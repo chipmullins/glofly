@@ -108,6 +108,7 @@ export default function LoginScreen({
       </section>
 
       <section className="form-panel">
+        <div className="titlebar-drag" aria-hidden="true" />
         <form className="login-form" onSubmit={handleSubmit} noValidate>
           <img src={wordmarkImg} alt="Glofly" className="login-wordmark" draggable={false} />
 

@@ -39,3 +39,9 @@ body {
   font-family: var(--glo-font-body);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Blank cream screen for the split second while a saved session is checked */
+.starting {
+  height: 100%;
+  background: var(--glo-cream);
+}

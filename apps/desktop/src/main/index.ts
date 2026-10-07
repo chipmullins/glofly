@@ -2,8 +2,18 @@ import { app, shell, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'ele
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { login, logout } from './auth'
-import type { LoginRequest } from '../preload/api-types'
+import { login, logout, restore } from './auth'
+import type { LoginRequest, WindowTheme } from '../preload/api-types'
+
+// Colors for the minimize / maximize / close buttons, matching each screen.
+const TITLE_BAR = {
+  login: { color: '#FFFBF7', symbolColor: '#24170F', height: 40 },
+  app: { color: '#FFFFFF', symbolColor: '#4A372B', height: 40 }
+} as const
+
+// On Windows, Glofly draws its own top area and Windows only draws the window
+// buttons (keeping Snap Layouts and double-click-to-maximize).
+const customTitleBar = process.platform === 'win32'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -15,6 +25,7 @@ function createWindow(): void {
     backgroundColor: '#FFFBF7',
     show: false,
     autoHideMenuBar: true,
+    ...(customTitleBar ? { titleBarStyle: 'hidden', titleBarOverlay: TITLE_BAR.login } : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -71,7 +82,21 @@ function isLoginRequest(value: unknown): value is LoginRequest {
   )
 }
 
+function isWindowTheme(value: unknown): value is WindowTheme {
+  return value === 'login' || value === 'app'
+}
+
 function registerIpcHandlers(): void {
+  ipcMain.on('window:theme', (event, theme: unknown) => {
+    if (!customTitleBar || !isAppUrl(event.senderFrame?.url ?? '') || !isWindowTheme(theme)) return
+    BrowserWindow.fromWebContents(event.sender)?.setTitleBarOverlay(TITLE_BAR[theme])
+  })
+
+  ipcMain.handle('auth:restore', (event) => {
+    if (!fromApp(event)) return null
+    return restore()
+  })
+
   ipcMain.handle('auth:login', (event, request: unknown) => {
     if (!fromApp(event) || !isLoginRequest(request)) {
       return { ok: false, reason: 'invalid', message: 'Check your details.' }

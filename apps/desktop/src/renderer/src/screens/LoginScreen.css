@@ -393,6 +393,27 @@
   text-align: center;
 }
 
+/* Custom title bar (Windows): the dark panel and the empty strip along the top
+   of the form panel drag the window. */
+.form-panel {
+  position: relative;
+}
+.titlebar-drag {
+  display: none;
+}
+.has-titlebar .titlebar-drag {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+.has-titlebar .brand {
+  -webkit-app-region: drag;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .glo-fly {
     animation: none;

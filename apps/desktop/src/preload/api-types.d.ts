@@ -19,9 +19,19 @@ export type LoginFailureReason =
 export type LoginResult =
   { ok: true; user: SignedInUser } | { ok: false; reason: LoginFailureReason; message: string }
 
+/** Which screen is showing, so the window buttons can match its colors. */
+export type WindowTheme = 'login' | 'app'
+
 export type GloflyApi = {
+  /** 'win32' on Windows, 'darwin' on Mac, 'linux' on Linux */
+  platform: string
   auth: {
     login: (request: LoginRequest) => Promise<LoginResult>
+    /** Signs back in with a saved "Keep me signed in" session. Null if there isn't a valid one. */
+    restore: () => Promise<SignedInUser | null>
     logout: () => Promise<void>
+  }
+  window: {
+    setTheme: (theme: WindowTheme) => void
   }
 }

@@ -1,4 +1,5 @@
 import type { LoginRequest, LoginResult, SignedInUser } from '../preload/api-types'
+import { clearToken, loadToken, saveToken } from './session-store'
 
 // Where the Glofly server lives. Local for now; becomes the AWS address at release.
 const API_URL = 'http://localhost:4000'
@@ -39,6 +40,8 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
 
   if (response.ok && body?.token && body.user) {
     sessionToken = body.token
+    if (request.keepSignedIn) await saveToken(body.token)
+    else await clearToken()
     return { ok: true, user: body.user }
   }
 
@@ -66,9 +69,39 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
   }
 }
 
+/** On launch: signs back in with the saved session, if there is a valid one. */
+export async function restore(): Promise<SignedInUser | null> {
+  const token = await loadToken()
+  if (!token) return null
+
+  let response: Response
+  try {
+    response = await fetch(`${API_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000)
+    })
+  } catch {
+    // Server unreachable: keep the saved session so it works next time.
+    return null
+  }
+
+  if (response.status === 401) {
+    // Expired or signed out elsewhere: forget it.
+    await clearToken()
+    return null
+  }
+
+  const body = (await response.json().catch(() => null)) as { user?: SignedInUser } | null
+  if (!response.ok || !body?.user) return null
+
+  sessionToken = token
+  return body.user
+}
+
 export async function logout(): Promise<void> {
   const token = sessionToken
   sessionToken = null
+  await clearToken()
   if (!token) return
   try {
     await fetch(`${API_URL}/auth/logout`, {
