@@ -15,6 +15,7 @@ import { MessageAttachments, PhotoViewer, UploadTray, type Upload } from './Atta
 import { attachmentSummary } from '../lib/attachments'
 import { FileIcon, ProfileIcon } from './icons'
 import MessageItem, { type ShownMessage } from './MessageItem'
+import { PinIcon } from './ChatList'
 import EmojiPicker from './EmojiPicker'
 import EmojiText from './EmojiText'
 import './ChatView.css'
@@ -28,6 +29,8 @@ type ChatViewProps = {
   /** Called after this chat is marked read, so the sidebar can clear its badge. */
   onRead: (conversationId: string) => void
   onViewProfile: () => void
+  /** Pins or unpins this chat in the sidebar */
+  onTogglePin: () => void
   onSessionExpired: () => void
 }
 
@@ -138,6 +141,7 @@ export default function ChatView({
   now,
   onRead,
   onViewProfile,
+  onTogglePin,
   onSessionExpired
 }: ChatViewProps): React.JSX.Element {
   const partner = conversation.partner
@@ -694,6 +698,20 @@ export default function ChatView({
           )}
         </div>
         <div className="chat-header-actions">
+          <button
+            type="button"
+            className={
+              conversation.pinnedAt
+                ? 'chat-header-button chat-header-button--on'
+                : 'chat-header-button'
+            }
+            aria-label={conversation.pinnedAt ? 'Unpin this chat' : 'Pin this chat'}
+            aria-pressed={!!conversation.pinnedAt}
+            title={conversation.pinnedAt ? 'Unpin' : 'Pin to the top'}
+            onClick={onTogglePin}
+          >
+            <PinIcon size={19} />
+          </button>
           <button
             type="button"
             className="chat-header-button"

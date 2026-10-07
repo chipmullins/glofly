@@ -27,6 +27,7 @@ import {
   listConversations,
   loadMessages,
   markRead,
+  pinConversation,
   openDm,
   reactToMessage,
   removeUpload,
@@ -472,6 +473,11 @@ function registerIpcHandlers(): void {
   )
   ipcMain.handle('conversations:read', (event, id: unknown) =>
     fromApp(event) && isUserId(id) ? markRead(id) : invalid
+  )
+  ipcMain.handle('conversations:pin', (event, id: unknown, pinned: unknown) =>
+    fromApp(event) && isUserId(id) && typeof pinned === 'boolean'
+      ? pinConversation(id, pinned)
+      : invalid
   )
   ipcMain.on('conversations:typing', (event, id: unknown) => {
     if (isAppUrl(event.senderFrame?.url ?? '') && isUserId(id)) sendTyping(id)

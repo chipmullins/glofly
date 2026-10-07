@@ -712,3 +712,9 @@
   font-size: 8px !important;
   font-weight: 700;
 }
+
+/* Pin button in the chat header: tinted while the chat is pinned */
+.chat-header-button--on {
+  background: var(--glo-accent-soft);
+  color: var(--glo-link);
+}

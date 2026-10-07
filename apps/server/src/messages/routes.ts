@@ -1,6 +1,6 @@
 import express, { Router, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
-import { and, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { alias } from "drizzle-orm/pg-core";
@@ -226,6 +226,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
       lastMessageAt: conversations.lastMessageAt,
       createdAt: conversations.createdAt,
       lastReadAt: conversationMembers.lastReadAt,
+      pinnedAt: conversationMembers.pinnedAt,
     })
     .from(conversationMembers)
     .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
@@ -305,6 +306,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
       partnerReadAt:
         mySettings?.readReceipts && partner.readReceipts ? partner.lastReadAt.toISOString() : null,
       activityAt: (c.lastMessageAt ?? c.createdAt).toISOString(),
+      // Pinned chats sit at the top of the sidebar, in the order they were pinned.
+      pinnedAt: c.pinnedAt?.toISOString() ?? null,
     });
   }
   return result.sort((a, b) => b.activityAt.localeCompare(a.activityAt));
@@ -313,6 +316,59 @@ async function summaries(myId: string, conversationIds?: string[]) {
 // GET /conversations — my chats, most recent first.
 conversationsRouter.get("/", async (_req, res) => {
   res.json({ conversations: await summaries(me(res).id) });
+});
+
+export const MAX_PINNED = 10;
+
+/** Pins or unpins a chat for me; my other devices update right away. */
+async function setPinned(myId: string, conversationId: string, pinned: boolean) {
+  const updated = await db
+    .update(conversationMembers)
+    .set({ pinnedAt: pinned ? new Date() : null })
+    .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, myId)))
+    .returning({ id: conversationMembers.conversationId });
+  if (updated.length) emitToUser(myId, "conversations:changed", {});
+  return updated.length > 0;
+}
+
+// PUT /conversations/:id/pin — pin a chat to the top of my sidebar (up to 10).
+conversationsRouter.put("/:id/pin", async (req, res) => {
+  const id = idParam.safeParse(req.params.id);
+  const myId = me(res).id;
+  if (!id.success) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const [mine] = await db
+    .select({ pinnedAt: conversationMembers.pinnedAt })
+    .from(conversationMembers)
+    .where(and(eq(conversationMembers.conversationId, id.data), eq(conversationMembers.userId, myId)));
+  if (!mine) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (!mine.pinnedAt) {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(conversationMembers)
+      .where(and(eq(conversationMembers.userId, myId), isNotNull(conversationMembers.pinnedAt)));
+    if (count >= MAX_PINNED) {
+      res.status(409).json({
+        error: "too_many_pinned",
+        message: `You can pin up to ${MAX_PINNED} chats. Unpin one first.`,
+      });
+      return;
+    }
+    await setPinned(myId, id.data, true);
+  }
+  res.status(204).end();
+});
+
+// DELETE /conversations/:id/pin — unpin it.
+conversationsRouter.delete("/:id/pin", async (req, res) => {
+  const id = idParam.safeParse(req.params.id);
+  if (id.success) await setPinned(me(res).id, id.data, false);
+  res.status(204).end();
 });
 
 // POST /conversations/dm  { userId } — open the DM with a friend (creates it the first time).

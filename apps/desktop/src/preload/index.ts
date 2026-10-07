@@ -84,6 +84,8 @@ const glofly: GloflyApi = {
     react: (conversationId: string, messageId: string, emoji: string, on: boolean) =>
       ipcRenderer.invoke('conversations:react', conversationId, messageId, emoji, on),
     markRead: (conversationId: string) => ipcRenderer.invoke('conversations:read', conversationId),
+    pin: (conversationId: string, pinned: boolean) =>
+      ipcRenderer.invoke('conversations:pin', conversationId, pinned),
     typing: (conversationId: string) => ipcRenderer.send('conversations:typing', conversationId)
   },
   files: {

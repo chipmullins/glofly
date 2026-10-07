@@ -167,6 +167,8 @@ export type ConversationSummary = {
   activityAt: string
   /** How far they've read (ISO date), for "Seen". Null unless both people allow read receipts. */
   partnerReadAt: string | null
+  /** When you pinned it (ISO date), or null if it isn't pinned */
+  pinnedAt: string | null
 }
 
 /** Settings → General → Privacy */
@@ -335,6 +337,8 @@ export type GloflyApi = {
       on: boolean
     ) => Promise<ApiResult<Message>>
     markRead: (conversationId: string) => Promise<ApiResult<null>>
+    /** Pins a chat to the top of the sidebar (up to 10, saved on your account), or unpins it. */
+    pin: (conversationId: string, pinned: boolean) => Promise<ApiResult<null>>
     typing: (conversationId: string) => void
   }
   files: {

@@ -99,6 +99,15 @@ export async function reactToMessage(
   return unwrap(await request(on ? 'PUT' : 'DELETE', path))
 }
 
+/** Pins a chat to the top of the sidebar (up to 10), or unpins it. */
+export async function pinConversation(
+  conversationId: string,
+  pinned: boolean
+): Promise<ApiResult<null>> {
+  const result = await request(pinned ? 'PUT' : 'DELETE', `/conversations/${conversationId}/pin`)
+  return result.ok ? { ok: true, data: null } : result
+}
+
 export async function markRead(conversationId: string): Promise<ApiResult<null>> {
   const result = await request('POST', `/conversations/${conversationId}/read`)
   return result.ok ? { ok: true, data: null } : result

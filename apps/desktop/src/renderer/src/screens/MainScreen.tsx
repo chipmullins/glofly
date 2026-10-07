@@ -23,14 +23,12 @@ import {
   FriendsIcon,
   LogOutIcon,
   MoreIcon,
-  PlusIcon,
   ProfileIcon,
   RemoveFriendIcon,
   SearchIcon,
   SettingsIcon
 } from '../components/icons'
 import { shortDate } from '../lib/names'
-import { attachmentSummary } from '../lib/attachments'
 import { playSound, setQuiet } from '../lib/sounds'
 import { dotFor, presenceLine, STATUS_LABEL } from '../lib/presence'
 import StatusDot from '../components/StatusDot'
@@ -39,6 +37,8 @@ import SettingsDialog from '../components/SettingsDialog'
 import '../components/dialogs.css'
 import './MainScreen.css'
 import EmojiText from '../components/EmojiText'
+import ChatList from '../components/ChatList'
+import { findChats, type ChatResult } from '../lib/chatSearch'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -332,6 +332,10 @@ export default function MainScreen({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
   const [viewing, setViewing] = useState<PublicUser | null>(null)
+  /** The sidebar's "Find a friend or chat" search */
+  const [chatQuery, setChatQuery] = useState('')
+  const [highlighted, setHighlighted] = useState(0)
+  const chatSearchRef = useRef<HTMLInputElement>(null)
   // Ticks every minute so "Last seen 5 minutes ago" stays accurate.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -379,8 +383,12 @@ export default function MainScreen({
     else setNotice(result.message)
   }, [onSessionExpired])
 
+  // Several refreshes can overlap (say, a burst of changes): only the newest one counts.
+  const conversationsRequest = useRef(0)
   const refreshConversations = useCallback(async () => {
+    const mine = ++conversationsRequest.current
     const result = await window.glofly.conversations.list()
+    if (mine !== conversationsRequest.current) return
     if (result.ok) setConversations(result.data)
     else if (result.error === 'unauthorized') onSessionExpired()
   }, [onSessionExpired])
@@ -486,6 +494,61 @@ export default function MainScreen({
       list.some((c) => c.id === conversation.id) ? list : [conversation, ...list]
     )
     setOpenChatId(conversation.id)
+  }
+
+  // Ctrl+K (or Cmd+K) jumps to "Find a friend or chat" from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        chatSearchRef.current?.focus()
+        chatSearchRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const chatResults = findChats(chatQuery, conversations, lists?.friends ?? [])
+
+  /** Opens a search result: its chat, or a new chat with that friend. */
+  function openResult(r: ChatResult): void {
+    setChatQuery('')
+    setHighlighted(0)
+    chatSearchRef.current?.blur()
+    if (r.conversation) setOpenChatId(r.conversation.id)
+    else void openChatWith(r.user.id)
+  }
+
+  function onChatSearchKey(e: React.KeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'ArrowDown' && chatResults.length) {
+      e.preventDefault()
+      setHighlighted((i) => (i + 1) % chatResults.length)
+    } else if (e.key === 'ArrowUp' && chatResults.length) {
+      e.preventDefault()
+      setHighlighted((i) => (i - 1 + chatResults.length) % chatResults.length)
+    } else if (e.key === 'Enter' && chatResults[highlighted]) {
+      e.preventDefault()
+      openResult(chatResults[highlighted])
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setChatQuery('')
+      setHighlighted(0)
+      e.currentTarget.blur()
+    }
+  }
+
+  /** Pins or unpins a chat (shown right away; put back if the server says no). */
+  async function togglePin(c: ConversationSummary): Promise<void> {
+    const pinnedAt = c.pinnedAt ? null : new Date().toISOString()
+    setConversations((list) => list.map((x) => (x.id === c.id ? { ...x, pinnedAt } : x)))
+    const result = await window.glofly.conversations.pin(c.id, !c.pinnedAt)
+    if (result.ok) return
+    setConversations((list) =>
+      list.map((x) => (x.id === c.id ? { ...x, pinnedAt: c.pinnedAt } : x))
+    )
+    if (result.error === 'unauthorized') onSessionExpired()
+    else setNotice(result.message)
   }
 
   const markedRead = useCallback((conversationId: string) => {
@@ -737,10 +800,27 @@ export default function MainScreen({
           <div className="search">
             <SearchIcon />
             <input
+              ref={chatSearchRef}
               type="search"
               className="search-input"
               aria-label="Find a friend or chat"
               placeholder="Find a friend or chat"
+              title="Find a friend or chat (Ctrl+K)"
+              role="combobox"
+              aria-expanded={chatQuery.trim().length > 0}
+              aria-controls="chat-search-results"
+              aria-activedescendant={
+                chatResults.length > 0 ? `chat-result-${highlighted}` : undefined
+              }
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={40}
+              value={chatQuery}
+              onChange={(e) => {
+                setChatQuery(e.target.value)
+                setHighlighted(0)
+              }}
+              onKeyDown={onChatSearchKey}
             />
           </div>
         </div>
@@ -797,81 +877,24 @@ export default function MainScreen({
           )}
         </button>
 
-        <div className="section-head">
-          <span>Direct messages</span>
-          <button
-            type="button"
-            className="icon-button icon-button--small"
-            aria-label="New message or group chat"
-            title="New message"
-            onClick={() => {
-              setOpenChatId(null)
-              setFilter('all')
-            }}
-          >
-            <PlusIcon />
-          </button>
-        </div>
-
-        {conversations.length === 0 ? (
-          <div className="dm-empty">
-            <ChatIcon />
-            <p>No conversations yet. Messages with friends will show up here.</p>
-          </div>
-        ) : (
-          <nav aria-label="Direct messages" className="dm-list">
-            {conversations.map((c) => {
-              const active = c.id === openChatId
-              const last = c.lastMessage
-              const partnerPresence = presence[c.partner.id]
-              // Like the design: friends show their status; otherwise the last message.
-              const preview = partnerPresence
-                ? presenceLine(partnerPresence, now)
-                : !last
-                  ? 'No messages yet'
-                  : `${last.senderId === user.id ? 'You: ' : ''}${
-                      last.deleted
-                        ? 'Message deleted'
-                        : last.body.replace(/\s+/g, ' ') || attachmentSummary(last.attachments)
-                    }`
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={active ? 'dm-row dm-row--active' : 'dm-row'}
-                  aria-current={active ? 'page' : undefined}
-                  onClick={() => setOpenChatId(c.id)}
-                >
-                  <Avatar
-                    id={c.partner.id}
-                    name={c.partner.displayName}
-                    avatarVersion={c.partner.avatarVersion}
-                    size={40}
-                    status={partnerPresence?.status}
-                    ring={active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'}
-                  />
-                  <span className="dm-text">
-                    <span
-                      className={
-                        c.unreadCount > 0 || active ? 'dm-name dm-name--strong' : 'dm-name'
-                      }
-                    >
-                      {c.partner.displayName}
-                    </span>
-                    <span className="dm-preview">
-                      <EmojiText text={preview} />
-                    </span>
-                  </span>
-                  {c.unreadCount > 0 && !active && (
-                    <span className="badge" aria-label={`${c.unreadCount} unread`}>
-                      {c.unreadCount > 99 ? '99+' : c.unreadCount}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </nav>
-        )}
+        <ChatList
+          meId={user.id}
+          conversations={conversations}
+          presence={presence}
+          now={now}
+          openChatId={openChatId}
+          query={chatQuery}
+          results={chatResults}
+          highlighted={highlighted}
+          onOpen={(id) => setOpenChatId(id)}
+          onOpenResult={openResult}
+          onTogglePin={(c) => void togglePin(c)}
+          onViewProfile={setViewing}
+          onNewMessage={() => {
+            setOpenChatId(null)
+            setFilter('all')
+          }}
+        />
       </aside>
 
       <main className="content">
@@ -889,6 +912,7 @@ export default function MainScreen({
             now={now}
             onRead={markedRead}
             onViewProfile={() => setViewing(openChat.partner)}
+            onTogglePin={() => void togglePin(openChat)}
             onSessionExpired={onSessionExpired}
           />
         ) : (

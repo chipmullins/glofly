@@ -175,6 +175,8 @@ export const conversationMembers = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     // Everything after this is unread for this person.
     lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull().defaultNow(),
+    // When this person pinned the chat to the top of their sidebar (null = not pinned).
+    pinnedAt: timestamp("pinned_at", { withTimezone: true }),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
