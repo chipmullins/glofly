@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Message } from '../../../preload/api-types'
+import { quoteSummary } from '../lib/attachments'
 
 export type ShownMessage = {
   key: string
@@ -29,6 +30,8 @@ type MessageItemProps = {
   onJumpTo: (messageId: string) => void
   onRetry: () => void
   onDiscard: () => void
+  /** The message's photos and files, if any. */
+  attachments: React.ReactNode
 }
 
 // The quick reactions offered by the 😊 button.
@@ -149,7 +152,8 @@ export default function MessageItem({
   onDelete,
   onJumpTo,
   onRetry,
-  onDiscard
+  onDiscard,
+  attachments
 }: MessageItemProps): React.JSX.Element {
   const m = item.message
   const mine = m.senderId === meId
@@ -201,7 +205,13 @@ export default function MessageItem({
   return (
     <div className={classes.join(' ')} data-message-id={m.id} ref={wrapRef}>
       {!grouped && avatar}
-      <div className="message-content">
+      <div
+        className={
+          item.pending && !item.pending.failed
+            ? 'message-content message-content--sending'
+            : 'message-content'
+        }
+      >
         {m.replyTo && (
           <button
             type="button"
@@ -221,7 +231,10 @@ export default function MessageItem({
                   : 'reply-quote-text'
               }
             >
-              {m.replyTo.deleted ? 'Original message was deleted' : m.replyTo.body}
+              {m.replyTo.deleted
+                ? 'Original message was deleted'
+                : m.replyTo.body ||
+                  (m.replyTo.attachment ? quoteSummary(m.replyTo.attachment) : '')}
             </span>
           </button>
         )}
@@ -239,7 +252,7 @@ export default function MessageItem({
           <EditBox initial={m.body} onSave={onSaveEdit} onCancel={onCancelEdit} />
         ) : m.deleted ? (
           <p className="message-body message-body--deleted">This message was deleted.</p>
-        ) : (
+        ) : !m.body && m.attachments.length > 0 ? null : (
           <p className={bodyClass} title={grouped ? time : undefined}>
             {m.body}
             {m.editedAt && (
@@ -253,6 +266,8 @@ export default function MessageItem({
             )}
           </p>
         )}
+
+        {!m.deleted && attachments}
 
         {item.pending?.failed && (
           <span className="message-failed">
@@ -370,18 +385,20 @@ export default function MessageItem({
                   Edit message
                 </button>
               )}
-              <button
-                type="button"
-                role="menuitem"
-                className="menu-item"
-                onClick={() => void copy()}
-              >
-                <Icon>
-                  <rect x="9" y="9" width="12" height="12" rx="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </Icon>
-                Copy text
-              </button>
+              {m.body && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="menu-item"
+                  onClick={() => void copy()}
+                >
+                  <Icon>
+                    <rect x="9" y="9" width="12" height="12" rx="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </Icon>
+                  Copy text
+                </button>
+              )}
               {mine && (
                 <button
                   type="button"

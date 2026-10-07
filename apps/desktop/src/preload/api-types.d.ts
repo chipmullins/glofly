@@ -102,8 +102,26 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError;
 
 export type Reaction = { emoji: string; userIds: string[] }
 
+/** A photo or file shared in a chat. Photos have their full-size width and height. */
+export type Attachment = {
+  id: string
+  kind: 'image' | 'file'
+  name: string
+  /** Bytes */
+  size: number
+  width: number | null
+  height: number | null
+}
+
 /** A short preview of the message being replied to. */
-export type ReplyPreview = { id: string; senderId: string; body: string; deleted: boolean }
+export type ReplyPreview = {
+  id: string
+  senderId: string
+  body: string
+  deleted: boolean
+  /** Its first photo or file (and how many it has), so "Photo" can show when there's no text. */
+  attachment?: { kind: 'image' | 'file'; name: string; count: number } | null
+}
 
 export type Message = {
   id: string
@@ -118,6 +136,8 @@ export type Message = {
   deleted: boolean
   replyTo: ReplyPreview | null
   reactions: Reaction[]
+  /** Photos and files, in order. Empty for a plain text message. */
+  attachments: Attachment[]
 }
 
 export type ConversationSummary = {
@@ -209,7 +229,21 @@ export type GloflyApi = {
     openDm: (userId: string) => Promise<ApiResult<ConversationSummary>>
     /** Newest page, or the page before `beforeMessageId`. Oldest first. */
     messages: (conversationId: string, beforeMessageId?: string) => Promise<ApiResult<MessagePage>>
-    send: (conversationId: string, body: string, replyToId?: string) => Promise<ApiResult<Message>>
+    /** `body` can be empty when sending photos or files. */
+    send: (
+      conversationId: string,
+      body: string,
+      replyToId?: string,
+      attachmentIds?: string[]
+    ) => Promise<ApiResult<Message>>
+    /** Uploads a photo or file (up to 25 MB) to send with the next message. */
+    upload: (
+      conversationId: string,
+      data: ArrayBuffer,
+      name: string
+    ) => Promise<ApiResult<Attachment>>
+    /** Removes an upload that hasn't been sent. */
+    removeUpload: (conversationId: string, attachmentId: string) => Promise<ApiResult<null>>
     edit: (conversationId: string, messageId: string, body: string) => Promise<ApiResult<Message>>
     remove: (conversationId: string, messageId: string) => Promise<ApiResult<Message>>
     react: (
@@ -220,6 +254,15 @@ export type GloflyApi = {
     ) => Promise<ApiResult<Message>>
     markRead: (conversationId: string) => Promise<ApiResult<null>>
     typing: (conversationId: string) => void
+  }
+  files: {
+    /** Asks where to save, then saves it there. Null if the person cancelled. */
+    save: (
+      conversationId: string,
+      attachment: Attachment
+    ) => Promise<ApiResult<{ path: string } | null>>
+    /** Shows a file Glofly just saved in File Explorer. */
+    showInFolder: (path: string) => void
   }
   /** Subscribe to live updates. Returns a function that unsubscribes. */
   onEvent: (listener: (event: GloflyEvent) => void) => () => void

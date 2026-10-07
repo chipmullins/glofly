@@ -1,4 +1,10 @@
-import type { ApiResult, ConversationSummary, Message, MessagePage } from '../preload/api-types'
+import type {
+  ApiResult,
+  Attachment,
+  ConversationSummary,
+  Message,
+  MessagePage
+} from '../preload/api-types'
 import { request } from './api'
 
 export async function listConversations(): Promise<ApiResult<ConversationSummary[]>> {
@@ -27,11 +33,43 @@ const unwrap = (result: ApiResult<{ message: Message }>): ApiResult<Message> =>
 export async function sendMessage(
   conversationId: string,
   body: string,
-  replyToId?: string
+  replyToId?: string,
+  attachmentIds?: string[]
 ): Promise<ApiResult<Message>> {
   return unwrap(
-    await request('POST', `/conversations/${conversationId}/messages`, { body, replyToId })
+    await request('POST', `/conversations/${conversationId}/messages`, {
+      body,
+      replyToId,
+      ...(attachmentIds?.length ? { attachmentIds } : {})
+    })
   )
+}
+
+/** Uploads a photo or file to send. It's attached when the message is sent. */
+export async function uploadAttachment(
+  conversationId: string,
+  data: Uint8Array,
+  name: string
+): Promise<ApiResult<Attachment>> {
+  const result = await request<{ attachment: Attachment }>(
+    'POST',
+    `/conversations/${conversationId}/attachments?name=${encodeURIComponent(name)}`,
+    undefined,
+    { data, type: 'application/octet-stream' }
+  )
+  return result.ok ? { ok: true, data: result.data.attachment } : result
+}
+
+/** Removes an upload that hasn't been sent. */
+export async function removeUpload(
+  conversationId: string,
+  attachmentId: string
+): Promise<ApiResult<null>> {
+  const result = await request(
+    'DELETE',
+    `/conversations/${conversationId}/attachments/${attachmentId}`
+  )
+  return result.ok ? { ok: true, data: null } : result
 }
 
 export async function editMessage(

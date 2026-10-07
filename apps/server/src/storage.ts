@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import type { Readable } from "node:stream";
 
@@ -50,7 +50,18 @@ class LocalDiskStorage implements Storage {
   }
 
   async remove(key: string): Promise<void> {
-    await rm(this.pathFor(key), { force: true });
+    const path = this.pathFor(key);
+    await rm(path, { force: true });
+    // Tidy up folders left empty (rmdir refuses folders that still have files in them).
+    let dir = dirname(path);
+    while (dir.startsWith(this.root + sep)) {
+      try {
+        await rmdir(dir);
+      } catch {
+        break;
+      }
+      dir = dirname(dir);
+    }
   }
 }
 

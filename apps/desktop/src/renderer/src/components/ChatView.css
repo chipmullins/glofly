@@ -1,6 +1,7 @@
 /* Direct message view. Values match the design canvas (Chat.dc.html). */
 
 .chat {
+  position: relative; /* for the drop overlay */
   flex: 1;
   min-height: 0;
   display: flex;
@@ -515,7 +516,23 @@
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  padding-left: 8px;
+}
+/* "Attach a file" (+) from the design */
+.attach-button {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #4a372b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.attach-button:hover {
+  background: #efe3d8;
 }
 .reply-bar {
   display: flex;

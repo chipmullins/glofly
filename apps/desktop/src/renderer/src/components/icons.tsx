@@ -152,3 +152,43 @@ export function CalendarIcon(p: IconProps): React.JSX.Element {
     </Svg>
   )
 }
+
+export function DownloadIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <path d="M12 4v11" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M5 20h14" />
+    </Svg>
+  )
+}
+
+export function FileIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+    </Svg>
+  )
+}
+
+export function PhotoIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="10" r="2" />
+      <path d="M21 16l-5-5-9 9" />
+    </Svg>
+  )
+}
+
+export function ChevronIcon({
+  direction,
+  ...p
+}: IconProps & { direction: 'left' | 'right' }): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      {direction === 'left' ? <path d="M15 5l-7 7 7 7" /> : <path d="M9 5l7 7-7 7" />}
+    </Svg>
+  )
+}

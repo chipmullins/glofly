@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
+  Attachment,
   GloflyApi,
   GloflyEvent,
   LoginRequest,
@@ -54,8 +55,12 @@ const glofly: GloflyApi = {
     openDm: (userId: string) => ipcRenderer.invoke('conversations:open-dm', userId),
     messages: (conversationId: string, beforeMessageId?: string) =>
       ipcRenderer.invoke('conversations:messages', conversationId, beforeMessageId),
-    send: (conversationId: string, body: string, replyToId?: string) =>
-      ipcRenderer.invoke('conversations:send', conversationId, body, replyToId),
+    send: (conversationId: string, body: string, replyToId?: string, attachmentIds?: string[]) =>
+      ipcRenderer.invoke('conversations:send', conversationId, body, replyToId, attachmentIds),
+    upload: (conversationId: string, data: ArrayBuffer, name: string) =>
+      ipcRenderer.invoke('conversations:upload', conversationId, data, name),
+    removeUpload: (conversationId: string, attachmentId: string) =>
+      ipcRenderer.invoke('conversations:remove-upload', conversationId, attachmentId),
     edit: (conversationId: string, messageId: string, body: string) =>
       ipcRenderer.invoke('conversations:edit', conversationId, messageId, body),
     remove: (conversationId: string, messageId: string) =>
@@ -64,6 +69,17 @@ const glofly: GloflyApi = {
       ipcRenderer.invoke('conversations:react', conversationId, messageId, emoji, on),
     markRead: (conversationId: string) => ipcRenderer.invoke('conversations:read', conversationId),
     typing: (conversationId: string) => ipcRenderer.send('conversations:typing', conversationId)
+  },
+  files: {
+    save: (conversationId: string, attachment: Attachment) =>
+      ipcRenderer.invoke(
+        'files:save',
+        conversationId,
+        attachment.id,
+        attachment.kind,
+        attachment.name
+      ),
+    showInFolder: (path: string) => ipcRenderer.send('files:show-in-folder', path)
   },
   onEvent: (listener: (event: GloflyEvent) => void) => {
     const handler = (_e: Electron.IpcRendererEvent, event: GloflyEvent): void => listener(event)

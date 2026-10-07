@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
+  Attachment,
   ConversationSummary,
   Message,
   Presence,
@@ -10,7 +11,9 @@ import { presenceHeader } from '../lib/presence'
 import { clockTime, continuesGroup, dayLabel, isSameDay } from '../lib/time'
 import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
-import { ProfileIcon } from './icons'
+import { MessageAttachments, PhotoViewer, UploadTray, type Upload } from './Attachments'
+import { attachmentSummary } from '../lib/attachments'
+import { FileIcon, ProfileIcon } from './icons'
 import MessageItem, { type ShownMessage } from './MessageItem'
 import './ChatView.css'
 
@@ -33,11 +36,14 @@ type Pending = {
   createdAt: string
   failed: boolean
   replyTo: ReplyPreview | null
+  attachments: Attachment[]
 }
 
 const TYPING_SEND_EVERY_MS = 3000 // how often we tell the other person we're typing
 const TYPING_SHOW_FOR_MS = 4500 // how long "is typing…" stays after their last keystroke
 const MESSAGE_MAX = 4000
+const FILES_PER_MESSAGE = 10
+const FILE_MAX_BYTES = 25 * 1024 * 1024
 
 function SendIcon(): React.JSX.Element {
   return (
@@ -76,8 +82,32 @@ const preview = (m: Message): ReplyPreview => ({
   id: m.id,
   senderId: m.senderId,
   body: m.body.slice(0, 200),
-  deleted: m.deleted
+  deleted: m.deleted,
+  attachment: m.attachments[0]
+    ? { kind: m.attachments[0].kind, name: m.attachments[0].name, count: m.attachments.length }
+    : null
 })
+
+/** Short text for a message: its words, or "Photo" / the file name if it has none. */
+const textOf = (m: Pick<Message, 'body' | 'attachments'>): string =>
+  m.body || attachmentSummary(m.attachments)
+
+function AttachIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
 
 export default function ChatView({
   me,
@@ -101,6 +131,13 @@ export default function ChatView({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Message | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
+  const [uploads, setUploads] = useState<Upload[]>([])
+  const [viewing, setViewing] = useState<{ photos: Attachment[]; index: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const dragDepth = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadsRef = useRef<Upload[]>([])
+  const chatOpen = useRef(true)
 
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -237,7 +274,8 @@ export default function ChatView({
     const result = await window.glofly.conversations.send(
       conversation.id,
       item.body,
-      item.replyTo?.id
+      item.replyTo?.id,
+      item.attachments.map((a) => a.id)
     )
     if (result.ok) {
       const sent = result.data
@@ -250,9 +288,30 @@ export default function ChatView({
     }
   }
 
+  // Leaving the chat with files still in the box: tidy them away on the server.
+  useEffect(() => {
+    uploadsRef.current = uploads
+  })
+  useEffect(() => {
+    chatOpen.current = true
+    return () => {
+      chatOpen.current = false
+      for (const u of uploadsRef.current) {
+        if (u.attachment)
+          void window.glofly.conversations.removeUpload(conversation.id, u.attachment.id)
+      }
+    }
+  }, [conversation.id])
+
+  const uploading = uploads.some((u) => u.status === 'uploading')
+  const readyFiles = uploads.flatMap((u) =>
+    u.status === 'ready' && u.attachment ? [u.attachment] : []
+  )
+  const canSend = !uploading && (draft.trim().length > 0 || readyFiles.length > 0)
+
   function send(): void {
     const body = draft.trim()
-    if (!body || !conversation.canMessage) return
+    if (!canSend || !conversation.canMessage) return
     if (body.length > MESSAGE_MAX) {
       setNotice(`Messages can be up to ${MESSAGE_MAX.toLocaleString()} characters.`)
       return
@@ -263,13 +322,114 @@ export default function ChatView({
       body,
       createdAt: new Date().toISOString(),
       failed: false,
-      replyTo: replyingTo ? preview(replyingTo) : null
+      replyTo: replyingTo ? preview(replyingTo) : null,
+      attachments: readyFiles
     }
     stickToBottom.current = true
     setPending((p) => [...p, item])
     setDraft('')
     setReplyingTo(null)
+    setUploads([]) // sent ones go with the message; failed ones are dropped
     void deliver(item)
+  }
+
+  /** Adds files to the message box and starts uploading them right away. */
+  function addFiles(files: File[]): void {
+    if (!conversation.canMessage || files.length === 0) return
+    const room = FILES_PER_MESSAGE - uploads.length
+    if (files.length > room) {
+      setNotice(`You can send up to ${FILES_PER_MESSAGE} files at a time.`)
+      files = files.slice(0, Math.max(0, room))
+    }
+    for (const file of files) {
+      tempCounter.current += 1
+      const upload: Upload = {
+        localId: `upload-${tempCounter.current}`,
+        name: file.name || 'Pasted image',
+        size: file.size,
+        looksLikePhoto: file.type.startsWith('image/') && file.type !== 'image/svg+xml',
+        status: 'uploading',
+        attachment: null,
+        error: null
+      }
+      const fail = (error: string): Upload => ({ ...upload, status: 'failed', error })
+      if (file.size === 0) {
+        setUploads((list) => [...list, fail('This file is empty.')])
+        continue
+      }
+      if (file.size > FILE_MAX_BYTES) {
+        setUploads((list) => [...list, fail('Too big. Files can be up to 25 MB.')])
+        continue
+      }
+      setUploads((list) => [...list, upload])
+      void (async () => {
+        let result: Awaited<ReturnType<typeof window.glofly.conversations.upload>>
+        try {
+          result = await window.glofly.conversations.upload(
+            conversation.id,
+            await file.arrayBuffer(),
+            upload.name
+          )
+        } catch {
+          result = { ok: false, error: 'invalid', message: "Couldn't read this file." }
+        }
+        if (!result.ok && result.error === 'unauthorized') return onSessionExpired()
+        const done: Upload = result.ok
+          ? { ...upload, status: 'ready', attachment: result.data }
+          : fail(result.message)
+        // Removed (or the chat closed) while it was uploading: remove it from the server too.
+        const stillWanted =
+          chatOpen.current && uploadsRef.current.some((u) => u.localId === upload.localId)
+        if (!stillWanted) {
+          if (result.ok)
+            void window.glofly.conversations.removeUpload(conversation.id, result.data.id)
+          return
+        }
+        setUploads((list) => list.map((u) => (u.localId === upload.localId ? done : u)))
+      })()
+    }
+    inputRef.current?.focus()
+  }
+
+  function removeUpload(localId: string): void {
+    const upload = uploads.find((u) => u.localId === localId)
+    setUploads((list) => list.filter((u) => u.localId !== localId))
+    if (upload?.attachment)
+      void window.glofly.conversations.removeUpload(conversation.id, upload.attachment.id)
+    inputRef.current?.focus()
+  }
+
+  // Dragging files onto the chat.
+  const hasFiles = (e: React.DragEvent): boolean => e.dataTransfer.types.includes('Files')
+  function onDragEnter(e: React.DragEvent): void {
+    if (!hasFiles(e) || !conversation.canMessage) return
+    e.preventDefault()
+    dragDepth.current += 1
+    setDragging(true)
+  }
+  function onDragOver(e: React.DragEvent): void {
+    if (!hasFiles(e) || !conversation.canMessage) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+  function onDragLeave(e: React.DragEvent): void {
+    if (!hasFiles(e)) return
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragging(false)
+  }
+  function onDrop(e: React.DragEvent): void {
+    e.preventDefault()
+    dragDepth.current = 0
+    setDragging(false)
+    addFiles(Array.from(e.dataTransfer.files))
+  }
+
+  // Pasting a screenshot or copied file.
+  function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>): void {
+    const files = Array.from(e.clipboardData.files)
+    if (files.length === 0) return
+    e.preventDefault()
+    addFiles(files)
   }
 
   function retry(tempId: string): void {
@@ -283,7 +443,8 @@ export default function ChatView({
     const trimmed = body.trim()
     setEditingId(null)
     inputRef.current?.focus()
-    if (!trimmed || trimmed === m.body) return
+    // Text can only be cleared from a message that has photos or files.
+    if ((!trimmed && m.attachments.length === 0) || trimmed === m.body) return
     upsert({ ...m, body: trimmed, editedAt: new Date().toISOString() }) // show it right away
     const result = await window.glofly.conversations.edit(conversation.id, m.id, trimmed)
     if (result.ok) upsert(result.data)
@@ -380,7 +541,8 @@ export default function ChatView({
         editedAt: null,
         deleted: false,
         replyTo: p.replyTo,
-        reactions: []
+        reactions: [],
+        attachments: p.attachments
       },
       pending: { failed: p.failed }
     }))
@@ -449,7 +611,13 @@ export default function ChatView({
     ) : null
 
   return (
-    <div className="chat">
+    <div
+      className="chat"
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <header className="chat-header">
         <Avatar
           id={partner.id}
@@ -550,7 +718,23 @@ export default function ChatView({
                 onDelete={() => setDeleting(m)}
                 onJumpTo={jumpTo}
                 onRetry={() => retry(item.key)}
-                onDiscard={() => setPending((p) => p.filter((x) => x.tempId !== item.key))}
+                onDiscard={() => {
+                  const discarded = pending.find((x) => x.tempId === item.key)
+                  setPending((p) => p.filter((x) => x.tempId !== item.key))
+                  for (const a of discarded?.attachments ?? []) {
+                    void window.glofly.conversations.removeUpload(conversation.id, a.id)
+                  }
+                }}
+                attachments={
+                  m.attachments.length > 0 ? (
+                    <MessageAttachments
+                      conversationId={conversation.id}
+                      attachments={m.attachments}
+                      onOpenPhoto={(photos, index) => setViewing({ photos, index })}
+                      onFailure={handleFailure}
+                    />
+                  ) : null
+                }
               />
             </div>
           )
@@ -585,11 +769,18 @@ export default function ChatView({
 
         {conversation.canMessage ? (
           <div className={replyingTo ? 'composer composer--replying' : 'composer'}>
+            {uploads.length > 0 && (
+              <UploadTray
+                conversationId={conversation.id}
+                uploads={uploads}
+                onRemove={removeUpload}
+              />
+            )}
             {replyingTo && (
               <div className="reply-bar">
                 <span>
                   Replying to <strong>{nameOf(replyingTo.senderId)}</strong>
-                  <span className="reply-bar-text">{replyingTo.body}</span>
+                  <span className="reply-bar-text">{textOf(replyingTo)}</span>
                 </span>
                 <button
                   type="button"
@@ -602,6 +793,25 @@ export default function ChatView({
               </div>
             )}
             <div className="composer-row">
+              <button
+                type="button"
+                className="attach-button"
+                aria-label="Attach a file"
+                title="Attach photos or files"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <AttachIcon />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                hidden
+                onChange={(e) => {
+                  addFiles(Array.from(e.target.files ?? []))
+                  e.target.value = '' // so the same file can be picked again
+                }}
+              />
               <textarea
                 ref={inputRef}
                 rows={1}
@@ -611,12 +821,14 @@ export default function ChatView({
                 maxLength={MESSAGE_MAX + 200}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
+                onPaste={onPaste}
               />
               <button
                 type="button"
                 className="send-button"
                 aria-label="Send message"
-                disabled={!draft.trim()}
+                title={uploading ? 'Waiting for files to upload…' : undefined}
+                disabled={!canSend}
                 onClick={send}
               >
                 <SendIcon />
@@ -629,6 +841,26 @@ export default function ChatView({
           </p>
         )}
       </div>
+
+      {dragging && (
+        <div className="drop-overlay" aria-hidden="true">
+          <span className="drop-overlay-icon">
+            <FileIcon size={30} />
+          </span>
+          <strong>Drop to send to {partner.displayName}</strong>
+          <span>Photos and files up to 25 MB</span>
+        </div>
+      )}
+
+      {viewing && (
+        <PhotoViewer
+          conversationId={conversation.id}
+          photos={viewing.photos}
+          startIndex={viewing.index}
+          onClose={() => setViewing(null)}
+          onFailure={handleFailure}
+        />
+      )}
 
       {deleting && (
         <ConfirmDialog

@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, protocol, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import {
@@ -20,8 +21,11 @@ import {
   markRead,
   openDm,
   reactToMessage,
-  sendMessage
+  removeUpload,
+  sendMessage,
+  uploadAttachment
 } from './messages'
+import { saveAttachment, showInFolder } from './files'
 import { connectRealtime, disconnectRealtime, sendTyping } from './realtime'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isUserId } from './api'
@@ -110,11 +114,15 @@ function createWindow(): void {
   }
 }
 
+// The one page that is the Glofly app. Any other file (say, one dropped on the window)
+// is never treated as the app, so it can't navigate in or talk to the main process.
+const APP_PAGE = pathToFileURL(join(__dirname, '../renderer/index.html')).href
+
 /** True for pages that belong to the Glofly app itself. */
 function isAppUrl(url: string): boolean {
   const devUrl = process.env['ELECTRON_RENDERER_URL']
-  if (is.dev && devUrl && url.startsWith(devUrl)) return true
-  return url.startsWith('file://')
+  if (is.dev && devUrl) return url.startsWith(devUrl)
+  return url.split(/[?#]/)[0] === APP_PAGE
 }
 
 /** Only answer requests that come from the Glofly window. */
@@ -296,11 +304,59 @@ function registerIpcHandlers(): void {
       ? loadMessages(id, before)
       : invalid
   )
-  ipcMain.handle('conversations:send', (event, id: unknown, body: unknown, replyTo: unknown) =>
-    fromApp(event) && isUserId(id) && isMessage(body) && (replyTo == null || isUserId(replyTo))
-      ? sendMessage(id, body, replyTo ?? undefined)
+  const isAttachmentIds = (v: unknown): v is string[] =>
+    Array.isArray(v) && v.length <= 10 && v.every(isUserId)
+  ipcMain.handle(
+    'conversations:send',
+    (event, id: unknown, body: unknown, replyTo: unknown, attachmentIds: unknown) =>
+      fromApp(event) &&
+      isUserId(id) &&
+      isMessage(body) &&
+      (replyTo == null || isUserId(replyTo)) &&
+      (attachmentIds == null || isAttachmentIds(attachmentIds))
+        ? sendMessage(id, body, replyTo ?? undefined, attachmentIds ?? undefined)
+        : invalid
+  )
+
+  // Photos and files in chats.
+  const FILE_MAX_BYTES = 25 * 1024 * 1024
+  ipcMain.handle('conversations:upload', (event, id: unknown, data: unknown, name: unknown) => {
+    if (
+      !fromApp(event) ||
+      !isUserId(id) ||
+      !(data instanceof ArrayBuffer) ||
+      typeof name !== 'string' ||
+      name.length > 1000
+    ) {
+      return invalid
+    }
+    if (data.byteLength === 0)
+      return { ok: false, error: 'invalid', message: 'That file is empty.' }
+    if (data.byteLength > FILE_MAX_BYTES) {
+      return { ok: false, error: 'invalid', message: 'Files can be up to 25 MB.' }
+    }
+    return uploadAttachment(id, new Uint8Array(data), name)
+  })
+  ipcMain.handle('conversations:remove-upload', (event, id: unknown, attachmentId: unknown) =>
+    fromApp(event) && isUserId(id) && isUserId(attachmentId)
+      ? removeUpload(id, attachmentId)
       : invalid
   )
+  ipcMain.handle(
+    'files:save',
+    (event, id: unknown, attachmentId: unknown, kind: unknown, name: unknown) =>
+      fromApp(event) &&
+      isUserId(id) &&
+      isUserId(attachmentId) &&
+      (kind === 'image' || kind === 'file') &&
+      typeof name === 'string' &&
+      name.length <= 1000
+        ? saveAttachment(BrowserWindow.fromWebContents(event.sender), id, attachmentId, kind, name)
+        : invalid
+  )
+  ipcMain.on('files:show-in-folder', (event, path: unknown) => {
+    if (isAppUrl(event.senderFrame?.url ?? '') && typeof path === 'string') showInFolder(path)
+  })
   ipcMain.handle('conversations:edit', (event, id: unknown, messageId: unknown, body: unknown) =>
     fromApp(event) && isUserId(id) && isUserId(messageId) && isMessage(body)
       ? editMessage(id, messageId, body)

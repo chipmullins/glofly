@@ -30,6 +30,7 @@ import {
   SettingsIcon
 } from '../components/icons'
 import { shortDate } from '../lib/names'
+import { attachmentSummary } from '../lib/attachments'
 import { playSound, setQuiet } from '../lib/sounds'
 import { dotFor, presenceLine, STATUS_LABEL } from '../lib/presence'
 import StatusDot from '../components/StatusDot'
@@ -823,7 +824,9 @@ export default function MainScreen({
                 : !last
                   ? 'No messages yet'
                   : `${last.senderId === user.id ? 'You: ' : ''}${
-                      last.deleted ? 'Message deleted' : last.body.replace(/\s+/g, ' ')
+                      last.deleted
+                        ? 'Message deleted'
+                        : last.body.replace(/\s+/g, ' ') || attachmentSummary(last.attachments)
                     }`
               return (
                 <button

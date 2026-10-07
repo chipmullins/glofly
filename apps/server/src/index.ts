@@ -7,6 +7,7 @@ import { authRouter } from "./auth/routes";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
 import { conversationsRouter } from "./messages/routes";
 import { avatarsRouter, profileRouter } from "./profile/routes";
+import { sweepUnsentUploads } from "./messages/attachments";
 import { startRealtime } from "./realtime";
 import { connectRedis } from "./redis";
 
@@ -59,6 +60,10 @@ connectRedis()
     server.listen(PORT, () => {
       console.log(`Glofly server running at http://localhost:${PORT}`);
     });
+    // Files added to a chat but never sent are cleared out after an hour.
+    setInterval(() => {
+      sweepUnsentUploads().catch((err) => console.error("Upload cleanup failed", err));
+    }, 10 * 60 * 1000);
   })
   .catch((err) => {
     console.error("Couldn't connect to Redis. Is Docker running? (docker compose up -d)", err);

@@ -4,6 +4,7 @@ import {
   boolean,
   date,
   index,
+  integer,
   pgEnum,
   pgTable,
   primaryKey,
@@ -213,4 +214,37 @@ export const messageReactions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.messageId, t.userId, t.emoji] })],
+);
+
+export const attachmentKind = pgEnum("attachment_kind", ["image", "file"]);
+
+// Photos and files shared in chats. Uploaded first (message_id empty), then attached
+// when the message is sent. Unsent uploads are cleaned up after an hour.
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    uploaderId: uuid("uploader_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id").references(() => messages.id, { onDelete: "cascade" }),
+    // Order within its message.
+    position: integer("position").notNull().default(0),
+    kind: attachmentKind("kind").notNull(),
+    // The file name as shown (cleaned up: no folders, hidden characters or tricks).
+    name: text("name").notNull(),
+    // Bytes of what's stored (for photos, the full-size version).
+    size: integer("size").notNull(),
+    // Photos only: size of the full-size version.
+    width: integer("width"),
+    height: integer("height"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("attachments_message_idx").on(t.messageId),
+    index("attachments_unsent_idx").on(t.uploaderId, t.createdAt),
+  ],
 );

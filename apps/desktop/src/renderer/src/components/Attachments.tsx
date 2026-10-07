@@ -1,0 +1,351 @@
+import { useEffect, useRef, useState } from 'react'
+import type { Attachment } from '../../../preload/api-types'
+import { fileTypeLabel, formatSize, photoUrl } from '../lib/attachments'
+import { ChevronIcon, CloseIcon, DownloadIcon, FileIcon, PhotoIcon } from './icons'
+import './Attachments.css'
+
+// Photos and files in chats: how they look in a message, the full-size photo viewer,
+// and the tray of files waiting to be sent.
+
+type Failure = (error: string, message: string) => void
+
+/** Saves an attachment (asks where first). Returns where it went, or null if cancelled/failed. */
+async function save(
+  conversationId: string,
+  attachment: Attachment,
+  onFailure: Failure
+): Promise<string | null> {
+  const result = await window.glofly.files.save(conversationId, attachment)
+  if (!result.ok) {
+    onFailure(result.error, result.message)
+    return null
+  }
+  return result.data?.path ?? null
+}
+
+// Photos in a message are shown up to this size (one photo), or as square tiles (several).
+const SINGLE_MAX_W = 360
+const SINGLE_MAX_H = 320
+const TILE = 176
+
+function singleSize(a: Attachment): { width: number; height: number } {
+  const w = a.width ?? SINGLE_MAX_W
+  const h = a.height ?? SINGLE_MAX_H
+  const scale = Math.min(SINGLE_MAX_W / w, SINGLE_MAX_H / h, 1)
+  return { width: Math.max(80, Math.round(w * scale)), height: Math.max(60, Math.round(h * scale)) }
+}
+
+/** A photo that shows a quiet placeholder if it can't be loaded. */
+function Photo({ src, alt }: { src: string; alt: string }): React.JSX.Element {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  if (failedSrc === src) {
+    return (
+      <span className="photo-missing">
+        <PhotoIcon size={22} />
+        Photo unavailable
+      </span>
+    )
+  }
+  return (
+    <img src={src} alt={alt} draggable={false} loading="lazy" onError={() => setFailedSrc(src)} />
+  )
+}
+
+function FileCard({
+  conversationId,
+  attachment,
+  onFailure
+}: {
+  conversationId: string
+  attachment: Attachment
+  onFailure: Failure
+}): React.JSX.Element {
+  const [savedTo, setSavedTo] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  async function download(): Promise<void> {
+    setSaving(true)
+    const path = await save(conversationId, attachment, onFailure)
+    setSaving(false)
+    if (path) setSavedTo(path)
+  }
+
+  return (
+    <div className="file-card">
+      <span className="file-card-icon" aria-hidden="true">
+        <FileIcon size={22} />
+      </span>
+      <span className="file-card-text">
+        <span className="file-card-name" title={attachment.name}>
+          {attachment.name}
+        </span>
+        <span className="file-card-meta">
+          {savedTo ? (
+            <>
+              Saved ·{' '}
+              <button type="button" onClick={() => window.glofly.files.showInFolder(savedTo)}>
+                Show in folder
+              </button>
+            </>
+          ) : (
+            `${fileTypeLabel(attachment.name)} · ${formatSize(attachment.size)}`
+          )}
+        </span>
+      </span>
+      <button
+        type="button"
+        className="file-card-download"
+        aria-label={`Download ${attachment.name}`}
+        title="Download"
+        disabled={saving}
+        onClick={() => void download()}
+      >
+        <DownloadIcon size={19} strokeWidth={2} />
+      </button>
+    </div>
+  )
+}
+
+/** The photos and files of one message. */
+export function MessageAttachments({
+  conversationId,
+  attachments,
+  onOpenPhoto,
+  onFailure
+}: {
+  conversationId: string
+  attachments: Attachment[]
+  onOpenPhoto: (photos: Attachment[], index: number) => void
+  onFailure: Failure
+}): React.JSX.Element {
+  const photos = attachments.filter((a) => a.kind === 'image')
+  const files = attachments.filter((a) => a.kind === 'file')
+  const single = photos.length === 1 ? singleSize(photos[0]) : null
+
+  return (
+    <div className="attachments">
+      {photos.length > 0 && (
+        <div className={single ? 'photo-grid photo-grid--single' : 'photo-grid'}>
+          {photos.map((a, i) => (
+            <button
+              key={a.id}
+              type="button"
+              className="photo-tile"
+              style={single ?? { width: TILE, height: TILE }}
+              aria-label={`Open photo ${a.name}`}
+              title={a.name}
+              onClick={() => onOpenPhoto(photos, i)}
+            >
+              <Photo src={photoUrl(conversationId, a.id, 'preview')} alt={a.name} />
+            </button>
+          ))}
+        </div>
+      )}
+      {files.map((a) => (
+        <FileCard key={a.id} conversationId={conversationId} attachment={a} onFailure={onFailure} />
+      ))}
+    </div>
+  )
+}
+
+/** Full-size photo viewer. ← → move between the photos of a message; Esc closes. */
+export function PhotoViewer({
+  conversationId,
+  photos,
+  startIndex,
+  onClose,
+  onFailure
+}: {
+  conversationId: string
+  photos: Attachment[]
+  startIndex: number
+  onClose: () => void
+  onFailure: Failure
+}): React.JSX.Element {
+  const [index, setIndex] = useState(startIndex)
+  const [loadedId, setLoadedId] = useState<string | null>(null)
+  const [savedTo, setSavedTo] = useState<{ id: string; path: string } | null>(null)
+  const closeButton = useRef<HTMLButtonElement>(null)
+  const photo = photos[index]
+  const count = photos.length
+
+  const keys = useRef({ onClose, count })
+  useEffect(() => {
+    keys.current = { onClose, count }
+  })
+  useEffect(() => {
+    closeButton.current?.focus()
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') keys.current.onClose()
+      if (e.key === 'ArrowLeft') setIndex((i) => (i - 1 + keys.current.count) % keys.current.count)
+      if (e.key === 'ArrowRight') setIndex((i) => (i + 1) % keys.current.count)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  async function download(): Promise<void> {
+    const path = await save(conversationId, photo, onFailure)
+    if (path) setSavedTo({ id: photo.id, path })
+  }
+
+  return (
+    <div
+      className="photo-viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Photo ${photo.name}`}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="photo-viewer-bar">
+        <span className="photo-viewer-title">
+          <span className="photo-viewer-name">{photo.name}</span>
+          <span className="photo-viewer-meta">
+            {count > 1 && `${index + 1} of ${count} · `}
+            {photo.width && photo.height ? `${photo.width} × ${photo.height}` : ''}
+          </span>
+        </span>
+        {savedTo?.id === photo.id ? (
+          <button
+            type="button"
+            className="photo-viewer-button"
+            onClick={() => window.glofly.files.showInFolder(savedTo.path)}
+          >
+            Show in folder
+          </button>
+        ) : (
+          <button type="button" className="photo-viewer-button" onClick={() => void download()}>
+            <DownloadIcon size={18} strokeWidth={2} />
+            Save
+          </button>
+        )}
+        <button
+          ref={closeButton}
+          type="button"
+          className="photo-viewer-close"
+          aria-label="Close photo"
+          onClick={onClose}
+        >
+          <CloseIcon size={20} strokeWidth={2.2} />
+        </button>
+      </div>
+
+      <div
+        className="photo-viewer-stage"
+        onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      >
+        {/* The preview shows instantly; the full-size photo fades in over it once loaded. */}
+        <div className="photo-viewer-frame" key={photo.id}>
+          {loadedId !== photo.id && (
+            <img
+              className="photo-viewer-preview"
+              src={photoUrl(conversationId, photo.id, 'preview')}
+              alt=""
+              draggable={false}
+            />
+          )}
+          <img
+            className={
+              loadedId === photo.id
+                ? 'photo-viewer-full photo-viewer-full--loaded'
+                : 'photo-viewer-full'
+            }
+            src={photoUrl(conversationId, photo.id, 'full')}
+            alt={photo.name}
+            draggable={false}
+            onLoad={() => setLoadedId(photo.id)}
+          />
+        </div>
+      </div>
+
+      {count > 1 && (
+        <>
+          <button
+            type="button"
+            className="photo-viewer-step photo-viewer-step--prev"
+            aria-label="Previous photo"
+            onClick={() => setIndex((i) => (i - 1 + count) % count)}
+          >
+            <ChevronIcon direction="left" size={26} strokeWidth={2.2} />
+          </button>
+          <button
+            type="button"
+            className="photo-viewer-step photo-viewer-step--next"
+            aria-label="Next photo"
+            onClick={() => setIndex((i) => (i + 1) % count)}
+          >
+            <ChevronIcon direction="right" size={26} strokeWidth={2.2} />
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** A file added to the message box, uploading or ready to send. */
+export type Upload = {
+  localId: string
+  name: string
+  size: number
+  looksLikePhoto: boolean
+  status: 'uploading' | 'ready' | 'failed'
+  attachment: Attachment | null
+  error: string | null
+}
+
+/** Files waiting to be sent, shown above the message box. */
+export function UploadTray({
+  conversationId,
+  uploads,
+  onRemove
+}: {
+  conversationId: string
+  uploads: Upload[]
+  onRemove: (localId: string) => void
+}): React.JSX.Element {
+  return (
+    <ul className="upload-tray" aria-label="Files to send">
+      {uploads.map((u) => {
+        const photo = u.attachment?.kind === 'image' ? u.attachment : null
+        return (
+          <li
+            key={u.localId}
+            className={u.status === 'failed' ? 'upload-chip upload-chip--failed' : 'upload-chip'}
+          >
+            <span className="upload-thumb" aria-hidden="true">
+              {photo ? (
+                <img src={photoUrl(conversationId, photo.id, 'preview')} alt="" draggable={false} />
+              ) : u.looksLikePhoto ? (
+                <PhotoIcon size={20} />
+              ) : (
+                <FileIcon size={20} />
+              )}
+              {u.status === 'uploading' && <span className="upload-spinner" />}
+            </span>
+            <span className="upload-text">
+              <span className="upload-name" title={u.name}>
+                {u.name}
+              </span>
+              <span className="upload-meta" role={u.status === 'failed' ? 'alert' : undefined}>
+                {u.status === 'uploading'
+                  ? 'Uploading…'
+                  : u.status === 'failed'
+                    ? u.error
+                    : formatSize(u.attachment?.size ?? u.size)}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="upload-remove"
+              aria-label={`Remove ${u.name}`}
+              title="Remove"
+              onClick={() => onRemove(u.localId)}
+            >
+              ×
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
