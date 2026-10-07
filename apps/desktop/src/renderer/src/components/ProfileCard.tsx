@@ -150,7 +150,7 @@ export default function ProfileCard({
               avatarVersion={shown.avatarVersion}
               size={156}
               status={presence?.status}
-              ring="#FFFFFF"
+              ring="var(--glo-surface)"
               className="profile-photo"
             />
 

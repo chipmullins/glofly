@@ -1,4 +1,12 @@
-import { app, shell, BrowserWindow, ipcMain, protocol, type IpcMainInvokeEvent } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  nativeTheme,
+  protocol,
+  type IpcMainInvokeEvent
+} from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -28,9 +36,14 @@ import {
 import { saveAttachment, showInFolder } from './files'
 import { changePassword, deleteAccount, getAccount } from './account'
 import {
+  appearanceArgs,
   getAppSettings,
+  isAppSettingsChanges,
+  isDark,
   loadAppSettings,
   setAppSettings,
+  zoomFactor,
+  sendAppearance,
   setUpTray,
   shouldHideOnClose,
   showWindow,
@@ -60,11 +73,19 @@ import type {
   WindowTheme
 } from '../preload/api-types'
 
-// Colors for the minimize / maximize / close buttons, matching each screen.
+// Colors for the minimize / maximize / close buttons, matching each screen and theme.
 const TITLE_BAR = {
   login: { color: '#FFFBF7', symbolColor: '#24170F', height: 40 },
-  app: { color: '#FFFFFF', symbolColor: '#4A372B', height: 40 }
+  app: { color: '#FFFFFF', symbolColor: '#4A372B', height: 40 },
+  loginDark: { color: '#1E1916', symbolColor: '#D9C8BC', height: 40 },
+  appDark: { color: '#1E1916', symbolColor: '#D9C8BC', height: 40 }
 } as const
+
+const titleBarFor = (screen: WindowTheme): (typeof TITLE_BAR)[keyof typeof TITLE_BAR] =>
+  TITLE_BAR[isDark() ? (screen === 'app' ? 'appDark' : 'loginDark') : screen]
+
+/** Which screen each window is showing, so its window buttons can follow theme changes. */
+const screenOf = new Map<number, WindowTheme>()
 
 // Developer option: `npm run second -w apps/desktop` opens a second copy of Glofly with its
 // own saved sign-in, so two test accounts can chat live on one PC.
@@ -95,18 +116,26 @@ function createWindow(): void {
     minWidth: 1000,
     minHeight: 700,
     title: isSecondWindow ? 'Glofly (second window)' : 'Glofly',
-    backgroundColor: '#FFFBF7',
+    backgroundColor: isDark() ? '#1E1916' : '#FFFBF7',
     show: false,
     autoHideMenuBar: true,
-    ...(customTitleBar ? { titleBarStyle: 'hidden', titleBarOverlay: TITLE_BAR.login } : {}),
+    ...(customTitleBar ? { titleBarStyle: 'hidden', titleBarOverlay: titleBarFor('login') } : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: true
+      sandbox: true,
+      // The accent is known before the page draws, so it never flashes the wrong color.
+      additionalArguments: appearanceArgs()
     }
   })
 
   mainWindow = window
+  // Text size (Settings → Appearance) is a zoom level for the whole window.
+  // A reload (say, while developing) gets the current theme and accent too.
+  window.webContents.on('did-finish-load', () => {
+    window.webContents.setZoomFactor(zoomFactor())
+    sendAppearance([window])
+  })
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null
   })
@@ -212,7 +241,8 @@ async function thenGoLive<T>(result: Promise<T>): Promise<T> {
 function registerIpcHandlers(): void {
   ipcMain.on('window:theme', (event, theme: unknown) => {
     if (!customTitleBar || !isAppUrl(event.senderFrame?.url ?? '') || !isWindowTheme(theme)) return
-    BrowserWindow.fromWebContents(event.sender)?.setTitleBarOverlay(TITLE_BAR[theme])
+    screenOf.set(event.sender.id, theme)
+    BrowserWindow.fromWebContents(event.sender)?.setTitleBarOverlay(titleBarFor(theme))
   })
 
   ipcMain.handle('auth:register', (event, request: unknown) => {
@@ -272,17 +302,9 @@ function registerIpcHandlers(): void {
 
   // App settings (this computer only).
   ipcMain.handle('app:get-settings', (event) => (fromApp(event) ? getAppSettings() : null))
-  ipcMain.handle('app:set-settings', (event, changes: unknown) => {
-    const c = changes as Record<string, unknown> | null
-    const ok =
-      fromApp(event) &&
-      typeof c === 'object' &&
-      c !== null &&
-      Object.entries(c).every(
-        ([k, v]) => (k === 'closeToTray' || k === 'openAtLogin') && typeof v === 'boolean'
-      )
-    return ok ? setAppSettings(c as { closeToTray?: boolean; openAtLogin?: boolean }) : null
-  })
+  ipcMain.handle('app:set-settings', (event, changes: unknown) =>
+    fromApp(event) && isAppSettingsChanges(changes) ? setAppSettings(changes) : null
+  )
 
   // Settings → Account. Passwords are checked for size only; the server does the rest.
   const isPassword = (v: unknown): v is string =>
@@ -487,6 +509,18 @@ app.whenReady().then(() => {
   startIdleWatch()
   createWindow()
   setUpTray(() => mainWindow, icon)
+
+  // Light ↔ dark (picked in Settings, or Windows changed with "Match system"):
+  // the page follows by itself; the window background and buttons follow here.
+  nativeTheme.on('updated', () => {
+    sendAppearance()
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.setBackgroundColor(isDark() ? '#1E1916' : '#FFFBF7')
+      if (customTitleBar) {
+        window.setTitleBarOverlay(titleBarFor(screenOf.get(window.webContents.id) ?? 'login'))
+      }
+    }
+  })
 
   app.on('activate', function () {
     // macOS: reopen the window when the dock icon is clicked.

@@ -5,7 +5,7 @@
   display: flex;
   font-family: var(--glo-font-body);
   color: var(--glo-ink);
-  background: #ffffff;
+  background: var(--glo-bg);
 }
 
 /* ---------- Sidebar ---------- */
@@ -14,8 +14,8 @@
   flex: 1 1 300px;
   max-width: 340px;
   min-width: 280px;
-  background: #f7f0e9;
-  border-right: 1px solid #eaddd1;
+  background: var(--glo-sidebar);
+  border-right: 1px solid var(--glo-line);
   padding: 16px 12px;
   display: flex;
   flex-direction: column;
@@ -50,7 +50,7 @@
   position: absolute;
   left: 12px;
   top: 12px;
-  color: #8f7868;
+  color: var(--glo-faint);
   pointer-events: none;
 }
 .search--wide {
@@ -61,20 +61,20 @@
   width: 100%;
   height: 42px;
   padding: 0 12px 0 38px;
-  border: 1.5px solid #e3d3c5;
+  border: 1.5px solid var(--glo-line-strong);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--glo-surface);
   font: inherit;
   font-size: 14px;
   color: var(--glo-ink);
 }
 .search-input::placeholder {
-  color: #8f7868;
+  color: var(--glo-faint);
 }
 .search-input:focus {
   outline: none;
   border-color: var(--glo-orange);
-  box-shadow: 0 0 0 4px rgba(244, 122, 31, 0.18);
+  box-shadow: 0 0 0 4px rgba(var(--glo-accent-rgb), 0.18);
 }
 
 /* Profile panel: under the search bar, at the top of the sidebar */
@@ -84,8 +84,8 @@
   align-items: center;
   gap: 12px;
   padding: 10px;
-  background: #ffffff;
-  border: 1px solid #eaddd1;
+  background: var(--glo-surface);
+  border: 1px solid var(--glo-line);
   border-radius: 14px;
 }
 .avatar {
@@ -115,12 +115,12 @@
 }
 .avatar--me {
   background: var(--glo-orange);
-  color: #2a1406;
+  color: var(--glo-on-accent);
   cursor: pointer;
 }
 /* Status dots, from the design. --ring is the color behind the avatar. */
 .status-dot {
-  --ring: #ffffff;
+  --ring: var(--glo-surface);
   position: absolute;
   right: -1px;
   bottom: -1px;
@@ -131,11 +131,11 @@
   overflow: hidden;
 }
 .status-dot--online {
-  background: #2e9e5b;
+  background: var(--glo-good);
 }
 /* Away: a yellow crescent moon */
 .status-dot--away {
-  background: #e2a00f;
+  background: var(--glo-warn);
 }
 .status-dot--away::after {
   content: '';
@@ -149,7 +149,7 @@
 }
 /* Do not disturb: red with a white dash */
 .status-dot--dnd {
-  background: #d33a2c;
+  background: var(--glo-danger);
 }
 .status-dot--dnd::after {
   content: '';
@@ -166,7 +166,7 @@
 .status-dot--offline {
   background: var(--ring);
   box-shadow:
-    inset 0 0 0 3px #9a8678,
+    inset 0 0 0 3px var(--glo-faint),
     0 0 0 3px var(--ring);
 }
 .profile-text {
@@ -206,7 +206,7 @@
 }
 .icon-button:hover,
 .icon-button[aria-expanded='true'] {
-  background: #f7f0e9;
+  background: var(--glo-panel);
   color: var(--glo-ink);
 }
 .icon-button--small {
@@ -215,7 +215,7 @@
   border-radius: 8px;
 }
 .sidebar .icon-button--small:hover {
-  background: #efe3d8;
+  background: var(--glo-hover);
 }
 
 .nav-item {
@@ -235,7 +235,7 @@
   text-align: left;
 }
 .nav-item--active {
-  background: #fbdcc4;
+  background: var(--glo-accent-soft);
 }
 .nav-item svg {
   color: var(--glo-link);
@@ -259,7 +259,7 @@
   align-items: flex-start;
   margin: 0 4px;
   padding: 14px;
-  border: 1.5px dashed #e3d3c5;
+  border: 1.5px dashed var(--glo-line-strong);
   border-radius: 12px;
   color: var(--glo-muted);
 }
@@ -283,10 +283,10 @@
   z-index: 20;
   width: 220px;
   padding: 6px;
-  background: #ffffff;
-  border: 1px solid #eaddd1;
+  background: var(--glo-surface);
+  border: 1px solid var(--glo-line);
   border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(36, 23, 15, 0.16);
+  box-shadow: 0 12px 32px rgba(var(--glo-shadow-rgb), 0.16);
   display: flex;
   flex-direction: column;
 }
@@ -312,11 +312,11 @@
 }
 .menu-item:hover,
 .menu-item:focus-visible {
-  background: #fbede1;
+  background: var(--glo-accent-tint);
   outline: none;
 }
 .menu-item--danger {
-  color: #b42318;
+  color: var(--glo-danger);
 }
 
 /* ---------- Main content ---------- */
@@ -326,7 +326,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--glo-bg);
 }
 
 .content-header {
@@ -335,7 +335,7 @@
   align-items: center;
   gap: 8px;
   padding: 14px 24px;
-  border-bottom: 1px solid #efe4da;
+  border-bottom: 1px solid var(--glo-line-soft);
 }
 .content-title {
   display: flex;
@@ -343,7 +343,7 @@
   gap: 10px;
   padding-right: 14px;
   margin-right: 6px;
-  border-right: 1px solid #eaddd1;
+  border-right: 1px solid var(--glo-line);
   font-family: var(--glo-font-display);
   font-weight: 600;
   font-size: 18px;
@@ -363,18 +363,18 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #4a372b;
+  color: var(--glo-icon);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
 .filter:hover {
-  background: #f7f0e9;
+  background: var(--glo-panel);
 }
 .filter[aria-pressed='true'] {
   background: var(--glo-ink);
-  color: #ffffff;
+  color: var(--glo-bg);
 }
 
 .primary-button {
@@ -386,7 +386,7 @@
   border: 0;
   border-radius: 10px;
   background: var(--glo-orange);
-  color: #2a1406;
+  color: var(--glo-on-accent);
   font-family: var(--glo-font-display);
   font-size: 15px;
   font-weight: 600;
@@ -460,11 +460,11 @@
   text-align: left;
 }
 .dm-row:hover {
-  background: #efe3d8;
+  background: var(--glo-hover);
 }
 .dm-row--active,
 .dm-row--active:hover {
-  background: #fbdcc4;
+  background: var(--glo-accent-soft);
 }
 .dm-text {
   flex: 1;
@@ -493,9 +493,9 @@
 
 .connection-banner {
   padding: 8px 24px;
-  background: #fbede1;
-  border-bottom: 1px solid #f1d6c0;
-  color: #8a3005;
+  background: var(--glo-accent-tint);
+  border-bottom: 1px solid var(--glo-accent-soft);
+  color: var(--glo-link-hover);
   font-size: 13px;
   font-weight: 600;
   text-align: center;
@@ -509,7 +509,7 @@
   height: 22px;
   padding: 0 7px;
   border-radius: 11px;
-  background: #c4410c;
+  background: var(--glo-link);
   color: #ffffff;
   font-size: 12px;
   font-weight: 700;
@@ -532,9 +532,9 @@
 .page-notice {
   padding: 12px 14px;
   border-radius: 12px;
-  background: #fdecea;
-  border: 1px solid #f5c2bc;
-  color: #a1241a;
+  background: var(--glo-danger-bg);
+  border: 1px solid var(--glo-danger-line);
+  color: var(--glo-danger-text);
   font-size: 14px;
 }
 
@@ -560,12 +560,12 @@
   align-items: center;
   gap: 14px;
   padding: 10px 12px;
-  border-top: 1px solid #f3eae2;
+  border-top: 1px solid var(--glo-line-soft);
   border-radius: 12px;
 }
 .friend-row:hover,
 .friend-row--open {
-  background: #fbf5ef;
+  background: var(--glo-subtle);
 }
 .friend-text {
   flex: 1;
@@ -608,8 +608,8 @@
   height: 40px;
   border: 0;
   border-radius: 50%;
-  background: #f7f0e9;
-  color: #4a372b;
+  background: var(--glo-panel);
+  color: var(--glo-icon);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -618,7 +618,7 @@
 }
 .round-button:hover,
 .round-button[aria-expanded='true'] {
-  background: #fbdcc4;
+  background: var(--glo-accent-soft);
 }
 .friend-more {
   position: relative;
@@ -700,7 +700,7 @@
 }
 .status-choice:hover,
 .status-choice:focus-visible {
-  background: #fbede1;
+  background: var(--glo-accent-tint);
   outline: none;
 }
 .status-choice > svg {
@@ -735,7 +735,7 @@
 .menu-divider {
   height: 1px;
   margin: 6px 4px;
-  background: #efe4da;
+  background: var(--glo-line-soft);
 }
 .custom-status {
   display: flex;
@@ -751,9 +751,9 @@
   width: 100%;
   height: 40px;
   padding: 0 34px 0 12px;
-  border: 1.5px solid #e3d3c5;
+  border: 1.5px solid var(--glo-line-strong);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--glo-surface);
   font: inherit;
   font-size: 14px;
   color: var(--glo-ink);
@@ -761,7 +761,7 @@
 .custom-status-row input:focus {
   outline: none;
   border-color: var(--glo-orange);
-  box-shadow: 0 0 0 4px rgba(244, 122, 31, 0.18);
+  box-shadow: 0 0 0 4px rgba(var(--glo-accent-rgb), 0.18);
 }
 .custom-status-clear {
   position: absolute;
@@ -771,7 +771,7 @@
   height: 26px;
   border: 0;
   border-radius: 50%;
-  background: #f7f0e9;
+  background: var(--glo-panel);
   color: var(--glo-muted);
   font-size: 16px;
   line-height: 1;
@@ -792,9 +792,15 @@
   border: 0;
   border-radius: 8px;
   background: var(--glo-orange);
-  color: #2a1406;
+  color: var(--glo-on-accent);
   font: inherit;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* Dark theme: badges use the accent, like the design */
+:root[data-theme='dark'] .badge {
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
 }

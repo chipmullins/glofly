@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
-  AppSettings,
+  AccentChoice,
+  AppSettingsChanges,
   Attachment,
   GloflyApi,
   GloflyEvent,
@@ -41,8 +42,11 @@ const glofly: GloflyApi = {
   },
   app: {
     getSettings: () => ipcRenderer.invoke('app:get-settings'),
-    setSettings: (changes: Partial<Pick<AppSettings, 'closeToTray' | 'openAtLogin'>>) =>
-      ipcRenderer.invoke('app:set-settings', changes)
+    setSettings: (changes: AppSettingsChanges) => ipcRenderer.invoke('app:set-settings', changes),
+    initialAppearance: {
+      accent: (process.argv.includes('--glofly-accent=red') ? 'red' : 'orange') as AccentChoice,
+      dark: process.argv.includes('--glofly-dark')
+    }
   },
   account: {
     get: () => ipcRenderer.invoke('account:get'),

@@ -182,10 +182,21 @@ export type PrivacySettings = {
 /** Settings → Account: private details only you see. */
 export type AccountDetails = { username: string; email: string; createdAt: string }
 
-/** Settings → General → App. Kept on this computer, not on the server. */
+export type AppSettingsChanges = Partial<
+  Pick<AppSettings, 'closeToTray' | 'openAtLogin' | 'theme' | 'accent' | 'textSize'>
+>
+
+export type ThemeChoice = 'light' | 'dark' | 'system'
+export type AccentChoice = 'orange' | 'red'
+export type TextSize = 'small' | 'default' | 'large' | 'larger'
+
+/** Settings → General → Appearance and App. Kept on this computer, not on the server. */
 export type AppSettings = {
   /** e.g. "0.1.0" */
   version: string
+  theme: ThemeChoice
+  accent: AccentChoice
+  textSize: TextSize
   /** Closing the window keeps Glofly running in the system tray. */
   closeToTray: boolean
   /** Open Glofly when the computer starts. */
@@ -208,6 +219,7 @@ export type GloflyEvent =
   | { type: 'profile:changed'; userId: string }
   | { type: 'connection'; connected: boolean }
   | { type: 'session:expired' }
+  | { type: 'appearance'; accent: AccentChoice; dark: boolean }
 
 /** Which screen is showing, so the window buttons can match its colors. */
 export type WindowTheme = 'login' | 'app'
@@ -243,9 +255,9 @@ export type GloflyApi = {
   }
   app: {
     getSettings: () => Promise<AppSettings>
-    setSettings: (
-      changes: Partial<Pick<AppSettings, 'closeToTray' | 'openAtLogin'>>
-    ) => Promise<AppSettings>
+    setSettings: (changes: AppSettingsChanges) => Promise<AppSettings>
+    /** Theme and accent at startup, known before anything is drawn (so nothing flashes). */
+    initialAppearance: { accent: AccentChoice; dark: boolean }
   }
   account: {
     get: () => Promise<ApiResult<AccountDetails>>

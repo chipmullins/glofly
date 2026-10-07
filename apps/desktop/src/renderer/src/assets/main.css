@@ -6,18 +6,138 @@
 @import '@fontsource-variable/dm-sans/opsz.css';
 
 :root {
-  --glo-cream: #fffbf7;
-  --glo-night: #1c1210;
+  /* Colors, as named roles. Light theme here; dark theme and the Glofly Red accent below.
+     Change a color in one place and every screen follows. */
+
+  /* Backgrounds */
+  --glo-cream: #fffbf7; /* login / register form panel, page */
+  --glo-bg: #ffffff; /* main content: chat, friends */
+  --glo-sidebar: #f7f0e9;
+  --glo-surface: #ffffff; /* cards, menus, dialogs, inputs */
+  --glo-panel: #f7f0e9; /* composer, quiet buttons, fills inside cards */
+  --glo-subtle: #fbf5ef; /* tinted cards, row hover */
+  --glo-hover: #efe3d8;
+  --glo-backdrop: rgba(60, 44, 34, 0.55); /* behind dialogs */
+
+  /* Lines */
+  --glo-line: #eaddd1;
+  --glo-line-soft: #efe4da;
+  --glo-border: #dcc8b8; /* text boxes */
+  --glo-line-strong: #d9c7b8; /* switches off, empty meters */
+
+  /* Text */
   --glo-ink: #24170f;
+  --glo-icon: #4a372b;
   --glo-muted: #6b5547;
-  --glo-orange: #f47a1f;
-  --glo-orange-deep: #e2650f;
+  --glo-faint: #8f7868; /* timestamps, hints */
+  --glo-placeholder: #8f7868;
+
+  /* Accent (Glow Orange) */
+  --glo-accent: #f47a1f;
+  --glo-accent-deep: #e2650f;
+  --glo-on-accent: #2a1406; /* text and icons on the accent */
+  --glo-accent-rgb: 244, 122, 31; /* for see-through glows: rgba(var(--glo-accent-rgb), 0.2) */
+  --glo-accent-soft: #fbdcc4; /* selected rows */
+  --glo-accent-tint: #fde9d7; /* light highlights */
+  --glo-accent-muted: #f1c9a6; /* disabled accent buttons */
   --glo-link: #b8430a;
   --glo-link-hover: #8a3005;
-  --glo-border: #dcc8b8;
-  --glo-placeholder: #9c8676;
+
+  /* Status */
+  --glo-danger: #b42318;
+  --glo-danger-text: #a1241a;
+  --glo-danger-bg: #fdecea;
+  --glo-danger-line: #f1c9c3;
+  --glo-good: #2e9e5b;
+  --glo-good-text: #1f6b3f;
+  --glo-good-bg: #eaf5ee;
+  --glo-warn: #e2a00f;
+  --glo-warn-text: #7a5200;
+  --glo-warn-bg: #fcf1d8;
+
+  --glo-shadow-rgb: 36, 23, 15;
+  --glo-night: #1c1210; /* the login screen's night-sky panel (dark in both themes) */
+
+  /* Older names, kept so nothing breaks */
+  --glo-orange: var(--glo-accent);
+  --glo-orange-deep: var(--glo-accent-deep);
+
   --glo-font-body: 'DM Sans Variable', 'DM Sans', system-ui, sans-serif;
   --glo-font-display: 'Outfit', system-ui, sans-serif;
+
+  color-scheme: light;
+}
+
+/* Dark theme (ChatDark.dc.html) */
+:root[data-theme='dark'] {
+  --glo-cream: #1e1916;
+  --glo-bg: #1e1916;
+  --glo-sidebar: #171310;
+  --glo-surface: #2a231f;
+  --glo-panel: #322a25;
+  --glo-subtle: #26201c;
+  --glo-hover: #3a302a;
+  --glo-backdrop: rgba(0, 0, 0, 0.6);
+
+  --glo-line: #3a302a;
+  --glo-line-soft: #2e2622;
+  --glo-border: #4a3e36;
+  --glo-line-strong: #574a41;
+
+  --glo-ink: #f5ede6;
+  --glo-icon: #d9c8bc;
+  --glo-muted: #b8a699;
+  --glo-faint: #9a897c;
+  --glo-placeholder: #8e7d71;
+
+  --glo-accent: #f7893a;
+  --glo-accent-deep: #ef7d2c;
+  --glo-on-accent: #2a1406;
+  --glo-accent-rgb: 247, 137, 58;
+  --glo-accent-soft: #4a2e1c;
+  --glo-accent-tint: #3a2618;
+  --glo-accent-muted: #5a3a26;
+  --glo-link: #ffa96a;
+  --glo-link-hover: #ffc596;
+
+  --glo-danger: #e5483e;
+  --glo-danger-text: #ff8a80;
+  --glo-danger-bg: #3a1d1a;
+  --glo-danger-line: #6b2a24;
+  --glo-good: #3dba6e;
+  --glo-good-text: #6fd39a;
+  --glo-good-bg: #1d3326;
+  --glo-warn: #f0b429;
+  --glo-warn-text: #f0c25a;
+  --glo-warn-bg: #3a2e14;
+
+  --glo-shadow-rgb: 0, 0, 0;
+
+  color-scheme: dark;
+}
+
+/* Glofly Red accent (ChatRed.dc.html) */
+:root[data-accent='red'] {
+  --glo-accent: #e0193a;
+  --glo-accent-deep: #c0122f;
+  --glo-on-accent: #ffffff;
+  --glo-accent-rgb: 224, 25, 58;
+  --glo-accent-soft: #fad3da;
+  --glo-accent-tint: #fce8eb;
+  --glo-accent-muted: #f4b3be;
+  --glo-link: #c0122f;
+  --glo-link-hover: #8f0d23;
+}
+:root[data-theme='dark'][data-accent='red'] {
+  --glo-accent: #f0485f;
+  --glo-accent-deep: #e03a52;
+  --glo-on-accent: #2a0a10;
+  --glo-accent-rgb: 240, 72, 95;
+  --glo-accent-soft: #4a1c24;
+  --glo-accent-tint: #3a1820;
+  --glo-accent-muted: #5a2a32;
+  --glo-link: #ff8a9b;
+  --glo-link-hover: #ffb3be;
 }
 
 *,

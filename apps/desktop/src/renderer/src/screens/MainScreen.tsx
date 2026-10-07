@@ -179,7 +179,7 @@ function FriendRow({
         name={person.displayName}
         avatarVersion={person.avatarVersion}
         status={person.presence?.status ?? 'offline'}
-        ring={open ? '#FBF5EF' : '#FFFFFF'}
+        ring={open ? 'var(--glo-subtle)' : 'var(--glo-bg)'}
       />
       <div className="friend-text">
         <div className="friend-names">
@@ -755,7 +755,7 @@ export default function MainScreen({
             onClick={() => setStatusOpen((v) => !v)}
           >
             <AvatarFace id={user.id} name={user.displayName} avatarVersion={user.avatarVersion} />
-            <StatusDot status={dotFor(myStatus.status)} ring="#FFFFFF" />
+            <StatusDot status={dotFor(myStatus.status)} ring="var(--glo-surface)" />
           </button>
           <div className="profile-text">
             <span className="profile-name">{user.displayName}</span>
@@ -848,7 +848,7 @@ export default function MainScreen({
                     avatarVersion={c.partner.avatarVersion}
                     size={40}
                     status={partnerPresence?.status}
-                    ring={active ? '#FBDCC4' : '#F7F0E9'}
+                    ring={active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'}
                   />
                   <span className="dm-text">
                     <span

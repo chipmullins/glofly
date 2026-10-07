@@ -14,7 +14,7 @@ type StatusDotProps = {
  */
 export default function StatusDot({
   status,
-  ring = '#FFFFFF',
+  ring = 'var(--glo-surface)',
   size = 12
 }: StatusDotProps): React.JSX.Element {
   return (

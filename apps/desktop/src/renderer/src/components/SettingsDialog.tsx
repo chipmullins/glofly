@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AppSettings, PrivacySettings, SignedInUser } from '../../../preload/api-types'
+import type {
+  AppSettings,
+  AppSettingsChanges,
+  PrivacySettings,
+  SignedInUser,
+  TextSize
+} from '../../../preload/api-types'
 import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
 import './dialogs.css'
@@ -60,24 +66,64 @@ export function Toggle({
   )
 }
 
+/** A row of choices where one is picked, like the design's Theme and Accent color. */
+function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange
+}: {
+  label: string
+  options: { value: T; label: string }[]
+  value: T | undefined
+  onChange: (value: T) => void
+}): React.JSX.Element {
+  return (
+    <div role="radiogroup" aria-label={label} className="segmented">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={o.value === value}
+          className={
+            o.value === value ? 'segmented-option segmented-option--on' : 'segmented-option'
+          }
+          disabled={value === undefined}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const TEXT_SIZES: { value: TextSize; label: string }[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'default', label: 'Default' },
+  { value: 'large', label: 'Large' },
+  { value: 'larger', label: 'Larger' }
+]
+
 function GeneralIcon({ active }: { active: boolean }): React.JSX.Element {
-  const fill = active ? '#FBDCC4' : '#F7F0E9'
+  const fill = active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'
   return (
     <svg
       width="19"
       height="19"
       viewBox="0 0 24 24"
       fill="none"
-      stroke={active ? '#B8430A' : 'currentColor'}
+      style={{ stroke: active ? 'var(--glo-link)' : 'currentColor' }}
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
       <path d="M4 6h16M4 12h16M4 18h16" />
-      <circle cx="9" cy="6" r="2" fill={fill} />
-      <circle cx="15" cy="12" r="2" fill={fill} />
-      <circle cx="8" cy="18" r="2" fill={fill} />
+      <circle cx="9" cy="6" r="2" style={{ fill }} />
+      <circle cx="15" cy="12" r="2" style={{ fill }} />
+      <circle cx="8" cy="18" r="2" style={{ fill }} />
     </svg>
   )
 }
@@ -89,7 +135,7 @@ function AccountIcon({ active }: { active: boolean }): React.JSX.Element {
       height="19"
       viewBox="0 0 24 24"
       fill="none"
-      stroke={active ? '#B8430A' : 'currentColor'}
+      style={{ stroke: active ? 'var(--glo-link)' : 'currentColor' }}
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -151,9 +197,7 @@ export default function SettingsDialog({
     }
   }
 
-  async function changeApp(
-    changes: Partial<Pick<AppSettings, 'closeToTray' | 'openAtLogin'>>
-  ): Promise<void> {
+  async function changeApp(changes: AppSettingsChanges): Promise<void> {
     if (!appSettings) return
     setAppSettings({ ...appSettings, ...changes })
     const saved = await window.glofly.app.setSettings(changes)
@@ -233,6 +277,67 @@ export default function SettingsDialog({
               />
             ) : (
               <>
+                <section className="settings-section">
+                  <h2>Appearance</h2>
+                  <div className="settings-card">
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <span className="settings-row-label">Theme</span>
+                        <span className="settings-row-desc">
+                          Match system follows your computer’s light or dark setting.
+                        </span>
+                      </div>
+                      <Segmented
+                        label="Theme"
+                        value={appSettings?.theme}
+                        options={[
+                          { value: 'light', label: 'Light' },
+                          { value: 'dark', label: 'Dark' },
+                          { value: 'system', label: 'Match system' }
+                        ]}
+                        onChange={(theme) => void changeApp({ theme })}
+                      />
+                    </div>
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <span className="settings-row-label">Accent color</span>
+                        <span className="settings-row-desc">
+                          Used for buttons, highlights and badges. Works in light and dark.
+                        </span>
+                      </div>
+                      <Segmented
+                        label="Accent color"
+                        value={appSettings?.accent}
+                        options={[
+                          { value: 'orange', label: 'Glow Orange' },
+                          { value: 'red', label: 'Glofly Red' }
+                        ]}
+                        onChange={(accent) => void changeApp({ accent })}
+                      />
+                    </div>
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <label className="settings-row-label" htmlFor="settings-text-size">
+                          Text size
+                        </label>
+                      </div>
+                      <select
+                        id="settings-text-size"
+                        className="settings-select"
+                        disabled={!appSettings}
+                        value={appSettings?.textSize ?? 'default'}
+                        onChange={(e) => void changeApp({ textSize: e.target.value as TextSize })}
+                      >
+                        {TEXT_SIZES.map((t) => (
+                          <option key={t.value} value={t.value}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
                 <section className="settings-section">
                   <h2>Privacy</h2>
                   <div className="settings-card">

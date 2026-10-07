@@ -680,7 +680,7 @@ export default function ChatView({
           name={partner.displayName}
           avatarVersion={partner.avatarVersion}
           status={partnerPresence?.status}
-          ring="#FFFFFF"
+          ring="var(--glo-bg)"
         />
         <div className="chat-title">
           <div className="chat-names">

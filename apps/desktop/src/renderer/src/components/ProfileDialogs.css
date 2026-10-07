@@ -140,7 +140,7 @@
   width: 156px;
   height: 156px;
   font-size: 52px;
-  box-shadow: 0 0 0 6px #ffffff;
+  box-shadow: 0 0 0 6px var(--glo-surface);
 }
 .profile-photo .status-dot {
   right: 8px;
@@ -151,7 +151,7 @@
 }
 .profile-photo .status-dot--offline {
   box-shadow:
-    inset 0 0 0 7px #9a8678,
+    inset 0 0 0 7px var(--glo-faint),
     0 0 0 6px var(--ring);
 }
 .profile-photo .status-dot--dnd::after {
@@ -176,32 +176,32 @@
   background: currentColor;
 }
 .status-pill--online {
-  background: #eaf5ee;
-  color: #1f6b3f;
+  background: var(--glo-good-bg);
+  color: var(--glo-good-text);
 }
 .status-pill--online::before {
-  background: #2e9e5b;
+  background: var(--glo-good);
 }
 .status-pill--away {
-  background: #fcf1d8;
-  color: #7a5200;
+  background: var(--glo-warn-bg);
+  color: var(--glo-warn-text);
 }
 .status-pill--away::before {
-  background: #e2a00f;
+  background: var(--glo-warn);
 }
 .status-pill--dnd {
-  background: #fbe5e2;
-  color: #b42318;
+  background: var(--glo-danger-bg);
+  color: var(--glo-danger);
 }
 .status-pill--dnd::before {
-  background: #d33a2c;
+  background: var(--glo-danger);
 }
 .status-pill--offline {
-  background: #f2ece6;
-  color: #6b5547;
+  background: var(--glo-hover);
+  color: var(--glo-muted);
 }
 .status-pill--offline::before {
-  background: #9a8678;
+  background: var(--glo-faint);
 }
 
 .profile-actions {
@@ -212,10 +212,10 @@
 .profile-action {
   flex: 1;
   height: 40px;
-  border: 1px solid #eaddd1;
+  border: 1px solid var(--glo-line);
   border-radius: 10px;
-  background: #ffffff;
-  color: #4a372b;
+  background: var(--glo-surface);
+  color: var(--glo-icon);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -225,14 +225,14 @@
   gap: 6px;
 }
 .profile-action:hover {
-  background: #fbf5ef;
+  background: var(--glo-subtle);
 }
 .profile-action--danger {
-  border-color: #f1c9c3;
-  color: #b42318;
+  border-color: var(--glo-danger-line);
+  color: var(--glo-danger);
 }
 .profile-action--danger:hover {
-  background: #fdf1ef;
+  background: var(--glo-danger-bg);
 }
 
 .profile-joined {
@@ -240,7 +240,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #6b5547;
+  color: var(--glo-muted);
 }
 
 .profile-main {
@@ -266,7 +266,7 @@
 }
 .profile-names span {
   font-size: 15px;
-  color: #6b5547;
+  color: var(--glo-muted);
 }
 .profile-status-text {
   display: flex;
@@ -274,13 +274,13 @@
   gap: 10px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: #fbf5ef;
+  background: var(--glo-subtle);
   font-size: 15px;
   overflow-wrap: anywhere;
 }
 .profile-status-text svg {
   flex: none;
-  color: #b8430a;
+  color: var(--glo-link);
 }
 .profile-about {
   display: flex;
@@ -292,13 +292,13 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #6b5547;
+  color: var(--glo-muted);
 }
 .profile-about p {
   margin: 0;
   font-size: 15px;
   line-height: 1.6;
-  color: #24170f;
+  color: var(--glo-ink);
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
@@ -313,7 +313,7 @@
   border: 0;
   border-radius: 12px;
   background: var(--glo-orange);
-  color: #2a1406;
+  color: var(--glo-on-accent);
   font-family: var(--glo-font-display);
   font-size: 15px;
   font-weight: 600;
@@ -328,7 +328,7 @@
 }
 .profile-loading {
   margin: 0;
-  color: #6b5547;
+  color: var(--glo-muted);
   font-size: 15px;
 }
 
@@ -362,15 +362,15 @@
 .photo-button:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 6px #ffffff,
-    0 0 0 9px rgba(244, 122, 31, 0.6);
+    0 0 0 6px var(--glo-surface),
+    0 0 0 9px rgba(var(--glo-accent-rgb), 0.6);
 }
 .photo-remove {
   height: 32px;
   padding: 0 10px;
   border: 0;
   background: transparent;
-  color: #b42318;
+  color: var(--glo-danger);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -391,16 +391,16 @@
 }
 .ep-hint {
   font-size: 12px;
-  color: #6b5547;
+  color: var(--glo-muted);
 }
 .ep-input,
 .ep-select,
 .ep-textarea {
-  border: 1.5px solid #dcc8b8;
+  border: 1.5px solid var(--glo-border);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--glo-surface);
   font: inherit;
-  color: #24170f;
+  color: var(--glo-ink);
   box-sizing: border-box;
 }
 .ep-input {
@@ -409,9 +409,9 @@
   font-size: 15px;
 }
 .ep-input[readonly] {
-  border-color: #eaddd1;
-  background: #f7f0e9;
-  color: #6b5547;
+  border-color: var(--glo-line);
+  background: var(--glo-panel);
+  color: var(--glo-muted);
 }
 .ep-textarea {
   padding: 10px 12px;
@@ -421,21 +421,21 @@
 }
 .ep-input::placeholder,
 .ep-textarea::placeholder {
-  color: #8f7868;
+  color: var(--glo-faint);
 }
 .ep-input:focus,
 .ep-select:focus,
 .ep-textarea:focus {
   outline: none;
   border-color: var(--glo-orange) !important;
-  box-shadow: 0 0 0 4px rgba(244, 122, 31, 0.18);
+  box-shadow: 0 0 0 4px rgba(var(--glo-accent-rgb), 0.18);
 }
 .ep-input[readonly]:focus {
-  border-color: #eaddd1 !important;
+  border-color: var(--glo-line) !important;
   box-shadow: none;
 }
 .ep-input--error {
-  border-color: #b42318;
+  border-color: var(--glo-danger);
 }
 .ep-select-wrap {
   position: relative;
@@ -456,16 +456,16 @@
   pointer-events: none;
 }
 .ep-select-dot--online {
-  background: #2e9e5b;
+  background: var(--glo-good);
 }
 .ep-select-dot--away {
-  background: #e2a00f;
+  background: var(--glo-warn);
 }
 .ep-select-dot--dnd {
-  background: #d33a2c;
+  background: var(--glo-danger);
 }
 .ep-select-dot--invisible {
-  box-shadow: inset 0 0 0 2.5px #9a8678;
+  box-shadow: inset 0 0 0 2.5px var(--glo-faint);
 }
 .edit-profile .profile-main {
   gap: 16px;
@@ -482,13 +482,13 @@
   align-items: baseline;
 }
 .ep-count--over {
-  color: #b42318;
+  color: var(--glo-danger);
   font-weight: 600;
 }
 .ep-error {
   margin: 0;
   font-size: 13px;
-  color: #b42318;
+  color: var(--glo-danger);
 }
 .ep-buttons {
   display: flex;
@@ -499,16 +499,16 @@
 .ep-cancel {
   height: 44px;
   padding: 0 18px;
-  border: 1px solid #eaddd1;
+  border: 1px solid var(--glo-line);
   border-radius: 12px;
-  background: #ffffff;
-  color: #4a372b;
+  background: var(--glo-surface);
+  color: var(--glo-icon);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
 }
 .ep-cancel:hover {
-  background: #fbf5ef;
+  background: var(--glo-subtle);
 }
 .ep-save {
   height: 44px;
@@ -516,7 +516,7 @@
   border: 0;
   border-radius: 12px;
   background: var(--glo-orange);
-  color: #2a1406;
+  color: var(--glo-on-accent);
   font-family: var(--glo-font-display);
   font-size: 15px;
   font-weight: 600;

@@ -73,7 +73,7 @@ export default function StatusMenu({
           onClick={() => void pick(c.id)}
         >
           <span className="status-choice-dot">
-            <StatusDot status={dotFor(c.id)} ring="#FFFFFF" />
+            <StatusDot status={dotFor(c.id)} ring="var(--glo-surface)" />
           </span>
           <span className="status-choice-text">
             <span className="status-choice-label">{STATUS_LABEL[c.id]}</span>

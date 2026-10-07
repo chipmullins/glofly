@@ -1,13 +1,34 @@
-import { app, BrowserWindow, Menu, nativeImage, Tray } from 'electron'
+import { app, BrowserWindow, Menu, nativeImage, nativeTheme, Tray } from 'electron'
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import type { AppSettings } from '../preload/api-types'
+import type {
+  AccentChoice,
+  AppSettings,
+  AppSettingsChanges,
+  TextSize,
+  ThemeChoice
+} from '../preload/api-types'
 
-// Settings → General → App: start with the computer, and keep running in the system tray.
-// These belong to this computer, so they're saved here (not on the server).
+// Settings → General → Appearance and App: theme, accent, text size, starting with the
+// computer, and the system tray. These belong to this computer, so they're saved here
+// (not on the server).
 
-type Saved = { closeToTray: boolean }
-const saved: Saved = { closeToTray: true } // the design has it on by default
+type Saved = { closeToTray: boolean; theme: ThemeChoice; accent: AccentChoice; textSize: TextSize }
+const saved: Saved = {
+  closeToTray: true, // the design has it on by default
+  theme: 'light',
+  accent: 'orange',
+  textSize: 'default'
+}
+
+const THEMES: ThemeChoice[] = ['light', 'dark', 'system']
+const ACCENTS: AccentChoice[] = ['orange', 'red']
+export const TEXT_SIZES: Record<TextSize, number> = {
+  small: 0.9,
+  default: 1,
+  large: 1.1,
+  larger: 1.25
+}
 
 const file = (): string => join(app.getPath('userData'), 'app-settings.json')
 
@@ -18,10 +39,38 @@ export function loadAppSettings(): void {
   try {
     const value = JSON.parse(readFileSync(file(), 'utf8')) as Partial<Saved>
     if (typeof value.closeToTray === 'boolean') saved.closeToTray = value.closeToTray
+    if (THEMES.includes(value.theme as ThemeChoice)) saved.theme = value.theme as ThemeChoice
+    if (ACCENTS.includes(value.accent as AccentChoice)) saved.accent = value.accent as AccentChoice
+    if ((value.textSize as string) in TEXT_SIZES) saved.textSize = value.textSize as TextSize
   } catch {
     // First run (or an unreadable file): keep the defaults.
   }
+  // Light, dark, or follow Windows. The window's colors follow this (prefers-color-scheme).
+  nativeTheme.themeSource = saved.theme
 }
+
+/** True when Glofly is showing its dark theme right now. */
+export const isDark = (): boolean => nativeTheme.shouldUseDarkColors
+
+export const currentAccent = (): AccentChoice => saved.accent
+
+/** Tells the window(s) which theme and accent to show. */
+export function sendAppearance(windows = BrowserWindow.getAllWindows()): void {
+  for (const window of windows) {
+    window.webContents.send('glofly:event', {
+      type: 'appearance',
+      accent: saved.accent,
+      dark: isDark()
+    })
+  }
+}
+
+/** Startup flags for a new window, so its first frame already has the right colors. */
+export const appearanceArgs = (): string[] => [
+  `--glofly-accent=${saved.accent}`,
+  ...(isDark() ? ['--glofly-dark'] : [])
+]
+export const zoomFactor = (): number => TEXT_SIZES[saved.textSize]
 
 function save(): void {
   try {
@@ -41,6 +90,9 @@ const startupAvailable = (): boolean =>
 export function getAppSettings(): AppSettings {
   return {
     version: app.getVersion(),
+    theme: saved.theme,
+    accent: saved.accent,
+    textSize: saved.textSize,
     closeToTray: saved.closeToTray,
     openAtLogin: startupAvailable()
       ? app.getLoginItemSettings({ args: [STARTUP_ARG] }).openAtLogin
@@ -49,13 +101,38 @@ export function getAppSettings(): AppSettings {
   }
 }
 
-export function setAppSettings(
-  changes: Partial<Pick<AppSettings, 'closeToTray' | 'openAtLogin'>>
-): AppSettings {
+/** Checks settings sent from the window before using them. */
+export function isAppSettingsChanges(value: unknown): value is AppSettingsChanges {
+  const c = value as Record<string, unknown> | null
+  if (typeof c !== 'object' || c === null || Array.isArray(c)) return false
+  return Object.entries(c).every(([k, v]) => {
+    if (k === 'closeToTray' || k === 'openAtLogin') return typeof v === 'boolean'
+    if (k === 'theme') return THEMES.includes(v as ThemeChoice)
+    if (k === 'accent') return ACCENTS.includes(v as AccentChoice)
+    if (k === 'textSize') return typeof v === 'string' && v in TEXT_SIZES
+    return false
+  })
+}
+
+export function setAppSettings(changes: AppSettingsChanges): AppSettings {
   if (changes.closeToTray !== undefined) {
     saved.closeToTray = changes.closeToTray
-    save()
     updateTray()
+  }
+  if (changes.theme) {
+    saved.theme = changes.theme
+    nativeTheme.themeSource = changes.theme
+  }
+  if (changes.accent) saved.accent = changes.accent
+  if (changes.theme || changes.accent) sendAppearance()
+  if (changes.textSize) {
+    saved.textSize = changes.textSize
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.setZoomFactor(zoomFactor())
+    }
+  }
+  if (changes.closeToTray !== undefined || changes.theme || changes.accent || changes.textSize) {
+    save()
   }
   if (changes.openAtLogin !== undefined && startupAvailable()) {
     app.setLoginItemSettings({ openAtLogin: changes.openAtLogin, args: [STARTUP_ARG] })
