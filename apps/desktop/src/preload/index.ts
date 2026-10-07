@@ -13,6 +13,16 @@ const glofly: GloflyApi = {
     restore: () => ipcRenderer.invoke('auth:restore'),
     logout: () => ipcRenderer.invoke('auth:logout')
   },
+  friends: {
+    list: () => ipcRenderer.invoke('friends:list'),
+    search: (query: string) => ipcRenderer.invoke('friends:search', query),
+    sendRequest: (username: string) => ipcRenderer.invoke('friends:send-request', username),
+    accept: (userId: string) => ipcRenderer.invoke('friends:accept', userId),
+    removeRequest: (userId: string) => ipcRenderer.invoke('friends:remove-request', userId),
+    remove: (userId: string) => ipcRenderer.invoke('friends:remove', userId),
+    block: (userId: string) => ipcRenderer.invoke('friends:block', userId),
+    unblock: (userId: string) => ipcRenderer.invoke('friends:unblock', userId)
+  },
   window: {
     setTheme: (theme: WindowTheme) => ipcRenderer.send('window:theme', theme)
   }

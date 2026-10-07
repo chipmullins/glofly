@@ -3,6 +3,17 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { checkUsername, login, logout, register, restore } from './auth'
+import {
+  acceptRequest,
+  blockUser,
+  isUserId,
+  listFriends,
+  removeFriend,
+  removeRequest,
+  searchUsers,
+  sendRequest,
+  unblockUser
+} from './friends'
 import type { LoginRequest, RegisterRequest, WindowTheme } from '../preload/api-types'
 
 // Colors for the minimize / maximize / close buttons, matching each screen.
@@ -118,6 +129,31 @@ function registerIpcHandlers(): void {
     if (!fromApp(event) || typeof username !== 'string' || username.length > 40) return null
     return checkUsername(username)
   })
+
+  // Friends. Every handler checks the sender and the input before calling the server.
+  const invalid = { ok: false, error: 'invalid', message: 'Something about that request was off.' }
+  const isShortText = (v: unknown, max: number): v is string =>
+    typeof v === 'string' && v.length > 0 && v.length <= max
+
+  ipcMain.handle('friends:list', (event) => (fromApp(event) ? listFriends() : invalid))
+  ipcMain.handle('friends:search', (event, query: unknown) =>
+    fromApp(event) && isShortText(query, 32) ? searchUsers(query) : invalid
+  )
+  ipcMain.handle('friends:send-request', (event, username: unknown) =>
+    fromApp(event) && isShortText(username, 40) ? sendRequest(username) : invalid
+  )
+  const byUserId: [string, (id: string) => Promise<unknown>][] = [
+    ['friends:accept', acceptRequest],
+    ['friends:remove-request', removeRequest],
+    ['friends:remove', removeFriend],
+    ['friends:block', blockUser],
+    ['friends:unblock', unblockUser]
+  ]
+  for (const [channel, action] of byUserId) {
+    ipcMain.handle(channel, (event, userId: unknown) =>
+      fromApp(event) && isUserId(userId) ? action(userId) : invalid
+    )
+  }
 
   ipcMain.handle('auth:restore', (event) => {
     if (!fromApp(event)) return null

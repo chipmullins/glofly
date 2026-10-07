@@ -23,6 +23,14 @@ export function getSessionToken(): string | null {
   return sessionToken
 }
 
+/** The server says this session is no longer valid: forget it on this device. */
+export async function endSessionLocally(): Promise<void> {
+  sessionToken = null
+  await clearToken()
+}
+
+export { API_URL }
+
 const UNREACHABLE = "Can't reach Glofly right now. Check your connection and try again."
 
 export async function login(request: LoginRequest): Promise<LoginResult> {

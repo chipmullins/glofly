@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { RegisterRequest, SignedInUser } from '../../preload/api-types'
 import LoginScreen, { type LoginDetails } from './screens/LoginScreen'
 import RegisterScreen from './screens/RegisterScreen'
@@ -64,6 +64,9 @@ export default function App(): React.JSX.Element {
     setScreen({ name: 'auth', form: 'login' })
   }
 
+  // The server ended the session (it expired, or was signed out elsewhere).
+  const handleSessionExpired = useCallback(() => setScreen({ name: 'auth', form: 'login' }), [])
+
   const showForm = (form: AuthScreen) => () => setScreen({ name: 'auth', form })
 
   switch (screen.name) {
@@ -98,6 +101,12 @@ export default function App(): React.JSX.Element {
       )
     }
     case 'app':
-      return <MainScreen user={screen.user} onLogout={handleLogout} />
+      return (
+        <MainScreen
+          user={screen.user}
+          onLogout={handleLogout}
+          onSessionExpired={handleSessionExpired}
+        />
+      )
   }
 }

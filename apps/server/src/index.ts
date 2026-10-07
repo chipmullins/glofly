@@ -3,6 +3,7 @@ import helmet from "helmet";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { authRouter } from "./auth/routes";
+import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
 
 const app = express();
 const PORT = 4000;
@@ -20,6 +21,9 @@ app.get("/health", async (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/users", usersRouter);
+app.use("/friends", friendsRouter);
+app.use("/blocks", blocksRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "not_found" });

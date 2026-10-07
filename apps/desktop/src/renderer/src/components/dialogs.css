@@ -1,0 +1,272 @@
+/* Dialogs (Add friend, confirmations). Values match AddFriend.dc.html. */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(60, 44, 34, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  animation: dialogFade 0.15s ease-out;
+}
+.dialog {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 22px;
+  box-shadow: 0 24px 64px rgba(28, 18, 16, 0.35);
+  font-family: var(--glo-font-body);
+  color: var(--glo-ink);
+  animation: dialogPop 0.18s ease-out;
+}
+@keyframes dialogFade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes dialogPop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog-backdrop,
+  .dialog {
+    animation: none;
+  }
+}
+
+/* ---------- Add friend ---------- */
+
+.add-friend-dialog {
+  max-width: 620px;
+  max-height: 100%;
+  padding: 26px 26px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.dialog-head h1 {
+  margin: 0 0 4px;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 24px;
+}
+.dialog-head p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--glo-muted);
+}
+.dialog-close {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: #f7f0e9;
+  color: #4a372b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+}
+.dialog-close:hover {
+  background: #efe3d8;
+}
+
+.people-search {
+  position: relative;
+}
+.people-search > svg {
+  position: absolute;
+  left: 14px;
+  top: 15px;
+  color: var(--glo-link);
+  pointer-events: none;
+}
+.people-search input {
+  width: 100%;
+  height: 50px;
+  padding: 0 110px 0 44px;
+  border: 2px solid #e3d3c5;
+  border-radius: 12px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 16px;
+  color: var(--glo-ink);
+}
+.people-search input::placeholder {
+  color: #8f7868;
+}
+.people-search input:focus {
+  outline: none;
+  border-color: var(--glo-orange);
+  box-shadow: 0 0 0 4px rgba(244, 122, 31, 0.18);
+}
+.people-count {
+  position: absolute;
+  right: 14px;
+  top: 16px;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+
+.people-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 120px;
+  overflow-y: auto;
+}
+.people-hint {
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--glo-muted);
+}
+.person {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+.person:hover,
+.person--friend {
+  background: #fbf5ef;
+}
+.person-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.person-name {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.person-sub {
+  font-size: 13px;
+  color: var(--glo-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.match {
+  color: var(--glo-link);
+}
+.friends-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #eaf5ee;
+  color: #1f6b3f;
+  font-size: 13px;
+  font-weight: 600;
+  flex: none;
+}
+
+.dialog-message {
+  margin: -6px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fdecea;
+  color: #a1241a;
+  font-size: 14px;
+}
+.dialog-foot {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid #efe4da;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+
+/* ---------- Small buttons (used in dialogs and friend rows) ---------- */
+
+.small-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: none;
+  white-space: nowrap;
+}
+.small-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.small-button--primary {
+  border: 0;
+  background: var(--glo-orange);
+  color: #2a1406;
+  font-family: var(--glo-font-display);
+}
+.small-button--primary:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+.small-button--quiet {
+  border: 1px solid #eaddd1;
+  background: #ffffff;
+  color: var(--glo-muted);
+}
+.small-button--quiet:hover:not(:disabled) {
+  background: #fbf5ef;
+  color: var(--glo-ink);
+}
+.small-button--danger {
+  border: 0;
+  background: #c4321f;
+  color: #ffffff;
+}
+.small-button--danger:hover:not(:disabled) {
+  background: #a82818;
+}
+
+/* ---------- Confirm ---------- */
+
+.confirm {
+  max-width: 420px;
+  padding: 24px;
+}
+.confirm h1 {
+  margin: 0 0 8px;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 20px;
+}
+.confirm p {
+  margin: 0 0 22px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--glo-muted);
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

@@ -88,3 +88,40 @@ export function ChatIcon(p: IconProps): React.JSX.Element {
     </Svg>
   )
 }
+
+export function CloseIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg size={18} strokeWidth={2.2} {...p}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </Svg>
+  )
+}
+
+export function MoreIcon({ size = 19 }: IconProps): React.JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
+    </svg>
+  )
+}
+
+export function BlockIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg size={18} strokeWidth={1.9} {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M5.6 5.6l12.8 12.8" />
+    </Svg>
+  )
+}
+
+export function RemoveFriendIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg size={18} strokeWidth={1.9} {...p}>
+      <circle cx="9" cy="8" r="4" />
+      <path d="M2 21c0-4 3-6 7-6s7 2 7 6" />
+      <path d="M16 11h6" />
+    </Svg>
+  )
+}

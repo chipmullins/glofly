@@ -3,7 +3,9 @@ import {
   boolean,
   date,
   index,
+  pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -76,3 +78,48 @@ export const sessions = pgTable(
 );
 
 export type Session = typeof sessions.$inferSelect;
+
+export const friendshipStatus = pgEnum("friendship_status", ["pending", "accepted"]);
+
+// One row per pair of people: a pending request or an accepted friendship.
+// The pair is stored in a fixed order (lower id first) so each pair can only exist once.
+export const friendships = pgTable(
+  "friendships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userLow: uuid("user_low")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userHigh: uuid("user_high")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Who sent the request.
+    requesterId: uuid("requester_id").notNull(),
+    status: friendshipStatus("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // When the request was accepted.
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("friendships_pair_idx").on(t.userLow, t.userHigh),
+    index("friendships_user_high_idx").on(t.userHigh),
+  ],
+);
+
+// Blocked people can't find you in search, send you requests, or (later) message or call you.
+export const blocks = pgTable(
+  "blocks",
+  {
+    blockerId: uuid("blocker_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    blockedId: uuid("blocked_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.blockerId, t.blockedId] }),
+    index("blocks_blocked_idx").on(t.blockedId),
+  ],
+);

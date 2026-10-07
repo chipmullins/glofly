@@ -15,6 +15,13 @@
       "when": 1791346435361,
       "tag": "0001_create_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791348835142,
+      "tag": "0002_create_friendships_and_blocks",
+      "breakpoints": true
     }
   ]
 }
