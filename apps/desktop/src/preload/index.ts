@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
+  AppSettings,
   Attachment,
   GloflyApi,
   GloflyEvent,
@@ -37,6 +38,17 @@ const glofly: GloflyApi = {
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     set: (changes: Partial<PrivacySettings>) => ipcRenderer.invoke('settings:set', changes)
+  },
+  app: {
+    getSettings: () => ipcRenderer.invoke('app:get-settings'),
+    setSettings: (changes: Partial<Pick<AppSettings, 'closeToTray' | 'openAtLogin'>>) =>
+      ipcRenderer.invoke('app:set-settings', changes)
+  },
+  account: {
+    get: () => ipcRenderer.invoke('account:get'),
+    changePassword: (currentPassword: string, newPassword: string, signOutOthers: boolean) =>
+      ipcRenderer.invoke('account:change-password', currentPassword, newPassword, signOutOthers),
+    delete: (password: string) => ipcRenderer.invoke('account:delete', password)
   },
   status: {
     get: () => ipcRenderer.invoke('status:get'),

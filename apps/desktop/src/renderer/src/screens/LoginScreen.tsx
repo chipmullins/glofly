@@ -7,14 +7,24 @@ export type LoginDetails = {
   identifier: string
   password: string
   keepSignedIn: boolean
+  /** Restores an account that's set to be deleted. */
+  restore?: boolean
 }
 
+/** Why a login didn't go through: a message, or an account that's set to be deleted. */
+export type LoginProblem = { message: string } | { deleteAfter: string }
+
 type LoginScreenProps = {
-  /** Resolves to null on success, or a message to show if login failed. */
-  onLogin: (details: LoginDetails) => Promise<string | null>
+  /** Resolves to null on success, or what went wrong. */
+  onLogin: (details: LoginDetails) => Promise<LoginProblem | null>
   onCreateAccount: () => void
   busy?: boolean
+  /** Shown above the form, e.g. after deleting an account. */
+  notice?: string | null
 }
+
+const longDate = (iso: string): string =>
+  new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
 
 function EyeIcon({ open }: { open: boolean }): React.JSX.Element {
   return (
@@ -39,7 +49,8 @@ function EyeIcon({ open }: { open: boolean }): React.JSX.Element {
 export default function LoginScreen({
   onLogin,
   onCreateAccount,
-  busy = false
+  busy = false,
+  notice = null
 }: LoginScreenProps): React.JSX.Element {
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -47,6 +58,8 @@ export default function LoginScreen({
   const [keepSignedIn, setKeepSignedIn] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Right password, but the account is set to be deleted on this date: offer to restore it. */
+  const [restoreBy, setRestoreBy] = useState<string | null>(null)
   const userRef = useRef<HTMLInputElement>(null)
   const passRef = useRef<HTMLInputElement>(null)
   const locked = busy || submitting
@@ -63,15 +76,34 @@ export default function LoginScreen({
       passRef.current?.focus()
       return
     }
+    await attempt(false)
+  }
+
+  async function attempt(restore: boolean): Promise<void> {
     setSubmitting(true)
     setError(null)
-    const message = await onLogin({ identifier: identifier.trim(), password, keepSignedIn })
+    const problem = await onLogin({
+      identifier: identifier.trim(),
+      password,
+      keepSignedIn,
+      restore
+    })
     setSubmitting(false)
-    if (message) {
-      setError(message)
-      setPassword('')
-      passRef.current?.focus()
+    if (!problem) return
+    if ('deleteAfter' in problem) {
+      setRestoreBy(problem.deleteAfter)
+      return
     }
+    setRestoreBy(null)
+    setError(problem.message)
+    setPassword('')
+    passRef.current?.focus()
+  }
+
+  function cancelRestore(): void {
+    setRestoreBy(null)
+    setPassword('')
+    passRef.current?.focus()
   }
 
   return (
@@ -118,6 +150,34 @@ export default function LoginScreen({
             <h1>Welcome back!</h1>
             <p>We knew you couldn&apos;t stay away.</p>
           </div>
+
+          {notice && !restoreBy && (
+            <div className="login-note" role="status">
+              {notice}
+            </div>
+          )}
+
+          {restoreBy && (
+            <div className="login-restore" role="alert">
+              <strong>This account is set to be deleted on {longDate(restoreBy)}.</strong>
+              <span>
+                Restore it to get your profile, friends and messages back, just as they were.
+              </span>
+              <div className="login-restore-actions">
+                <button
+                  type="button"
+                  className="login-restore-yes"
+                  disabled={locked}
+                  onClick={() => void attempt(true)}
+                >
+                  Restore my account
+                </button>
+                <button type="button" className="link-button" onClick={cancelRestore}>
+                  Not now
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="fields">
             <div className="field">

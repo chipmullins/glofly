@@ -419,3 +419,52 @@
     animation: none;
   }
 }
+
+/* After deleting an account, and "Restore my account" */
+.login-note,
+.login-restore {
+  margin: -6px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fbf5ef;
+  border: 1px solid #eaddd1;
+  color: var(--glo-ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.login-restore {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fdf4f2;
+  border-color: #f1c9c3;
+}
+.login-restore span {
+  color: var(--glo-muted);
+}
+.login-restore-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+.login-restore-yes {
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--glo-orange);
+  color: #2a1406;
+  font-family: var(--glo-font-display);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.login-restore-yes:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.login-restore-yes:focus-visible {
+  outline: 3px solid rgba(244, 122, 31, 0.45);
+  outline-offset: 2px;
+}

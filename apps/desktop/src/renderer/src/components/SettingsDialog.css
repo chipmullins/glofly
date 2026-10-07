@@ -42,15 +42,36 @@
   gap: 12px;
   height: 46px;
   padding: 0 14px;
+  border: 0;
   border-radius: 10px;
+  background: transparent;
   color: #4a372b;
+  font: inherit;
   font-weight: 600;
   font-size: 15px;
+  text-align: left;
+  cursor: pointer;
 }
-.settings-nav-item--active {
+.settings-nav-item:hover {
+  background: #efe3d8;
+}
+.settings-nav-item--active,
+.settings-nav-item--active:hover {
   background: #fbdcc4;
   color: var(--glo-ink);
   font-weight: 700;
+}
+.settings-nav-item:focus-visible {
+  outline: 2px solid var(--glo-orange);
+  outline-offset: 1px;
+}
+.settings-nav-spacer {
+  flex: 1;
+}
+.settings-version {
+  padding: 0 14px;
+  font-size: 12px;
+  color: var(--glo-muted);
 }
 .settings-content {
   flex: 1;
@@ -122,6 +143,10 @@
   background: #e2650f;
   justify-content: flex-end;
 }
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .toggle--loading {
   background: #efe4da;
   cursor: default;
@@ -149,4 +174,218 @@
   height: 42px;
   padding: 0 16px;
   color: var(--glo-ink);
+}
+
+/* Dropdown (e.g. "Who can send me friend requests") */
+.settings-select {
+  width: 240px;
+  height: 42px;
+  flex: none;
+  padding: 0 12px;
+  border: 1.5px solid #dcc8b8;
+  border-radius: 10px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  color: var(--glo-ink);
+  cursor: pointer;
+}
+.settings-select:focus {
+  outline: none;
+  border-color: var(--glo-orange);
+  box-shadow: 0 0 0 4px rgba(244, 122, 31, 0.18);
+}
+.settings-select:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- Account (SettingsAccount.dc.html) ---------- */
+
+.acct-username {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: #fbf5ef;
+}
+.acct-username-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.acct-username-handle {
+  font-weight: 700;
+  font-size: 16px;
+}
+.acct-lock {
+  display: flex;
+  color: var(--glo-muted);
+}
+.acct-card {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.acct-card--row {
+  flex-direction: row;
+  align-items: center;
+}
+.acct-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.acct-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.acct-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.acct-input {
+  height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid #dcc8b8;
+  border-radius: 10px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 15px;
+  color: var(--glo-ink);
+}
+.acct-input:focus {
+  outline: none;
+  border-color: var(--glo-orange);
+  box-shadow: 0 0 0 4px rgba(244, 122, 31, 0.18);
+}
+.acct-input[aria-invalid='true'] {
+  border-color: #e0786c;
+}
+.acct-error {
+  font-size: 13px;
+  color: #a1241a;
+}
+.acct-strength {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 16px;
+}
+.acct-strength-bars {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.acct-strength-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: #eadbcf;
+  transition: background 0.2s ease;
+}
+.acct-strength-bar--1 {
+  background: #c4321f;
+}
+.acct-strength-bar--2,
+.acct-strength-bar--3 {
+  background: #e2a00f;
+}
+.acct-strength-bar--4 {
+  background: #2e9e5b;
+}
+.acct-strength-label {
+  min-width: 44px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+}
+.acct-strength-label--1 {
+  color: #a1241a;
+}
+.acct-strength-label--2,
+.acct-strength-label--3 {
+  color: #8a5a00;
+}
+.acct-strength-label--4 {
+  color: #1f6b3f;
+}
+.acct-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.acct-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #e2650f;
+}
+.acct-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.acct-saved {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f6b3f;
+}
+.acct-danger-title.acct-danger-title {
+  color: #b42318;
+}
+.acct-danger {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #f1c9c3;
+  border-radius: 14px;
+  background: #fdf4f2;
+}
+.acct-delete-button {
+  height: 42px;
+  padding: 0 16px;
+  flex: none;
+  border: 0;
+  border-radius: 10px;
+  background: #b42318;
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.acct-delete-button:hover {
+  background: #941c13;
+}
+.acct-delete-button:focus-visible {
+  outline: 3px solid rgba(180, 35, 24, 0.35);
+  outline-offset: 2px;
+}
+
+/* "Delete your account?" sits on top of Settings. */
+.dialog-backdrop--nested {
+  z-index: 60;
+}
+.acct-delete-dialog {
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.acct-delete-dialog .confirm-actions {
+  margin-top: 14px;
+}
+.acct-delete-text p {
+  margin: 0 0 10px;
+  font-size: 14px;
 }

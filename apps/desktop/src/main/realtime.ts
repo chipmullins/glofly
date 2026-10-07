@@ -26,7 +26,17 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
     forward({ type: 'connection', connected: true })
     if (idle) socket?.emit('idle', true) // the server assumes a fresh connection is active
   })
-  socket.on('disconnect', () => forward({ type: 'connection', connected: false }))
+  socket.on('disconnect', (reason) => {
+    // The server only closes a connection itself when that device was signed out
+    // (say, "Sign me out of Glofly on all other devices"). Sign out here too.
+    if (reason === 'io server disconnect') {
+      disconnectRealtime()
+      onUnauthorized()
+      forward({ type: 'session:expired' })
+      return
+    }
+    forward({ type: 'connection', connected: false })
+  })
   socket.on('connect_error', (err) => {
     if (err.message === 'unauthorized') {
       disconnectRealtime()

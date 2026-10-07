@@ -13,13 +13,21 @@ export type LoginRequest = {
   identifier: string
   password: string
   keepSignedIn: boolean
+  /** Logging in to an account that's set to be deleted: true restores it. */
+  restore?: boolean
 }
 
 export type LoginFailureReason =
-  'wrong_details' | 'invalid' | 'too_many_requests' | 'unreachable' | 'server_error'
+  | 'wrong_details'
+  | 'invalid'
+  | 'too_many_requests'
+  | 'unreachable'
+  | 'server_error'
+  | 'deletion_scheduled' // right password, but the account is set to be deleted
 
 export type LoginResult =
-  { ok: true; user: SignedInUser } | { ok: false; reason: LoginFailureReason; message: string }
+  | { ok: true; user: SignedInUser }
+  | { ok: false; reason: LoginFailureReason; message: string; deleteAfter?: string }
 
 export type RegisterRequest = {
   email: string
@@ -98,7 +106,15 @@ export type ApiError =
   | 'forbidden'
   | 'too_many_requests'
   | 'server_error'
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError; message: string }
+export type ApiResult<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false
+      error: ApiError
+      message: string
+      /** Problems with particular fields, e.g. { currentPassword: "That isn't your current password." } */
+      fields?: Record<string, string>
+    }
 
 export type Reaction = { emoji: string; userIds: string[] }
 
@@ -159,6 +175,23 @@ export type PrivacySettings = {
   readReceipts: boolean
   showLastSeen: boolean
   showTyping: boolean
+  /** Who can send me friend requests */
+  friendRequests: 'everyone' | 'nobody'
+}
+
+/** Settings → Account: private details only you see. */
+export type AccountDetails = { username: string; email: string; createdAt: string }
+
+/** Settings → General → App. Kept on this computer, not on the server. */
+export type AppSettings = {
+  /** e.g. "0.1.0" */
+  version: string
+  /** Closing the window keeps Glofly running in the system tray. */
+  closeToTray: boolean
+  /** Open Glofly when the computer starts. */
+  openAtLogin: boolean
+  /** False while developing: only the installed app can start with Windows. */
+  startupAvailable: boolean
 }
 
 export type MessagePage = { messages: Message[]; hasMore: boolean }
@@ -207,6 +240,23 @@ export type GloflyApi = {
   settings: {
     get: () => Promise<ApiResult<PrivacySettings>>
     set: (changes: Partial<PrivacySettings>) => Promise<ApiResult<PrivacySettings>>
+  }
+  app: {
+    getSettings: () => Promise<AppSettings>
+    setSettings: (
+      changes: Partial<Pick<AppSettings, 'closeToTray' | 'openAtLogin'>>
+    ) => Promise<AppSettings>
+  }
+  account: {
+    get: () => Promise<ApiResult<AccountDetails>>
+    /** This device stays signed in; with signOutOthers, every other device is signed out. */
+    changePassword: (
+      currentPassword: string,
+      newPassword: string,
+      signOutOthers: boolean
+    ) => Promise<ApiResult<{ signedOut: number }>>
+    /** Signs out everywhere. The account is removed for good after 30 days unless restored. */
+    delete: (password: string) => Promise<ApiResult<{ deleteAfter: string }>>
   }
   status: {
     get: () => Promise<ApiResult<MyStatus>>

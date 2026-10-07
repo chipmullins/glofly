@@ -45,6 +45,8 @@ type MainScreenProps = {
   onLogout: () => void
   /** The server ended this session (expired, or signed out elsewhere). */
   onSessionExpired: () => void
+  /** Deleted from Settings → Account (this device is signed out). */
+  onAccountDeleted: (deleteAfter: string) => void
   /** Your name or photo changed (here or on another device). */
   onUserChange: (changes: Pick<SignedInUser, 'displayName' | 'avatarVersion'>) => void
 }
@@ -311,6 +313,7 @@ export default function MainScreen({
   user,
   onLogout,
   onSessionExpired,
+  onAccountDeleted,
   onUserChange
 }: MainScreenProps): React.JSX.Element {
   const [filter, setFilter] = useState<FriendFilter>('all')
@@ -962,6 +965,7 @@ export default function MainScreen({
           user={user}
           onClose={() => setSettingsOpen(false)}
           onLogout={onLogout}
+          onAccountDeleted={onAccountDeleted}
           onSessionExpired={onSessionExpired}
         />
       )}

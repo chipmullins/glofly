@@ -1,6 +1,6 @@
 import { Router, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
-import { and, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { blocks, conversationMembers, friendships, users } from "../db/schema";
@@ -104,6 +104,7 @@ const settingsSchema = z
     readReceipts: z.boolean(),
     showLastSeen: z.boolean(),
     showTyping: z.boolean(),
+    friendRequests: z.enum(["everyone", "nobody"]),
   })
   .partial()
   .strict();
@@ -114,6 +115,7 @@ async function mySettings(userId: string) {
       readReceipts: users.readReceipts,
       showLastSeen: users.showLastSeen,
       showTyping: users.showTyping,
+      friendRequests: users.friendRequests,
     })
     .from(users)
     .where(eq(users.id, userId));
@@ -121,7 +123,7 @@ async function mySettings(userId: string) {
 }
 
 /** Everyone I have a chat with. */
-async function chatPartnersOf(userId: string): Promise<string[]> {
+export async function chatPartnersOf(userId: string): Promise<string[]> {
   const mine = db
     .select({ id: conversationMembers.conversationId })
     .from(conversationMembers)
@@ -138,7 +140,7 @@ usersRouter.get("/me/settings", async (_req, res) => {
   res.json(await mySettings(me(res).id));
 });
 
-// PATCH /users/me/settings  { readReceipts?, showLastSeen?, showTyping? }
+// PATCH /users/me/settings  { readReceipts?, showLastSeen?, showTyping?, friendRequests? }
 usersRouter.patch("/me/settings", searchLimiter, async (req, res) => {
   const parsed = settingsSchema.safeParse(req.body);
   if (!parsed.success || !Object.keys(parsed.data).length) {
@@ -175,6 +177,7 @@ usersRouter.get("/search", searchLimiter, async (req, res) => {
     .where(
       and(
         ne(users.id, myId),
+        isNull(users.deleteAfter), // accounts being deleted are hidden
         or(
           ilike(users.username, `${term}%`),
           ilike(users.displayName, `${term}%`),
@@ -234,7 +237,13 @@ friendsRouter.get("/", async (_req, res) => {
     })
     .from(friendships)
     .innerJoin(users, eq(users.id, otherId))
-    .where(or(eq(friendships.userLow, myId), eq(friendships.userHigh, myId)))
+    .where(
+      and(
+        or(eq(friendships.userLow, myId), eq(friendships.userHigh, myId)),
+        // Someone deleting their account disappears until they restore it.
+        isNull(users.deleteAfter),
+      ),
+    )
     .orderBy(users.displayName);
 
   const blocked = await db
@@ -279,14 +288,20 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
   }
   const myId = me(res).id;
 
-  const [target] = await db
-    .select(publicUser)
+  const [found] = await db
+    .select({ ...publicUser, friendRequests: users.friendRequests, deleteAfter: users.deleteAfter })
     .from(users)
     .where(sql`lower(${users.username}) = ${parsed.data.username.toLowerCase()}`)
     .limit(1);
+  const target = found && {
+    id: found.id,
+    username: found.username,
+    displayName: found.displayName,
+    avatarVersion: found.avatarVersion,
+  };
 
   // A block looks exactly like "not found", so blocking never reveals itself.
-  if (!target || (await blockedEitherWay(myId, target.id))) {
+  if (!found || !target || found.deleteAfter || (await blockedEitherWay(myId, target.id))) {
     res.status(404).json({ error: "not_found", message: "No one has that username." });
     return;
   }
@@ -313,6 +328,15 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
     friendsChanged(myId, target.id);
     await shareNewFriendPresence(myId, target.id);
     res.json({ status: "accepted", user: target });
+    return;
+  }
+
+  // "Who can send me friend requests: No one". (Someone they asked first can still say yes, above.)
+  if (found.friendRequests === "nobody") {
+    res.status(403).json({
+      error: "not_accepting",
+      message: `@${target.username} isn't accepting friend requests.`,
+    });
     return;
   }
 

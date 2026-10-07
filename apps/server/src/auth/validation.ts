@@ -57,7 +57,7 @@ const emailSchema = z
   .max(254, "That email address is too long.")
   .pipe(z.email("Enter a valid email address."));
 
-const passwordSchema = z
+export const passwordSchema = z
   .string({ error: "Choose a password." })
   .min(PASSWORD_MIN, `Passwords need at least ${PASSWORD_MIN} characters.`)
   .max(PASSWORD_MAX, `Passwords can be at most ${PASSWORD_MAX} characters.`)
@@ -111,6 +111,8 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(PASSWORD_MAX),
   keepSignedIn: z.boolean().default(false),
   deviceName: z.string().trim().max(60).optional(),
+  // Logging in to an account that's set to be deleted: true restores it.
+  restore: z.boolean().default(false),
 });
 
 /** Turns validation problems into { field: "message" }, first problem per field. */

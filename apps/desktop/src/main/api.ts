@@ -35,7 +35,7 @@ export async function request<T>(
 
   if (response.status === 204) return { ok: true, data: null as T }
   const json = (await response.json().catch(() => null)) as
-    (T & { message?: string; error?: string }) | null
+    (T & { message?: string; error?: string; fields?: Record<string, string> }) | null
 
   if (response.ok && json) return { ok: true, data: json }
 
@@ -52,10 +52,18 @@ export async function request<T>(
     413: 'invalid',
     429: 'too_many_requests'
   }
+  const fields =
+    json?.fields && typeof json.fields === 'object'
+      ? Object.fromEntries(Object.entries(json.fields).filter(([, v]) => typeof v === 'string'))
+      : undefined
   return {
     ok: false,
     error: errorFor[response.status] ?? 'server_error',
-    message: json?.message ?? 'Something went wrong on our end. Try again in a moment.'
+    message:
+      json?.message ??
+      (fields && Object.values(fields)[0]) ??
+      'Something went wrong on our end. Try again in a moment.',
+    ...(fields ? { fields } : {})
   }
 }
 

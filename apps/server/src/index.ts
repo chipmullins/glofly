@@ -4,6 +4,8 @@ import helmet from "helmet";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { authRouter } from "./auth/routes";
+import { accountRouter } from "./account/routes";
+import { purgeDeletedAccounts } from "./account/deletion";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
 import { conversationsRouter } from "./messages/routes";
 import { avatarsRouter, profileRouter } from "./profile/routes";
@@ -27,6 +29,7 @@ app.get("/health", async (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/account", accountRouter);
 app.use("/users", usersRouter);
 app.use("/users", profileRouter);
 app.use("/avatars", avatarsRouter);
@@ -64,6 +67,11 @@ connectRedis()
     setInterval(() => {
       sweepUnsentUploads().catch((err) => console.error("Upload cleanup failed", err));
     }, 10 * 60 * 1000);
+    // Deleted accounts are removed for good once their 30 days are up (checked hourly).
+    const purge = () =>
+      purgeDeletedAccounts().catch((err) => console.error("Account removal failed", err));
+    purge();
+    setInterval(purge, 60 * 60 * 1000);
   })
   .catch((err) => {
     console.error("Couldn't connect to Redis. Is Docker running? (docker compose up -d)", err);

@@ -42,6 +42,7 @@ export function startRealtime(httpServer: HttpServer): void {
         typeof token === "string" && token.length <= 200 ? await findSession(token) : null;
       if (!found) return next(new Error("unauthorized"));
       socket.data.user = found.user;
+      socket.data.sessionId = found.session.id;
       next();
     } catch (err) {
       // A database hiccup must never take the whole server down. The app retries.
@@ -146,4 +147,15 @@ function startPresenceHeartbeat(server: Server): void {
 /** Sends an event to every device the person is signed in on. */
 export function emitToUser(userId: string, event: string, payload: unknown): void {
   io?.to(userRoom(userId)).emit(event, payload);
+}
+
+/**
+ * Closes the live connections of a person's signed-out devices (all of them, or all but
+ * one session). Their apps see the server close the connection and sign out.
+ */
+export async function disconnectSessions(userId: string, keepSessionId?: string): Promise<void> {
+  if (!io) return;
+  for (const socket of await io.in(userRoom(userId)).fetchSockets()) {
+    if (socket.data.sessionId !== keepSessionId) socket.disconnect(true);
+  }
 }

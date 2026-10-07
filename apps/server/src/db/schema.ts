@@ -15,6 +15,8 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invisible"]);
+// Who can send someone friend requests (Settings → General → Privacy).
+export const friendRequestsFrom = pgEnum("friend_requests_from", ["everyone", "nobody"]);
 
 // One row per Glofly account.
 export const users = pgTable(
@@ -56,6 +58,11 @@ export const users = pgTable(
     readReceipts: boolean("read_receipts").notNull().default(true),
     showLastSeen: boolean("show_last_seen").notNull().default(true),
     showTyping: boolean("show_typing").notNull().default(true),
+    friendRequests: friendRequestsFrom("friend_requests").notNull().default("everyone"),
+
+    // Set when someone deletes their account: the moment it's permanently removed.
+    // Until then the account is hidden, and logging in again offers to restore it.
+    deleteAfter: timestamp("delete_after", { withTimezone: true }),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })

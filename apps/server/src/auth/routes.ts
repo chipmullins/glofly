@@ -4,6 +4,7 @@ import { eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { users } from "../db/schema";
 import { hashPassword, verifyPassword } from "./passwords";
+import { cancelDeletion } from "../account/deletion";
 import { bearerToken, createSession, deleteSession, requireAuth } from "./sessions";
 import { fieldErrors, loginSchema, registerSchema, usernameSchema } from "./validation";
 
@@ -159,7 +160,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     res.status(400).json({ error: "invalid", message: "Enter your username or email and password." });
     return;
   }
-  const { identifier, password, keepSignedIn, deviceName } = parsed.data;
+  const { identifier, password, keepSignedIn, deviceName, restore } = parsed.data;
 
   const column = identifier.includes("@") ? users.email : users.username;
   const [user] = await db
@@ -169,6 +170,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
       displayName: users.displayName,
       avatarVersion: users.avatarVersion,
       passwordHash: users.passwordHash,
+      deleteAfter: users.deleteAfter,
     })
     .from(users)
     .where(eq(lower(column), identifier.toLowerCase()))
@@ -178,10 +180,25 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     ? await verifyPassword(user.passwordHash, password)
     : (await verifyPassword(await getDummyHash(), password), false);
 
-  if (!user || !passwordOk) {
+  // An account whose 30 days have run out is about to be removed: it's gone.
+  const removed = !!user?.deleteAfter && user.deleteAfter.getTime() <= Date.now();
+  if (!user || !passwordOk || removed) {
     // Same message either way, so nobody can test which accounts exist.
     res.status(401).json({ error: "wrong_details", message: WRONG_DETAILS });
     return;
+  }
+
+  // Set to be deleted: only the right password gets this far, so it's safe to say so.
+  if (user.deleteAfter) {
+    if (!restore) {
+      res.status(403).json({
+        error: "deletion_scheduled",
+        deleteAfter: user.deleteAfter.toISOString(),
+        message: "This account is set to be deleted.",
+      });
+      return;
+    }
+    await cancelDeletion(user.id);
   }
 
   const session = await createSession(user.id, keepSignedIn, deviceName ?? null);

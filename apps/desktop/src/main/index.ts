@@ -26,6 +26,16 @@ import {
   uploadAttachment
 } from './messages'
 import { saveAttachment, showInFolder } from './files'
+import { changePassword, deleteAccount, getAccount } from './account'
+import {
+  getAppSettings,
+  loadAppSettings,
+  setAppSettings,
+  setUpTray,
+  shouldHideOnClose,
+  showWindow,
+  startHidden
+} from './app-settings'
 import { connectRealtime, disconnectRealtime, sendTyping } from './realtime'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isUserId } from './api'
@@ -44,6 +54,7 @@ import {
 import type {
   LoginRequest,
   PhotoType,
+  PrivacySettings,
   ProfileChanges,
   RegisterRequest,
   WindowTheme
@@ -60,6 +71,13 @@ const TITLE_BAR = {
 const isSecondWindow = process.env.npm_lifecycle_event === 'second'
 if (isSecondWindow) app.setPath('userData', `${app.getPath('userData')}-second`)
 
+// Only one Glofly at a time (per sign-in folder). Opening it again, say while it's in the
+// tray, brings the existing window forward instead.
+if (!app.requestSingleInstanceLock()) app.quit()
+else app.on('second-instance', () => showWindow())
+
+let mainWindow: BrowserWindow | null = null
+
 // Profile photos load through glofly-media:// (see media.ts). Registered before the app
 // starts, as a secure scheme so the window treats it like https.
 protocol.registerSchemesAsPrivileged([
@@ -71,7 +89,7 @@ protocol.registerSchemesAsPrivileged([
 const customTitleBar = process.platform === 'win32'
 
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 1000,
@@ -88,29 +106,43 @@ function createWindow(): void {
     }
   })
 
-  // Keep "(second window)" in the title so the two copies are easy to tell apart.
-  if (isSecondWindow) mainWindow.on('page-title-updated', (event) => event.preventDefault())
+  mainWindow = window
+  window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null
+  })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  // Keep "(second window)" in the title so the two copies are easy to tell apart.
+  if (isSecondWindow) window.on('page-title-updated', (event) => event.preventDefault())
+
+  // Started with the computer: stay in the tray until opened.
+  window.on('ready-to-show', () => {
+    if (!startHidden()) window.show()
+  })
+
+  // "Keep running in the system tray when closed": closing just hides the window.
+  window.on('close', (event) => {
+    if (shouldHideOnClose()) {
+      event.preventDefault()
+      window.hide()
+    }
   })
 
   // Links that try to open a new window go to the real browser instead (https only).
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  window.webContents.setWindowOpenHandler((details) => {
     if (details.url.startsWith('https://')) shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
   // The Glofly window never navigates away from the app itself.
-  mainWindow.webContents.on('will-navigate', (event, url) => {
+  window.webContents.on('will-navigate', (event, url) => {
     if (!isAppUrl(url)) event.preventDefault()
   })
 
   // In development, load from the dev server (hot reload). Otherwise load the built files.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    window.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    window.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
@@ -140,7 +172,8 @@ function isLoginRequest(value: unknown): value is LoginRequest {
     v.identifier.length <= 254 &&
     typeof v.password === 'string' &&
     v.password.length <= 128 &&
-    typeof v.keepSignedIn === 'boolean'
+    typeof v.keepSignedIn === 'boolean' &&
+    (v.restore === undefined || typeof v.restore === 'boolean')
   )
 }
 
@@ -219,19 +252,55 @@ function registerIpcHandlers(): void {
     )
   }
 
-  // Privacy settings: only known on/off settings get through.
+  // Privacy settings: only known settings with allowed values get through.
   ipcMain.handle('settings:get', (event) => (fromApp(event) ? getSettings() : invalid))
   ipcMain.handle('settings:set', (event, changes: unknown) => {
-    const known = ['readReceipts', 'showLastSeen', 'showTyping']
+    const onOff = ['readReceipts', 'showLastSeen', 'showTyping']
+    const allowed = (k: string, v: unknown): boolean =>
+      onOff.includes(k)
+        ? typeof v === 'boolean'
+        : k === 'friendRequests' && (v === 'everyone' || v === 'nobody')
     const c = changes as Record<string, unknown> | null
     const ok =
       fromApp(event) &&
       typeof c === 'object' &&
       c !== null &&
       Object.keys(c).length > 0 &&
-      Object.entries(c).every(([k, v]) => known.includes(k) && typeof v === 'boolean')
-    return ok ? setSettings(c as Record<string, boolean>) : invalid
+      Object.entries(c).every(([k, v]) => allowed(k, v))
+    return ok ? setSettings(c as Partial<PrivacySettings>) : invalid
   })
+
+  // App settings (this computer only).
+  ipcMain.handle('app:get-settings', (event) => (fromApp(event) ? getAppSettings() : null))
+  ipcMain.handle('app:set-settings', (event, changes: unknown) => {
+    const c = changes as Record<string, unknown> | null
+    const ok =
+      fromApp(event) &&
+      typeof c === 'object' &&
+      c !== null &&
+      Object.entries(c).every(
+        ([k, v]) => (k === 'closeToTray' || k === 'openAtLogin') && typeof v === 'boolean'
+      )
+    return ok ? setAppSettings(c as { closeToTray?: boolean; openAtLogin?: boolean }) : null
+  })
+
+  // Settings → Account. Passwords are checked for size only; the server does the rest.
+  const isPassword = (v: unknown): v is string =>
+    typeof v === 'string' && v.length > 0 && v.length <= 128
+  ipcMain.handle(
+    'account:change-password',
+    (event, current: unknown, next: unknown, signOutOthers: unknown) =>
+      fromApp(event) &&
+      isPassword(current) &&
+      isPassword(next) &&
+      typeof signOutOthers === 'boolean'
+        ? changePassword(current, next, signOutOthers)
+        : invalid
+  )
+  ipcMain.handle('account:get', (event) => (fromApp(event) ? getAccount() : invalid))
+  ipcMain.handle('account:delete', (event, password: unknown) =>
+    fromApp(event) && isPassword(password) ? deleteAccount(password) : invalid
+  )
 
   // Your status.
   ipcMain.handle('status:get', (event) => (fromApp(event) ? getMyStatus() : invalid))
@@ -413,9 +482,11 @@ app.whenReady().then(() => {
   })
 
   protocol.handle(MEDIA_SCHEME, handleMediaRequest)
+  loadAppSettings()
   registerIpcHandlers()
   startIdleWatch()
   createWindow()
+  setUpTray(() => mainWindow, icon)
 
   app.on('activate', function () {
     // macOS: reopen the window when the dock icon is clicked.

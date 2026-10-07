@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RegisterRequest, SignedInUser } from '../../preload/api-types'
-import LoginScreen, { type LoginDetails } from './screens/LoginScreen'
+import LoginScreen, { type LoginDetails, type LoginProblem } from './screens/LoginScreen'
 import RegisterScreen from './screens/RegisterScreen'
 import MainScreen from './screens/MainScreen'
 import FireflyTakeoff from './components/FireflyTakeoff'
@@ -10,7 +10,7 @@ type AuthScreen = 'login' | 'register'
 
 type Screen =
   | { name: 'starting' } // checking for a saved "Keep me signed in" session
-  | { name: 'auth'; form: AuthScreen }
+  | { name: 'auth'; form: AuthScreen; notice?: string }
   | { name: 'takeoff'; form: AuthScreen; user: SignedInUser; isNew: boolean } // firefly flying over the form
   | { name: 'app'; user: SignedInUser }
 
@@ -47,9 +47,13 @@ export default function App(): React.JSX.Element {
     return () => clearTimeout(timer)
   }, [screen])
 
-  async function handleLogin(details: LoginDetails): Promise<string | null> {
+  async function handleLogin(details: LoginDetails): Promise<LoginProblem | null> {
     const result = await window.glofly.auth.login(details)
-    if (!result.ok) return result.message
+    if (!result.ok) {
+      return result.reason === 'deletion_scheduled' && result.deleteAfter
+        ? { deleteAfter: result.deleteAfter }
+        : { message: result.message }
+    }
     setScreen({ name: 'takeoff', form: 'login', user: result.user, isNew: false })
     return null
   }
@@ -70,6 +74,20 @@ export default function App(): React.JSX.Element {
 
   // The server ended the session (it expired, or was signed out elsewhere).
   const handleSessionExpired = useCallback(() => setScreen({ name: 'auth', form: 'login' }), [])
+
+  // Deleted from Settings → Account: this device is already signed out.
+  const handleAccountDeleted = useCallback((deleteAfter: string) => {
+    const date = new Date(deleteAfter).toLocaleDateString(undefined, {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    })
+    setScreen({
+      name: 'auth',
+      form: 'login',
+      notice: `Your account will be deleted on ${date}. Log in before then if you change your mind.`
+    })
+  }, [])
 
   // Your name or photo changed: update it everywhere.
   const handleUserChange = useCallback(
@@ -94,6 +112,7 @@ export default function App(): React.JSX.Element {
               onLogin={handleLogin}
               onCreateAccount={showForm('register')}
               busy={flying}
+              notice={screen.name === 'auth' ? screen.notice : null}
             />
           ) : (
             <RegisterScreen onRegister={handleRegister} onLogin={showForm('login')} busy={flying} />
@@ -117,6 +136,7 @@ export default function App(): React.JSX.Element {
           user={screen.user}
           onLogout={handleLogout}
           onSessionExpired={handleSessionExpired}
+          onAccountDeleted={handleAccountDeleted}
           onUserChange={handleUserChange}
         />
       )

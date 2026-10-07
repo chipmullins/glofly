@@ -1,6 +1,6 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "../db";
-import { blocks, friendships } from "../db/schema";
+import { blocks, friendships, users } from "../db/schema";
 
 /** Pairs are stored lower id first, so each pair of people has exactly one row. */
 export function pair(a: string, b: string): { userLow: string; userHigh: string } {
@@ -36,7 +36,22 @@ export async function areFriends(a: string, b: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-/** Glofly's rule: you can message friends, unless either of you has blocked the other. */
+/** True if either account is set to be deleted (hidden until it's restored or removed). */
+export async function deletionPending(...userIds: string[]): Promise<boolean> {
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(inArray(users.id, userIds), isNotNull(users.deleteAfter)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Glofly's rule: you can message friends, unless either of you has blocked the other
+ * (or one of you is deleting their account).
+ */
 export async function canMessage(a: string, b: string): Promise<boolean> {
-  return (await areFriends(a, b)) && !(await blockedEitherWay(a, b));
+  return (
+    (await areFriends(a, b)) && !(await blockedEitherWay(a, b)) && !(await deletionPending(a, b))
+  );
 }

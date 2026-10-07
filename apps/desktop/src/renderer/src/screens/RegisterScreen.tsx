@@ -4,6 +4,7 @@ import fireflyImg from '../assets/firefly.png'
 import wordmarkImg from '../assets/glofly-wordmark.png'
 import './LoginScreen.css'
 import './RegisterScreen.css'
+import { PASSWORD_RULES, STRENGTH_LABELS } from '../lib/passwords'
 
 type RegisterScreenProps = {
   /** Resolves to null on success, or a message per field (and/or a general message). */
@@ -30,24 +31,6 @@ const MONTHS = [
 ]
 
 // Same rules the server enforces (apps/server/src/auth/validation.ts).
-const PASSWORD_RULES = [
-  {
-    id: 'length',
-    label: 'At least 8 characters',
-    test: (p: string) => p.length >= 8,
-    required: true
-  },
-  { id: 'number', label: 'One number', test: (p: string) => /[0-9]/.test(p), required: true },
-  { id: 'letter', label: 'One letter', test: (p: string) => /\p{L}/u.test(p), required: true },
-  {
-    id: 'symbol',
-    label: 'One symbol (!@#$)',
-    test: (p: string) => /[^\p{L}\p{N}\s]/u.test(p),
-    required: false
-  }
-]
-
-const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong']
 
 type UsernameStatus =
   | { state: 'idle' }

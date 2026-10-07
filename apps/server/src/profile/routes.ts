@@ -10,7 +10,7 @@ import { requireAuth } from "../auth/sessions";
 import { emitToUser } from "../realtime";
 import { presenceOf } from "../presence";
 import { storage } from "../storage";
-import { areFriends, blockedEitherWay, pairIs } from "../friends/rules";
+import { areFriends, blockedEitherWay, deletionPending, pairIs } from "../friends/rules";
 import { DISPLAY_NAME_MAX } from "../auth/validation";
 
 export const profileRouter = Router();
@@ -228,7 +228,9 @@ profileRouter.get("/:id/profile", async (req, res) => {
     return;
   }
   // A block looks exactly like "not found", same as everywhere else.
-  const blocked = id.data !== me(res).id && (await blockedEitherWay(me(res).id, id.data));
+  const blocked =
+    id.data !== me(res).id &&
+    ((await blockedEitherWay(me(res).id, id.data)) || (await deletionPending(id.data)));
   const profile = blocked ? null : await profileOf(id.data, await visibilityOf(me(res).id, id.data));
   if (!profile) {
     res.status(404).json({ error: "not_found" });

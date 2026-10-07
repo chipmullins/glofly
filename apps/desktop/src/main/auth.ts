@@ -51,6 +51,7 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
     user?: SignedInUser
     error?: string
     message?: string
+    deleteAfter?: string
   } | null
 
   if (response.ok && body?.token && body.user) {
@@ -58,6 +59,19 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
     if (request.keepSignedIn) await saveToken(body.token)
     else await clearToken()
     return { ok: true, user: body.user }
+  }
+
+  if (
+    response.status === 403 &&
+    body?.error === 'deletion_scheduled' &&
+    typeof body.deleteAfter === 'string'
+  ) {
+    return {
+      ok: false,
+      reason: 'deletion_scheduled',
+      message: 'This account is set to be deleted.',
+      deleteAfter: body.deleteAfter
+    }
   }
 
   switch (response.status) {

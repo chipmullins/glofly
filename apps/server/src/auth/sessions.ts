@@ -88,5 +88,6 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   }
   res.locals.user = found.user;
   res.locals.sessionToken = token;
+  res.locals.sessionId = found.session.id;
   next();
 };
