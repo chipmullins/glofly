@@ -75,7 +75,8 @@ authRouter.get("/username-available", usernameCheckLimiter, async (req, res) => 
 });
 
 // POST /auth/register
-// Body: { email, username, displayName, password, birthday: "YYYY-MM-DD", acceptTerms: true }
+// Body: { email, username, displayName, password, birthday: "YYYY-MM-DD", acceptTerms: true, deviceName? }
+// Returns a session token too, so the new account is signed in right away.
 authRouter.post("/register", registerLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -119,7 +120,14 @@ authRouter.post("/register", registerLimiter, async (req, res) => {
       })
       .returning({ id: users.id, username: users.username, displayName: users.displayName });
 
-    res.status(201).json({ user });
+    // Sign the new account straight in on this device ("Keep me signed in" on, like most
+    // desktop messengers). They can log out from the settings menu.
+    const session = await createSession(user.id, true, input.deviceName ?? null);
+    res.status(201).json({
+      token: session.token,
+      expiresAt: session.expiresAt.toISOString(),
+      user,
+    });
   } catch (err) {
     // Two people grabbing the same name at the same instant: the database still catches it.
     const field = duplicateField(err);

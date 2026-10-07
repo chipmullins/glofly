@@ -1,0 +1,294 @@
+/* Register screen. Shares LoginScreen.css for the brand panel and form controls;
+   values here match the design canvas (Register.dc.html). */
+
+.register {
+  height: 100%;
+  display: flex;
+  font-family: var(--glo-font-body);
+  color: var(--glo-ink);
+  background: var(--glo-cream);
+  overflow: hidden;
+}
+
+/* Firefly and glow positions for this screen's brand panel */
+.reg-dot--1 {
+  left: 20%;
+  top: 14%;
+  width: 5px;
+  height: 5px;
+  background: #ffd27a;
+  box-shadow: 0 0 16px 6px rgba(255, 190, 90, 0.5);
+}
+.reg-dot--2 {
+  left: 10%;
+  top: 52%;
+  width: 4px;
+  height: 4px;
+  background: #ffd27a;
+  box-shadow: 0 0 12px 4px rgba(255, 190, 90, 0.4);
+}
+.reg-dot--3 {
+  left: 88%;
+  top: 88%;
+  width: 3px;
+  height: 3px;
+  background: #ffd27a;
+  box-shadow: 0 0 10px 4px rgba(255, 190, 90, 0.4);
+}
+.glo-fly.reg-fly--1 {
+  left: 76%;
+  top: 12%;
+  width: 32px;
+  transform: rotate(-12deg);
+}
+.glo-fly.reg-fly--2 {
+  left: 84%;
+  top: 70%;
+  width: 22px;
+  transform: rotate(10deg);
+  opacity: 0.82;
+}
+.glo-fly.reg-fly--3 {
+  left: 58%;
+  top: 88%;
+  width: 26px;
+  transform: rotate(-4deg);
+}
+
+.features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 360px;
+}
+.features li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #f3e6dc;
+  font-size: 16px;
+}
+.feature-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #33231c;
+  color: #ffa54a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+/* The form scrolls on its own when the window is shorter than the form. */
+.register-panel {
+  overflow-y: auto;
+  align-items: flex-start;
+  padding: 48px 32px;
+}
+.register-form {
+  width: 100%;
+  max-width: 420px;
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.register-wordmark {
+  width: 170px;
+  height: auto;
+  align-self: flex-start;
+}
+.register-heading h1 {
+  font-size: 32px;
+}
+
+.register-fields {
+  gap: 16px;
+}
+.register-fields .field {
+  gap: 7px;
+}
+.register .text-input {
+  height: 46px;
+}
+.register .eye-button {
+  right: 1px;
+  top: 1px;
+}
+
+.field-hint {
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.field-hint--error {
+  color: #b42318;
+}
+
+/* Username with @ and the live availability check */
+.username-wrap {
+  position: relative;
+}
+.username-at {
+  position: absolute;
+  left: 14px;
+  top: 13px;
+  font-size: 15px;
+  color: #9c8676;
+  pointer-events: none;
+}
+.text-input--username {
+  padding: 0 120px 0 32px;
+}
+.username-status {
+  position: absolute;
+  right: 14px;
+  top: 0;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+}
+.username-status > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.username-status--checking {
+  color: #9c8676;
+}
+.username-status--available {
+  color: #1f7a4d;
+}
+.username-status--taken {
+  color: #b42318;
+}
+
+/* Password strength */
+.strength {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 18px;
+}
+.strength-bars {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.strength-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: #eadbcf;
+  transition: background 0.2s ease;
+}
+.strength-bar--on {
+  background: var(--glo-orange);
+}
+.strength-label {
+  min-width: 48px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+}
+.strength-label--1 {
+  color: #b42318;
+}
+.strength-label--2,
+.strength-label--3 {
+  color: var(--glo-link);
+}
+.strength-label--4 {
+  color: #1f7a4d;
+}
+
+.password-rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+  font-size: 13px;
+}
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--glo-muted);
+}
+.rule--met {
+  color: #1f7a4d;
+}
+
+/* Birthday */
+.birthday {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.birthday legend {
+  padding: 0;
+  margin-bottom: 7px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.birthday-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.3fr;
+  gap: 10px;
+}
+.birthday-row .text-input {
+  min-width: 0;
+  padding: 0 12px;
+}
+.birthday-select {
+  cursor: pointer;
+}
+.birthday-select--empty {
+  color: #9c8676;
+}
+.birthday-select option {
+  color: var(--glo-ink);
+}
+
+/* Terms */
+.terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 400 !important;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.terms input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--glo-orange-deep);
+  margin: 1px 0 0;
+  flex: none;
+  cursor: pointer;
+}
+.terms .link-button {
+  font-size: 14px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

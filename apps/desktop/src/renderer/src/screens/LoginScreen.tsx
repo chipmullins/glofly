@@ -12,6 +12,7 @@ export type LoginDetails = {
 type LoginScreenProps = {
   /** Resolves to null on success, or a message to show if login failed. */
   onLogin: (details: LoginDetails) => Promise<string | null>
+  onCreateAccount: () => void
   busy?: boolean
 }
 
@@ -37,6 +38,7 @@ function EyeIcon({ open }: { open: boolean }): React.JSX.Element {
 
 export default function LoginScreen({
   onLogin,
+  onCreateAccount,
   busy = false
 }: LoginScreenProps): React.JSX.Element {
   const [identifier, setIdentifier] = useState('')
@@ -204,7 +206,11 @@ export default function LoginScreen({
 
           <p className="login-footer">
             New here?{' '}
-            <button type="button" className="link-button link-button--strong">
+            <button
+              type="button"
+              className="link-button link-button--strong"
+              onClick={onCreateAccount}
+            >
               Create an account
             </button>
           </p>

@@ -2,8 +2,8 @@ import { app, shell, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'ele
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { login, logout, restore } from './auth'
-import type { LoginRequest, WindowTheme } from '../preload/api-types'
+import { checkUsername, login, logout, register, restore } from './auth'
+import type { LoginRequest, RegisterRequest, WindowTheme } from '../preload/api-types'
 
 // Colors for the minimize / maximize / close buttons, matching each screen.
 const TITLE_BAR = {
@@ -82,6 +82,21 @@ function isLoginRequest(value: unknown): value is LoginRequest {
   )
 }
 
+function isRegisterRequest(value: unknown): value is RegisterRequest {
+  const v = value as Partial<RegisterRequest> | null
+  const shortText = (x: unknown, max: number): boolean => typeof x === 'string' && x.length <= max
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    shortText(v.email, 254) &&
+    shortText(v.username, 40) &&
+    shortText(v.displayName, 64) &&
+    shortText(v.password, 128) &&
+    shortText(v.birthday, 10) &&
+    typeof v.acceptTerms === 'boolean'
+  )
+}
+
 function isWindowTheme(value: unknown): value is WindowTheme {
   return value === 'login' || value === 'app'
 }
@@ -90,6 +105,18 @@ function registerIpcHandlers(): void {
   ipcMain.on('window:theme', (event, theme: unknown) => {
     if (!customTitleBar || !isAppUrl(event.senderFrame?.url ?? '') || !isWindowTheme(theme)) return
     BrowserWindow.fromWebContents(event.sender)?.setTitleBarOverlay(TITLE_BAR[theme])
+  })
+
+  ipcMain.handle('auth:register', (event, request: unknown) => {
+    if (!fromApp(event) || !isRegisterRequest(request)) {
+      return { ok: false, fields: {}, message: 'Check your details.' }
+    }
+    return register(request)
+  })
+
+  ipcMain.handle('auth:check-username', (event, username: unknown) => {
+    if (!fromApp(event) || typeof username !== 'string' || username.length > 40) return null
+    return checkUsername(username)
   })
 
   ipcMain.handle('auth:restore', (event) => {

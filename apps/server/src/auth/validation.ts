@@ -100,6 +100,7 @@ export const registerSchema = z.object({
   acceptTerms: z.literal(true, {
     error: "Please agree to the Terms of Service and Privacy Policy.",
   }),
+  deviceName: z.string().trim().max(60).optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

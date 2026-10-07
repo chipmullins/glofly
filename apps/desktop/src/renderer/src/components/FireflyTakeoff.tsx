@@ -3,8 +3,10 @@ import fireflyImg from '../assets/firefly.png'
 import './FireflyTakeoff.css'
 
 type FireflyTakeoffProps = {
-  /** Name shown on the welcome screen, e.g. "Chip" */
-  name: string
+  /** Big line on the welcome screen, e.g. "Welcome back, Chip" */
+  title: string
+  /** Small line under it, next to the loading dots */
+  status?: string
 }
 
 /**
@@ -18,7 +20,10 @@ function flightPath(w: number, h: number): string {
   return `path('M ${x(120)} ${y(660)} C ${x(420)} ${y(780)}, ${x(640)} ${y(120)}, ${x(1480)} ${y(110)}')`
 }
 
-export default function FireflyTakeoff({ name }: FireflyTakeoffProps): React.JSX.Element {
+export default function FireflyTakeoff({
+  title,
+  status = 'Loading your chats'
+}: FireflyTakeoffProps): React.JSX.Element {
   // Measured once when the animation starts.
   const style = useMemo(
     () =>
@@ -30,14 +35,14 @@ export default function FireflyTakeoff({ name }: FireflyTakeoffProps): React.JSX
     <div className="takeoff" style={style} role="status" aria-live="polite">
       <div className="tk-app">
         <img src={fireflyImg} alt="" draggable={false} />
-        <span className="tk-app-title">Welcome back, {name}</span>
+        <span className="tk-app-title">{title}</span>
         <span className="tk-app-status">
           <span className="tk-dots" aria-hidden="true">
             <span className="tk-dot" />
             <span className="tk-dot" />
             <span className="tk-dot" />
           </span>
-          Loading your chats
+          {status}
         </span>
       </div>
 

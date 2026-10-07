@@ -1,4 +1,11 @@
-import type { LoginRequest, LoginResult, SignedInUser } from '../preload/api-types'
+import type {
+  LoginRequest,
+  LoginResult,
+  RegisterRequest,
+  RegisterResult,
+  SignedInUser,
+  UsernameCheck
+} from '../preload/api-types'
 import { clearToken, loadToken, saveToken } from './session-store'
 
 // Where the Glofly server lives. Local for now; becomes the AWS address at release.
@@ -66,6 +73,62 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
         reason: 'server_error',
         message: 'Something went wrong on our end. Try again in a moment.'
       }
+  }
+}
+
+export async function register(request: RegisterRequest): Promise<RegisterResult> {
+  let response: Response
+  try {
+    response = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...request, deviceName: DEVICE_NAME }),
+      signal: AbortSignal.timeout(10_000)
+    })
+  } catch {
+    return { ok: false, fields: {}, message: UNREACHABLE }
+  }
+
+  const body = (await response.json().catch(() => null)) as {
+    token?: string
+    user?: SignedInUser
+    fields?: Record<string, string>
+    message?: string
+  } | null
+
+  if (response.status === 201 && body?.token && body.user) {
+    sessionToken = body.token
+    await saveToken(body.token) // new accounts start out kept signed in
+    return { ok: true, user: body.user }
+  }
+  if ((response.status === 400 || response.status === 409) && body?.fields) {
+    return { ok: false, fields: body.fields }
+  }
+  if (response.status === 429) {
+    return {
+      ok: false,
+      fields: {},
+      message: body?.message ?? 'Too many sign-up attempts. Try again later.'
+    }
+  }
+  return {
+    ok: false,
+    fields: {},
+    message: 'Something went wrong on our end. Try again in a moment.'
+  }
+}
+
+export async function checkUsername(username: string): Promise<UsernameCheck | null> {
+  try {
+    const response = await fetch(
+      `${API_URL}/auth/username-available?username=${encodeURIComponent(username)}`,
+      { signal: AbortSignal.timeout(5_000) }
+    )
+    if (!response.ok) return null
+    const body = (await response.json()) as UsernameCheck
+    return typeof body.available === 'boolean' ? body : null
+  } catch {
+    return null
   }
 }
 
