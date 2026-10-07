@@ -10,7 +10,8 @@ export type LoginDetails = {
 }
 
 type LoginScreenProps = {
-  onLogin: (details: LoginDetails) => void
+  /** Resolves to null on success, or a message to show if login failed. */
+  onLogin: (details: LoginDetails) => Promise<string | null>
   busy?: boolean
 }
 
@@ -42,13 +43,16 @@ export default function LoginScreen({
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [keepSignedIn, setKeepSignedIn] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const userRef = useRef<HTMLInputElement>(null)
   const passRef = useRef<HTMLInputElement>(null)
+  const locked = busy || submitting
 
   // Pressing Enter in either field submits, because this is a real <form>.
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>): void {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault()
-    if (busy) return
+    if (locked) return
     if (!identifier.trim()) {
       userRef.current?.focus()
       return
@@ -57,7 +61,15 @@ export default function LoginScreen({
       passRef.current?.focus()
       return
     }
-    onLogin({ identifier: identifier.trim(), password, keepSignedIn })
+    setSubmitting(true)
+    setError(null)
+    const message = await onLogin({ identifier: identifier.trim(), password, keepSignedIn })
+    setSubmitting(false)
+    if (message) {
+      setError(message)
+      setPassword('')
+      passRef.current?.focus()
+    }
   }
 
   return (
@@ -116,6 +128,8 @@ export default function LoginScreen({
                 autoComplete="username"
                 autoFocus
                 spellCheck={false}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'login-error' : undefined}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
               />
@@ -135,6 +149,8 @@ export default function LoginScreen({
                   className="text-input text-input--password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? 'login-error' : undefined}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -160,7 +176,28 @@ export default function LoginScreen({
             </label>
           </div>
 
-          <button type="submit" className="login-submit" disabled={busy}>
+          {error && (
+            <div id="login-error" className="login-error" role="alert">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7.5v5" />
+                <path d="M12 16.2v.3" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button type="submit" className="login-submit" disabled={locked} aria-busy={submitting}>
             Log in
           </button>
 

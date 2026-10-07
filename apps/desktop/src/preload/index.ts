@@ -1,22 +1,14 @@
-import { contextBridge } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+import { contextBridge, ipcRenderer } from 'electron'
+import type { GloflyApi, LoginRequest } from './api-types'
 
-// Custom APIs for renderer
-const api = {}
-
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
+// The only things the UI can ask the main process to do. Each one is a named,
+// specific action. The UI never gets general access to Electron or Node, so even
+// if something malicious ran inside the window, it couldn't reach your files.
+const glofly: GloflyApi = {
+  auth: {
+    login: (request: LoginRequest) => ipcRenderer.invoke('auth:login', request),
+    logout: () => ipcRenderer.invoke('auth:logout')
   }
-} else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
 }
+
+contextBridge.exposeInMainWorld('glofly', glofly)

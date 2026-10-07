@@ -3,8 +3,9 @@ import { rateLimit } from "express-rate-limit";
 import { eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { users } from "../db/schema";
-import { hashPassword } from "./passwords";
-import { fieldErrors, registerSchema, usernameSchema } from "./validation";
+import { hashPassword, verifyPassword } from "./passwords";
+import { bearerToken, createSession, deleteSession, requireAuth } from "./sessions";
+import { fieldErrors, loginSchema, registerSchema, usernameSchema } from "./validation";
 
 export const authRouter = Router();
 
@@ -23,6 +24,19 @@ const usernameCheckLimiter = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "too_many_requests", message: "Slow down a little and try again." },
+});
+
+// Only failed attempts count, so a typo-prone person isn't locked out after logging in fine.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "too_many_requests",
+    message: "Too many login attempts. Wait a few minutes and try again.",
+  },
 });
 
 const lower = (column: typeof users.username | typeof users.email) => sql`lower(${column})`;
@@ -115,4 +129,63 @@ authRouter.post("/register", registerLimiter, async (req, res) => {
     }
     throw err;
   }
+});
+
+// Checked when nobody has the typed username, so a wrong username takes as long
+// as a wrong password. Otherwise timing would reveal which usernames exist.
+let dummyHash: Promise<string> | null = null;
+const getDummyHash = () => (dummyHash ??= hashPassword("glofly-timing-placeholder-1"));
+
+const WRONG_DETAILS = "That username or password isn't right.";
+
+// POST /auth/login
+// Body: { identifier: username or email, password, keepSignedIn, deviceName? }
+authRouter.post("/login", loginLimiter, async (req, res) => {
+  const parsed = loginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: "Enter your username or email and password." });
+    return;
+  }
+  const { identifier, password, keepSignedIn, deviceName } = parsed.data;
+
+  const column = identifier.includes("@") ? users.email : users.username;
+  const [user] = await db
+    .select({
+      id: users.id,
+      username: users.username,
+      displayName: users.displayName,
+      passwordHash: users.passwordHash,
+    })
+    .from(users)
+    .where(eq(lower(column), identifier.toLowerCase()))
+    .limit(1);
+
+  const passwordOk = user
+    ? await verifyPassword(user.passwordHash, password)
+    : (await verifyPassword(await getDummyHash(), password), false);
+
+  if (!user || !passwordOk) {
+    // Same message either way, so nobody can test which accounts exist.
+    res.status(401).json({ error: "wrong_details", message: WRONG_DETAILS });
+    return;
+  }
+
+  const session = await createSession(user.id, keepSignedIn, deviceName ?? null);
+  res.json({
+    token: session.token,
+    expiresAt: session.expiresAt.toISOString(),
+    user: { id: user.id, username: user.username, displayName: user.displayName },
+  });
+});
+
+// GET /auth/me — who is this token signed in as?
+authRouter.get("/me", requireAuth, (_req, res) => {
+  res.json({ user: res.locals.user });
+});
+
+// POST /auth/logout — signs this device out.
+authRouter.post("/logout", async (req, res) => {
+  const token = bearerToken(req.headers.authorization);
+  if (token) await deleteSession(token);
+  res.status(204).end();
 });

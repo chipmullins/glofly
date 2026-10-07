@@ -1,8 +1,7 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
+import type { GloflyApi } from './api-types'
 
 declare global {
   interface Window {
-    electron: ElectronAPI
-    api: unknown
+    glofly: GloflyApi
   }
 }

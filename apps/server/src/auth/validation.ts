@@ -104,6 +104,14 @@ export const registerSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+// Login only checks the shape. Whether the details are right is decided by the database.
+export const loginSchema = z.object({
+  identifier: z.string().trim().min(1).max(254),
+  password: z.string().min(1).max(PASSWORD_MAX),
+  keepSignedIn: z.boolean().default(false),
+  deviceName: z.string().trim().max(60).optional(),
+});
+
 /** Turns validation problems into { field: "message" }, first problem per field. */
 export function fieldErrors(error: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};

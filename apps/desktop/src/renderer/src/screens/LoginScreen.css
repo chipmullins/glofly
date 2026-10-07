@@ -364,6 +364,28 @@
   cursor: default;
 }
 
+.login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: -6px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fdecea;
+  border: 1px solid #f5c2bc;
+  color: #a1241a;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.login-error svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.text-input[aria-invalid='true'] {
+  border-color: #e0786c;
+}
+
 .login-footer {
   margin: 0;
   font-size: 15px;
