@@ -4,7 +4,7 @@ import { disconnectRealtime } from './realtime'
 
 /** Calls the server as the signed-in user and turns the answer into an ApiResult. */
 export async function request<T>(
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown
 ): Promise<ApiResult<T>> {

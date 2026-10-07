@@ -29,6 +29,27 @@
       "when": 1791350204771,
       "tag": "0003_create_messaging",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791351018307,
+      "tag": "0004_message_replies_and_reactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791351810530,
+      "tag": "0005_user_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791352206785,
+      "tag": "0006_privacy_settings",
+      "breakpoints": true
     }
   ]
 }

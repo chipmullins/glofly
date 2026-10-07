@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   date,
   index,
@@ -11,6 +12,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invisible"]);
 
 // One row per Glofly account.
 export const users = pgTable(
@@ -34,6 +37,19 @@ export const users = pgTable(
 
     // When they agreed to the Terms of Service and Privacy Policy.
     termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }).notNull(),
+
+    // The status they picked. "invisible" means they appear offline to everyone.
+    statusPreference: userStatus("status_preference").notNull().default("online"),
+    // Custom status, e.g. "Grinding ranked tonight". Shown to friends while not offline.
+    statusText: text("status_text"),
+    // When their last device disconnected. Shown to friends as "Last seen …".
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+
+    // Privacy settings (Settings → General → Privacy).
+    // Read receipts work both ways: turn them off and you don't see other people's either.
+    readReceipts: boolean("read_receipts").notNull().default(true),
+    showLastSeen: boolean("show_last_seen").notNull().default(true),
+    showTyping: boolean("show_typing").notNull().default(true),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -165,11 +181,31 @@ export const messages = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
+    // The message this one replies to, if any. If that message is removed entirely, the link clears.
+    replyToId: uuid("reply_to_id").references((): AnyPgColumn => messages.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    // For editing and deleting, coming later.
     editedAt: timestamp("edited_at", { withTimezone: true }),
+    // Deleted messages keep their place (so replies still make sense) but lose their text.
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   // Loading a chat = newest messages in one conversation, so index exactly that.
   (t) => [index("messages_conversation_created_idx").on(t.conversationId, t.createdAt, t.id)],
+);
+
+// One row per person per emoji per message.
+export const messageReactions = pgTable(
+  "message_reactions",
+  {
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    emoji: text("emoji").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.messageId, t.userId, t.emoji] })],
 );

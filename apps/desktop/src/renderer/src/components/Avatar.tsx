@@ -1,4 +1,6 @@
+import type { PresenceStatus } from '../../../preload/api-types'
 import { initials } from '../lib/names'
+import StatusDot from './StatusDot'
 
 // Round initials avatar. Photos come later; until then each person gets a steady color.
 
@@ -24,9 +26,19 @@ type AvatarProps = {
   id: string
   name: string
   size?: number
+  /** Shows a status dot when given. */
+  status?: PresenceStatus
+  /** Background behind the avatar, used as the ring around the dot. */
+  ring?: string
 }
 
-export default function Avatar({ id, name, size = 44 }: AvatarProps): React.JSX.Element {
+export default function Avatar({
+  id,
+  name,
+  size = 44,
+  status,
+  ring
+}: AvatarProps): React.JSX.Element {
   const [bg, fg] = colorsFor(id)
   return (
     <span
@@ -41,6 +53,7 @@ export default function Avatar({ id, name, size = 44 }: AvatarProps): React.JSX.
       }}
     >
       {initials(name)}
+      {status && <StatusDot status={status} ring={ring} size={size >= 44 ? 13 : 12} />}
     </span>
   )
 }

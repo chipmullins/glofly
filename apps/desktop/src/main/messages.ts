@@ -21,16 +21,44 @@ export function loadMessages(
   return request<MessagePage>('GET', `/conversations/${conversationId}/messages${query}`)
 }
 
+const unwrap = (result: ApiResult<{ message: Message }>): ApiResult<Message> =>
+  result.ok ? { ok: true, data: result.data.message } : result
+
 export async function sendMessage(
   conversationId: string,
+  body: string,
+  replyToId?: string
+): Promise<ApiResult<Message>> {
+  return unwrap(
+    await request('POST', `/conversations/${conversationId}/messages`, { body, replyToId })
+  )
+}
+
+export async function editMessage(
+  conversationId: string,
+  messageId: string,
   body: string
 ): Promise<ApiResult<Message>> {
-  const result = await request<{ message: Message }>(
-    'POST',
-    `/conversations/${conversationId}/messages`,
-    { body }
+  return unwrap(
+    await request('PATCH', `/conversations/${conversationId}/messages/${messageId}`, { body })
   )
-  return result.ok ? { ok: true, data: result.data.message } : result
+}
+
+export async function deleteMessage(
+  conversationId: string,
+  messageId: string
+): Promise<ApiResult<Message>> {
+  return unwrap(await request('DELETE', `/conversations/${conversationId}/messages/${messageId}`))
+}
+
+export async function reactToMessage(
+  conversationId: string,
+  messageId: string,
+  emoji: string,
+  on: boolean
+): Promise<ApiResult<Message>> {
+  const path = `/conversations/${conversationId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`
+  return unwrap(await request(on ? 'PUT' : 'DELETE', path))
 }
 
 export async function markRead(conversationId: string): Promise<ApiResult<null>> {

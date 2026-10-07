@@ -3,6 +3,8 @@ import type {
   GloflyApi,
   GloflyEvent,
   LoginRequest,
+  MyStatus,
+  PrivacySettings,
   RegisterRequest,
   WindowTheme
 } from './api-types'
@@ -29,13 +31,27 @@ const glofly: GloflyApi = {
     block: (userId: string) => ipcRenderer.invoke('friends:block', userId),
     unblock: (userId: string) => ipcRenderer.invoke('friends:unblock', userId)
   },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (changes: Partial<PrivacySettings>) => ipcRenderer.invoke('settings:set', changes)
+  },
+  status: {
+    get: () => ipcRenderer.invoke('status:get'),
+    set: (changes: Partial<MyStatus>) => ipcRenderer.invoke('status:set', changes)
+  },
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),
     openDm: (userId: string) => ipcRenderer.invoke('conversations:open-dm', userId),
     messages: (conversationId: string, beforeMessageId?: string) =>
       ipcRenderer.invoke('conversations:messages', conversationId, beforeMessageId),
-    send: (conversationId: string, body: string) =>
-      ipcRenderer.invoke('conversations:send', conversationId, body),
+    send: (conversationId: string, body: string, replyToId?: string) =>
+      ipcRenderer.invoke('conversations:send', conversationId, body, replyToId),
+    edit: (conversationId: string, messageId: string, body: string) =>
+      ipcRenderer.invoke('conversations:edit', conversationId, messageId, body),
+    remove: (conversationId: string, messageId: string) =>
+      ipcRenderer.invoke('conversations:remove', conversationId, messageId),
+    react: (conversationId: string, messageId: string, emoji: string, on: boolean) =>
+      ipcRenderer.invoke('conversations:react', conversationId, messageId, emoji, on),
     markRead: (conversationId: string) => ipcRenderer.invoke('conversations:read', conversationId),
     typing: (conversationId: string) => ipcRenderer.send('conversations:typing', conversationId)
   },

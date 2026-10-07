@@ -12,8 +12,18 @@ import {
   register,
   restore
 } from './auth'
-import { listConversations, loadMessages, markRead, openDm, sendMessage } from './messages'
+import {
+  deleteMessage,
+  editMessage,
+  listConversations,
+  loadMessages,
+  markRead,
+  openDm,
+  reactToMessage,
+  sendMessage
+} from './messages'
 import { connectRealtime, disconnectRealtime, sendTyping } from './realtime'
+import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isUserId } from './api'
 import {
   acceptRequest,
@@ -33,6 +43,11 @@ const TITLE_BAR = {
   app: { color: '#FFFFFF', symbolColor: '#4A372B', height: 40 }
 } as const
 
+// Developer option: `npm run second -w apps/desktop` opens a second copy of Glofly with its
+// own saved sign-in, so two test accounts can chat live on one PC.
+const isSecondWindow = process.env.npm_lifecycle_event === 'second'
+if (isSecondWindow) app.setPath('userData', `${app.getPath('userData')}-second`)
+
 // On Windows, Glofly draws its own top area and Windows only draws the window
 // buttons (keeping Snap Layouts and double-click-to-maximize).
 const customTitleBar = process.platform === 'win32'
@@ -43,7 +58,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 1000,
     minHeight: 700,
-    title: 'Glofly',
+    title: isSecondWindow ? 'Glofly (second window)' : 'Glofly',
     backgroundColor: '#FFFBF7',
     show: false,
     autoHideMenuBar: true,
@@ -54,6 +69,9 @@ function createWindow(): void {
       sandbox: true
     }
   })
+
+  // Keep "(second window)" in the title so the two copies are easy to tell apart.
+  if (isSecondWindow) mainWindow.on('page-title-updated', (event) => event.preventDefault())
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -179,6 +197,40 @@ function registerIpcHandlers(): void {
     )
   }
 
+  // Privacy settings: only known on/off settings get through.
+  ipcMain.handle('settings:get', (event) => (fromApp(event) ? getSettings() : invalid))
+  ipcMain.handle('settings:set', (event, changes: unknown) => {
+    const known = ['readReceipts', 'showLastSeen', 'showTyping']
+    const c = changes as Record<string, unknown> | null
+    const ok =
+      fromApp(event) &&
+      typeof c === 'object' &&
+      c !== null &&
+      Object.keys(c).length > 0 &&
+      Object.entries(c).every(([k, v]) => known.includes(k) && typeof v === 'boolean')
+    return ok ? setSettings(c as Record<string, boolean>) : invalid
+  })
+
+  // Your status.
+  ipcMain.handle('status:get', (event) => (fromApp(event) ? getMyStatus() : invalid))
+  ipcMain.handle('status:set', (event, changes: unknown) => {
+    const c = changes as { status?: unknown; statusText?: unknown } | null
+    const choices = ['online', 'away', 'dnd', 'invisible']
+    const ok =
+      fromApp(event) &&
+      typeof c === 'object' &&
+      c !== null &&
+      (c.status === undefined || (typeof c.status === 'string' && choices.includes(c.status))) &&
+      (c.statusText === undefined ||
+        c.statusText === null ||
+        (typeof c.statusText === 'string' && c.statusText.length <= 200))
+    if (!ok) return invalid
+    return setMyStatus({
+      ...(c.status !== undefined ? { status: c.status as 'online' } : {}),
+      ...(c.statusText !== undefined ? { statusText: c.statusText as string | null } : {})
+    })
+  })
+
   // Conversations and messages.
   const isMessage = (v: unknown): v is string => typeof v === 'string' && v.length <= 8000
   ipcMain.handle('conversations:list', (event) => (fromApp(event) ? listConversations() : invalid))
@@ -190,8 +242,31 @@ function registerIpcHandlers(): void {
       ? loadMessages(id, before)
       : invalid
   )
-  ipcMain.handle('conversations:send', (event, id: unknown, body: unknown) =>
-    fromApp(event) && isUserId(id) && isMessage(body) ? sendMessage(id, body) : invalid
+  ipcMain.handle('conversations:send', (event, id: unknown, body: unknown, replyTo: unknown) =>
+    fromApp(event) && isUserId(id) && isMessage(body) && (replyTo == null || isUserId(replyTo))
+      ? sendMessage(id, body, replyTo ?? undefined)
+      : invalid
+  )
+  ipcMain.handle('conversations:edit', (event, id: unknown, messageId: unknown, body: unknown) =>
+    fromApp(event) && isUserId(id) && isUserId(messageId) && isMessage(body)
+      ? editMessage(id, messageId, body)
+      : invalid
+  )
+  ipcMain.handle('conversations:remove', (event, id: unknown, messageId: unknown) =>
+    fromApp(event) && isUserId(id) && isUserId(messageId) ? deleteMessage(id, messageId) : invalid
+  )
+  ipcMain.handle(
+    'conversations:react',
+    (event, id: unknown, messageId: unknown, emoji: unknown, on: unknown) =>
+      fromApp(event) &&
+      isUserId(id) &&
+      isUserId(messageId) &&
+      typeof emoji === 'string' &&
+      emoji.length > 0 &&
+      emoji.length <= 32 &&
+      typeof on === 'boolean'
+        ? reactToMessage(id, messageId, emoji, on)
+        : invalid
   )
   ipcMain.handle('conversations:read', (event, id: unknown) =>
     fromApp(event) && isUserId(id) ? markRead(id) : invalid
@@ -228,6 +303,7 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
+  startIdleWatch()
   createWindow()
 
   app.on('activate', function () {

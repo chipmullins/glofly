@@ -1,0 +1,152 @@
+/* Settings window. Values match the design canvas (SettingsGeneral.dc.html). */
+
+.settings {
+  max-width: 920px;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #efe4da;
+}
+.settings-head h1 {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 24px;
+}
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+.settings-nav {
+  width: 230px;
+  flex: none;
+  padding: 20px 14px;
+  background: #f7f0e9;
+  border-right: 1px solid #eaddd1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: #4a372b;
+  font-weight: 600;
+  font-size: 15px;
+}
+.settings-nav-item--active {
+  background: #fbdcc4;
+  color: var(--glo-ink);
+  font-weight: 700;
+}
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 28px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-section h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.settings-card {
+  border: 1px solid #efe4da;
+  border-radius: 14px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 18px;
+}
+.settings-row + .settings-row {
+  border-top: 1px solid #f3eae2;
+}
+.settings-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.settings-row-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-row-desc {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--glo-muted);
+}
+
+/* On/off switch from the design */
+.toggle {
+  width: 48px;
+  height: 28px;
+  padding: 3px;
+  border: 0;
+  border-radius: 14px;
+  background: #cdbbae;
+  display: flex;
+  justify-content: flex-start;
+  cursor: pointer;
+  flex: none;
+  transition: background 0.15s ease;
+}
+.toggle--on {
+  background: #e2650f;
+  justify-content: flex-end;
+}
+.toggle--loading {
+  background: #efe4da;
+  cursor: default;
+}
+.toggle:focus-visible {
+  outline: 3px solid rgba(244, 122, 31, 0.45);
+  outline-offset: 2px;
+}
+.toggle-knob {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(36, 23, 15, 0.3);
+}
+
+.settings-logout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px;
+}
+.settings-logout-button {
+  height: 42px;
+  padding: 0 16px;
+  color: var(--glo-ink);
+}

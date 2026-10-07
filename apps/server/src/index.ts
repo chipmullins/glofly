@@ -7,6 +7,7 @@ import { authRouter } from "./auth/routes";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
 import { conversationsRouter } from "./messages/routes";
 import { startRealtime } from "./realtime";
+import { connectRedis } from "./redis";
 
 const app = express();
 const PORT = 4000;
@@ -46,6 +47,13 @@ app.use(errorHandler);
 const server = createServer(app);
 startRealtime(server);
 
-server.listen(PORT, () => {
-  console.log(`Glofly server running at http://localhost:${PORT}`);
-});
+connectRedis()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`Glofly server running at http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Couldn't connect to Redis. Is Docker running? (docker compose up -d)", err);
+    process.exit(1);
+  });

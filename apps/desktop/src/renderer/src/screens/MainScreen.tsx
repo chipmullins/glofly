@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ApiResult,
   ConversationSummary,
+  MyStatus,
+  Presence,
   FriendEntry,
   FriendLists,
   SignedInUser
@@ -24,7 +26,11 @@ import {
   SettingsIcon
 } from '../components/icons'
 import { initials, shortDate } from '../lib/names'
-import { playSound } from '../lib/sounds'
+import { playSound, setQuiet } from '../lib/sounds'
+import { dotFor, presenceLine, STATUS_LABEL } from '../lib/presence'
+import StatusDot from '../components/StatusDot'
+import StatusMenu from '../components/StatusMenu'
+import SettingsDialog from '../components/SettingsDialog'
 import '../components/dialogs.css'
 import './MainScreen.css'
 
@@ -71,7 +77,13 @@ function useClickOutside(open: boolean, close: () => void): React.RefObject<HTML
   return ref
 }
 
-function SettingsMenu({ onLogout }: { onLogout: () => void }): React.JSX.Element {
+function SettingsMenu({
+  onLogout,
+  onOpenSettings
+}: {
+  onLogout: () => void
+  onOpenSettings: () => void
+}): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   const wrapRef = useClickOutside(open, close)
@@ -93,6 +105,18 @@ function SettingsMenu({ onLogout }: { onLogout: () => void }): React.JSX.Element
           <button
             type="button"
             role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close()
+              onOpenSettings()
+            }}
+          >
+            <SettingsIcon size={18} />
+            Settings
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             className="menu-item menu-item--danger"
             onClick={onLogout}
           >
@@ -107,11 +131,13 @@ function SettingsMenu({ onLogout }: { onLogout: () => void }): React.JSX.Element
 
 function FriendRow({
   person,
+  now,
   onMessage,
   onRemove,
   onBlock
 }: {
   person: FriendEntry
+  now: number
   onMessage: () => void
   onRemove: () => void
   onBlock: () => void
@@ -122,13 +148,20 @@ function FriendRow({
 
   return (
     <div className={open ? 'friend-row friend-row--open' : 'friend-row'}>
-      <Avatar id={person.id} name={person.displayName} />
+      <Avatar
+        id={person.id}
+        name={person.displayName}
+        status={person.presence?.status ?? 'offline'}
+        ring={open ? '#FBF5EF' : '#FFFFFF'}
+      />
       <div className="friend-text">
         <div className="friend-names">
           <span className="friend-name">{person.displayName}</span>
           <span className="friend-user">@{person.username}</span>
         </div>
-        <span className="friend-sub">Friends since {shortDate(person.since)}</span>
+        <span className="friend-sub" title={`Friends since ${shortDate(person.since)}`}>
+          {presenceLine(person.presence, now)}
+        </span>
       </div>
       <button
         type="button"
@@ -251,6 +284,29 @@ export default function MainScreen({
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [openChatId, setOpenChatId] = useState<string | null>(null)
   const [connected, setConnected] = useState(true)
+  const [presence, setPresence] = useState<Record<string, Presence>>({})
+  const [myStatus, setMyStatus] = useState<MyStatus>({ status: 'online', statusText: null })
+  const [statusOpen, setStatusOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  // Ticks every minute so "Last seen 5 minutes ago" stays accurate.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Do not disturb keeps Glofly quiet.
+  useEffect(() => {
+    setQuiet(myStatus.status === 'dnd')
+    return () => setQuiet(false)
+  }, [myStatus.status])
+
+  // Your own status and custom status.
+  useEffect(() => {
+    window.glofly.status.get().then((result) => {
+      if (result.ok) setMyStatus(result.data)
+    })
+  }, [])
   const openChatRef = useRef<string | null>(null)
   useEffect(() => {
     openChatRef.current = openChatId
@@ -265,6 +321,11 @@ export default function MainScreen({
       if (incomingSeen.current !== null && count > incomingSeen.current) playSound('friendRequest')
       incomingSeen.current = count
       setLists(result.data)
+      setPresence(
+        Object.fromEntries(
+          result.data.friends.filter((f) => f.presence).map((f) => [f.id, f.presence as Presence])
+        )
+      )
       setNotice(null)
     } else if (result.error === 'unauthorized') onSessionExpired()
     else setNotice(result.message)
@@ -307,6 +368,37 @@ export default function MainScreen({
           })
           break
         }
+        case 'message:updated': {
+          // Keep the sidebar preview in step with edits and deletes of the latest message.
+          const m = event.message
+          setConversations((list) =>
+            list.map((c) => (c.lastMessage?.id === m.id ? { ...c, lastMessage: m } : c))
+          )
+          break
+        }
+        case 'presence': {
+          const { userId, status, statusText, lastSeenAt } = event
+          if (userId === user.id) {
+            // Your own status changed (maybe from another device): refresh what you picked.
+            window.glofly.status.get().then((result) => {
+              if (result.ok) setMyStatus(result.data)
+            })
+          } else {
+            setPresence((map) => ({ ...map, [userId]: { status, statusText, lastSeenAt } }))
+          }
+          break
+        }
+        case 'conversation:read': {
+          // They read the chat: update "Seen".
+          const { conversationId, readAt } = event
+          setConversations((list) =>
+            list.map((c) => (c.id === conversationId ? { ...c, partnerReadAt: readAt } : c))
+          )
+          break
+        }
+        case 'conversations:changed':
+          void refreshConversations()
+          break
         case 'friends:changed':
           void refresh()
           break
@@ -342,6 +434,17 @@ export default function MainScreen({
   }, [])
 
   const openChat = conversations.find((c) => c.id === openChatId) ?? null
+
+  async function changeStatus(changes: Partial<MyStatus>): Promise<boolean> {
+    const result = await window.glofly.status.set(changes)
+    if (result.ok) {
+      setMyStatus(result.data)
+      return true
+    }
+    if (result.error === 'unauthorized') onSessionExpired()
+    else setNotice(result.message)
+    return false
+  }
 
   // Load now, then keep it fresh.
   useEffect(() => {
@@ -385,7 +488,12 @@ export default function MainScreen({
   }
 
   const incomingCount = lists?.incoming.length ?? 0
-  const friends = (lists?.friends ?? []).filter((p) => matches(p, search))
+  const friends = (lists?.friends ?? [])
+    .map((p) => ({ ...p, presence: presence[p.id] ?? p.presence }))
+    .filter((p) => matches(p, search))
+  const isOnline = (p: FriendEntry): boolean => (p.presence?.status ?? 'offline') !== 'offline'
+  const onlineFriends = friends.filter(isOnline)
+  const offlineFriends = friends.filter((p) => !isOnline(p))
   const incoming = (lists?.incoming ?? []).filter((p) => matches(p, search))
   const outgoing = (lists?.outgoing ?? []).filter((p) => matches(p, search))
   const blocked = (lists?.blocked ?? []).filter((p) => matches(p, search))
@@ -395,12 +503,43 @@ export default function MainScreen({
   function renderTab(): React.ReactNode {
     if (!lists) return null // first load: blank for a moment rather than a flash of "no friends"
 
-    if (filter === 'online' || filter === 'offline') {
-      return (
-        <EmptyState
-          title="Online status is coming"
-          text="You'll see who's online, away or busy once chat is live."
+    const friendRows = (people: FriendEntry[]): React.ReactNode =>
+      people.map((p) => (
+        <FriendRow
+          key={p.id}
+          person={p}
+          now={now}
+          onRemove={() => setConfirm({ kind: 'remove', person: p })}
+          onBlock={() => setConfirm({ kind: 'block', person: p })}
+          onMessage={() => void openChatWith(p.id)}
         />
+      ))
+
+    if (filter === 'online' || filter === 'offline') {
+      const people = filter === 'online' ? onlineFriends : offlineFriends
+      if (people.length === 0) {
+        if (searching) return <p className="list-empty">No friends match “{search.trim()}”.</p>
+        return filter === 'online' ? (
+          <EmptyState
+            title="Nobody online right now"
+            text={
+              lists.friends.length
+                ? "When friends are online, away or busy, they'll show up here."
+                : "Add friends to see when they're around."
+            }
+            onAdd={lists.friends.length ? undefined : openAdd}
+          />
+        ) : (
+          <EmptyState title="Everyone's around" text="Friends who are offline will show up here." />
+        )
+      }
+      return (
+        <section className="friend-group">
+          <h2>
+            {filter === 'online' ? 'Online' : 'Offline'} — {people.length}
+          </h2>
+          {friendRows(people)}
+        </section>
       )
     }
 
@@ -416,19 +555,22 @@ export default function MainScreen({
       }
       if (friends.length === 0)
         return <p className="list-empty">No friends match “{search.trim()}”.</p>
+      // Grouped like the design: "Online — 3", then "Offline — 2".
       return (
-        <section className="friend-group">
-          <h2>All friends — {friends.length}</h2>
-          {friends.map((p) => (
-            <FriendRow
-              key={p.id}
-              person={p}
-              onRemove={() => setConfirm({ kind: 'remove', person: p })}
-              onBlock={() => setConfirm({ kind: 'block', person: p })}
-              onMessage={() => void openChatWith(p.id)}
-            />
-          ))}
-        </section>
+        <>
+          {onlineFriends.length > 0 && (
+            <section className="friend-group">
+              <h2>Online — {onlineFriends.length}</h2>
+              {friendRows(onlineFriends)}
+            </section>
+          )}
+          {offlineFriends.length > 0 && (
+            <section className="friend-group">
+              <h2>Offline — {offlineFriends.length}</h2>
+              {friendRows(offlineFriends)}
+            </section>
+          )}
+        </>
       )
     }
 
@@ -541,15 +683,31 @@ export default function MainScreen({
         </div>
 
         <div className="profile-panel">
-          <button type="button" className="avatar avatar--me" aria-label="Change your status">
+          <button
+            type="button"
+            className="avatar avatar--me"
+            aria-label={`Change your status (now ${STATUS_LABEL[myStatus.status]})`}
+            aria-expanded={statusOpen}
+            title="Change your status"
+            onClick={() => setStatusOpen((v) => !v)}
+          >
             {initials(user.displayName)}
-            <span className="status-dot status-dot--online" />
+            <StatusDot status={dotFor(myStatus.status)} ring="#FFFFFF" />
           </button>
           <div className="profile-text">
             <span className="profile-name">{user.displayName}</span>
-            <span className="profile-sub">@{user.username} · Online</span>
+            <span className="profile-sub" title={myStatus.statusText ?? undefined}>
+              @{user.username} · {myStatus.statusText || STATUS_LABEL[myStatus.status]}
+            </span>
           </div>
-          <SettingsMenu onLogout={onLogout} />
+          <SettingsMenu onLogout={onLogout} onOpenSettings={() => setSettingsOpen(true)} />
+          {statusOpen && (
+            <StatusMenu
+              current={myStatus}
+              onChange={changeStatus}
+              onClose={() => setStatusOpen(false)}
+            />
+          )}
         </div>
 
         <button
@@ -595,9 +753,16 @@ export default function MainScreen({
           <nav aria-label="Direct messages" className="dm-list">
             {conversations.map((c) => {
               const active = c.id === openChatId
-              const preview = c.lastMessage
-                ? `${c.lastMessage.senderId === user.id ? 'You: ' : ''}${c.lastMessage.body.replace(/\s+/g, ' ')}`
-                : 'No messages yet'
+              const last = c.lastMessage
+              const partnerPresence = presence[c.partner.id]
+              // Like the design: friends show their status; otherwise the last message.
+              const preview = partnerPresence
+                ? presenceLine(partnerPresence, now)
+                : !last
+                  ? 'No messages yet'
+                  : `${last.senderId === user.id ? 'You: ' : ''}${
+                      last.deleted ? 'Message deleted' : last.body.replace(/\s+/g, ' ')
+                    }`
               return (
                 <button
                   key={c.id}
@@ -606,7 +771,13 @@ export default function MainScreen({
                   aria-current={active ? 'page' : undefined}
                   onClick={() => setOpenChatId(c.id)}
                 >
-                  <Avatar id={c.partner.id} name={c.partner.displayName} size={40} />
+                  <Avatar
+                    id={c.partner.id}
+                    name={c.partner.displayName}
+                    size={40}
+                    status={partnerPresence?.status}
+                    ring={active ? '#FBDCC4' : '#F7F0E9'}
+                  />
                   <span className="dm-text">
                     <span
                       className={
@@ -640,6 +811,8 @@ export default function MainScreen({
             key={openChat.id}
             me={user}
             conversation={openChat}
+            partnerPresence={presence[openChat.partner.id]}
+            now={now}
             onRead={markedRead}
             onSessionExpired={onSessionExpired}
           />
@@ -710,6 +883,14 @@ export default function MainScreen({
             setAdding(false)
             void openChatWith(userId)
           }}
+        />
+      )}
+      {settingsOpen && (
+        <SettingsDialog
+          user={user}
+          onClose={() => setSettingsOpen(false)}
+          onLogout={onLogout}
+          onSessionExpired={onSessionExpired}
         />
       )}
       {confirm && (

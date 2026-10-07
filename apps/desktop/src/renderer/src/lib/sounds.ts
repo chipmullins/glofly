@@ -14,6 +14,13 @@ export type SoundName =
   | 'friendRequest' // someone sends you a friend request
   | 'login' // the firefly takeoff finishes
 
+// While you're set to Do not disturb, Glofly stays silent.
+let quiet = false
+export function setQuiet(value: boolean): void {
+  quiet = value
+}
+
 export function playSound(name: SoundName): void {
+  if (quiet) return
   void name // no sound files yet
 }

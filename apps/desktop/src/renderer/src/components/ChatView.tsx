@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ConversationSummary, Message, SignedInUser } from '../../../preload/api-types'
+import type {
+  ConversationSummary,
+  Message,
+  Presence,
+  ReplyPreview,
+  SignedInUser
+} from '../../../preload/api-types'
 import { initials } from '../lib/names'
+import { presenceHeader } from '../lib/presence'
 import { clockTime, continuesGroup, dayLabel, isSameDay } from '../lib/time'
 import Avatar from './Avatar'
+import ConfirmDialog from './ConfirmDialog'
+import MessageItem, { type ShownMessage } from './MessageItem'
 import './ChatView.css'
 
 type ChatViewProps = {
   me: SignedInUser
   conversation: ConversationSummary
+  /** Their status, if they're a friend */
+  partnerPresence?: Presence
+  now: number
   /** Called after this chat is marked read, so the sidebar can clear its badge. */
   onRead: (conversationId: string) => void
   onSessionExpired: () => void
@@ -19,6 +31,7 @@ type Pending = {
   body: string
   createdAt: string
   failed: boolean
+  replyTo: ReplyPreview | null
 }
 
 const TYPING_SEND_EVERY_MS = 3000 // how often we tell the other person we're typing
@@ -44,9 +57,32 @@ function SendIcon(): React.JSX.Element {
   )
 }
 
+/**
+ * Applies a changed message to the list: the message itself, and any replies quoting it
+ * (so deleting or editing a message updates its quotes right away too).
+ */
+function applyUpdate(list: Message[], m: Message): Message[] {
+  return list.map((x) => {
+    if (x.id === m.id) return m
+    if (x.replyTo?.id === m.id) {
+      return { ...x, replyTo: { ...x.replyTo, body: m.body.slice(0, 200), deleted: m.deleted } }
+    }
+    return x
+  })
+}
+
+const preview = (m: Message): ReplyPreview => ({
+  id: m.id,
+  senderId: m.senderId,
+  body: m.body.slice(0, 200),
+  deleted: m.deleted
+})
+
 export default function ChatView({
   me,
   conversation,
+  partnerPresence,
+  now,
   onRead,
   onSessionExpired
 }: ChatViewProps): React.JSX.Element {
@@ -59,6 +95,10 @@ export default function ChatView({
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const [partnerTyping, setPartnerTyping] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<Message | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
 
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -68,6 +108,11 @@ export default function ChatView({
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tempCounter = useRef(0)
 
+  const nameOf = useCallback(
+    (userId: string) => (userId === me.id ? me.displayName : partner.displayName),
+    [me, partner]
+  )
+
   const handleFailure = useCallback(
     (error: string, message: string) => {
       if (error === 'unauthorized') onSessionExpired()
@@ -75,6 +120,11 @@ export default function ChatView({
     },
     [onSessionExpired]
   )
+
+  /** Puts the newest version of a message in the list. */
+  const upsert = useCallback((m: Message) => {
+    setMessages((list) => (list.some((x) => x.id === m.id) ? applyUpdate(list, m) : [...list, m]))
+  }, [])
 
   // Mark read when the window is in front and this chat is open.
   const markRead = useCallback(async () => {
@@ -101,7 +151,7 @@ export default function ChatView({
     }
   }, [conversation.id, handleFailure, markRead])
 
-  // Live updates: new messages and typing.
+  // Live updates: new messages, edits/deletes/reactions, and typing.
   useEffect(() => {
     return window.glofly.onEvent((event) => {
       if (event.type === 'message:new' && event.message.conversationId === conversation.id) {
@@ -110,6 +160,15 @@ export default function ChatView({
         if (m.senderId !== me.id) {
           setPartnerTyping(false)
           void markRead()
+        }
+      }
+      if (event.type === 'message:updated' && event.message.conversationId === conversation.id) {
+        const m = event.message
+        setMessages((list) => applyUpdate(list, m))
+        // A deleted message can't stay quoted in the reply bar or keep an edit box open.
+        if (m.deleted) {
+          setReplyingTo((r) => (r?.id === m.id ? null : r))
+          setEditingId((id) => (id === m.id ? null : id))
         }
       }
       if (
@@ -149,7 +208,7 @@ export default function ChatView({
     } else if (stickToBottom.current) {
       list.scrollTop = list.scrollHeight
     }
-  }, [messages, pending, partnerTyping])
+  }, [messages, pending, partnerTyping, replyingTo, conversation.partnerReadAt])
 
   async function loadOlder(): Promise<void> {
     if (loadingOlder || !hasMore || messages.length === 0) return
@@ -173,7 +232,11 @@ export default function ChatView({
   }
 
   async function deliver(item: Pending): Promise<void> {
-    const result = await window.glofly.conversations.send(conversation.id, item.body)
+    const result = await window.glofly.conversations.send(
+      conversation.id,
+      item.body,
+      item.replyTo?.id
+    )
     if (result.ok) {
       const sent = result.data
       setPending((p) => p.filter((x) => x.tempId !== item.tempId))
@@ -197,17 +260,70 @@ export default function ChatView({
       tempId: `pending-${tempCounter.current}`,
       body,
       createdAt: new Date().toISOString(),
-      failed: false
+      failed: false,
+      replyTo: replyingTo ? preview(replyingTo) : null
     }
     stickToBottom.current = true
     setPending((p) => [...p, item])
     setDraft('')
+    setReplyingTo(null)
     void deliver(item)
   }
 
-  function retry(item: Pending): void {
-    setPending((p) => p.map((x) => (x.tempId === item.tempId ? { ...x, failed: false } : x)))
+  function retry(tempId: string): void {
+    const item = pending.find((x) => x.tempId === tempId)
+    if (!item) return
+    setPending((p) => p.map((x) => (x.tempId === tempId ? { ...x, failed: false } : x)))
     void deliver({ ...item, failed: false })
+  }
+
+  async function saveEdit(m: Message, body: string): Promise<void> {
+    const trimmed = body.trim()
+    setEditingId(null)
+    inputRef.current?.focus()
+    if (!trimmed || trimmed === m.body) return
+    upsert({ ...m, body: trimmed, editedAt: new Date().toISOString() }) // show it right away
+    const result = await window.glofly.conversations.edit(conversation.id, m.id, trimmed)
+    if (result.ok) upsert(result.data)
+    else {
+      upsert(m) // put the original back
+      handleFailure(result.error, result.message)
+    }
+  }
+
+  async function confirmDelete(): Promise<void> {
+    if (!deleting) return
+    const m = deleting
+    setDeleting(null)
+    const result = await window.glofly.conversations.remove(conversation.id, m.id)
+    if (result.ok) upsert(result.data)
+    else handleFailure(result.error, result.message)
+  }
+
+  async function toggleReaction(m: Message, emoji: string): Promise<void> {
+    if (!conversation.canMessage) return
+    const mine = m.reactions.find((r) => r.emoji === emoji)?.userIds.includes(me.id) ?? false
+    const result = await window.glofly.conversations.react(conversation.id, m.id, emoji, !mine)
+    if (result.ok) upsert(result.data)
+    else handleFailure(result.error, result.message)
+  }
+
+  function startReply(m: Message): void {
+    setReplyingTo(m)
+    setEditingId(null)
+    inputRef.current?.focus()
+  }
+
+  /** Scrolls to the original message of a reply and briefly highlights it. */
+  function jumpTo(messageId: string): void {
+    const el = listRef.current?.querySelector(`[data-message-id="${messageId}"]`)
+    if (!el) {
+      setNotice('That message is further back. Scroll up to load it.')
+      return
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlightId(messageId)
+    setTimeout(() => setHighlightId((id) => (id === messageId ? null : id)), 1600)
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
@@ -215,6 +331,19 @@ export default function ChatView({
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       send()
+    }
+    // Escape cancels a reply.
+    if (e.key === 'Escape' && replyingTo) {
+      e.preventDefault()
+      setReplyingTo(null)
+    }
+    // Up arrow in an empty box edits your last message.
+    if (e.key === 'ArrowUp' && !draft) {
+      const last = [...messages].reverse().find((m) => m.senderId === me.id && !m.deleted)
+      if (last && conversation.canMessage) {
+        e.preventDefault()
+        setEditingId(last.id)
+      }
     }
   }
 
@@ -236,34 +365,103 @@ export default function ChatView({
   }, [draft])
 
   // Everything to show, oldest first: delivered messages, then ones still sending.
-  const shown = [
-    ...messages.map((m) => ({
-      key: m.id,
-      senderId: m.senderId,
-      body: m.body,
-      createdAt: m.createdAt,
-      pending: null as Pending | null
-    })),
+  const shown: ShownMessage[] = [
+    ...messages.map((m) => ({ key: m.id, message: m, pending: null })),
     ...pending.map((p) => ({
       key: p.tempId,
-      senderId: me.id,
-      body: p.body,
-      createdAt: p.createdAt,
-      pending: p
+      message: {
+        id: p.tempId,
+        conversationId: conversation.id,
+        senderId: me.id,
+        body: p.body,
+        createdAt: p.createdAt,
+        editedAt: null,
+        deleted: false,
+        replyTo: p.replyTo,
+        reactions: []
+      },
+      pending: { failed: p.failed }
     }))
   ]
+
+  // "✓✓ Seen 10:03 PM" (from the design) under your latest message, once they've read it.
+  // Only when your message is the last one (a reply from them already says they saw it),
+  // and only when both of you allow read receipts.
+  const lastItem = shown.at(-1)
+  const lastIsMine =
+    lastItem &&
+    !lastItem.pending &&
+    lastItem.message.senderId === me.id &&
+    !lastItem.message.deleted
+  const readAt = conversation.partnerReadAt
+  const seen =
+    lastIsMine &&
+    readAt &&
+    new Date(readAt).getTime() >= new Date(lastItem.message.createdAt).getTime()
+  const seenLine =
+    lastIsMine && readAt !== null ? (
+      <div className={seen ? 'receipt receipt--seen' : 'receipt'} aria-live="polite">
+        {seen ? (
+          <>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M2 12l5 5L17 7" />
+              <path d="M9 17l1 0L22 7" />
+            </svg>
+            Seen {clockTime(readAt)}
+            <Avatar id={partner.id} name={partner.displayName} size={18} />
+          </>
+        ) : (
+          <>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12l5 5L20 7" />
+            </svg>
+            Sent
+          </>
+        )}
+      </div>
+    ) : null
 
   return (
     <div className="chat">
       <header className="chat-header">
-        <Avatar id={partner.id} name={partner.displayName} />
+        <Avatar
+          id={partner.id}
+          name={partner.displayName}
+          status={partnerPresence?.status}
+          ring="#FFFFFF"
+        />
         <div className="chat-title">
-          <span className="chat-name">{partner.displayName}</span>
-          <span className="chat-user">@{partner.username}</span>
+          <div className="chat-names">
+            <span className="chat-name">{partner.displayName}</span>
+            <span className="chat-user">@{partner.username}</span>
+          </div>
+          {partnerPresence && (
+            <span className="chat-status">{presenceHeader(partnerPresence, now)}</span>
+          )}
         </div>
       </header>
 
-      <div className="chat-messages" ref={listRef} onScroll={onScroll} aria-live="polite">
+      <div className="chat-messages" ref={listRef} onScroll={onScroll}>
         {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}
         {!loading && !hasMore && (
           <div className="chat-start">
@@ -276,71 +474,55 @@ export default function ChatView({
           </div>
         )}
 
-        {shown.map((m, i) => {
-          const previous = shown[i - 1]
+        {shown.map((item, i) => {
+          const m = item.message
+          const previous = shown[i - 1]?.message
           const newDay = !previous || !isSameDay(previous.createdAt, m.createdAt)
-          const grouped = !newDay && continuesGroup(previous, m)
-          const mine = m.senderId === me.id
-          const name = mine ? me.displayName : partner.displayName
+          // A reply always shows its name, so the quote is clearly attached to it.
+          const grouped = !newDay && !m.replyTo && continuesGroup(previous, m)
           return (
-            <div key={m.key}>
+            <div key={item.key}>
               {newDay && (
                 <div className="day-divider">
                   <span>{dayLabel(m.createdAt)}</span>
                 </div>
               )}
-              <div className={grouped ? 'message message--grouped' : 'message'}>
-                {!grouped &&
-                  (mine ? (
+              <MessageItem
+                item={item}
+                grouped={grouped}
+                meId={me.id}
+                authorName={nameOf(m.senderId)}
+                avatar={
+                  m.senderId === me.id ? (
                     <span className="avatar avatar--mine" aria-hidden="true">
                       {initials(me.displayName)}
                     </span>
                   ) : (
                     <Avatar id={partner.id} name={partner.displayName} size={40} />
-                  ))}
-                <div className="message-content">
-                  {!grouped && (
-                    <div className="message-meta">
-                      <span
-                        className={mine ? 'message-author message-author--mine' : 'message-author'}
-                      >
-                        {name}
-                      </span>
-                      <span className="message-time">{clockTime(m.createdAt)}</span>
-                    </div>
-                  )}
-                  <p
-                    className={
-                      m.pending
-                        ? m.pending.failed
-                          ? 'message-body message-body--failed'
-                          : 'message-body message-body--sending'
-                        : 'message-body'
-                    }
-                    title={grouped ? clockTime(m.createdAt) : undefined}
-                  >
-                    {m.body}
-                  </p>
-                  {m.pending?.failed && (
-                    <span className="message-failed">
-                      Not sent ·{' '}
-                      <button type="button" onClick={() => retry(m.pending as Pending)}>
-                        Retry
-                      </button>{' '}
-                      ·{' '}
-                      <button
-                        type="button"
-                        onClick={() => setPending((p) => p.filter((x) => x.tempId !== m.key))}
-                      >
-                        Delete
-                      </button>
-                    </span>
-                  )}
-                </div>
-              </div>
+                  )
+                }
+                time={clockTime(m.createdAt)}
+                nameOf={nameOf}
+                canAct={conversation.canMessage}
+                editing={editingId === m.id}
+                highlighted={highlightId === m.id}
+                onReact={(emoji) => void toggleReaction(m, emoji)}
+                onReply={() => startReply(m)}
+                onEdit={() => setEditingId(m.id)}
+                onSaveEdit={(body) => void saveEdit(m, body)}
+                onCancelEdit={() => {
+                  setEditingId(null)
+                  inputRef.current?.focus()
+                }}
+                onDelete={() => setDeleting(m)}
+                onJumpTo={jumpTo}
+                onRetry={() => retry(item.key)}
+                onDiscard={() => setPending((p) => p.filter((x) => x.tempId !== item.key))}
+              />
             </div>
           )
         })}
+        {seenLine}
       </div>
 
       <div className="composer-area">
@@ -362,30 +544,51 @@ export default function ChatView({
         {notice && (
           <p className="chat-notice" role="alert">
             {notice}
+            <button type="button" aria-label="Dismiss" onClick={() => setNotice(null)}>
+              ×
+            </button>
           </p>
         )}
 
         {conversation.canMessage ? (
-          <div className="composer">
-            <textarea
-              ref={inputRef}
-              rows={1}
-              aria-label={`Message ${partner.displayName}`}
-              placeholder={`Message @${partner.username}`}
-              value={draft}
-              maxLength={MESSAGE_MAX + 200}
-              onChange={onChange}
-              onKeyDown={onKeyDown}
-            />
-            <button
-              type="button"
-              className="send-button"
-              aria-label="Send message"
-              disabled={!draft.trim()}
-              onClick={send}
-            >
-              <SendIcon />
-            </button>
+          <div className={replyingTo ? 'composer composer--replying' : 'composer'}>
+            {replyingTo && (
+              <div className="reply-bar">
+                <span>
+                  Replying to <strong>{nameOf(replyingTo.senderId)}</strong>
+                  <span className="reply-bar-text">{replyingTo.body}</span>
+                </span>
+                <button
+                  type="button"
+                  aria-label="Cancel reply"
+                  title="Cancel reply (Esc)"
+                  onClick={() => setReplyingTo(null)}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            <div className="composer-row">
+              <textarea
+                ref={inputRef}
+                rows={1}
+                aria-label={`Message ${partner.displayName}`}
+                placeholder={`Message @${partner.username}`}
+                value={draft}
+                maxLength={MESSAGE_MAX + 200}
+                onChange={onChange}
+                onKeyDown={onKeyDown}
+              />
+              <button
+                type="button"
+                className="send-button"
+                aria-label="Send message"
+                disabled={!draft.trim()}
+                onClick={send}
+              >
+                <SendIcon />
+              </button>
+            </div>
           </div>
         ) : (
           <p className="composer-locked">
@@ -393,6 +596,17 @@ export default function ChatView({
           </p>
         )}
       </div>
+
+      {deleting && (
+        <ConfirmDialog
+          title="Delete message?"
+          message="It will be removed for both of you. This can't be undone."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
     </div>
   )
 }

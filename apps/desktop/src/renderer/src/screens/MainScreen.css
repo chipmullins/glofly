@@ -79,6 +79,7 @@
 
 /* Profile panel: under the search bar, at the top of the sidebar */
 .profile-panel {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -107,17 +108,56 @@
   color: #2a1406;
   cursor: pointer;
 }
+/* Status dots, from the design. --ring is the color behind the avatar. */
 .status-dot {
+  --ring: #ffffff;
   position: absolute;
   right: -1px;
   bottom: -1px;
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  box-shadow: 0 0 0 3px #ffffff;
+  box-shadow: 0 0 0 3px var(--ring);
+  overflow: hidden;
 }
 .status-dot--online {
   background: #2e9e5b;
+}
+/* Away: a yellow crescent moon */
+.status-dot--away {
+  background: #e2a00f;
+}
+.status-dot--away::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: -2px;
+  width: 66%;
+  height: 66%;
+  border-radius: 50%;
+  background: var(--ring);
+}
+/* Do not disturb: red with a white dash */
+.status-dot--dnd {
+  background: #d33a2c;
+}
+.status-dot--dnd::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50%;
+  height: 2px;
+  border-radius: 1px;
+  background: #ffffff;
+  transform: translate(-50%, -50%);
+}
+/* Offline: a gray ring */
+.status-dot--offline {
+  background: var(--ring);
+  box-shadow:
+    inset 0 0 0 3px #9a8678,
+    0 0 0 3px var(--ring);
 }
 .profile-text {
   flex: 1;
@@ -616,4 +656,135 @@
   .main--enter {
     animation-duration: 0.15s;
   }
+}
+
+/* ---------- Status menu (from the avatar in the profile panel) ---------- */
+
+.status-menu {
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  width: auto; /* exactly as wide as the profile panel, so the sidebar never cuts it off */
+  padding: 8px;
+}
+.status-menu-title {
+  margin: 4px 8px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.status-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--glo-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.status-choice:hover,
+.status-choice:focus-visible {
+  background: #fbede1;
+  outline: none;
+}
+.status-choice > svg {
+  margin-left: auto;
+  color: var(--glo-link);
+  flex: none;
+}
+.status-choice-dot {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.status-choice-dot .status-dot {
+  right: 1px;
+  bottom: 1px;
+}
+.status-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.status-choice-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.status-choice-hint {
+  font-size: 12px;
+  color: var(--glo-muted);
+}
+.menu-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: #efe4da;
+}
+.custom-status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px 2px;
+}
+.custom-status-row {
+  position: relative;
+  display: flex;
+}
+.custom-status-row input {
+  width: 100%;
+  height: 40px;
+  padding: 0 34px 0 12px;
+  border: 1.5px solid #e3d3c5;
+  border-radius: 10px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  color: var(--glo-ink);
+}
+.custom-status-row input:focus {
+  outline: none;
+  border-color: var(--glo-orange);
+  box-shadow: 0 0 0 4px rgba(244, 122, 31, 0.18);
+}
+.custom-status-clear {
+  position: absolute;
+  right: 6px;
+  top: 7px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: #f7f0e9;
+  color: var(--glo-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.custom-status-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--glo-muted);
+}
+.custom-status-save {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--glo-orange);
+  color: #2a1406;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }

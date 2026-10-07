@@ -3,9 +3,10 @@ import { rateLimit } from "express-rate-limit";
 import { and, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { blocks, friendships, users } from "../db/schema";
+import { blocks, conversationMembers, friendships, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { emitToUser } from "../realtime";
+import { announcePresence, presenceOf } from "../presence";
 import { blockedEitherWay, pair, pairIs } from "./rules";
 
 // Everything here needs a signed-in user.
@@ -34,6 +35,12 @@ const requestLimiter = perUser(60 * 60 * 1000, 30, "You've sent a lot of request
 
 const userIdParam = z.uuid();
 
+/** New friends see each other's status right away. */
+async function shareNewFriendPresence(a: string, b: string): Promise<void> {
+  await announcePresence(a, emitToUser, true);
+  await announcePresence(b, emitToUser, true);
+}
+
 /** Tells both people's apps to refresh their friends lists right away. */
 function friendsChanged(...userIds: string[]): void {
   for (const id of userIds) emitToUser(id, "friends:changed", {});
@@ -42,6 +49,109 @@ const publicUser = { id: users.id, username: users.username, displayName: users.
 
 /** Escapes characters that mean "anything" in a LIKE search, so they're matched literally. */
 const likeSafe = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+const statusSchema = z.object({
+  status: z.enum(["online", "away", "dnd", "invisible"]).optional(),
+  statusText: z
+    .string()
+    .trim()
+    .max(80, "Custom status can be up to 80 characters.")
+    // eslint-disable-next-line no-control-regex
+    .refine((t) => !/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/.test(t), "That status has hidden characters.")
+    .transform((t) => (t === "" ? null : t))
+    .nullable()
+    .optional(),
+});
+
+async function myStatus(userId: string) {
+  const [row] = await db
+    .select({ status: users.statusPreference, statusText: users.statusText })
+    .from(users)
+    .where(eq(users.id, userId));
+  return row;
+}
+
+// GET /users/me/status — the status you picked and your custom status.
+usersRouter.get("/me/status", async (_req, res) => {
+  res.json(await myStatus(me(res).id));
+});
+
+// PATCH /users/me/status  { status?, statusText? } — change them. Friends see it instantly.
+usersRouter.patch("/me/status", searchLimiter, async (req, res) => {
+  const parsed = statusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: parsed.error.issues[0].message });
+    return;
+  }
+  const { status, statusText } = parsed.data;
+  const changes: { statusPreference?: typeof status; statusText?: string | null } = {};
+  if (status !== undefined) changes.statusPreference = status;
+  if (statusText !== undefined) changes.statusText = statusText;
+  if (Object.keys(changes).length) {
+    await db.update(users).set(changes).where(eq(users.id, me(res).id));
+    await announcePresence(me(res).id, emitToUser);
+  }
+  res.json(await myStatus(me(res).id));
+});
+
+const settingsSchema = z
+  .object({
+    readReceipts: z.boolean(),
+    showLastSeen: z.boolean(),
+    showTyping: z.boolean(),
+  })
+  .partial()
+  .strict();
+
+async function mySettings(userId: string) {
+  const [row] = await db
+    .select({
+      readReceipts: users.readReceipts,
+      showLastSeen: users.showLastSeen,
+      showTyping: users.showTyping,
+    })
+    .from(users)
+    .where(eq(users.id, userId));
+  return row;
+}
+
+/** Everyone I have a chat with. */
+async function chatPartnersOf(userId: string): Promise<string[]> {
+  const mine = db
+    .select({ id: conversationMembers.conversationId })
+    .from(conversationMembers)
+    .where(eq(conversationMembers.userId, userId));
+  const rows = await db
+    .selectDistinct({ userId: conversationMembers.userId })
+    .from(conversationMembers)
+    .where(and(inArray(conversationMembers.conversationId, mine), ne(conversationMembers.userId, userId)));
+  return rows.map((r) => r.userId);
+}
+
+// GET /users/me/settings — privacy settings.
+usersRouter.get("/me/settings", async (_req, res) => {
+  res.json(await mySettings(me(res).id));
+});
+
+// PATCH /users/me/settings  { readReceipts?, showLastSeen?, showTyping? }
+usersRouter.patch("/me/settings", searchLimiter, async (req, res) => {
+  const parsed = settingsSchema.safeParse(req.body);
+  if (!parsed.success || !Object.keys(parsed.data).length) {
+    res.status(400).json({ error: "invalid", message: "Something about that setting was off." });
+    return;
+  }
+  const myId = me(res).id;
+  const before = await mySettings(myId);
+  await db.update(users).set(parsed.data).where(eq(users.id, myId));
+  const after = await mySettings(myId);
+
+  // Friends see the change right away.
+  if (before.showLastSeen !== after.showLastSeen) await announcePresence(myId, emitToUser, true);
+  if (before.readReceipts !== after.readReceipts) {
+    for (const id of [myId, ...(await chatPartnersOf(myId))]) emitToUser(id, "conversations:changed", {});
+  }
+  res.json(after);
+});
 
 // GET /users/search?q=ja — live search for the Add friend dialog.
 // Matches the start of a username, or the start of any word in a display name.
@@ -134,10 +244,15 @@ friendsRouter.get("/", async (_req, res) => {
     username: r.username,
     displayName: r.displayName,
   });
+  const friendRows = rows.filter((r) => r.status === "accepted");
+  const presence = await presenceOf(friendRows.map((r) => r.id));
+  const offline = { status: "offline", statusText: null, lastSeenAt: null };
   res.json({
-    friends: rows
-      .filter((r) => r.status === "accepted")
-      .map((r) => ({ ...strip(r), since: r.acceptedAt ?? r.createdAt })),
+    friends: friendRows.map((r) => ({
+      ...strip(r),
+      since: r.acceptedAt ?? r.createdAt,
+      presence: presence.get(r.id) ?? offline,
+    })),
     incoming: rows
       .filter((r) => r.status === "pending" && r.requesterId !== myId)
       .map((r) => ({ ...strip(r), since: r.createdAt })),
@@ -190,6 +305,7 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
       .set({ status: "accepted", acceptedAt: new Date() })
       .where(eq(friendships.id, existing.id));
     friendsChanged(myId, target.id);
+    await shareNewFriendPresence(myId, target.id);
     res.json({ status: "accepted", user: target });
     return;
   }
@@ -226,6 +342,7 @@ friendsRouter.post("/requests/:userId/accept", async (req, res) => {
     return;
   }
   friendsChanged(myId, them.data);
+  await shareNewFriendPresence(myId, them.data);
   res.json({ status: "accepted" });
 });
 

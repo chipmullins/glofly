@@ -2,9 +2,22 @@ import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "./db";
-import { conversationMembers } from "./db/schema";
+import { conversationMembers, users } from "./db/schema";
 import { findSession } from "./auth/sessions";
 import { canMessage } from "./friends/rules";
+import {
+  announcePresence,
+  deviceConnected,
+  deviceDisconnected,
+  deviceHeartbeat,
+  deviceIdle,
+  sweepStalePresence,
+} from "./presence";
+
+/** Runs a background task, logging (not crashing) if it fails. */
+function safely(task: () => Promise<unknown>): void {
+  task().catch((err) => console.error("Real-time task failed:", err));
+}
 
 // The real-time connection: each signed-in app keeps one open, so the server can
 // push new messages, typing, and friend changes the moment they happen.
@@ -37,9 +50,36 @@ export function startRealtime(httpServer: HttpServer): void {
     }
   });
 
+  startPresenceHeartbeat(io);
+
   io.on("connection", (socket) => {
     const me = socket.data.user as { id: string; displayName: string };
     void socket.join(userRoom(me.id));
+    socket.data.idle = false;
+
+    // Presence: this device is here.
+    safely(async () => {
+      await deviceConnected(me.id, socket.id);
+      await announcePresence(me.id, emitToUser);
+    });
+
+    // The app says whether someone is actually using the computer (idle = away).
+    socket.on("idle", (idle: unknown) => {
+      if (typeof idle !== "boolean" || idle === socket.data.idle) return;
+      socket.data.idle = idle;
+      safely(async () => {
+        await deviceIdle(me.id, socket.id, idle);
+        await announcePresence(me.id, emitToUser);
+      });
+    });
+
+    socket.on("disconnect", () => {
+      safely(async () => {
+        await deviceDisconnected(me.id, socket.id);
+        // Wait a moment before telling friends, so a quick reconnect doesn't flicker "offline".
+        setTimeout(() => safely(() => announcePresence(me.id, emitToUser)), 5000);
+      });
+    });
 
     // "Jacob is typing…". Sent at most every few seconds by the app.
     let lastTyping = 0;
@@ -72,6 +112,12 @@ export function startRealtime(httpServer: HttpServer): void {
           )
           .limit(1);
         if (!isMember.length) return;
+        // Respect "Show when I'm typing".
+        const [settings] = await db
+          .select({ showTyping: users.showTyping })
+          .from(users)
+          .where(eq(users.id, me.id));
+        if (!settings?.showTyping) return;
         for (const other of others) {
           if (await canMessage(me.id, other.userId)) {
             emitToUser(other.userId, "typing", { conversationId, userId: me.id });
@@ -82,6 +128,19 @@ export function startRealtime(httpServer: HttpServer): void {
       }
     });
   });
+}
+
+/** Every 30 seconds: refresh each connected device, then catch anyone who vanished. */
+function startPresenceHeartbeat(server: Server): void {
+  setInterval(() => {
+    safely(async () => {
+      for (const socket of server.of("/").sockets.values()) {
+        const user = socket.data.user as { id: string } | undefined;
+        if (user) await deviceHeartbeat(user.id, socket.id, socket.data.idle === true);
+      }
+      await sweepStalePresence(emitToUser);
+    });
+  }, 30_000);
 }
 
 /** Sends an event to every device the person is signed in on. */
