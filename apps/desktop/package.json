@@ -1,10 +1,9 @@
 {
   "name": "@glofly/desktop",
   "version": "0.1.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "Glofly instant messenger",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Glofly",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",

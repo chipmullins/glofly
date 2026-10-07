@@ -120,7 +120,8 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     ...(customTitleBar ? { titleBarStyle: 'hidden', titleBarOverlay: titleBarFor('login') } : {}),
-    ...(process.platform === 'linux' ? { icon } : {}),
+    // The Glofly icon on the window and taskbar (the installed app also has it built in).
+    ...(process.platform !== 'darwin' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,

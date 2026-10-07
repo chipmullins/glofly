@@ -1,5 +1,7 @@
-appId: com.electron.app
-productName: desktop
+# Packaging Glofly into an installer (npm run build:win → dist/Glofly-<version>-setup.exe)
+appId: com.glofly.app # must match setAppUserModelId in src/main/index.ts (taskbar + notifications)
+productName: Glofly
+copyright: Copyright © 2026 Glofly
 directories:
   buildResources: build
 files:
@@ -12,32 +14,40 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: desktop
+  executableName: Glofly
+  icon: build/icon.ico
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
+  # One click: double-click the setup file, a short branded install, and Glofly opens.
+  oneClick: true
+  perMachine: false # installs for this Windows user, so no admin prompt
+  artifactName: Glofly-${version}-setup.${ext}
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  shortcutName: Glofly
+  uninstallDisplayName: Glofly
   createDesktopShortcut: always
+  createStartMenuShortcut: true
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false # keeps sign-in and settings if Glofly is reinstalled
+  include: build/installer.nsh # the red Glofly splash while installing
 mac:
+  icon: build/icon.icns
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    - NSCameraUsageDescription: Glofly uses your camera for video calls.
+    - NSMicrophoneUsageDescription: Glofly uses your microphone for voice and video calls.
   notarize: false
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: Glofly-${version}.${ext}
 linux:
   target:
     - AppImage
-    - snap
-    - deb
-  maintainer: electronjs.org
-  category: Utility
+  maintainer: Glofly
+  category: Network
 appImage:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: Glofly-${version}.${ext}
 npmRebuild: false
+# Auto-updates are switched on at the AWS step (the address gets filled in then).
 publish:
   provider: generic
   url: https://example.com/auto-updates
