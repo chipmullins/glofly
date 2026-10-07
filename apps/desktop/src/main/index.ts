@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, protocol, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -25,6 +25,8 @@ import {
 import { connectRealtime, disconnectRealtime, sendTyping } from './realtime'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isUserId } from './api'
+import { handleMediaRequest, MEDIA_SCHEME } from './media'
+import { getMyProfile, getProfile, removePhoto, setPhoto, updateProfile } from './profile'
 import {
   acceptRequest,
   blockUser,
@@ -35,7 +37,13 @@ import {
   sendRequest,
   unblockUser
 } from './friends'
-import type { LoginRequest, RegisterRequest, WindowTheme } from '../preload/api-types'
+import type {
+  LoginRequest,
+  PhotoType,
+  ProfileChanges,
+  RegisterRequest,
+  WindowTheme
+} from '../preload/api-types'
 
 // Colors for the minimize / maximize / close buttons, matching each screen.
 const TITLE_BAR = {
@@ -47,6 +55,12 @@ const TITLE_BAR = {
 // own saved sign-in, so two test accounts can chat live on one PC.
 const isSecondWindow = process.env.npm_lifecycle_event === 'second'
 if (isSecondWindow) app.setPath('userData', `${app.getPath('userData')}-second`)
+
+// Profile photos load through glofly-media:// (see media.ts). Registered before the app
+// starts, as a secure scheme so the window treats it like https.
+protocol.registerSchemesAsPrivileged([
+  { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true } }
+])
 
 // On Windows, Glofly draws its own top area and Windows only draws the window
 // buttons (keeping Snap Layouts and double-click-to-maximize).
@@ -231,6 +245,46 @@ function registerIpcHandlers(): void {
     })
   })
 
+  // Profiles and profile photos.
+  const PHOTO_MAX_BYTES = 8 * 1024 * 1024
+  const PHOTO_TYPES: PhotoType[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  const BIO_MAX = 190
+  const isProfileChanges = (value: unknown): value is ProfileChanges => {
+    const c = value as Record<string, unknown> | null
+    if (typeof c !== 'object' || c === null || Array.isArray(c)) return false
+    const keys = Object.keys(c)
+    return (
+      keys.length > 0 &&
+      keys.every((k) => k === 'displayName' || k === 'bio') &&
+      (c.displayName === undefined ||
+        (typeof c.displayName === 'string' && c.displayName.length <= 64)) &&
+      (c.bio === undefined ||
+        c.bio === null ||
+        (typeof c.bio === 'string' && c.bio.length <= BIO_MAX * 2))
+    )
+  }
+  ipcMain.handle('profile:get-mine', (event) => (fromApp(event) ? getMyProfile() : invalid))
+  ipcMain.handle('profile:get', (event, userId: unknown) =>
+    fromApp(event) && isUserId(userId) ? getProfile(userId) : invalid
+  )
+  ipcMain.handle('profile:update', (event, changes: unknown) =>
+    fromApp(event) && isProfileChanges(changes) ? updateProfile(changes) : invalid
+  )
+  ipcMain.handle('profile:set-photo', (event, data: unknown, type: unknown) => {
+    if (
+      !fromApp(event) ||
+      !(data instanceof ArrayBuffer) ||
+      !PHOTO_TYPES.includes(type as PhotoType)
+    ) {
+      return invalid
+    }
+    if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
+      return { ok: false, error: 'invalid', message: 'Photos can be up to 8 MB.' }
+    }
+    return setPhoto(new Uint8Array(data), type as PhotoType)
+  })
+  ipcMain.handle('profile:remove-photo', (event) => (fromApp(event) ? removePhoto() : invalid))
+
   // Conversations and messages.
   const isMessage = (v: unknown): v is string => typeof v === 'string' && v.length <= 8000
   ipcMain.handle('conversations:list', (event) => (fromApp(event) ? listConversations() : invalid))
@@ -302,6 +356,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  protocol.handle(MEDIA_SCHEME, handleMediaRequest)
   registerIpcHandlers()
   startIdleWatch()
   createWindow()

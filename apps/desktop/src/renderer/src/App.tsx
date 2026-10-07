@@ -71,6 +71,13 @@ export default function App(): React.JSX.Element {
   // The server ended the session (it expired, or was signed out elsewhere).
   const handleSessionExpired = useCallback(() => setScreen({ name: 'auth', form: 'login' }), [])
 
+  // Your name or photo changed: update it everywhere.
+  const handleUserChange = useCallback(
+    (changes: Pick<SignedInUser, 'displayName' | 'avatarVersion'>) =>
+      setScreen((s) => (s.name === 'app' ? { ...s, user: { ...s.user, ...changes } } : s)),
+    []
+  )
+
   const showForm = (form: AuthScreen) => () => setScreen({ name: 'auth', form })
 
   switch (screen.name) {
@@ -110,6 +117,7 @@ export default function App(): React.JSX.Element {
           user={screen.user}
           onLogout={handleLogout}
           onSessionExpired={handleSessionExpired}
+          onUserChange={handleUserChange}
         />
       )
   }

@@ -125,3 +125,30 @@ export function RemoveFriendIcon(p: IconProps): React.JSX.Element {
     </Svg>
   )
 }
+
+export function ProfileIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c0-4 3.5-6 8-6s8 2 8 6" />
+    </Svg>
+  )
+}
+
+export function CameraIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </Svg>
+  )
+}
+
+export function CalendarIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+    </Svg>
+  )
+}

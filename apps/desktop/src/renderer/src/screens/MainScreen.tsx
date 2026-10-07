@@ -6,13 +6,16 @@ import type {
   Presence,
   FriendEntry,
   FriendLists,
+  PublicUser,
   SignedInUser
 } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import AddFriendDialog from '../components/AddFriendDialog'
-import Avatar from '../components/Avatar'
+import Avatar, { AvatarFace } from '../components/Avatar'
 import ChatView from '../components/ChatView'
 import ConfirmDialog from '../components/ConfirmDialog'
+import EditProfileDialog from '../components/EditProfileDialog'
+import ProfileCard from '../components/ProfileCard'
 import {
   AddFriendIcon,
   BlockIcon,
@@ -21,11 +24,12 @@ import {
   LogOutIcon,
   MoreIcon,
   PlusIcon,
+  ProfileIcon,
   RemoveFriendIcon,
   SearchIcon,
   SettingsIcon
 } from '../components/icons'
-import { initials, shortDate } from '../lib/names'
+import { shortDate } from '../lib/names'
 import { playSound, setQuiet } from '../lib/sounds'
 import { dotFor, presenceLine, STATUS_LABEL } from '../lib/presence'
 import StatusDot from '../components/StatusDot'
@@ -39,6 +43,8 @@ type MainScreenProps = {
   onLogout: () => void
   /** The server ended this session (expired, or signed out elsewhere). */
   onSessionExpired: () => void
+  /** Your name or photo changed (here or on another device). */
+  onUserChange: (changes: Pick<SignedInUser, 'displayName' | 'avatarVersion'>) => void
 }
 
 type FriendFilter = 'all' | 'online' | 'offline' | 'pending' | 'blocked'
@@ -55,7 +61,7 @@ const FILTERS: { id: FriendFilter; label: string }[] = [
 // is just a safety net in case an update is ever missed.
 const REFRESH_MS = 60_000
 
-type Confirm = { kind: 'remove' | 'block'; person: FriendEntry } | null
+type Confirm = { kind: 'remove' | 'block'; person: PublicUser } | null
 
 function useClickOutside(open: boolean, close: () => void): React.RefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null)
@@ -79,10 +85,12 @@ function useClickOutside(open: boolean, close: () => void): React.RefObject<HTML
 
 function SettingsMenu({
   onLogout,
-  onOpenSettings
+  onOpenSettings,
+  onEditProfile
 }: {
   onLogout: () => void
   onOpenSettings: () => void
+  onEditProfile: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
@@ -102,6 +110,18 @@ function SettingsMenu({
       </button>
       {open && (
         <div role="menu" className="menu settings-menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close()
+              onEditProfile()
+            }}
+          >
+            <ProfileIcon size={18} />
+            Edit profile
+          </button>
           <button
             type="button"
             role="menuitem"
@@ -133,12 +153,14 @@ function FriendRow({
   person,
   now,
   onMessage,
+  onViewProfile,
   onRemove,
   onBlock
 }: {
   person: FriendEntry
   now: number
   onMessage: () => void
+  onViewProfile: () => void
   onRemove: () => void
   onBlock: () => void
 }): React.JSX.Element {
@@ -151,6 +173,7 @@ function FriendRow({
       <Avatar
         id={person.id}
         name={person.displayName}
+        avatarVersion={person.avatarVersion}
         status={person.presence?.status ?? 'offline'}
         ring={open ? '#FBF5EF' : '#FFFFFF'}
       />
@@ -185,6 +208,19 @@ function FriendRow({
         </button>
         {open && (
           <div role="menu" className="menu friend-menu">
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                close()
+                onViewProfile()
+              }}
+            >
+              <ProfileIcon size={18} />
+              View profile
+            </button>
+            <div className="menu-divider" role="separator" />
             <button
               type="button"
               role="menuitem"
@@ -227,7 +263,7 @@ function PersonRow({
 }): React.JSX.Element {
   return (
     <div className="friend-row">
-      <Avatar id={person.id} name={person.displayName} />
+      <Avatar id={person.id} name={person.displayName} avatarVersion={person.avatarVersion} />
       <div className="friend-text">
         <div className="friend-names">
           <span className="friend-name">{person.displayName}</span>
@@ -272,7 +308,8 @@ const matches = (p: FriendEntry, q: string): boolean => {
 export default function MainScreen({
   user,
   onLogout,
-  onSessionExpired
+  onSessionExpired,
+  onUserChange
 }: MainScreenProps): React.JSX.Element {
   const [filter, setFilter] = useState<FriendFilter>('all')
   const [lists, setLists] = useState<FriendLists | null>(null)
@@ -288,6 +325,8 @@ export default function MainScreen({
   const [myStatus, setMyStatus] = useState<MyStatus>({ status: 'online', statusText: null })
   const [statusOpen, setStatusOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [editingProfile, setEditingProfile] = useState(false)
+  const [viewing, setViewing] = useState<PublicUser | null>(null)
   // Ticks every minute so "Last seen 5 minutes ago" stays accurate.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -308,6 +347,10 @@ export default function MainScreen({
     })
   }, [])
   const openChatRef = useRef<string | null>(null)
+  const onUserChangeRef = useRef(onUserChange)
+  useEffect(() => {
+    onUserChangeRef.current = onUserChange
+  })
   useEffect(() => {
     openChatRef.current = openChatId
   }, [openChatId])
@@ -399,6 +442,19 @@ export default function MainScreen({
         case 'conversations:changed':
           void refreshConversations()
           break
+        case 'profile:changed':
+          if (event.userId === user.id) {
+            // You changed your name or photo (maybe on another device).
+            window.glofly.profile.getMine().then((result) => {
+              if (result.ok) {
+                const { displayName, avatarVersion } = result.data
+                onUserChangeRef.current({ displayName, avatarVersion })
+              }
+            })
+          } else {
+            void refresh() // a friend's new name or photo
+          }
+          break
         case 'friends:changed':
           void refresh()
           break
@@ -488,6 +544,7 @@ export default function MainScreen({
   }
 
   const incomingCount = lists?.incoming.length ?? 0
+  const isFriendId = (id: string): boolean => (lists?.friends ?? []).some((f) => f.id === id)
   const friends = (lists?.friends ?? [])
     .map((p) => ({ ...p, presence: presence[p.id] ?? p.presence }))
     .filter((p) => matches(p, search))
@@ -512,6 +569,7 @@ export default function MainScreen({
           onRemove={() => setConfirm({ kind: 'remove', person: p })}
           onBlock={() => setConfirm({ kind: 'block', person: p })}
           onMessage={() => void openChatWith(p.id)}
+          onViewProfile={() => setViewing(p)}
         />
       ))
 
@@ -691,7 +749,7 @@ export default function MainScreen({
             title="Change your status"
             onClick={() => setStatusOpen((v) => !v)}
           >
-            {initials(user.displayName)}
+            <AvatarFace id={user.id} name={user.displayName} avatarVersion={user.avatarVersion} />
             <StatusDot status={dotFor(myStatus.status)} ring="#FFFFFF" />
           </button>
           <div className="profile-text">
@@ -700,7 +758,11 @@ export default function MainScreen({
               @{user.username} · {myStatus.statusText || STATUS_LABEL[myStatus.status]}
             </span>
           </div>
-          <SettingsMenu onLogout={onLogout} onOpenSettings={() => setSettingsOpen(true)} />
+          <SettingsMenu
+            onLogout={onLogout}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onEditProfile={() => setEditingProfile(true)}
+          />
           {statusOpen && (
             <StatusMenu
               current={myStatus}
@@ -774,6 +836,7 @@ export default function MainScreen({
                   <Avatar
                     id={c.partner.id}
                     name={c.partner.displayName}
+                    avatarVersion={c.partner.avatarVersion}
                     size={40}
                     status={partnerPresence?.status}
                     ring={active ? '#FBDCC4' : '#F7F0E9'}
@@ -814,6 +877,7 @@ export default function MainScreen({
             partnerPresence={presence[openChat.partner.id]}
             now={now}
             onRead={markedRead}
+            onViewProfile={() => setViewing(openChat.partner)}
             onSessionExpired={onSessionExpired}
           />
         ) : (
@@ -890,6 +954,40 @@ export default function MainScreen({
           user={user}
           onClose={() => setSettingsOpen(false)}
           onLogout={onLogout}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
+      {editingProfile && (
+        <EditProfileDialog
+          user={user}
+          status={myStatus}
+          onSaved={(saved, status) => {
+            onUserChange({ displayName: saved.displayName, avatarVersion: saved.avatarVersion })
+            setMyStatus(status)
+          }}
+          onClose={() => setEditingProfile(false)}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
+      {viewing && (
+        <ProfileCard
+          key={viewing.id}
+          person={viewing}
+          isFriend={isFriendId(viewing.id)}
+          presence={presence[viewing.id]}
+          onMessage={() => {
+            setViewing(null)
+            void openChatWith(viewing.id)
+          }}
+          onRemove={() => {
+            setViewing(null)
+            setConfirm({ kind: 'remove', person: viewing })
+          }}
+          onBlock={() => {
+            setViewing(null)
+            setConfirm({ kind: 'block', person: viewing })
+          }}
+          onClose={() => setViewing(null)}
           onSessionExpired={onSessionExpired}
         />
       )}

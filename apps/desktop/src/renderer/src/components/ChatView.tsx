@@ -6,11 +6,11 @@ import type {
   ReplyPreview,
   SignedInUser
 } from '../../../preload/api-types'
-import { initials } from '../lib/names'
 import { presenceHeader } from '../lib/presence'
 import { clockTime, continuesGroup, dayLabel, isSameDay } from '../lib/time'
-import Avatar from './Avatar'
+import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
+import { ProfileIcon } from './icons'
 import MessageItem, { type ShownMessage } from './MessageItem'
 import './ChatView.css'
 
@@ -22,6 +22,7 @@ type ChatViewProps = {
   now: number
   /** Called after this chat is marked read, so the sidebar can clear its badge. */
   onRead: (conversationId: string) => void
+  onViewProfile: () => void
   onSessionExpired: () => void
 }
 
@@ -84,6 +85,7 @@ export default function ChatView({
   partnerPresence,
   now,
   onRead,
+  onViewProfile,
   onSessionExpired
 }: ChatViewProps): React.JSX.Element {
   const partner = conversation.partner
@@ -418,7 +420,12 @@ export default function ChatView({
               <path d="M9 17l1 0L22 7" />
             </svg>
             Seen {clockTime(readAt)}
-            <Avatar id={partner.id} name={partner.displayName} size={18} />
+            <Avatar
+              id={partner.id}
+              name={partner.displayName}
+              avatarVersion={partner.avatarVersion}
+              size={18}
+            />
           </>
         ) : (
           <>
@@ -447,6 +454,7 @@ export default function ChatView({
         <Avatar
           id={partner.id}
           name={partner.displayName}
+          avatarVersion={partner.avatarVersion}
           status={partnerPresence?.status}
           ring="#FFFFFF"
         />
@@ -459,13 +467,29 @@ export default function ChatView({
             <span className="chat-status">{presenceHeader(partnerPresence, now)}</span>
           )}
         </div>
+        <div className="chat-header-actions">
+          <button
+            type="button"
+            className="chat-header-button"
+            aria-label={`View ${partner.displayName}'s profile`}
+            title="Profile"
+            onClick={onViewProfile}
+          >
+            <ProfileIcon size={20} strokeWidth={1.9} />
+          </button>
+        </div>
       </header>
 
       <div className="chat-messages" ref={listRef} onScroll={onScroll}>
         {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}
         {!loading && !hasMore && (
           <div className="chat-start">
-            <Avatar id={partner.id} name={partner.displayName} size={72} />
+            <Avatar
+              id={partner.id}
+              name={partner.displayName}
+              avatarVersion={partner.avatarVersion}
+              size={72}
+            />
             <h2>{partner.displayName}</h2>
             <p>
               This is the beginning of your messages with <strong>@{partner.username}</strong>. Say
@@ -495,10 +519,19 @@ export default function ChatView({
                 avatar={
                   m.senderId === me.id ? (
                     <span className="avatar avatar--mine" aria-hidden="true">
-                      {initials(me.displayName)}
+                      <AvatarFace
+                        id={me.id}
+                        name={me.displayName}
+                        avatarVersion={me.avatarVersion}
+                      />
                     </span>
                   ) : (
-                    <Avatar id={partner.id} name={partner.displayName} size={40} />
+                    <Avatar
+                      id={partner.id}
+                      name={partner.displayName}
+                      avatarVersion={partner.avatarVersion}
+                      size={40}
+                    />
                   )
                 }
                 time={clockTime(m.createdAt)}

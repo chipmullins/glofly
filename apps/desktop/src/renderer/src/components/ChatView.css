@@ -53,6 +53,28 @@
   padding-right: 162px; /* room for the Windows window buttons */
   -webkit-app-region: drag;
 }
+/* Header buttons from the design (Chat.dc.html). Calls arrive in a later step. */
+.chat-header-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+  -webkit-app-region: no-drag;
+}
+.chat-header-button {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: #f7f0e9;
+  color: #4a372b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.chat-header-button:hover {
+  background: #efe3d8;
+}
 
 .chat-messages {
   flex: 1;

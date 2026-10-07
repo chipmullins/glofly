@@ -4,7 +4,9 @@ import type {
   GloflyEvent,
   LoginRequest,
   MyStatus,
+  PhotoType,
   PrivacySettings,
+  ProfileChanges,
   RegisterRequest,
   WindowTheme
 } from './api-types'
@@ -38,6 +40,14 @@ const glofly: GloflyApi = {
   status: {
     get: () => ipcRenderer.invoke('status:get'),
     set: (changes: Partial<MyStatus>) => ipcRenderer.invoke('status:set', changes)
+  },
+  profile: {
+    getMine: () => ipcRenderer.invoke('profile:get-mine'),
+    get: (userId: string) => ipcRenderer.invoke('profile:get', userId),
+    update: (changes: ProfileChanges) => ipcRenderer.invoke('profile:update', changes),
+    setPhoto: (data: ArrayBuffer, type: PhotoType) =>
+      ipcRenderer.invoke('profile:set-photo', data, type),
+    removePhoto: () => ipcRenderer.invoke('profile:remove-photo')
   },
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),

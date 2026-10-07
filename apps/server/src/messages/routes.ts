@@ -201,6 +201,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
       id: users.id,
       username: users.username,
       displayName: users.displayName,
+      avatarVersion: users.avatarVersion,
       readReceipts: users.readReceipts,
       lastReadAt: conversationMembers.lastReadAt,
     })
@@ -248,7 +249,12 @@ async function summaries(myId: string, conversationIds?: string[]) {
     if (!partner) continue;
     result.push({
       id: c.id,
-      partner: { id: partner.id, username: partner.username, displayName: partner.displayName },
+      partner: {
+        id: partner.id,
+        username: partner.username,
+        displayName: partner.displayName,
+        avatarVersion: partner.avatarVersion,
+      },
       lastMessage: latest.find((m) => m.conversationId === c.id) ?? null,
       unreadCount: unread.find((u) => u.conversationId === c.id)?.count ?? 0,
       canMessage: await canMessage(myId, partner.id),

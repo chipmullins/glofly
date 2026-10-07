@@ -6,6 +6,7 @@ import { db } from "./db";
 import { authRouter } from "./auth/routes";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
 import { conversationsRouter } from "./messages/routes";
+import { avatarsRouter, profileRouter } from "./profile/routes";
 import { startRealtime } from "./realtime";
 import { connectRedis } from "./redis";
 
@@ -26,6 +27,8 @@ app.get("/health", async (_req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/users", usersRouter);
+app.use("/users", profileRouter);
+app.use("/avatars", avatarsRouter);
 app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
 app.use("/conversations", conversationsRouter);
@@ -39,6 +42,10 @@ app.use((_req, res) => {
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   const status = typeof err?.status === "number" && err.status < 500 ? err.status : 500;
   if (status === 500) console.error(err);
+  if (status === 413) {
+    res.status(413).json({ error: "too_large", message: "That file is too big." });
+    return;
+  }
   res.status(status).json({ error: status === 500 ? "server_error" : "bad_request" });
 };
 app.use(errorHandler);

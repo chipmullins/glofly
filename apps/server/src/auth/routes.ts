@@ -118,7 +118,12 @@ authRouter.post("/register", registerLimiter, async (req, res) => {
         birthday: input.birthday,
         termsAcceptedAt: new Date(),
       })
-      .returning({ id: users.id, username: users.username, displayName: users.displayName });
+      .returning({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        avatarVersion: users.avatarVersion,
+      });
 
     // Sign the new account straight in on this device ("Keep me signed in" on, like most
     // desktop messengers). They can log out from the settings menu.
@@ -162,6 +167,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
       id: users.id,
       username: users.username,
       displayName: users.displayName,
+      avatarVersion: users.avatarVersion,
       passwordHash: users.passwordHash,
     })
     .from(users)
@@ -182,7 +188,12 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
   res.json({
     token: session.token,
     expiresAt: session.expiresAt.toISOString(),
-    user: { id: user.id, username: user.username, displayName: user.displayName },
+    user: {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      avatarVersion: user.avatarVersion,
+    },
   });
 });
 

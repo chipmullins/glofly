@@ -42,6 +42,11 @@ export const users = pgTable(
     statusPreference: userStatus("status_preference").notNull().default("online"),
     // Custom status, e.g. "Grinding ranked tonight". Shown to friends while not offline.
     statusText: text("status_text"),
+    // Profile photo: a new random version each upload, so apps never show a stale cached photo.
+    avatarVersion: text("avatar_version"),
+    // "About me" on their profile, up to 190 characters.
+    bio: text("bio"),
+
     // When their last device disconnected. Shown to friends as "Last seen …".
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
 

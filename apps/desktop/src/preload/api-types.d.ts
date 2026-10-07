@@ -5,6 +5,8 @@ export type SignedInUser = {
   id: string
   username: string
   displayName: string
+  /** Changes with every new profile photo. Null means no photo (initials instead). */
+  avatarVersion: string | null
 }
 
 export type LoginRequest = {
@@ -35,7 +37,30 @@ export type RegisterResult =
 
 export type UsernameCheck = { available: boolean; reason?: string }
 
-export type PublicUser = { id: string; username: string; displayName: string }
+export type PublicUser = {
+  id: string
+  username: string
+  displayName: string
+  /** Changes with every new profile photo. Null means no photo (initials instead). */
+  avatarVersion: string | null
+}
+
+/**
+ * A profile card. About me and the join date are only shared with people you're connected
+ * to (friends, someone who sent you a request, or someone you chat with); status only with
+ * friends. Otherwise they're null.
+ */
+export type Profile = PublicUser & {
+  bio: string | null
+  /** ISO date */
+  joinedAt: string | null
+  presence: Presence | null
+}
+
+export type ProfileChanges = { displayName?: string; bio?: string | null }
+
+/** Photo types Glofly accepts for profile photos. */
+export type PhotoType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
 
 /** What a person is to you. */
 export type Relationship = 'none' | 'friends' | 'outgoing' | 'incoming'
@@ -127,6 +152,7 @@ export type GloflyEvent =
   | ({ type: 'presence'; userId: string } & Presence)
   | { type: 'conversation:read'; conversationId: string; userId: string; readAt: string }
   | { type: 'conversations:changed' }
+  | { type: 'profile:changed'; userId: string }
   | { type: 'connection'; connected: boolean }
   | { type: 'session:expired' }
 
@@ -166,6 +192,16 @@ export type GloflyApi = {
     get: () => Promise<ApiResult<MyStatus>>
     /** Change your status and/or custom status (empty text clears it). */
     set: (changes: Partial<MyStatus>) => Promise<ApiResult<MyStatus>>
+  }
+  profile: {
+    /** Your own profile, for Edit profile. */
+    getMine: () => Promise<ApiResult<Profile>>
+    /** Someone's profile card. */
+    get: (userId: string) => Promise<ApiResult<Profile>>
+    update: (changes: ProfileChanges) => Promise<ApiResult<Profile>>
+    /** Uploads a new profile photo (up to 8 MB). The server crops it and removes hidden photo data. */
+    setPhoto: (data: ArrayBuffer, type: PhotoType) => Promise<ApiResult<{ avatarVersion: string }>>
+    removePhoto: () => Promise<ApiResult<{ avatarVersion: null }>>
   }
   conversations: {
     list: () => Promise<ApiResult<ConversationSummary[]>>

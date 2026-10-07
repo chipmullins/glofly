@@ -45,7 +45,12 @@ async function shareNewFriendPresence(a: string, b: string): Promise<void> {
 function friendsChanged(...userIds: string[]): void {
   for (const id of userIds) emitToUser(id, "friends:changed", {});
 }
-const publicUser = { id: users.id, username: users.username, displayName: users.displayName };
+const publicUser = {
+  id: users.id,
+  username: users.username,
+  displayName: users.displayName,
+  avatarVersion: users.avatarVersion,
+};
 
 /** Escapes characters that mean "anything" in a LIKE search, so they're matched literally. */
 const likeSafe = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -242,6 +247,7 @@ friendsRouter.get("/", async (_req, res) => {
   const strip = (r: (typeof rows)[number]) => ({
     id: r.id,
     username: r.username,
+    avatarVersion: r.avatarVersion,
     displayName: r.displayName,
   });
   const friendRows = rows.filter((r) => r.status === "accepted");

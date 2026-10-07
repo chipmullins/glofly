@@ -164,7 +164,11 @@ export default function AddFriendDialog({
               key={person.id}
               className={person.relationship === 'friends' ? 'person person--friend' : 'person'}
             >
-              <Avatar id={person.id} name={person.displayName} />
+              <Avatar
+                id={person.id}
+                name={person.displayName}
+                avatarVersion={person.avatarVersion}
+              />
               <div className="person-text">
                 <span className="person-name">
                   <Highlight text={person.displayName} query={trimmed} />

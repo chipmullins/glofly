@@ -6,7 +6,9 @@ import { disconnectRealtime } from './realtime'
 export async function request<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   path: string,
-  body?: unknown
+  body?: unknown,
+  /** Sends a file as-is instead of JSON (profile photos). */
+  file?: { data: Uint8Array; type: string }
 ): Promise<ApiResult<T>> {
   const token = getSessionToken()
   if (!token) return { ok: false, error: 'unauthorized', message: 'Please log in again.' }
@@ -17,10 +19,11 @@ export async function request<T>(
       method,
       headers: {
         Authorization: `Bearer ${token}`,
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {})
+        ...(file ? { 'Content-Type': file.type } : {}),
+        ...(body !== undefined && !file ? { 'Content-Type': 'application/json' } : {})
       },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(10_000)
+      body: file ? (file.data as BodyInit) : body !== undefined ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(file ? 60_000 : 10_000)
     })
   } catch {
     return {
@@ -46,6 +49,7 @@ export async function request<T>(
     403: 'forbidden',
     404: 'not_found',
     409: 'conflict',
+    413: 'invalid',
     429: 'too_many_requests'
   }
   return {

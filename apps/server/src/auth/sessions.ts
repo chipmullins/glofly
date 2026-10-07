@@ -38,7 +38,12 @@ export async function findSession(token: string) {
   const [row] = await db
     .select({
       session: sessions,
-      user: { id: users.id, username: users.username, displayName: users.displayName },
+      user: {
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        avatarVersion: users.avatarVersion,
+      },
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
