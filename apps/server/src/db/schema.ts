@@ -5,6 +5,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -19,6 +20,14 @@ export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invis
 export const friendRequestsFrom = pgEnum("friend_requests_from", ["everyone", "nobody"]);
 
 // One row per Glofly account.
+/** Something that happened in a group chat, shown as a line in the chat. */
+export type ChatEvent =
+  | { type: "created"; name: string | null }
+  | { type: "renamed"; name: string | null }
+  | { type: "added"; userIds: string[] }
+  | { type: "removed"; userId: string }
+  | { type: "left" };
+
 export const users = pgTable(
   "users",
   {
@@ -153,12 +162,19 @@ export const blocks = pgTable(
   ],
 );
 
-// A chat. Right now every conversation is a direct message between two friends;
-// group chats will reuse these same tables.
+export const conversationKind = pgEnum("conversation_kind", ["dm", "group"]);
+
+// A chat: a direct message between two friends, or a group chat (up to 25 people).
 export const conversations = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
-  // For direct messages: "lowerId:higherId", so each pair has exactly one DM.
+  kind: conversationKind("kind").notNull().default("dm"),
+  // For direct messages: "lowerId:higherId", so each pair has exactly one DM. Null for groups.
   dmKey: text("dm_key").unique(),
+  // Group chats: the name anyone in the group can set (null = shown as members' names).
+  name: text("name"),
+  // Group chats: who made it. They can remove people. If they leave, it passes to whoever
+  // has been in the group longest.
+  createdBy: uuid("created_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // Used to sort the sidebar: most recent chat first.
   lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
@@ -204,6 +220,9 @@ export const messages = pgTable(
     editedAt: timestamp("edited_at", { withTimezone: true }),
     // Deleted messages keep their place (so replies still make sense) but lose their text.
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // Group events shown as a line in the chat ("Chip renamed the group …"). The sender is
+    // who did it; the body is empty. Null for ordinary messages.
+    event: jsonb("event").$type<ChatEvent>(),
   },
   // Loading a chat = newest messages in one conversation, so index exactly that.
   (t) => [index("messages_conversation_created_idx").on(t.conversationId, t.createdAt, t.id)],

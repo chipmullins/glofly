@@ -11,6 +11,7 @@ import {
   messageReactions,
   messages,
   users,
+  type ChatEvent,
 } from "../db/schema";
 import { storage } from "../storage";
 import {
@@ -29,7 +30,7 @@ import {
   type Variant,
 } from "./attachments";
 import { requireAuth } from "../auth/sessions";
-import { canMessage, pair } from "../friends/rules";
+import { blockedEitherWay, canMessage, deletionPending, pair } from "../friends/rules";
 import { emitToUser } from "../realtime";
 
 export const conversationsRouter = Router();
@@ -59,6 +60,7 @@ const messageFields = {
   createdAt: messages.createdAt,
   editedAt: messages.editedAt,
   deletedAt: messages.deletedAt,
+  event: messages.event,
 };
 type MessageRow = {
   id: string;
@@ -69,6 +71,7 @@ type MessageRow = {
   createdAt: Date;
   editedAt: Date | null;
   deletedAt: Date | null;
+  event: ChatEvent | null;
 };
 
 const messageBody = z
@@ -149,6 +152,8 @@ async function hydrate(rows: MessageRow[]) {
       createdAt: r.createdAt,
       editedAt: deleted ? null : r.editedAt,
       deleted,
+      // Group events ("Chip renamed the group"): shown as a line, not a message bubble.
+      event: r.event ?? null,
       replyTo: reply
         ? {
             id: reply.id,
@@ -208,21 +213,54 @@ async function shareReadPosition(conversationId: string, readerId: string, partn
   }
 }
 
-/** The other person in a DM, and whether you're a member at all. */
-async function dmPartner(conversationId: string, myId: string) {
+type Access = {
+  kind: "dm" | "group";
+  memberIds: string[];
+  /** DMs: the other person */
+  partner: string | null;
+  /** Groups: who can remove people */
+  createdBy: string | null;
+  name: string | null;
+};
+
+/** A chat I'm in (null if it doesn't exist or I'm not a member). */
+async function access(conversationId: string, myId: string): Promise<Access | null> {
+  const [conversation] = await db
+    .select({ kind: conversations.kind, createdBy: conversations.createdBy, name: conversations.name })
+    .from(conversations)
+    .where(eq(conversations.id, conversationId));
+  if (!conversation) return null;
   const members = await db
     .select({ userId: conversationMembers.userId })
     .from(conversationMembers)
     .where(eq(conversationMembers.conversationId, conversationId));
-  if (!members.some((m) => m.userId === myId)) return null; // not your chat
-  return members.find((m) => m.userId !== myId)?.userId ?? null;
+  const memberIds = members.map((m) => m.userId);
+  if (!memberIds.includes(myId)) return null; // not your chat
+  return {
+    kind: conversation.kind,
+    memberIds,
+    partner: conversation.kind === "dm" ? (memberIds.find((id) => id !== myId) ?? null) : null,
+    createdBy: conversation.createdBy,
+    name: conversation.name,
+  };
 }
+
+/** Can I post here? DMs need us to be friends (and not blocked); groups just need me in it. */
+async function canPost(chat: Access, myId: string): Promise<boolean> {
+  if (chat.kind === "group") return !(await deletionPending(myId));
+  return chat.partner !== null && (await canMessage(myId, chat.partner));
+}
+
+const CANT_POST = "You can only message your friends.";
 
 /** Everything the sidebar needs about some of my conversations. */
 async function summaries(myId: string, conversationIds?: string[]) {
   const mine = await db
     .select({
       id: conversations.id,
+      kind: conversations.kind,
+      name: conversations.name,
+      createdBy: conversations.createdBy,
       lastMessageAt: conversations.lastMessageAt,
       createdAt: conversations.createdAt,
       lastReadAt: conversationMembers.lastReadAt,
@@ -239,7 +277,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
   if (!mine.length) return [];
   const ids = mine.map((c) => c.id);
 
-  const partners = await db
+  // Everyone else in these chats (DMs: the other person; groups: the other members).
+  const others = await db
     .select({
       conversationId: conversationMembers.conversationId,
       id: users.id,
@@ -248,15 +287,18 @@ async function summaries(myId: string, conversationIds?: string[]) {
       avatarVersion: users.avatarVersion,
       readReceipts: users.readReceipts,
       lastReadAt: conversationMembers.lastReadAt,
+      joinedAt: conversationMembers.joinedAt,
     })
     .from(conversationMembers)
     .innerJoin(users, eq(users.id, conversationMembers.userId))
-    .where(and(inArray(conversationMembers.conversationId, ids), ne(conversationMembers.userId, myId)));
+    .where(and(inArray(conversationMembers.conversationId, ids), ne(conversationMembers.userId, myId)))
+    .orderBy(conversationMembers.joinedAt, users.username);
 
   const [mySettings] = await db
     .select({ readReceipts: users.readReceipts })
     .from(users)
     .where(eq(users.id, myId));
+  const iAmLeaving = await deletionPending(myId);
 
   // Newest message in each conversation.
   const latest = await hydrate(
@@ -267,7 +309,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
       .orderBy(messages.conversationId, desc(messages.createdAt), desc(messages.id)),
   );
 
-  // Messages from the other person since I last read the chat.
+  // Messages from other people since I last read the chat (group events don't count).
   const unread = await db
     .select({ conversationId: messages.conversationId, count: sql<number>`count(*)::int` })
     .from(messages)
@@ -282,32 +324,59 @@ async function summaries(myId: string, conversationIds?: string[]) {
       and(
         inArray(messages.conversationId, ids),
         ne(messages.senderId, myId),
+        isNull(messages.event),
         gt(messages.createdAt, conversationMembers.lastReadAt),
       ),
     )
     .groupBy(messages.conversationId);
 
+  const person = (p: (typeof others)[number]) => ({
+    id: p.id,
+    username: p.username,
+    displayName: p.displayName,
+    avatarVersion: p.avatarVersion,
+  });
+
   const result = [];
   for (const c of mine) {
-    const partner = partners.find((p) => p.conversationId === c.id);
-    if (!partner) continue;
-    result.push({
+    const members = others.filter((p) => p.conversationId === c.id);
+    const common = {
       id: c.id,
-      partner: {
-        id: partner.id,
-        username: partner.username,
-        displayName: partner.displayName,
-        avatarVersion: partner.avatarVersion,
-      },
       lastMessage: latest.find((m) => m.conversationId === c.id) ?? null,
       unreadCount: unread.find((u) => u.conversationId === c.id)?.count ?? 0,
+      activityAt: (c.lastMessageAt ?? c.createdAt).toISOString(),
+      // Pinned chats sit at the top of the sidebar, in the order they were pinned.
+      pinnedAt: c.pinnedAt?.toISOString() ?? null,
+    };
+    if (c.kind === "group") {
+      result.push({
+        ...common,
+        kind: "group" as const,
+        partner: null,
+        name: c.name,
+        // The other members, longest-standing first.
+        members: members.map(person),
+        memberCount: members.length + 1,
+        createdBy: c.createdBy,
+        canMessage: !iAmLeaving,
+        partnerReadAt: null,
+      });
+      continue;
+    }
+    const partner = members[0];
+    if (!partner) continue;
+    result.push({
+      ...common,
+      kind: "dm" as const,
+      partner: person(partner),
+      name: null,
+      members: [person(partner)],
+      memberCount: 2,
+      createdBy: null,
       canMessage: await canMessage(myId, partner.id),
       // How far they've read, shown as "Seen". Only when both people allow read receipts.
       partnerReadAt:
         mySettings?.readReceipts && partner.readReceipts ? partner.lastReadAt.toISOString() : null,
-      activityAt: (c.lastMessageAt ?? c.createdAt).toISOString(),
-      // Pinned chats sit at the top of the sidebar, in the order they were pinned.
-      pinnedAt: c.pinnedAt?.toISOString() ?? null,
     });
   }
   return result.sort((a, b) => b.activityAt.localeCompare(a.activityAt));
@@ -411,11 +480,306 @@ conversationsRouter.post("/dm", async (req, res) => {
   res.json({ conversation: summary });
 });
 
+// ---------------------------------------------------------------------------------------
+// Group chats. Up to 25 people, all added by a friend. Anyone in the group can rename it and
+// add their friends; the person who made it can remove people. Anyone can leave. If the
+// creator leaves, whoever has been in the group longest takes over.
+
+export const GROUP_MAX = 25;
+export const GROUP_NAME_MAX = 50;
+const GROUP_HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
+
+const groupLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 40,
+  keyGenerator: (_req, res) => me(res).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "That's a lot of group changes. Wait a few minutes and try again." },
+});
+
+/** A group name: trimmed, up to 50 characters, no hidden characters. Empty = no name. */
+const groupName = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((s) => (s ?? "").trim())
+  .pipe(
+    z
+      .string()
+      .max(GROUP_NAME_MAX, `Group names can be up to ${GROUP_NAME_MAX} characters.`)
+      .refine((n) => !GROUP_HIDDEN_CHARS.test(n), "Group names can't contain hidden characters."),
+  )
+  .transform((s) => (s === "" ? null : s));
+
+const peopleIds = z.array(idParam).min(1).max(GROUP_MAX);
+
+/** The people mentioned by some messages (senders, and anyone a group event names). */
+async function peopleFor(rows: { senderId: string; event: ChatEvent | null }[]) {
+  const ids = new Set<string>();
+  for (const r of rows) {
+    ids.add(r.senderId);
+    if (r.event?.type === "added") r.event.userIds.forEach((id) => ids.add(id));
+    if (r.event?.type === "removed") ids.add(r.event.userId);
+  }
+  if (!ids.size) return [];
+  return db
+    .select({
+      id: users.id,
+      username: users.username,
+      displayName: users.displayName,
+      avatarVersion: users.avatarVersion,
+    })
+    .from(users)
+    .where(inArray(users.id, [...ids]));
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Adds a line like "Chip renamed the group" to a chat. */
+async function postEvent(tx: Tx, conversationId: string, actorId: string, event: ChatEvent) {
+  const [row] = await tx
+    .insert(messages)
+    .values({ conversationId, senderId: actorId, body: "", event })
+    .returning(messageFields);
+  await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));
+  // Your own change doesn't make the chat unread for you.
+  await tx
+    .update(conversationMembers)
+    .set({ lastReadAt: row.createdAt })
+    .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, actorId)));
+  return row;
+}
+
+/** Tells everyone affected: the new line appears and their chat lists refresh. */
+async function announce(row: MessageRow, userIds: string[]) {
+  const [message] = await hydrate([row]);
+  const people = await peopleFor([row]);
+  for (const userId of new Set(userIds)) {
+    emitToUser(userId, "message:new", { message, people });
+    emitToUser(userId, "conversations:changed", {});
+  }
+}
+
+/** Checks I can add each of these people: they're my friends (not blocked, not leaving). */
+async function addable(myId: string, userIds: string[]): Promise<boolean> {
+  for (const id of userIds) if (id === myId || !(await canMessage(myId, id))) return false;
+  return true;
+}
+
+class GroupFull extends Error {}
+
+const NOT_FRIENDS = "You can only add your friends to a group.";
+const groupFull = (n = GROUP_MAX) => `Groups can have up to ${n} people.`;
+
+// POST /conversations/group  { name?, userIds } — start a group with at least two friends.
+conversationsRouter.post("/group", groupLimiter, async (req, res) => {
+  const myId = me(res).id;
+  const parsed = z.object({ name: groupName, userIds: peopleIds }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: parsed.error.issues[0]?.message ?? "Pick friends to add." });
+    return;
+  }
+  const userIds = [...new Set(parsed.data.userIds)];
+  if (userIds.length < 2) {
+    res.status(400).json({ error: "invalid", message: "Pick at least two friends for a group. (For one, just message them!)" });
+    return;
+  }
+  if (userIds.length + 1 > GROUP_MAX) {
+    res.status(400).json({ error: "invalid", message: groupFull() });
+    return;
+  }
+  if ((await deletionPending(myId)) || !(await addable(myId, userIds))) {
+    res.status(403).json({ error: "forbidden", message: NOT_FRIENDS });
+    return;
+  }
+  const { conversationId, row } = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(conversations)
+      .values({ kind: "group", name: parsed.data.name, createdBy: myId })
+      .returning({ id: conversations.id });
+    const now = Date.now();
+    // The creator joined first, then everyone in the order picked (that's who takes over).
+    await tx.insert(conversationMembers).values([
+      { conversationId: created.id, userId: myId, joinedAt: new Date(now) },
+      ...userIds.map((userId, i) => ({ conversationId: created.id, userId, joinedAt: new Date(now + 1 + i) })),
+    ]);
+    const row = await postEvent(tx, created.id, myId, { type: "created", name: parsed.data.name });
+    return { conversationId: created.id, row };
+  });
+  await announce(row, [myId, ...userIds]);
+  const [summary] = await summaries(myId, [conversationId]);
+  res.status(201).json({ conversation: summary });
+});
+
+/** The group I'm in (404s anything else). */
+async function myGroup(idRaw: unknown, myId: string) {
+  const id = idParam.safeParse(idRaw);
+  if (!id.success) return null;
+  const chat = await access(id.data, myId);
+  return chat?.kind === "group" ? { id: id.data, ...chat } : null;
+}
+
+// PATCH /conversations/:id  { name } — rename a group (empty or null clears the name).
+conversationsRouter.patch("/:id", groupLimiter, async (req, res) => {
+  const myId = me(res).id;
+  const chat = await myGroup(req.params.id, myId);
+  if (!chat) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const parsed = z.object({ name: groupName }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: parsed.error.issues[0]?.message ?? "That name won't work." });
+    return;
+  }
+  if (await deletionPending(myId)) {
+    res.status(403).json({ error: "forbidden", message: CANT_POST });
+    return;
+  }
+  const name = parsed.data.name;
+  if (name !== chat.name) {
+    const row = await db.transaction(async (tx) => {
+      await tx.update(conversations).set({ name }).where(eq(conversations.id, chat.id));
+      return postEvent(tx, chat.id, myId, { type: "renamed", name });
+    });
+    await announce(row, chat.memberIds);
+  }
+  const [summary] = await summaries(myId, [chat.id]);
+  res.json({ conversation: summary });
+});
+
+// POST /conversations/:id/members  { userIds } — add friends to a group.
+conversationsRouter.post("/:id/members", groupLimiter, async (req, res) => {
+  const myId = me(res).id;
+  const chat = await myGroup(req.params.id, myId);
+  if (!chat) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const parsed = z.object({ userIds: peopleIds }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: "Pick friends to add." });
+    return;
+  }
+  const userIds = [...new Set(parsed.data.userIds)].filter((id) => !chat.memberIds.includes(id));
+  if (!userIds.length) {
+    res.status(400).json({ error: "invalid", message: "They're already in the group." });
+    return;
+  }
+  if ((await deletionPending(myId)) || !(await addable(myId, userIds))) {
+    res.status(403).json({ error: "forbidden", message: NOT_FRIENDS });
+    return;
+  }
+  let result: { row: MessageRow; memberIds: string[] };
+  try {
+    result = await db.transaction(async (tx) => {
+      // Lock the group so two people adding at once can't go past 25.
+      await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, chat.id)).for("update");
+      const current = await tx
+        .select({ userId: conversationMembers.userId })
+        .from(conversationMembers)
+        .where(eq(conversationMembers.conversationId, chat.id));
+      const currentIds = current.map((m) => m.userId);
+      const fresh = userIds.filter((id) => !currentIds.includes(id));
+      if (!currentIds.includes(myId)) throw new GroupFull(); // left in the meantime
+      if (currentIds.length + fresh.length > GROUP_MAX) throw new GroupFull();
+      const now = Date.now();
+      if (fresh.length) {
+        await tx.insert(conversationMembers).values(
+          fresh.map((userId, i) => ({ conversationId: chat.id, userId, joinedAt: new Date(now + i) })),
+        );
+      }
+      const row = await postEvent(tx, chat.id, myId, { type: "added", userIds: fresh });
+      return { row, memberIds: [...currentIds, ...fresh] };
+    });
+  } catch (err) {
+    if (err instanceof GroupFull) {
+      res.status(409).json({ error: "group_full", message: groupFull() });
+      return;
+    }
+    throw err;
+  }
+  await announce(result.row, result.memberIds);
+  const [summary] = await summaries(myId, [chat.id]);
+  res.json({ conversation: summary });
+});
+
+// DELETE /conversations/:id/members/:userId — leave (yourself) or remove someone (creator only).
+conversationsRouter.delete("/:id/members/:userId", groupLimiter, async (req, res) => {
+  const myId = me(res).id;
+  const chat = await myGroup(req.params.id, myId);
+  const target = idParam.safeParse(req.params.userId);
+  if (!chat || !target.success || !chat.memberIds.includes(target.data)) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const leaving = target.data === myId;
+  if (!leaving && chat.createdBy !== myId) {
+    res.status(403).json({ error: "forbidden", message: "Only the person who made the group can remove people." });
+    return;
+  }
+
+  const outcome = await db.transaction(async (tx) => {
+    await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, chat.id)).for("update");
+    const removed = await tx
+      .delete(conversationMembers)
+      .where(and(eq(conversationMembers.conversationId, chat.id), eq(conversationMembers.userId, target.data)))
+      .returning({ userId: conversationMembers.userId });
+    if (!removed.length) return { kind: "gone" as const };
+    // Their unsent uploads for this group go too.
+    const unsent = await tx
+      .delete(attachments)
+      .where(
+        and(
+          eq(attachments.conversationId, chat.id),
+          eq(attachments.uploaderId, target.data),
+          isNull(attachments.messageId),
+        ),
+      )
+      .returning({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind });
+    const rest = await tx
+      .select({ userId: conversationMembers.userId })
+      .from(conversationMembers)
+      .where(eq(conversationMembers.conversationId, chat.id))
+      .orderBy(conversationMembers.joinedAt);
+    if (!rest.length) {
+      // The last person left: the group and everything in it is removed.
+      const files = await tx
+        .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
+        .from(attachments)
+        .where(eq(attachments.conversationId, chat.id));
+      await tx.delete(conversations).where(eq(conversations.id, chat.id));
+      return { kind: "empty" as const, files: [...unsent, ...files] };
+    }
+    const [group] = await tx
+      .select({ createdBy: conversations.createdBy })
+      .from(conversations)
+      .where(eq(conversations.id, chat.id));
+    if (group.createdBy === target.data || group.createdBy === null) {
+      await tx.update(conversations).set({ createdBy: rest[0].userId }).where(eq(conversations.id, chat.id));
+    }
+    const row = await postEvent(
+      tx,
+      chat.id,
+      myId,
+      leaving ? { type: "left" } : { type: "removed", userId: target.data },
+    );
+    return { kind: "posted" as const, row, files: unsent, memberIds: rest.map((m) => m.userId) };
+  });
+
+  if (outcome.kind !== "gone") await removeFiles(outcome.files);
+  if (outcome.kind === "posted") await announce(outcome.row, outcome.memberIds);
+  // The person who left (or was removed) sees the group disappear on all their devices.
+  emitToUser(target.data, "conversations:changed", {});
+  res.status(204).end();
+});
+
 // GET /conversations/:id/messages?before=<messageId>&limit=50 — history, oldest first.
 conversationsRouter.get("/:id/messages", async (req, res) => {
   const id = idParam.safeParse(req.params.id);
   const myId = me(res).id;
-  if (!id.success || (await dmPartner(id.data, myId)) === null) {
+  if (!id.success || (await access(id.data, myId)) === null) {
     res.status(404).json({ error: "not_found" });
     return;
   }
@@ -444,7 +808,9 @@ conversationsRouter.get("/:id/messages", async (req, res) => {
     .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(limit + 1);
 
-  res.json({ messages: await hydrate(rows.slice(0, limit).reverse()), hasMore: rows.length > limit });
+  const page = rows.slice(0, limit).reverse();
+  // Who's who, including people who've since left a group.
+  res.json({ messages: await hydrate(page), hasMore: rows.length > limit, people: await peopleFor(page) });
 });
 
 // POST /conversations/:id/messages  { body } — send a message.
@@ -478,20 +844,20 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     });
     return;
   }
-  const partner = await dmPartner(id.data, myId);
-  if (partner === null) {
+  const chat = await access(id.data, myId);
+  if (chat === null) {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  if (!(await canMessage(myId, partner))) {
-    res.status(403).json({ error: "forbidden", message: "You can only message your friends." });
+  if (!(await canPost(chat, myId))) {
+    res.status(403).json({ error: "forbidden", message: CANT_POST });
     return;
   }
   // A reply must point at a message in this same chat that still exists.
   const replyToId = replyTo.success ? (replyTo.data ?? null) : null;
   if (replyToId) {
     const original = await findMessage(id.data, replyToId);
-    if (!original || original.deletedAt) {
+    if (!original || original.deletedAt || original.event) {
       res.status(400).json({ error: "invalid", message: "That message isn't available to reply to." });
       return;
     }
@@ -546,10 +912,10 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   }
 
   const [message] = await hydrate([inserted]);
-  // Instantly to both people (all their signed-in devices).
-  for (const userId of [myId, partner]) emitToUser(userId, "message:new", { message });
-  // Replying means you've read everything before it.
-  await shareReadPosition(id.data, myId, partner, inserted.createdAt);
+  // Instantly to everyone in the chat (all their signed-in devices).
+  for (const userId of chat.memberIds) emitToUser(userId, "message:new", { message });
+  // Replying means you've read everything before it ("Seen" is for DMs).
+  if (chat.partner) await shareReadPosition(id.data, myId, chat.partner, inserted.createdAt);
   res.status(201).json({ message });
 });
 
@@ -560,11 +926,12 @@ async function loadForChange(conversationIdRaw: unknown, messageIdRaw: unknown, 
   const conversationId = idParam.safeParse(conversationIdRaw);
   const messageId = idParam.safeParse(messageIdRaw);
   if (!conversationId.success || !messageId.success) return { status: 404 as const };
-  const partner = await dmPartner(conversationId.data, myId);
-  if (partner === null) return { status: 404 as const };
+  const chat = await access(conversationId.data, myId);
+  if (chat === null) return { status: 404 as const };
   const message = await findMessage(conversationId.data, messageId.data);
-  if (!message) return { status: 404 as const };
-  return { status: 200 as const, message, partner, conversationId: conversationId.data };
+  // Group events ("Chip renamed the group") can't be edited, deleted or reacted to.
+  if (!message || message.event) return { status: 404 as const };
+  return { status: 200 as const, message, chat, conversationId: conversationId.data };
 }
 
 async function sendUpdated(messageId: string, conversationId: string) {
@@ -582,13 +949,13 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
     res.status(404).json({ error: "not_found" });
     return;
   }
-  const { message, partner, conversationId } = found;
+  const { message, chat, conversationId } = found;
   if (message.senderId !== myId || message.deletedAt) {
     res.status(403).json({ error: "forbidden", message: "You can only edit your own messages." });
     return;
   }
-  if (!(await canMessage(myId, partner))) {
-    res.status(403).json({ error: "forbidden", message: "You can only message your friends." });
+  if (!(await canPost(chat, myId))) {
+    res.status(403).json({ error: "forbidden", message: CANT_POST });
     return;
   }
   const hasFiles = (await attachmentsOf([message.id])).has(message.id);
@@ -654,7 +1021,7 @@ conversationsRouter.put("/:id/messages/:messageId/reactions/:emoji", sendLimiter
     res.status(400).json({ error: "invalid", message: "That isn't an emoji." });
     return;
   }
-  if (!(await canMessage(myId, found.partner))) {
+  if (!(await canPost(found.chat, myId))) {
     res.status(403).json({ error: "forbidden", message: "You can only react in chats with friends." });
     return;
   }
@@ -707,8 +1074,8 @@ conversationsRouter.post("/:id/read", async (req, res) => {
       )
       .returning({ conversationId: conversationMembers.conversationId });
     if (updated.length) {
-      const partner = await dmPartner(id.data, myId);
-      if (partner) await shareReadPosition(id.data, myId, partner, now);
+      const chat = await access(id.data, myId);
+      if (chat?.partner) await shareReadPosition(id.data, myId, chat.partner, now);
     }
   }
   res.status(204).end();
@@ -723,12 +1090,12 @@ conversationsRouter.post(
   async (req, res) => {
     const id = idParam.safeParse(req.params.id);
     const myId = me(res).id;
-    const partner = id.success ? await dmPartner(id.data, myId) : null;
-    if (!id.success || partner === null) {
+    const chat = id.success ? await access(id.data, myId) : null;
+    if (!id.success || chat === null) {
       res.status(404).json({ error: "not_found" });
       return;
     }
-    if (!(await canMessage(myId, partner))) {
+    if (!(await canPost(chat, myId))) {
       res.status(403).json({ error: "forbidden", message: "You can only send files to friends." });
       return;
     }
@@ -763,7 +1130,7 @@ async function loadAttachment(conversationIdRaw: unknown, attachmentIdRaw: unkno
   const conversationId = idParam.safeParse(conversationIdRaw);
   const attachmentId = idParam.safeParse(attachmentIdRaw);
   if (!conversationId.success || !attachmentId.success) return null;
-  if ((await dmPartner(conversationId.data, myId)) === null) return null;
+  if ((await access(conversationId.data, myId)) === null) return null;
   const [row] = await db
     .select()
     .from(attachments)

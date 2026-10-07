@@ -4,16 +4,19 @@ import type {
   ConversationSummary,
   Message,
   Presence,
+  PublicUser,
   ReplyPreview,
   SignedInUser
 } from '../../../preload/api-types'
+import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
+import GroupAvatar from './GroupAvatar'
 import { presenceHeader } from '../lib/presence'
 import { clockTime, continuesGroup, dayLabel, isSameDay } from '../lib/time'
 import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
 import { MessageAttachments, PhotoViewer, UploadTray, type Upload } from './Attachments'
 import { attachmentSummary } from '../lib/attachments'
-import { FileIcon, ProfileIcon } from './icons'
+import { FileIcon, GroupIcon, ProfileIcon } from './icons'
 import MessageItem, { type ShownMessage } from './MessageItem'
 import { PinIcon } from './ChatList'
 import EmojiPicker from './EmojiPicker'
@@ -23,12 +26,15 @@ import './ChatView.css'
 type ChatViewProps = {
   me: SignedInUser
   conversation: ConversationSummary
-  /** Their status, if they're a friend */
-  partnerPresence?: Presence
+  /** Friends' statuses (DMs show the other person's in the header) */
+  presence: Record<string, Presence>
   now: number
   /** Called after this chat is marked read, so the sidebar can clear its badge. */
   onRead: (conversationId: string) => void
-  onViewProfile: () => void
+  /** DMs: the other person's profile. Groups: anyone's (from their avatar). */
+  onViewProfile: (user: PublicUser) => void
+  /** Groups: rename, members, add people, leave */
+  onGroupSettings: () => void
   /** Pins or unpins this chat in the sidebar */
   onTogglePin: () => void
   onSessionExpired: () => void
@@ -137,14 +143,18 @@ function AttachIcon(): React.JSX.Element {
 export default function ChatView({
   me,
   conversation,
-  partnerPresence,
+  presence,
   now,
   onRead,
   onViewProfile,
+  onGroupSettings,
   onTogglePin,
   onSessionExpired
 }: ChatViewProps): React.JSX.Element {
   const partner = conversation.partner
+  const isGroup = conversation.kind === 'group'
+  const partnerPresence = partner ? presence[partner.id] : undefined
+  const title = chatTitle(conversation)
   const [messages, setMessages] = useState<Message[]>([])
   const [pending, setPending] = useState<Pending[]>([])
   const [hasMore, setHasMore] = useState(false)
@@ -152,7 +162,10 @@ export default function ChatView({
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
-  const [partnerTyping, setPartnerTyping] = useState(false)
+  /** Who's typing right now (several people at once in a group) */
+  const [typingIds, setTypingIds] = useState<string[]>([])
+  /** Everyone messages here mention, including people who've left a group */
+  const [formerPeople, setFormerPeople] = useState<Record<string, PublicUser>>({})
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Message | null>(null)
@@ -174,13 +187,35 @@ export default function ChatView({
   const stickToBottom = useRef(true)
   const keepScrollFrom = useRef<number | null>(null)
   const lastTypingSent = useRef(0)
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const typingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const tempCounter = useRef(0)
 
-  const nameOf = useCallback(
-    (userId: string) => (userId === me.id ? me.displayName : partner.displayName),
-    [me, partner]
+  /** A person in this chat (or who used to be), for names and avatars. */
+  const personOf = useCallback(
+    (userId: string): PublicUser | null =>
+      userId === me.id
+        ? me
+        : (conversation.members.find((m) => m.id === userId) ?? formerPeople[userId] ?? null),
+    [me, conversation.members, formerPeople]
   )
+  const nameOf = useCallback(
+    (userId: string) => personOf(userId)?.displayName ?? 'Former member',
+    [personOf]
+  )
+  const rememberPeople = useCallback((people: PublicUser[] | undefined) => {
+    if (!people?.length) return
+    setFormerPeople((map) => {
+      const next = { ...map }
+      for (const p of people) next[p.id] = p
+      return next
+    })
+  }, [])
+  const stopTyping = useCallback((userId: string) => {
+    const timer = typingTimers.current.get(userId)
+    if (timer) clearTimeout(timer)
+    typingTimers.current.delete(userId)
+    setTypingIds((ids) => (ids.includes(userId) ? ids.filter((id) => id !== userId) : ids))
+  }, [])
 
   const handleFailure = useCallback(
     (error: string, message: string) => {
@@ -212,13 +247,14 @@ export default function ChatView({
       stickToBottom.current = true
       setMessages(result.data.messages)
       setHasMore(result.data.hasMore)
+      rememberPeople(result.data.people)
       void markRead()
     })
     inputRef.current?.focus()
     return () => {
       cancelled = true
     }
-  }, [conversation.id, handleFailure, markRead])
+  }, [conversation.id, handleFailure, markRead, rememberPeople])
 
   // Live updates: new messages, edits/deletes/reactions, and typing.
   useEffect(() => {
@@ -226,8 +262,9 @@ export default function ChatView({
       if (event.type === 'message:new' && event.message.conversationId === conversation.id) {
         const m = event.message
         setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))
+        rememberPeople(event.people)
         if (m.senderId !== me.id) {
-          setPartnerTyping(false)
+          stopTyping(m.senderId)
           void markRead()
         }
       }
@@ -246,19 +283,30 @@ export default function ChatView({
         event.userId !== me.id
       ) {
         // Show "is typing…", and hide it a few seconds after their last keystroke.
-        setPartnerTyping(true)
-        if (typingTimer.current) clearTimeout(typingTimer.current)
-        typingTimer.current = setTimeout(() => setPartnerTyping(false), TYPING_SHOW_FOR_MS)
+        const userId = event.userId
+        setTypingIds((ids) => (ids.includes(userId) ? ids : [...ids, userId]))
+        const old = typingTimers.current.get(userId)
+        if (old) clearTimeout(old)
+        typingTimers.current.set(
+          userId,
+          setTimeout(() => stopTyping(userId), TYPING_SHOW_FOR_MS)
+        )
       }
     })
-  }, [conversation.id, me.id, markRead])
+  }, [conversation.id, me.id, markRead, rememberPeople, stopTyping])
 
-  useEffect(
-    () => () => {
-      if (typingTimer.current) clearTimeout(typingTimer.current)
-    },
-    []
-  )
+  useEffect(() => {
+    const timers = typingTimers.current
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer)
+    }
+  }, [])
+
+  // Someone typing who's no longer in the group (or a removed name) stops showing.
+  const typingNames = typingIds
+    .filter((id) => conversation.members.some((m) => m.id === id))
+    .map((id) => nameOf(id))
+  const someoneTyping = typingNames.length > 0
 
   // Coming back to the window counts as reading.
   useEffect(() => {
@@ -277,7 +325,7 @@ export default function ChatView({
     } else if (stickToBottom.current) {
       list.scrollTop = list.scrollHeight
     }
-  }, [messages, pending, partnerTyping, replyingTo, conversation.partnerReadAt])
+  }, [messages, pending, someoneTyping, replyingTo, conversation.partnerReadAt])
 
   async function loadOlder(): Promise<void> {
     if (loadingOlder || !hasMore || messages.length === 0) return
@@ -291,6 +339,7 @@ export default function ChatView({
       ...list
     ])
     setHasMore(result.data.hasMore)
+    rememberPeople(result.data.people)
   }
 
   function onScroll(): void {
@@ -532,7 +581,9 @@ export default function ChatView({
     }
     // Up arrow in an empty box edits your last message.
     if (e.key === 'ArrowUp' && !draft) {
-      const last = [...messages].reverse().find((m) => m.senderId === me.id && !m.deleted)
+      const last = [...messages]
+        .reverse()
+        .find((m) => m.senderId === me.id && !m.deleted && !m.event)
       if (last && conversation.canMessage) {
         e.preventDefault()
         setEditingId(last.id)
@@ -602,7 +653,8 @@ export default function ChatView({
         deleted: false,
         replyTo: p.replyTo,
         reactions: [],
-        attachments: p.attachments
+        attachments: p.attachments,
+        event: null
       },
       pending: { failed: p.failed }
     }))
@@ -613,7 +665,9 @@ export default function ChatView({
   // and only when both of you allow read receipts.
   const lastItem = shown.at(-1)
   const lastIsMine =
+    !!partner &&
     lastItem &&
+    !lastItem.message.event &&
     !lastItem.pending &&
     lastItem.message.senderId === me.id &&
     !lastItem.message.deleted
@@ -642,12 +696,14 @@ export default function ChatView({
               <path d="M9 17l1 0L22 7" />
             </svg>
             Seen {clockTime(readAt)}
-            <Avatar
-              id={partner.id}
-              name={partner.displayName}
-              avatarVersion={partner.avatarVersion}
-              size={18}
-            />
+            {partner && (
+              <Avatar
+                id={partner.id}
+                name={partner.displayName}
+                avatarVersion={partner.avatarVersion}
+                size={18}
+              />
+            )}
           </>
         ) : (
           <>
@@ -679,22 +735,47 @@ export default function ChatView({
       onDrop={onDrop}
     >
       <header className="chat-header">
-        <Avatar
-          id={partner.id}
-          name={partner.displayName}
-          avatarVersion={partner.avatarVersion}
-          status={partnerPresence?.status}
-          ring="var(--glo-bg)"
-        />
+        {partner ? (
+          <Avatar
+            id={partner.id}
+            name={partner.displayName}
+            avatarVersion={partner.avatarVersion}
+            status={partnerPresence?.status}
+            ring="var(--glo-bg)"
+          />
+        ) : (
+          <button
+            type="button"
+            className="chat-header-face"
+            aria-label="Group settings"
+            onClick={onGroupSettings}
+          >
+            <GroupAvatar members={conversation.members} me={me} size={44} ring="var(--glo-bg)" />
+          </button>
+        )}
         <div className="chat-title">
           <div className="chat-names">
-            <span className="chat-name">{partner.displayName}</span>
-            <span className="chat-user">@{partner.username}</span>
-          </div>
-          {partnerPresence && (
-            <span className="chat-status">
-              <EmojiText text={presenceHeader(partnerPresence, now)} />
+            <span className="chat-name">
+              <EmojiText text={title} />
             </span>
+            {partner && <span className="chat-user">@{partner.username}</span>}
+          </div>
+          {partner ? (
+            partnerPresence && (
+              <span className="chat-status">
+                <EmojiText text={presenceHeader(partnerPresence, now)} />
+              </span>
+            )
+          ) : (
+            <button type="button" className="chat-status chat-members" onClick={onGroupSettings}>
+              {memberCountLabel(conversation.memberCount)}
+              {(() => {
+                const online = conversation.members.filter(
+                  (m) => (presence[m.id]?.status ?? 'offline') !== 'offline'
+                ).length
+                return online > 0 ? ` · ${online} online` : ''
+              })()}
+            </button>
           )}
         </div>
         <div className="chat-header-actions">
@@ -712,15 +793,27 @@ export default function ChatView({
           >
             <PinIcon size={19} />
           </button>
-          <button
-            type="button"
-            className="chat-header-button"
-            aria-label={`View ${partner.displayName}'s profile`}
-            title="Profile"
-            onClick={onViewProfile}
-          >
-            <ProfileIcon size={20} strokeWidth={1.9} />
-          </button>
+          {partner ? (
+            <button
+              type="button"
+              className="chat-header-button"
+              aria-label={`View ${partner.displayName}'s profile`}
+              title="Profile"
+              onClick={() => onViewProfile(partner)}
+            >
+              <ProfileIcon size={20} strokeWidth={1.9} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="chat-header-button"
+              aria-label="Group settings"
+              title="Group settings"
+              onClick={onGroupSettings}
+            >
+              <GroupIcon size={21} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -728,17 +821,27 @@ export default function ChatView({
         {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}
         {!loading && !hasMore && (
           <div className="chat-start">
-            <Avatar
-              id={partner.id}
-              name={partner.displayName}
-              avatarVersion={partner.avatarVersion}
-              size={72}
-            />
-            <h2>{partner.displayName}</h2>
-            <p>
-              This is the beginning of your messages with <strong>@{partner.username}</strong>. Say
-              hello!
-            </p>
+            {partner ? (
+              <Avatar
+                id={partner.id}
+                name={partner.displayName}
+                avatarVersion={partner.avatarVersion}
+                size={72}
+              />
+            ) : (
+              <GroupAvatar members={conversation.members} me={me} size={72} ring="var(--glo-bg)" />
+            )}
+            <h2>
+              <EmojiText text={title} />
+            </h2>
+            {partner ? (
+              <p>
+                This is the beginning of your messages with <strong>@{partner.username}</strong>.
+                Say hello!
+              </p>
+            ) : (
+              <p>This is the beginning of the group. Say hello to everyone!</p>
+            )}
           </div>
         )}
 
@@ -746,15 +849,31 @@ export default function ChatView({
           const m = item.message
           const previous = shown[i - 1]?.message
           const newDay = !previous || !isSameDay(previous.createdAt, m.createdAt)
+          const divider = newDay && (
+            <div className="day-divider">
+              <span>{dayLabel(m.createdAt)}</span>
+            </div>
+          )
+          // Group events ("Chip added Maya") are a quiet line, not a message.
+          if (m.event) {
+            return (
+              <div key={item.key}>
+                {divider}
+                <div className="chat-event" data-message-id={m.id}>
+                  <span>
+                    <EmojiText text={eventText(m.event, m.senderId, me.id, nameOf)} />
+                  </span>
+                  <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
+                </div>
+              </div>
+            )
+          }
+          const sender = personOf(m.senderId)
           // A reply always shows its name, so the quote is clearly attached to it.
-          const grouped = !newDay && !m.replyTo && continuesGroup(previous, m)
+          const grouped = !newDay && !m.replyTo && !previous?.event && continuesGroup(previous, m)
           return (
             <div key={item.key}>
-              {newDay && (
-                <div className="day-divider">
-                  <span>{dayLabel(m.createdAt)}</span>
-                </div>
-              )}
+              {divider}
               <MessageItem
                 item={item}
                 grouped={grouped}
@@ -769,11 +888,25 @@ export default function ChatView({
                         avatarVersion={me.avatarVersion}
                       />
                     </span>
+                  ) : sender && isGroup ? (
+                    <button
+                      type="button"
+                      className="message-face"
+                      aria-label={`View ${sender.displayName}'s profile`}
+                      onClick={() => onViewProfile(sender)}
+                    >
+                      <Avatar
+                        id={sender.id}
+                        name={sender.displayName}
+                        avatarVersion={sender.avatarVersion}
+                        size={40}
+                      />
+                    </button>
                   ) : (
                     <Avatar
-                      id={partner.id}
-                      name={partner.displayName}
-                      avatarVersion={partner.avatarVersion}
+                      id={m.senderId}
+                      name={sender?.displayName ?? '?'}
+                      avatarVersion={sender?.avatarVersion}
                       size={40}
                     />
                   )
@@ -820,16 +953,20 @@ export default function ChatView({
 
       <div className="composer-area">
         <div className="typing-line" aria-live="polite">
-          {partnerTyping && (
+          {someoneTyping && (
             <>
               <span className="typing-dots" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </span>
-              <span>
-                <strong>{partner.displayName}</strong> is typing…
-              </span>
+              {typingNames.length === 1 ? (
+                <span>
+                  <strong>{typingNames[0]}</strong> is typing…
+                </span>
+              ) : (
+                <span>{typingText(typingNames)}</span>
+              )}
             </>
           )}
         </div>
@@ -893,8 +1030,8 @@ export default function ChatView({
               <textarea
                 ref={inputRef}
                 rows={1}
-                aria-label={`Message ${partner.displayName}`}
-                placeholder={`Message @${partner.username}`}
+                aria-label={`Message ${title}`}
+                placeholder={partner ? `Message @${partner.username}` : `Message ${title}`}
                 value={draft}
                 maxLength={MESSAGE_MAX + 200}
                 onChange={onChange}
@@ -926,7 +1063,9 @@ export default function ChatView({
           </div>
         ) : (
           <p className="composer-locked">
-            You can only message friends. Add @{partner.username} as a friend to chat again.
+            {partner
+              ? `You can only message friends. Add @${partner.username} as a friend to chat again.`
+              : "You can't send messages right now."}
           </p>
         )}
       </div>
@@ -936,7 +1075,9 @@ export default function ChatView({
           <span className="drop-overlay-icon">
             <FileIcon size={30} />
           </span>
-          <strong>Drop to send to {partner.displayName}</strong>
+          <strong>
+            Drop to send to <EmojiText text={title} />
+          </strong>
           <span>Photos and files up to 25 MB</span>
         </div>
       )}
@@ -965,7 +1106,11 @@ export default function ChatView({
       {deleting && (
         <ConfirmDialog
           title="Delete message?"
-          message="It will be removed for both of you. This can't be undone."
+          message={
+            isGroup
+              ? "It will be removed for everyone in the group. This can't be undone."
+              : "It will be removed for both of you. This can't be undone."
+          }
           confirmLabel="Delete"
           danger
           onConfirm={() => void confirmDelete()}

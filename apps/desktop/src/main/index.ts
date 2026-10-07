@@ -29,6 +29,10 @@ import {
   markRead,
   pinConversation,
   openDm,
+  createGroup,
+  renameGroup,
+  addMembers,
+  removeMember,
   reactToMessage,
   removeUpload,
   sendMessage,
@@ -391,6 +395,23 @@ function registerIpcHandlers(): void {
   ipcMain.handle('conversations:list', (event) => (fromApp(event) ? listConversations() : invalid))
   ipcMain.handle('conversations:open-dm', (event, userId: unknown) =>
     fromApp(event) && isUserId(userId) ? openDm(userId) : invalid
+  )
+  // Group chats: up to 25 people, names up to 50 characters (the server checks the details).
+  const isPeople = (v: unknown): v is string[] =>
+    Array.isArray(v) && v.length >= 1 && v.length <= 25 && v.every(isUserId)
+  const isGroupName = (v: unknown): v is string | null =>
+    v === null || (typeof v === 'string' && v.length <= 200)
+  ipcMain.handle('conversations:create-group', (event, userIds: unknown, name: unknown) =>
+    fromApp(event) && isPeople(userIds) && isGroupName(name) ? createGroup(userIds, name) : invalid
+  )
+  ipcMain.handle('conversations:rename-group', (event, id: unknown, name: unknown) =>
+    fromApp(event) && isUserId(id) && isGroupName(name) ? renameGroup(id, name) : invalid
+  )
+  ipcMain.handle('conversations:add-members', (event, id: unknown, userIds: unknown) =>
+    fromApp(event) && isUserId(id) && isPeople(userIds) ? addMembers(id, userIds) : invalid
+  )
+  ipcMain.handle('conversations:remove-member', (event, id: unknown, userId: unknown) =>
+    fromApp(event) && isUserId(id) && isUserId(userId) ? removeMember(id, userId) : invalid
   )
   ipcMain.handle('conversations:messages', (event, id: unknown, before: unknown) =>
     fromApp(event) && isUserId(id) && (before === undefined || isUserId(before))

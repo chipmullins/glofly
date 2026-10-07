@@ -154,22 +154,54 @@ export type Message = {
   reactions: Reaction[]
   /** Photos and files, in order. Empty for a plain text message. */
   attachments: Attachment[]
+  /** Group chats: a line like "Chip renamed the group" instead of a message (sent by senderId). */
+  event: ChatEvent | null
 }
 
-export type ConversationSummary = {
+/** Things that happen in a group chat, shown as a line in the chat. */
+export type ChatEvent =
+  | { type: 'created'; name: string | null }
+  | { type: 'renamed'; name: string | null }
+  | { type: 'added'; userIds: string[] }
+  | { type: 'removed'; userId: string }
+  | { type: 'left' }
+
+type ConversationBase = {
   id: string
-  partner: PublicUser
   lastMessage: Message | null
   unreadCount: number
-  /** False if you're no longer friends, or either of you blocked the other. */
+  /** DMs: false if you're no longer friends, or either of you blocked the other. */
   canMessage: boolean
   /** ISO date of the latest activity, for sorting */
   activityAt: string
-  /** How far they've read (ISO date), for "Seen". Null unless both people allow read receipts. */
-  partnerReadAt: string | null
   /** When you pinned it (ISO date), or null if it isn't pinned */
   pinnedAt: string | null
+  /** Everyone else in the chat (groups: longest-standing first) */
+  members: PublicUser[]
+  /** Including you */
+  memberCount: number
 }
+
+export type DmSummary = ConversationBase & {
+  kind: 'dm'
+  partner: PublicUser
+  name: null
+  createdBy: null
+  /** How far they've read (ISO date), for "Seen". Null unless both people allow read receipts. */
+  partnerReadAt: string | null
+}
+
+export type GroupSummary = ConversationBase & {
+  kind: 'group'
+  partner: null
+  /** Null = no name (shown as the members' names) */
+  name: string | null
+  /** Who can remove people (whoever made it, or whoever took over) */
+  createdBy: string | null
+  partnerReadAt: null
+}
+
+export type ConversationSummary = DmSummary | GroupSummary
 
 /** Settings → General → Privacy */
 export type PrivacySettings = {
@@ -227,11 +259,12 @@ export type AppSettings = {
   startupAvailable: boolean
 }
 
-export type MessagePage = { messages: Message[]; hasMore: boolean }
+/** `people`: everyone the messages mention, including people who've left a group. */
+export type MessagePage = { messages: Message[]; hasMore: boolean; people: PublicUser[] }
 
 /** Live updates pushed from the server. */
 export type GloflyEvent =
-  | { type: 'message:new'; message: Message }
+  | { type: 'message:new'; message: Message; people?: PublicUser[] }
   | { type: 'message:updated'; message: Message }
   | { type: 'typing'; conversationId: string; userId: string }
   | { type: 'friends:changed' }
@@ -311,6 +344,20 @@ export type GloflyApi = {
     list: () => Promise<ApiResult<ConversationSummary[]>>
     /** Opens (or creates) the DM with a friend. */
     openDm: (userId: string) => Promise<ApiResult<ConversationSummary>>
+    /** Starts a group with at least two friends (up to 25 people, including you). */
+    createGroup: (userIds: string[], name: string | null) => Promise<ApiResult<ConversationSummary>>
+    /** Anyone in the group can rename it. Null or empty clears the name. */
+    renameGroup: (
+      conversationId: string,
+      name: string | null
+    ) => Promise<ApiResult<ConversationSummary>>
+    /** Anyone in the group can add their friends. */
+    addMembers: (
+      conversationId: string,
+      userIds: string[]
+    ) => Promise<ApiResult<ConversationSummary>>
+    /** Your own id leaves the group; anyone else's removes them (only whoever made it). */
+    removeMember: (conversationId: string, userId: string) => Promise<ApiResult<null>>
     /** Newest page, or the page before `beforeMessageId`. Oldest first. */
     messages: (conversationId: string, beforeMessageId?: string) => Promise<ApiResult<MessagePage>>
     /** `body` can be empty when sending photos or files. */

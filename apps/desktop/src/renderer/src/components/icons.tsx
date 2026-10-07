@@ -192,3 +192,37 @@ export function ChevronIcon({
     </Svg>
   )
 }
+
+/** Group chats: three people */
+export function GroupIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <circle cx="12" cy="8" r="3.2" />
+      <path d="M6 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" />
+      <circle cx="5" cy="10" r="2.2" />
+      <path d="M1.5 18.5c0-2.2 1.5-3.7 3.5-3.7" />
+      <circle cx="19" cy="10" r="2.2" />
+      <path d="M22.5 18.5c0-2.2-1.5-3.7-3.5-3.7" />
+    </Svg>
+  )
+}
+
+/** Leave group: a door with an arrow out */
+export function LeaveIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5" />
+      <path d="M15 8l4 4-4 4" />
+      <path d="M19 12H9" />
+    </Svg>
+  )
+}
+
+export function PencilIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z" />
+      <path d="M13.5 6.5l4 4" />
+    </Svg>
+  )
+}

@@ -69,6 +69,14 @@ const glofly: GloflyApi = {
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),
     openDm: (userId: string) => ipcRenderer.invoke('conversations:open-dm', userId),
+    createGroup: (userIds: string[], name: string | null) =>
+      ipcRenderer.invoke('conversations:create-group', userIds, name),
+    renameGroup: (conversationId: string, name: string | null) =>
+      ipcRenderer.invoke('conversations:rename-group', conversationId, name),
+    addMembers: (conversationId: string, userIds: string[]) =>
+      ipcRenderer.invoke('conversations:add-members', conversationId, userIds),
+    removeMember: (conversationId: string, userId: string) =>
+      ipcRenderer.invoke('conversations:remove-member', conversationId, userId),
     messages: (conversationId: string, beforeMessageId?: string) =>
       ipcRenderer.invoke('conversations:messages', conversationId, beforeMessageId),
     send: (conversationId: string, body: string, replyToId?: string, attachmentIds?: string[]) =>

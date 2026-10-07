@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, ne } from "drizzle-orm";
 import { db } from "../db";
 import { attachments, conversationMembers, conversations, sessions, users } from "../db/schema";
 import { chatPartnersOf } from "../friends/routes";
@@ -50,7 +50,7 @@ export async function purgeDeletedAccounts(): Promise<void> {
     const friends = await friendIdsOf(user.id);
     const partners = await chatPartnersOf(user.id);
 
-    // Their direct messages (group chats, later, will just lose them as a member).
+    // Their direct messages are removed (both sides); group chats just lose them as a member.
     const dms = await db
       .select({ id: conversations.id })
       .from(conversations)
@@ -68,13 +68,52 @@ export async function purgeDeletedAccounts(): Promise<void> {
           .where(inArray(attachments.conversationId, dmIds))
       : [];
 
+    const groups = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .innerJoin(conversationMembers, eq(conversationMembers.conversationId, conversations.id))
+      .where(and(eq(conversationMembers.userId, user.id), eq(conversations.kind, "group")));
+    const groupIds = groups.map((g) => g.id);
+    // Their messages in groups go with the account, so their photos and files do too.
+    if (groupIds.length) {
+      files.push(
+        ...(await db
+          .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
+          .from(attachments)
+          .where(and(inArray(attachments.conversationId, groupIds), eq(attachments.uploaderId, user.id)))),
+      );
+    }
+
     await db.transaction(async (tx) => {
       if (dmIds.length) await tx.delete(conversations).where(inArray(conversations.id, dmIds));
+      for (const groupId of groupIds) {
+        const rest = await tx
+          .select({ userId: conversationMembers.userId })
+          .from(conversationMembers)
+          .where(and(eq(conversationMembers.conversationId, groupId), ne(conversationMembers.userId, user.id)))
+          .orderBy(conversationMembers.joinedAt);
+        if (!rest.length) {
+          // They were the last one in it.
+          files.push(
+            ...(await tx
+              .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
+              .from(attachments)
+              .where(eq(attachments.conversationId, groupId))),
+          );
+          await tx.delete(conversations).where(eq(conversations.id, groupId));
+        } else {
+          // If they made the group, whoever has been in it longest takes over.
+          await tx
+            .update(conversations)
+            .set({ createdBy: rest[0].userId })
+            .where(and(eq(conversations.id, groupId), eq(conversations.createdBy, user.id)));
+        }
+      }
       // Everything else of theirs goes with the account (the database cascades it).
       await tx.delete(users).where(eq(users.id, user.id));
     });
 
-    await removeFiles(files);
+    await removeFiles([...new Map(files.map((f) => [f.id, f])).values()]);
     if (user.avatarVersion) {
       await storage
         .remove(`avatars/${user.id}/${user.avatarVersion}.webp`)

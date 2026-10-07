@@ -2,10 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ConversationSummary, Presence, PublicUser } from '../../../preload/api-types'
 import { attachmentSummary } from '../lib/attachments'
 import type { ChatResult } from '../lib/chatSearch'
+import { chatTitle, eventText, memberCountLabel } from '../lib/groups'
 import { presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
 import EmojiText from './EmojiText'
-import { ChatIcon, PlusIcon, ProfileIcon } from './icons'
+import GroupAvatar from './GroupAvatar'
+import { ChatIcon, GroupIcon, LeaveIcon, PlusIcon, ProfileIcon } from './icons'
 
 export function PinIcon({ size = 13 }: { size?: number }): React.JSX.Element {
   return (
@@ -27,7 +29,7 @@ export function PinIcon({ size = 13 }: { size?: number }): React.JSX.Element {
 }
 
 type ChatListProps = {
-  meId: string
+  me: PublicUser
   conversations: ConversationSummary[]
   presence: Record<string, Presence>
   now: number
@@ -41,13 +43,32 @@ type ChatListProps = {
   onOpenResult: (result: ChatResult) => void
   onTogglePin: (conversation: ConversationSummary) => void
   onViewProfile: (user: PublicUser) => void
+  onGroupSettings: (conversation: ConversationSummary) => void
+  onLeaveGroup: (conversation: ConversationSummary) => void
   onNewMessage: () => void
+  onNewGroup: () => void
+}
+
+/** The sidebar's one-line preview of a chat's latest message. */
+function lastMessagePreview(c: ConversationSummary, me: PublicUser): string {
+  const last = c.lastMessage
+  if (!last) return 'No messages yet'
+  const nameOf = (id: string): string =>
+    c.members.find((m) => m.id === id)?.displayName.split(/\s+/)[0] ?? 'Someone'
+  if (last.event) return eventText(last.event, last.senderId, me.id, nameOf)
+  const text = last.deleted
+    ? 'Message deleted'
+    : last.body.replace(/\s+/g, ' ') || attachmentSummary(last.attachments)
+  // Groups say who sent it ("Maya: hi"); DMs only mark your own ("You: hi").
+  const who =
+    last.senderId === me.id ? 'You: ' : c.kind === 'group' ? `${nameOf(last.senderId)}: ` : ''
+  return who + text
 }
 
 /** One chat in the sidebar (from the design: avatar with status, name, status or last message). */
 function DmRow({
   c,
-  meId,
+  me,
   active,
   presence,
   now,
@@ -55,24 +76,18 @@ function DmRow({
   onMenu
 }: {
   c: ConversationSummary
-  meId: string
+  me: PublicUser
   active: boolean
   presence: Presence | undefined
   now: number
   onOpen: () => void
   onMenu: (x: number, y: number) => void
 }): React.JSX.Element {
-  const last = c.lastMessage
-  // Like the design: friends show their status; otherwise the last message.
-  const preview = presence
-    ? presenceLine(presence, now)
-    : !last
-      ? 'No messages yet'
-      : `${last.senderId === meId ? 'You: ' : ''}${
-          last.deleted
-            ? 'Message deleted'
-            : last.body.replace(/\s+/g, ' ') || attachmentSummary(last.attachments)
-        }`
+  // Like the design: friends show their status; otherwise the last message (groups always).
+  const preview =
+    presence && c.kind === 'dm' ? presenceLine(presence, now) : lastMessagePreview(c, me)
+  const title = chatTitle(c)
+  const ring = active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'
   return (
     <button
       type="button"
@@ -86,17 +101,24 @@ function DmRow({
         onMenu(e.clientX || rect.left + 40, e.clientY || rect.bottom)
       }}
     >
-      <Avatar
-        id={c.partner.id}
-        name={c.partner.displayName}
-        avatarVersion={c.partner.avatarVersion}
-        size={40}
-        status={presence?.status}
-        ring={active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'}
-      />
+      {c.kind === 'dm' ? (
+        <Avatar
+          id={c.partner.id}
+          name={c.partner.displayName}
+          avatarVersion={c.partner.avatarVersion}
+          size={40}
+          status={presence?.status}
+          ring={ring}
+        />
+      ) : (
+        <GroupAvatar members={c.members} me={me} size={40} ring={ring} />
+      )}
       <span className="dm-text">
-        <span className={c.unreadCount > 0 || active ? 'dm-name dm-name--strong' : 'dm-name'}>
-          {c.partner.displayName}
+        <span
+          className={c.unreadCount > 0 || active ? 'dm-name dm-name--strong' : 'dm-name'}
+          title={c.kind === 'group' ? `${title} · ${memberCountLabel(c.memberCount)}` : undefined}
+        >
+          <EmojiText text={title} />
         </span>
         <span className="dm-preview">
           <EmojiText text={preview} />
@@ -111,13 +133,15 @@ function DmRow({
   )
 }
 
-/** Right-click menu on a chat: pin or unpin, view profile. */
+/** Right-click menu on a chat: pin or unpin, then view profile (DMs) or group options. */
 function RowMenu({
   conversation,
   x,
   y,
   onTogglePin,
   onViewProfile,
+  onGroupSettings,
+  onLeaveGroup,
   onClose
 }: {
   conversation: ConversationSummary
@@ -125,6 +149,8 @@ function RowMenu({
   y: number
   onTogglePin: () => void
   onViewProfile: () => void
+  onGroupSettings: () => void
+  onLeaveGroup: () => void
   onClose: () => void
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
@@ -164,7 +190,7 @@ function RowMenu({
     <div
       ref={ref}
       role="menu"
-      aria-label={`${conversation.partner.displayName} chat options`}
+      aria-label={`${chatTitle(conversation)} chat options`}
       className="menu row-menu"
       style={{ left: pos.left, top: pos.top }}
     >
@@ -180,24 +206,54 @@ function RowMenu({
         <PinIcon size={18} />
         {pinned ? 'Unpin chat' : 'Pin chat'}
       </button>
-      <button
-        type="button"
-        role="menuitem"
-        className="menu-item"
-        onClick={() => {
-          onClose()
-          onViewProfile()
-        }}
-      >
-        <ProfileIcon size={18} />
-        View profile
-      </button>
+      {conversation.kind === 'dm' ? (
+        <button
+          type="button"
+          role="menuitem"
+          className="menu-item"
+          onClick={() => {
+            onClose()
+            onViewProfile()
+          }}
+        >
+          <ProfileIcon size={18} />
+          View profile
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              onClose()
+              onGroupSettings()
+            }}
+          >
+            <GroupIcon size={18} />
+            Group settings
+          </button>
+          <div className="menu-divider" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item menu-item--danger"
+            onClick={() => {
+              onClose()
+              onLeaveGroup()
+            }}
+          >
+            <LeaveIcon size={18} />
+            Leave group
+          </button>
+        </>
+      )}
     </div>
   )
 }
 
 export default function ChatList({
-  meId,
+  me,
   conversations,
   presence,
   now,
@@ -209,7 +265,10 @@ export default function ChatList({
   onOpenResult,
   onTogglePin,
   onViewProfile,
-  onNewMessage
+  onGroupSettings,
+  onLeaveGroup,
+  onNewMessage,
+  onNewGroup
 }: ChatListProps): React.JSX.Element {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const menuFor = conversations.find((c) => c.id === menu?.id) ?? null
@@ -224,9 +283,9 @@ export default function ChatList({
     <DmRow
       key={c.id}
       c={c}
-      meId={meId}
+      me={me}
       active={c.id === openChatId}
-      presence={presence[c.partner.id]}
+      presence={c.kind === 'dm' ? presence[c.partner.id] : undefined}
       now={now}
       onOpen={() => onOpen(c.id)}
       onMenu={(x, y) => setMenu({ id: c.id, x, y })}
@@ -249,6 +308,39 @@ export default function ChatList({
             aria-label="Friends and chats"
           >
             {results.map((r, i) => {
+              if (r.kind === 'group') {
+                const g = r.conversation
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    role="option"
+                    id={`chat-result-${i}`}
+                    aria-selected={i === highlighted}
+                    className={i === highlighted ? 'dm-row dm-row--highlight' : 'dm-row'}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onOpenResult(r)}
+                  >
+                    <GroupAvatar
+                      members={g.members}
+                      me={me}
+                      size={40}
+                      ring={i === highlighted ? 'var(--glo-hover)' : 'var(--glo-sidebar)'}
+                    />
+                    <span className="dm-text">
+                      <span className="dm-name dm-name--strong">
+                        <EmojiText text={chatTitle(g)} />
+                      </span>
+                      <span className="dm-preview">Group · {memberCountLabel(g.memberCount)}</span>
+                    </span>
+                    {g.pinnedAt && (
+                      <span className="dm-pin" title="Pinned">
+                        <PinIcon />
+                      </span>
+                    )}
+                  </button>
+                )
+              }
               const p = presence[r.user.id]
               return (
                 <button
@@ -308,27 +400,38 @@ export default function ChatList({
       )}
 
       <div className="section-head">
-        <span>Direct messages</span>
-        <button
-          type="button"
-          className="icon-button icon-button--small"
-          aria-label="New message or group chat"
-          title="New message"
-          onClick={onNewMessage}
-        >
-          <PlusIcon />
-        </button>
+        <span>Chats</span>
+        <span className="section-head-actions">
+          <button
+            type="button"
+            className="icon-button icon-button--small"
+            aria-label="New group chat"
+            title="New group chat"
+            onClick={onNewGroup}
+          >
+            <GroupIcon size={17} />
+          </button>
+          <button
+            type="button"
+            className="icon-button icon-button--small"
+            aria-label="New message"
+            title="New message"
+            onClick={onNewMessage}
+          >
+            <PlusIcon />
+          </button>
+        </span>
       </div>
 
       {conversations.length === 0 ? (
         <div className="dm-empty">
           <ChatIcon />
-          <p>No conversations yet. Messages with friends will show up here.</p>
+          <p>No conversations yet. Messages and group chats with friends will show up here.</p>
         </div>
       ) : others.length === 0 ? (
         <p className="search-empty">All your chats are pinned.</p>
       ) : (
-        <nav aria-label="Direct messages" className="dm-list">
+        <nav aria-label="Chats" className="dm-list">
           {others.map(row)}
         </nav>
       )}
@@ -339,7 +442,9 @@ export default function ChatList({
           x={menu.x}
           y={menu.y}
           onTogglePin={() => onTogglePin(menuFor)}
-          onViewProfile={() => onViewProfile(menuFor.partner)}
+          onViewProfile={() => menuFor.partner && onViewProfile(menuFor.partner)}
+          onGroupSettings={() => onGroupSettings(menuFor)}
+          onLeaveGroup={() => onLeaveGroup(menuFor)}
           onClose={() => setMenu(null)}
         />
       )}

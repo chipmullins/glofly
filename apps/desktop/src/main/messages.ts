@@ -19,6 +19,44 @@ export async function openDm(userId: string): Promise<ApiResult<ConversationSumm
   return result.ok ? { ok: true, data: result.data.conversation } : result
 }
 
+const unwrapConversation = (
+  result: ApiResult<{ conversation: ConversationSummary }>
+): ApiResult<ConversationSummary> =>
+  result.ok ? { ok: true, data: result.data.conversation } : result
+
+/** Starts a group chat with friends. */
+export async function createGroup(
+  userIds: string[],
+  name: string | null
+): Promise<ApiResult<ConversationSummary>> {
+  return unwrapConversation(await request('POST', '/conversations/group', { userIds, name }))
+}
+
+export async function renameGroup(
+  conversationId: string,
+  name: string | null
+): Promise<ApiResult<ConversationSummary>> {
+  return unwrapConversation(await request('PATCH', `/conversations/${conversationId}`, { name }))
+}
+
+export async function addMembers(
+  conversationId: string,
+  userIds: string[]
+): Promise<ApiResult<ConversationSummary>> {
+  return unwrapConversation(
+    await request('POST', `/conversations/${conversationId}/members`, { userIds })
+  )
+}
+
+/** Leaves a group (your own id) or removes someone from it. */
+export async function removeMember(
+  conversationId: string,
+  userId: string
+): Promise<ApiResult<null>> {
+  const result = await request('DELETE', `/conversations/${conversationId}/members/${userId}`)
+  return result.ok ? { ok: true, data: null } : result
+}
+
 export function loadMessages(
   conversationId: string,
   beforeMessageId?: string

@@ -2,9 +2,9 @@ import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "./db";
-import { conversationMembers, users } from "./db/schema";
+import { conversationMembers, conversations, users } from "./db/schema";
 import { findSession } from "./auth/sessions";
-import { canMessage } from "./friends/rules";
+import { blockedEitherWay, canMessage } from "./friends/rules";
 import {
   announcePresence,
   deviceConnected,
@@ -119,8 +119,17 @@ export function startRealtime(httpServer: HttpServer): void {
           .from(users)
           .where(eq(users.id, me.id));
         if (!settings?.showTyping) return;
+        const [chat] = await db
+          .select({ kind: conversations.kind })
+          .from(conversations)
+          .where(eq(conversations.id, conversationId));
         for (const other of others) {
-          if (await canMessage(me.id, other.userId)) {
+          // DMs: only if you can message each other. Groups: everyone, except across a block.
+          const allowed =
+            chat?.kind === "group"
+              ? !(await blockedEitherWay(me.id, other.userId))
+              : await canMessage(me.id, other.userId);
+          if (allowed) {
             emitToUser(other.userId, "typing", { conversationId, userId: me.id });
           }
         }

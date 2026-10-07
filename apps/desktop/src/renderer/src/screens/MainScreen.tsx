@@ -39,6 +39,8 @@ import './MainScreen.css'
 import EmojiText from '../components/EmojiText'
 import ChatList from '../components/ChatList'
 import { findChats, type ChatResult } from '../lib/chatSearch'
+import { GroupPeopleDialog, GroupSettingsDialog } from '../components/GroupDialogs'
+import { chatTitle } from '../lib/groups'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -66,6 +68,8 @@ const FILTERS: { id: FriendFilter; label: string }[] = [
 const REFRESH_MS = 60_000
 
 type Confirm = { kind: 'remove' | 'block'; person: PublicUser } | null
+/** "New group chat", or "Add people" to a group */
+type GroupPicker = { groupId: string | null } | null
 
 function useClickOutside(open: boolean, close: () => void): React.RefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null)
@@ -332,6 +336,10 @@ export default function MainScreen({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
   const [viewing, setViewing] = useState<PublicUser | null>(null)
+  const [groupPicker, setGroupPicker] = useState<GroupPicker>(null)
+  const [settingsFor, setSettingsFor] = useState<string | null>(null)
+  const [leaving, setLeaving] = useState<ConversationSummary | null>(null)
+  const [leaveBusy, setLeaveBusy] = useState(false)
   /** The sidebar's "Find a friend or chat" search */
   const [chatQuery, setChatQuery] = useState('')
   const [highlighted, setHighlighted] = useState(0)
@@ -404,7 +412,9 @@ export default function MainScreen({
         case 'message:new': {
           const m = event.message
           const viewing = openChatRef.current === m.conversationId && document.hasFocus()
-          if (m.senderId !== user.id && !viewing) playSound('message')
+          // Group events ("Maya renamed the group") don't ding or count as unread.
+          const fromOthers = m.senderId !== user.id && !m.event
+          if (fromOthers && !viewing) playSound('message')
           setConversations((list) => {
             const existing = list.find((c) => c.id === m.conversationId)
             if (!existing) {
@@ -416,7 +426,7 @@ export default function MainScreen({
               lastMessage: m,
               activityAt: m.createdAt,
               unreadCount:
-                m.senderId !== user.id && openChatRef.current !== m.conversationId
+                fromOthers && openChatRef.current !== m.conversationId
                   ? existing.unreadCount + 1
                   : existing.unreadCount
             }
@@ -448,7 +458,9 @@ export default function MainScreen({
           // They read the chat: update "Seen".
           const { conversationId, readAt } = event
           setConversations((list) =>
-            list.map((c) => (c.id === conversationId ? { ...c, partnerReadAt: readAt } : c))
+            list.map((c) =>
+              c.id === conversationId && c.kind === 'dm' ? { ...c, partnerReadAt: readAt } : c
+            )
           )
           break
         }
@@ -517,7 +529,7 @@ export default function MainScreen({
     setHighlighted(0)
     chatSearchRef.current?.blur()
     if (r.conversation) setOpenChatId(r.conversation.id)
-    else void openChatWith(r.user.id)
+    else if (r.kind === 'person') void openChatWith(r.user.id)
   }
 
   function onChatSearchKey(e: React.KeyboardEvent<HTMLInputElement>): void {
@@ -551,6 +563,36 @@ export default function MainScreen({
     else setNotice(result.message)
   }
 
+  /** A new or changed chat from the server: put it in the list (and open it, if asked). */
+  function gotConversation(conversation: ConversationSummary, open: boolean): void {
+    setConversations((list) => [conversation, ...list.filter((c) => c.id !== conversation.id)])
+    if (open) setOpenChatId(conversation.id)
+  }
+
+  async function leaveGroup(): Promise<void> {
+    if (!leaving) return
+    setLeaveBusy(true)
+    const result = await window.glofly.conversations.removeMember(leaving.id, user.id)
+    setLeaveBusy(false)
+    if (!result.ok) {
+      if (result.error === 'unauthorized') onSessionExpired()
+      else setNotice(result.message)
+      setLeaving(null)
+      return
+    }
+    const id = leaving.id
+    setLeaving(null)
+    setSettingsFor((s) => (s === id ? null : s))
+    setConversations((list) => list.filter((c) => c.id !== id))
+    setOpenChatId((open) => (open === id ? null : open))
+  }
+
+  /** Someone's profile card (your own opens Edit profile). */
+  function viewPerson(person: PublicUser): void {
+    if (person.id === user.id) setEditingProfile(true)
+    else setViewing(person)
+  }
+
   const markedRead = useCallback((conversationId: string) => {
     setConversations((list) =>
       list.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
@@ -558,6 +600,10 @@ export default function MainScreen({
   }, [])
 
   const openChat = conversations.find((c) => c.id === openChatId) ?? null
+  const settingsGroup = conversations.find((c) => c.id === settingsFor && c.kind === 'group')
+  const pickerGroup = groupPicker?.groupId
+    ? conversations.find((c) => c.id === groupPicker.groupId && c.kind === 'group')
+    : undefined
 
   async function changeStatus(changes: Partial<MyStatus>): Promise<boolean> {
     const result = await window.glofly.status.set(changes)
@@ -878,7 +924,7 @@ export default function MainScreen({
         </button>
 
         <ChatList
-          meId={user.id}
+          me={user}
           conversations={conversations}
           presence={presence}
           now={now}
@@ -889,11 +935,14 @@ export default function MainScreen({
           onOpen={(id) => setOpenChatId(id)}
           onOpenResult={openResult}
           onTogglePin={(c) => void togglePin(c)}
-          onViewProfile={setViewing}
+          onViewProfile={viewPerson}
+          onGroupSettings={(c) => setSettingsFor(c.id)}
+          onLeaveGroup={setLeaving}
           onNewMessage={() => {
             setOpenChatId(null)
             setFilter('all')
           }}
+          onNewGroup={() => setGroupPicker({ groupId: null })}
         />
       </aside>
 
@@ -908,10 +957,11 @@ export default function MainScreen({
             key={openChat.id}
             me={user}
             conversation={openChat}
-            partnerPresence={presence[openChat.partner.id]}
+            presence={presence}
             now={now}
             onRead={markedRead}
-            onViewProfile={() => setViewing(openChat.partner)}
+            onViewProfile={viewPerson}
+            onGroupSettings={() => setSettingsFor(openChat.id)}
             onTogglePin={() => void togglePin(openChat)}
             onSessionExpired={onSessionExpired}
           />
@@ -982,6 +1032,53 @@ export default function MainScreen({
             setAdding(false)
             void openChatWith(userId)
           }}
+        />
+      )}
+      {groupPicker && (groupPicker.groupId === null || pickerGroup) && (
+        <GroupPeopleDialog
+          friends={lists?.friends ?? []}
+          presence={presence}
+          now={now}
+          group={pickerGroup?.kind === 'group' ? pickerGroup : null}
+          onDone={(conversation) => {
+            setGroupPicker(null)
+            gotConversation(conversation, true)
+          }}
+          onClose={() => setGroupPicker(null)}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
+      {settingsGroup?.kind === 'group' && !groupPicker && (
+        <GroupSettingsDialog
+          group={settingsGroup}
+          me={user}
+          presence={presence}
+          onRenamed={(conversation) => gotConversation(conversation, false)}
+          onAddPeople={() => setGroupPicker({ groupId: settingsGroup.id })}
+          onViewProfile={(person) => {
+            setSettingsFor(null)
+            viewPerson(person)
+          }}
+          onLeave={() => setLeaving(settingsGroup)}
+          onClose={() => setSettingsFor(null)}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
+      {leaving && (
+        <ConfirmDialog
+          title={`Leave ${chatTitle(leaving)}?`}
+          message={
+            leaving.memberCount <= 1
+              ? "You're the last one here, so the group and its messages will be deleted."
+              : leaving.createdBy === user.id
+                ? "You won't get its messages anymore, and whoever has been in the group longest becomes the owner. Someone in the group can add you back later."
+                : "You won't get its messages anymore. Someone in the group can add you back later."
+          }
+          confirmLabel="Leave group"
+          danger
+          busy={leaveBusy}
+          onConfirm={() => void leaveGroup()}
+          onCancel={() => setLeaving(null)}
         />
       )}
       {settingsOpen && (

@@ -718,3 +718,50 @@
   background: var(--glo-accent-soft);
   color: var(--glo-link);
 }
+
+/* ---------- Group chats ---------- */
+
+.chat-header-face,
+.message-face {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  flex: none;
+  line-height: 0;
+}
+.message-face:focus-visible,
+.chat-header-face:focus-visible {
+  outline: 2px solid var(--glo-orange);
+  outline-offset: 2px;
+}
+.chat-members {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-members:hover {
+  color: var(--glo-ink);
+  text-decoration: underline;
+}
+
+/* "Chip added Maya and Jacob": a quiet centered line between messages. */
+.chat-event {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 8px;
+  margin: 10px 24px;
+  font-size: 13px;
+  color: var(--glo-muted);
+  text-align: center;
+}
+.chat-event time {
+  font-size: 11px;
+  color: var(--glo-faint);
+  white-space: nowrap;
+}

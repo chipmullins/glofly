@@ -832,3 +832,39 @@
   z-index: 40;
   min-width: 190px;
 }
+
+/* ---------- Group avatars: two faces overlapping ---------- */
+
+.group-avatar {
+  position: relative;
+  flex: none;
+  display: block;
+}
+.group-avatar-back,
+.group-avatar-front {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  line-height: 0;
+}
+.group-avatar-back {
+  top: 0;
+  left: 0;
+}
+.group-avatar-front {
+  right: 0;
+  bottom: 0;
+}
+.group-avatar .avatar {
+  font-size: 11px !important;
+  letter-spacing: -0.02em;
+}
+.group-avatar--empty {
+  background: var(--glo-panel);
+  color: var(--glo-icon);
+}
+.section-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}

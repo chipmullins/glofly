@@ -47,7 +47,10 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
 
   // Only these events are passed on, and only their expected fields.
   socket.on('message:new', (payload) => {
-    if (payload?.message?.id) forward({ type: 'message:new', message: payload.message })
+    if (payload?.message?.id) {
+      const people = Array.isArray(payload.people) ? payload.people : undefined
+      forward({ type: 'message:new', message: payload.message, people })
+    }
   })
   socket.on('message:updated', (payload) => {
     if (payload?.message?.id) forward({ type: 'message:updated', message: payload.message })
