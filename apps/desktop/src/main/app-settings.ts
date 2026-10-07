@@ -3,8 +3,11 @@ import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type {
   AccentChoice,
+  AlertSound,
   AppSettings,
   AppSettingsChanges,
+  CallSound,
+  SoundSettings,
   TextSize,
   ThemeChoice
 } from '../preload/api-types'
@@ -13,13 +16,55 @@ import type {
 // computer, and the system tray. These belong to this computer, so they're saved here
 // (not on the server).
 
-type Saved = { closeToTray: boolean; theme: ThemeChoice; accent: AccentChoice; textSize: TextSize }
+type Saved = {
+  closeToTray: boolean
+  theme: ThemeChoice
+  accent: AccentChoice
+  textSize: TextSize
+  sounds: SoundSettings
+}
 const saved: Saved = {
   closeToTray: true, // the design has it on by default
   theme: 'light',
   accent: 'orange',
-  textSize: 'default'
+  textSize: 'default',
+  sounds: {
+    enabled: true,
+    dndSilence: true,
+    message: 'chime',
+    friendRequest: 'chime',
+    login: 'hello',
+    ringtone: 'ring',
+    outgoing: 'jingle'
+  }
 }
+
+const ALERT_SOUNDS: AlertSound[] = ['chime', 'hello', 'none']
+const CALL_SOUNDS: CallSound[] = ['ring', 'jingle', 'none']
+
+/** Checks a sound setting (from the window or the saved file) before using it. */
+function soundSettingOk(key: string, value: unknown): boolean {
+  switch (key) {
+    case 'enabled':
+    case 'dndSilence':
+      return typeof value === 'boolean'
+    case 'message':
+    case 'friendRequest':
+    case 'login':
+      return ALERT_SOUNDS.includes(value as AlertSound)
+    case 'ringtone':
+    case 'outgoing':
+      return CALL_SOUNDS.includes(value as CallSound)
+    default:
+      return false
+  }
+}
+
+const isSoundChanges = (value: unknown): value is Partial<SoundSettings> =>
+  typeof value === 'object' &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.entries(value).every(([k, v]) => soundSettingOk(k, v))
 
 const THEMES: ThemeChoice[] = ['light', 'dark', 'system']
 const ACCENTS: AccentChoice[] = ['orange', 'red']
@@ -42,6 +87,11 @@ export function loadAppSettings(): void {
     if (THEMES.includes(value.theme as ThemeChoice)) saved.theme = value.theme as ThemeChoice
     if (ACCENTS.includes(value.accent as AccentChoice)) saved.accent = value.accent as AccentChoice
     if ((value.textSize as string) in TEXT_SIZES) saved.textSize = value.textSize as TextSize
+    if (typeof value.sounds === 'object' && value.sounds !== null) {
+      for (const [k, v] of Object.entries(value.sounds)) {
+        if (soundSettingOk(k, v)) (saved.sounds as Record<string, unknown>)[k] = v
+      }
+    }
   } catch {
     // First run (or an unreadable file): keep the defaults.
   }
@@ -93,6 +143,7 @@ export function getAppSettings(): AppSettings {
     theme: saved.theme,
     accent: saved.accent,
     textSize: saved.textSize,
+    sounds: { ...saved.sounds },
     closeToTray: saved.closeToTray,
     openAtLogin: startupAvailable()
       ? app.getLoginItemSettings({ args: [STARTUP_ARG] }).openAtLogin
@@ -110,6 +161,7 @@ export function isAppSettingsChanges(value: unknown): value is AppSettingsChange
     if (k === 'theme') return THEMES.includes(v as ThemeChoice)
     if (k === 'accent') return ACCENTS.includes(v as AccentChoice)
     if (k === 'textSize') return typeof v === 'string' && v in TEXT_SIZES
+    if (k === 'sounds') return isSoundChanges(v)
     return false
   })
 }
@@ -131,7 +183,14 @@ export function setAppSettings(changes: AppSettingsChanges): AppSettings {
       window.webContents.setZoomFactor(zoomFactor())
     }
   }
-  if (changes.closeToTray !== undefined || changes.theme || changes.accent || changes.textSize) {
+  if (changes.sounds) saved.sounds = { ...saved.sounds, ...changes.sounds }
+  if (
+    changes.closeToTray !== undefined ||
+    changes.theme ||
+    changes.accent ||
+    changes.textSize ||
+    changes.sounds
+  ) {
     save()
   }
   if (changes.openAtLogin !== undefined && startupAvailable()) {

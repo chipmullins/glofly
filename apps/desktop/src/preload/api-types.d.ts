@@ -184,7 +184,26 @@ export type AccountDetails = { username: string; email: string; createdAt: strin
 
 export type AppSettingsChanges = Partial<
   Pick<AppSettings, 'closeToTray' | 'openAtLogin' | 'theme' | 'accent' | 'textSize'>
->
+> & { sounds?: Partial<SoundSettings> }
+
+/** Short sounds for alerts, and longer ones for calls (Chip's sound files). */
+export type AlertSound = 'chime' | 'hello' | 'none'
+export type CallSound = 'ring' | 'jingle' | 'none'
+
+/** Settings → Notifications & sounds */
+export type SoundSettings = {
+  /** "Notification sounds": off mutes every Glofly sound at once */
+  enabled: boolean
+  /** "Silence everything in Do Not Disturb" */
+  dndSilence: boolean
+  message: AlertSound
+  friendRequest: AlertSound
+  login: AlertSound
+  /** Plays when someone calls you (with calls) */
+  ringtone: CallSound
+  /** Plays while you wait for someone to answer (with calls) */
+  outgoing: CallSound
+}
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
 export type AccentChoice = 'orange' | 'red'
@@ -197,6 +216,7 @@ export type AppSettings = {
   theme: ThemeChoice
   accent: AccentChoice
   textSize: TextSize
+  sounds: SoundSettings
   /** Closing the window keeps Glofly running in the system tray. */
   closeToTray: boolean
   /** Open Glofly when the computer starts. */

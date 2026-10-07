@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import type {
+  AlertSound,
   AppSettings,
   AppSettingsChanges,
+  CallSound,
+  SoundSettings,
   PrivacySettings,
   SignedInUser,
   TextSize
 } from '../../../preload/api-types'
 import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
+import { previewSound, setSoundSettings, SOUND_FILES, stopPreview } from '../lib/sounds'
 import './dialogs.css'
 import './SettingsDialog.css'
 
@@ -99,6 +103,91 @@ function Segmented<T extends string>({
   )
 }
 
+type SoundKey = 'message' | 'friendRequest' | 'login' | 'ringtone' | 'outgoing'
+
+// Sound rows from the design (plus the login sound). Alerts pick from the short sounds,
+// call rows from the long ones.
+const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' | 'call' }[] = [
+  { key: 'message', label: 'Message sound', kind: 'alert' },
+  { key: 'friendRequest', label: 'Friend request sound', kind: 'alert' },
+  {
+    key: 'login',
+    label: 'Login sound',
+    desc: 'Plays as Glofly opens after you log in.',
+    kind: 'alert'
+  },
+  { key: 'ringtone', label: 'Ringtone', desc: 'Plays when someone calls you.', kind: 'call' },
+  {
+    key: 'outgoing',
+    label: 'Outgoing call jingle',
+    desc: 'Plays while you wait for someone to answer.',
+    kind: 'call'
+  }
+]
+const ALERT_CHOICES: AlertSound[] = ['chime', 'hello', 'none']
+const CALL_CHOICES: CallSound[] = ['ring', 'jingle', 'none']
+
+function PlayIcon({ playing }: { playing: boolean }): React.JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      {playing ? <rect x="6" y="6" width="12" height="12" rx="2" /> : <path d="M8 5v14l11-7z" />}
+    </svg>
+  )
+}
+
+/** A sound choice with a Play button to hear it (Play again stops it). */
+function SoundRow({
+  row,
+  value,
+  playing,
+  onChange,
+  onPlay
+}: {
+  row: (typeof SOUND_ROWS)[number]
+  value: AlertSound | CallSound | undefined
+  playing: boolean
+  onChange: (value: AlertSound | CallSound) => void
+  onPlay: () => void
+}): React.JSX.Element {
+  const choices = row.kind === 'alert' ? ALERT_CHOICES : CALL_CHOICES
+  const id = `settings-sound-${row.key}`
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <label className="settings-row-label" htmlFor={id}>
+          {row.label}
+        </label>
+        {row.desc && <span className="settings-row-desc">{row.desc}</span>}
+      </div>
+      <div className="settings-sound">
+        <select
+          id={id}
+          className="settings-select settings-select--sound"
+          disabled={value === undefined}
+          value={value ?? 'none'}
+          onChange={(e) => onChange(e.target.value as AlertSound | CallSound)}
+        >
+          {choices.map((c) => (
+            <option key={c} value={c}>
+              {c === 'none' ? 'None' : SOUND_FILES[c].label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="settings-play"
+          aria-label={playing ? `Stop ${row.label}` : `Play ${row.label}`}
+          title={playing ? 'Stop' : 'Play'}
+          disabled={!value || value === 'none'}
+          onClick={onPlay}
+        >
+          <PlayIcon playing={playing} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const TEXT_SIZES: { value: TextSize; label: string }[] = [
   { value: 'small', label: 'Small' },
   { value: 'default', label: 'Default' },
@@ -158,6 +247,8 @@ export default function SettingsDialog({
   const [settings, setSettings] = useState<PrivacySettings | null>(null)
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  /** Which sound row's preview is playing */
+  const [playing, setPlaying] = useState<SoundKey | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
   useEffect(() => {
@@ -176,7 +267,10 @@ export default function SettingsDialog({
       if (e.key === 'Escape' && !e.defaultPrevented) closeRef.current()
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      stopPreview() // closing Settings stops any sound you're previewing
+    }
   }, [onSessionExpired])
 
   async function change<K extends keyof PrivacySettings>(
@@ -199,9 +293,32 @@ export default function SettingsDialog({
 
   async function changeApp(changes: AppSettingsChanges): Promise<void> {
     if (!appSettings) return
-    setAppSettings({ ...appSettings, ...changes })
+    // Show the change right away (the saved settings come back a moment later).
+    setAppSettings({
+      ...appSettings,
+      ...changes,
+      sounds: { ...appSettings.sounds, ...changes.sounds }
+    })
     const saved = await window.glofly.app.setSettings(changes)
-    if (saved) setAppSettings(saved)
+    if (saved) {
+      setAppSettings(saved)
+      setSoundSettings(saved.sounds)
+    }
+  }
+
+  function changeSound(changes: Partial<SoundSettings>): void {
+    if (!appSettings) return
+    void changeApp({ sounds: { ...appSettings.sounds, ...changes } })
+  }
+
+  function togglePreview(key: SoundKey): void {
+    const choice = appSettings?.sounds[key]
+    if (playing === key || !choice || choice === 'none') {
+      stopPreview()
+      return
+    }
+    setPlaying(key)
+    previewSound(choice, () => setPlaying((p) => (p === key ? null : p)))
   }
 
   function openPage(next: Page): void {
@@ -379,6 +496,61 @@ export default function SettingsDialog({
                         <option value="everyone">Everyone</option>
                         <option value="nobody">No one</option>
                       </select>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="settings-section">
+                  <h2>Notifications &amp; sounds</h2>
+                  <div className="settings-card">
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <span className="settings-row-label">Notification sounds</span>
+                        <span className="settings-row-desc">
+                          Turn this off to mute every Glofly sound at once.
+                        </span>
+                      </div>
+                      {appSettings ? (
+                        <Toggle
+                          on={appSettings.sounds.enabled}
+                          label="Notification sounds"
+                          onChange={(on) => changeSound({ enabled: on })}
+                        />
+                      ) : (
+                        <span className="toggle toggle--loading" aria-hidden="true" />
+                      )}
+                    </div>
+                    {SOUND_ROWS.map((row) => (
+                      <SoundRow
+                        key={row.key}
+                        row={row}
+                        value={appSettings?.sounds[row.key]}
+                        playing={playing === row.key}
+                        onChange={(value) => {
+                          if (playing === row.key) stopPreview()
+                          changeSound({ [row.key]: value })
+                        }}
+                        onPlay={() => togglePreview(row.key)}
+                      />
+                    ))}
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <span className="settings-row-label">
+                          Silence everything in Do Not Disturb
+                        </span>
+                        <span className="settings-row-desc">
+                          No sounds while your status is Do Not Disturb.
+                        </span>
+                      </div>
+                      {appSettings ? (
+                        <Toggle
+                          on={appSettings.sounds.dndSilence}
+                          label="Silence everything in Do Not Disturb"
+                          onChange={(on) => changeSound({ dndSilence: on })}
+                        />
+                      ) : (
+                        <span className="toggle toggle--loading" aria-hidden="true" />
+                      )}
                     </div>
                   </div>
                 </section>

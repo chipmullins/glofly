@@ -432,3 +432,38 @@
 :root[data-theme='dark'] .segmented-option--on {
   background: var(--glo-hover);
 }
+
+/* Sound choice + Play (Notifications & sounds) */
+.settings-sound {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+.settings-select--sound {
+  width: 196px;
+}
+.settings-play {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border: 1px solid var(--glo-line);
+  border-radius: 10px;
+  background: var(--glo-surface);
+  color: var(--glo-link);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.settings-play:hover:not(:disabled) {
+  background: var(--glo-subtle);
+}
+.settings-play:disabled {
+  color: var(--glo-faint);
+  cursor: default;
+}
+.settings-play:focus-visible {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 1px;
+}
