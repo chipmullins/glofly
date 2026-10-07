@@ -1,0 +1,5 @@
+{
+  "name": "glofly",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
+}
