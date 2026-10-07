@@ -1,6 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Message } from '../../../preload/api-types'
 import { quoteSummary } from '../lib/attachments'
+import { addRecent, isJumbo } from '../lib/emoji'
+import EmojiPicker from './EmojiPicker'
+import EmojiText, { Emoji } from './EmojiText'
 
 export type ShownMessage = {
   key: string
@@ -34,7 +37,7 @@ type MessageItemProps = {
   attachments: React.ReactNode
 }
 
-// The quick reactions offered by the 😊 button.
+// The quick reactions offered by the 😊 button (the + after them opens the full picker).
 const QUICK_REACTIONS = ['❤️', '😂', '👍', '😮', '😢', '🔥']
 
 function Icon({
@@ -158,6 +161,9 @@ export default function MessageItem({
   const m = item.message
   const mine = m.senderId === meId
   const [popup, setPopup] = useState<'react' | 'menu' | null>(null)
+  /** The button the full emoji picker opened from, while it's open. */
+  const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null)
+  const reactButtonRef = useRef<HTMLButtonElement>(null)
   const [copied, setCopied] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const showToolbar = !item.pending && !m.deleted && !editing
@@ -179,6 +185,15 @@ export default function MessageItem({
     }
   }, [popup])
 
+  const closePicker = useCallback(() => setPickerAnchor(null), [])
+  const pickReaction = useCallback(
+    (emoji: string) => {
+      setPickerAnchor(null)
+      onReact(emoji)
+    },
+    [onReact]
+  )
+
   async function copy(): Promise<void> {
     setPopup(null)
     try {
@@ -192,7 +207,7 @@ export default function MessageItem({
 
   const classes = ['message']
   if (grouped) classes.push('message--grouped')
-  if (popup) classes.push('message--active')
+  if (popup || pickerAnchor) classes.push('message--active')
   if (highlighted) classes.push('message--highlight')
   if (editing) classes.push('message--editing')
 
@@ -201,6 +216,7 @@ export default function MessageItem({
       ? 'message-body message-body--failed'
       : 'message-body message-body--sending'
     : 'message-body'
+  const jumbo = !item.pending && !m.deleted && isJumbo(m.body)
 
   return (
     <div className={classes.join(' ')} data-message-id={m.id} ref={wrapRef}>
@@ -231,10 +247,15 @@ export default function MessageItem({
                   : 'reply-quote-text'
               }
             >
-              {m.replyTo.deleted
-                ? 'Original message was deleted'
-                : m.replyTo.body ||
-                  (m.replyTo.attachment ? quoteSummary(m.replyTo.attachment) : '')}
+              {m.replyTo.deleted ? (
+                'Original message was deleted'
+              ) : m.replyTo.body ? (
+                <EmojiText text={m.replyTo.body} />
+              ) : m.replyTo.attachment ? (
+                quoteSummary(m.replyTo.attachment)
+              ) : (
+                ''
+              )}
             </span>
           </button>
         )}
@@ -253,8 +274,11 @@ export default function MessageItem({
         ) : m.deleted ? (
           <p className="message-body message-body--deleted">This message was deleted.</p>
         ) : !m.body && m.attachments.length > 0 ? null : (
-          <p className={bodyClass} title={grouped ? time : undefined}>
-            {m.body}
+          <p
+            className={jumbo ? `${bodyClass} message-body--jumbo` : bodyClass}
+            title={grouped ? time : undefined}
+          >
+            <EmojiText text={m.body} />
             {m.editedAt && (
               <span
                 className="message-edited"
@@ -297,11 +321,31 @@ export default function MessageItem({
                   disabled={!canAct}
                   onClick={() => onReact(r.emoji)}
                 >
-                  <span className="reaction-emoji">{r.emoji}</span>
+                  <Emoji emoji={r.emoji} className="reaction-emoji" />
                   <span className="reaction-count">{r.userIds.length}</span>
                 </button>
               )
             })}
+            {canAct && !item.pending && !m.deleted && (
+              <button
+                type="button"
+                className="reaction reaction--add"
+                aria-label="Add reaction"
+                title="Add reaction"
+                aria-expanded={!!pickerAnchor}
+                onClick={(e) => {
+                  const button = e.currentTarget
+                  setPickerAnchor((a) => (a ? null : button))
+                }}
+              >
+                <Icon size={16}>
+                  <circle cx="11" cy="13" r="8" />
+                  <path d="M7.8 15.2s1.1 1.6 3.2 1.6 3.2-1.6 3.2-1.6" />
+                  <path d="M8.5 11h.01M13.5 11h.01" />
+                  <path d="M19 2v5M16.5 4.5h5" />
+                </Icon>
+              </button>
+            )}
           </div>
         )}
 
@@ -312,6 +356,7 @@ export default function MessageItem({
         <div className="msg-toolbar" role="toolbar" aria-label="Message actions">
           {canAct && (
             <button
+              ref={reactButtonRef}
               type="button"
               aria-label="Add reaction"
               title="Add reaction"
@@ -357,12 +402,28 @@ export default function MessageItem({
                   aria-label={`React with ${emoji}`}
                   onClick={() => {
                     setPopup(null)
+                    addRecent(meId, emoji)
                     onReact(emoji)
                   }}
                 >
-                  {emoji}
+                  <Emoji emoji={emoji} className="reaction-picker-emoji" />
                 </button>
               ))}
+              <button
+                type="button"
+                role="menuitem"
+                className="reaction-picker-more"
+                aria-label="More emoji"
+                title="More emoji"
+                onClick={() => {
+                  setPopup(null)
+                  setPickerAnchor(reactButtonRef.current)
+                }}
+              >
+                <Icon size={20}>
+                  <path d="M12 5v14M5 12h14" />
+                </Icon>
+              </button>
             </div>
           )}
 
@@ -420,6 +481,16 @@ export default function MessageItem({
             </div>
           )}
         </div>
+      )}
+
+      {pickerAnchor && canAct && (
+        <EmojiPicker
+          anchor={pickerAnchor}
+          userId={meId}
+          label="Add a reaction"
+          onPick={pickReaction}
+          onClose={closePicker}
+        />
       )}
     </div>
   )

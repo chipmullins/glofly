@@ -7,6 +7,7 @@ import Avatar from './Avatar'
 import { BlockIcon, CalendarIcon, ChatIcon, CloseIcon, RemoveFriendIcon } from './icons'
 import './dialogs.css'
 import './ProfileDialogs.css'
+import EmojiText from './EmojiText'
 
 type Fly = { left: string; top: number; size: 'big' | 'small'; rotate: number }
 type Spark = 'a' | 'b'
@@ -193,14 +194,16 @@ export default function ProfileCard({
             {statusText && (
               <div className="profile-status-text">
                 <ChatIcon size={18} strokeWidth={2} />
-                {statusText}
+                <EmojiText text={statusText} />
               </div>
             )}
 
             {shown.bio && (
               <div className="profile-about">
                 <span className="profile-about-label">About me</span>
-                <p>{shown.bio}</p>
+                <p>
+                  <EmojiText text={shown.bio} />
+                </p>
               </div>
             )}
 

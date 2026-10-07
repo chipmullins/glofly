@@ -300,8 +300,33 @@
   cursor: default;
 }
 .reaction-emoji {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  vertical-align: 0;
   font-size: 15px;
   line-height: 1;
+}
+/* "Add reaction" after a message's reactions */
+.reaction--add {
+  padding: 0 8px;
+  color: #8a7262;
+  opacity: 0;
+}
+.message:hover .reaction--add,
+.message--active .reaction--add,
+.reaction--add:focus-visible {
+  opacity: 1;
+}
+.reaction--add:hover {
+  color: var(--glo-link);
+}
+/* A message that's only emoji shows them big */
+.message-body--jumbo .emoji {
+  width: 44px;
+  height: 44px;
+  margin: 2px 1px 0;
+  vertical-align: -10px;
 }
 
 /* Hover toolbar: react, reply, more (from the design) */
@@ -365,6 +390,24 @@
 .reaction-picker button:hover {
   background: #fbede1;
   transform: scale(1.15);
+}
+.reaction-picker button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.reaction-picker-emoji {
+  width: 24px;
+  height: 24px;
+}
+.reaction-picker .reaction-picker-more {
+  color: var(--glo-muted);
+  border-left: 1px solid #f1e6dc;
+  border-radius: 0 50% 50% 0;
+}
+.reaction-picker .reaction-picker-more:hover {
+  transform: none;
+  color: var(--glo-link);
 }
 /* Near the top of the chat, open the picker downward so it isn't cut off. */
 .chat-messages > div:first-of-type .reaction-picker {
@@ -533,6 +576,32 @@
 }
 .attach-button:hover {
   background: #efe3d8;
+}
+/* Emoji (😊) button from the design, between the message box and Send */
+.emoji-button {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #4a372b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.emoji-button:hover,
+.emoji-button--open {
+  background: #efe3d8;
+}
+.emoji-button--open {
+  color: var(--glo-link);
+}
+.emoji-button:focus-visible,
+.attach-button:focus-visible {
+  outline: 2px solid var(--glo-orange);
+  outline-offset: 1px;
 }
 .reply-bar {
   display: flex;

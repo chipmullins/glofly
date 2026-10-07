@@ -41,6 +41,16 @@ body {
 }
 
 /* Blank cream screen for the split second while a saved session is checked */
+/* An emoji shown as a Twemoji picture, sized to the text around it */
+img.emoji {
+  display: inline-block;
+  width: 1.3em;
+  height: 1.3em;
+  margin: 0 0.05em;
+  vertical-align: -0.3em;
+  user-select: text;
+}
+
 .starting {
   height: 100%;
   background: var(--glo-cream);

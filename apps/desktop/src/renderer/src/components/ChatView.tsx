@@ -15,6 +15,8 @@ import { MessageAttachments, PhotoViewer, UploadTray, type Upload } from './Atta
 import { attachmentSummary } from '../lib/attachments'
 import { FileIcon, ProfileIcon } from './icons'
 import MessageItem, { type ShownMessage } from './MessageItem'
+import EmojiPicker from './EmojiPicker'
+import EmojiText from './EmojiText'
 import './ChatView.css'
 
 type ChatViewProps = {
@@ -92,6 +94,26 @@ const preview = (m: Message): ReplyPreview => ({
 const textOf = (m: Pick<Message, 'body' | 'attachments'>): string =>
   m.body || attachmentSummary(m.attachments)
 
+function EmojiIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 14.5s1.3 2 3.5 2 3.5-2 3.5-2" />
+      <path d="M9 9.5h.01M15 9.5h.01" />
+    </svg>
+  )
+}
+
 function AttachIcon(): React.JSX.Element {
   return (
     <svg
@@ -134,6 +156,10 @@ export default function ChatView({
   const [uploads, setUploads] = useState<Upload[]>([])
   const [viewing, setViewing] = useState<{ photos: Attachment[]; index: number } | null>(null)
   const [dragging, setDragging] = useState(false)
+  /** The 😊 button, while the emoji picker it opened is showing */
+  const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null)
+  /** Where the cursor goes after an emoji is added (applied once the text updates). */
+  const cursorAfterInsert = useRef<number | null>(null)
   const dragDepth = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadsRef = useRef<Upload[]>([])
@@ -510,14 +536,40 @@ export default function ChatView({
     }
   }
 
-  function onChange(e: React.ChangeEvent<HTMLTextAreaElement>): void {
-    setDraft(e.target.value)
+  /** Tells the other person we're typing (at most every few seconds). */
+  function noteTyping(text: string): void {
     const nowMs = Date.now()
-    if (e.target.value.trim() && nowMs - lastTypingSent.current > TYPING_SEND_EVERY_MS) {
+    if (text.trim() && nowMs - lastTypingSent.current > TYPING_SEND_EVERY_MS) {
       lastTypingSent.current = nowMs
       window.glofly.conversations.typing(conversation.id)
     }
   }
+
+  function onChange(e: React.ChangeEvent<HTMLTextAreaElement>): void {
+    setDraft(e.target.value)
+    noteTyping(e.target.value)
+  }
+
+  /** Puts an emoji where the cursor was (replacing any selected text). */
+  function insertEmoji(emoji: string, keepOpen: boolean): void {
+    const input = inputRef.current
+    const start = input?.selectionStart ?? draft.length
+    const end = input?.selectionEnd ?? draft.length
+    const next = draft.slice(0, start) + emoji + draft.slice(end)
+    if (next.length > MESSAGE_MAX + 200) return
+    cursorAfterInsert.current = start + emoji.length
+    setDraft(next)
+    noteTyping(next)
+    if (!keepOpen) {
+      setEmojiAnchor(null)
+      input?.focus()
+    }
+  }
+
+  const closeEmoji = useCallback(() => {
+    setEmojiAnchor(null)
+    inputRef.current?.focus()
+  }, [])
 
   // Grow the message box with its text, up to a limit.
   useLayoutEffect(() => {
@@ -525,6 +577,10 @@ export default function ChatView({
     if (!input) return
     input.style.height = 'auto'
     input.style.height = `${Math.min(input.scrollHeight, 160)}px`
+    if (cursorAfterInsert.current !== null) {
+      input.setSelectionRange(cursorAfterInsert.current, cursorAfterInsert.current)
+      cursorAfterInsert.current = null
+    }
   }, [draft])
 
   // Everything to show, oldest first: delivered messages, then ones still sending.
@@ -632,7 +688,9 @@ export default function ChatView({
             <span className="chat-user">@{partner.username}</span>
           </div>
           {partnerPresence && (
-            <span className="chat-status">{presenceHeader(partnerPresence, now)}</span>
+            <span className="chat-status">
+              <EmojiText text={presenceHeader(partnerPresence, now)} />
+            </span>
           )}
         </div>
         <div className="chat-header-actions">
@@ -780,7 +838,9 @@ export default function ChatView({
               <div className="reply-bar">
                 <span>
                   Replying to <strong>{nameOf(replyingTo.senderId)}</strong>
-                  <span className="reply-bar-text">{textOf(replyingTo)}</span>
+                  <span className="reply-bar-text">
+                    <EmojiText text={textOf(replyingTo)} />
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -825,6 +885,17 @@ export default function ChatView({
               />
               <button
                 type="button"
+                className={emojiAnchor ? 'emoji-button emoji-button--open' : 'emoji-button'}
+                aria-label="Emoji"
+                aria-expanded={!!emojiAnchor}
+                aria-haspopup="dialog"
+                title="Emoji"
+                onClick={(e) => (emojiAnchor ? closeEmoji() : setEmojiAnchor(e.currentTarget))}
+              >
+                <EmojiIcon />
+              </button>
+              <button
+                type="button"
                 className="send-button"
                 aria-label="Send message"
                 title={uploading ? 'Waiting for files to upload…' : undefined}
@@ -850,6 +921,17 @@ export default function ChatView({
           <strong>Drop to send to {partner.displayName}</strong>
           <span>Photos and files up to 25 MB</span>
         </div>
+      )}
+
+      {emojiAnchor && conversation.canMessage && (
+        <EmojiPicker
+          anchor={emojiAnchor}
+          userId={me.id}
+          label="Add emoji to your message"
+          allowMultiple
+          onPick={insertEmoji}
+          onClose={closeEmoji}
+        />
       )}
 
       {viewing && (

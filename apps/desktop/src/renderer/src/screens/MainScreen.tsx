@@ -38,6 +38,7 @@ import StatusMenu from '../components/StatusMenu'
 import SettingsDialog from '../components/SettingsDialog'
 import '../components/dialogs.css'
 import './MainScreen.css'
+import EmojiText from '../components/EmojiText'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -184,7 +185,7 @@ function FriendRow({
           <span className="friend-user">@{person.username}</span>
         </div>
         <span className="friend-sub" title={`Friends since ${shortDate(person.since)}`}>
-          {presenceLine(person.presence, now)}
+          <EmojiText text={presenceLine(person.presence, now)} />
         </span>
       </div>
       <button
@@ -756,7 +757,9 @@ export default function MainScreen({
           <div className="profile-text">
             <span className="profile-name">{user.displayName}</span>
             <span className="profile-sub" title={myStatus.statusText ?? undefined}>
-              @{user.username} · {myStatus.statusText || STATUS_LABEL[myStatus.status]}
+              <EmojiText
+                text={`@${user.username} · ${myStatus.statusText || STATUS_LABEL[myStatus.status]}`}
+              />
             </span>
           </div>
           <SettingsMenu
@@ -852,7 +855,9 @@ export default function MainScreen({
                     >
                       {c.partner.displayName}
                     </span>
-                    <span className="dm-preview">{preview}</span>
+                    <span className="dm-preview">
+                      <EmojiText text={preview} />
+                    </span>
                   </span>
                   {c.unreadCount > 0 && !active && (
                     <span className="badge" aria-label={`${c.unreadCount} unread`}>

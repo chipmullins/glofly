@@ -91,16 +91,17 @@ const uploadLimiter = rateLimit({
   message: { error: "too_many_requests", message: "That's a lot of files at once. Wait a minute and try again." },
 });
 
-/** A single emoji (including ones built from several characters, like 👍🏽 or 👨‍👩‍👧). */
+/** A single emoji (including ones built from several characters, like 👍🏽, 👨‍👩‍👧 or the keycap 1️⃣). */
 const emojiParam = z
   .string()
   .min(1)
   .max(32)
   .refine(
     (e) =>
-      /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\p{Regional_Indicator}|\u200d|\ufe0f|\u20e3)+$/u.test(e) &&
-      /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(e) &&
-      !/^[0-9#*]+$/.test(e),
+      /^[0-9#*]\ufe0f?\u20e3$/u.test(e) ||
+      (/^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\p{Regional_Indicator}|\u200d|\ufe0f|\u20e3)+$/u.test(e) &&
+        /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(e) &&
+        !/^[0-9#*]+$/.test(e)),
   );
 const MAX_REACTIONS_PER_PERSON = 20;
 
