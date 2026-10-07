@@ -123,3 +123,53 @@ export const blocks = pgTable(
     index("blocks_blocked_idx").on(t.blockedId),
   ],
 );
+
+// A chat. Right now every conversation is a direct message between two friends;
+// group chats will reuse these same tables.
+export const conversations = pgTable("conversations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // For direct messages: "lowerId:higherId", so each pair has exactly one DM.
+  dmKey: text("dm_key").unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Used to sort the sidebar: most recent chat first.
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+});
+
+export const conversationMembers = pgTable(
+  "conversation_members",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Everything after this is unread for this person.
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull().defaultNow(),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.conversationId, t.userId] }),
+    index("conversation_members_user_idx").on(t.userId),
+  ],
+);
+
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // For editing and deleting, coming later.
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  // Loading a chat = newest messages in one conversation, so index exactly that.
+  (t) => [index("messages_conversation_created_idx").on(t.conversationId, t.createdAt, t.id)],
+);

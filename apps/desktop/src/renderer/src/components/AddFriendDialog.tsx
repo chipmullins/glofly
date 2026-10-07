@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Relationship, SearchResult } from '../../../preload/api-types'
 import { splitMatch } from '../lib/names'
 import Avatar from './Avatar'
-import { AddFriendIcon, CloseIcon, SearchIcon } from './icons'
+import { AddFriendIcon, ChatIcon, CloseIcon, SearchIcon } from './icons'
 import './dialogs.css'
 
 type AddFriendDialogProps = {
@@ -10,6 +10,8 @@ type AddFriendDialogProps = {
   /** Called after any change, so the friends list can refresh. */
   onChanged: () => void
   onSessionExpired: () => void
+  /** Opens a chat with a friend from the results. */
+  onMessage: (userId: string) => void
 }
 
 function Highlight({ text, query }: { text: string; query: string }): React.JSX.Element {
@@ -27,7 +29,8 @@ function Highlight({ text, query }: { text: string; query: string }): React.JSX.
 export default function AddFriendDialog({
   onClose,
   onChanged,
-  onSessionExpired
+  onSessionExpired,
+  onMessage
 }: AddFriendDialogProps): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [answer, setAnswer] = useState<{ query: string; results: SearchResult[] } | null>(null)
@@ -187,6 +190,17 @@ export default function AddFriendDialog({
                   </svg>
                   Friends
                 </span>
+              )}
+              {person.relationship === 'friends' && (
+                <button
+                  type="button"
+                  className="dialog-close"
+                  aria-label={`Message ${person.displayName}`}
+                  title="Message"
+                  onClick={() => onMessage(person.id)}
+                >
+                  <ChatIcon size={18} />
+                </button>
               )}
               {person.relationship === 'none' && (
                 <button

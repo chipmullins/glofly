@@ -5,6 +5,8 @@ import { z } from "zod";
 import { db } from "../db";
 import { blocks, friendships, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
+import { emitToUser } from "../realtime";
+import { blockedEitherWay, pair, pairIs } from "./rules";
 
 // Everything here needs a signed-in user.
 export const usersRouter = Router();
@@ -30,31 +32,12 @@ const perUser = (windowMs: number, limit: number, message: string) =>
 const searchLimiter = perUser(60 * 1000, 60, "Slow down a little and try again.");
 const requestLimiter = perUser(60 * 60 * 1000, 30, "You've sent a lot of requests. Try again later.");
 
-/** Pairs are stored lower id first, so each pair of people has exactly one row. */
-function pair(a: string, b: string): { userLow: string; userHigh: string } {
-  return a < b ? { userLow: a, userHigh: b } : { userLow: b, userHigh: a };
-}
-const pairIs = (a: string, b: string) => {
-  const p = pair(a, b);
-  return and(eq(friendships.userLow, p.userLow), eq(friendships.userHigh, p.userHigh));
-};
-
-/** True if either person has blocked the other. */
-async function blockedEitherWay(a: string, b: string): Promise<boolean> {
-  const rows = await db
-    .select({ blockerId: blocks.blockerId })
-    .from(blocks)
-    .where(
-      or(
-        and(eq(blocks.blockerId, a), eq(blocks.blockedId, b)),
-        and(eq(blocks.blockerId, b), eq(blocks.blockedId, a)),
-      ),
-    )
-    .limit(1);
-  return rows.length > 0;
-}
-
 const userIdParam = z.uuid();
+
+/** Tells both people's apps to refresh their friends lists right away. */
+function friendsChanged(...userIds: string[]): void {
+  for (const id of userIds) emitToUser(id, "friends:changed", {});
+}
 const publicUser = { id: users.id, username: users.username, displayName: users.displayName };
 
 /** Escapes characters that mean "anything" in a LIKE search, so they're matched literally. */
@@ -206,6 +189,7 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
       .update(friendships)
       .set({ status: "accepted", acceptedAt: new Date() })
       .where(eq(friendships.id, existing.id));
+    friendsChanged(myId, target.id);
     res.json({ status: "accepted", user: target });
     return;
   }
@@ -214,6 +198,7 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
     .insert(friendships)
     .values({ ...pair(myId, target.id), requesterId: myId, status: "pending" })
     .onConflictDoNothing();
+  friendsChanged(myId, target.id);
   res.status(201).json({ status: "pending", user: target });
 });
 
@@ -240,6 +225,7 @@ friendsRouter.post("/requests/:userId/accept", async (req, res) => {
     res.status(404).json({ error: "not_found", message: "That request isn't there anymore." });
     return;
   }
+  friendsChanged(myId, them.data);
   res.json({ status: "accepted" });
 });
 
@@ -250,6 +236,7 @@ friendsRouter.delete("/requests/:userId", async (req, res) => {
     await db
       .delete(friendships)
       .where(and(pairIs(me(res).id, them.data), eq(friendships.status, "pending")));
+    friendsChanged(me(res).id, them.data);
   }
   res.status(204).end();
 });
@@ -261,6 +248,7 @@ friendsRouter.delete("/:userId", async (req, res) => {
     await db
       .delete(friendships)
       .where(and(pairIs(me(res).id, them.data), eq(friendships.status, "accepted")));
+    friendsChanged(me(res).id, them.data);
   }
   res.status(204).end();
 });
@@ -282,6 +270,7 @@ blocksRouter.post("/:userId", async (req, res) => {
     await tx.insert(blocks).values({ blockerId: myId, blockedId: them.data }).onConflictDoNothing();
     await tx.delete(friendships).where(pairIs(myId, them.data));
   });
+  friendsChanged(myId, them.data);
   res.status(204).end();
 });
 
@@ -292,6 +281,7 @@ blocksRouter.delete("/:userId", async (req, res) => {
     await db
       .delete(blocks)
       .where(and(eq(blocks.blockerId, me(res).id), eq(blocks.blockedId, them.data)));
+    friendsChanged(me(res).id);
   }
   res.status(204).end();
 });

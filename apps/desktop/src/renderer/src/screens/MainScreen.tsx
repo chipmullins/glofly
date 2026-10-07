@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ApiResult, FriendEntry, FriendLists, SignedInUser } from '../../../preload/api-types'
+import type {
+  ApiResult,
+  ConversationSummary,
+  FriendEntry,
+  FriendLists,
+  SignedInUser
+} from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import AddFriendDialog from '../components/AddFriendDialog'
 import Avatar from '../components/Avatar'
+import ChatView from '../components/ChatView'
 import ConfirmDialog from '../components/ConfirmDialog'
 import {
   AddFriendIcon,
@@ -17,6 +24,7 @@ import {
   SettingsIcon
 } from '../components/icons'
 import { initials, shortDate } from '../lib/names'
+import { playSound } from '../lib/sounds'
 import '../components/dialogs.css'
 import './MainScreen.css'
 
@@ -37,9 +45,9 @@ const FILTERS: { id: FriendFilter; label: string }[] = [
   { id: 'blocked', label: 'Blocked' }
 ]
 
-// How often the friends list refreshes while the app is open. Becomes instant
-// once the real-time connection arrives with chat.
-const REFRESH_MS = 15_000
+// Friends and chats update instantly over the live connection. This slow refresh
+// is just a safety net in case an update is ever missed.
+const REFRESH_MS = 60_000
 
 type Confirm = { kind: 'remove' | 'block'; person: FriendEntry } | null
 
@@ -99,10 +107,12 @@ function SettingsMenu({ onLogout }: { onLogout: () => void }): React.JSX.Element
 
 function FriendRow({
   person,
+  onMessage,
   onRemove,
   onBlock
 }: {
   person: FriendEntry
+  onMessage: () => void
   onRemove: () => void
   onBlock: () => void
 }): React.JSX.Element {
@@ -120,6 +130,15 @@ function FriendRow({
         </div>
         <span className="friend-sub">Friends since {shortDate(person.since)}</span>
       </div>
+      <button
+        type="button"
+        className="round-button"
+        aria-label={`Message ${person.displayName}`}
+        title="Message"
+        onClick={onMessage}
+      >
+        <ChatIcon />
+      </button>
       <div className="friend-more" ref={wrapRef}>
         <button
           type="button"
@@ -229,15 +248,100 @@ export default function MainScreen({
   const [adding, setAdding] = useState(false)
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [openChatId, setOpenChatId] = useState<string | null>(null)
+  const [connected, setConnected] = useState(true)
+  const openChatRef = useRef<string | null>(null)
+  useEffect(() => {
+    openChatRef.current = openChatId
+  }, [openChatId])
+  const incomingSeen = useRef<number | null>(null)
 
-  const refresh = useCallback(async () => {
+  const refreshFriends = useCallback(async () => {
     const result = await window.glofly.friends.list()
     if (result.ok) {
+      // A new friend request since last time? Play the friend-request sound.
+      const count = result.data.incoming.length
+      if (incomingSeen.current !== null && count > incomingSeen.current) playSound('friendRequest')
+      incomingSeen.current = count
       setLists(result.data)
       setNotice(null)
     } else if (result.error === 'unauthorized') onSessionExpired()
     else setNotice(result.message)
   }, [onSessionExpired])
+
+  const refreshConversations = useCallback(async () => {
+    const result = await window.glofly.conversations.list()
+    if (result.ok) setConversations(result.data)
+    else if (result.error === 'unauthorized') onSessionExpired()
+  }, [onSessionExpired])
+
+  const refresh = useCallback(async () => {
+    await Promise.all([refreshFriends(), refreshConversations()])
+  }, [refreshFriends, refreshConversations])
+
+  // Live updates from the server.
+  useEffect(() => {
+    return window.glofly.onEvent((event) => {
+      switch (event.type) {
+        case 'message:new': {
+          const m = event.message
+          const viewing = openChatRef.current === m.conversationId && document.hasFocus()
+          if (m.senderId !== user.id && !viewing) playSound('message')
+          setConversations((list) => {
+            const existing = list.find((c) => c.id === m.conversationId)
+            if (!existing) {
+              void refreshConversations() // a brand-new chat: fetch its details
+              return list
+            }
+            const updated: ConversationSummary = {
+              ...existing,
+              lastMessage: m,
+              activityAt: m.createdAt,
+              unreadCount:
+                m.senderId !== user.id && openChatRef.current !== m.conversationId
+                  ? existing.unreadCount + 1
+                  : existing.unreadCount
+            }
+            return [updated, ...list.filter((c) => c.id !== m.conversationId)]
+          })
+          break
+        }
+        case 'friends:changed':
+          void refresh()
+          break
+        case 'connection':
+          setConnected(event.connected)
+          if (event.connected) void refresh() // catch up on anything missed while offline
+          break
+        case 'session:expired':
+          onSessionExpired()
+          break
+      }
+    })
+  }, [user.id, refresh, refreshConversations, onSessionExpired])
+
+  async function openChatWith(userId: string): Promise<void> {
+    const result = await window.glofly.conversations.openDm(userId)
+    if (!result.ok) {
+      if (result.error === 'unauthorized') onSessionExpired()
+      else setNotice(result.message)
+      return
+    }
+    const conversation = result.data
+    setConversations((list) =>
+      list.some((c) => c.id === conversation.id) ? list : [conversation, ...list]
+    )
+    setOpenChatId(conversation.id)
+  }
+
+  const markedRead = useCallback((conversationId: string) => {
+    setConversations((list) =>
+      list.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
+    )
+  }, [])
+
+  const openChat = conversations.find((c) => c.id === openChatId) ?? null
 
   // Load now, then keep it fresh.
   useEffect(() => {
@@ -321,6 +425,7 @@ export default function MainScreen({
               person={p}
               onRemove={() => setConfirm({ kind: 'remove', person: p })}
               onBlock={() => setConfirm({ kind: 'block', person: p })}
+              onMessage={() => void openChatWith(p.id)}
             />
           ))}
         </section>
@@ -449,9 +554,12 @@ export default function MainScreen({
 
         <button
           type="button"
-          className="nav-item nav-item--active"
-          aria-current="page"
-          onClick={() => setFilter(incomingCount > 0 ? 'pending' : 'all')}
+          className={openChat ? 'nav-item' : 'nav-item nav-item--active'}
+          aria-current={openChat ? undefined : 'page'}
+          onClick={() => {
+            setOpenChatId(null)
+            setFilter(incomingCount > 0 ? 'pending' : 'all')
+          }}
         >
           <FriendsIcon />
           Friends
@@ -468,70 +576,129 @@ export default function MainScreen({
             type="button"
             className="icon-button icon-button--small"
             aria-label="New message or group chat"
+            title="New message"
+            onClick={() => {
+              setOpenChatId(null)
+              setFilter('all')
+            }}
           >
             <PlusIcon />
           </button>
         </div>
 
-        <div className="dm-empty">
-          <ChatIcon />
-          <p>No conversations yet. Messages with friends will show up here.</p>
-        </div>
+        {conversations.length === 0 ? (
+          <div className="dm-empty">
+            <ChatIcon />
+            <p>No conversations yet. Messages with friends will show up here.</p>
+          </div>
+        ) : (
+          <nav aria-label="Direct messages" className="dm-list">
+            {conversations.map((c) => {
+              const active = c.id === openChatId
+              const preview = c.lastMessage
+                ? `${c.lastMessage.senderId === user.id ? 'You: ' : ''}${c.lastMessage.body.replace(/\s+/g, ' ')}`
+                : 'No messages yet'
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={active ? 'dm-row dm-row--active' : 'dm-row'}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => setOpenChatId(c.id)}
+                >
+                  <Avatar id={c.partner.id} name={c.partner.displayName} size={40} />
+                  <span className="dm-text">
+                    <span
+                      className={
+                        c.unreadCount > 0 || active ? 'dm-name dm-name--strong' : 'dm-name'
+                      }
+                    >
+                      {c.partner.displayName}
+                    </span>
+                    <span className="dm-preview">{preview}</span>
+                  </span>
+                  {c.unreadCount > 0 && !active && (
+                    <span className="badge" aria-label={`${c.unreadCount} unread`}>
+                      {c.unreadCount > 99 ? '99+' : c.unreadCount}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </nav>
+        )}
       </aside>
 
       <main className="content">
-        <header className="content-header">
-          <div className="content-title">
-            <FriendsIcon size={22} />
-            Friends
+        {!connected && (
+          <div className="connection-banner" role="status">
+            Reconnecting to Glofly…
           </div>
-          <nav aria-label="Friend filters" className="filters">
-            {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className="filter"
-                aria-pressed={filter === f.id}
-                onClick={() => setFilter(f.id)}
-              >
-                {f.label}
-                {f.id === 'pending' && incomingCount > 0 && (
-                  <span className="badge badge--small">{incomingCount}</span>
-                )}
+        )}
+        {openChat ? (
+          <ChatView
+            key={openChat.id}
+            me={user}
+            conversation={openChat}
+            onRead={markedRead}
+            onSessionExpired={onSessionExpired}
+          />
+        ) : (
+          <>
+            <header className="content-header">
+              <div className="content-title">
+                <FriendsIcon size={22} />
+                Friends
+              </div>
+              <nav aria-label="Friend filters" className="filters">
+                {FILTERS.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    className="filter"
+                    aria-pressed={filter === f.id}
+                    onClick={() => setFilter(f.id)}
+                  >
+                    {f.label}
+                    {f.id === 'pending' && incomingCount > 0 && (
+                      <span className="badge badge--small">{incomingCount}</span>
+                    )}
+                  </button>
+                ))}
+              </nav>
+              <button type="button" className="primary-button add-friend" onClick={openAdd}>
+                <AddFriendIcon />
+                Add friend
               </button>
-            ))}
-          </nav>
-          <button type="button" className="primary-button add-friend" onClick={openAdd}>
-            <AddFriendIcon />
-            Add friend
-          </button>
-        </header>
+            </header>
 
-        <div className="content-body">
-          {notice && (
-            <div className="page-notice" role="alert">
-              {notice}
+            <div className="content-body">
+              {notice && (
+                <div className="page-notice" role="alert">
+                  {notice}
+                </div>
+              )}
+              <div className="search search--wide">
+                <SearchIcon />
+                <input
+                  type="search"
+                  className="search-input"
+                  aria-label="Search friends"
+                  placeholder={
+                    filter === 'blocked'
+                      ? 'Search blocked'
+                      : filter === 'pending'
+                        ? 'Search requests'
+                        : 'Search friends'
+                  }
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              {renderTab()}
             </div>
-          )}
-          <div className="search search--wide">
-            <SearchIcon />
-            <input
-              type="search"
-              className="search-input"
-              aria-label="Search friends"
-              placeholder={
-                filter === 'blocked'
-                  ? 'Search blocked'
-                  : filter === 'pending'
-                    ? 'Search requests'
-                    : 'Search friends'
-              }
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          {renderTab()}
-        </div>
+          </>
+        )}
       </main>
 
       {adding && (
@@ -539,6 +706,10 @@ export default function MainScreen({
           onClose={() => setAdding(false)}
           onChanged={refresh}
           onSessionExpired={onSessionExpired}
+          onMessage={(userId) => {
+            setAdding(false)
+            void openChatWith(userId)
+          }}
         />
       )}
       {confirm && (

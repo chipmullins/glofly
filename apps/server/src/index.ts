@@ -1,9 +1,12 @@
+import { createServer } from "node:http";
 import express, { type ErrorRequestHandler } from "express";
 import helmet from "helmet";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { authRouter } from "./auth/routes";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
+import { conversationsRouter } from "./messages/routes";
+import { startRealtime } from "./realtime";
 
 const app = express();
 const PORT = 4000;
@@ -24,6 +27,7 @@ app.use("/auth", authRouter);
 app.use("/users", usersRouter);
 app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
+app.use("/conversations", conversationsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "not_found" });
@@ -38,6 +42,10 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+// One server handles both the API and the real-time connection.
+const server = createServer(app);
+startRealtime(server);
+
+server.listen(PORT, () => {
   console.log(`Glofly server running at http://localhost:${PORT}`);
 });

@@ -8,7 +8,14 @@ if (!connectionString) {
 }
 
 // A pool keeps a few database connections open and reuses them.
-export const pool = new Pool({ connectionString, max: 10 });
+export const pool = new Pool({
+  connectionString,
+  max: Number(process.env.DATABASE_POOL_MAX) || 10,
+});
+
+// An idle connection dropping (database restart, network blip) shouldn't crash the server;
+// the pool simply opens a new one next time.
+pool.on("error", (err) => console.error("Database connection error:", err.message));
 
 // Use `db` for all queries. Drizzle sends values separately from the SQL,
 // which prevents SQL injection.

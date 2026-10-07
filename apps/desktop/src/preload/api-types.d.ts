@@ -56,9 +56,40 @@ export type ApiError =
   | 'not_found'
   | 'invalid'
   | 'conflict'
+  | 'forbidden'
   | 'too_many_requests'
   | 'server_error'
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError; message: string }
+
+export type Message = {
+  id: string
+  conversationId: string
+  senderId: string
+  body: string
+  /** ISO date */
+  createdAt: string
+}
+
+export type ConversationSummary = {
+  id: string
+  partner: PublicUser
+  lastMessage: Message | null
+  unreadCount: number
+  /** False if you're no longer friends, or either of you blocked the other. */
+  canMessage: boolean
+  /** ISO date of the latest activity, for sorting */
+  activityAt: string
+}
+
+export type MessagePage = { messages: Message[]; hasMore: boolean }
+
+/** Live updates pushed from the server. */
+export type GloflyEvent =
+  | { type: 'message:new'; message: Message }
+  | { type: 'typing'; conversationId: string; userId: string }
+  | { type: 'friends:changed' }
+  | { type: 'connection'; connected: boolean }
+  | { type: 'session:expired' }
 
 /** Which screen is showing, so the window buttons can match its colors. */
 export type WindowTheme = 'login' | 'app'
@@ -88,6 +119,18 @@ export type GloflyApi = {
     block: (userId: string) => Promise<ApiResult<null>>
     unblock: (userId: string) => Promise<ApiResult<null>>
   }
+  conversations: {
+    list: () => Promise<ApiResult<ConversationSummary[]>>
+    /** Opens (or creates) the DM with a friend. */
+    openDm: (userId: string) => Promise<ApiResult<ConversationSummary>>
+    /** Newest page, or the page before `beforeMessageId`. Oldest first. */
+    messages: (conversationId: string, beforeMessageId?: string) => Promise<ApiResult<MessagePage>>
+    send: (conversationId: string, body: string) => Promise<ApiResult<Message>>
+    markRead: (conversationId: string) => Promise<ApiResult<null>>
+    typing: (conversationId: string) => void
+  }
+  /** Subscribe to live updates. Returns a function that unsubscribes. */
+  onEvent: (listener: (event: GloflyEvent) => void) => () => void
   window: {
     setTheme: (theme: WindowTheme) => void
   }

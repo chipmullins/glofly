@@ -4,6 +4,7 @@ import LoginScreen, { type LoginDetails } from './screens/LoginScreen'
 import RegisterScreen from './screens/RegisterScreen'
 import MainScreen from './screens/MainScreen'
 import FireflyTakeoff from './components/FireflyTakeoff'
+import { playSound } from './lib/sounds'
 
 type AuthScreen = 'login' | 'register'
 
@@ -39,7 +40,10 @@ export default function App(): React.JSX.Element {
   // After the takeoff, open the app.
   useEffect(() => {
     if (screen.name !== 'takeoff') return
-    const timer = setTimeout(() => setScreen({ name: 'app', user: screen.user }), TAKEOFF_MS)
+    const timer = setTimeout(() => {
+      playSound('login')
+      setScreen({ name: 'app', user: screen.user })
+    }, TAKEOFF_MS)
     return () => clearTimeout(timer)
   }, [screen])
 

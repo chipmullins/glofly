@@ -389,6 +389,68 @@
   color: var(--glo-muted);
 }
 
+/* ---------- Direct messages in the sidebar ---------- */
+
+.dm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--glo-ink);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.dm-row:hover {
+  background: #efe3d8;
+}
+.dm-row--active,
+.dm-row--active:hover {
+  background: #fbdcc4;
+}
+.dm-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.dm-name {
+  font-weight: 500;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dm-name--strong {
+  font-weight: 700;
+}
+.dm-preview {
+  font-size: 13px;
+  color: var(--glo-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.connection-banner {
+  padding: 8px 24px;
+  background: #fbede1;
+  border-bottom: 1px solid #f1d6c0;
+  color: #8a3005;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
 /* ---------- Friends list ---------- */
 
 .badge {

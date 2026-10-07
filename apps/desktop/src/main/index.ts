@@ -2,11 +2,22 @@ import { app, shell, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'ele
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { checkUsername, login, logout, register, restore } from './auth'
+import {
+  API_URL,
+  checkUsername,
+  endSessionLocally,
+  getSessionToken,
+  login,
+  logout,
+  register,
+  restore
+} from './auth'
+import { listConversations, loadMessages, markRead, openDm, sendMessage } from './messages'
+import { connectRealtime, disconnectRealtime, sendTyping } from './realtime'
+import { isUserId } from './api'
 import {
   acceptRequest,
   blockUser,
-  isUserId,
   listFriends,
   removeFriend,
   removeRequest,
@@ -112,6 +123,19 @@ function isWindowTheme(value: unknown): value is WindowTheme {
   return value === 'login' || value === 'app'
 }
 
+/** Opens the live connection once signed in. If the server rejects it, sign out here too. */
+function goLive(): void {
+  const token = getSessionToken()
+  if (token) connectRealtime(API_URL, token, () => void endSessionLocally())
+}
+
+/** Runs an auth action, and opens the live connection if it signed someone in. */
+async function thenGoLive<T>(result: Promise<T>): Promise<T> {
+  const value = await result
+  if (getSessionToken()) goLive()
+  return value
+}
+
 function registerIpcHandlers(): void {
   ipcMain.on('window:theme', (event, theme: unknown) => {
     if (!customTitleBar || !isAppUrl(event.senderFrame?.url ?? '') || !isWindowTheme(theme)) return
@@ -122,7 +146,7 @@ function registerIpcHandlers(): void {
     if (!fromApp(event) || !isRegisterRequest(request)) {
       return { ok: false, fields: {}, message: 'Check your details.' }
     }
-    return register(request)
+    return thenGoLive(register(request))
   })
 
   ipcMain.handle('auth:check-username', (event, username: unknown) => {
@@ -155,20 +179,42 @@ function registerIpcHandlers(): void {
     )
   }
 
+  // Conversations and messages.
+  const isMessage = (v: unknown): v is string => typeof v === 'string' && v.length <= 8000
+  ipcMain.handle('conversations:list', (event) => (fromApp(event) ? listConversations() : invalid))
+  ipcMain.handle('conversations:open-dm', (event, userId: unknown) =>
+    fromApp(event) && isUserId(userId) ? openDm(userId) : invalid
+  )
+  ipcMain.handle('conversations:messages', (event, id: unknown, before: unknown) =>
+    fromApp(event) && isUserId(id) && (before === undefined || isUserId(before))
+      ? loadMessages(id, before)
+      : invalid
+  )
+  ipcMain.handle('conversations:send', (event, id: unknown, body: unknown) =>
+    fromApp(event) && isUserId(id) && isMessage(body) ? sendMessage(id, body) : invalid
+  )
+  ipcMain.handle('conversations:read', (event, id: unknown) =>
+    fromApp(event) && isUserId(id) ? markRead(id) : invalid
+  )
+  ipcMain.on('conversations:typing', (event, id: unknown) => {
+    if (isAppUrl(event.senderFrame?.url ?? '') && isUserId(id)) sendTyping(id)
+  })
+
   ipcMain.handle('auth:restore', (event) => {
     if (!fromApp(event)) return null
-    return restore()
+    return thenGoLive(restore())
   })
 
   ipcMain.handle('auth:login', (event, request: unknown) => {
     if (!fromApp(event) || !isLoginRequest(request)) {
       return { ok: false, reason: 'invalid', message: 'Check your details.' }
     }
-    return login(request)
+    return thenGoLive(login(request))
   })
 
   ipcMain.handle('auth:logout', (event) => {
     if (!fromApp(event)) return
+    disconnectRealtime()
     return logout()
   })
 }
