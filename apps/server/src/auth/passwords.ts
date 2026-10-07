@@ -1,0 +1,22 @@
+import { hash, verify } from "@node-rs/argon2";
+
+// Argon2id with the settings OWASP recommends: 19 MiB of memory, 2 passes, 1 thread.
+// Each hash includes its own random salt, so two people with the same password
+// get completely different hashes.
+const OPTIONS = {
+  memoryCost: 19456,
+  timeCost: 2,
+  parallelism: 1,
+};
+
+export function hashPassword(password: string): Promise<string> {
+  return hash(password, OPTIONS);
+}
+
+export async function verifyPassword(passwordHash: string, password: string): Promise<boolean> {
+  try {
+    return await verify(passwordHash, password);
+  } catch {
+    return false;
+  }
+}
