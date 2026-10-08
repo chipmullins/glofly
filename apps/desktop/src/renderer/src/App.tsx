@@ -68,6 +68,7 @@ export default function App(): React.JSX.Element {
   }
 
   async function handleLogout(): Promise<void> {
+    playSound('logout')
     await window.glofly.auth.logout()
     setScreen({ name: 'auth', form: 'login' })
   }

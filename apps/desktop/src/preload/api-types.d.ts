@@ -294,8 +294,20 @@ export type ShowNotification = {
   call?: boolean
 }
 
-/** Short sounds for alerts, and longer ones for calls (Chip's sound files). */
-export type AlertSound = 'chime' | 'hello' | 'none'
+/** Short sounds for alerts and call moments, and longer ones that loop while a call rings. */
+export type AlertSound =
+  | 'chime'
+  | 'hello'
+  | 'glowOn'
+  | 'glowOff'
+  | 'blinkIn'
+  | 'blinkOut'
+  | 'goodnight'
+  | 'sparkTrail'
+  | 'dewdrop'
+  | 'starfall'
+  | 'pebble'
+  | 'none'
 export type CallSound = 'ring' | 'jingle' | 'none'
 
 /** Settings → Notifications & sounds */
@@ -307,6 +319,16 @@ export type SoundSettings = {
   message: AlertSound
   friendRequest: AlertSound
   login: AlertSound
+  /** You log out */
+  logout: AlertSound
+  /** You're in a call with someone (they answered, or you answered or joined) */
+  callConnected: AlertSound
+  /** You leave a call, or it ends */
+  callEnded: AlertSound
+  /** Someone else joins the group call you're in */
+  memberJoined: AlertSound
+  /** Someone else leaves the group call you're in */
+  memberLeft: AlertSound
   /** Plays when someone calls you (with calls) */
   ringtone: CallSound
   /** Plays while you wait for someone to answer (with calls) */

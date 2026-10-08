@@ -36,6 +36,11 @@ const saved: Saved = {
     message: 'chime',
     friendRequest: 'chime',
     login: 'hello',
+    logout: 'goodnight',
+    callConnected: 'glowOn',
+    callEnded: 'glowOff',
+    memberJoined: 'blinkIn',
+    memberLeft: 'blinkOut',
     ringtone: 'ring',
     outgoing: 'jingle'
   },
@@ -50,7 +55,20 @@ const isNotificationChanges = (value: unknown): value is Partial<NotificationSet
     ([k, v]) => (k === 'enabled' || k === 'preview') && typeof v === 'boolean'
   )
 
-const ALERT_SOUNDS: AlertSound[] = ['chime', 'hello', 'none']
+const ALERT_SOUNDS: AlertSound[] = [
+  'chime',
+  'hello',
+  'glowOn',
+  'glowOff',
+  'blinkIn',
+  'blinkOut',
+  'goodnight',
+  'sparkTrail',
+  'dewdrop',
+  'starfall',
+  'pebble',
+  'none'
+]
 const CALL_SOUNDS: CallSound[] = ['ring', 'jingle', 'none']
 
 /** Checks a sound setting (from the window or the saved file) before using it. */
@@ -62,6 +80,11 @@ function soundSettingOk(key: string, value: unknown): boolean {
     case 'message':
     case 'friendRequest':
     case 'login':
+    case 'logout':
+    case 'callConnected':
+    case 'callEnded':
+    case 'memberJoined':
+    case 'memberLeft':
       return ALERT_SOUNDS.includes(value as AlertSound)
     case 'ringtone':
     case 'outgoing':

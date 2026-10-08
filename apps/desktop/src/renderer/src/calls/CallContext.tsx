@@ -16,7 +16,7 @@ import type {
 } from '../../../preload/api-types'
 import { chatTitle } from '../lib/groups'
 import { audioCapture, getCallPrefs, onCallPrefsChange, type CallPrefs } from '../lib/callPrefs'
-import { startLoop } from '../lib/sounds'
+import { playSound, startLoop } from '../lib/sounds'
 import { clearNotification, notify, shouldNotify } from '../lib/notify'
 import IncomingCall from '../components/IncomingCall'
 import {
@@ -150,6 +150,44 @@ export function CallProvider({
   const justLeft = useRef(new Set<string>())
 
   const bump = useCallback(() => setTick((t) => t + 1), [])
+
+  // Call sounds (Settings → Notifications & sounds). "Connected" the first moment you're in a
+  // call with someone else; then, in groups, "Someone joins" / "Someone leaves" as people come
+  // and go; "Call ended" when the call goes away after that. A call nobody answered, or that
+  // you hung up while it rang, makes no connected/ended sound (the jingle already stopped).
+  const heard = useRef<{ callId: string | null; live: boolean; others: Set<string> }>({
+    callId: null,
+    live: false,
+    others: new Set()
+  })
+  useEffect(() => {
+    const h = heard.current
+    const call = current?.call ?? null
+    if (!current || (h.callId && call && call.id !== h.callId)) {
+      if (h.live) playSound('callEnded')
+      heard.current = { callId: null, live: false, others: new Set() }
+      if (!current) return
+    }
+    if (!call) return
+    const inIt = current.phase === 'connected' || current.phase === 'reconnecting'
+    const others = new Set(
+      call.members.filter((m) => m.userId !== me.id && m.state === 'joined').map((m) => m.userId)
+    )
+    const now = heard.current
+    now.callId = call.id
+    if (!now.live) {
+      if (inIt && others.size > 0) {
+        playSound('callConnected')
+        heard.current = { callId: call.id, live: true, others }
+      }
+      return
+    }
+    if (current.chat.kind === 'group') {
+      if ([...others].some((id) => !now.others.has(id))) playSound('memberJoined')
+      if ([...now.others].some((id) => !others.has(id))) playSound('memberLeft')
+    }
+    now.others = others
+  }, [current, me.id])
 
   const chatFor = useCallback((conversationId: string): CallChat | null => {
     const c = conversationsRef.current.find((x) => x.id === conversationId)

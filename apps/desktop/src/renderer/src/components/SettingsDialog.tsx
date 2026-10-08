@@ -105,10 +105,20 @@ function Segmented<T extends string>({
   )
 }
 
-type SoundKey = 'message' | 'friendRequest' | 'login' | 'ringtone' | 'outgoing'
+type SoundKey =
+  | 'message'
+  | 'friendRequest'
+  | 'login'
+  | 'logout'
+  | 'ringtone'
+  | 'outgoing'
+  | 'callConnected'
+  | 'callEnded'
+  | 'memberJoined'
+  | 'memberLeft'
 
-// Sound rows from the design (plus the login sound). Alerts pick from the short sounds,
-// call rows from the long ones.
+// Sound rows from the design (plus login, log out and the call moments). Short-sound rows pick
+// from every short sound, the ringing rows from the long ones.
 const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' | 'call' }[] = [
   { key: 'message', label: 'Message sound', kind: 'alert' },
   { key: 'friendRequest', label: 'Friend request sound', kind: 'alert' },
@@ -118,15 +128,53 @@ const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' |
     desc: 'Plays as Glofly opens after you log in.',
     kind: 'alert'
   },
+  { key: 'logout', label: 'Log out sound', desc: 'Plays when you log out.', kind: 'alert' },
   { key: 'ringtone', label: 'Ringtone', desc: 'Plays when someone calls you.', kind: 'call' },
   {
     key: 'outgoing',
     label: 'Outgoing call jingle',
     desc: 'Plays while you wait for someone to answer.',
     kind: 'call'
+  },
+  {
+    key: 'callConnected',
+    label: 'Call connected',
+    desc: 'Plays when you join a call, or someone answers yours.',
+    kind: 'alert'
+  },
+  {
+    key: 'callEnded',
+    label: 'Call ended',
+    desc: 'Plays when you leave a call, or it ends.',
+    kind: 'alert'
+  },
+  {
+    key: 'memberJoined',
+    label: 'Someone joins',
+    desc: 'Plays when someone joins a group call you’re in.',
+    kind: 'alert'
+  },
+  {
+    key: 'memberLeft',
+    label: 'Someone leaves',
+    desc: 'Plays when someone leaves a group call you’re in.',
+    kind: 'alert'
   }
 ]
-const ALERT_CHOICES: AlertSound[] = ['chime', 'hello', 'none']
+const ALERT_CHOICES: AlertSound[] = [
+  'chime',
+  'sparkTrail',
+  'dewdrop',
+  'starfall',
+  'pebble',
+  'hello',
+  'goodnight',
+  'glowOn',
+  'glowOff',
+  'blinkIn',
+  'blinkOut',
+  'none'
+]
 const CALL_CHOICES: CallSound[] = ['ring', 'jingle', 'none']
 
 function PlayIcon({ playing }: { playing: boolean }): React.JSX.Element {

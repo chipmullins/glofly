@@ -8,22 +8,46 @@ import messageFile from '../assets/sounds/message.ogg'
 import loginFile from '../assets/sounds/login.ogg'
 import ringtoneFile from '../assets/sounds/ringtone.ogg'
 import outgoingFile from '../assets/sounds/outgoing.ogg'
+import glowOnFile from '../assets/sounds/glow-on.ogg'
+import glowOffFile from '../assets/sounds/glow-off.ogg'
+import blinkInFile from '../assets/sounds/blink-in.ogg'
+import blinkOutFile from '../assets/sounds/blink-out.ogg'
+import goodnightFile from '../assets/sounds/goodnight.ogg'
+import sparkTrailFile from '../assets/sounds/spark-trail.ogg'
+import dewdropFile from '../assets/sounds/dewdrop.ogg'
+import starfallFile from '../assets/sounds/starfall.ogg'
+import pebbleFile from '../assets/sounds/pebble.ogg'
 
 export type SoundName =
   | 'message' // a message arrives
   | 'friendRequest' // someone sends you a friend request
   | 'login' // the firefly takeoff finishes
+  | 'logout' // you log out
+  | 'callConnected' // you're in a call with someone
+  | 'callEnded' // you leave a call, or it ends
+  | 'memberJoined' // someone joins the group call you're in
+  | 'memberLeft' // someone leaves the group call you're in
   | 'ringtone' // someone is calling you
   | 'outgoing' // waiting for someone to answer your call
 
-type SoundFile = Exclude<AlertSound | CallSound, 'none'>
+export type SoundFile = Exclude<AlertSound | CallSound, 'none'>
 
 /** The sound library, with the names shown in Settings. */
 export const SOUND_FILES: Record<SoundFile, { label: string; url: string }> = {
   chime: { label: 'Firefly chime', url: messageFile },
   hello: { label: 'Glofly hello', url: loginFile },
   ring: { label: 'Glow ring', url: ringtoneFile },
-  jingle: { label: 'Glofly jingle', url: outgoingFile }
+  jingle: { label: 'Glofly jingle', url: outgoingFile },
+  // Made Oct 8 from the same notes (C, E, G, B) and tone as the sounds above.
+  glowOn: { label: 'Glow on', url: glowOnFile },
+  glowOff: { label: 'Glow off', url: glowOffFile },
+  blinkIn: { label: 'Blink in', url: blinkInFile },
+  blinkOut: { label: 'Blink out', url: blinkOutFile },
+  goodnight: { label: 'Glofly goodnight', url: goodnightFile },
+  sparkTrail: { label: 'Spark trail', url: sparkTrailFile },
+  dewdrop: { label: 'Dewdrop', url: dewdropFile },
+  starfall: { label: 'Starfall', url: starfallFile },
+  pebble: { label: 'Pebble', url: pebbleFile }
 }
 
 let settings: SoundSettings = {
@@ -32,6 +56,11 @@ let settings: SoundSettings = {
   message: 'chime',
   friendRequest: 'chime',
   login: 'hello',
+  logout: 'goodnight',
+  callConnected: 'glowOn',
+  callEnded: 'glowOff',
+  memberJoined: 'blinkIn',
+  memberLeft: 'blinkOut',
   ringtone: 'ring',
   outgoing: 'jingle'
 }
@@ -56,7 +85,7 @@ const lastPlayed = new Map<SoundName, number>()
 export function playSound(name: SoundName): void {
   if (!settings.enabled || (quiet && settings.dndSilence)) return
   const choice = settings[name]
-  if (choice === 'none') return
+  if (!choice || choice === 'none' || !(choice in SOUND_FILES)) return
   // A burst of messages makes one sound, not a pile-up.
   const now = Date.now()
   if (now - (lastPlayed.get(name) ?? 0) < 800) return
@@ -75,7 +104,7 @@ export function playSound(name: SoundName): void {
 export function startLoop(name: 'ringtone' | 'outgoing'): () => void {
   if (!settings.enabled || (quiet && settings.dndSilence)) return () => {}
   const choice = settings[name]
-  if (choice === 'none') return () => {}
+  if (!choice || choice === 'none' || !(choice in SOUND_FILES)) return () => {}
   const audio = new Audio(SOUND_FILES[choice].url)
   audio.loop = true
   let stopped = false
