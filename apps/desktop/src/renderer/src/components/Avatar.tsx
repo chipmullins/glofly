@@ -3,26 +3,9 @@ import type { PresenceStatus } from '../../../preload/api-types'
 import { avatarUrl } from '../lib/media'
 import { initials } from '../lib/names'
 import StatusDot from './StatusDot'
+import { colorsFor } from '../lib/avatarColors'
 
 // Round avatar: the person's profile photo, or their initials in a steady color.
-
-// Color pairs from the design canvas.
-const PALETTE: [string, string][] = [
-  ['#FBDCC4', '#8A3005'],
-  ['#D7E5F5', '#1E4E8C'],
-  ['#DDEBD9', '#2F6B3A'],
-  ['#EADCF5', '#5B3A8C'],
-  ['#F5DCDC', '#8C2F2F'],
-  ['#F3E7C5', '#6E5310'],
-  ['#E2E8EC', '#3A4B57']
-]
-
-/** The same person always gets the same color. */
-function colorsFor(id: string): [string, string] {
-  let hash = 0
-  for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
-  return PALETTE[hash % PALETTE.length]
-}
 
 type AvatarProps = {
   id: string

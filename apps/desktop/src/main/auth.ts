@@ -8,8 +8,25 @@ import type {
 } from '../preload/api-types'
 import { clearToken, loadToken, saveToken } from './session-store'
 
-// Where the Glofly server lives. Local for now; becomes the AWS address at release.
-const API_URL = 'http://localhost:4000'
+// Where the Glofly server lives. This PC (localhost) unless apps/desktop/.env.local says
+// otherwise, e.g. to test on other computers at home:
+//   MAIN_VITE_SERVER_URL=http://192.168.1.50:4000
+// It's read when the app is built (npm run dev / npm run build:win), so rebuild after changing it.
+// Becomes the AWS (https) address at release.
+const API_URL = serverUrl(import.meta.env.MAIN_VITE_SERVER_URL)
+
+function serverUrl(setting: string | undefined): string {
+  const fallback = 'http://localhost:4000'
+  if (!setting) return fallback
+  try {
+    const url = new URL(setting.trim())
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('not http')
+    return url.origin // no trailing slash or path
+  } catch {
+    console.error(`MAIN_VITE_SERVER_URL isn't a web address (${setting}). Using ${fallback}.`)
+    return fallback
+  }
+}
 
 const DEVICE_NAME = `Glofly Desktop on ${
   process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'Mac' : 'Linux'

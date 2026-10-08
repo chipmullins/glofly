@@ -13,6 +13,7 @@ import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
 import VoiceVideoSettings from './VoiceVideoSettings'
 import { previewSound, setSoundSettings, SOUND_FILES, stopPreview } from '../lib/sounds'
+import { setNotificationSettings } from '../lib/notify'
 import './dialogs.css'
 import './SettingsDialog.css'
 
@@ -318,12 +319,14 @@ export default function SettingsDialog({
     setAppSettings({
       ...appSettings,
       ...changes,
-      sounds: { ...appSettings.sounds, ...changes.sounds }
+      sounds: { ...appSettings.sounds, ...changes.sounds },
+      notifications: { ...appSettings.notifications, ...changes.notifications }
     })
     const saved = await window.glofly.app.setSettings(changes)
     if (saved) {
       setAppSettings(saved)
       setSoundSettings(saved.sounds)
+      setNotificationSettings(saved.notifications)
     }
   }
 
@@ -539,6 +542,42 @@ export default function SettingsDialog({
                 <section className="settings-section">
                   <h2>Notifications &amp; sounds</h2>
                   <div className="settings-card">
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <span className="settings-row-label">Desktop notifications</span>
+                        <span className="settings-row-desc">
+                          Show new messages and calls in Windows when Glofly isn&apos;t in front.
+                        </span>
+                      </div>
+                      {appSettings ? (
+                        <Toggle
+                          on={appSettings.notifications.enabled}
+                          label="Desktop notifications"
+                          onChange={(on) => void changeApp({ notifications: { enabled: on } })}
+                        />
+                      ) : (
+                        <span className="toggle toggle--loading" aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <span className="settings-row-label">Show message preview</span>
+                        <span className="settings-row-desc">
+                          Off shows &ldquo;New message&rdquo; instead of what it says, handy when
+                          sharing your screen.
+                        </span>
+                      </div>
+                      {appSettings ? (
+                        <Toggle
+                          on={appSettings.notifications.preview}
+                          label="Show message preview"
+                          disabled={!appSettings.notifications.enabled}
+                          onChange={(on) => void changeApp({ notifications: { preview: on } })}
+                        />
+                      ) : (
+                        <span className="toggle toggle--loading" aria-hidden="true" />
+                      )}
+                    </div>
                     <div className="settings-row">
                       <div className="settings-row-text">
                         <span className="settings-row-label">Notification sounds</span>

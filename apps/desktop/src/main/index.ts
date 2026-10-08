@@ -41,6 +41,13 @@ import {
 } from './messages'
 import { saveAttachment, showInFolder } from './files'
 import {
+  clearAllNotifications,
+  clearNotification,
+  isShowNotification,
+  setBadge,
+  showNotification
+} from './notifications'
+import {
   activeCalls,
   answerCall,
   chooseScreen,
@@ -120,7 +127,8 @@ let mainWindow: BrowserWindow | null = null
 // Profile photos load through glofly-media:// (see media.ts). Registered before the app
 // starts, as a secure scheme so the window treats it like https.
 protocol.registerSchemesAsPrivileged([
-  { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true } }
+  // corsEnabled: the window can draw a profile photo onto a canvas (notification pictures).
+  { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, corsEnabled: true } }
 ])
 
 // On Windows, Glofly draws its own top area and Windows only draws the window
@@ -581,6 +589,22 @@ function registerIpcHandlers(): void {
       : false
   )
 
+  // Windows notifications and the taskbar badge (the window decides when and what).
+  ipcMain.on('notifications:show', (event, notification: unknown) => {
+    if (isAppUrl(event.senderFrame?.url ?? '') && isShowNotification(notification)) {
+      showNotification(notification, icon)
+    }
+  })
+  ipcMain.on('notifications:clear', (event, key: unknown) => {
+    if (isAppUrl(event.senderFrame?.url ?? '') && typeof key === 'string' && key.length <= 60) {
+      clearNotification(key)
+    }
+  })
+  ipcMain.on('notifications:badge', (event, count: unknown, image: unknown) => {
+    if (!isAppUrl(event.senderFrame?.url ?? '') || typeof count !== 'number') return
+    setBadge(BrowserWindow.fromWebContents(event.sender), count, image)
+  })
+
   // An incoming call: show Glofly if it's tucked away in the tray, and flash the taskbar button
   // (without taking focus away from whatever you're doing).
   ipcMain.on('window:attention', (event) => {
@@ -606,6 +630,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('auth:logout', (event) => {
     if (!fromApp(event)) return
     disconnectRealtime()
+    clearAllNotifications()
+    setBadge(BrowserWindow.fromWebContents(event.sender), 0, null)
     return logout()
   })
 }

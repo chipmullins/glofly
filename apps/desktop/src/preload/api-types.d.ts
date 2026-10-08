@@ -270,7 +270,29 @@ export type AccountDetails = { username: string; email: string; createdAt: strin
 
 export type AppSettingsChanges = Partial<
   Pick<AppSettings, 'closeToTray' | 'openAtLogin' | 'theme' | 'accent' | 'textSize'>
-> & { sounds?: Partial<SoundSettings> }
+> & { sounds?: Partial<SoundSettings>; notifications?: Partial<NotificationSettings> }
+
+/** Settings → Notifications & sounds: Windows notifications */
+export type NotificationSettings = {
+  /** "Desktop notifications" */
+  enabled: boolean
+  /** "Show message preview": off shows "New message" instead of the text */
+  preview: boolean
+}
+
+/** A Windows notification, built by the window and shown by the main process. */
+export type ShowNotification = {
+  /** One notification per key: a new one replaces the old (a chat's id, or "call:<id>") */
+  key: string
+  /** The chat it's about: clicking it opens this chat (null: the Friends page, e.g. a request) */
+  conversationId: string | null
+  title: string
+  body: string
+  /** A round picture of the person (PNG data: URL), or null for the Glofly icon */
+  icon: string | null
+  /** Calls stay until answered or dismissed */
+  call?: boolean
+}
 
 /** Short sounds for alerts, and longer ones for calls (Chip's sound files). */
 export type AlertSound = 'chime' | 'hello' | 'none'
@@ -303,6 +325,7 @@ export type AppSettings = {
   accent: AccentChoice
   textSize: TextSize
   sounds: SoundSettings
+  notifications: NotificationSettings
   /** Closing the window keeps Glofly running in the system tray. */
   closeToTray: boolean
   /** Open Glofly when the computer starts. */
@@ -328,6 +351,8 @@ export type GloflyEvent =
   | { type: 'connection'; connected: boolean }
   | { type: 'session:expired' }
   | { type: 'appearance'; accent: AccentChoice; dark: boolean }
+  /** A Windows notification was clicked (Glofly is already brought to the front). */
+  | { type: 'notification:click'; conversationId: string | null }
 
 /** Which screen is showing, so the window buttons can match its colors. */
 export type WindowTheme = 'login' | 'app'
@@ -467,6 +492,13 @@ export type GloflyApi = {
     screenSources: () => Promise<ScreenSource[]>
     /** Picks what the next screen share shows (the share itself starts in the call). */
     chooseScreen: (sourceId: string) => Promise<boolean>
+  }
+  notifications: {
+    show: (notification: ShowNotification) => void
+    /** Takes a chat's (or call's) notification away, e.g. once you've read the chat. */
+    clear: (key: string) => void
+    /** The unread count on the taskbar icon; `image` is the badge drawn by the window. */
+    badge: (count: number, image: string | null) => void
   }
   /** Subscribe to live updates. Returns a function that unsubscribes. */
   onEvent: (listener: (event: GloflyEvent) => void) => () => void

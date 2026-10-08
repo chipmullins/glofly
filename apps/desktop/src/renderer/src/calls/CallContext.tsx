@@ -17,6 +17,7 @@ import type {
 import { chatTitle } from '../lib/groups'
 import { audioCapture, getCallPrefs, onCallPrefsChange, type CallPrefs } from '../lib/callPrefs'
 import { startLoop } from '../lib/sounds'
+import { clearNotification, notify, shouldNotify } from '../lib/notify'
 import IncomingCall from '../components/IncomingCall'
 import {
   CallsContext,
@@ -161,6 +162,8 @@ export function CallProvider({
   )
 
   const clearIncoming = useCallback(() => {
+    const ringing = incomingRef.current
+    if (ringing) clearNotification(`call:${ringing.call.id}`)
     stopRingtone.current()
     stopRingtone.current = () => {}
     if (ringEnd.current) clearTimeout(ringEnd.current)
@@ -606,6 +609,23 @@ export function CallProvider({
           setIncoming({ call, caller: who, chat })
           stopRingtone.current = startLoop('ringtone')
           window.glofly.window.attention()
+          // Not looking at Glofly: a Windows notification too (clicking it opens the call).
+          if (shouldNotify()) {
+            const kind = call.video ? 'Video call' : 'Voice call'
+            void notify(
+              {
+                key: `call:${call.id}`,
+                conversationId: call.conversationId,
+                call: true,
+                title:
+                  chat.kind === 'group'
+                    ? `${firstName(who)} is calling ${chat.title}`
+                    : `${who.displayName} is calling you`,
+                body: `${kind} · Click to answer`
+              },
+              who
+            )
+          }
         } else {
           setIncoming({ ...inc, call })
         }
@@ -622,6 +642,21 @@ export function CallProvider({
         }
       } else if (inc?.call.id === call.id) {
         clearIncoming() // answered elsewhere, declined, or over
+        // It rang out (or they hung up) while you were away.
+        if (call.status === 'missed' && shouldNotify()) {
+          void notify(
+            {
+              key: call.conversationId,
+              conversationId: call.conversationId,
+              title:
+                inc.chat.kind === 'group'
+                  ? `${firstName(inc.caller)} · ${inc.chat.title}`
+                  : inc.caller.displayName,
+              body: `Missed ${call.video ? 'video' : 'voice'} call`
+            },
+            inc.caller
+          )
+        }
       }
 
       if (isActive(call) && mine === 'joined' && chat && !justLeft.current.has(call.id)) {

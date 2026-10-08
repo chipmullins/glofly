@@ -11,6 +11,7 @@ import type {
   PrivacySettings,
   ProfileChanges,
   RegisterRequest,
+  ShowNotification,
   WindowTheme
 } from './api-types'
 
@@ -118,6 +119,12 @@ const glofly: GloflyApi = {
     leave: (callId: string) => ipcRenderer.invoke('calls:leave', callId),
     screenSources: () => ipcRenderer.invoke('calls:screen-sources'),
     chooseScreen: (sourceId: string) => ipcRenderer.invoke('calls:choose-screen', sourceId)
+  },
+  notifications: {
+    show: (notification: ShowNotification) => ipcRenderer.send('notifications:show', notification),
+    clear: (key: string) => ipcRenderer.send('notifications:clear', key),
+    badge: (count: number, image: string | null) =>
+      ipcRenderer.send('notifications:badge', count, image)
   },
   onEvent: (listener: (event: GloflyEvent) => void) => {
     const handler = (_e: Electron.IpcRendererEvent, event: GloflyEvent): void => listener(event)

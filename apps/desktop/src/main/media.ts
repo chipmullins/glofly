@@ -93,6 +93,12 @@ export async function handleMediaRequest(req: Request): Promise<Response> {
   }
 
   return new Response(bytes as BodyInit, {
-    headers: { 'Content-Type': 'image/webp', 'X-Content-Type-Options': 'nosniff' }
+    headers: {
+      'Content-Type': 'image/webp',
+      'X-Content-Type-Options': 'nosniff',
+      // Lets the Glofly page draw photos onto a canvas (notification pictures). Only Glofly's
+      // own page can load glofly-media:// at all (the window never shows any other page).
+      'Access-Control-Allow-Origin': '*'
+    }
   })
 }

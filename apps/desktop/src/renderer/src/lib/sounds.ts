@@ -47,6 +47,9 @@ export function setQuiet(value: boolean): void {
   quiet = value
 }
 
+/** True while Do not disturb is silencing Glofly (sounds and notifications). */
+export const isSilenced = (): boolean => quiet && settings.dndSilence
+
 const lastPlayed = new Map<SoundName, number>()
 
 /** Plays the sound picked for this moment, unless sounds are off or you're in Do not disturb. */

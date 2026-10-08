@@ -6,6 +6,7 @@ import type {
   Presence,
   FriendEntry,
   FriendLists,
+  Message,
   PublicUser,
   SignedInUser
 } from '../../../preload/api-types'
@@ -41,6 +42,8 @@ import ChatList from '../components/ChatList'
 import { findChats, type ChatResult } from '../lib/chatSearch'
 import { GroupPeopleDialog, GroupSettingsDialog } from '../components/GroupDialogs'
 import { chatTitle } from '../lib/groups'
+import { attachmentSummary } from '../lib/attachments'
+import { badgeImage, clearNotification, notify, previewsOn, shouldNotify } from '../lib/notify'
 import { CallProvider } from '../calls/CallContext'
 import type { CallsValue } from '../calls/callState'
 import { CallStrip } from '../components/CallPanel'
@@ -405,6 +408,14 @@ export default function MainScreen({
     openChatRef.current = openChatId
   }, [openChatId])
   const incomingSeen = useRef<number | null>(null)
+  /** Requests already seen (so only new ones get a notification) */
+  const requestIds = useRef<Set<string> | null>(null)
+  /** Messages notified per chat since you last read it ("+2 more") */
+  const unseen = useRef(new Map<string, number>())
+  const conversationsRef = useRef<ConversationSummary[]>([])
+  useEffect(() => {
+    conversationsRef.current = conversations
+  })
 
   const refreshFriends = useCallback(async () => {
     const result = await window.glofly.friends.list()
@@ -413,6 +424,22 @@ export default function MainScreen({
       const count = result.data.incoming.length
       if (incomingSeen.current !== null && count > incomingSeen.current) playSound('friendRequest')
       incomingSeen.current = count
+      // …and a Windows notification for each new one (while you're elsewhere).
+      const before = requestIds.current
+      requestIds.current = new Set(result.data.incoming.map((p) => p.id))
+      if (before && shouldNotify()) {
+        for (const p of result.data.incoming.filter((x) => !before.has(x.id))) {
+          void notify(
+            {
+              key: `request:${p.id}`,
+              conversationId: null,
+              title: p.displayName,
+              body: `@${p.username} sent you a friend request`
+            },
+            p
+          )
+        }
+      }
       setLists(result.data)
       setPresence(
         Object.fromEntries(
@@ -438,6 +465,38 @@ export default function MainScreen({
     await Promise.all([refreshFriends(), refreshConversations()])
   }, [refreshFriends, refreshConversations])
 
+  /**
+   * A Windows notification for a new message: who sent it and what it says (or "New message"
+   * with previews off). One per chat; more messages update it ("+2 more").
+   */
+  const notifyMessage = useCallback((m: Message, people?: PublicUser[]) => {
+    const chat = conversationsRef.current.find((c) => c.id === m.conversationId)
+    const sender =
+      chat?.members.find((p) => p.id === m.senderId) ??
+      people?.find((p) => p.id === m.senderId) ??
+      null
+    const name = sender?.displayName ?? 'Someone'
+    const count = (unseen.current.get(m.conversationId) ?? 0) + 1
+    unseen.current.set(m.conversationId, count)
+    const text = (m.body || attachmentSummary(m.attachments)).replace(/\s+/g, ' ').trim()
+    const more = count > 1 ? ` · +${count - 1} more` : ''
+    void notify(
+      {
+        key: m.conversationId,
+        conversationId: m.conversationId,
+        title: chat?.kind === 'group' ? `${name} · ${chatTitle(chat)}` : name,
+        body: previewsOn() ? `${text}${more}` : count > 1 ? `${count} new messages` : 'New message'
+      },
+      sender
+    )
+  }, [])
+
+  // The unread count on the taskbar icon.
+  useEffect(() => {
+    const total = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
+    window.glofly.notifications.badge(total, total > 0 ? badgeImage(total) : null)
+  }, [conversations])
+
   // Live updates from the server.
   useEffect(() => {
     return window.glofly.onEvent((event) => {
@@ -448,6 +507,7 @@ export default function MainScreen({
           // Group events ("Maya renamed the group") don't ding or count as unread.
           const fromOthers = m.senderId !== user.id && !m.event
           if (fromOthers && !viewing) playSound('message')
+          if (fromOthers && shouldNotify()) notifyMessage(m, event.people)
           setConversations((list) => {
             const existing = list.find((c) => c.id === m.conversationId)
             if (!existing) {
@@ -523,9 +583,17 @@ export default function MainScreen({
         case 'session:expired':
           onSessionExpired()
           break
+        case 'notification:click':
+          // Glofly is already in front: open the chat (or Friends → Pending for a request).
+          if (event.conversationId) setOpenChatId(event.conversationId)
+          else {
+            setOpenChatId(null)
+            setFilter('pending')
+          }
+          break
       }
     })
-  }, [user.id, refresh, refreshConversations, onSessionExpired])
+  }, [user.id, refresh, refreshConversations, onSessionExpired, notifyMessage])
 
   useEffect(() => {
     if (!toast) return
@@ -652,6 +720,9 @@ export default function MainScreen({
   }
 
   const markedRead = useCallback((conversationId: string) => {
+    // Read: its notification goes, and the next one starts counting again.
+    unseen.current.delete(conversationId)
+    clearNotification(conversationId)
     setConversations((list) =>
       list.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
     )

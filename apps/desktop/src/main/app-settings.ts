@@ -7,6 +7,7 @@ import type {
   AppSettings,
   AppSettingsChanges,
   CallSound,
+  NotificationSettings,
   SoundSettings,
   TextSize,
   ThemeChoice
@@ -22,6 +23,7 @@ type Saved = {
   accent: AccentChoice
   textSize: TextSize
   sounds: SoundSettings
+  notifications: NotificationSettings
 }
 const saved: Saved = {
   closeToTray: true, // the design has it on by default
@@ -36,8 +38,17 @@ const saved: Saved = {
     login: 'hello',
     ringtone: 'ring',
     outgoing: 'jingle'
-  }
+  },
+  notifications: { enabled: true, preview: true }
 }
+
+const isNotificationChanges = (value: unknown): value is Partial<NotificationSettings> =>
+  typeof value === 'object' &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.entries(value).every(
+    ([k, v]) => (k === 'enabled' || k === 'preview') && typeof v === 'boolean'
+  )
 
 const ALERT_SOUNDS: AlertSound[] = ['chime', 'hello', 'none']
 const CALL_SOUNDS: CallSound[] = ['ring', 'jingle', 'none']
@@ -92,6 +103,9 @@ export function loadAppSettings(): void {
         if (soundSettingOk(k, v)) (saved.sounds as Record<string, unknown>)[k] = v
       }
     }
+    if (isNotificationChanges(value.notifications)) {
+      saved.notifications = { ...saved.notifications, ...value.notifications }
+    }
   } catch {
     // First run (or an unreadable file): keep the defaults.
   }
@@ -144,6 +158,7 @@ export function getAppSettings(): AppSettings {
     accent: saved.accent,
     textSize: saved.textSize,
     sounds: { ...saved.sounds },
+    notifications: { ...saved.notifications },
     closeToTray: saved.closeToTray,
     openAtLogin: startupAvailable()
       ? app.getLoginItemSettings({ args: [STARTUP_ARG] }).openAtLogin
@@ -162,6 +177,7 @@ export function isAppSettingsChanges(value: unknown): value is AppSettingsChange
     if (k === 'accent') return ACCENTS.includes(v as AccentChoice)
     if (k === 'textSize') return typeof v === 'string' && v in TEXT_SIZES
     if (k === 'sounds') return isSoundChanges(v)
+    if (k === 'notifications') return isNotificationChanges(v)
     return false
   })
 }
@@ -184,7 +200,11 @@ export function setAppSettings(changes: AppSettingsChanges): AppSettings {
     }
   }
   if (changes.sounds) saved.sounds = { ...saved.sounds, ...changes.sounds }
+  if (changes.notifications) {
+    saved.notifications = { ...saved.notifications, ...changes.notifications }
+  }
   if (
+    changes.notifications ||
     changes.closeToTray !== undefined ||
     changes.theme ||
     changes.accent ||
