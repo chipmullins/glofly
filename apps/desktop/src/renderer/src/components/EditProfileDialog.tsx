@@ -12,6 +12,7 @@ import { CameraIcon, CalendarIcon } from './icons'
 import { ProfileHero } from './ProfileCard'
 import './dialogs.css'
 import './ProfileDialogs.css'
+import PhotoCropper from './PhotoCropper'
 
 type EditProfileDialogProps = {
   user: SignedInUser
@@ -38,7 +39,18 @@ const STATUS_CHOICES: { id: MyStatusChoice; label: string }[] = [
 
 /** A photo picked but not saved yet: kept until Save, so Cancel throws it away. */
 type PhotoChange =
-  { kind: 'new'; data: ArrayBuffer; type: PhotoType; preview: string } | { kind: 'remove' }
+  | {
+      kind: 'new'
+      data: ArrayBuffer
+      type: PhotoType
+      preview: string
+      /** The photo as picked, so it can be positioned again */
+      original: PickedPhoto
+    }
+  | { kind: 'remove' }
+
+/** A photo just picked, before it's positioned in the circle. */
+type PickedPhoto = { data: ArrayBuffer; type: PhotoType; src: string }
 
 function readFile(file: File): Promise<{ data: ArrayBuffer; preview: string }> {
   return Promise.all([
@@ -66,6 +78,8 @@ export default function EditProfileDialog({
   const [statusText, setStatusText] = useState(status.statusText ?? '')
   const [bio, setBio] = useState<string | null>(null) // null until loaded
   const [photo, setPhoto] = useState<PhotoChange | null>(null)
+  /** The photo being positioned in the crop window */
+  const [cropping, setCropping] = useState<PickedPhoto | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [nameError, setNameError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -91,7 +105,7 @@ export default function EditProfileDialog({
     })
     nameRef.current?.focus()
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') closeRef.current()
+      if (e.key === 'Escape' && !e.defaultPrevented) closeRef.current()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -111,7 +125,8 @@ export default function EditProfileDialog({
     }
     try {
       const { data, preview } = await readFile(file)
-      setPhoto({ kind: 'new', data, type: file.type as PhotoType, preview })
+      // Choose what's in the circle first.
+      setCropping({ data, type: file.type as PhotoType, src: preview })
       setError(null)
     } catch {
       setError("Couldn't open that photo. Try another one.")
@@ -239,6 +254,15 @@ export default function EditProfileDialog({
               hidden
               onChange={(e) => void pickPhoto(e)}
             />
+            {photo?.kind === 'new' && (
+              <button
+                type="button"
+                className="photo-remove photo-adjust"
+                onClick={() => setCropping(photo.original)}
+              >
+                Adjust position
+              </button>
+            )}
             {hasPhoto && (
               <button
                 type="button"
@@ -365,6 +389,27 @@ export default function EditProfileDialog({
           </div>
         </div>
       </form>
+      {cropping && (
+        <PhotoCropper
+          src={cropping.src}
+          animated={cropping.type === 'image/gif'}
+          onApply={({ data, preview }) => {
+            setPhoto({ kind: 'new', data, type: 'image/webp', preview, original: cropping })
+            setCropping(null)
+          }}
+          onUseWhole={() => {
+            setPhoto({
+              kind: 'new',
+              data: cropping.data,
+              type: cropping.type,
+              preview: cropping.src,
+              original: cropping
+            })
+            setCropping(null)
+          }}
+          onCancel={() => setCropping(null)}
+        />
+      )}
     </div>
   )
 }

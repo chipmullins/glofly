@@ -452,3 +452,24 @@
   font-size: 12px;
   font-weight: 700;
 }
+
+/* ---------- Simple panel dialogs: title, content, buttons on the right ----------
+   (Share your screen, Add people to the call, Position your photo) */
+
+.dialog--panel {
+  padding: 24px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100vh - 80px);
+}
+.dialog--panel > .dialog-head {
+  display: block;
+}
+.dialog--panel > .dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding-top: 16px;
+}

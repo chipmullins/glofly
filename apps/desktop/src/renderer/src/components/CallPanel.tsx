@@ -240,7 +240,7 @@ export function ScreenPicker({
         role="dialog"
         aria-modal="true"
         aria-labelledby="screen-picker-title"
-        className="dialog screen-picker"
+        className="dialog dialog--panel screen-picker"
       >
         <div className="dialog-head">
           <h1 id="screen-picker-title">Share your screen</h1>
@@ -303,7 +303,7 @@ function AddToCall({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-to-call-title"
-        className="dialog add-to-call"
+        className="dialog dialog--panel add-to-call"
       >
         <div className="dialog-head">
           <h1 id="add-to-call-title">Add people to the call</h1>

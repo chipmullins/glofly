@@ -546,3 +546,87 @@
   opacity: 0.7;
   cursor: default;
 }
+
+/* ---------- Position your photo (crop) ---------- */
+
+.photo-adjust {
+  margin-top: -4px;
+  color: var(--glo-link);
+}
+.photo-adjust:hover {
+  color: var(--glo-link-hover);
+}
+.crop-backdrop {
+  z-index: 60; /* above Edit profile */
+}
+.crop-dialog {
+  width: min(400px, calc(100vw - 48px));
+}
+.crop-stage {
+  display: flex;
+  justify-content: center;
+}
+.crop-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--glo-night);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.crop-frame:active {
+  cursor: grabbing;
+}
+.crop-frame:focus-visible {
+  outline: 3px solid var(--glo-accent);
+  outline-offset: 3px;
+}
+.crop-image {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+}
+/* Everything outside the circle is dimmed, like the round photo it becomes. */
+.crop-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.85),
+    0 0 0 999px rgba(28, 18, 16, 0.6);
+  pointer-events: none;
+}
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+}
+.crop-zoom input {
+  flex: 1;
+  accent-color: var(--glo-accent);
+}
+.crop-zoom button {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--glo-panel);
+  color: var(--glo-icon);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.crop-zoom button:hover {
+  background: var(--glo-hover);
+}
+.crop-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.crop-whole {
+  margin-right: auto;
+}
