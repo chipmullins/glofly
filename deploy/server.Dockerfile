@@ -23,8 +23,11 @@ COPY apps/desktop/package.json apps/desktop/
 RUN npm ci -w @glofly/server --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
 
 # Amazon's certificate list, so the encrypted connection to RDS is verified (see src/db/index.ts).
-ADD --chmod=644 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /etc/ssl/rds-global-bundle.pem
-ENV DATABASE_CA_FILE=/etc/ssl/rds-global-bundle.pem
+# (Kept in its own folder: ADD --chmod into /etc/ssl locked that folder and broke Node's OpenSSL.)
+RUN mkdir -p /opt/certs
+ADD https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /opt/certs/rds-global-bundle.pem
+RUN chmod 755 /opt/certs && chmod 644 /opt/certs/rds-global-bundle.pem
+ENV DATABASE_CA_FILE=/opt/certs/rds-global-bundle.pem
 
 WORKDIR /app/apps/server
 COPY --from=build /app/apps/server/dist ./dist
