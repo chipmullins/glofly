@@ -1,1 +1,3 @@
 uploads/
+# Redis snapshots (if redis-server is ever run from this folder)
+dump.rdb
