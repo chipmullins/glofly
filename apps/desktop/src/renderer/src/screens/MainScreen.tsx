@@ -45,6 +45,7 @@ import { chatTitle } from '../lib/groups'
 import { attachmentSummary } from '../lib/attachments'
 import { badgeImage, clearNotification, notify, previewsOn, shouldNotify } from '../lib/notify'
 import { CallProvider } from '../calls/CallContext'
+import UpdateBar from '../components/UpdateBar'
 import type { CallsValue } from '../calls/callState'
 import { CallStrip } from '../components/CallPanel'
 import { PhoneIcon, VideoIcon } from '../components/icons'
@@ -1087,6 +1088,7 @@ export default function MainScreen({
         </aside>
 
         <main className="content">
+          <UpdateBar />
           {!connected && (
             <div className="connection-banner" role="status">
               Reconnecting to Glofly…

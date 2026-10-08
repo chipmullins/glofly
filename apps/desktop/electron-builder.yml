@@ -47,7 +47,8 @@ linux:
 appImage:
   artifactName: Glofly-${version}.${ext}
 npmRebuild: false
-# Auto-updates are switched on at the AWS step (the address gets filled in then).
+# Auto-updates: a release uploads Glofly-<version>-setup.exe, its .blockmap and latest.yml
+# to the public glofly-updates bucket. (The app reads the same address from .env.production.)
 publish:
   provider: generic
-  url: https://example.com/auto-updates
+  url: https://glofly-updates.s3.us-east-2.amazonaws.com

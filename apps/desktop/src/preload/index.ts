@@ -131,6 +131,17 @@ const glofly: GloflyApi = {
     ipcRenderer.on('glofly:event', handler)
     return () => ipcRenderer.removeListener('glofly:event', handler)
   },
+  updates: {
+    status: () => ipcRenderer.invoke('updates:status'),
+    onReady: (listener: (version: string) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, version: unknown): void => {
+        if (typeof version === 'string') listener(version)
+      }
+      ipcRenderer.on('updates:ready', handler)
+      return () => ipcRenderer.removeListener('updates:ready', handler)
+    },
+    restart: () => ipcRenderer.send('updates:restart')
+  },
   window: {
     setTheme: (theme: WindowTheme) => ipcRenderer.send('window:theme', theme),
     attention: () => ipcRenderer.send('window:attention')

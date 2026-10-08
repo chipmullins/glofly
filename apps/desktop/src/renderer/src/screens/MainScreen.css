@@ -501,6 +501,53 @@
   text-align: center;
 }
 
+/* "A new version of Glofly is ready" */
+.update-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 24px;
+  background: var(--glo-accent-tint);
+  border-bottom: 1px solid var(--glo-accent-soft);
+  color: var(--glo-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.update-bar-version {
+  color: var(--glo-muted);
+  font-weight: 500;
+}
+
+.update-bar-restart {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.update-bar-restart:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.update-bar-later {
+  padding: 5px 8px;
+  border: none;
+  background: none;
+  color: var(--glo-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.update-bar-later:hover {
+  color: var(--glo-ink);
+}
+
 /* ---------- Friends list ---------- */
 
 .badge {

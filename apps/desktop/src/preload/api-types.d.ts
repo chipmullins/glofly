@@ -524,6 +524,15 @@ export type GloflyApi = {
   }
   /** Subscribe to live updates. Returns a function that unsubscribes. */
   onEvent: (listener: (event: GloflyEvent) => void) => () => void
+  /** New versions of Glofly (installed app only). */
+  updates: {
+    /** The version downloaded and waiting for a restart, or null. */
+    status: () => Promise<string | null>
+    /** Called when a new version has finished downloading. Returns a function that unsubscribes. */
+    onReady: (listener: (version: string) => void) => () => void
+    /** Closes Glofly, installs the new version and opens it again. */
+    restart: () => void
+  }
   window: {
     setTheme: (theme: WindowTheme) => void
     /** Brings Glofly to your attention (an incoming call): shows it if it's in the tray, flashes the taskbar. */

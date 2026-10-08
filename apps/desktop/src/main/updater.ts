@@ -1,19 +1,22 @@
-import { app } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 
 // Automatic updates for the installed app.
 //
 // Where updates come from is baked in at build time, next to the server address:
 //   MAIN_VITE_UPDATES_URL=https://<updates address>   (apps/desktop/.env.production)
-// The release pipeline uploads the new setup file + latest.yml there. Without the
-// setting (development, home-network test builds) nothing is checked.
+// A release uploads the new setup file + its .blockmap + latest.yml there. Without
+// the setting (development, home-network test builds) nothing is checked.
 //
-// Glofly checks shortly after starting and every 4 hours, downloads in the
-// background (small delta downloads), shows a Windows notification when it's
-// ready, and installs the next time Glofly quits. (An in-app "Restart to update"
-// button comes later.)
+// Glofly checks shortly after starting and every 4 hours and downloads in the
+// background (only the changed parts, thanks to the .blockmap). When a new version
+// is ready, the window shows "Restart to update"; otherwise it installs quietly the
+// next time Glofly quits.
 
 const CHECK_EVERY = 4 * 60 * 60 * 1000
+
+/** The version that's downloaded and waiting, or null. */
+let readyVersion: string | null = null
 
 function updatesUrl(): string | null {
   const setting = import.meta.env.MAIN_VITE_UPDATES_URL?.trim()
@@ -27,6 +30,22 @@ function updatesUrl(): string | null {
   }
 }
 
+function announce(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send('updates:ready', readyVersion)
+  }
+}
+
+export function updateReady(): string | null {
+  return readyVersion
+}
+
+/** "Restart to update": closes Glofly, installs silently, and opens it again. */
+export function restartToUpdate(): void {
+  if (!readyVersion) return
+  autoUpdater.quitAndInstall(true, true)
+}
+
 export function startAutoUpdates(): void {
   const url = updatesUrl()
   if (!app.isPackaged || !url) return
@@ -35,10 +54,15 @@ export function startAutoUpdates(): void {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.on('error', (err) => console.error('Update check failed:', err?.message ?? err))
+  autoUpdater.on('update-downloaded', (info) => {
+    readyVersion = info.version
+    announce()
+  })
 
   const check = (): void => {
+    if (readyVersion) return // already waiting for a restart
     autoUpdater
-      .checkForUpdatesAndNotify()
+      .checkForUpdates()
       .catch((err) => console.error('Update check failed:', err?.message ?? err))
   }
   setTimeout(check, 30 * 1000) // let sign-in and the first screen settle first

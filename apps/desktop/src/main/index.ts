@@ -78,7 +78,7 @@ import { connectRealtime, disconnectRealtime, sendTyping } from './realtime'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isUserId } from './api'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
-import { startAutoUpdates } from './updater'
+import { restartToUpdate, startAutoUpdates, updateReady } from './updater'
 import { getMyProfile, getProfile, removePhoto, setPhoto, updateProfile } from './profile'
 import {
   acceptRequest,
@@ -608,6 +608,13 @@ function registerIpcHandlers(): void {
 
   // An incoming call: show Glofly if it's tucked away in the tray, and flash the taskbar button
   // (without taking focus away from whatever you're doing).
+  // Auto-updates: is a new version downloaded and waiting, and "Restart to update".
+  ipcMain.handle('updates:status', (event) => (fromApp(event) ? updateReady() : null))
+  ipcMain.on('updates:restart', (event) => {
+    if (!isAppUrl(event.senderFrame?.url ?? '')) return
+    restartToUpdate()
+  })
+
   ipcMain.on('window:attention', (event) => {
     if (!isAppUrl(event.senderFrame?.url ?? '')) return
     const window = BrowserWindow.fromWebContents(event.sender)
