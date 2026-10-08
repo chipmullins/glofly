@@ -18,6 +18,9 @@ const ssl = caFile ? { ca: readFileSync(caFile, "utf8"), rejectUnauthorized: tru
 export const pool = new Pool({
   connectionString,
   ssl,
+  // Give up on a connection after 10s with a clear error instead of waiting forever
+  // (e.g. a firewall rule blocking the database).
+  connectionTimeoutMillis: 10_000,
   max: Number(process.env.DATABASE_POOL_MAX) || 10,
 });
 
