@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { IncomingCallInfo } from '../calls/callState'
+import { firstName, type IncomingCallInfo } from '../calls/callState'
 import Avatar from './Avatar'
 import { HangUpIcon, MessageBubbleIcon, MicIcon, PhoneIcon, VideoIcon } from './icons'
 
@@ -27,7 +27,8 @@ export default function IncomingCall({
   onAnswer,
   onDecline
 }: IncomingCallProps): React.JSX.Element {
-  const { call, caller } = info
+  const { call, caller, chat } = info
+  const group = chat.kind === 'group'
   const [replying, setReplying] = useState(false)
   const [custom, setCustom] = useState('')
   const firstButton = useRef<HTMLButtonElement>(null)
@@ -54,7 +55,7 @@ export default function IncomingCall({
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-label={`Incoming ${kind} call from ${caller.displayName}`}
+        aria-label={`Incoming ${kind} call from ${caller.displayName}${group ? ` in ${chat.title}` : ''}`}
         className="incoming"
       >
         <div className="incoming-kind">
@@ -63,7 +64,7 @@ export default function IncomingCall({
           ) : (
             <PhoneIcon size={16} strokeWidth={2} />
           )}
-          Incoming {kind} call
+          Incoming {group ? `group ${kind}` : kind} call
         </div>
 
         <div className="call-glow-face call-glow-face--incoming">
@@ -79,9 +80,10 @@ export default function IncomingCall({
         </div>
 
         <div className="incoming-who">
-          <h2>{caller.displayName}</h2>
+          <h2>{group ? chat.title : caller.displayName}</h2>
           <span>
-            {busy ? 'is calling you. Answering hangs up your current call.' : 'is calling you…'}
+            {group ? `${firstName(caller)} is calling the group` : 'is calling you'}
+            {busy ? '. Answering hangs up your current call.' : '…'}
           </span>
         </div>
 

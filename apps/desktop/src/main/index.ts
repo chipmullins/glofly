@@ -48,6 +48,7 @@ import {
   joinCall,
   leaveCall,
   pickedScreen,
+  ringPeople,
   screenSources,
   startCall
 } from './calls'
@@ -568,6 +569,9 @@ function registerIpcHandlers(): void {
       fromApp(event) && isUserId(id) ? action(id) : invalid
     )
   }
+  ipcMain.handle('calls:ring', (event, id: unknown, userIds: unknown) =>
+    fromApp(event) && isUserId(id) && isPeople(userIds) ? ringPeople(id, userIds) : invalid
+  )
   ipcMain.handle('calls:screen-sources', (event) => (fromApp(event) ? screenSources() : []))
   ipcMain.handle('calls:choose-screen', (event, sourceId: unknown) =>
     fromApp(event) &&

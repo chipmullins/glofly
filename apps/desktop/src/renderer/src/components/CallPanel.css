@@ -126,14 +126,19 @@
   min-height: 0;
 }
 .call-tiles {
+  /* --cols and --tile-h come from the number of people (CallPanel.tsx gridFor). Each tile keeps a
+     16:9 shape and the grid centers itself, so wide windows don't stretch the video. */
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, calc(var(--tile-h) * 16 / 9)));
+  justify-content: center;
   gap: 16px;
+  /* Big groups: three rows show, the rest scroll. */
+  max-height: calc(var(--tile-h) * 3 + 32px);
+  overflow-y: auto;
 }
 .call-tile {
   position: relative;
-  /* The design's 300px, shrinking on shorter windows so the message box always fits. */
-  height: clamp(170px, 32vh, 300px);
+  height: var(--tile-h);
   border-radius: 16px;
   background: var(--glo-call-tile);
   overflow: hidden;
@@ -147,25 +152,27 @@
 }
 .call-tile--speaking {
   box-shadow:
-    0 0 0 3px var(--glo-call-glow),
+    inset 0 0 0 3px var(--glo-call-glow),
     0 0 24px 2px rgba(var(--glo-call-glow-rgb), 0.45);
 }
-/* A shared screen: big on the left, both cameras stacked on the right. */
+/* A shared screen: big on the left, everyone's tiles in a scrolling column on the right. */
 .call-media--screen {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(160px, 20%, 240px);
   gap: 12px;
 }
 .call-media--screen .call-tiles {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
   gap: 12px;
+  max-height: clamp(220px, 44vh, 480px);
 }
 .call-media--screen .call-tile {
+  flex: none;
+  width: 100%;
   height: auto;
-}
-.call-media--screen .call-glow-face {
-  transform: scale(0.55);
+  aspect-ratio: 16 / 9;
 }
 .call-media--screen .call-tile-status {
   display: none;
@@ -174,8 +181,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
-  padding: 16px;
+  gap: clamp(8px, 2vh, 22px);
+  padding: 12px;
   text-align: center;
 }
 .call-tile-status {
@@ -702,4 +709,126 @@
 .chat-event strong {
   color: var(--glo-ink);
   font-weight: 600;
+}
+
+/* ---------- A group call you're not in (top of the chat) ---------- */
+
+.call-join {
+  margin: 12px 24px 0;
+  padding: 10px 10px 10px 16px;
+  border-radius: 16px;
+  background: var(--glo-call-bg);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+:root[data-theme='dark'] .call-join {
+  box-shadow: 0 0 0 1px rgba(var(--glo-call-glow-rgb), 0.16);
+}
+.call-join-faces {
+  display: flex;
+  flex: none;
+}
+.call-join-faces .avatar {
+  box-shadow: 0 0 0 2px var(--glo-call-bg);
+  font-size: 11px !important;
+}
+.call-join-faces .avatar + .avatar {
+  margin-left: -4px;
+}
+.call-join-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.call-join-text strong {
+  font-size: 14px;
+}
+.call-join-text span {
+  font-size: 13px;
+  color: var(--glo-call-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.call-join-button {
+  flex: none;
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--glo-call-answer);
+  color: var(--glo-call-text);
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.call-join-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.call-join-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.call-join :focus-visible {
+  outline: 2px solid var(--glo-call-glow);
+  outline-offset: 2px;
+}
+
+/* ---------- Add people to the call ---------- */
+
+.add-to-call {
+  width: min(440px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+}
+.add-to-call-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.add-to-call-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.add-to-call-row:hover {
+  background: var(--glo-subtle);
+}
+.add-to-call-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--glo-accent);
+  flex: none;
+}
+.add-to-call-row--ringing {
+  cursor: default;
+  opacity: 0.7;
+}
+.add-to-call-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.add-to-call-name strong {
+  font-size: 15px;
+  color: var(--glo-ink);
+}
+.add-to-call-name span {
+  font-size: 13px;
+  color: var(--glo-muted);
 }

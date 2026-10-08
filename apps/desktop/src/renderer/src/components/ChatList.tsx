@@ -3,6 +3,7 @@ import type { ConversationSummary, Presence, PublicUser } from '../../../preload
 import { attachmentSummary } from '../lib/attachments'
 import type { ChatResult } from '../lib/chatSearch'
 import { chatTitle, eventText, memberCountLabel } from '../lib/groups'
+import { joinedCount, useCalls } from '../calls/callState'
 import { presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
 import EmojiText from './EmojiText'
@@ -84,8 +85,19 @@ function DmRow({
   onMenu: (x: number, y: number) => void
 }): React.JSX.Element {
   // Like the design: friends show their status; otherwise the last message (groups always).
+  // A call going on shows instead: "In call · 4 of 6" (GroupCall.dc.html).
+  const calls = useCalls()
+  const call = calls.callIn(c.id)
+  const callLabel = call
+    ? call.status === 'ringing' && joinedCount(call) <= 1
+      ? 'Calling…'
+      : c.kind === 'group'
+        ? `In call · ${joinedCount(call)} of ${call.members.length}`
+        : 'In call'
+    : null
   const preview =
-    presence && c.kind === 'dm' ? presenceLine(presence, now) : lastMessagePreview(c, me)
+    callLabel ??
+    (presence && c.kind === 'dm' ? presenceLine(presence, now) : lastMessagePreview(c, me))
   const title = chatTitle(c)
   const ring = active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'
   return (
@@ -120,7 +132,7 @@ function DmRow({
         >
           <EmojiText text={title} />
         </span>
-        <span className="dm-preview">
+        <span className={callLabel ? 'dm-preview dm-preview--call' : 'dm-preview'}>
           <EmojiText text={preview} />
         </span>
       </span>

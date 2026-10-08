@@ -314,7 +314,9 @@ export const calls = pgTable(
   ],
 );
 
-// Who has joined a call (and left it). Someone with a row and no left_at is in the call now.
+// Everyone a call involves. A row is made when someone is rung (invited_at) or joins on their
+// own (group calls). In the call now = joined_at set and left_at empty. Ringing = invited_at
+// within the last 23 seconds, not joined, not declined.
 export const callParticipants = pgTable(
   "call_participants",
   {
@@ -324,7 +326,12 @@ export const callParticipants = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    // When they were last rung (null = joined without being rung).
+    invitedAt: timestamp("invited_at", { withTimezone: true }),
+    // Pressed Decline (stops ringing on all their devices).
+    declinedAt: timestamp("declined_at", { withTimezone: true }),
+    // When they last joined (null = never joined, or rung again after leaving: see left_at).
+    joinedAt: timestamp("joined_at", { withTimezone: true }),
     leftAt: timestamp("left_at", { withTimezone: true }),
   },
   (t) => [

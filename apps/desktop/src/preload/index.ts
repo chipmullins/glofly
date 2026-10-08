@@ -113,6 +113,7 @@ const glofly: GloflyApi = {
     active: () => ipcRenderer.invoke('calls:active'),
     answer: (callId: string) => ipcRenderer.invoke('calls:answer', callId),
     join: (callId: string) => ipcRenderer.invoke('calls:join', callId),
+    ring: (callId: string, userIds: string[]) => ipcRenderer.invoke('calls:ring', callId, userIds),
     decline: (callId: string) => ipcRenderer.invoke('calls:decline', callId),
     leave: (callId: string) => ipcRenderer.invoke('calls:leave', callId),
     screenSources: () => ipcRenderer.invoke('calls:screen-sources'),

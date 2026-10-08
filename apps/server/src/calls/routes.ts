@@ -1,30 +1,35 @@
 import { Router, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { callParticipants, calls } from "../db/schema";
+import { calls } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { canMessage } from "../friends/rules";
-import { access, announce, canPost, postEvent } from "../messages/routes";
+import { access, announce, canPost, GROUP_MAX, postEvent, type Access } from "../messages/routes";
 import { callToken, LIVEKIT_URL, livekitConfigured } from "./livekit";
 import {
   activeCallOf,
   activeCallsFor,
   announceCall,
-  answerCall,
-  callInfo,
   closeCall,
-  startRinging,
+  declineCall,
+  describe,
+  isInCall,
+  joinCall,
+  leaveCall,
+  ringMore,
+  startCall,
   type CallRow,
 } from "./service";
 
-// Voice and video calls (1-on-1 for now; group calls come next).
+// Voice and video calls: 1-on-1 and group (up to 25 people).
 //
 //   POST /calls                 { conversationId, video }  start a call → { call, token, url }
 //   GET  /calls/active                                     ringing / ongoing calls in my chats
-//   POST /calls/:id/answer                                  → { call, token, url }
-//   POST /calls/:id/join                                    back into a call I'm part of (after a restart)
+//   POST /calls/:id/answer                                  pick up → { call, token, url }
+//   POST /calls/:id/join                                    join a group call, or get back into mine
+//   POST /calls/:id/ring        { userIds }                groups: ring people who aren't in it
 //   POST /calls/:id/decline
 //   POST /calls/:id/leave                                   hang up (or cancel while it rings)
 
@@ -35,8 +40,6 @@ type Me = { id: string; username: string; displayName: string };
 const me = (res: Response): Me => res.locals.user as Me;
 
 const idParam = z.uuid();
-/** 1-on-1 calls: at most two people in a room. */
-const DM_ROOM_SIZE = 2;
 
 const startLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -58,16 +61,14 @@ const actionLimiter = rateLimit({
 
 function notSetUp(res: Response): boolean {
   if (livekitConfigured) return false;
-  res.status(503).json({
-    error: "calls_unavailable",
-    message: "Calls aren't set up on this server yet.",
-  });
+  res.status(503).json({ error: "calls_unavailable", message: "Calls aren't set up on this server yet." });
   return true;
 }
 
-/** A pass into the call's room, with where to find it. */
-async function joinDetails(row: CallRow, user: Me) {
-  return { call: callInfo(row), token: await callToken(row.id, user, DM_ROOM_SIZE), url: LIVEKIT_URL };
+/** A pass into the call's room, with where to find it. 1-on-1 rooms hold 2; group rooms 25. */
+async function joinDetails(row: CallRow, user: Me, chat: Access) {
+  const size = chat.kind === "group" ? GROUP_MAX : 2;
+  return { call: await describe(row), token: await callToken(row.id, user, size), url: LIVEKIT_URL };
 }
 
 /** A call in one of my chats (null otherwise, so other people's calls stay invisible). */
@@ -80,9 +81,18 @@ async function myCall(idRaw: unknown, myId: string) {
   return chat ? { row, chat } : null;
 }
 
-const notFound = (res: Response) => res.status(404).json({ error: "not_found" });
+/** 1-on-1 calls need us to still be friends; group calls just need me in the group. */
+async function allowed(chat: Access, myId: string): Promise<boolean> {
+  if (chat.kind === "group") return canPost(chat, myId);
+  return !!chat.partner && (await canMessage(myId, chat.partner));
+}
 
-// POST /calls  { conversationId, video } — call a friend.
+const notFound = (res: Response) => res.status(404).json({ error: "not_found" });
+const callOver = (res: Response) =>
+  res.status(409).json({ error: "call_over", message: "This call has already ended." });
+const ACTIVE = ["ringing", "ongoing"];
+
+// POST /calls  { conversationId, video } — call a friend, or the whole group.
 callsRouter.post("/", startLimiter, async (req, res) => {
   if (notSetUp(res)) return;
   const user = me(res);
@@ -97,74 +107,63 @@ callsRouter.post("/", startLimiter, async (req, res) => {
     notFound(res);
     return;
   }
-  if (chat.kind === "group") {
-    res.status(400).json({ error: "invalid", message: "Group calls are coming soon." });
+  if (!(await allowed(chat, user.id))) {
+    res.status(403).json({ error: "forbidden", message: "You can only call your friends." });
     return;
   }
-  if (!(await canPost(chat, user.id)) || !chat.partner) {
-    res.status(403).json({ error: "forbidden", message: "You can only call your friends." });
+  if (chat.memberIds.length < 2) {
+    res.status(400).json({ error: "invalid", message: "There's nobody else here to call." });
     return;
   }
   if (await activeCallOf(user.id)) {
     res.status(409).json({ error: "busy", message: "You're already in a call. Hang up first." });
     return;
   }
-  if (await activeCallOf(chat.partner)) {
+  if (chat.kind === "dm" && chat.partner && (await activeCallOf(chat.partner))) {
     res.status(409).json({ error: "busy", message: "They're on another call right now. Try again in a bit." });
     return;
   }
 
-  let started: { call: CallRow; line: Awaited<ReturnType<typeof postEvent>> };
+  let started: Awaited<ReturnType<typeof startCall>>;
+  const posted: { line?: Awaited<ReturnType<typeof postEvent>> } = {};
   try {
-    started = await db.transaction(async (tx) => {
-      const [call] = await tx.insert(calls).values({ conversationId, callerId: user.id, video }).returning();
-      await tx.insert(callParticipants).values({ callId: call.id, userId: user.id });
-      const line = await postEvent(tx, conversationId, user.id, {
+    started = await startCall(conversationId, user.id, video, async (tx, callId) => {
+      posted.line = await postEvent(tx, conversationId, user.id, {
         type: "call",
-        callId: call.id,
+        callId,
         video,
         status: "ringing",
         durationSec: null,
       });
-      const [withLine] = await tx
-        .update(calls)
-        .set({ messageId: line.id })
-        .where(eq(calls.id, call.id))
-        .returning();
-      return { call: withLine, line };
+      return posted.line;
     });
   } catch (err) {
-    // There's already a call ringing or going in this chat (say, you both pressed call at once).
-    if ((err as { code?: string })?.code === "23505" || (err as { cause?: { code?: string } })?.cause?.code === "23505") {
+    // There's already a call ringing or going in this chat (say, two people pressed call at once).
+    const code = (err as { code?: string })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
+    if (code === "23505") {
       res.status(409).json({ error: "already_calling", message: "There's already a call in this chat." });
       return;
     }
     throw err;
   }
 
-  await announce(started.line, chat.memberIds);
+  if (posted.line) await announce(posted.line, chat.memberIds);
   await announceCall(started.call);
-  startRinging(started.call.id);
-  res.status(201).json(await joinDetails(started.call, user));
+  res.status(201).json(await joinDetails(started.call, user, chat));
 });
 
 // GET /calls/active — calls ringing or going on in my chats right now.
 callsRouter.get("/active", async (_req, res) => {
   const myId = me(res).id;
-  const rows = await activeCallsFor(myId);
   const result = [];
-  for (const row of rows) {
-    const [mine] = await db
-      .select({ leftAt: callParticipants.leftAt })
-      .from(callParticipants)
-      .where(and(eq(callParticipants.callId, row.id), eq(callParticipants.userId, myId)));
-    // `joined`: I'm in this call (so the app can offer to rejoin rather than ring).
-    result.push({ call: callInfo(row), joined: !!mine && mine.leftAt === null });
+  for (const row of await activeCallsFor(myId)) {
+    // `joined`: I'm in this call (maybe on another device), so the app offers to switch rather than ring.
+    result.push({ call: await describe(row), joined: await isInCall(row.id, myId) });
   }
   res.json({ calls: result });
 });
 
-// POST /calls/:id/answer — pick up a call to me.
+// POST /calls/:id/answer — pick up a call I'm being rung for.
 callsRouter.post("/:id/answer", actionLimiter, async (req, res) => {
   if (notSetUp(res)) return;
   const user = me(res);
@@ -174,17 +173,18 @@ callsRouter.post("/:id/answer", actionLimiter, async (req, res) => {
     return;
   }
   const { row, chat } = found;
-  if (row.callerId === user.id) {
+  if (row.callerId === user.id && chat.kind === "dm") {
     res.status(400).json({ error: "invalid", message: "You can't answer your own call." });
     return;
   }
-  if (!chat.partner || !(await canMessage(user.id, chat.partner))) {
-    await closeCall(row.id, "not_allowed");
+  if (!(await allowed(chat, user.id))) {
+    if (chat.kind === "dm") await closeCall(row.id, "not_allowed");
     res.status(403).json({ error: "forbidden", message: "You can only call your friends." });
     return;
   }
-  if (row.status !== "ringing") {
-    res.status(409).json({ error: "call_over", message: "This call has already ended." });
+  // 1-on-1: only while it rings. Groups: any time it's going on.
+  if (chat.kind === "dm" ? row.status !== "ringing" : !ACTIVE.includes(row.status)) {
+    callOver(res);
     return;
   }
   const other = await activeCallOf(user.id);
@@ -192,15 +192,20 @@ callsRouter.post("/:id/answer", actionLimiter, async (req, res) => {
     res.status(409).json({ error: "busy", message: "Hang up your other call first." });
     return;
   }
-  const answered = await answerCall(row.id, user.id);
-  if (!answered) {
-    res.status(409).json({ error: "call_over", message: "This call has already ended." });
+  if (chat.kind === "dm" && (await isInCall(row.id, user.id))) {
+    callOver(res); // already answered (on another device)
     return;
   }
-  res.json(await joinDetails(answered, user));
+  const joined = await joinCall(row.id, user.id);
+  if (!joined) {
+    callOver(res);
+    return;
+  }
+  res.json(await joinDetails(joined, user, chat));
 });
 
-// POST /calls/:id/join — back into a call I'm part of (the app restarted, or lost its connection).
+// POST /calls/:id/join — join a group call that's going on, or get back into a call I'm in
+// (the app restarted, the connection dropped, or I'm moving it to this device).
 callsRouter.post("/:id/join", actionLimiter, async (req, res) => {
   if (notSetUp(res)) return;
   const user = me(res);
@@ -210,27 +215,65 @@ callsRouter.post("/:id/join", actionLimiter, async (req, res) => {
     return;
   }
   const { row, chat } = found;
-  const [mine] = await db
-    .select()
-    .from(callParticipants)
-    .where(and(eq(callParticipants.callId, row.id), eq(callParticipants.userId, user.id)));
-  const canRejoin = !!mine && (row.status === "ongoing" || (row.status === "ringing" && row.callerId === user.id));
-  if (!canRejoin) {
-    res.status(409).json({ error: "call_over", message: "This call has already ended." });
+  if (!ACTIVE.includes(row.status)) {
+    callOver(res);
     return;
   }
-  if (!chat.partner || !(await canMessage(user.id, chat.partner))) {
-    await closeCall(row.id, "not_allowed");
+  if (!(await allowed(chat, user.id))) {
+    if (chat.kind === "dm") await closeCall(row.id, "not_allowed");
     res.status(403).json({ error: "forbidden", message: "You can only call your friends." });
     return;
   }
-  if (mine.leftAt) {
-    await db
-      .update(callParticipants)
-      .set({ leftAt: null })
-      .where(and(eq(callParticipants.callId, row.id), eq(callParticipants.userId, user.id)));
+  const inIt = await isInCall(row.id, user.id);
+  if (chat.kind === "dm") {
+    // 1-on-1: only someone already in the call can get back in (answering is separate).
+    if (!inIt) {
+      callOver(res);
+      return;
+    }
+    res.json(await joinDetails(row, user, chat));
+    return;
   }
-  res.json(await joinDetails(row, user));
+  const other = await activeCallOf(user.id);
+  if (other && other.id !== row.id) {
+    res.status(409).json({ error: "busy", message: "Hang up your other call first." });
+    return;
+  }
+  const joined = inIt ? row : await joinCall(row.id, user.id);
+  if (!joined) {
+    callOver(res);
+    return;
+  }
+  res.json(await joinDetails(joined, user, chat));
+});
+
+// POST /calls/:id/ring  { userIds } — group calls: ring people in the group who aren't in the call.
+callsRouter.post("/:id/ring", actionLimiter, async (req, res) => {
+  const user = me(res);
+  const found = await myCall(req.params.id, user.id);
+  const parsed = z.object({ userIds: z.array(idParam).min(1).max(GROUP_MAX) }).safeParse(req.body);
+  if (!found) {
+    notFound(res);
+    return;
+  }
+  if (!parsed.success || found.chat.kind !== "group") {
+    res.status(400).json({ error: "invalid", message: "Pick people in the group to ring." });
+    return;
+  }
+  const { row, chat } = found;
+  if (!ACTIVE.includes(row.status)) {
+    callOver(res);
+    return;
+  }
+  if (!(await isInCall(row.id, user.id))) {
+    res.status(403).json({ error: "forbidden", message: "Join the call first." });
+    return;
+  }
+  const targets = [...new Set(parsed.data.userIds)].filter((id) => id !== user.id && chat.memberIds.includes(id));
+  const notIn = [];
+  for (const id of targets) if (!(await isInCall(row.id, id))) notIn.push(id);
+  if (notIn.length) await ringMore(row.id, notIn);
+  res.status(204).end();
 });
 
 // POST /calls/:id/decline — don't pick up.
@@ -241,13 +284,15 @@ callsRouter.post("/:id/decline", actionLimiter, async (req, res) => {
     notFound(res);
     return;
   }
-  if (found.row.callerId !== user.id && found.row.status === "ringing") {
-    await closeCall(found.row.id, "declined");
+  const { row } = found;
+  if (row.callerId !== user.id && ACTIVE.includes(row.status) && !(await isInCall(row.id, user.id))) {
+    await declineCall(row.id, user.id);
   }
   res.status(204).end();
 });
 
-// POST /calls/:id/leave — hang up. While it's still ringing, the caller hanging up cancels it.
+// POST /calls/:id/leave — hang up. 1-on-1 (or the caller while it still rings): the call ends.
+// Group calls carry on until the last person leaves.
 callsRouter.post("/:id/leave", actionLimiter, async (req, res) => {
   const user = me(res);
   const found = await myCall(req.params.id, user.id);
@@ -255,13 +300,6 @@ callsRouter.post("/:id/leave", actionLimiter, async (req, res) => {
     notFound(res);
     return;
   }
-  const { row } = found;
-  if (row.status === "ringing") {
-    // The person being called "leaving" a ringing call is declining it.
-    await closeCall(row.id, row.callerId === user.id ? "hang_up" : "declined");
-  } else if (row.status === "ongoing") {
-    // 1-on-1: when either person hangs up, the call is over.
-    await closeCall(row.id, "hang_up");
-  }
+  await leaveCall(found.row.id, user.id);
   res.status(204).end();
 });

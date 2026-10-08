@@ -902,3 +902,9 @@
     opacity: 0;
   }
 }
+
+/* A call going on in this chat: "In call · 4 of 6" in the sidebar (GroupCall.dc.html). */
+.dm-preview--call {
+  color: var(--glo-link);
+  font-weight: 500;
+}

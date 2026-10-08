@@ -32,6 +32,7 @@ import {
 import { requireAuth } from "../auth/sessions";
 import { blockedEitherWay, canMessage, deletionPending, pair } from "../friends/rules";
 import { emitToUser } from "../realtime";
+import { removeFromChatCall } from "../calls/service";
 
 export const conversationsRouter = Router();
 conversationsRouter.use(requireAuth);
@@ -773,6 +774,8 @@ conversationsRouter.delete("/:id/members/:userId", groupLimiter, async (req, res
   });
 
   if (outcome.kind !== "gone") await removeFiles(outcome.files);
+  // Someone who leaves (or is removed) drops out of the group's call straight away.
+  if (outcome.kind !== "gone") await removeFromChatCall(chat.id, target.data);
   if (outcome.kind === "posted") await announce(outcome.row, outcome.memberIds);
   // The person who left (or was removed) sees the group disappear on all their devices.
   emitToUser(target.data, "conversations:changed", {});

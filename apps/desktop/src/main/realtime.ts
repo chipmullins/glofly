@@ -1,6 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { io, type Socket } from 'socket.io-client'
-import type { Call, GloflyEvent, PublicUser } from '../preload/api-types'
+import type { Call, CallMember, GloflyEvent, PublicUser } from '../preload/api-types'
 
 // The live connection to the server lives here in the main process, like the
 // session token. Events are passed on to the window as plain data.
@@ -118,7 +118,24 @@ function cleanCall(c: unknown): Call | null {
   ) {
     return null
   }
+  const members: CallMember[] = []
+  if (Array.isArray(x.members)) {
+    for (const m of x.members.slice(0, 50) as Record<string, unknown>[]) {
+      if (
+        typeof m?.userId === 'string' &&
+        UUID.test(m.userId) &&
+        ['joined', 'ringing', 'out'].includes(m.state as string)
+      ) {
+        members.push({
+          userId: m.userId,
+          state: m.state as CallMember['state'],
+          ringingUntil: isoOrNull(m.ringingUntil)
+        })
+      }
+    }
+  }
   return {
+    members,
     id: x.id,
     conversationId: x.conversationId,
     callerId: x.callerId,

@@ -176,7 +176,16 @@ export type ChatEvent =
 
 export type CallStatus = 'ringing' | 'ongoing' | 'ended' | 'missed' | 'declined'
 
-/** A voice or video call (1-on-1 for now). */
+/** Where one person in the chat stands in a call. */
+export type CallMember = {
+  userId: string
+  /** joined: in the call · ringing: being rung right now · out: not in it */
+  state: 'joined' | 'ringing' | 'out'
+  /** While ringing: when it stops (ISO date) */
+  ringingUntil: string | null
+}
+
+/** A voice or video call, 1-on-1 or group. */
 export type Call = {
   id: string
   conversationId: string
@@ -188,6 +197,8 @@ export type Call = {
   createdAt: string
   answeredAt: string | null
   endedAt: string | null
+  /** Everyone in the chat (you included) and where they stand */
+  members: CallMember[]
 }
 
 /** What's needed to join a call's room: a short-lived pass and where the room is. */
@@ -445,8 +456,10 @@ export type GloflyApi = {
     /** Ringing and ongoing calls in your chats (to show an incoming call after a restart). */
     active: () => Promise<ApiResult<ActiveCall[]>>
     answer: (callId: string) => Promise<ApiResult<CallJoin>>
-    /** Back into a call you're part of (after a restart, or moving it to this device). */
+    /** Joins a group call that's going on, or gets back into yours (restart, moving devices). */
     join: (callId: string) => Promise<ApiResult<CallJoin>>
+    /** Group calls: rings people in the group who aren't in the call. */
+    ring: (callId: string, userIds: string[]) => Promise<ApiResult<null>>
     decline: (callId: string) => Promise<ApiResult<null>>
     /** Hangs up (or cancels the call while it's still ringing). */
     leave: (callId: string) => Promise<ApiResult<null>>

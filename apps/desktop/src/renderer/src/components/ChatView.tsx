@@ -17,7 +17,7 @@ import ConfirmDialog from './ConfirmDialog'
 import { MessageAttachments, PhotoViewer, UploadTray, type Upload } from './Attachments'
 import { attachmentSummary } from '../lib/attachments'
 import { CallLineIcon, FileIcon, GroupIcon, PhoneIcon, ProfileIcon, VideoIcon } from './icons'
-import CallPanel from './CallPanel'
+import CallPanel, { JoinCallBar } from './CallPanel'
 import { useCalls } from '../calls/callState'
 import MessageItem, { type ShownMessage } from './MessageItem'
 import { PinIcon } from './ChatList'
@@ -157,8 +157,15 @@ export default function ChatView({
   const isGroup = conversation.kind === 'group'
   const calls = useCalls()
   const inThisCall = calls.current?.conversationId === conversation.id
-  // Calls are 1-on-1 for now, between friends, one at a time.
-  const canCall = conversation.kind === 'dm' && conversation.canMessage && !calls.current
+  // One call at a time. 1-on-1: friends only. Groups: anyone in it (joins a call going on).
+  const canCall = conversation.canMessage && conversation.memberCount > 1 && !calls.current
+  const groupCallOn = isGroup && !!calls.callIn(conversation.id)
+  const callTitle = (kind: 'Voice' | 'Video'): string =>
+    calls.current && !inThisCall
+      ? "You're already in a call"
+      : groupCallOn
+        ? `Join the ${kind.toLowerCase()} call`
+        : `${kind} call`
   const partnerPresence = partner ? presence[partner.id] : undefined
   const title = chatTitle(conversation)
   const [messages, setMessages] = useState<Message[]>([])
@@ -785,13 +792,13 @@ export default function ChatView({
           )}
         </div>
         <div className="chat-header-actions">
-          {conversation.kind === 'dm' && (
+          {
             <>
               <button
                 type="button"
                 className="chat-header-button"
-                aria-label="Start voice call"
-                title={calls.current && !inThisCall ? "You're already in a call" : 'Voice call'}
+                aria-label={groupCallOn ? 'Join call' : 'Start voice call'}
+                title={callTitle('Voice')}
                 disabled={!canCall}
                 onClick={() => calls.start(conversation, false)}
               >
@@ -800,15 +807,15 @@ export default function ChatView({
               <button
                 type="button"
                 className="chat-header-button"
-                aria-label="Start video call"
-                title={calls.current && !inThisCall ? "You're already in a call" : 'Video call'}
+                aria-label={groupCallOn ? 'Join call with video' : 'Start video call'}
+                title={callTitle('Video')}
                 disabled={!canCall}
                 onClick={() => calls.start(conversation, true)}
               >
                 <VideoIcon size={21} />
               </button>
             </>
-          )}
+          }
           <button
             type="button"
             className={
@@ -847,7 +854,7 @@ export default function ChatView({
         </div>
       </header>
 
-      {inThisCall && <CallPanel me={me} />}
+      {inThisCall ? <CallPanel me={me} /> : <JoinCallBar conversation={conversation} me={me} />}
 
       <div className="chat-messages" ref={listRef} onScroll={onScroll}>
         {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}

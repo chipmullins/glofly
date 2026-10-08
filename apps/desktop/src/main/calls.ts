@@ -41,6 +41,10 @@ export async function joinCall(callId: string): Promise<ApiResult<CallJoin>> {
   return checkedJoin(await request<CallJoin>('POST', `/calls/${callId}/join`))
 }
 
+export function ringPeople(callId: string, userIds: string[]): Promise<ApiResult<null>> {
+  return request<null>('POST', `/calls/${callId}/ring`, { userIds })
+}
+
 export function declineCall(callId: string): Promise<ApiResult<null>> {
   return request<null>('POST', `/calls/${callId}/decline`)
 }

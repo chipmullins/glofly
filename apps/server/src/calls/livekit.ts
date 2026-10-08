@@ -93,3 +93,15 @@ export async function closeRoom(callId: string): Promise<void> {
     console.error("Couldn't close a call's room:", err instanceof Error ? err.message : err);
   }
 }
+
+/** Disconnects one person from a call's room (they were removed from the group). */
+export async function removeFromRoom(callId: string, userId: string): Promise<void> {
+  const service = roomService();
+  if (!service) return;
+  try {
+    await service.removeParticipant(callId, userId);
+  } catch (err) {
+    if (err instanceof ServerError && (err.status === 404 || err.code === "not_found")) return;
+    console.error("Couldn't remove someone from a call's room:", err instanceof Error ? err.message : err);
+  }
+}

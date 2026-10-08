@@ -1,14 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import { Track, type Participant, type VideoTrack } from 'livekit-client'
-import type { PublicUser, ScreenSource, SignedInUser } from '../../../preload/api-types'
-import { callDuration, firstName, useCalls, type CurrentCall } from '../calls/callState'
+import type {
+  Call,
+  ConversationSummary,
+  PublicUser,
+  ScreenSource,
+  SignedInUser
+} from '../../../preload/api-types'
+import {
+  callDuration,
+  firstName,
+  joinedCount,
+  memberState,
+  useCalls,
+  type CurrentCall
+} from '../calls/callState'
 import { getCallPrefs } from '../lib/callPrefs'
 import Avatar from './Avatar'
 import {
+  AddFriendIcon,
   FullscreenIcon,
   HangUpIcon,
   MicIcon,
   MicOffIcon,
+  PhoneIcon,
   ScreenShareIcon,
   SpeakingIcon,
   StopShareIcon,
@@ -17,8 +32,9 @@ import {
 } from './icons'
 import './CallPanel.css'
 
-// The call, shown at the top of its chat (Calling.dc.html): you and them side by side, a shared
-// screen above when someone shares, and the controls underneath. Dark in every theme.
+// The call, shown at the top of its chat (Calling.dc.html, GroupCall.dc.html): a tile for you
+// and everyone in or being rung for the call, a shared screen beside them when someone shares,
+// and the controls underneath. Dark in every theme.
 
 /** A camera or screen, playing in a video element. */
 function TrackVideo({
@@ -67,47 +83,68 @@ function videoOf(p: Participant | undefined, source: Track.Source): VideoTrack |
   return pub.videoTrack
 }
 
-function Tile({
-  person,
-  label,
-  camera,
-  mirror,
-  muted,
-  speaking,
-  ringing,
-  status
-}: {
+/**
+ * How the tiles are laid out for this many people: columns, and a tile height that shrinks with
+ * the window. Tiles keep a 16:9 shape (centered), so a wide window doesn't stretch them.
+ */
+function gridFor(count: number): { cols: number; height: string; face: number; ringFace: number } {
+  if (count <= 2) {
+    return {
+      cols: Math.max(count, 1),
+      height: 'clamp(170px, 32vh, 300px)',
+      face: 96,
+      ringFace: 112
+    }
+  }
+  if (count <= 4) return { cols: 2, height: 'clamp(120px, 21vh, 220px)', face: 76, ringFace: 76 }
+  if (count <= 9) return { cols: 3, height: 'clamp(100px, 18vh, 200px)', face: 64, ringFace: 64 }
+  return { cols: 4, height: 'clamp(84px, 13vh, 150px)', face: 48, ringFace: 48 }
+}
+
+type TileInfo = {
   person: PublicUser
   label: string
   camera: VideoTrack | null
   mirror?: boolean
   muted: boolean
   speaking: boolean
-  /** Glowing rings while it rings */
   ringing: boolean
-  /** "Ringing…", "Connecting…" under their face */
   status: string | null
+}
+
+function Tile({
+  tile,
+  face,
+  ringFace
+}: {
+  tile: TileInfo
+  face: number
+  ringFace: number
 }): React.JSX.Element {
+  const { person, label, camera, mirror, muted, speaking, ringing, status } = tile
   return (
     <div className={speaking ? 'call-tile call-tile--speaking' : 'call-tile'}>
       {camera ? (
         <TrackVideo track={camera} mirror={mirror} />
       ) : (
         <div className="call-tile-face">
-          <div className={ringing ? 'call-glow-face' : 'call-glow-face call-glow-face--still'}>
+          <div
+            className={ringing ? 'call-glow-face' : 'call-glow-face call-glow-face--still'}
+            style={{ width: ringing ? ringFace : face, height: ringing ? ringFace : face }}
+          >
             {ringing && <span className="call-ring" aria-hidden="true" />}
             {ringing && <span className="call-ring call-ring--late" aria-hidden="true" />}
             <Avatar
               id={person.id}
               name={person.displayName}
               avatarVersion={person.avatarVersion}
-              size={ringing ? 112 : 96}
-              className="call-glow-photo"
+              size={ringing ? ringFace : face}
+              className={ringing ? 'call-glow-photo call-glow-photo--ringing' : 'call-glow-photo'}
             />
           </div>
           {status && (
             <div className="call-tile-status">
-              <strong>{person.displayName}</strong>
+              {face >= 96 && <strong>{person.displayName}</strong>}
               <span>{status}</span>
             </div>
           )}
@@ -239,19 +276,118 @@ export function ScreenPicker({
   )
 }
 
-/** The call's title line: "Video calling Jacob…", or their name and how long you've talked. */
-function titleOf(c: CurrentCall): { text: string; timerSince: string | null } {
-  const name = firstName(c.partner)
-  switch (c.phase) {
-    case 'starting':
-    case 'ringing':
-      return { text: c.video ? `Video calling ${name}…` : `Calling ${name}…`, timerSince: null }
-    case 'connecting':
-      return { text: 'Connecting…', timerSince: null }
-    case 'reconnecting':
-      return { text: 'Reconnecting…', timerSince: null }
-    case 'connected':
-      return { text: c.partner.displayName, timerSince: c.call?.answeredAt ?? null }
+/** Group calls: ring people in the group who aren't in the call. */
+function AddToCall({
+  call,
+  people,
+  onRing,
+  onClose
+}: {
+  call: Call
+  people: PublicUser[]
+  onRing: (userIds: string[]) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const [picked, setPicked] = useState<string[]>([])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+  const outside = people.filter((p) => memberState(call, p.id) !== 'joined')
+  return (
+    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-to-call-title"
+        className="dialog add-to-call"
+      >
+        <div className="dialog-head">
+          <h1 id="add-to-call-title">Add people to the call</h1>
+          <p>They&apos;ll be rung wherever they&apos;re signed in.</p>
+        </div>
+        <div className="add-to-call-list">
+          {outside.length === 0 ? (
+            <p className="screen-picker-note">Everyone in the group is already here.</p>
+          ) : (
+            outside.map((p) => {
+              const ringing = memberState(call, p.id) === 'ringing'
+              const on = picked.includes(p.id)
+              return (
+                <label
+                  key={p.id}
+                  className={
+                    ringing ? 'add-to-call-row add-to-call-row--ringing' : 'add-to-call-row'
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={on || ringing}
+                    disabled={ringing}
+                    onChange={() =>
+                      setPicked((list) => (on ? list.filter((x) => x !== p.id) : [...list, p.id]))
+                    }
+                  />
+                  <Avatar
+                    id={p.id}
+                    name={p.displayName}
+                    avatarVersion={p.avatarVersion}
+                    size={36}
+                  />
+                  <span className="add-to-call-name">
+                    <strong>{p.displayName}</strong>
+                    <span>{ringing ? 'Ringing…' : `@${p.username}`}</span>
+                  </span>
+                </label>
+              )
+            })
+          )}
+        </div>
+        <div className="dialog-foot">
+          <button type="button" className="small-button small-button--quiet" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="small-button small-button--primary"
+            disabled={picked.length === 0}
+            onClick={() => onRing(picked)}
+          >
+            {picked.length > 1 ? `Ring ${picked.length} people` : 'Ring'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** The call's title line: "Video calling Jacob…", or the chat's name, who's joined and how long. */
+function titleOf(c: CurrentCall): { text: string; sub: string | null; timerSince: string | null } {
+  const partner = c.chat.kind === 'dm' ? c.chat.people[0] : undefined
+  const call = c.call
+  if (c.phase === 'reconnecting') return { text: 'Reconnecting…', sub: null, timerSince: null }
+  if (c.phase === 'connecting') {
+    return {
+      text: c.chat.kind === 'group' ? 'Joining…' : 'Connecting…',
+      sub: null,
+      timerSince: null
+    }
+  }
+  if (call?.status !== 'ongoing') {
+    const name = partner ? firstName(partner) : c.chat.title
+    return {
+      text: c.video ? `Video calling ${name}…` : `Calling ${name}…`,
+      sub: null,
+      timerSince: null
+    }
+  }
+  return {
+    text: partner ? partner.displayName : c.chat.title,
+    sub: c.chat.kind === 'group' ? `${joinedCount(call)} of ${call.members.length} joined` : null,
+    timerSince: call.answeredAt
   }
 }
 
@@ -259,40 +395,96 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   const calls = useCalls()
   const { current, room } = calls
   const [picking, setPicking] = useState(false)
+  const [adding, setAdding] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
   if (!current) return null
 
+  const call = current.call
+  const group = current.chat.kind === 'group'
   const local = room?.localParticipant
-  const remote = room?.remoteParticipants.get(current.partner.id)
   const ready = !!room && room.state === 'connected'
   const micOn = local?.isMicrophoneEnabled ?? false
   const cameraOn = local?.isCameraEnabled ?? false
   const sharing = local?.isScreenShareEnabled ?? false
-  const myCamera = videoOf(local, Track.Source.Camera)
-  const theirCamera = videoOf(remote, Track.Source.Camera)
-  const theirScreen = videoOf(remote, Track.Source.ScreenShare)
-  const myScreen = videoOf(local, Track.Source.ScreenShare)
-  const screen = theirScreen ?? myScreen
-  const ringing = current.phase === 'starting' || current.phase === 'ringing'
+  const waiting = !call || call.status === 'ringing'
   const title = titleOf(current)
 
-  const theirStatus = ringing
-    ? 'Ringing…'
-    : current.phase === 'connecting' ||
-        (!remote && current.phase === 'connected' && !current.partnerAway)
-      ? 'Connecting…'
-      : current.partnerAway
-        ? 'Their connection dropped. Waiting for them…'
-        : null
+  // Everyone else to show: in the room, joined (still connecting), or being rung.
+  const others: TileInfo[] = []
+  for (const person of current.chat.people) {
+    const remote = room?.remoteParticipants.get(person.id)
+    const state = call ? memberState(call, person.id) : 'ringing'
+    const ringing = !remote && (state === 'ringing' || (!group && waiting))
+    if (group && !remote && !ringing && state !== 'joined') continue
+    let status: string | null = null
+    if (ringing) status = 'Ringing…'
+    else if (!remote && current.partnerAway) status = 'Their connection dropped. Waiting for them…'
+    else if (!remote) status = 'Connecting…'
+    others.push({
+      person,
+      label: group ? firstName(person) : person.displayName,
+      camera: videoOf(remote, Track.Source.Camera),
+      muted: !!remote && !remote.isMicrophoneEnabled,
+      speaking: !!remote?.isSpeaking,
+      ringing,
+      status
+    })
+  }
+  // People who are here first, then whoever's still being rung.
+  others.sort((a, b) => Number(a.ringing) - Number(b.ringing))
+
+  const tiles: TileInfo[] = [
+    {
+      person: me,
+      label: 'You',
+      camera: videoOf(local, Track.Source.Camera),
+      mirror: getCallPrefs().mirrorCamera,
+      muted: ready && !micOn,
+      speaking: !!local?.isSpeaking,
+      ringing: false,
+      status: null
+    },
+    ...others
+  ]
+
+  // A shared screen: someone else's first (one shows at a time), otherwise yours.
+  let screen: VideoTrack | null = null
+  let screenLabel = ''
+  for (const p of room?.remoteParticipants.values() ?? []) {
+    const track = videoOf(p, Track.Source.ScreenShare)
+    if (track) {
+      screen = track
+      const person = current.chat.people.find((x) => x.id === p.identity)
+      screenLabel = person ? `${firstName(person)}'s screen` : 'Shared screen'
+      break
+    }
+  }
+  const sharedByOther = !!screen
+  if (!screen) {
+    screen = videoOf(local, Track.Source.ScreenShare)
+    screenLabel = 'Your screen'
+  }
+
+  const grid = gridFor(tiles.length)
+  const canAdd =
+    group &&
+    ready &&
+    !!call &&
+    current.chat.people.some((p) => memberState(call, p.id) !== 'joined')
 
   return (
     <section className="call-panel" aria-label="Call">
       <div className="call-title">
         <span className="call-dot" aria-hidden="true" />
         <h2>{title.text}</h2>
-        {title.timerSince && (
+        {(title.sub || title.timerSince) && (
           <span className="call-sub">
-            · <CallTimer since={title.timerSince} />
+            {title.sub && <>· {title.sub} </>}
+            {title.timerSince && (
+              <>
+                · <CallTimer since={title.timerSince} />
+              </>
+            )}
           </span>
         )}
       </div>
@@ -306,15 +498,13 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         </p>
       )}
 
-      {/* With a shared screen, the cameras sit in a column beside it. */}
+      {/* With a shared screen, everyone's tiles sit in a column beside it. */}
       <div className={screen ? 'call-media call-media--screen' : 'call-media'}>
         {screen && (
           <div className="call-stage" ref={stageRef}>
             <TrackVideo track={screen} fit="contain" />
-            <span className="call-tag">
-              {theirScreen ? `${firstName(current.partner)}'s screen` : 'Your screen'}
-            </span>
-            {theirScreen && (
+            <span className="call-tag">{screenLabel}</span>
+            {sharedByOther && (
               <button
                 type="button"
                 className="call-stage-full"
@@ -333,26 +523,18 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
           </div>
         )}
 
-        <div className="call-tiles">
-          <Tile
-            person={me}
-            label="You"
-            camera={myCamera}
-            mirror={getCallPrefs().mirrorCamera}
-            muted={ready && !micOn}
-            speaking={!!local?.isSpeaking}
-            ringing={false}
-            status={null}
-          />
-          <Tile
-            person={current.partner}
-            label={current.partner.displayName}
-            camera={theirCamera}
-            muted={!!remote && !remote.isMicrophoneEnabled}
-            speaking={!!remote?.isSpeaking}
-            ringing={ringing}
-            status={theirStatus}
-          />
+        <div
+          className="call-tiles"
+          style={{ '--cols': grid.cols, '--tile-h': grid.height } as React.CSSProperties}
+        >
+          {tiles.map((t) => (
+            <Tile
+              key={t.person.id}
+              tile={t}
+              face={screen ? Math.min(grid.face, 56) : grid.face}
+              ringFace={screen ? Math.min(grid.ringFace, 56) : grid.ringFace}
+            />
+          ))}
         </div>
       </div>
 
@@ -389,11 +571,23 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         >
           {sharing ? <StopShareIcon size={22} /> : <ScreenShareIcon size={22} />}
         </button>
+        {group && (
+          <button
+            type="button"
+            className="call-button"
+            aria-label="Add people to call"
+            title="Add people"
+            disabled={!canAdd}
+            onClick={() => setAdding(true)}
+          >
+            <AddFriendIcon size={22} />
+          </button>
+        )}
         <button
           type="button"
           className="call-hangup"
-          aria-label={ringing ? 'Cancel call' : 'Hang up'}
-          title={ringing ? 'Cancel call' : 'Hang up'}
+          aria-label={group ? 'Leave call' : waiting ? 'Cancel call' : 'Hang up'}
+          title={group ? 'Leave call' : waiting ? 'Cancel call' : 'Hang up'}
           onClick={calls.hangUp}
         >
           <HangUpIcon />
@@ -409,7 +603,86 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
           }}
         />
       )}
+      {adding && call && (
+        <AddToCall
+          call={call}
+          people={current.chat.people}
+          onClose={() => setAdding(false)}
+          onRing={(ids) => {
+            setAdding(false)
+            void calls.ring(ids)
+          }}
+        />
+      )}
     </section>
+  )
+}
+
+/** A group call going on in this chat that you're not in: who's there, and Join. */
+export function JoinCallBar({
+  conversation,
+  me
+}: {
+  conversation: ConversationSummary
+  me: SignedInUser
+}): React.JSX.Element | null {
+  const calls = useCalls()
+  const call = calls.callIn(conversation.id)
+  if (!call || conversation.kind !== 'group') return null
+  if (calls.current?.call?.id === call.id || calls.current?.conversationId === conversation.id) {
+    return null
+  }
+  const mine = memberState(call, me.id)
+  if (mine === 'joined' || mine === 'ringing') return null // another device / the Incoming card
+  const here = conversation.members.filter((p) => memberState(call, p.id) === 'joined')
+  const names = here.map(firstName)
+  const who =
+    names.length === 0
+      ? 'Starting…'
+      : `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`
+  const busy = !!calls.current
+  return (
+    <div className="call-join" role="region" aria-label="Call in this group">
+      <span className="call-dot" aria-hidden="true" />
+      <span className="call-join-faces" aria-hidden="true">
+        {here.slice(0, 4).map((p) => (
+          <Avatar
+            key={p.id}
+            id={p.id}
+            name={p.displayName}
+            avatarVersion={p.avatarVersion}
+            size={28}
+          />
+        ))}
+      </span>
+      <span className="call-join-text">
+        <strong>
+          {call.video ? 'Video call' : 'Voice call'} · {joinedCount(call)} of {call.members.length}{' '}
+          joined
+        </strong>
+        <span>{who}</span>
+      </span>
+      <button
+        type="button"
+        className="call-join-button"
+        title={busy ? "You're already in a call" : 'Join with your microphone'}
+        disabled={busy}
+        onClick={() => calls.start(conversation, false)}
+      >
+        <PhoneIcon size={16} strokeWidth={2.2} />
+        Join
+      </button>
+      <button
+        type="button"
+        className="call-join-button"
+        title={busy ? "You're already in a call" : 'Join with your camera on'}
+        disabled={busy}
+        onClick={() => calls.start(conversation, true)}
+      >
+        <VideoIcon size={17} strokeWidth={2.2} />
+        Join with video
+      </button>
+    </div>
   )
 }
 
@@ -449,7 +722,7 @@ export function CallStrip({
         >
           <span className="call-dot" aria-hidden="true" />
           <span className="call-strip-text">
-            <strong>{current.partner.displayName}</strong>
+            <strong>{current.chat.title}</strong>
             <span>{status}</span>
           </span>
         </button>
@@ -466,7 +739,7 @@ export function CallStrip({
         <button
           type="button"
           className="call-strip-button call-strip-button--hangup"
-          aria-label="Hang up"
+          aria-label={current.chat.kind === 'group' ? 'Leave call' : 'Hang up'}
           onClick={calls.hangUp}
         >
           <HangUpIcon size={18} />
@@ -476,13 +749,13 @@ export function CallStrip({
   }
 
   if (elsewhere && !current) {
-    const calling = elsewhere.call.status === 'ringing'
+    const calling = elsewhere.call.status === 'ringing' && elsewhere.call.callerId
     return (
       <div className="call-strip" role="region" aria-label="Call on another device">
         <span className="call-strip-main call-strip-main--static">
           <span className="call-dot" aria-hidden="true" />
           <span className="call-strip-text">
-            <strong>{elsewhere.partner.displayName}</strong>
+            <strong>{elsewhere.chat.title}</strong>
             <span>{calling ? 'Calling from another device' : 'In a call on another device'}</span>
           </span>
         </span>

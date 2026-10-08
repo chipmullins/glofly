@@ -11,28 +11,35 @@ import type {
   Call,
   CallJoin,
   ConversationSummary,
-  DmSummary,
   PublicUser,
   SignedInUser
 } from '../../../preload/api-types'
+import { chatTitle } from '../lib/groups'
+import { audioCapture, getCallPrefs, onCallPrefsChange, type CallPrefs } from '../lib/callPrefs'
+import { startLoop } from '../lib/sounds'
+import IncomingCall from '../components/IncomingCall'
 import {
   CallsContext,
   firstName,
+  isActive,
+  memberState,
+  type CallChat,
   type CallsValue,
   type CurrentCall,
   type ElsewhereCall,
   type IncomingCallInfo
 } from './callState'
-import { audioCapture, getCallPrefs, onCallPrefsChange, type CallPrefs } from '../lib/callPrefs'
-import { startLoop } from '../lib/sounds'
-import IncomingCall from '../components/IncomingCall'
 import '../components/CallPanel.css'
 
 // Everything about calls in one place: the call you're in (and its LiveKit room), a call ringing
-// for you, and a call you're in on another device. It lives above the chats, so a call keeps
-// going while you look at other chats; the call panel inside a chat just shows it.
+// for you, a call you're in on another device, and which chats have a call going on. It lives
+// above the chats, so a call keeps going while you look at other chats; the call panel inside a
+// chat just shows it.
+//
+// What the server says about each person (ringing / joined / out) decides what this device
+// shows: ringing for you → the Incoming card; joined but not here → "on another device".
 
-/** How long someone can drop out of a call before it's ended. */
+/** 1-on-1: how long the other person can drop out before the call is ended. */
 const AWAY_LIMIT_MS = 30_000
 
 /** A friendly explanation for a microphone or camera that won't start. */
@@ -61,6 +68,12 @@ function cameraOptions(p: CallPrefs): {
   }
 }
 
+const chatOf = (c: ConversationSummary): CallChat => ({
+  kind: c.kind,
+  title: chatTitle(c),
+  people: c.members
+})
+
 type CallProviderProps = {
   me: SignedInUser
   conversations: ConversationSummary[]
@@ -86,6 +99,8 @@ export function CallProvider({
   const [current, setCurrentState] = useState<CurrentCall | null>(null)
   const [incoming, setIncomingState] = useState<IncomingCallInfo | null>(null)
   const [elsewhere, setElsewhereState] = useState<ElsewhereCall | null>(null)
+  /** Ringing and ongoing calls in my chats, by chat */
+  const [active, setActive] = useState<Record<string, Call>>({})
   const [room, setRoom] = useState<Room | null>(null)
   const [tick, setTick] = useState(0)
 
@@ -93,12 +108,14 @@ export function CallProvider({
   const currentRef = useRef<CurrentCall | null>(null)
   const incomingRef = useRef<IncomingCallInfo | null>(null)
   const elsewhereRef = useRef<ElsewhereCall | null>(null)
+  const activeRef = useRef<Record<string, Call>>({})
   const roomRef = useRef<Room | null>(null)
   const conversationsRef = useRef(conversations)
   const callbacks = useRef({ onOpenChat, onNotice, onSessionExpired })
   useEffect(() => {
     conversationsRef.current = conversations
     callbacks.current = { onOpenChat, onNotice, onSessionExpired }
+    activeRef.current = active
   })
 
   const setCurrent = useCallback(
@@ -118,27 +135,38 @@ export function CallProvider({
     setElsewhereState(value)
   }, [])
 
-  // Every attempt to start, answer or rejoin a call gets a number. Hanging up bumps it, so any
+  // Every attempt to start, answer or join a call gets a number. Hanging up bumps it, so any
   // step still in flight from an older attempt knows to stop.
   const attemptRef = useRef(0)
   const audioRoot = useRef<HTMLDivElement>(null)
   const awayTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ringEnd = useRef<ReturnType<typeof setTimeout> | null>(null)
   const stopOutgoing = useRef<() => void>(() => {})
   const stopRingtone = useRef<() => void>(() => {})
   /** Rooms Glofly closed on purpose (so their "disconnected" isn't treated as a dropped call). */
   const closing = useRef(new WeakSet<Room>())
+  /** Calls just hung up here: a late update saying "you're in it" isn't "on another device". */
+  const justLeft = useRef(new Set<string>())
 
   const bump = useCallback(() => setTick((t) => t + 1), [])
 
-  const partnerFor = useCallback((conversationId: string): PublicUser | null => {
+  const chatFor = useCallback((conversationId: string): CallChat | null => {
     const c = conversationsRef.current.find((x) => x.id === conversationId)
-    return c?.kind === 'dm' ? c.partner : null
+    return c ? chatOf(c) : null
   }, [])
 
   const problem = useCallback(
     (message: string) => setCurrent((c) => (c ? { ...c, problem: message } : c)),
     [setCurrent]
   )
+
+  const clearIncoming = useCallback(() => {
+    stopRingtone.current()
+    stopRingtone.current = () => {}
+    if (ringEnd.current) clearTimeout(ringEnd.current)
+    ringEnd.current = null
+    setIncoming(null)
+  }, [setIncoming])
 
   /** Leaves the room and forgets the call here (doesn't tell the server: see hangUp). */
   const teardown = useCallback(() => {
@@ -161,7 +189,11 @@ export function CallProvider({
   const hangUp = useCallback(() => {
     const id = currentRef.current?.call?.id
     teardown()
-    if (id) void window.glofly.calls.leave(id)
+    if (id) {
+      justLeft.current.add(id)
+      setTimeout(() => justLeft.current.delete(id), 5000)
+      void window.glofly.calls.leave(id)
+    }
   }, [teardown])
 
   // Defined below; connectRoom and rejoin call each other when a connection drops.
@@ -181,7 +213,7 @@ export function CallProvider({
 
       next
         .on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
-          // Their voice plays through a hidden audio element (on the speakers picked in Settings).
+          // Their voices play through hidden audio elements (on the speakers picked in Settings).
           if (track.kind === Track.Kind.Audio) audioRoot.current?.append(track.attach())
           bump()
         })
@@ -196,18 +228,20 @@ export function CallProvider({
           bump()
         })
         .on(RoomEvent.ParticipantDisconnected, () => {
-          // They dropped out. Give them a moment to come back before ending the call.
+          // 1-on-1: they dropped out. Give them a moment to come back before ending the call.
+          // (Groups carry on; the server notices if someone doesn't come back.)
           const c = currentRef.current
-          if (c?.phase === 'connected' || c?.phase === 'reconnecting') {
+          if (c?.chat.kind === 'dm' && (c.phase === 'connected' || c.phase === 'reconnecting')) {
             setCurrent((x) => (x ? { ...x, partnerAway: true } : x))
             if (awayTimer.current) clearTimeout(awayTimer.current)
             awayTimer.current = setTimeout(() => {
-              const who = currentRef.current?.partner
+              const who = currentRef.current?.chat.people[0]
               hangUp()
-              if (who)
+              if (who) {
                 callbacks.current.onNotice(
                   `The call ended because ${firstName(who)}'s connection dropped.`
                 )
+              }
             }, AWAY_LIMIT_MS)
           }
           bump()
@@ -286,16 +320,16 @@ export function CallProvider({
       if (reason === DisconnectReason.DUPLICATE_IDENTITY) {
         // You picked up the same call on another device: it carries on there.
         teardown()
-        setElsewhere({ call, partner: c.partner })
+        setElsewhere({ call, chat: c.chat })
         callbacks.current.onNotice('Your call moved to another device.')
         return
       }
       if (
+        reason === DisconnectReason.PARTICIPANT_REMOVED ||
         reason === DisconnectReason.ROOM_DELETED ||
-        reason === DisconnectReason.ROOM_CLOSED ||
-        reason === DisconnectReason.PARTICIPANT_REMOVED
+        reason === DisconnectReason.ROOM_CLOSED
       ) {
-        teardown() // the call is over (the server says so too)
+        teardown() // taken out of the call, or the call is over (the server says so too)
         return
       }
       // Anything else: try once to get back in.
@@ -332,16 +366,63 @@ export function CallProvider({
     else callbacks.current.onNotice(message)
   }, [])
 
+  /** Gets into a call through the server (answer, or join a group call), then its room. */
+  const enter = useCallback(
+    (call: Call, chat: CallChat, video: boolean, how: 'answer' | 'join') => {
+      const attempt = ++attemptRef.current
+      setCurrent({
+        conversationId: call.conversationId,
+        chat,
+        call,
+        video,
+        phase: 'connecting',
+        problem: null,
+        partnerAway: false
+      })
+      callbacks.current.onOpenChat(call.conversationId)
+      void window.glofly.calls[how](call.id).then((result) => {
+        if (attempt !== attemptRef.current) {
+          if (result.ok) void window.glofly.calls.leave(result.data.call.id)
+          return
+        }
+        if (!result.ok) {
+          teardown()
+          failed(result.error, result.message)
+          return
+        }
+        const status = result.data.call.status
+        setCurrent((c) =>
+          c
+            ? {
+                ...c,
+                call: result.data.call,
+                phase: status === 'ongoing' ? 'connected' : 'ringing'
+              }
+            : c
+        )
+        void connectRoom(result.data, video, attempt)
+      })
+    },
+    [connectRoom, failed, setCurrent, teardown]
+  )
+
   const start = useCallback(
-    (conversation: DmSummary, video: boolean) => {
+    (conversation: ConversationSummary, video: boolean) => {
       if (currentRef.current) {
         callbacks.current.onNotice("You're already in a call. Hang up first.")
+        return
+      }
+      const chat = chatOf(conversation)
+      // A group call already going on: join it rather than start another.
+      const existing = activeRef.current[conversation.id]
+      if (existing && conversation.kind === 'group') {
+        enter(existing, chat, video, 'join')
         return
       }
       const attempt = ++attemptRef.current
       setCurrent({
         conversationId: conversation.id,
-        partner: conversation.partner,
+        chat,
         call: null,
         video,
         phase: 'starting',
@@ -360,103 +441,59 @@ export function CallProvider({
           failed(result.error, result.message)
           return
         }
+        const call = result.data.call
+        setActive((map) => ({ ...map, [call.conversationId]: call }))
         setCurrent((c) =>
-          c
-            ? {
-                ...c,
-                call: result.data.call,
-                phase: result.data.call.status === 'ongoing' ? 'connected' : 'ringing'
-              }
-            : c
+          c ? { ...c, call, phase: call.status === 'ongoing' ? 'connected' : 'ringing' } : c
         )
         void connectRoom(result.data, video, attempt)
       })
     },
-    [connectRoom, failed, setCurrent, teardown]
+    [connectRoom, enter, failed, setCurrent, teardown]
   )
 
   const answer = useCallback(
     async (video: boolean) => {
       const inc = incomingRef.current
       if (!inc) return
-      stopRingtone.current()
-      setIncoming(null)
-      // Already in a call: that one ends first.
+      clearIncoming()
+      // Already in a call: that one ends (or you leave it) first.
       const previous = currentRef.current?.call?.id
       if (currentRef.current) teardown()
       if (previous) await window.glofly.calls.leave(previous)
-      const attempt = ++attemptRef.current
-      setCurrent({
-        conversationId: inc.call.conversationId,
-        partner: inc.caller,
-        call: inc.call,
-        video: inc.call.video,
-        phase: 'connecting',
-        problem: null,
-        partnerAway: false
-      })
-      callbacks.current.onOpenChat(inc.call.conversationId)
-      void window.glofly.calls.answer(inc.call.id).then((result) => {
-        if (attempt !== attemptRef.current) {
-          if (result.ok) void window.glofly.calls.leave(result.data.call.id)
-          return
-        }
-        if (!result.ok) {
-          teardown()
-          failed(result.error, result.message)
-          return
-        }
-        setCurrent((c) => (c ? { ...c, call: result.data.call, phase: 'connected' } : c))
-        void connectRoom(result.data, video, attempt)
-      })
+      enter(inc.call, inc.chat, video, 'answer')
     },
-    [connectRoom, failed, setCurrent, setIncoming, teardown]
+    [clearIncoming, enter, teardown]
   )
 
   const decline = useCallback(
     async (message?: string) => {
       const inc = incomingRef.current
       if (!inc) return
-      stopRingtone.current()
-      setIncoming(null)
+      clearIncoming()
       if (message) await window.glofly.conversations.send(inc.call.conversationId, message)
       const result = await window.glofly.calls.decline(inc.call.id)
       if (!result.ok && result.error === 'unauthorized') callbacks.current.onSessionExpired()
     },
-    [setIncoming]
+    [clearIncoming]
   )
 
   const moveHere = useCallback(() => {
     const away = elsewhereRef.current
     if (!away || currentRef.current) return
     setElsewhere(null)
-    const attempt = ++attemptRef.current
-    setCurrent({
-      conversationId: away.call.conversationId,
-      partner: away.partner,
-      call: away.call,
-      video: away.call.video,
-      phase: 'connecting',
-      problem: null,
-      partnerAway: false
-    })
-    callbacks.current.onOpenChat(away.call.conversationId)
-    void window.glofly.calls.join(away.call.id).then((result) => {
-      if (attempt !== attemptRef.current) return
-      if (!result.ok) {
-        teardown()
-        failed(result.error, result.message)
-        return
-      }
-      const status = result.data.call.status
-      setCurrent((c) =>
-        c
-          ? { ...c, call: result.data.call, phase: status === 'ongoing' ? 'connected' : 'ringing' }
-          : c
-      )
-      void connectRoom(result.data, false, attempt)
-    })
-  }, [connectRoom, failed, setCurrent, setElsewhere, teardown])
+    enter(away.call, away.chat, false, 'join')
+  }, [enter, setElsewhere])
+
+  const ring = useCallback(
+    async (userIds: string[]) => {
+      const id = currentRef.current?.call?.id
+      if (!id || userIds.length === 0) return
+      const result = await window.glofly.calls.ring(id, userIds)
+      if (!result.ok) failed(result.error, result.message)
+    },
+    [failed]
+  )
 
   const toggleMic = useCallback(() => {
     const local = roomRef.current?.localParticipant
@@ -504,9 +541,16 @@ export function CallProvider({
     [setCurrent]
   )
 
-  // A call changed somewhere (rang, was answered, ended).
+  // A call changed somewhere (rang, was answered, someone joined or left, it ended).
   const onCallUpdate = useCallback(
     (call: Call, caller: PublicUser | null) => {
+      setActive((map) => {
+        if (isActive(call)) return { ...map, [call.conversationId]: call }
+        if (map[call.conversationId]?.id !== call.id) return map
+        const next = { ...map }
+        delete next[call.conversationId]
+        return next
+      })
       const cur = currentRef.current
       // This device is starting a call in that chat and hasn't heard back yet: that's ours.
       if (
@@ -517,84 +561,90 @@ export function CallProvider({
       ) {
         return
       }
+      const mine = memberState(call, me.id)
+
       if (cur?.call?.id === call.id) {
-        if (call.status === 'ringing') return
-        if (call.status === 'ongoing') {
-          stopOutgoing.current()
-          setCurrent((c) =>
-            c ? { ...c, call, phase: c.phase === 'reconnecting' ? c.phase : 'connected' } : c
-          )
+        if (!isActive(call)) {
+          // Over. If nobody picked up, say so.
+          const unanswered = call.callerId === me.id && call.status !== 'ended'
+          teardown()
+          if (unanswered) {
+            const partner = cur.chat.kind === 'dm' ? cur.chat.people[0] : undefined
+            callbacks.current.onNotice(
+              partner ? `${firstName(partner)} didn't pick up.` : 'Nobody picked up.'
+            )
+          }
           return
         }
-        // Over. If they never picked up, say so.
-        const unanswered = cur.call.callerId === me.id && call.status !== 'ended'
-        teardown()
-        if (unanswered) callbacks.current.onNotice(`${firstName(cur.partner)} didn't pick up.`)
+        if (!call.members.some((m) => m.userId === me.id)) {
+          teardown() // no longer in the group
+          callbacks.current.onNotice("You're no longer in this group, so you've left its call.")
+          return
+        }
+        if (call.status === 'ongoing') stopOutgoing.current()
+        setCurrent((c) => {
+          if (!c) return c
+          let phase = c.phase
+          if (c.phase === 'connecting') {
+            if (mine === 'joined') phase = call.status === 'ongoing' ? 'connected' : 'ringing'
+          } else if (c.phase !== 'reconnecting') {
+            phase = call.status === 'ongoing' ? 'connected' : 'ringing'
+          }
+          return { ...c, call, phase }
+        })
         return
       }
 
+      // Not the call I'm in here.
+      const chat = chatFor(call.conversationId)
       const inc = incomingRef.current
-      if (inc?.call.id === call.id) {
-        if (call.status === 'ringing') return
-        stopRingtone.current()
-        setIncoming(null)
-        // Picked up on another of your devices.
-        if (call.status === 'ongoing') setElsewhere({ call, partner: inc.caller })
-        return
+      if (isActive(call) && mine === 'ringing' && chat) {
+        if (inc?.call.id !== call.id) {
+          const who = caller ?? chat.people.find((p) => p.id === call.callerId) ?? chat.people[0]
+          if (!who) return
+          clearIncoming()
+          setIncoming({ call, caller: who, chat })
+          stopRingtone.current = startLoop('ringtone')
+          window.glofly.window.attention()
+        } else {
+          setIncoming({ ...inc, call })
+        }
+        // Stop ringing when its time is up, even if nothing else is heard.
+        const until = call.members.find((m) => m.userId === me.id)?.ringingUntil
+        if (until) {
+          if (ringEnd.current) clearTimeout(ringEnd.current)
+          ringEnd.current = setTimeout(
+            () => {
+              if (incomingRef.current?.call.id === call.id) clearIncoming()
+            },
+            Math.max(0, new Date(until).getTime() - Date.now())
+          )
+        }
+      } else if (inc?.call.id === call.id) {
+        clearIncoming() // answered elsewhere, declined, or over
       }
 
-      const away = elsewhereRef.current
-      if (away?.call.id === call.id) {
-        setElsewhere(
-          call.status === 'ringing' || call.status === 'ongoing' ? { ...away, call } : null
-        )
-        return
+      if (isActive(call) && mine === 'joined' && chat && !justLeft.current.has(call.id)) {
+        if (!cur || cur.call?.id !== call.id) setElsewhere({ call, chat })
+      } else if (elsewhereRef.current?.call.id === call.id) {
+        setElsewhere(null)
       }
-
-      if (call.status !== 'ringing') return
-      const partner =
-        call.callerId === me.id
-          ? partnerFor(call.conversationId)
-          : (caller ?? partnerFor(call.conversationId))
-      if (!partner) return
-      if (call.callerId === me.id) {
-        // You're calling them from another device.
-        if (!cur) setElsewhere({ call, partner })
-        return
-      }
-      setIncoming({ call, caller: partner })
-      stopRingtone.current()
-      stopRingtone.current = startLoop('ringtone')
-      window.glofly.window.attention()
     },
-    [me.id, partnerFor, setCurrent, setElsewhere, setIncoming, teardown]
+    [chatFor, clearIncoming, me.id, setCurrent, setElsewhere, setIncoming, teardown]
   )
 
-  /** Catches up with the server: a call ringing for you, or one you're in elsewhere. */
+  /** Catches up with the server: calls in my chats, ringing for me, or mine elsewhere. */
   const syncActive = useCallback(async () => {
     const result = await window.glofly.calls.active()
     if (!result.ok) return
     const ids = new Set(result.data.map((a) => a.call.id))
-    // Anything that ended while we weren't looking.
-    if (incomingRef.current && !ids.has(incomingRef.current.call.id)) {
-      stopRingtone.current()
-      setIncoming(null)
-    }
+    setActive(Object.fromEntries(result.data.map((a) => [a.call.conversationId, a.call])))
+    if (incomingRef.current && !ids.has(incomingRef.current.call.id)) clearIncoming()
     if (elsewhereRef.current && !ids.has(elsewhereRef.current.call.id)) setElsewhere(null)
     const cur = currentRef.current
     if (cur?.call && cur.phase !== 'starting' && !ids.has(cur.call.id)) teardown()
-
-    for (const { call, joined } of result.data) {
-      if (currentRef.current?.call?.id === call.id) continue
-      const partner = partnerFor(call.conversationId)
-      if (!partner) continue
-      if (joined) {
-        if (!currentRef.current) setElsewhere({ call, partner })
-      } else if (call.status === 'ringing' && call.callerId !== me.id && !incomingRef.current) {
-        onCallUpdate(call, partner)
-      }
-    }
-  }, [me.id, onCallUpdate, partnerFor, setElsewhere, setIncoming, teardown])
+    for (const { call } of result.data) onCallUpdate(call, null)
+  }, [clearIncoming, onCallUpdate, setElsewhere, teardown])
 
   useEffect(() => {
     return window.glofly.onEvent((event) => {
@@ -611,6 +661,17 @@ export function CallProvider({
     void syncActive()
   }, [conversations.length, syncActive])
 
+  // Ringing tiles and "4 of 6" go stale when someone's ringing runs out: refresh once a second
+  // while anyone's being rung.
+  useEffect(() => {
+    const anyRinging = Object.values(active).some((c) =>
+      c.members.some((m) => m.state === 'ringing')
+    )
+    if (!anyRinging) return
+    const timer = setInterval(bump, 1000)
+    return () => clearInterval(timer)
+  }, [active, bump])
+
   // Changing devices in Settings → Voice & video during a call switches them right away.
   useEffect(() => {
     return onCallPrefsChange((p) => {
@@ -620,10 +681,11 @@ export function CallProvider({
       if (p.cameraId) void r.switchActiveDevice('videoinput', p.cameraId).catch(() => {})
       void r.switchActiveDevice('audiooutput', p.speakerId || 'default').catch(() => {})
       const mic = r.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack
-      if (mic && 'restartTrack' in mic)
+      if (mic && 'restartTrack' in mic) {
         void (mic as { restartTrack: (o: unknown) => Promise<void> })
           .restartTrack(audioCapture(p))
           .catch(() => {})
+      }
       bump()
     })
   }, [bump])
@@ -638,12 +700,15 @@ export function CallProvider({
     }
   }, [teardown])
 
+  const callIn = useCallback((conversationId: string) => active[conversationId] ?? null, [active])
+
   const value: CallsValue = {
     current,
     incoming,
     elsewhere,
     room,
     tick,
+    callIn,
     start,
     answer,
     decline,
@@ -652,6 +717,7 @@ export function CallProvider({
     toggleCamera,
     shareScreen,
     stopSharing,
+    ring,
     moveHere,
     clearProblem
   }
@@ -662,7 +728,7 @@ export function CallProvider({
   return (
     <CallsContext.Provider value={value}>
       {children}
-      {/* Their voice plays from here, whichever chat is open. */}
+      {/* Their voices play from here, whichever chat is open. */}
       <div ref={audioRoot} hidden />
       {incoming && (
         <IncomingCall
