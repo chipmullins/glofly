@@ -1,7 +1,7 @@
 import numpy as np, scipy.io.wavfile as w
 from scipy.signal import butter, sosfilt
 exec(open('synth_round1.py').read().split('# --- Pair A')[0])
-import os; os.chdir('round2')
+import os; os.makedirs('round2', exist_ok=True); os.chdir('round2')
 def T(d): return np.arange(int(SR*d))/SR
 def kalimba(f,dur=1.4,amp=1.0):
     t=T(dur); y=np.sin(2*np.pi*f*t)*np.exp(-t*3.2)+0.35*np.sin(2*np.pi*f*5.95*t)*np.exp(-t*14)+0.15*np.sin(2*np.pi*f*2.0*t)*np.exp(-t*7)
