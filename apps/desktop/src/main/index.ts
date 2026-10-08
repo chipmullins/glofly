@@ -78,6 +78,7 @@ import { connectRealtime, disconnectRealtime, sendTyping } from './realtime'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isUserId } from './api'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
+import { startAutoUpdates } from './updater'
 import { getMyProfile, getProfile, removePhoto, setPhoto, updateProfile } from './profile'
 import {
   acceptRequest,
@@ -651,6 +652,7 @@ app.whenReady().then(() => {
   startIdleWatch()
   createWindow()
   setUpTray(() => mainWindow, icon)
+  startAutoUpdates()
 
   // Light ↔ dark (picked in Settings, or Windows changed with "Match system"):
   // the page follows by itself; the window background and buttons follow here.

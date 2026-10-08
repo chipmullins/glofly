@@ -1,0 +1,8 @@
+# Caddy gets and renews the https certificate for the API address automatically
+# (Let's Encrypt), and passes everything, including the real-time connection,
+# to the Glofly server. It replaces any X-Forwarded-For a visitor sends, so the
+# server's per-IP rate limits can't be fooled.
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy server:4000
+}

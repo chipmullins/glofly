@@ -15,9 +15,15 @@ import { avatarsRouter, profileRouter } from "./profile/routes";
 import { sweepUnsentUploads } from "./messages/attachments";
 import { startRealtime } from "./realtime";
 import { connectRedis } from "./redis";
+import { storageKind } from "./storage";
 
 const app = express();
-const PORT = 4000;
+const PORT = Number(process.env.PORT) || 4000;
+
+// Live server: Caddy sits in front and handles https, so the real visitor's address
+// arrives in X-Forwarded-For. Trusting exactly one hop keeps per-IP rate limits
+// working without letting anyone fake their address. Off when developing.
+if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
 
 app.use(helmet()); // standard security headers; also hides that this is Express
 app.use(express.json({ limit: "10kb" })); // rejects oversized request bodies
@@ -65,7 +71,7 @@ startRealtime(server);
 connectRedis()
   .then(() => {
     server.listen(PORT, () => {
-      console.log(`Glofly server running at http://localhost:${PORT}`);
+      console.log(`Glofly server running at http://localhost:${PORT} (files: ${storageKind})`);
       if (!livekitConfigured) console.log("Calls are off: add the LIVEKIT_ settings to .env to turn them on.");
     });
     // Calls nobody answered become missed; calls someone dropped out of are ended.
