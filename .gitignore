@@ -147,3 +147,6 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Desktop production addresses (public, committed)
+!apps/desktop/.env.production
