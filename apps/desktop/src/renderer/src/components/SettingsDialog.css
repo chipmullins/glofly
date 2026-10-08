@@ -467,3 +467,69 @@
   outline: 2px solid var(--glo-accent);
   outline-offset: 1px;
 }
+
+/* ---------- Voice & video ---------- */
+
+.settings-row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.settings-select--device {
+  width: 260px;
+  max-width: 100%;
+}
+.voice-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.voice-test {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.voice-meter {
+  flex: 1;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--glo-line-strong);
+  overflow: hidden;
+}
+.voice-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--glo-good);
+  transition: width 0.06s linear;
+}
+.voice-preview {
+  aspect-ratio: 16 / 9;
+  max-width: 420px;
+  width: 100%;
+  border-radius: 14px;
+  background: var(--glo-call-bg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.voice-preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.voice-preview-video--mirror {
+  transform: scaleX(-1);
+}
+.voice-preview-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--glo-call-muted);
+}
+.settings-row--stack > .small-button {
+  align-self: flex-start;
+}

@@ -13,8 +13,8 @@ export type SoundName =
   | 'message' // a message arrives
   | 'friendRequest' // someone sends you a friend request
   | 'login' // the firefly takeoff finishes
-  | 'ringtone' // someone is calling you (calls, later)
-  | 'outgoing' // waiting for someone to answer (calls, later)
+  | 'ringtone' // someone is calling you
+  | 'outgoing' // waiting for someone to answer your call
 
 type SoundFile = Exclude<AlertSound | CallSound, 'none'>
 
@@ -62,6 +62,30 @@ export function playSound(name: SoundName): void {
   void audio.play().catch(() => {
     // The computer has no sound device, or it's busy: nothing to do.
   })
+}
+
+/**
+ * Plays a call sound over and over (the ringtone, or the jingle while you wait for someone to
+ * answer) until the returned function is called. Silent if sounds are off or you're in
+ * Do not disturb.
+ */
+export function startLoop(name: 'ringtone' | 'outgoing'): () => void {
+  if (!settings.enabled || (quiet && settings.dndSilence)) return () => {}
+  const choice = settings[name]
+  if (choice === 'none') return () => {}
+  const audio = new Audio(SOUND_FILES[choice].url)
+  audio.loop = true
+  let stopped = false
+  void audio.play().catch(() => {
+    // No sound device: nothing to do.
+  })
+  return () => {
+    if (stopped) return
+    stopped = true
+    audio.pause()
+    audio.removeAttribute('src')
+    audio.load()
+  }
 }
 
 // ---------------------------------------------------------------------------------------

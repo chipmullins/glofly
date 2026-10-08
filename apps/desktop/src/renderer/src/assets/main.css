@@ -58,6 +58,30 @@
   --glo-shadow-rgb: 36, 23, 15;
   --glo-night: #1c1210; /* the login screen's night-sky panel (dark in both themes) */
 
+  /* Calls (Calling.dc.html, Incoming.dc.html): dark in every theme, like the night sky. */
+  --glo-call-bg: #1c1210;
+  --glo-call-tile: #2a1c17;
+  --glo-call-tile-me: #3a2a22;
+  --glo-call-button: #3a2a22;
+  --glo-call-button-hover: #4a372b;
+  --glo-call-line: #4a372b;
+  --glo-call-text: #ffffff;
+  --glo-call-muted: #d9c2b1;
+  --glo-call-soft: #e9d5c4;
+  --glo-call-kind: #f9b26b;
+  --glo-call-glow: #ffa54a;
+  --glo-call-glow-rgb: 255, 165, 74;
+  --glo-call-dot: #ffb347;
+  --glo-call-answer: #2e9e5b;
+  --glo-call-hangup: #d33a2c;
+  --glo-call-hangup-hover: #b72e22;
+  --glo-call-mute-icon: #ff8a7a;
+  --glo-call-off-bg: #f3e9e0; /* a control that's switched off (muted, camera off) */
+  --glo-call-off-ink: #1c1210;
+  --glo-call-tag: rgba(28, 18, 16, 0.78);
+  --glo-call-video: #000000; /* behind a video that doesn't fill its box */
+  --glo-call-scrim: rgba(28, 18, 16, 0.45);
+
   /* Older names, kept so nothing breaks */
   --glo-orange: var(--glo-accent);
   --glo-orange-deep: var(--glo-accent-deep);

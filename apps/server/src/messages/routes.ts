@@ -62,7 +62,7 @@ const messageFields = {
   deletedAt: messages.deletedAt,
   event: messages.event,
 };
-type MessageRow = {
+export type MessageRow = {
   id: string;
   conversationId: string;
   senderId: string;
@@ -213,7 +213,7 @@ async function shareReadPosition(conversationId: string, readerId: string, partn
   }
 }
 
-type Access = {
+export type Access = {
   kind: "dm" | "group";
   memberIds: string[];
   /** DMs: the other person */
@@ -224,7 +224,7 @@ type Access = {
 };
 
 /** A chat I'm in (null if it doesn't exist or I'm not a member). */
-async function access(conversationId: string, myId: string): Promise<Access | null> {
+export async function access(conversationId: string, myId: string): Promise<Access | null> {
   const [conversation] = await db
     .select({ kind: conversations.kind, createdBy: conversations.createdBy, name: conversations.name })
     .from(conversations)
@@ -246,7 +246,7 @@ async function access(conversationId: string, myId: string): Promise<Access | nu
 }
 
 /** Can I post here? DMs need us to be friends (and not blocked); groups just need me in it. */
-async function canPost(chat: Access, myId: string): Promise<boolean> {
+export async function canPost(chat: Access, myId: string): Promise<boolean> {
   if (chat.kind === "group") return !(await deletionPending(myId));
   return chat.partner !== null && (await canMessage(myId, chat.partner));
 }
@@ -309,7 +309,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
       .orderBy(messages.conversationId, desc(messages.createdAt), desc(messages.id)),
   );
 
-  // Messages from other people since I last read the chat (group events don't count).
+  // Messages from other people since I last read the chat. Lines like "Chip added Maya" don't
+  // count; a call you missed does.
   const unread = await db
     .select({ conversationId: messages.conversationId, count: sql<number>`count(*)::int` })
     .from(messages)
@@ -324,7 +325,10 @@ async function summaries(myId: string, conversationIds?: string[]) {
       and(
         inArray(messages.conversationId, ids),
         ne(messages.senderId, myId),
-        isNull(messages.event),
+        or(
+          isNull(messages.event),
+          sql`(${messages.event}->>'type' = 'call' and ${messages.event}->>'status' = 'missed')`,
+        ),
         gt(messages.createdAt, conversationMembers.lastReadAt),
       ),
     )
@@ -534,10 +538,10 @@ async function peopleFor(rows: { senderId: string; event: ChatEvent | null }[]) 
     .where(inArray(users.id, [...ids]));
 }
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-/** Adds a line like "Chip renamed the group" to a chat. */
-async function postEvent(tx: Tx, conversationId: string, actorId: string, event: ChatEvent) {
+/** Adds a line like "Chip renamed the group" (or a call) to a chat. */
+export async function postEvent(tx: Tx, conversationId: string, actorId: string, event: ChatEvent) {
   const [row] = await tx
     .insert(messages)
     .values({ conversationId, senderId: actorId, body: "", event })
@@ -552,7 +556,7 @@ async function postEvent(tx: Tx, conversationId: string, actorId: string, event:
 }
 
 /** Tells everyone affected: the new line appears and their chat lists refresh. */
-async function announce(row: MessageRow, userIds: string[]) {
+export async function announce(row: MessageRow, userIds: string[]) {
   const [message] = await hydrate([row]);
   const people = await peopleFor([row]);
   for (const userId of new Set(userIds)) {
@@ -934,7 +938,7 @@ async function loadForChange(conversationIdRaw: unknown, messageIdRaw: unknown, 
   return { status: 200 as const, message, chat, conversationId: conversationId.data };
 }
 
-async function sendUpdated(messageId: string, conversationId: string) {
+export async function sendUpdated(messageId: string, conversationId: string) {
   const [row] = await db.select(messageFields).from(messages).where(eq(messages.id, messageId));
   const [message] = await hydrate([row]);
   await broadcast(conversationId, "message:updated", { message });

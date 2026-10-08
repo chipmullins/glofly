@@ -4,7 +4,15 @@ import fireflyImg from '../assets/firefly.png'
 import { shortDate } from '../lib/names'
 import { STATUS_LABEL } from '../lib/presence'
 import Avatar from './Avatar'
-import { BlockIcon, CalendarIcon, ChatIcon, CloseIcon, RemoveFriendIcon } from './icons'
+import {
+  BlockIcon,
+  CalendarIcon,
+  ChatIcon,
+  CloseIcon,
+  PhoneIcon,
+  RemoveFriendIcon,
+  VideoIcon
+} from './icons'
 import './dialogs.css'
 import './ProfileDialogs.css'
 import EmojiText from './EmojiText'
@@ -57,6 +65,8 @@ type ProfileCardProps = {
   /** Live status from the friends list, if they're a friend. */
   presence?: Presence
   onMessage: () => void
+  /** Friends: start a voice or video call */
+  onCall?: (video: boolean) => void
   onRemove: () => void
   onBlock: () => void
   onClose: () => void
@@ -69,6 +79,7 @@ export default function ProfileCard({
   isFriend,
   presence: livePresence,
   onMessage,
+  onCall,
   onRemove,
   onBlock,
   onClose,
@@ -219,6 +230,28 @@ export default function ProfileCard({
                   <ChatIcon size={18} strokeWidth={2} />
                   Message
                 </button>
+                {onCall && (
+                  <>
+                    <button
+                      type="button"
+                      className="profile-call"
+                      aria-label={`Voice call ${shown.displayName}`}
+                      title="Voice call"
+                      onClick={() => onCall(false)}
+                    >
+                      <PhoneIcon size={19} />
+                    </button>
+                    <button
+                      type="button"
+                      className="profile-call"
+                      aria-label={`Video call ${shown.displayName}`}
+                      title="Video call"
+                      onClick={() => onCall(true)}
+                    >
+                      <VideoIcon size={20} />
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

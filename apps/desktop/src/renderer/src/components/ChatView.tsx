@@ -16,7 +16,9 @@ import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
 import { MessageAttachments, PhotoViewer, UploadTray, type Upload } from './Attachments'
 import { attachmentSummary } from '../lib/attachments'
-import { FileIcon, GroupIcon, ProfileIcon } from './icons'
+import { CallLineIcon, FileIcon, GroupIcon, PhoneIcon, ProfileIcon, VideoIcon } from './icons'
+import CallPanel from './CallPanel'
+import { useCalls } from '../calls/callState'
 import MessageItem, { type ShownMessage } from './MessageItem'
 import { PinIcon } from './ChatList'
 import EmojiPicker from './EmojiPicker'
@@ -153,6 +155,10 @@ export default function ChatView({
 }: ChatViewProps): React.JSX.Element {
   const partner = conversation.partner
   const isGroup = conversation.kind === 'group'
+  const calls = useCalls()
+  const inThisCall = calls.current?.conversationId === conversation.id
+  // Calls are 1-on-1 for now, between friends, one at a time.
+  const canCall = conversation.kind === 'dm' && conversation.canMessage && !calls.current
   const partnerPresence = partner ? presence[partner.id] : undefined
   const title = chatTitle(conversation)
   const [messages, setMessages] = useState<Message[]>([])
@@ -779,6 +785,30 @@ export default function ChatView({
           )}
         </div>
         <div className="chat-header-actions">
+          {conversation.kind === 'dm' && (
+            <>
+              <button
+                type="button"
+                className="chat-header-button"
+                aria-label="Start voice call"
+                title={calls.current && !inThisCall ? "You're already in a call" : 'Voice call'}
+                disabled={!canCall}
+                onClick={() => calls.start(conversation, false)}
+              >
+                <PhoneIcon size={20} />
+              </button>
+              <button
+                type="button"
+                className="chat-header-button"
+                aria-label="Start video call"
+                title={calls.current && !inThisCall ? "You're already in a call" : 'Video call'}
+                disabled={!canCall}
+                onClick={() => calls.start(conversation, true)}
+              >
+                <VideoIcon size={21} />
+              </button>
+            </>
+          )}
           <button
             type="button"
             className={
@@ -817,6 +847,8 @@ export default function ChatView({
         </div>
       </header>
 
+      {inThisCall && <CallPanel me={me} />}
+
       <div className="chat-messages" ref={listRef} onScroll={onScroll}>
         {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}
         {!loading && !hasMore && (
@@ -854,6 +886,30 @@ export default function ChatView({
               <span>{dayLabel(m.createdAt)}</span>
             </div>
           )
+          // Calls get a line with an arrow, like the design ("Chip started a video call").
+          if (m.event?.type === 'call') {
+            const missed =
+              m.senderId !== me.id && (m.event.status === 'missed' || m.event.status === 'declined')
+            return (
+              <div key={item.key}>
+                {divider}
+                <div
+                  className={
+                    missed
+                      ? 'chat-event chat-event--call chat-event--missed'
+                      : 'chat-event chat-event--call'
+                  }
+                  data-message-id={m.id}
+                >
+                  <span className="chat-event-icon">
+                    <CallLineIcon missed={missed} />
+                  </span>
+                  <span>{eventText(m.event, m.senderId, me.id, nameOf)}</span>
+                  <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
+                </div>
+              </div>
+            )
+          }
           // Group events ("Chip added Maya") are a quiet line, not a message.
           if (m.event) {
             return (

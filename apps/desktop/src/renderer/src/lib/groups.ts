@@ -55,6 +55,46 @@ export function eventText(
       return `${actor} removed ${who(event.userId)}`
     case 'left':
       return `${actor} left the group`
+    case 'call':
+      return callLine(event, actorId, meId, nameOf)
+  }
+}
+
+/** "1 min", "12 min", "1 hr 5 min", "40 sec" */
+export function roughDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.max(1, seconds)} sec`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m ? `${h} hr ${m} min` : `${h} hr`
+}
+
+/**
+ * A call's line in the chat. It changes as the call goes:
+ * "Chip started a video call" → "Video call · 12 min", or "You missed a video call from Chip".
+ * Someone whose call wasn't picked up just sees it wasn't answered (declining isn't announced).
+ */
+export function callLine(
+  event: Extract<ChatEvent, { type: 'call' }>,
+  callerId: string,
+  meId: string,
+  nameOf: (userId: string) => string
+): string {
+  const kind = event.video ? 'video call' : 'voice call'
+  const Kind = event.video ? 'Video call' : 'Voice call'
+  const iCalled = callerId === meId
+  const caller = iCalled ? 'You' : nameOf(callerId)
+  switch (event.status) {
+    case 'ringing':
+    case 'ongoing':
+      return `${caller} started a ${kind}`
+    case 'ended':
+      return event.durationSec !== null ? `${Kind} · ${roughDuration(event.durationSec)}` : Kind
+    case 'missed':
+      return iCalled ? `Your ${kind} wasn't answered` : `You missed a ${kind} from ${caller}`
+    case 'declined':
+      return iCalled ? `Your ${kind} wasn't answered` : `You declined a ${kind} from ${caller}`
   }
 }
 

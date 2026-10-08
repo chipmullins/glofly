@@ -158,13 +158,54 @@ export type Message = {
   event: ChatEvent | null
 }
 
-/** Things that happen in a group chat, shown as a line in the chat. */
+/** Things that happen in a chat, shown as a line ("Chip added Maya", "Chip started a video call"). */
 export type ChatEvent =
   | { type: 'created'; name: string | null }
   | { type: 'renamed'; name: string | null }
   | { type: 'added'; userIds: string[] }
   | { type: 'removed'; userId: string }
   | { type: 'left' }
+  | {
+      type: 'call'
+      callId: string
+      video: boolean
+      status: CallStatus
+      /** How long it lasted, once ended */
+      durationSec: number | null
+    }
+
+export type CallStatus = 'ringing' | 'ongoing' | 'ended' | 'missed' | 'declined'
+
+/** A voice or video call (1-on-1 for now). */
+export type Call = {
+  id: string
+  conversationId: string
+  callerId: string
+  /** Started as a video call (cameras can still be turned on or off) */
+  video: boolean
+  status: CallStatus
+  /** ISO dates */
+  createdAt: string
+  answeredAt: string | null
+  endedAt: string | null
+}
+
+/** What's needed to join a call's room: a short-lived pass and where the room is. */
+export type CallJoin = { call: Call; token: string; url: string }
+
+/** A ringing or ongoing call in one of your chats. `joined`: you're in it (maybe on another device). */
+export type ActiveCall = { call: Call; joined: boolean }
+
+/** A screen or window that can be shared, with a small picture of it. */
+export type ScreenSource = {
+  id: string
+  name: string
+  kind: 'screen' | 'window'
+  /** data: URL */
+  thumbnail: string
+  /** data: URL of the app's icon (windows only) */
+  icon: string | null
+}
 
 type ConversationBase = {
   id: string
@@ -272,6 +313,7 @@ export type GloflyEvent =
   | { type: 'conversation:read'; conversationId: string; userId: string; readAt: string }
   | { type: 'conversations:changed' }
   | { type: 'profile:changed'; userId: string }
+  | { type: 'call:updated'; call: Call; caller: PublicUser | null }
   | { type: 'connection'; connected: boolean }
   | { type: 'session:expired' }
   | { type: 'appearance'; accent: AccentChoice; dark: boolean }
@@ -397,9 +439,27 @@ export type GloflyApi = {
     /** Shows a file Glofly just saved in File Explorer. */
     showInFolder: (path: string) => void
   }
+  calls: {
+    /** Calls a friend. Returns the pass to join the call's room right away (it rings meanwhile). */
+    start: (conversationId: string, video: boolean) => Promise<ApiResult<CallJoin>>
+    /** Ringing and ongoing calls in your chats (to show an incoming call after a restart). */
+    active: () => Promise<ApiResult<ActiveCall[]>>
+    answer: (callId: string) => Promise<ApiResult<CallJoin>>
+    /** Back into a call you're part of (after a restart, or moving it to this device). */
+    join: (callId: string) => Promise<ApiResult<CallJoin>>
+    decline: (callId: string) => Promise<ApiResult<null>>
+    /** Hangs up (or cancels the call while it's still ringing). */
+    leave: (callId: string) => Promise<ApiResult<null>>
+    /** Screens and windows that can be shared. */
+    screenSources: () => Promise<ScreenSource[]>
+    /** Picks what the next screen share shows (the share itself starts in the call). */
+    chooseScreen: (sourceId: string) => Promise<boolean>
+  }
   /** Subscribe to live updates. Returns a function that unsubscribes. */
   onEvent: (listener: (event: GloflyEvent) => void) => () => void
   window: {
     setTheme: (theme: WindowTheme) => void
+    /** Brings Glofly to your attention (an incoming call): shows it if it's in the tray, flashes the taskbar. */
+    attention: () => void
   }
 }

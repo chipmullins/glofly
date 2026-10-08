@@ -41,6 +41,10 @@ import ChatList from '../components/ChatList'
 import { findChats, type ChatResult } from '../lib/chatSearch'
 import { GroupPeopleDialog, GroupSettingsDialog } from '../components/GroupDialogs'
 import { chatTitle } from '../lib/groups'
+import { CallProvider } from '../calls/CallContext'
+import type { CallsValue } from '../calls/callState'
+import { CallStrip } from '../components/CallPanel'
+import { PhoneIcon, VideoIcon } from '../components/icons'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -161,6 +165,7 @@ function FriendRow({
   person,
   now,
   onMessage,
+  onCall,
   onViewProfile,
   onRemove,
   onBlock
@@ -168,6 +173,7 @@ function FriendRow({
   person: FriendEntry
   now: number
   onMessage: () => void
+  onCall: (video: boolean) => void
   onViewProfile: () => void
   onRemove: () => void
   onBlock: () => void
@@ -227,6 +233,30 @@ function FriendRow({
             >
               <ProfileIcon size={18} />
               View profile
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                close()
+                onCall(false)
+              }}
+            >
+              <PhoneIcon size={18} />
+              Voice call
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                close()
+                onCall(true)
+              }}
+            >
+              <VideoIcon size={18} />
+              Video call
             </button>
             <div className="menu-divider" role="separator" />
             <button
@@ -340,6 +370,9 @@ export default function MainScreen({
   const [settingsFor, setSettingsFor] = useState<string | null>(null)
   const [leaving, setLeaving] = useState<ConversationSummary | null>(null)
   const [leaveBusy, setLeaveBusy] = useState(false)
+  /** Short messages about calls ("Jacob didn't pick up."), shown for a few seconds */
+  const [toast, setToast] = useState<string | null>(null)
+  const callControls = useRef<CallsValue | null>(null)
   /** The sidebar's "Find a friend or chat" search */
   const [chatQuery, setChatQuery] = useState('')
   const [highlighted, setHighlighted] = useState(0)
@@ -493,6 +526,31 @@ export default function MainScreen({
       }
     })
   }, [user.id, refresh, refreshConversations, onSessionExpired])
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), 6000)
+    return () => clearTimeout(timer)
+  }, [toast])
+
+  /** Calls a friend: their chat opens with the call at the top. */
+  async function callFriend(userId: string, video: boolean): Promise<void> {
+    let chat = conversations.find((c) => c.kind === 'dm' && c.partner.id === userId)
+    if (!chat) {
+      const result = await window.glofly.conversations.openDm(userId)
+      if (!result.ok) {
+        if (result.error === 'unauthorized') onSessionExpired()
+        else setToast(result.message)
+        return
+      }
+      chat = result.data
+      const opened = chat
+      setConversations((list) => (list.some((c) => c.id === opened.id) ? list : [opened, ...list]))
+    }
+    if (chat.kind !== 'dm') return
+    setOpenChatId(chat.id)
+    callControls.current?.start(chat, video)
+  }
 
   async function openChatWith(userId: string): Promise<void> {
     const result = await window.glofly.conversations.openDm(userId)
@@ -683,6 +741,7 @@ export default function MainScreen({
           onRemove={() => setConfirm({ kind: 'remove', person: p })}
           onBlock={() => setConfirm({ kind: 'block', person: p })}
           onMessage={() => void openChatWith(p.id)}
+          onCall={(video) => void callFriend(p.id, video)}
           onViewProfile={() => setViewing(p)}
         />
       ))
@@ -837,312 +896,339 @@ export default function MainScreen({
   }
 
   return (
-    <div className="main main--enter">
-      <aside className="sidebar">
-        <div className="sidebar-top">
-          <div className="sidebar-logo" aria-hidden="true">
-            <img src={fireflyImg} alt="" draggable={false} />
+    <CallProvider
+      me={user}
+      conversations={conversations}
+      onOpenChat={setOpenChatId}
+      onNotice={setToast}
+      onSessionExpired={onSessionExpired}
+      controlsRef={callControls}
+    >
+      <div className="main main--enter">
+        <aside className="sidebar">
+          <div className="sidebar-top">
+            <div className="sidebar-logo" aria-hidden="true">
+              <img src={fireflyImg} alt="" draggable={false} />
+            </div>
+            <div className="search">
+              <SearchIcon />
+              <input
+                ref={chatSearchRef}
+                type="search"
+                className="search-input"
+                aria-label="Find a friend or chat"
+                placeholder="Find a friend or chat"
+                title="Find a friend or chat (Ctrl+K)"
+                role="combobox"
+                aria-expanded={chatQuery.trim().length > 0}
+                aria-controls="chat-search-results"
+                aria-activedescendant={
+                  chatResults.length > 0 ? `chat-result-${highlighted}` : undefined
+                }
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={40}
+                value={chatQuery}
+                onChange={(e) => {
+                  setChatQuery(e.target.value)
+                  setHighlighted(0)
+                }}
+                onKeyDown={onChatSearchKey}
+              />
+            </div>
           </div>
-          <div className="search">
-            <SearchIcon />
-            <input
-              ref={chatSearchRef}
-              type="search"
-              className="search-input"
-              aria-label="Find a friend or chat"
-              placeholder="Find a friend or chat"
-              title="Find a friend or chat (Ctrl+K)"
-              role="combobox"
-              aria-expanded={chatQuery.trim().length > 0}
-              aria-controls="chat-search-results"
-              aria-activedescendant={
-                chatResults.length > 0 ? `chat-result-${highlighted}` : undefined
-              }
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={40}
-              value={chatQuery}
-              onChange={(e) => {
-                setChatQuery(e.target.value)
-                setHighlighted(0)
-              }}
-              onKeyDown={onChatSearchKey}
-            />
-          </div>
-        </div>
 
-        <div className="profile-panel">
+          <div className="profile-panel">
+            <button
+              type="button"
+              className="avatar avatar--me"
+              aria-label={`Change your status (now ${STATUS_LABEL[myStatus.status]})`}
+              aria-expanded={statusOpen}
+              title="Change your status"
+              onClick={() => setStatusOpen((v) => !v)}
+            >
+              <AvatarFace id={user.id} name={user.displayName} avatarVersion={user.avatarVersion} />
+              <StatusDot status={dotFor(myStatus.status)} ring="var(--glo-surface)" />
+            </button>
+            <div className="profile-text">
+              <span className="profile-name">{user.displayName}</span>
+              <span className="profile-sub" title={myStatus.statusText ?? undefined}>
+                <EmojiText
+                  text={`@${user.username} · ${myStatus.statusText || STATUS_LABEL[myStatus.status]}`}
+                />
+              </span>
+            </div>
+            <SettingsMenu
+              onLogout={onLogout}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onEditProfile={() => setEditingProfile(true)}
+            />
+            {statusOpen && (
+              <StatusMenu
+                current={myStatus}
+                onChange={changeStatus}
+                onClose={() => setStatusOpen(false)}
+              />
+            )}
+          </div>
+
           <button
             type="button"
-            className="avatar avatar--me"
-            aria-label={`Change your status (now ${STATUS_LABEL[myStatus.status]})`}
-            aria-expanded={statusOpen}
-            title="Change your status"
-            onClick={() => setStatusOpen((v) => !v)}
+            className={openChat ? 'nav-item' : 'nav-item nav-item--active'}
+            aria-current={openChat ? undefined : 'page'}
+            onClick={() => {
+              setOpenChatId(null)
+              setFilter(incomingCount > 0 ? 'pending' : 'all')
+            }}
           >
-            <AvatarFace id={user.id} name={user.displayName} avatarVersion={user.avatarVersion} />
-            <StatusDot status={dotFor(myStatus.status)} ring="var(--glo-surface)" />
+            <FriendsIcon />
+            Friends
+            {incomingCount > 0 && (
+              <span className="badge" aria-label={`${incomingCount} friend requests`}>
+                {incomingCount}
+              </span>
+            )}
           </button>
-          <div className="profile-text">
-            <span className="profile-name">{user.displayName}</span>
-            <span className="profile-sub" title={myStatus.statusText ?? undefined}>
-              <EmojiText
-                text={`@${user.username} · ${myStatus.statusText || STATUS_LABEL[myStatus.status]}`}
-              />
-            </span>
-          </div>
-          <SettingsMenu
-            onLogout={onLogout}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onEditProfile={() => setEditingProfile(true)}
-          />
-          {statusOpen && (
-            <StatusMenu
-              current={myStatus}
-              onChange={changeStatus}
-              onClose={() => setStatusOpen(false)}
-            />
-          )}
-        </div>
 
-        <button
-          type="button"
-          className={openChat ? 'nav-item' : 'nav-item nav-item--active'}
-          aria-current={openChat ? undefined : 'page'}
-          onClick={() => {
-            setOpenChatId(null)
-            setFilter(incomingCount > 0 ? 'pending' : 'all')
-          }}
-        >
-          <FriendsIcon />
-          Friends
-          {incomingCount > 0 && (
-            <span className="badge" aria-label={`${incomingCount} friend requests`}>
-              {incomingCount}
-            </span>
-          )}
-        </button>
+          <CallStrip openChatId={openChatId} onOpenChat={setOpenChatId} />
 
-        <ChatList
-          me={user}
-          conversations={conversations}
-          presence={presence}
-          now={now}
-          openChatId={openChatId}
-          query={chatQuery}
-          results={chatResults}
-          highlighted={highlighted}
-          onOpen={(id) => setOpenChatId(id)}
-          onOpenResult={openResult}
-          onTogglePin={(c) => void togglePin(c)}
-          onViewProfile={viewPerson}
-          onGroupSettings={(c) => setSettingsFor(c.id)}
-          onLeaveGroup={setLeaving}
-          onNewMessage={() => {
-            setOpenChatId(null)
-            setFilter('all')
-          }}
-          onNewGroup={() => setGroupPicker({ groupId: null })}
-        />
-      </aside>
-
-      <main className="content">
-        {!connected && (
-          <div className="connection-banner" role="status">
-            Reconnecting to Glofly…
-          </div>
-        )}
-        {openChat ? (
-          <ChatView
-            key={openChat.id}
+          <ChatList
             me={user}
-            conversation={openChat}
+            conversations={conversations}
             presence={presence}
             now={now}
-            onRead={markedRead}
+            openChatId={openChatId}
+            query={chatQuery}
+            results={chatResults}
+            highlighted={highlighted}
+            onOpen={(id) => setOpenChatId(id)}
+            onOpenResult={openResult}
+            onTogglePin={(c) => void togglePin(c)}
             onViewProfile={viewPerson}
-            onGroupSettings={() => setSettingsFor(openChat.id)}
-            onTogglePin={() => void togglePin(openChat)}
+            onGroupSettings={(c) => setSettingsFor(c.id)}
+            onLeaveGroup={setLeaving}
+            onNewMessage={() => {
+              setOpenChatId(null)
+              setFilter('all')
+            }}
+            onNewGroup={() => setGroupPicker({ groupId: null })}
+          />
+        </aside>
+
+        <main className="content">
+          {!connected && (
+            <div className="connection-banner" role="status">
+              Reconnecting to Glofly…
+            </div>
+          )}
+          {openChat ? (
+            <ChatView
+              key={openChat.id}
+              me={user}
+              conversation={openChat}
+              presence={presence}
+              now={now}
+              onRead={markedRead}
+              onViewProfile={viewPerson}
+              onGroupSettings={() => setSettingsFor(openChat.id)}
+              onTogglePin={() => void togglePin(openChat)}
+              onSessionExpired={onSessionExpired}
+            />
+          ) : (
+            <>
+              <header className="content-header">
+                <div className="content-title">
+                  <FriendsIcon size={22} />
+                  Friends
+                </div>
+                <nav aria-label="Friend filters" className="filters">
+                  {FILTERS.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      className="filter"
+                      aria-pressed={filter === f.id}
+                      onClick={() => setFilter(f.id)}
+                    >
+                      {f.label}
+                      {f.id === 'pending' && incomingCount > 0 && (
+                        <span className="badge badge--small">{incomingCount}</span>
+                      )}
+                    </button>
+                  ))}
+                </nav>
+                <button type="button" className="primary-button add-friend" onClick={openAdd}>
+                  <AddFriendIcon />
+                  Add friend
+                </button>
+              </header>
+
+              <div className="content-body">
+                {notice && (
+                  <div className="page-notice" role="alert">
+                    {notice}
+                  </div>
+                )}
+                <div className="search search--wide">
+                  <SearchIcon />
+                  <input
+                    type="search"
+                    className="search-input"
+                    aria-label="Search friends"
+                    placeholder={
+                      filter === 'blocked'
+                        ? 'Search blocked'
+                        : filter === 'pending'
+                          ? 'Search requests'
+                          : 'Search friends'
+                    }
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                {renderTab()}
+              </div>
+            </>
+          )}
+        </main>
+
+        {adding && (
+          <AddFriendDialog
+            onClose={() => setAdding(false)}
+            onChanged={refresh}
+            onSessionExpired={onSessionExpired}
+            onMessage={(userId) => {
+              setAdding(false)
+              void openChatWith(userId)
+            }}
+          />
+        )}
+        {groupPicker && (groupPicker.groupId === null || pickerGroup) && (
+          <GroupPeopleDialog
+            friends={lists?.friends ?? []}
+            presence={presence}
+            now={now}
+            group={pickerGroup?.kind === 'group' ? pickerGroup : null}
+            onDone={(conversation) => {
+              setGroupPicker(null)
+              gotConversation(conversation, true)
+            }}
+            onClose={() => setGroupPicker(null)}
             onSessionExpired={onSessionExpired}
           />
-        ) : (
-          <>
-            <header className="content-header">
-              <div className="content-title">
-                <FriendsIcon size={22} />
-                Friends
-              </div>
-              <nav aria-label="Friend filters" className="filters">
-                {FILTERS.map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    className="filter"
-                    aria-pressed={filter === f.id}
-                    onClick={() => setFilter(f.id)}
-                  >
-                    {f.label}
-                    {f.id === 'pending' && incomingCount > 0 && (
-                      <span className="badge badge--small">{incomingCount}</span>
-                    )}
-                  </button>
-                ))}
-              </nav>
-              <button type="button" className="primary-button add-friend" onClick={openAdd}>
-                <AddFriendIcon />
-                Add friend
-              </button>
-            </header>
-
-            <div className="content-body">
-              {notice && (
-                <div className="page-notice" role="alert">
-                  {notice}
-                </div>
-              )}
-              <div className="search search--wide">
-                <SearchIcon />
-                <input
-                  type="search"
-                  className="search-input"
-                  aria-label="Search friends"
-                  placeholder={
-                    filter === 'blocked'
-                      ? 'Search blocked'
-                      : filter === 'pending'
-                        ? 'Search requests'
-                        : 'Search friends'
-                  }
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              {renderTab()}
-            </div>
-          </>
         )}
-      </main>
-
-      {adding && (
-        <AddFriendDialog
-          onClose={() => setAdding(false)}
-          onChanged={refresh}
-          onSessionExpired={onSessionExpired}
-          onMessage={(userId) => {
-            setAdding(false)
-            void openChatWith(userId)
-          }}
-        />
-      )}
-      {groupPicker && (groupPicker.groupId === null || pickerGroup) && (
-        <GroupPeopleDialog
-          friends={lists?.friends ?? []}
-          presence={presence}
-          now={now}
-          group={pickerGroup?.kind === 'group' ? pickerGroup : null}
-          onDone={(conversation) => {
-            setGroupPicker(null)
-            gotConversation(conversation, true)
-          }}
-          onClose={() => setGroupPicker(null)}
-          onSessionExpired={onSessionExpired}
-        />
-      )}
-      {settingsGroup?.kind === 'group' && !groupPicker && (
-        <GroupSettingsDialog
-          group={settingsGroup}
-          me={user}
-          presence={presence}
-          onRenamed={(conversation) => gotConversation(conversation, false)}
-          onAddPeople={() => setGroupPicker({ groupId: settingsGroup.id })}
-          onViewProfile={(person) => {
-            setSettingsFor(null)
-            viewPerson(person)
-          }}
-          onLeave={() => setLeaving(settingsGroup)}
-          onClose={() => setSettingsFor(null)}
-          onSessionExpired={onSessionExpired}
-        />
-      )}
-      {leaving && (
-        <ConfirmDialog
-          title={`Leave ${chatTitle(leaving)}?`}
-          message={
-            leaving.memberCount <= 1
-              ? "You're the last one here, so the group and its messages will be deleted."
-              : leaving.createdBy === user.id
-                ? "You won't get its messages anymore, and whoever has been in the group longest becomes the owner. Someone in the group can add you back later."
-                : "You won't get its messages anymore. Someone in the group can add you back later."
-          }
-          confirmLabel="Leave group"
-          danger
-          busy={leaveBusy}
-          onConfirm={() => void leaveGroup()}
-          onCancel={() => setLeaving(null)}
-        />
-      )}
-      {settingsOpen && (
-        <SettingsDialog
-          user={user}
-          onClose={() => setSettingsOpen(false)}
-          onLogout={onLogout}
-          onAccountDeleted={onAccountDeleted}
-          onSessionExpired={onSessionExpired}
-        />
-      )}
-      {editingProfile && (
-        <EditProfileDialog
-          user={user}
-          status={myStatus}
-          onSaved={(saved, status) => {
-            onUserChange({ displayName: saved.displayName, avatarVersion: saved.avatarVersion })
-            setMyStatus(status)
-          }}
-          onClose={() => setEditingProfile(false)}
-          onSessionExpired={onSessionExpired}
-        />
-      )}
-      {viewing && (
-        <ProfileCard
-          key={viewing.id}
-          person={viewing}
-          isFriend={isFriendId(viewing.id)}
-          presence={presence[viewing.id]}
-          onMessage={() => {
-            setViewing(null)
-            void openChatWith(viewing.id)
-          }}
-          onRemove={() => {
-            setViewing(null)
-            setConfirm({ kind: 'remove', person: viewing })
-          }}
-          onBlock={() => {
-            setViewing(null)
-            setConfirm({ kind: 'block', person: viewing })
-          }}
-          onClose={() => setViewing(null)}
-          onSessionExpired={onSessionExpired}
-        />
-      )}
-      {confirm && (
-        <ConfirmDialog
-          title={
-            confirm.kind === 'remove'
-              ? `Remove ${confirm.person.displayName}?`
-              : `Block ${confirm.person.displayName}?`
-          }
-          message={
-            confirm.kind === 'remove'
-              ? `You'll no longer be friends with @${confirm.person.username}. You can send a new request later.`
-              : `@${confirm.person.username} will be removed from your friends, won't find you in search, and can't send you requests. You can unblock them anytime.`
-          }
-          confirmLabel={confirm.kind === 'remove' ? 'Remove friend' : 'Block'}
-          danger
-          busy={busy === confirm.person.id}
-          onConfirm={confirmAction}
-          onCancel={() => setConfirm(null)}
-        />
-      )}
-    </div>
+        {settingsGroup?.kind === 'group' && !groupPicker && (
+          <GroupSettingsDialog
+            group={settingsGroup}
+            me={user}
+            presence={presence}
+            onRenamed={(conversation) => gotConversation(conversation, false)}
+            onAddPeople={() => setGroupPicker({ groupId: settingsGroup.id })}
+            onViewProfile={(person) => {
+              setSettingsFor(null)
+              viewPerson(person)
+            }}
+            onLeave={() => setLeaving(settingsGroup)}
+            onClose={() => setSettingsFor(null)}
+            onSessionExpired={onSessionExpired}
+          />
+        )}
+        {leaving && (
+          <ConfirmDialog
+            title={`Leave ${chatTitle(leaving)}?`}
+            message={
+              leaving.memberCount <= 1
+                ? "You're the last one here, so the group and its messages will be deleted."
+                : leaving.createdBy === user.id
+                  ? "You won't get its messages anymore, and whoever has been in the group longest becomes the owner. Someone in the group can add you back later."
+                  : "You won't get its messages anymore. Someone in the group can add you back later."
+            }
+            confirmLabel="Leave group"
+            danger
+            busy={leaveBusy}
+            onConfirm={() => void leaveGroup()}
+            onCancel={() => setLeaving(null)}
+          />
+        )}
+        {settingsOpen && (
+          <SettingsDialog
+            user={user}
+            onClose={() => setSettingsOpen(false)}
+            onLogout={onLogout}
+            onAccountDeleted={onAccountDeleted}
+            onSessionExpired={onSessionExpired}
+          />
+        )}
+        {editingProfile && (
+          <EditProfileDialog
+            user={user}
+            status={myStatus}
+            onSaved={(saved, status) => {
+              onUserChange({ displayName: saved.displayName, avatarVersion: saved.avatarVersion })
+              setMyStatus(status)
+            }}
+            onClose={() => setEditingProfile(false)}
+            onSessionExpired={onSessionExpired}
+          />
+        )}
+        {viewing && (
+          <ProfileCard
+            key={viewing.id}
+            person={viewing}
+            isFriend={isFriendId(viewing.id)}
+            presence={presence[viewing.id]}
+            onMessage={() => {
+              setViewing(null)
+              void openChatWith(viewing.id)
+            }}
+            onCall={
+              isFriendId(viewing.id)
+                ? (video) => {
+                    setViewing(null)
+                    void callFriend(viewing.id, video)
+                  }
+                : undefined
+            }
+            onRemove={() => {
+              setViewing(null)
+              setConfirm({ kind: 'remove', person: viewing })
+            }}
+            onBlock={() => {
+              setViewing(null)
+              setConfirm({ kind: 'block', person: viewing })
+            }}
+            onClose={() => setViewing(null)}
+            onSessionExpired={onSessionExpired}
+          />
+        )}
+        {confirm && (
+          <ConfirmDialog
+            title={
+              confirm.kind === 'remove'
+                ? `Remove ${confirm.person.displayName}?`
+                : `Block ${confirm.person.displayName}?`
+            }
+            message={
+              confirm.kind === 'remove'
+                ? `You'll no longer be friends with @${confirm.person.username}. You can send a new request later.`
+                : `@${confirm.person.username} will be removed from your friends, won't find you in search, and can't send you requests. You can unblock them anytime.`
+            }
+            confirmLabel={confirm.kind === 'remove' ? 'Remove friend' : 'Block'}
+            danger
+            busy={busy === confirm.person.id}
+            onConfirm={confirmAction}
+            onCancel={() => setConfirm(null)}
+          />
+        )}
+        {toast && (
+          <div className="call-toast" role="status">
+            {toast}
+            <button type="button" aria-label="Dismiss" onClick={() => setToast(null)}>
+              ×
+            </button>
+          </div>
+        )}
+      </div>
+    </CallProvider>
   )
 }

@@ -6,6 +6,7 @@ import { announcePresence, friendIdsOf } from "../presence";
 import { disconnectSessions, emitToUser } from "../realtime";
 import { removeFiles } from "../messages/attachments";
 import { storage } from "../storage";
+import { endCallsFor } from "../calls/service";
 
 // Deleting an account is a two-step thing, like the design says: "You'll have 30 days to
 // change your mind." The account is hidden right away and every device is signed out;
@@ -25,6 +26,7 @@ export async function scheduleDeletion(userId: string): Promise<Date> {
   await db.update(users).set({ deleteAfter }).where(eq(users.id, userId));
   await db.delete(sessions).where(eq(sessions.userId, userId));
   await disconnectSessions(userId);
+  await endCallsFor(userId);
   await announcePresence(userId, emitToUser, true);
   await tellFriendsAndChats(userId, await friendIdsOf(userId), await chatPartnersOf(userId));
   return deleteAfter;

@@ -85,6 +85,13 @@
       "when": 1791413983616,
       "tag": "0011_group_chats",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791423126596,
+      "tag": "0012_calls",
+      "breakpoints": true
     }
   ]
 }

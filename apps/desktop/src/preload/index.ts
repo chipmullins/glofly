@@ -107,13 +107,25 @@ const glofly: GloflyApi = {
       ),
     showInFolder: (path: string) => ipcRenderer.send('files:show-in-folder', path)
   },
+  calls: {
+    start: (conversationId: string, video: boolean) =>
+      ipcRenderer.invoke('calls:start', conversationId, video),
+    active: () => ipcRenderer.invoke('calls:active'),
+    answer: (callId: string) => ipcRenderer.invoke('calls:answer', callId),
+    join: (callId: string) => ipcRenderer.invoke('calls:join', callId),
+    decline: (callId: string) => ipcRenderer.invoke('calls:decline', callId),
+    leave: (callId: string) => ipcRenderer.invoke('calls:leave', callId),
+    screenSources: () => ipcRenderer.invoke('calls:screen-sources'),
+    chooseScreen: (sourceId: string) => ipcRenderer.invoke('calls:choose-screen', sourceId)
+  },
   onEvent: (listener: (event: GloflyEvent) => void) => {
     const handler = (_e: Electron.IpcRendererEvent, event: GloflyEvent): void => listener(event)
     ipcRenderer.on('glofly:event', handler)
     return () => ipcRenderer.removeListener('glofly:event', handler)
   },
   window: {
-    setTheme: (theme: WindowTheme) => ipcRenderer.send('window:theme', theme)
+    setTheme: (theme: WindowTheme) => ipcRenderer.send('window:theme', theme),
+    attention: () => ipcRenderer.send('window:attention')
   }
 }
 

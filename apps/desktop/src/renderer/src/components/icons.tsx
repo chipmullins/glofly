@@ -226,3 +226,140 @@ export function PencilIcon(p: IconProps): React.JSX.Element {
     </Svg>
   )
 }
+
+// ---------- Calls (from Calling.dc.html, Incoming.dc.html and GroupCall.dc.html) ----------
+
+const PHONE =
+  'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z'
+
+export function PhoneIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={1.9} {...p}>
+      <path d={PHONE} />
+    </Svg>
+  )
+}
+
+/** The phone tipped down: hang up / decline. */
+export function HangUpIcon({ size = 24, strokeWidth = 2 }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ transform: 'rotate(135deg)' }}
+    >
+      <path d={PHONE} />
+    </svg>
+  )
+}
+
+export function VideoIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={1.9} {...p}>
+      <rect x="2" y="6" width="14" height="12" rx="2" />
+      <path d="M16 10l6-3v10l-6-3z" />
+    </Svg>
+  )
+}
+
+export function VideoOffIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={1.9} {...p}>
+      <path d="M16 16v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h1M10 6h4a2 2 0 0 1 2 2v3l6-4v10" />
+      <path d="M3 3l18 18" />
+    </Svg>
+  )
+}
+
+export function MicIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={1.9} {...p}>
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v4" />
+    </Svg>
+  )
+}
+
+export function MicOffIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={1.9} {...p}>
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v4" />
+      <path d="M3 3l18 18" />
+    </Svg>
+  )
+}
+
+export function ScreenShareIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={1.9} {...p}>
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+      <path d="M12 13V7M9 10l3-3 3 3" />
+    </Svg>
+  )
+}
+
+export function StopShareIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={1.9} {...p}>
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+      <path d="M9.5 7.5l5 5M14.5 7.5l-5 5" />
+    </Svg>
+  )
+}
+
+/** Sound bars next to someone who's talking. */
+export function SpeakingIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg size={14} strokeWidth={2.2} {...p}>
+      <path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" />
+    </Svg>
+  )
+}
+
+export function MessageBubbleIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg size={16} strokeWidth={2} {...p}>
+      <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+    </Svg>
+  )
+}
+
+export function FullscreenIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+    </Svg>
+  )
+}
+
+/** The arrow on a call line in the chat ("Chip started a video call"). */
+export function CallLineIcon({ missed = false }: { missed?: boolean }): React.JSX.Element {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ transform: missed ? 'rotate(135deg)' : 'rotate(-45deg)' }}
+    >
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  )
+}

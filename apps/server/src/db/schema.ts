@@ -19,15 +19,19 @@ export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invis
 // Who can send someone friend requests (Settings → General → Privacy).
 export const friendRequestsFrom = pgEnum("friend_requests_from", ["everyone", "nobody"]);
 
-// One row per Glofly account.
-/** Something that happened in a group chat, shown as a line in the chat. */
+export type CallStatus = "ringing" | "ongoing" | "ended" | "missed" | "declined";
+
+/** Something that happened in a chat, shown as a line ("Chip added Maya", "Chip started a video call"). */
 export type ChatEvent =
   | { type: "created"; name: string | null }
   | { type: "renamed"; name: string | null }
   | { type: "added"; userIds: string[] }
   | { type: "removed"; userId: string }
-  | { type: "left" };
+  | { type: "left" }
+  // A call. The line changes as the call goes: ringing → ongoing → ended (or missed / declined).
+  | { type: "call"; callId: string; video: boolean; status: CallStatus; durationSec: number | null };
 
+// One row per Glofly account.
 export const users = pgTable(
   "users",
   {
@@ -274,5 +278,57 @@ export const attachments = pgTable(
   (t) => [
     index("attachments_message_idx").on(t.messageId),
     index("attachments_unsent_idx").on(t.uploaderId, t.createdAt),
+  ],
+);
+
+export const callStatus = pgEnum("call_status", ["ringing", "ongoing", "ended", "missed", "declined"]);
+
+// Voice and video calls. The audio and video travel through LiveKit (the room is named after
+// the call's id); this table is Glofly's record of who called whom and how it went.
+export const calls = pgTable(
+  "calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    // Who started it.
+    callerId: uuid("caller_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Started as a video call (true) or a voice call (false). Cameras can still be turned on or off.
+    video: boolean("video").notNull(),
+    status: callStatus("status").notNull().default("ringing"),
+    // The line in the chat ("Chip started a video call"), updated as the call goes.
+    messageId: uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (t) => [
+    // At most one ringing or ongoing call per chat.
+    uniqueIndex("calls_one_active_idx")
+      .on(t.conversationId)
+      .where(sql`${t.status} in ('ringing', 'ongoing')`),
+    index("calls_active_idx").on(t.status).where(sql`${t.status} in ('ringing', 'ongoing')`),
+  ],
+);
+
+// Who has joined a call (and left it). Someone with a row and no left_at is in the call now.
+export const callParticipants = pgTable(
+  "call_participants",
+  {
+    callId: uuid("call_id")
+      .notNull()
+      .references(() => calls.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    leftAt: timestamp("left_at", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.callId, t.userId] }),
+    index("call_participants_user_idx").on(t.userId),
   ],
 );

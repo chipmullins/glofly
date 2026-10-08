@@ -8,6 +8,9 @@ import { accountRouter } from "./account/routes";
 import { purgeDeletedAccounts } from "./account/deletion";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
 import { conversationsRouter } from "./messages/routes";
+import { callsRouter } from "./calls/routes";
+import { sweepCalls } from "./calls/service";
+import { livekitConfigured } from "./calls/livekit";
 import { avatarsRouter, profileRouter } from "./profile/routes";
 import { sweepUnsentUploads } from "./messages/attachments";
 import { startRealtime } from "./realtime";
@@ -36,6 +39,7 @@ app.use("/avatars", avatarsRouter);
 app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
 app.use("/conversations", conversationsRouter);
+app.use("/calls", callsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "not_found" });
@@ -62,7 +66,12 @@ connectRedis()
   .then(() => {
     server.listen(PORT, () => {
       console.log(`Glofly server running at http://localhost:${PORT}`);
+      if (!livekitConfigured) console.log("Calls are off: add the LIVEKIT_ settings to .env to turn them on.");
     });
+    // Calls nobody answered become missed; calls someone dropped out of are ended.
+    setInterval(() => {
+      sweepCalls().catch((err) => console.error("Call check failed", err));
+    }, 15 * 1000);
     // Files added to a chat but never sent are cleared out after an hour.
     setInterval(() => {
       sweepUnsentUploads().catch((err) => console.error("Upload cleanup failed", err));

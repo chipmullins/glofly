@@ -868,3 +868,37 @@
   align-items: center;
   gap: 2px;
 }
+
+/* A short message about a call ("Jacob didn't pick up."), floating at the bottom. */
+.call-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 70;
+  max-width: min(520px, calc(100vw - 48px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 18px;
+  border-radius: 14px;
+  background: var(--glo-call-bg);
+  color: var(--glo-call-text);
+  font-size: 14px;
+  box-shadow: 0 12px 32px rgba(var(--glo-shadow-rgb), 0.3);
+  animation: call-toast-in 0.2s ease-out;
+}
+.call-toast button {
+  border: 0;
+  background: none;
+  color: var(--glo-call-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+@keyframes call-toast-in {
+  from {
+    transform: translate(-50%, 8px);
+    opacity: 0;
+  }
+}

@@ -326,6 +326,23 @@
 .profile-message:hover {
   background: var(--glo-orange-deep);
 }
+/* Voice and video call buttons next to Message. */
+.profile-call {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border: 0;
+  border-radius: 12px;
+  background: var(--glo-panel);
+  color: var(--glo-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.profile-call:hover {
+  background: var(--glo-hover);
+}
 .profile-loading {
   margin: 0;
   color: var(--glo-muted);

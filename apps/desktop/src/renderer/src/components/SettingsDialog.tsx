@@ -11,6 +11,7 @@ import type {
 } from '../../../preload/api-types'
 import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
+import VoiceVideoSettings from './VoiceVideoSettings'
 import { previewSound, setSoundSettings, SOUND_FILES, stopPreview } from '../lib/sounds'
 import './dialogs.css'
 import './SettingsDialog.css'
@@ -24,7 +25,7 @@ type SettingsDialogProps = {
   onAccountDeleted: (deleteAfter: string) => void
 }
 
-type Page = 'general' | 'account'
+type Page = 'general' | 'voice' | 'account'
 
 type ToggleKey = 'readReceipts' | 'showLastSeen' | 'showTyping'
 type Row = { key: ToggleKey; label: string; desc?: string }
@@ -236,6 +237,26 @@ function AccountIcon({ active }: { active: boolean }): React.JSX.Element {
   )
 }
 
+function VoiceIcon({ active }: { active: boolean }): React.JSX.Element {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{ stroke: active ? 'var(--glo-link)' : 'currentColor' }}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v4" />
+    </svg>
+  )
+}
+
 export default function SettingsDialog({
   user,
   onClose,
@@ -365,6 +386,19 @@ export default function SettingsDialog({
             <button
               type="button"
               className={
+                page === 'voice'
+                  ? 'settings-nav-item settings-nav-item--active'
+                  : 'settings-nav-item'
+              }
+              aria-current={page === 'voice' ? 'page' : undefined}
+              onClick={() => openPage('voice')}
+            >
+              <VoiceIcon active={page === 'voice'} />
+              Voice &amp; video
+            </button>
+            <button
+              type="button"
+              className={
                 page === 'account'
                   ? 'settings-nav-item settings-nav-item--active'
                   : 'settings-nav-item'
@@ -386,7 +420,9 @@ export default function SettingsDialog({
               </p>
             )}
 
-            {page === 'account' ? (
+            {page === 'voice' ? (
+              <VoiceVideoSettings />
+            ) : page === 'account' ? (
               <AccountSettings
                 user={user}
                 onSessionExpired={onSessionExpired}

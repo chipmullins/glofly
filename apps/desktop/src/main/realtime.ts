@@ -1,6 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { io, type Socket } from 'socket.io-client'
-import type { GloflyEvent } from '../preload/api-types'
+import type { Call, GloflyEvent, PublicUser } from '../preload/api-types'
 
 // The live connection to the server lives here in the main process, like the
 // session token. Events are passed on to the window as plain data.
@@ -79,6 +79,10 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
       })
     }
   })
+  socket.on('call:updated', (p) => {
+    const call = cleanCall(p?.call)
+    if (call) forward({ type: 'call:updated', call, caller: cleanUser(p?.caller) })
+  })
   socket.on('presence', (p) => {
     const statuses = ['online', 'away', 'dnd', 'offline']
     if (typeof p?.userId !== 'string' || !statuses.includes(p?.status)) return
@@ -90,6 +94,51 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
       lastSeenAt: typeof p.lastSeenAt === 'string' ? p.lastSeenAt : null
     })
   })
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const CALL_STATUSES = ['ringing', 'ongoing', 'ended', 'missed', 'declined']
+const isoOrNull = (v: unknown): string | null =>
+  typeof v === 'string' && v.length <= 40 ? v : null
+
+/** Only a well-formed call, with just its known fields, reaches the window. */
+function cleanCall(c: unknown): Call | null {
+  const x = c as Record<string, unknown> | null
+  if (
+    !x ||
+    typeof x.id !== 'string' ||
+    !UUID.test(x.id) ||
+    typeof x.conversationId !== 'string' ||
+    !UUID.test(x.conversationId) ||
+    typeof x.callerId !== 'string' ||
+    !UUID.test(x.callerId) ||
+    typeof x.video !== 'boolean' ||
+    !CALL_STATUSES.includes(x.status as string) ||
+    typeof x.createdAt !== 'string'
+  ) {
+    return null
+  }
+  return {
+    id: x.id,
+    conversationId: x.conversationId,
+    callerId: x.callerId,
+    video: x.video,
+    status: x.status as Call['status'],
+    createdAt: x.createdAt,
+    answeredAt: isoOrNull(x.answeredAt),
+    endedAt: isoOrNull(x.endedAt)
+  }
+}
+
+function cleanUser(u: unknown): PublicUser | null {
+  const x = u as Record<string, unknown> | null
+  if (!x || typeof x.id !== 'string' || !UUID.test(x.id)) return null
+  return {
+    id: x.id,
+    username: typeof x.username === 'string' ? x.username.slice(0, 40) : '',
+    displayName: typeof x.displayName === 'string' ? x.displayName.slice(0, 64) : '',
+    avatarVersion: typeof x.avatarVersion === 'string' ? x.avatarVersion.slice(0, 64) : null
+  }
 }
 
 export function disconnectRealtime(): void {

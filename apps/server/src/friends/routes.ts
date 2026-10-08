@@ -6,6 +6,7 @@ import { db } from "../db";
 import { blocks, conversationMembers, friendships, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { emitToUser } from "../realtime";
+import { endCallsBetween } from "../calls/service";
 import { announcePresence, presenceOf } from "../presence";
 import { blockedEitherWay, pair, pairIs } from "./rules";
 
@@ -396,6 +397,7 @@ friendsRouter.delete("/:userId", async (req, res) => {
       .delete(friendships)
       .where(and(pairIs(me(res).id, them.data), eq(friendships.status, "accepted")));
     friendsChanged(me(res).id, them.data);
+    await endCallsBetween(me(res).id, them.data); // only friends can call each other
   }
   res.status(204).end();
 });
@@ -418,6 +420,7 @@ blocksRouter.post("/:userId", async (req, res) => {
     await tx.delete(friendships).where(pairIs(myId, them.data));
   });
   friendsChanged(myId, them.data);
+  await endCallsBetween(myId, them.data);
   res.status(204).end();
 });
 

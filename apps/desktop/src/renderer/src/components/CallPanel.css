@@ -1,0 +1,705 @@
+/* Calls: the panel in a chat (Calling.dc.html), the incoming card (Incoming.dc.html), the screen
+   picker and the sidebar strip. The call surfaces stay dark in every theme. */
+
+/* ---------- The firefly glow around a face while it rings ---------- */
+
+@keyframes call-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.call-glow-face {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.call-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--glo-call-glow);
+  animation: call-pulse 2.2s ease-out infinite;
+  pointer-events: none;
+}
+.call-ring--late {
+  animation-delay: 1.1s;
+}
+.call-glow-photo {
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  box-shadow: 0 0 40px 6px rgba(var(--glo-call-glow-rgb), 0.35);
+}
+.call-glow-face--still .call-glow-photo {
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-ring {
+    animation: none;
+    opacity: 0.4;
+  }
+  .call-ring--late {
+    display: none;
+  }
+}
+
+/* ---------- The panel at the top of the chat ---------- */
+
+.call-panel {
+  margin: 16px 24px 0;
+  padding: 22px 24px 20px;
+  background: var(--glo-call-bg);
+  border-radius: 20px;
+  color: var(--glo-call-text);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: none;
+}
+/* On the dark theme the panel would melt into the page: a faint glow-colored edge keeps it apart. */
+:root[data-theme='dark'] .call-panel,
+:root[data-theme='dark'] .call-strip {
+  box-shadow: 0 0 0 1px rgba(var(--glo-call-glow-rgb), 0.16);
+}
+
+.call-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 26px;
+}
+.call-title h2 {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 20px;
+}
+.call-sub {
+  font-size: 14px;
+  color: var(--glo-call-muted);
+  font-variant-numeric: tabular-nums;
+}
+.call-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--glo-call-dot);
+  box-shadow: 0 0 10px 3px rgba(255, 179, 71, 0.7);
+}
+
+.call-problem {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--glo-call-tile-me);
+  color: var(--glo-call-soft);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.call-problem button {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.call-media {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+.call-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.call-tile {
+  position: relative;
+  /* The design's 300px, shrinking on shorter windows so the message box always fits. */
+  height: clamp(170px, 32vh, 300px);
+  border-radius: 16px;
+  background: var(--glo-call-tile);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.15s;
+}
+.call-tile:first-child {
+  background: var(--glo-call-tile-me);
+}
+.call-tile--speaking {
+  box-shadow:
+    0 0 0 3px var(--glo-call-glow),
+    0 0 24px 2px rgba(var(--glo-call-glow-rgb), 0.45);
+}
+/* A shared screen: big on the left, both cameras stacked on the right. */
+.call-media--screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(160px, 20%, 240px);
+  gap: 12px;
+}
+.call-media--screen .call-tiles {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.call-media--screen .call-tile {
+  height: auto;
+}
+.call-media--screen .call-glow-face {
+  transform: scale(0.55);
+}
+.call-media--screen .call-tile-status {
+  display: none;
+}
+.call-tile-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 16px;
+  text-align: center;
+}
+.call-tile-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.call-tile-status strong {
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 18px;
+}
+.call-tile-status span {
+  font-size: 14px;
+  color: var(--glo-call-muted);
+}
+
+.call-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--glo-call-video);
+}
+.call-video--cover {
+  object-fit: cover;
+}
+.call-video--contain {
+  object-fit: contain;
+}
+.call-video--mirror {
+  transform: scaleX(-1);
+}
+
+.call-tag {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--glo-call-tag);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.call-tag-muted {
+  display: flex;
+  color: var(--glo-call-mute-icon);
+}
+.call-tag-speaking {
+  display: flex;
+  color: var(--glo-call-dot);
+}
+
+.call-stage {
+  position: relative;
+  height: clamp(220px, 44vh, 480px);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--glo-call-video);
+}
+.call-stage:fullscreen {
+  border-radius: 0;
+  height: 100%;
+}
+.call-stage-full {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--glo-call-tag);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.call-stage-full:hover {
+  background: var(--glo-call-button-hover);
+}
+
+.call-controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+.call-button {
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--glo-call-button);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.call-button:hover:not(:disabled) {
+  background: var(--glo-call-button-hover);
+}
+.call-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.call-button--off,
+.call-button--off:hover:not(:disabled) {
+  background: var(--glo-call-off-bg);
+  color: var(--glo-call-off-ink);
+}
+.call-button--sharing,
+.call-button--sharing:hover:not(:disabled) {
+  background: var(--glo-call-glow);
+  color: var(--glo-call-off-ink);
+}
+.call-hangup {
+  width: 72px;
+  height: 52px;
+  border: 0;
+  border-radius: 26px;
+  background: var(--glo-call-hangup);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.call-hangup:hover {
+  background: var(--glo-call-hangup-hover);
+}
+.call-panel :focus-visible {
+  outline: 2px solid var(--glo-call-glow);
+  outline-offset: 2px;
+}
+
+/* ---------- Incoming call ---------- */
+
+.incoming-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--glo-call-scrim);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 120px 24px 24px;
+  box-sizing: border-box;
+}
+.incoming {
+  width: 100%;
+  max-width: 460px;
+  padding: 32px 28px 26px;
+  box-sizing: border-box;
+  background: var(--glo-call-bg);
+  color: var(--glo-call-text);
+  border-radius: 24px;
+  box-shadow:
+    0 24px 64px rgba(28, 18, 16, 0.45),
+    0 0 0 1px rgba(var(--glo-call-glow-rgb), 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  animation: incoming-in 0.22s ease-out;
+}
+@keyframes incoming-in {
+  from {
+    transform: translateY(-12px);
+    opacity: 0;
+  }
+}
+.incoming :focus-visible {
+  outline: 2px solid var(--glo-call-glow);
+  outline-offset: 3px;
+}
+.incoming-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glo-call-kind);
+}
+.call-glow-face--incoming {
+  width: 104px;
+  height: 104px;
+}
+.incoming-who {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.incoming-who h2 {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 26px;
+  overflow-wrap: anywhere;
+}
+.incoming-who span {
+  font-size: 15px;
+  color: var(--glo-call-muted);
+}
+.incoming-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+.incoming-actions--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.incoming-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--glo-call-soft);
+}
+.incoming-answer,
+.incoming-decline {
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.incoming-answer {
+  background: var(--glo-call-answer);
+  box-shadow: 0 6px 18px rgba(46, 158, 91, 0.35);
+}
+.incoming-answer:hover {
+  filter: brightness(1.08);
+}
+.incoming-decline {
+  background: var(--glo-call-hangup);
+  box-shadow: 0 6px 18px rgba(211, 58, 44, 0.35);
+}
+.incoming-decline:hover {
+  background: var(--glo-call-hangup-hover);
+}
+.incoming-message,
+.incoming-back {
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--glo-call-line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--glo-call-soft);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.incoming-message:hover,
+.incoming-back:hover {
+  background: var(--glo-call-tile-me);
+}
+.incoming-replies {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.incoming-reply {
+  padding: 11px 14px;
+  border: 1px solid var(--glo-call-line);
+  border-radius: 12px;
+  background: var(--glo-call-tile);
+  color: var(--glo-call-text);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.incoming-reply:hover {
+  background: var(--glo-call-tile-me);
+}
+.incoming-custom {
+  display: flex;
+  gap: 8px;
+}
+.incoming-custom input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--glo-call-line);
+  border-radius: 12px;
+  background: var(--glo-call-tile);
+  color: var(--glo-call-text);
+  font: inherit;
+  font-size: 14px;
+}
+.incoming-custom input::placeholder {
+  color: var(--glo-call-muted);
+}
+.incoming-custom button {
+  height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--glo-call-glow);
+  color: var(--glo-call-off-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.incoming-custom button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.incoming-back {
+  align-self: center;
+  margin-top: 4px;
+}
+
+/* ---------- Screen picker ---------- */
+
+.screen-picker {
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+}
+.screen-picker-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 24px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.screen-picker-note {
+  margin: 24px 0;
+  text-align: center;
+  color: var(--glo-muted);
+}
+.screen-group h2 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.screen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.screen-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--glo-panel);
+  color: var(--glo-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.screen-option:hover {
+  background: var(--glo-hover);
+}
+.screen-option--picked,
+.screen-option--picked:hover {
+  border-color: var(--glo-accent);
+  background: var(--glo-accent-tint);
+}
+.screen-thumb {
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: var(--glo-night);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.screen-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.screen-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.screen-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.screen-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* ---------- The sidebar strip (a call you can't see right now) ---------- */
+
+.call-strip {
+  margin: 4px 12px 8px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 14px;
+  background: var(--glo-call-bg);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.call-strip-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.call-strip-main--static {
+  cursor: default;
+}
+.call-strip-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.call-strip-text strong {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.call-strip-text span {
+  font-size: 12px;
+  color: var(--glo-call-muted);
+  font-variant-numeric: tabular-nums;
+}
+.call-strip-button {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--glo-call-button);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.call-strip-button:hover {
+  background: var(--glo-call-button-hover);
+}
+.call-strip-button--off,
+.call-strip-button--off:hover {
+  background: var(--glo-call-off-bg);
+  color: var(--glo-call-off-ink);
+}
+.call-strip-button--hangup,
+.call-strip-button--hangup:hover {
+  background: var(--glo-call-hangup);
+}
+.call-strip-switch {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--glo-call-answer);
+  color: var(--glo-call-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.call-strip :focus-visible {
+  outline: 2px solid var(--glo-call-glow);
+  outline-offset: 2px;
+}
+
+/* ---------- Call lines in the chat ---------- */
+
+.chat-event--call {
+  align-items: center;
+}
+.chat-event-icon {
+  display: flex;
+  color: var(--glo-link);
+}
+.chat-event--missed .chat-event-icon {
+  color: var(--glo-danger-text);
+}
+.chat-event strong {
+  color: var(--glo-ink);
+  font-weight: 600;
+}

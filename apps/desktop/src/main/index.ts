@@ -5,6 +5,7 @@ import {
   ipcMain,
   nativeTheme,
   protocol,
+  session,
   type IpcMainInvokeEvent
 } from 'electron'
 import { join } from 'path'
@@ -39,6 +40,17 @@ import {
   uploadAttachment
 } from './messages'
 import { saveAttachment, showInFolder } from './files'
+import {
+  activeCalls,
+  answerCall,
+  chooseScreen,
+  declineCall,
+  joinCall,
+  leaveCall,
+  pickedScreen,
+  screenSources,
+  startCall
+} from './calls'
 import { changePassword, deleteAccount, getAccount } from './account'
 import {
   appearanceArgs,
@@ -179,6 +191,42 @@ function createWindow(): void {
   } else {
     window.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+// What the Glofly page may use. Electron says yes to everything unless told otherwise, so only
+// these are allowed, and only for the app's own page: the microphone and camera (calls), copying
+// text, full screen (a shared screen), and picking where call audio plays.
+const ALLOWED_PERMISSIONS = new Set([
+  'media',
+  'clipboard-sanitized-write',
+  'fullscreen',
+  'speaker-selection'
+])
+
+function setUpPermissions(): void {
+  const ses = session.defaultSession
+  ses.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    const media =
+      permission !== 'media' ||
+      ('mediaTypes' in details &&
+        (details.mediaTypes ?? []).every((t) => t === 'audio' || t === 'video'))
+    callback(ALLOWED_PERMISSIONS.has(permission) && media && isAppUrl(details.requestingUrl))
+  })
+  ses.setPermissionCheckHandler((contents, permission, _origin, details) => {
+    const url = details.requestingUrl ?? contents?.getURL() ?? ''
+    return ALLOWED_PERMISSIONS.has(permission) && isAppUrl(url)
+  })
+  // Sharing your screen in a call: only the screen or window picked in Glofly's own picker.
+  ses.setDisplayMediaRequestHandler(
+    (request, callback) => {
+      if (!isAppUrl(request.frame?.url ?? '')) {
+        callback({})
+        return
+      }
+      void pickedScreen().then((source) => callback(source ? { video: source } : {}))
+    },
+    { useSystemPicker: false }
+  )
 }
 
 // The one page that is the Glofly app. Any other file (say, one dropped on the window)
@@ -504,6 +552,41 @@ function registerIpcHandlers(): void {
     if (isAppUrl(event.senderFrame?.url ?? '') && isUserId(id)) sendTyping(id)
   })
 
+  // Calls.
+  ipcMain.handle('calls:start', (event, id: unknown, video: unknown) =>
+    fromApp(event) && isUserId(id) && typeof video === 'boolean' ? startCall(id, video) : invalid
+  )
+  ipcMain.handle('calls:active', (event) => (fromApp(event) ? activeCalls() : invalid))
+  const byCallId: [string, (id: string) => Promise<unknown>][] = [
+    ['calls:answer', answerCall],
+    ['calls:join', joinCall],
+    ['calls:decline', declineCall],
+    ['calls:leave', leaveCall]
+  ]
+  for (const [channel, action] of byCallId) {
+    ipcMain.handle(channel, (event, id: unknown) =>
+      fromApp(event) && isUserId(id) ? action(id) : invalid
+    )
+  }
+  ipcMain.handle('calls:screen-sources', (event) => (fromApp(event) ? screenSources() : []))
+  ipcMain.handle('calls:choose-screen', (event, sourceId: unknown) =>
+    fromApp(event) &&
+    typeof sourceId === 'string' &&
+    /^(screen|window):[\w:-]{1,100}$/.test(sourceId)
+      ? chooseScreen(sourceId)
+      : false
+  )
+
+  // An incoming call: show Glofly if it's tucked away in the tray, and flash the taskbar button
+  // (without taking focus away from whatever you're doing).
+  ipcMain.on('window:attention', (event) => {
+    if (!isAppUrl(event.senderFrame?.url ?? '')) return
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return
+    if (!window.isVisible()) window.showInactive()
+    if (!window.isFocused()) window.flashFrame(true)
+  })
+
   ipcMain.handle('auth:restore', (event) => {
     if (!fromApp(event)) return null
     return thenGoLive(restore())
@@ -532,6 +615,7 @@ app.whenReady().then(() => {
   })
 
   protocol.handle(MEDIA_SCHEME, handleMediaRequest)
+  setUpPermissions()
   loadAppSettings()
   registerIpcHandlers()
   startIdleWatch()

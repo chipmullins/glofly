@@ -54,7 +54,7 @@
   padding-right: 162px; /* room for the Windows window buttons */
   -webkit-app-region: drag;
 }
-/* Header buttons from the design (Chat.dc.html). Calls arrive in a later step. */
+/* Header buttons from the design (Chat.dc.html): voice call, video call, pin, profile. */
 .chat-header-actions {
   display: flex;
   gap: 6px;
@@ -73,8 +73,13 @@
   justify-content: center;
   cursor: pointer;
 }
-.chat-header-button:hover {
+.chat-header-button:hover:not(:disabled) {
   background: var(--glo-hover);
+}
+/* Call buttons while you're already in a call (from Calling.dc.html). */
+.chat-header-button:disabled {
+  color: var(--glo-faint);
+  cursor: default;
 }
 
 .chat-messages {
