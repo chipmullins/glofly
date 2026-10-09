@@ -8,8 +8,9 @@ const root = document.documentElement
 
 export function applyAppearance({ accent, dark }: { accent: AccentChoice; dark: boolean }): void {
   root.dataset.theme = dark ? 'dark' : 'light'
-  if (accent === 'red') root.dataset.accent = 'red'
-  else delete root.dataset.accent
+  // Glow Orange is the default colors; the others are set with data-accent (main.css).
+  if (accent === 'orange') delete root.dataset.accent
+  else root.dataset.accent = accent
 }
 
 /** Runs once at startup, before anything is drawn, and keeps following changes. */

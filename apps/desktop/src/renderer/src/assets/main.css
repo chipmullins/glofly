@@ -164,6 +164,54 @@
   --glo-link-hover: #ffb3be;
 }
 
+/* Glofly Lagoon accent (teal blue) */
+:root[data-accent='lagoon'] {
+  --glo-accent: #1789ad;
+  --glo-accent-deep: #127596;
+  --glo-on-accent: #ffffff;
+  --glo-accent-rgb: 23, 137, 173;
+  --glo-accent-soft: #cfe8f1;
+  --glo-accent-tint: #e8f4f9;
+  --glo-accent-muted: #a7d5e5;
+  --glo-link: #0f6f8f;
+  --glo-link-hover: #0a5269;
+}
+:root[data-theme='dark'][data-accent='lagoon'] {
+  --glo-accent: #4cc3e6;
+  --glo-accent-deep: #38afd3;
+  --glo-on-accent: #062029;
+  --glo-accent-rgb: 76, 195, 230;
+  --glo-accent-soft: #173944;
+  --glo-accent-tint: #132d36;
+  --glo-accent-muted: #20505e;
+  --glo-link: #8ad8ef;
+  --glo-link-hover: #b5e7f6;
+}
+
+/* Glofly Violet accent (purple) */
+:root[data-accent='violet'] {
+  --glo-accent: #8b3fd9;
+  --glo-accent-deep: #7432bd;
+  --glo-on-accent: #ffffff;
+  --glo-accent-rgb: 139, 63, 217;
+  --glo-accent-soft: #ebdcfa;
+  --glo-accent-tint: #f5eefd;
+  --glo-accent-muted: #d2b5f2;
+  --glo-link: #7230b8;
+  --glo-link-hover: #55238c;
+}
+:root[data-theme='dark'][data-accent='violet'] {
+  --glo-accent: #b57cff;
+  --glo-accent-deep: #a468f2;
+  --glo-on-accent: #1d0a33;
+  --glo-accent-rgb: 181, 124, 255;
+  --glo-accent-soft: #3a2552;
+  --glo-accent-tint: #2d1d42;
+  --glo-accent-muted: #4a3266;
+  --glo-link: #cfa8ff;
+  --glo-link-hover: #e2c9ff;
+}
+
 *,
 *::before,
 *::after {

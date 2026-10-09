@@ -101,7 +101,7 @@ const isSoundChanges = (value: unknown): value is Partial<SoundSettings> =>
   Object.entries(value).every(([k, v]) => soundSettingOk(k, v))
 
 const THEMES: ThemeChoice[] = ['light', 'dark', 'system']
-const ACCENTS: AccentChoice[] = ['orange', 'red']
+const ACCENTS: AccentChoice[] = ['orange', 'red', 'lagoon', 'violet']
 export const TEXT_SIZES: Record<TextSize, number> = {
   small: 0.9,
   default: 1,

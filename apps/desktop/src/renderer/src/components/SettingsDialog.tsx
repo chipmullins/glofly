@@ -78,15 +78,23 @@ function Segmented<T extends string>({
   label,
   options,
   value,
-  onChange
+  onChange,
+  wide = false
 }: {
   label: string
-  options: { value: T; label: string }[]
+  /** Fill the row, options sharing the width equally (wraps into two rows on narrow windows) */
+  wide?: boolean
+  /** swatch: a small color dot before the label (accent colors) */
+  options: { value: T; label: string; swatch?: string }[]
   value: T | undefined
   onChange: (value: T) => void
 }): React.JSX.Element {
   return (
-    <div role="radiogroup" aria-label={label} className="segmented">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={wide ? 'segmented segmented--wide' : 'segmented'}
+    >
       {options.map((o) => (
         <button
           key={o.value}
@@ -99,6 +107,13 @@ function Segmented<T extends string>({
           disabled={value === undefined}
           onClick={() => onChange(o.value)}
         >
+          {o.swatch && (
+            <span
+              className="segmented-swatch"
+              style={{ background: o.swatch }}
+              aria-hidden="true"
+            />
+          )}
           {o.label}
         </button>
       ))}
@@ -503,7 +518,7 @@ export default function SettingsDialog({
                         onChange={(theme) => void changeApp({ theme })}
                       />
                     </div>
-                    <div className="settings-row">
+                    <div className="settings-row settings-row--stack">
                       <div className="settings-row-text">
                         <span className="settings-row-label">Accent color</span>
                         <span className="settings-row-desc">
@@ -511,11 +526,14 @@ export default function SettingsDialog({
                         </span>
                       </div>
                       <Segmented
+                        wide
                         label="Accent color"
                         value={appSettings?.accent}
                         options={[
-                          { value: 'orange', label: 'Glow Orange' },
-                          { value: 'red', label: 'Glofly Red' }
+                          { value: 'orange', label: 'Glow Orange', swatch: '#f47a1f' },
+                          { value: 'red', label: 'Glofly Red', swatch: '#e0193a' },
+                          { value: 'lagoon', label: 'Glofly Lagoon', swatch: '#1789ad' },
+                          { value: 'violet', label: 'Glofly Violet', swatch: '#8b3fd9' }
                         ]}
                         onChange={(accent) => void changeApp({ accent })}
                       />

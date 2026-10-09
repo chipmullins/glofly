@@ -414,6 +414,20 @@
   white-space: nowrap;
   cursor: pointer;
 }
+.segmented--wide {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.segmented--wide .segmented-option {
+  justify-content: center;
+}
+.segmented-swatch {
+  width: 10px;
+  height: 10px;
+  margin-right: 7px;
+  flex: none;
+  border-radius: 50%;
+}
 .segmented-option:hover:not(:disabled) {
   color: var(--glo-ink);
 }

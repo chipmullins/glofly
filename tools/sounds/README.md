@@ -18,7 +18,7 @@ Convert a pick for the app: `ffmpeg -i in.wav -c:a libopus -b:a 128k out.ogg` â†
 | Glow off | glow-off.ogg | round2 ended-D-firefly |
 | Blink in | blink-in.ogg | round2 join-1-blink |
 | Blink out | blink-out.ogg | round2 left-1-blink |
-| Glofly goodnight | goodnight.ogg | logoff-2-falling |
+| Glofly goodnight | goodnight.ogg | Chip's own logoff-3-short.wav (Oct 8; replaced logoff-2-falling) |
 | Spark trail | spark-trail.ogg | round1 ended-A-spark |
 | Dewdrop | dewdrop.ogg | round2 connected-G-glass |
 | Starfall | starfall.ogg | round2 ended-G-glass |

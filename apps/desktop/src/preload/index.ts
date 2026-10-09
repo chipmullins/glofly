@@ -19,6 +19,12 @@ import type {
 // The only things the UI can ask the main process to do. Each one is a named,
 // specific action. The UI never gets general access to Electron or Node, so even
 // if something malicious ran inside the window, it couldn't reach your files.
+/** The accent the main process passed at launch (--glofly-accent=…), so the first frame is right. */
+function accentFromArgs(): AccentChoice {
+  const arg = process.argv.find((a) => a.startsWith('--glofly-accent='))?.split('=')[1]
+  return arg === 'red' || arg === 'lagoon' || arg === 'violet' ? arg : 'orange'
+}
+
 const glofly: GloflyApi = {
   platform: process.platform,
   auth: {
@@ -46,7 +52,7 @@ const glofly: GloflyApi = {
     getSettings: () => ipcRenderer.invoke('app:get-settings'),
     setSettings: (changes: AppSettingsChanges) => ipcRenderer.invoke('app:set-settings', changes),
     initialAppearance: {
-      accent: (process.argv.includes('--glofly-accent=red') ? 'red' : 'orange') as AccentChoice,
+      accent: accentFromArgs(),
       dark: process.argv.includes('--glofly-dark')
     }
   },
