@@ -282,6 +282,23 @@
   flex: none;
   color: var(--glo-link);
 }
+.profile-playing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--glo-good-bg);
+  color: var(--glo-good-text);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.profile-playing svg {
+  flex: none;
+}
+.profile-playing-time {
+  opacity: 0.8;
+}
 .profile-about {
   display: flex;
   flex-direction: column;

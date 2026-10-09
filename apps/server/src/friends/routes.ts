@@ -262,7 +262,7 @@ friendsRouter.get("/", async (_req, res) => {
   });
   const friendRows = rows.filter((r) => r.status === "accepted");
   const presence = await presenceOf(friendRows.map((r) => r.id));
-  const offline = { status: "offline", statusText: null, lastSeenAt: null };
+  const offline = { status: "offline", statusText: null, lastSeenAt: null, activity: null };
   res.json({
     friends: friendRows.map((r) => ({
       ...strip(r),

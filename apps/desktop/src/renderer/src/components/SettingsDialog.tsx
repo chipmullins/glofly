@@ -9,6 +9,7 @@ import type {
   SignedInUser,
   TextSize
 } from '../../../preload/api-types'
+import ActivitySettings from './ActivitySettings'
 import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
 import VoiceVideoSettings from './VoiceVideoSettings'
@@ -585,6 +586,11 @@ export default function SettingsDialog({
                       </select>
                     </div>
                   </div>
+                </section>
+
+                <section className="settings-section">
+                  <h2>Activity</h2>
+                  <ActivitySettings />
                 </section>
 
                 <section className="settings-section">

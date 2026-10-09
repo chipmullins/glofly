@@ -11,6 +11,8 @@ import {
   deviceDisconnected,
   deviceHeartbeat,
   deviceIdle,
+  cleanActivityName,
+  setDeviceActivity,
   sweepStalePresence,
 } from "./presence";
 
@@ -71,6 +73,23 @@ export function startRealtime(httpServer: HttpServer): void {
       safely(async () => {
         await deviceIdle(me.id, socket.id, idle);
         await announcePresence(me.id, emitToUser);
+      });
+    });
+
+    // "Playing Guild Wars 2": the app sends the game it detected (or null when it stops).
+    // Only the game's name ever arrives here, never the list of running programs.
+    let lastActivityAt = 0;
+    socket.on("activity", (payload: unknown) => {
+      const now = Date.now();
+      if (now - lastActivityAt < 1000) return; // ignore floods (the app sends at most every 15s)
+      lastActivityAt = now;
+      const raw = (payload as { name?: unknown } | null)?.name;
+      const name = raw === null ? null : cleanActivityName(raw);
+      if (raw !== null && name === null) return; // not a usable name
+      safely(async () => {
+        if (await setDeviceActivity(me.id, socket.id, name)) {
+          await announcePresence(me.id, emitToUser);
+        }
       });
     });
 

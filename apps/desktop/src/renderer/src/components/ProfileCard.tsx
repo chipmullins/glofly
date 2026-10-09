@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import type { Presence, Profile, PublicUser } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import { shortDate } from '../lib/names'
-import { STATUS_LABEL } from '../lib/presence'
+import { playedFor, playing, STATUS_LABEL } from '../lib/presence'
 import Avatar from './Avatar'
 import {
   BlockIcon,
   CalendarIcon,
   ChatIcon,
   CloseIcon,
+  GameIcon,
   PhoneIcon,
   RemoveFriendIcon,
   VideoIcon
@@ -132,6 +133,7 @@ export default function ProfileCard({
   const shown = profile ?? { ...person, bio: null, joinedAt: null, presence: null }
   const presence = isFriend ? (livePresence ?? shown.presence ?? undefined) : undefined
   const statusText = presence && presence.status !== 'offline' ? presence.statusText : null
+  const game = playing(presence)
 
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -201,6 +203,16 @@ export default function ProfileCard({
               <h2>{shown.displayName}</h2>
               <span>@{shown.username}</span>
             </div>
+
+            {game && (
+              <div className="profile-playing">
+                <GameIcon size={18} />
+                <span>
+                  Playing <strong>{game.name}</strong>
+                  <span className="profile-playing-time"> · {playedFor(game)}</span>
+                </span>
+              </div>
+            )}
 
             {statusText && (
               <div className="profile-status-text">

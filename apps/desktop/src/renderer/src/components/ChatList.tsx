@@ -5,7 +5,7 @@ import type { ChatResult } from '../lib/chatSearch'
 import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
 import { useTypingByChat } from '../lib/typingWatch'
 import { joinedCount, useCalls } from '../calls/callState'
-import { presenceLine } from '../lib/presence'
+import { playing, presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
 import EmojiText from './EmojiText'
 import GroupAvatar from './GroupAvatar'
@@ -153,7 +153,9 @@ function DmRow({
               ? 'dm-preview dm-preview--call'
               : typingLabel
                 ? 'dm-preview dm-preview--typing'
-                : 'dm-preview'
+                : c.kind === 'dm' && playing(presence)
+                  ? 'dm-preview dm-preview--playing'
+                  : 'dm-preview'
           }
         >
           {typingLabel && !callLabel && (

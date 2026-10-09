@@ -1,12 +1,20 @@
 import { BrowserWindow } from 'electron'
 import { io, type Socket } from 'socket.io-client'
-import type { Call, CallMember, GloflyEvent, PublicUser } from '../preload/api-types'
+import type { Activity, Call, CallMember, GloflyEvent, PublicUser } from '../preload/api-types'
 
 // The live connection to the server lives here in the main process, like the
 // session token. Events are passed on to the window as plain data.
 
 let socket: Socket | null = null
 let idle = false
+/** The game this computer is sharing ("Playing …"), sent again after every reconnect. */
+let activity: string | null = null
+
+/** Shares what's being played (or null). Only the game's name is ever sent. */
+export function shareActivity(name: string | null): void {
+  activity = name
+  if (socket?.connected) socket.emit('activity', { name })
+}
 
 function forward(event: GloflyEvent): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -25,6 +33,7 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
   socket.on('connect', () => {
     forward({ type: 'connection', connected: true })
     if (idle) socket?.emit('idle', true) // the server assumes a fresh connection is active
+    if (activity) socket?.emit('activity', { name: activity })
   })
   socket.on('disconnect', (reason) => {
     // The server only closes a connection itself when that device was signed out
@@ -91,9 +100,18 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
       userId: p.userId,
       status: p.status,
       statusText: typeof p.statusText === 'string' ? p.statusText : null,
-      lastSeenAt: typeof p.lastSeenAt === 'string' ? p.lastSeenAt : null
+      lastSeenAt: typeof p.lastSeenAt === 'string' ? p.lastSeenAt : null,
+      activity: cleanActivity(p.activity)
     })
   })
+}
+
+/** "Playing …": a short name and when it started, or nothing. */
+function cleanActivity(a: unknown): Activity | null {
+  const x = a as { name?: unknown; since?: unknown } | null
+  if (!x || typeof x.name !== 'string' || !x.name || x.name.length > 64) return null
+  if (typeof x.since !== 'string' || x.since.length > 40) return null
+  return { name: x.name, since: x.since }
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

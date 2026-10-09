@@ -74,7 +74,19 @@ import {
   showWindow,
   startHidden
 } from './app-settings'
-import { connectRealtime, disconnectRealtime, sendTyping } from './realtime'
+import { connectRealtime, disconnectRealtime, sendTyping, shareActivity } from './realtime'
+import {
+  addGame,
+  cleanGameName,
+  gameState,
+  hideGame,
+  isExe,
+  markNoticeShown,
+  removeGame,
+  runningPrograms,
+  setGamesEnabled,
+  startGameWatch
+} from './games'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isUserId } from './api'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
@@ -608,6 +620,27 @@ function registerIpcHandlers(): void {
 
   // An incoming call: show Glofly if it's tucked away in the tray, and flash the taskbar button
   // (without taking focus away from whatever you're doing).
+  // "Playing …": Settings → Activity. Every value from the window is checked first.
+  ipcMain.handle('games:state', (event) => (fromApp(event) ? gameState() : null))
+  ipcMain.handle('games:set-enabled', (event, enabled: unknown) =>
+    fromApp(event) && typeof enabled === 'boolean' ? setGamesEnabled(enabled) : null
+  )
+  ipcMain.handle('games:hide', (event, name: unknown, hide: unknown) => {
+    const clean = cleanGameName(name)
+    return fromApp(event) && clean && typeof hide === 'boolean' ? hideGame(clean, hide) : null
+  })
+  ipcMain.handle('games:add', (event, exe: unknown, name: unknown) => {
+    const clean = cleanGameName(name)
+    return fromApp(event) && isExe(exe) && clean ? addGame(exe, clean) : null
+  })
+  ipcMain.handle('games:remove', (event, exe: unknown) =>
+    fromApp(event) && isExe(exe) ? removeGame(exe) : null
+  )
+  ipcMain.handle('games:running', (event) => (fromApp(event) ? runningPrograms() : []))
+  ipcMain.on('games:notice-shown', (event) => {
+    if (isAppUrl(event.senderFrame?.url ?? '')) markNoticeShown()
+  })
+
   // Auto-updates: is a new version downloaded and waiting, and "Restart to update".
   ipcMain.handle('updates:status', (event) => (fromApp(event) ? updateReady() : null))
   ipcMain.on('updates:restart', (event) => {
@@ -660,6 +693,7 @@ app.whenReady().then(() => {
   createWindow()
   setUpTray(() => mainWindow, icon)
   startAutoUpdates()
+  startGameWatch(shareActivity)
 
   // Light ↔ dark (picked in Settings, or Windows changed with "Match system"):
   // the page follows by itself; the window background and buttons follow here.

@@ -344,6 +344,16 @@ export function FullscreenIcon(p: IconProps): React.JSX.Element {
   )
 }
 
+/** A game controller, next to "Playing …". */
+export function GameIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M6 11h4M8 9v4M15 12h.01M18 10h.01" />
+      <path d="M17.3 5H6.7a4 4 0 0 0-3.96 3.43L2 14.6A2.7 2.7 0 0 0 4.66 18c.98 0 1.86-.55 2.3-1.42L8 15h8l1.04 1.58A2.6 2.6 0 0 0 19.34 18 2.7 2.7 0 0 0 22 14.6l-.74-6.17A4 4 0 0 0 17.3 5z" />
+    </Svg>
+  )
+}
+
 export function ExitFullscreenIcon(p: IconProps): React.JSX.Element {
   return (
     <Svg strokeWidth={2} {...p}>

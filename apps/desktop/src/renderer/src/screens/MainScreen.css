@@ -617,6 +617,26 @@
 .friend-row--clickable {
   cursor: pointer;
 }
+/* "Playing Guild Wars 2 · 1h 12m" */
+.friend-sub--playing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--glo-good-text);
+  font-weight: 500;
+}
+.friend-sub--playing svg {
+  flex: none;
+}
+.friend-sub--playing > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dm-preview--playing {
+  color: var(--glo-good-text);
+}
 .friend-text {
   flex: 1;
   min-width: 0;
@@ -937,6 +957,22 @@
   font-size: 14px;
   box-shadow: 0 12px 32px rgba(var(--glo-shadow-rgb), 0.3);
   animation: call-toast-in 0.2s ease-out;
+}
+.game-notice strong {
+  white-space: nowrap;
+}
+.game-notice svg {
+  flex: none;
+  color: var(--glo-call-dot);
+}
+.call-toast .game-notice-settings {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--glo-call-button);
+  color: var(--glo-call-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
 }
 .call-toast button {
   border: 0;

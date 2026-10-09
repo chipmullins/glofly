@@ -31,10 +31,11 @@ import {
 } from '../components/icons'
 import { shortDate } from '../lib/names'
 import { playSound, setQuiet } from '../lib/sounds'
-import { dotFor, presenceLine, STATUS_LABEL } from '../lib/presence'
+import { activityLine, dotFor, playing, presenceLine, STATUS_LABEL } from '../lib/presence'
 import StatusDot from '../components/StatusDot'
 import StatusMenu from '../components/StatusMenu'
 import SettingsDialog from '../components/SettingsDialog'
+import GameNotice from '../components/GameNotice'
 import '../components/dialogs.css'
 import './MainScreen.css'
 import EmojiText from '../components/EmojiText'
@@ -48,7 +49,7 @@ import { CallProvider } from '../calls/CallContext'
 import UpdateBar from '../components/UpdateBar'
 import type { CallsValue } from '../calls/callState'
 import { CallFloat, CallStrip } from '../components/CallPanel'
-import { PhoneIcon, VideoIcon } from '../components/icons'
+import { GameIcon, PhoneIcon, VideoIcon } from '../components/icons'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -185,6 +186,7 @@ function FriendRow({
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   const wrapRef = useClickOutside(open, close)
+  const game = playing(person.presence)
 
   return (
     // Clicking anywhere on the row opens the chat (the Message button does the same from the
@@ -212,9 +214,16 @@ function FriendRow({
           <span className="friend-name">{person.displayName}</span>
           <span className="friend-user">@{person.username}</span>
         </div>
-        <span className="friend-sub" title={`Friends since ${shortDate(person.since)}`}>
-          <EmojiText text={presenceLine(person.presence, now)} />
-        </span>
+        {game ? (
+          <span className="friend-sub friend-sub--playing" title={activityLine(game, now)}>
+            <GameIcon size={14} />
+            <span>{activityLine(game, now)}</span>
+          </span>
+        ) : (
+          <span className="friend-sub" title={`Friends since ${shortDate(person.since)}`}>
+            <EmojiText text={presenceLine(person.presence, now)} />
+          </span>
+        )}
       </div>
       <button
         type="button"
@@ -549,14 +558,17 @@ export default function MainScreen({
           break
         }
         case 'presence': {
-          const { userId, status, statusText, lastSeenAt } = event
+          const { userId, status, statusText, lastSeenAt, activity } = event
           if (userId === user.id) {
             // Your own status changed (maybe from another device): refresh what you picked.
             window.glofly.status.get().then((result) => {
               if (result.ok) setMyStatus(result.data)
             })
           } else {
-            setPresence((map) => ({ ...map, [userId]: { status, statusText, lastSeenAt } }))
+            setPresence((map) => ({
+              ...map,
+              [userId]: { status, statusText, lastSeenAt, activity: activity ?? null }
+            }))
           }
           break
         }
@@ -1306,6 +1318,7 @@ export default function MainScreen({
             onCancel={() => setConfirm(null)}
           />
         )}
+        <GameNotice onOpenSettings={() => setSettingsOpen(true)} />
         {toast && (
           <div className="call-toast" role="status">
             {toast}

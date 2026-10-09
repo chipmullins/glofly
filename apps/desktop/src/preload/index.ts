@@ -4,6 +4,7 @@ import type {
   AppSettingsChanges,
   Attachment,
   GloflyApi,
+  GameState,
   GloflyEvent,
   LoginRequest,
   MyStatus,
@@ -130,6 +131,20 @@ const glofly: GloflyApi = {
     const handler = (_e: Electron.IpcRendererEvent, event: GloflyEvent): void => listener(event)
     ipcRenderer.on('glofly:event', handler)
     return () => ipcRenderer.removeListener('glofly:event', handler)
+  },
+  games: {
+    state: () => ipcRenderer.invoke('games:state'),
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke('games:set-enabled', enabled),
+    hide: (name: string, hide: boolean) => ipcRenderer.invoke('games:hide', name, hide),
+    add: (exe: string, name: string) => ipcRenderer.invoke('games:add', exe, name),
+    remove: (exe: string) => ipcRenderer.invoke('games:remove', exe),
+    running: () => ipcRenderer.invoke('games:running'),
+    noticeShown: () => ipcRenderer.send('games:notice-shown'),
+    onChange: (listener: (state: GameState) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, state: GameState): void => listener(state)
+      ipcRenderer.on('games:changed', handler)
+      return () => ipcRenderer.removeListener('games:changed', handler)
+    }
   },
   updates: {
     status: () => ipcRenderer.invoke('updates:status'),

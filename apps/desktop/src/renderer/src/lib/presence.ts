@@ -1,4 +1,4 @@
-import type { MyStatusChoice, Presence, PresenceStatus } from '../../../preload/api-types'
+import type { Activity, MyStatusChoice, Presence, PresenceStatus } from '../../../preload/api-types'
 
 export const STATUS_LABEL: Record<PresenceStatus | MyStatusChoice, string> = {
   online: 'Online',
@@ -21,18 +21,42 @@ export function timeAgo(iso: string, now = Date.now()): string {
   return `on ${new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
 }
 
-/** The line under someone's name: custom status, their status, or when they were last seen. */
+/** How long they've been playing: "1h 12m", "25m", or "just started". */
+export function playedFor(activity: Activity, now = Date.now()): string {
+  const minutes = Math.floor((now - new Date(activity.since).getTime()) / 60000)
+  if (!Number.isFinite(minutes) || minutes < 1) return 'just started'
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  return minutes % 60 ? `${hours}h ${minutes % 60}m` : `${hours}h`
+}
+
+/** What they're playing, if anything (never while offline). */
+export const playing = (p: Presence | undefined): Activity | null =>
+  p && p.status !== 'offline' ? (p.activity ?? null) : null
+
+/** "Playing Guild Wars 2 · 1h 12m" */
+export const activityLine = (activity: Activity, now = Date.now()): string =>
+  `Playing ${activity.name} · ${playedFor(activity, now)}`
+
+/**
+ * The line under someone's name: what they're playing, custom status, their status, or when
+ * they were last seen.
+ */
 export function presenceLine(p: Presence | undefined, now = Date.now()): string {
   if (!p) return ''
   if (p.status === 'offline')
     return p.lastSeenAt ? `Last seen ${timeAgo(p.lastSeenAt, now)}` : 'Offline'
+  const game = playing(p)
+  if (game) return `Playing ${game.name}`
   return p.statusText || STATUS_LABEL[p.status]
 }
 
-/** Chat header version from the design: "Online · Grinding ranked tonight". */
+/** Chat header version from the design: "Online · Grinding ranked tonight" (or "· Playing …"). */
 export function presenceHeader(p: Presence | undefined, now = Date.now()): string {
   if (!p) return ''
   if (p.status === 'offline') return presenceLine(p, now)
+  const game = playing(p)
+  if (game) return `${STATUS_LABEL[p.status]} · ${activityLine(game, now)}`
   return p.statusText ? `${STATUS_LABEL[p.status]} · ${p.statusText}` : STATUS_LABEL[p.status]
 }
 

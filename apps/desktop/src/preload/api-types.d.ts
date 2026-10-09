@@ -82,6 +82,32 @@ export type Presence = {
   statusText: string | null
   /** ISO date; only for offline people who aren't invisible */
   lastSeenAt: string | null
+  /** What they're playing ("Guild Wars 2", since an ISO date), if they share it */
+  activity?: Activity | null
+}
+
+export type Activity = { name: string; since: string }
+
+/** A game you added yourself in Settings → Activity: its program (lowercase .exe) and name. */
+export type CustomGame = { exe: string; name: string }
+/** A program with a window open, offered by "Add a game". */
+export type RunningProgram = { exe: string; title: string }
+
+/** Settings → Activity, and what Glofly sees you playing on this computer. */
+export type GameState = {
+  /** Game detection works on this computer (Windows) */
+  supported: boolean
+  /** "Show what I'm playing" */
+  enabled: boolean
+  /** The game friends see right now (null if none, or sharing is off) */
+  current: string | null
+  /** The game detected, even while sharing is off */
+  detected: string | null
+  custom: CustomGame[]
+  /** Games never shown, by name */
+  hidden: string[]
+  /** The one-time "your friends can see this" note has been shown */
+  noticeShown: boolean
 }
 
 /** The status you pick for yourself. */
@@ -524,6 +550,18 @@ export type GloflyApi = {
   }
   /** Subscribe to live updates. Returns a function that unsubscribes. */
   onEvent: (listener: (event: GloflyEvent) => void) => () => void
+  /** "Playing Guild Wars 2": game detection and Settings → Activity (this computer). */
+  games: {
+    state: () => Promise<GameState>
+    setEnabled: (enabled: boolean) => Promise<GameState>
+    hide: (name: string, hide: boolean) => Promise<GameState>
+    add: (exe: string, name: string) => Promise<GameState | null>
+    remove: (exe: string) => Promise<GameState>
+    /** Programs with a window open, for "Add a game" */
+    running: () => Promise<RunningProgram[]>
+    noticeShown: () => void
+    onChange: (listener: (state: GameState) => void) => () => void
+  }
   /** New versions of Glofly (installed app only). */
   updates: {
     /** The version downloaded and waiting for a restart, or null. */
