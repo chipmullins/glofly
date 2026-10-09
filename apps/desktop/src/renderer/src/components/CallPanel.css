@@ -62,6 +62,7 @@
   flex-direction: column;
   gap: 18px;
   flex: none;
+  position: relative; /* for the view buttons */
 }
 /* On the dark theme the panel would melt into the page: a faint glow-colored edge keeps it apart. */
 :root[data-theme='dark'] .call-panel,
@@ -166,7 +167,7 @@
   flex-direction: column;
   justify-content: flex-start;
   gap: 12px;
-  max-height: clamp(220px, 44vh, 480px);
+  max-height: var(--stage-h, clamp(220px, 44vh, 480px));
 }
 .call-media--screen .call-tile {
   flex: none;
@@ -246,7 +247,7 @@
 
 .call-stage {
   position: relative;
-  height: clamp(220px, 44vh, 480px);
+  height: var(--stage-h, clamp(220px, 44vh, 480px));
   border-radius: 16px;
   overflow: hidden;
   background: var(--glo-call-video);
@@ -825,4 +826,156 @@
 .add-to-call-name span {
   font-size: 13px;
   color: var(--glo-muted);
+}
+
+/* ---------- Call views: bigger, and full screen ---------- */
+
+.call-view-buttons {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+  z-index: 1;
+}
+.call-view-button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--glo-call-tag);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.call-view-button:hover {
+  background: var(--glo-call-button-hover);
+}
+/* Keep the title clear of the buttons on narrow windows. */
+.call-title {
+  padding-inline: 84px;
+}
+
+/* Bigger: the panel grows, and a few messages plus the message box stay visible below. */
+.call-panel--large ~ .chat-messages {
+  min-height: 120px;
+}
+
+/* Full screen: the call fills the monitor. */
+.call-panel:fullscreen {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  padding: 24px 32px;
+  box-shadow: none;
+}
+.call-panel--full .call-media {
+  flex: 1;
+  justify-content: center;
+}
+.call-panel--full .call-media--screen {
+  align-content: center;
+}
+/* After a few seconds without the mouse moving, the title and controls fade out. */
+.call-panel .call-title,
+.call-panel .call-controls,
+.call-panel .call-view-buttons {
+  transition: opacity 0.3s ease;
+}
+.call-panel--idle {
+  cursor: none;
+}
+.call-panel--idle .call-title,
+.call-panel--idle .call-controls,
+.call-panel--idle .call-view-buttons {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-panel .call-title,
+  .call-panel .call-controls,
+  .call-panel .call-view-buttons {
+    transition: none;
+  }
+}
+
+/* ---------- Floating call video (on another chat) ---------- */
+
+.call-float {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  width: 300px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--glo-call-bg);
+  color: var(--glo-call-text);
+  box-shadow:
+    0 18px 40px -12px rgba(var(--glo-shadow-rgb), 0.55),
+    0 0 0 1px rgba(var(--glo-call-glow-rgb), 0.16);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.call-float:active {
+  cursor: grabbing;
+}
+.call-float-video {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--glo-call-tile);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.call-float-video .call-video {
+  pointer-events: none;
+}
+.call-float-hide {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--glo-call-tag);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.call-float:hover .call-float-hide,
+.call-float-hide:focus-visible {
+  opacity: 1;
+}
+.call-float-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+.call-float-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.call-float-text strong {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.call-float-text span {
+  font-size: 12px;
+  color: var(--glo-call-muted);
+  font-variant-numeric: tabular-nums;
 }

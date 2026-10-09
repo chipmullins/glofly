@@ -47,7 +47,7 @@ import { badgeImage, clearNotification, notify, previewsOn, shouldNotify } from 
 import { CallProvider } from '../calls/CallContext'
 import UpdateBar from '../components/UpdateBar'
 import type { CallsValue } from '../calls/callState'
-import { CallStrip } from '../components/CallPanel'
+import { CallFloat, CallStrip } from '../components/CallPanel'
 import { PhoneIcon, VideoIcon } from '../components/icons'
 
 type MainScreenProps = {
@@ -187,7 +187,19 @@ function FriendRow({
   const wrapRef = useClickOutside(open, close)
 
   return (
-    <div className={open ? 'friend-row friend-row--open' : 'friend-row'}>
+    // Clicking anywhere on the row opens the chat (the Message button does the same from the
+    // keyboard); clicks on the row's own buttons and menu do their own thing.
+    <div
+      className={
+        open
+          ? 'friend-row friend-row--open friend-row--clickable'
+          : 'friend-row friend-row--clickable'
+      }
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('button, .friend-menu')) return
+        onMessage()
+      }}
+    >
       <Avatar
         id={person.id}
         name={person.displayName}
@@ -1089,6 +1101,7 @@ export default function MainScreen({
 
         <main className="content">
           <UpdateBar />
+          <CallFloat openChatId={openChatId} onOpenChat={setOpenChatId} />
           {!connected && (
             <div className="connection-banner" role="status">
               Reconnecting to Glofly…

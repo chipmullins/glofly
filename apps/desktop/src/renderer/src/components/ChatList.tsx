@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ConversationSummary, Presence, PublicUser } from '../../../preload/api-types'
 import { attachmentSummary } from '../lib/attachments'
 import type { ChatResult } from '../lib/chatSearch'
-import { chatTitle, eventText, memberCountLabel } from '../lib/groups'
+import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
+import { useTypingByChat } from '../lib/typingWatch'
 import { joinedCount, useCalls } from '../calls/callState'
 import { presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
@@ -73,6 +74,7 @@ function DmRow({
   active,
   presence,
   now,
+  typingIds,
   onOpen,
   onMenu
 }: {
@@ -81,6 +83,8 @@ function DmRow({
   active: boolean
   presence: Presence | undefined
   now: number
+  /** People typing in this chat right now */
+  typingIds: string[] | undefined
   onOpen: () => void
   onMenu: (x: number, y: number) => void
 }): React.JSX.Element {
@@ -95,8 +99,19 @@ function DmRow({
         ? `In call · ${joinedCount(call)} of ${call.members.length}`
         : 'In call'
     : null
+  // Someone typing in a chat you're not looking at: "typing…" (DMs) or "Maya is typing…" (groups).
+  // The open chat shows its own typing line, so the sidebar leaves that one alone.
+  const typingNames =
+    !active && typingIds?.length
+      ? typingIds
+          .map((id) => c.members.find((m) => m.id === id)?.displayName.split(/\s+/)[0])
+          .filter((name): name is string => !!name)
+      : []
+  const typingLabel =
+    typingNames.length === 0 ? null : c.kind === 'dm' ? 'typing…' : typingText(typingNames)
   const preview =
     callLabel ??
+    typingLabel ??
     (presence && c.kind === 'dm' ? presenceLine(presence, now) : lastMessagePreview(c, me))
   const title = chatTitle(c)
   const ring = active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'
@@ -132,7 +147,22 @@ function DmRow({
         >
           <EmojiText text={title} />
         </span>
-        <span className={callLabel ? 'dm-preview dm-preview--call' : 'dm-preview'}>
+        <span
+          className={
+            callLabel
+              ? 'dm-preview dm-preview--call'
+              : typingLabel
+                ? 'dm-preview dm-preview--typing'
+                : 'dm-preview'
+          }
+        >
+          {typingLabel && !callLabel && (
+            <span className="dm-typing-dots" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+          )}
           <EmojiText text={preview} />
         </span>
       </span>
@@ -283,6 +313,7 @@ export default function ChatList({
   onNewGroup
 }: ChatListProps): React.JSX.Element {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  const typing = useTypingByChat(me.id)
   const menuFor = conversations.find((c) => c.id === menu?.id) ?? null
 
   // Pinned chats in the order they were pinned; everything else by latest activity.
@@ -299,6 +330,7 @@ export default function ChatList({
       active={c.id === openChatId}
       presence={c.kind === 'dm' ? presence[c.partner.id] : undefined}
       now={now}
+      typingIds={typing[c.id]}
       onOpen={() => onOpen(c.id)}
       onMenu={(x, y) => setMenu({ id: c.id, x, y })}
     />

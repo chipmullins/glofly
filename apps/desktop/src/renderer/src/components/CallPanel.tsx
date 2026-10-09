@@ -19,12 +19,16 @@ import { getCallPrefs } from '../lib/callPrefs'
 import Avatar from './Avatar'
 import {
   AddFriendIcon,
+  CloseIcon,
+  ExitFullscreenIcon,
+  ExpandIcon,
   FullscreenIcon,
   HangUpIcon,
   MicIcon,
   MicOffIcon,
   PhoneIcon,
   ScreenShareIcon,
+  ShrinkIcon,
   SpeakingIcon,
   StopShareIcon,
   VideoIcon,
@@ -83,23 +87,55 @@ function videoOf(p: Participant | undefined, source: Track.Source): VideoTrack |
   return pub.videoTrack
 }
 
-/**
- * How the tiles are laid out for this many people: columns, and a tile height that shrinks with
- * the window. Tiles keep a 16:9 shape (centered), so a wide window doesn't stretch them.
- */
-function gridFor(count: number): { cols: number; height: string; face: number; ringFace: number } {
-  if (count <= 2) {
-    return {
-      cols: Math.max(count, 1),
-      height: 'clamp(170px, 32vh, 300px)',
-      face: 96,
-      ringFace: 112
-    }
-  }
-  if (count <= 4) return { cols: 2, height: 'clamp(120px, 21vh, 220px)', face: 76, ringFace: 76 }
-  if (count <= 9) return { cols: 3, height: 'clamp(100px, 18vh, 200px)', face: 64, ringFace: 64 }
-  return { cols: 4, height: 'clamp(84px, 13vh, 150px)', face: 48, ringFace: 48 }
+/** The three ways to see a call: in the chat, bigger (message box still below), or full screen. */
+export type CallView = 'normal' | 'large' | 'full'
+
+/** Space the rest of the window needs around the tiles, in each view (px). */
+const RESERVED: Record<'large' | 'full', number> = {
+  large: 470, // chat header + panel title/controls + a few messages + the message box
+  full: 200 // title and controls
 }
+
+/**
+ * How the tiles are laid out for this many people: columns, and a tile height that follows the
+ * window. Tiles keep a 16:9 shape (centered), so a wide window doesn't stretch them.
+ */
+function gridFor(
+  count: number,
+  view: CallView = 'normal',
+  windowHeight: number = window.innerHeight
+): { cols: number; height: string; face: number; ringFace: number } {
+  const cols = count <= 2 ? Math.max(count, 1) : count <= 4 ? 2 : count <= 9 ? 3 : 4
+  // Normal view: [smallest, share of the window height, largest] tile height, and photo sizes.
+  const [min, vh, max, face, ringFace] =
+    count <= 2
+      ? [170, 32, 300, 96, 112]
+      : count <= 4
+        ? [120, 21, 220, 76, 76]
+        : count <= 9
+          ? [100, 18, 200, 64, 64]
+          : [84, 13, 150, 48, 48]
+  if (view === 'normal')
+    return { cols, height: `clamp(${min}px, ${vh}vh, ${max}px)`, face, ringFace }
+  // Bigger views: as many rows as needed (up to three; more scroll) share the free height, never
+  // smaller than the normal view (on a short window they match it). Photos grow with the tiles.
+  const normalPx = Math.min(Math.max(min, (windowHeight * vh) / 100), max)
+  const rows = Math.min(Math.ceil(count / cols), 3)
+  const freePx = (windowHeight - RESERVED[view]) / rows - ((rows - 1) * 16) / rows
+  const tilePx = Math.round(Math.max(normalPx, freePx))
+  const bigFace = Math.max(face, Math.min(count <= 2 ? 136 : 112, Math.round(tilePx * 0.45)))
+  return { cols, height: `${tilePx}px`, face: bigFace, ringFace: Math.max(ringFace, bigFace) }
+}
+
+/** Height of a shared screen in each view. */
+function stageHeight(view: CallView): string {
+  return view === 'normal'
+    ? 'clamp(220px, 44vh, 480px)'
+    : `max(clamp(220px, 44vh, 480px), calc(100vh - ${RESERVED[view]}px))`
+}
+
+/** Bigger or normal is remembered while Glofly is open, so switching chats keeps your choice. */
+let rememberedSize: 'normal' | 'large' = 'normal'
 
 type TileInfo = {
   person: PublicUser
@@ -397,7 +433,71 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   const [picking, setPicking] = useState(false)
   const [adding, setAdding] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
+  const [size, setSizeState] = useState<'normal' | 'large'>(rememberedSize)
+  const [full, setFull] = useState(false)
+  /** Full screen: the title and controls fade away after a few seconds without the mouse moving. */
+  const [idle, setIdle] = useState(false)
+  /** The bigger views size their tiles from the window height. */
+  const [windowHeight, setWindowHeight] = useState(() => window.innerHeight)
+  useEffect(() => {
+    const onResize = (): void => setWindowHeight(window.innerHeight)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const setSize = (next: 'normal' | 'large'): void => {
+    rememberedSize = next
+    setSizeState(next)
+  }
+
+  // Follow full screen however it ends (the button, Escape, or Windows).
+  useEffect(() => {
+    const onChange = (): void => {
+      setIdle(false)
+      setFull(!!panelRef.current && document.fullscreenElement === panelRef.current)
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
+  useEffect(() => {
+    if (!full) return
+    let timer = setTimeout(() => setIdle(true), 3000)
+    const wake = (): void => {
+      setIdle(false)
+      clearTimeout(timer)
+      timer = setTimeout(() => setIdle(true), 3000)
+    }
+    const el = panelRef.current
+    el?.addEventListener('mousemove', wake)
+    el?.addEventListener('mousedown', wake)
+    document.addEventListener('keydown', wake)
+    return () => {
+      clearTimeout(timer)
+      el?.removeEventListener('mousemove', wake)
+      el?.removeEventListener('mousedown', wake)
+      document.removeEventListener('keydown', wake)
+    }
+  }, [full])
+
+  // The call ending (or leaving its chat) takes the window out of full screen.
+  useEffect(() => {
+    const el = panelRef.current
+    return () => {
+      if (el && document.fullscreenElement === el) void document.exitFullscreen().catch(() => {})
+    }
+  }, [current?.conversationId])
+
+  const toggleFull = (): void => {
+    const el = panelRef.current
+    if (!el) return
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+    else void el.requestFullscreen().catch(() => {})
+  }
+
   if (!current) return null
+  const view: CallView = full ? 'full' : size
 
   const call = current.call
   const group = current.chat.kind === 'group'
@@ -465,7 +565,7 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
     screenLabel = 'Your screen'
   }
 
-  const grid = gridFor(tiles.length)
+  const grid = gridFor(tiles.length, view, windowHeight)
   const canAdd =
     group &&
     ready &&
@@ -473,7 +573,41 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
     current.chat.people.some((p) => memberState(call, p.id) !== 'joined')
 
   return (
-    <section className="call-panel" aria-label="Call">
+    <section
+      ref={panelRef}
+      className={[
+        'call-panel',
+        view === 'large' && 'call-panel--large',
+        full && 'call-panel--full',
+        full && idle && 'call-panel--idle'
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      aria-label="Call"
+    >
+      <div className="call-view-buttons">
+        {!full && (
+          <button
+            type="button"
+            className="call-view-button"
+            aria-label={size === 'large' ? 'Make the call smaller' : 'Make the call bigger'}
+            title={size === 'large' ? 'Smaller' : 'Bigger'}
+            onClick={() => setSize(size === 'large' ? 'normal' : 'large')}
+          >
+            {size === 'large' ? <ShrinkIcon size={18} /> : <ExpandIcon size={18} />}
+          </button>
+        )}
+        <button
+          type="button"
+          className="call-view-button"
+          aria-label={full ? 'Exit full screen' : 'Full screen'}
+          title={full ? 'Exit full screen (Esc)' : 'Full screen'}
+          onClick={toggleFull}
+        >
+          {full ? <ExitFullscreenIcon size={18} /> : <FullscreenIcon size={18} />}
+        </button>
+      </div>
+
       <div className="call-title">
         <span className="call-dot" aria-hidden="true" />
         <h2>{title.text}</h2>
@@ -499,12 +633,20 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       )}
 
       {/* With a shared screen, everyone's tiles sit in a column beside it. */}
-      <div className={screen ? 'call-media call-media--screen' : 'call-media'}>
+      <div
+        className={screen ? 'call-media call-media--screen' : 'call-media'}
+        style={{ '--stage-h': stageHeight(view) } as React.CSSProperties}
+        onDoubleClick={(e) => {
+          // Double-click the video to go full screen (or back), like most video players.
+          if ((e.target as HTMLElement).closest('button')) return
+          toggleFull()
+        }}
+      >
         {screen && (
           <div className="call-stage" ref={stageRef}>
             <TrackVideo track={screen} fit="contain" />
             <span className="call-tag">{screenLabel}</span>
-            {sharedByOther && (
+            {sharedByOther && !full && (
               <button
                 type="button"
                 className="call-stage-full"
@@ -767,4 +909,231 @@ export function CallStrip({
   }
 
   return null
+}
+
+const FLOAT_POS_KEY = 'glofly.callFloat.pos'
+
+function loadFloatPos(): { x: number; y: number } | null {
+  try {
+    const raw = localStorage.getItem(FLOAT_POS_KEY)
+    if (!raw) return null
+    const p = JSON.parse(raw) as { x?: unknown; y?: unknown }
+    return typeof p.x === 'number' && typeof p.y === 'number' ? { x: p.x, y: p.y } : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * While you're in a call but looking at another chat: a small floating video you can drag
+ * anywhere in the window. Shows a shared screen first, then whoever's talking, then anyone with
+ * their camera on (or their photo). Click it to go back to the call; mute, camera and hang up
+ * are on it; × hides it until the next call (the sidebar strip stays).
+ */
+export function CallFloat({
+  openChatId,
+  onOpenChat
+}: {
+  openChatId: string | null
+  onOpenChat: (conversationId: string) => void
+}): React.JSX.Element | null {
+  const calls = useCalls()
+  const { current, room } = calls
+  const [hiddenFor, setHiddenFor] = useState<string | null>(null)
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(loadFloatPos)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const drag = useRef<{
+    dx: number
+    dy: number
+    startX: number
+    startY: number
+    moved: boolean
+  } | null>(null)
+
+  // Keep it inside the window when the window gets smaller.
+  useEffect(() => {
+    const onResize = (): void => {
+      setPos((p) => {
+        const el = boxRef.current
+        if (!p || !el) return p
+        return {
+          x: Math.min(Math.max(8, p.x), window.innerWidth - el.offsetWidth - 8),
+          y: Math.min(Math.max(8, p.y), window.innerHeight - el.offsetHeight - 8)
+        }
+      })
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  if (!current || current.conversationId === openChatId) return null
+  const callKey = current.call?.id ?? current.conversationId
+  if (hiddenFor === callKey) return null
+
+  const local = room?.localParticipant
+  const micOn = local?.isMicrophoneEnabled ?? true
+  const cameraOn = local?.isCameraEnabled ?? false
+  const ready = !!room && room.state === 'connected'
+  const remotes = [...(room?.remoteParticipants.values() ?? [])]
+  const personOf = (id: string): PublicUser | undefined =>
+    current.chat.people.find((p) => p.id === id)
+
+  // What to show, most interesting first.
+  let video: VideoTrack | null = null
+  let fit: 'cover' | 'contain' = 'cover'
+  let label = ''
+  let who: PublicUser | undefined
+  for (const p of remotes) {
+    const track = videoOf(p, Track.Source.ScreenShare)
+    if (track) {
+      video = track
+      fit = 'contain'
+      const person = personOf(p.identity)
+      label = person ? `${firstName(person)}'s screen` : 'Shared screen'
+      break
+    }
+  }
+  if (!video) {
+    const withCamera = remotes.filter((p) => videoOf(p, Track.Source.Camera))
+    const pick = withCamera.find((p) => p.isSpeaking) ?? withCamera[0]
+    if (pick) {
+      video = videoOf(pick, Track.Source.Camera)
+      who = personOf(pick.identity)
+      label = who ? firstName(who) : ''
+    }
+  }
+  if (!video) {
+    const talking = remotes.find((p) => p.isSpeaking) ?? remotes[0]
+    who = (talking && personOf(talking.identity)) ?? current.chat.people[0]
+    label = who ? firstName(who) : ''
+  }
+
+  const status =
+    current.phase === 'connected' && current.call?.answeredAt ? (
+      <CallTimer since={current.call.answeredAt} />
+    ) : current.phase === 'reconnecting' ? (
+      'Reconnecting…'
+    ) : current.phase === 'connecting' ? (
+      'Connecting…'
+    ) : (
+      'Ringing…'
+    )
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button')) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    drag.current = {
+      dx: e.clientX - rect.left,
+      dy: e.clientY - rect.top,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false
+    }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const d = drag.current
+    if (!d) return
+    if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 5) return
+    d.moved = true
+    const el = e.currentTarget
+    setPos({
+      x: Math.min(Math.max(8, e.clientX - d.dx), window.innerWidth - el.offsetWidth - 8),
+      y: Math.min(Math.max(8, e.clientY - d.dy), window.innerHeight - el.offsetHeight - 8)
+    })
+  }
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const d = drag.current
+    drag.current = null
+    if (!d) return
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    if (!d.moved) {
+      onOpenChat(current.conversationId) // a click, not a drag: back to the call
+      return
+    }
+    setPos((p) => {
+      try {
+        if (p) localStorage.setItem(FLOAT_POS_KEY, JSON.stringify(p))
+      } catch {
+        // not saved; it still stays put until Glofly closes
+      }
+      return p
+    })
+  }
+
+  return (
+    <div
+      ref={boxRef}
+      className="call-float"
+      role="region"
+      aria-label={`Your call with ${current.chat.title}`}
+      title="Drag to move · click to go back to the call"
+      style={pos ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : undefined}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => (drag.current = null)}
+    >
+      <div className="call-float-video">
+        {video ? (
+          <TrackVideo track={video} fit={fit} />
+        ) : (
+          who && (
+            <Avatar
+              id={who.id}
+              name={who.displayName}
+              avatarVersion={who.avatarVersion}
+              size={64}
+            />
+          )
+        )}
+        {label && <span className="call-tag">{label}</span>}
+        <button
+          type="button"
+          className="call-float-hide"
+          aria-label="Hide the floating video"
+          title="Hide (the call keeps going)"
+          onClick={() => setHiddenFor(callKey)}
+        >
+          <CloseIcon size={14} />
+        </button>
+      </div>
+      <div className="call-float-bar">
+        <span className="call-dot" aria-hidden="true" />
+        <span className="call-float-text">
+          <strong>{current.chat.title}</strong>
+          <span>{status}</span>
+        </span>
+        <button
+          type="button"
+          className={cameraOn ? 'call-strip-button' : 'call-strip-button call-strip-button--off'}
+          aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+          aria-pressed={cameraOn}
+          disabled={!ready}
+          onClick={calls.toggleCamera}
+        >
+          {cameraOn ? <VideoIcon size={17} /> : <VideoOffIcon size={17} />}
+        </button>
+        <button
+          type="button"
+          className={micOn ? 'call-strip-button' : 'call-strip-button call-strip-button--off'}
+          aria-label={micOn ? 'Mute microphone' : 'Unmute microphone'}
+          aria-pressed={!micOn}
+          disabled={!room}
+          onClick={calls.toggleMic}
+        >
+          {micOn ? <MicIcon size={17} /> : <MicOffIcon size={17} />}
+        </button>
+        <button
+          type="button"
+          className="call-strip-button call-strip-button--hangup"
+          aria-label={current.chat.kind === 'group' ? 'Leave call' : 'Hang up'}
+          onClick={calls.hangUp}
+        >
+          <HangUpIcon size={17} />
+        </button>
+      </div>
+    </div>
+  )
 }

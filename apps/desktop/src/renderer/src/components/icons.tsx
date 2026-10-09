@@ -344,6 +344,32 @@ export function FullscreenIcon(p: IconProps): React.JSX.Element {
   )
 }
 
+export function ExitFullscreenIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+    </Svg>
+  )
+}
+
+/** Make the call bigger (arrows pointing out). */
+export function ExpandIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
+    </Svg>
+  )
+}
+
+/** Make the call smaller (arrows pointing in). */
+export function ShrinkIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7" />
+    </Svg>
+  )
+}
+
 /** The arrow on a call line in the chat ("Chip started a video call"). */
 export function CallLineIcon({ missed = false }: { missed?: boolean }): React.JSX.Element {
   return (
