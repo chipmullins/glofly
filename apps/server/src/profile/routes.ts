@@ -55,7 +55,7 @@ async function peopleWhoSee(userId: string): Promise<string[]> {
 }
 
 /** Tells everyone who shows this person (and their own devices) to refresh their details. */
-async function profileChanged(userId: string): Promise<void> {
+export async function profileChanged(userId: string): Promise<void> {
   for (const id of [userId, ...(await peopleWhoSee(userId))]) {
     emitToUser(id, "profile:changed", { userId });
   }

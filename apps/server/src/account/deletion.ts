@@ -32,6 +32,16 @@ export async function scheduleDeletion(userId: string): Promise<Date> {
   return deleteAfter;
 }
 
+/**
+ * Control → Delete now: removed for good straight away (no 30 days). Signs them out and
+ * hides them first, exactly like scheduling, then removes everything.
+ */
+export async function deleteNow(userId: string): Promise<void> {
+  await scheduleDeletion(userId);
+  await db.update(users).set({ deleteAfter: new Date(Date.now() - 1000) }).where(eq(users.id, userId));
+  await purgeDeletedAccounts(userId);
+}
+
 /** Changed their mind: the account comes back exactly as it was. */
 export async function cancelDeletion(userId: string): Promise<void> {
   await db.update(users).set({ deleteAfter: null }).where(eq(users.id, userId));
@@ -42,11 +52,17 @@ export async function cancelDeletion(userId: string): Promise<void> {
  * Removes accounts whose 30 days are up: their profile, photo, friends, blocks, and their
  * direct-message chats (both sides, with every message and file in them).
  */
-export async function purgeDeletedAccounts(): Promise<void> {
+export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
   const due = await db
     .select({ id: users.id, avatarVersion: users.avatarVersion })
     .from(users)
-    .where(and(isNotNull(users.deleteAfter), lt(users.deleteAfter, new Date())));
+    .where(
+      and(
+        isNotNull(users.deleteAfter),
+        lt(users.deleteAfter, new Date()),
+        onlyUserId ? eq(users.id, onlyUserId) : undefined,
+      ),
+    );
 
   for (const user of due) {
     const friends = await friendIdsOf(user.id);

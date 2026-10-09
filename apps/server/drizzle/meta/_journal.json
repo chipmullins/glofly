@@ -113,6 +113,13 @@
       "when": 1791516457003,
       "tag": "0015_email_features",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791566590546,
+      "tag": "0016_admin_control",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RegisterRequest } from '../../../preload/api-types'
+import type { RegisterRequest, SignupMode } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import wordmarkImg from '../assets/glofly-wordmark.png'
 import { PRIVACY_URL, TERMS_URL } from '../lib/links'
@@ -138,8 +138,22 @@ export default function RegisterScreen({
     status: UsernameStatus
   } | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // Who can sign up (set in Glofly Control): invite only asks for a code; closed says so.
+  const [signupMode, setSignupMode] = useState<SignupMode | null>(null)
+  const [inviteCode, setInviteCode] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
-  const locked = busy || submitting
+  const closed = signupMode === 'closed'
+  const locked = busy || submitting || closed
+
+  useEffect(() => {
+    let live = true
+    window.glofly.auth.signupMode().then((mode) => {
+      if (live) setSignupMode(mode)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
 
   // Live "Available" check: waits until typing pauses, then asks the server.
   const trimmedUsername = username.trim()
@@ -184,6 +198,7 @@ export default function RegisterScreen({
   /** Quick checks before bothering the server. The server checks everything again. */
   function checkLocally(): Record<string, string> {
     const found: Record<string, string> = {}
+    if (signupMode === 'invite' && !inviteCode.trim()) found.inviteCode = 'Enter your invite code.'
     if (!email.trim()) found.email = 'Enter your email address.'
     if (!username.trim()) found.username = 'Choose a username.'
     else if (usernameStatus.state === 'unavailable') found.username = usernameStatus.reason
@@ -196,7 +211,15 @@ export default function RegisterScreen({
   }
 
   function focusFirstError(fields: Record<string, string>): void {
-    const order = ['email', 'username', 'displayName', 'password', 'birthday', 'acceptTerms']
+    const order = [
+      'inviteCode',
+      'email',
+      'username',
+      'displayName',
+      'password',
+      'birthday',
+      'acceptTerms'
+    ]
     const first = order.find((f) => fields[f])
     if (!first) return
     formRef.current?.querySelector<HTMLElement>(`[data-field="${first}"]`)?.focus()
@@ -224,12 +247,17 @@ export default function RegisterScreen({
       displayName: displayName.trim(),
       password,
       birthday,
-      acceptTerms
+      acceptTerms,
+      ...(signupMode === 'invite' ? { inviteCode: inviteCode.trim() } : {})
     })
     setSubmitting(false)
     if (failure) {
       setErrors(failure.fields)
-      setFormMessage(failure.message ?? null)
+      setFormMessage(failure.message ?? failure.fields.form ?? null)
+      // Sign-ups changed while the form was open (e.g. now invite only): ask again.
+      if (failure.fields.inviteCode || failure.fields.form) {
+        window.glofly.auth.signupMode().then((mode) => mode && setSignupMode(mode))
+      }
       focusFirstError(failure.fields)
     }
   }
@@ -332,7 +360,43 @@ export default function RegisterScreen({
             <p>Your people are just a hello away.</p>
           </div>
 
+          {closed && (
+            <div className="login-error" role="status">
+              <span>
+                Glofly isn&apos;t taking new sign-ups right now. Already have an account? Log in
+                below.
+              </span>
+            </div>
+          )}
+
           <div className="fields register-fields">
+            {signupMode === 'invite' && (
+              <div className="field">
+                <label htmlFor="reg-invite">Invite code</label>
+                <input
+                  id="reg-invite"
+                  data-field="inviteCode"
+                  className="text-input"
+                  placeholder="GLOW-XXXX"
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={20}
+                  style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                  value={inviteCode}
+                  aria-invalid={errors.inviteCode ? true : undefined}
+                  aria-describedby="reg-inviteCode-hint"
+                  onChange={(e) => {
+                    setInviteCode(e.target.value)
+                    clearError('inviteCode')
+                  }}
+                />
+                <Hint
+                  id="reg-inviteCode-hint"
+                  error={errors.inviteCode}
+                  helper="Glofly is invite only for now. Ask the person who invited you for a code."
+                />
+              </div>
+            )}
             <div className="field">
               <label htmlFor="reg-email">Email address</label>
               <input

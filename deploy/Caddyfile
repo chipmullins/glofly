@@ -5,6 +5,19 @@
 # The Glofly server: API + real-time connection.
 {$API_DOMAIN} {
 	encode zstd gzip
+
+	# Glofly Control (the admin app) only answers from the admin's own network.
+	# ADMIN_IPS in deploy/.env: addresses or ranges separated by spaces. Unset: nobody.
+	# (The server checks the same list again.)
+	@control_elsewhere {
+		path /admin /admin/*
+		not remote_ip {$ADMIN_IPS:127.0.0.1}
+	}
+	handle @control_elsewhere {
+		header Content-Type application/json
+		respond `{"error":"not_allowed_network","message":"Glofly Control only works from your home network."}` 403
+	}
+
 	reverse_proxy server:4000
 }
 
@@ -12,9 +25,10 @@
 {$SITE_DOMAIN} {
 	encode zstd gzip
 
-	# The pages people open from Glofly's emails (choose a new password, confirm an email)
-	# come from the Glofly server, with its own security headers.
-	@account path /reset /confirm
+	# The pages people open from Glofly's emails (choose a new password, confirm an email,
+	# finish setting up an account made in Glofly Control) come from the Glofly server,
+	# with its own security headers.
+	@account path /reset /confirm /welcome
 	handle @account {
 		reverse_proxy server:4000
 	}

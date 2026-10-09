@@ -1,4 +1,5 @@
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+import { redis } from "../redis";
 
 // Sends Glofly's emails (Forgot password, confirm your email, …).
 //
@@ -75,6 +76,21 @@ export async function sendNow(email: Email): Promise<boolean> {
   } catch (err) {
     const e = err as { name?: string; message?: string };
     console.error(`Email "${email.subject}" couldn't be sent: ${e?.name ?? "Error"} ${e?.message ?? ""}`);
+    countFailure();
     return false;
   }
+}
+
+// Failed sends per day (UTC), for Control's Dashboard ("Email · 0 failed today").
+export const failedKey = (day = new Date()): string => `email:failed:${day.toISOString().slice(0, 10)}`;
+
+function countFailure(): void {
+  if (!redis.isReady) return;
+  const key = failedKey();
+  redis
+    .multi()
+    .incr(key)
+    .expire(key, 8 * 24 * 60 * 60)
+    .exec()
+    .catch(() => {});
 }

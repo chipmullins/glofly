@@ -31,6 +31,7 @@ const glofly: GloflyApi = {
     login: (request: LoginRequest) => ipcRenderer.invoke('auth:login', request),
     register: (request: RegisterRequest) => ipcRenderer.invoke('auth:register', request),
     checkUsername: (username: string) => ipcRenderer.invoke('auth:check-username', username),
+    signupMode: () => ipcRenderer.invoke('auth:signup-mode'),
     restore: () => ipcRenderer.invoke('auth:restore'),
     logout: () => ipcRenderer.invoke('auth:logout'),
     forgotPassword: (identifier: string) => ipcRenderer.invoke('auth:forgot-password', identifier)

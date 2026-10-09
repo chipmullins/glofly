@@ -44,7 +44,7 @@ export const usernameSchema = z
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/;
 
-const displayNameSchema = z
+export const displayNameSchema = z
   .string({ error: "Enter a display name." })
   .trim()
   .min(1, "Enter a display name.")
@@ -80,7 +80,7 @@ function isRealDate(value: string): boolean {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
 
-const birthdaySchema = z
+export const birthdaySchema = z
   .string({ error: "Enter your birthday." })
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter your birthday.")
   .refine(isRealDate, "That date doesn't exist.")
@@ -101,6 +101,8 @@ export const registerSchema = z.object({
     error: "Please agree to the Terms of Service and Privacy Policy.",
   }),
   deviceName: z.string().trim().max(60).optional(),
+  // Needed while sign-ups are invite only (Control → Sign-ups). Checked in the route.
+  inviteCode: z.string().trim().max(20).optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

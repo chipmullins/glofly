@@ -1,5 +1,6 @@
 import type {
   ForgotPasswordResult,
+  SignupMode,
   LoginRequest,
   LoginResult,
   RegisterRequest,
@@ -8,6 +9,7 @@ import type {
   UsernameCheck
 } from '../preload/api-types'
 import { hostname } from 'node:os'
+import { app } from 'electron'
 import { clearToken, loadToken, saveToken } from './session-store'
 
 // Where the Glofly server lives. This PC (localhost) unless apps/desktop/.env.local says
@@ -29,6 +31,9 @@ function serverUrl(setting: string | undefined): string {
     return fallback
   }
 }
+
+/** Sent with every request so Glofly Control can show which app versions are in use. */
+export const VERSION_HEADER = { 'X-Glofly-Version': app.getVersion() }
 
 // Shown in Settings → Account → Where you're signed in, only to you: "Windows · DESKTOP-4KQ2".
 const DEVICE_NAME = deviceName()
@@ -68,7 +73,7 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
   try {
     response = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...VERSION_HEADER },
       body: JSON.stringify({ ...request, deviceName: DEVICE_NAME }),
       signal: AbortSignal.timeout(10_000)
     })
@@ -133,7 +138,7 @@ export async function register(request: RegisterRequest): Promise<RegisterResult
   try {
     response = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...VERSION_HEADER },
       body: JSON.stringify({ ...request, deviceName: DEVICE_NAME }),
       signal: AbortSignal.timeout(10_000)
     })
@@ -163,6 +168,9 @@ export async function register(request: RegisterRequest): Promise<RegisterResult
       message: body?.message ?? 'Too many sign-up attempts. Try again later.'
     }
   }
+  // Sign-ups are closed (Glofly Control → Sign-ups).
+  if (response.status === 403 && body?.message)
+    return { ok: false, fields: {}, message: body.message }
   return {
     ok: false,
     fields: {},
@@ -209,6 +217,20 @@ export async function checkUsername(username: string): Promise<UsernameCheck | n
   }
 }
 
+/** Who can sign up right now: open, invite only (needs a code) or closed. Null if unknown. */
+export async function signupMode(): Promise<SignupMode | null> {
+  try {
+    const response = await fetch(`${API_URL}/auth/signups`, { signal: AbortSignal.timeout(5_000) })
+    if (!response.ok) return null
+    const body = (await response.json()) as { mode?: unknown }
+    return body.mode === 'open' || body.mode === 'invite' || body.mode === 'closed'
+      ? body.mode
+      : null
+  } catch {
+    return null
+  }
+}
+
 /** On launch: signs back in with the saved session, if there is a valid one. */
 export async function restore(): Promise<SignedInUser | null> {
   const token = await loadToken()
@@ -217,7 +239,7 @@ export async function restore(): Promise<SignedInUser | null> {
   let response: Response
   try {
     response = await fetch(`${API_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, ...VERSION_HEADER },
       signal: AbortSignal.timeout(10_000)
     })
   } catch {

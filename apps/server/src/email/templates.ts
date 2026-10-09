@@ -187,3 +187,24 @@ export const passwordChangedNotice = (user: Person): Email =>
       "Not you? Use Forgot password? on Glofly's login screen to choose a new one right away.",
     ],
   });
+
+export const inviteEmail = (
+  invite: { email: string; displayName: string; username: string },
+  inviterName: string,
+  url: string,
+): Email =>
+  render({
+    to: invite.email,
+    subject: `${inviterName} invited you to Glofly`,
+    heading: "You're invited to Glofly",
+    paragraphs: [
+      `Hi ${invite.displayName},`,
+      `${inviterName} set up a Glofly account for you: @${invite.username}. Glofly is an instant messenger for chatting, group chats and calls with friends.`,
+      "Finish setting it up by choosing your own password. It only takes a minute.",
+    ],
+    button: { label: "Finish setting up", url },
+    footnotes: [
+      "This link works for 7 days.",
+      "Weren't expecting this? You can ignore this email. The account stays unused and goes away after 7 days.",
+    ],
+  });

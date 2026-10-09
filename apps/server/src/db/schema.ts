@@ -80,6 +80,11 @@ export const users = pgTable(
     // Until then the account is hidden, and logging in again offers to restore it.
     deleteAfter: timestamp("delete_after", { withTimezone: true }),
 
+    // Suspended in Glofly Control: every device signed out and logging in refused (showing
+    // the reason) until unsuspended. Null = not suspended.
+    suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+    suspendReason: text("suspend_reason"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -114,6 +119,9 @@ export const sessions = pgTable(
 
     // e.g. "Glofly Desktop on Windows", for a future "Where you're signed in" list.
     deviceName: text("device_name"),
+    // The app version this device last reported (X-Glofly-Version), for Control's
+    // "App versions in use". Null = an app from before versions were reported (0.1.7 and older).
+    appVersion: text("app_version"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),
@@ -372,5 +380,143 @@ export const callParticipants = pgTable(
   (t) => [
     primaryKey({ columns: [t.callId, t.userId] }),
     index("call_participants_user_idx").on(t.userId),
+  ],
+);
+
+// ───────────── Glofly Control (admin) ─────────────
+
+export const signupMode = pgEnum("signup_mode", [
+  "open", // anyone with the app can sign up
+  "invite", // sign-up needs an invite code
+  "closed", // no new sign-ups (accounts created in Control still work)
+]);
+
+// Server-wide settings changed in Control. One row per setting.
+export const serverSettings = pgTable("server_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Codes typed on the sign-up screen while sign-ups are invite only.
+export const inviteCodes = pgTable(
+  "invite_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // e.g. GLOW-7K2M. Matched case-insensitively (stored upper case).
+    code: text("code").notNull().unique(),
+    // Who it's for, e.g. "Friday group".
+    label: text("label").notNull(),
+    maxUses: integer("max_uses").notNull(),
+    uses: integer("uses").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    // Turned off in Control: stops working at once.
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+// Who signed up with which code.
+export const inviteCodeUses = pgTable(
+  "invite_code_uses",
+  {
+    codeId: uuid("code_id")
+      .notNull()
+      .references(() => inviteCodes.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    usedAt: timestamp("used_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.codeId, t.userId] }), index("invite_code_uses_user_idx").on(t.userId)],
+);
+
+// "Create an account for someone": the admin picks the email, username and display name;
+// the person finishes on glofly.app/welcome (their own password, birthday, Terms). The
+// account itself (a users row) is only made then. Until then, the username and email are
+// held for them while the invite is pending.
+export const accountInvites = pgTable(
+  "account_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    username: text("username").notNull(),
+    displayName: text("display_name").notNull(),
+    // SHA-256 of the link's token; a resend replaces it (the old link stops working).
+    tokenHash: text("token_hash").notNull().unique(),
+    invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
+    // Make the inviter and the new account friends when they finish.
+    addFriend: boolean("add_friend").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    acceptedUserId: uuid("accepted_user_id").references(() => users.id, { onDelete: "set null" }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("account_invites_username_idx").on(sql`lower(${t.username})`),
+    index("account_invites_email_idx").on(sql`lower(${t.email})`),
+  ],
+);
+
+// Who can use Control: a Glofly account plus separate admin credentials (its own password
+// and an authenticator app). Made with the admin:setup script on the server, never by the API.
+export const admins = pgTable("admins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  // Argon2id, like account passwords, but a different password from their Glofly one.
+  passwordHash: text("password_hash").notNull(),
+  // The authenticator secret, encrypted with ADMIN_KEY (AES-256-GCM).
+  totpSecret: text("totp_secret").notNull(),
+  // The last 30-second step a code was accepted for, so the same code can't be used twice.
+  lastTotpStep: integer("last_totp_step").notNull().default(0),
+  // SHA-256 of each unused backup code (one use each).
+  backupCodes: jsonb("backup_codes").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Signed-in Control windows. Short-lived and tied to the network they signed in from.
+export const adminSessions = pgTable(
+  "admin_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    adminId: uuid("admin_id")
+      .notNull()
+      .references(() => admins.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    ip: text("ip").notNull(),
+    deviceName: text("device_name"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+);
+
+// Everything done in Control. Rows can only be added: the database refuses to change or
+// delete them (a trigger in migration 0016). Accounts are referenced by id without a
+// foreign key, so entries stay after an account is removed; target_label keeps the name.
+export const adminAuditLog = pgTable(
+  "admin_audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Null for things that happened on their own (e.g. someone finishing their invite).
+    adminId: uuid("admin_id"),
+    action: text("action").notNull(),
+    targetUserId: uuid("target_user_id"),
+    // What it was about, as it read then: "@maya.p", "GLOW-7K2M", "Open → Invite only".
+    targetLabel: text("target_label"),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    // The admin's reason, required for every action.
+    note: text("note").notNull().default(""),
+    ip: text("ip"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("admin_audit_created_idx").on(t.createdAt),
+    index("admin_audit_target_idx").on(t.targetUserId),
   ],
 );

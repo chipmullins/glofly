@@ -6,7 +6,16 @@ import { users } from "../db/schema";
 import { hashPassword, verifyPassword } from "./passwords";
 import { cancelDeletion } from "../account/deletion";
 import { requestPasswordReset, sendVerification } from "../account/email";
-import { bearerToken, createSession, deleteSession, requireAuth } from "./sessions";
+import { appVersionFrom, bearerToken, createSession, deleteSession, requireAuth } from "./sessions";
+import {
+  claimInviteCode,
+  emailHeldByInvite,
+  getSignupMode,
+  looksLikeInviteCode,
+  normalizeInviteCode,
+  recordInviteUse,
+  usernameHeldByInvite,
+} from "../admin/signups";
 import { fieldErrors, forgotPasswordSchema, loginSchema, registerSchema, usernameSchema } from "./validation";
 
 export const authRouter = Router();
@@ -73,8 +82,18 @@ authRouter.get("/username-available", usernameCheckLimiter, async (req, res) => 
     .where(eq(lower(users.username), parsed.data.toLowerCase()))
     .limit(1);
 
-  res.json(existing.length ? { available: false, reason: TAKEN.username } : { available: true });
+  const taken = existing.length > 0 || (await usernameHeldByInvite(parsed.data));
+  res.json(taken ? { available: false, reason: TAKEN.username } : { available: true });
 });
+
+// GET /auth/signups — who can sign up right now (Control → Sign-ups), so the register
+// screen can ask for an invite code, or say sign-ups are closed, before anyone fills it in.
+authRouter.get("/signups", usernameCheckLimiter, async (_req, res) => {
+  res.json({ mode: await getSignupMode() });
+});
+
+const SIGNUPS_CLOSED = "Glofly isn't taking new sign-ups right now.";
+const BAD_INVITE_CODE = "That invite code doesn't work. Check it, or ask for a new one.";
 
 // POST /auth/register
 // Body: { email, username, displayName, password, birthday: "YYYY-MM-DD", acceptTerms: true, deviceName? }
@@ -86,6 +105,18 @@ authRouter.post("/register", registerLimiter, async (req, res) => {
     return;
   }
   const input = parsed.data;
+
+  const mode = await getSignupMode();
+  if (mode === "closed") {
+    res.status(403).json({ error: "signups_closed", message: SIGNUPS_CLOSED, fields: { form: SIGNUPS_CLOSED } });
+    return;
+  }
+  const inviteCode = mode === "invite" ? normalizeInviteCode(input.inviteCode ?? "") : null;
+  if (inviteCode !== null && !looksLikeInviteCode(inviteCode)) {
+    const message = input.inviteCode ? BAD_INVITE_CODE : "Enter your invite code.";
+    res.status(400).json({ error: "invalid", fields: { inviteCode: message } });
+    return;
+  }
 
   // Check both at once so the screen can show every problem together.
   const clashes = await db
@@ -102,6 +133,9 @@ authRouter.post("/register", registerLimiter, async (req, res) => {
     if (row.username.toLowerCase() === input.username.toLowerCase()) fields.username = TAKEN.username;
     if (row.email.toLowerCase() === input.email.toLowerCase()) fields.email = TAKEN.email;
   }
+  // Usernames and emails held for someone who was invited (Control → Create account).
+  if (!fields.username && (await usernameHeldByInvite(input.username))) fields.username = TAKEN.username;
+  if (!fields.email && (await emailHeldByInvite(input.email))) fields.email = TAKEN.email;
   if (Object.keys(fields).length) {
     res.status(409).json({ error: "taken", fields });
     return;
@@ -110,26 +144,42 @@ authRouter.post("/register", registerLimiter, async (req, res) => {
   const passwordHash = await hashPassword(input.password);
 
   try {
-    const [user] = await db
-      .insert(users)
-      .values({
-        email: input.email,
-        username: input.username,
-        displayName: input.displayName,
-        passwordHash,
-        birthday: input.birthday,
-        termsAcceptedAt: new Date(),
-      })
-      .returning({
-        id: users.id,
-        username: users.username,
-        displayName: users.displayName,
-        avatarVersion: users.avatarVersion,
-      });
+    // The invite code (if needed) and the account are made together: a used-up code makes no account.
+    const user = await db.transaction(async (tx) => {
+      const codeId = inviteCode ? await claimInviteCode(tx, inviteCode) : null;
+      if (inviteCode && !codeId) return null;
+      const [created] = await tx
+        .insert(users)
+        .values({
+          email: input.email,
+          username: input.username,
+          displayName: input.displayName,
+          passwordHash,
+          birthday: input.birthday,
+          termsAcceptedAt: new Date(),
+        })
+        .returning({
+          id: users.id,
+          username: users.username,
+          displayName: users.displayName,
+          avatarVersion: users.avatarVersion,
+        });
+      if (codeId) await recordInviteUse(tx, codeId, created.id);
+      return created;
+    });
+    if (!user) {
+      res.status(400).json({ error: "invalid", fields: { inviteCode: BAD_INVITE_CODE } });
+      return;
+    }
 
     // Sign the new account straight in on this device ("Keep me signed in" on, like most
     // desktop messengers). They can log out from the settings menu.
-    const session = await createSession(user.id, true, input.deviceName ?? null);
+    const session = await createSession(
+      user.id,
+      true,
+      input.deviceName ?? null,
+      appVersionFrom(req.headers["x-glofly-version"]),
+    );
     // "Confirm your email": sent in the background so signing up stays quick.
     sendVerification(user.id).catch((err) => console.error("Couldn't send the confirm email", err));
     res.status(201).json({
@@ -174,6 +224,8 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
       avatarVersion: users.avatarVersion,
       passwordHash: users.passwordHash,
       deleteAfter: users.deleteAfter,
+      suspendedAt: users.suspendedAt,
+      suspendReason: users.suspendReason,
     })
     .from(users)
     .where(eq(lower(column), identifier.toLowerCase()))
@@ -191,6 +243,19 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     return;
   }
 
+  // Suspended in Control: only the right password gets this far, so it's safe to say why.
+  // 401 so older app versions show this message too (they show the message of any 401).
+  if (user.suspendedAt) {
+    res.status(401).json({
+      error: "suspended",
+      message: user.suspendReason
+        ? `Your Glofly account is suspended: ${user.suspendReason}`
+        : "Your Glofly account is suspended.",
+      reason: user.suspendReason,
+    });
+    return;
+  }
+
   // Set to be deleted: only the right password gets this far, so it's safe to say so.
   if (user.deleteAfter) {
     if (!restore) {
@@ -204,7 +269,12 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     await cancelDeletion(user.id);
   }
 
-  const session = await createSession(user.id, keepSignedIn, deviceName ?? null);
+  const session = await createSession(
+    user.id,
+    keepSignedIn,
+    deviceName ?? null,
+    appVersionFrom(req.headers["x-glofly-version"]),
+  );
   res.json({
     token: session.token,
     expiresAt: session.expiresAt.toISOString(),

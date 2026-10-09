@@ -215,3 +215,45 @@ export async function confirmEmail(link: EmailToken): Promise<ConfirmResult> {
   announceAccount(user.id);
   return { ok: true, kind: "changed", email: link.email };
 }
+
+// ───────────── Glofly Control ─────────────
+
+/** Control → Send password reset. Waits for Amazon, so Control can say if it didn't go out. */
+export async function adminSendPasswordReset(userId: string): Promise<"sent" | "send_failed" | "not_found"> {
+  const user = await person(userId);
+  if (!user) return "not_found";
+  const token = await issueToken(user.id, "reset_password", user.email);
+  if (await sendNow(resetPasswordEmail(user, linkFor("reset", token)))) return "sent";
+  await discardToken(token);
+  return "send_failed";
+}
+
+/** Control → Resend confirm email (no hourly limit: the admin decides). */
+export async function adminResendVerification(userId: string): Promise<"sent" | "already_verified" | "send_failed"> {
+  const user = await person(userId);
+  if (!user || user.emailVerifiedAt) return "already_verified";
+  return (await sendVerification(userId, true)) ? "sent" : "send_failed";
+}
+
+/**
+ * Control → Change email: switches it straight away (no confirm step: the admin checked it
+ * with them). The new address isn't confirmed yet, so a confirm link goes to it; the old
+ * address gets "Your email was changed". Links sent to the old address stop working.
+ */
+export async function adminChangeEmail(userId: string, newEmail: string): Promise<"changed" | "same" | "taken" | "not_found"> {
+  const user = await person(userId);
+  if (!user) return "not_found";
+  if (user.email.toLowerCase() === newEmail.toLowerCase()) return "same";
+  if (await emailInUse(newEmail, userId)) return "taken";
+  try {
+    await db.update(users).set({ email: newEmail, emailVerifiedAt: null }).where(eq(users.id, userId));
+  } catch (err) {
+    if (isEmailClash(err)) return "taken";
+    throw err;
+  }
+  await cancelTokens(userId, ["verify_email", "change_email", "reset_password"]);
+  sendInBackground(emailChangedNotice(user, user.email, newEmail));
+  await sendVerification(userId);
+  announceAccount(userId);
+  return "changed";
+}

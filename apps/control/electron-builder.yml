@@ -1,0 +1,34 @@
+# Packaging Glofly Control (npm run build:win -w apps/control → dist/Glofly-Control-<version>-setup.exe).
+# Only Chip installs this. It is NOT part of Glofly releases or auto-updates, and never goes
+# to the glofly-updates bucket.
+appId: com.glofly.control # must match setAppUserModelId in src/main/index.ts
+productName: Glofly Control
+copyright: Copyright © 2026 Glofly
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,README.md}'
+  - '!{.env,.env.*,.npmrc}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asarUnpack:
+  - resources/**
+win:
+  executableName: GloflyControl
+  icon: build/icon.ico
+nsis:
+  oneClick: true
+  perMachine: false
+  artifactName: Glofly-Control-${version}-setup.${ext}
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  shortcutName: Glofly Control
+  uninstallDisplayName: Glofly Control
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  runAfterFinish: true
+npmRebuild: false
+# No auto-updates: rebuild and reinstall when Control changes.
+publish: null

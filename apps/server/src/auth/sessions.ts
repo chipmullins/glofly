@@ -13,7 +13,17 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function createSession(userId: string, persistent: boolean, deviceName: string | null) {
+/** "0.1.8" from the app's X-Glofly-Version header, or null (older apps don't send it). */
+export function appVersionFrom(header: unknown): string | null {
+  return typeof header === "string" && /^\d{1,3}\.\d{1,3}\.\d{1,4}$/.test(header) ? header : null;
+}
+
+export async function createSession(
+  userId: string,
+  persistent: boolean,
+  deviceName: string | null,
+  appVersion: string | null = null,
+) {
   // 32 random bytes: far too many possibilities to ever guess.
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + (persistent ? PERSISTENT_LIFETIME : SHORT_LIFETIME));
@@ -23,6 +33,7 @@ export async function createSession(userId: string, persistent: boolean, deviceN
     tokenHash: hashToken(token),
     persistent,
     deviceName,
+    appVersion,
     expiresAt,
   });
 
@@ -85,6 +96,11 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   if (!found) {
     res.status(401).json({ error: "unauthorized" });
     return;
+  }
+  // Which app version this device runs (Control → App versions in use).
+  const version = appVersionFrom(req.headers["x-glofly-version"]);
+  if (version && version !== found.session.appVersion) {
+    await db.update(sessions).set({ appVersion: version }).where(eq(sessions.id, found.session.id));
   }
   res.locals.user = found.user;
   res.locals.sessionToken = token;

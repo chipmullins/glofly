@@ -37,7 +37,12 @@ export type RegisterRequest = {
   /** YYYY-MM-DD */
   birthday: string
   acceptTerms: boolean
+  /** Needed while sign-ups are invite only. */
+  inviteCode?: string
 }
+
+/** Who can sign up right now (set in Glofly Control). */
+export type SignupMode = 'open' | 'invite' | 'closed'
 
 /** On failure, `fields` holds a message per field (email, username, password, ...). */
 export type RegisterResult =
@@ -446,6 +451,8 @@ export type GloflyApi = {
     register: (request: RegisterRequest) => Promise<RegisterResult>
     /** Live "Available" check. Null if the server can't be reached. */
     checkUsername: (username: string) => Promise<UsernameCheck | null>
+    /** Open, invite only or closed (Glofly Control → Sign-ups). Null if the server can't be reached. */
+    signupMode: () => Promise<SignupMode | null>
     /** Signs back in with a saved "Keep me signed in" session. Null if there isn't a valid one. */
     restore: () => Promise<SignedInUser | null>
     logout: () => Promise<void>

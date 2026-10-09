@@ -1,5 +1,5 @@
 import type { ApiError, ApiResult } from '../preload/api-types'
-import { API_URL, endSessionLocally, getSessionToken } from './auth'
+import { API_URL, endSessionLocally, getSessionToken, VERSION_HEADER } from './auth'
 import { disconnectRealtime } from './realtime'
 
 /** Calls the server as the signed-in user and turns the answer into an ApiResult. */
@@ -19,6 +19,7 @@ export async function request<T>(
       method,
       headers: {
         Authorization: `Bearer ${token}`,
+        ...VERSION_HEADER,
         ...(file ? { 'Content-Type': file.type } : {}),
         ...(body !== undefined && !file ? { 'Content-Type': 'application/json' } : {})
       },

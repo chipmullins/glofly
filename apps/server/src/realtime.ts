@@ -205,3 +205,15 @@ export async function connectedSessionIds(userId: string): Promise<Set<string>> 
   }
   return ids;
 }
+
+/** Everyone with the app open right now: how many devices, and which people (Control's Dashboard). */
+export async function connectedSummary(): Promise<{ devices: number; userIds: Set<string> }> {
+  const userIds = new Set<string>();
+  if (!io) return { devices: 0, userIds };
+  const sockets = await io.fetchSockets();
+  for (const socket of sockets) {
+    const id = (socket.data.user as { id?: string } | undefined)?.id;
+    if (id) userIds.add(id);
+  }
+  return { devices: sockets.length, userIds };
+}

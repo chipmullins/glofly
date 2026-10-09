@@ -9,6 +9,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/desktop/package.json apps/desktop/
+COPY apps/control/package.json apps/control/
 RUN npm ci -w @glofly/server --ignore-scripts --no-audit --no-fund
 COPY apps/server/ apps/server/
 RUN npm run build -w @glofly/server
@@ -20,6 +21,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/desktop/package.json apps/desktop/
+COPY apps/control/package.json apps/control/
 RUN npm ci -w @glofly/server --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
 
 # Amazon's certificate list, so the encrypted connection to RDS is verified (see src/db/index.ts).

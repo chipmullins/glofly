@@ -19,6 +19,7 @@ import { storageKind } from "./storage";
 import { webRouter } from "./web/pages";
 import { emailKind } from "./email/send";
 import { sweepEmailTokens } from "./email/tokens";
+import { controlRouter } from "./admin";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -49,6 +50,8 @@ app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
 app.use("/conversations", conversationsRouter);
 app.use("/calls", callsRouter);
+// Glofly Control (admin app): only from the admin's network, separate sign-in with a code.
+app.use("/admin", controlRouter);
 // Pages opened from emails (glofly.app/reset, /confirm). Plain HTML, not JSON.
 app.use(webRouter);
 

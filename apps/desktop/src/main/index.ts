@@ -21,7 +21,8 @@ import {
   login,
   logout,
   register,
-  restore
+  restore,
+  signupMode
 } from './auth'
 import {
   deleteMessage,
@@ -308,7 +309,8 @@ function isRegisterRequest(value: unknown): value is RegisterRequest {
     shortText(v.displayName, 64) &&
     shortText(v.password, 128) &&
     shortText(v.birthday, 10) &&
-    typeof v.acceptTerms === 'boolean'
+    typeof v.acceptTerms === 'boolean' &&
+    (v.inviteCode === undefined || shortText(v.inviteCode, 20))
   )
 }
 
@@ -341,6 +343,11 @@ function registerIpcHandlers(): void {
       return { ok: false, fields: {}, message: 'Check your details.' }
     }
     return thenGoLive(register(request))
+  })
+
+  ipcMain.handle('auth:signup-mode', (event) => {
+    if (!fromApp(event)) return null
+    return signupMode()
   })
 
   ipcMain.handle('auth:check-username', (event, username: unknown) => {
