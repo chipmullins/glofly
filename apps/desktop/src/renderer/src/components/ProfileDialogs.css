@@ -373,25 +373,45 @@
   overflow: hidden;
   cursor: pointer;
 }
-.photo-button-label {
+.photo-wrap {
+  position: relative;
+}
+/* A soft darkening on hover, so the photo reads as clickable. */
+.photo-button.avatar::after {
+  content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 52px;
-  background: rgba(28, 18, 16, 0.72);
-  color: #ffffff;
-  font-family: var(--glo-font-body);
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(var(--glo-shadow-rgb), 0);
+  transition: background 0.15s;
+}
+.photo-button.avatar:hover::after {
+  background: rgba(var(--glo-shadow-rgb), 0.12);
+}
+/* The small "Edit" pill on the photo's lower edge. */
+.photo-edit {
+  position: absolute;
+  right: 4px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--glo-line);
+  border-radius: 999px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  box-shadow: 0 4px 12px rgba(var(--glo-shadow-rgb), 0.16);
+  cursor: pointer;
 }
-.photo-button:hover .photo-button-label,
-.photo-button:focus-visible .photo-button-label {
-  background: rgba(28, 18, 16, 0.85);
+.photo-edit:hover,
+.photo-wrap:hover .photo-edit {
+  border-color: var(--glo-accent);
+  color: var(--glo-link);
 }
 .photo-button:focus-visible {
   outline: none;

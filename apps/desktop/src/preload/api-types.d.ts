@@ -382,6 +382,9 @@ export type AppSettings = {
   startupAvailable: boolean
 }
 
+/** Search results, newest first. `people`: everyone they mention. */
+export type MessageSearchPage = { results: Message[]; hasMore: boolean; people: PublicUser[] }
+
 /** `people`: everyone the messages mention, including people who've left a group. */
 export type MessagePage = { messages: Message[]; hasMore: boolean; people: PublicUser[] }
 
@@ -486,6 +489,12 @@ export type GloflyApi = {
     removeMember: (conversationId: string, userId: string) => Promise<ApiResult<null>>
     /** Newest page, or the page before `beforeMessageId`. Oldest first. */
     messages: (conversationId: string, beforeMessageId?: string) => Promise<ApiResult<MessagePage>>
+    /** Messages containing these words (2+ characters), in one chat or all of them. */
+    search: (
+      query: string,
+      conversationId?: string,
+      beforeMessageId?: string
+    ) => Promise<ApiResult<MessageSearchPage>>
     /** `body` can be empty when sending photos or files. */
     send: (
       conversationId: string,

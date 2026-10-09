@@ -38,6 +38,7 @@ const file = (): string => join(app.getPath('userData'), 'games.json')
 
 /** Control characters, zero-width characters and direction overrides (the right-to-left trick). */
 const HIDDEN_CHARACTERS = new RegExp(
+  // eslint-disable-next-line no-control-regex -- removing control characters is the point
   '[\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u2069\\ufeff]',
   'g'
 )

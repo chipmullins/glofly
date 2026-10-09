@@ -16,7 +16,15 @@ import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
 import { MessageAttachments, PhotoViewer, UploadTray, type Upload } from './Attachments'
 import { attachmentSummary } from '../lib/attachments'
-import { CallLineIcon, FileIcon, GroupIcon, PhoneIcon, ProfileIcon, VideoIcon } from './icons'
+import {
+  CallLineIcon,
+  FileIcon,
+  GroupIcon,
+  PhoneIcon,
+  ProfileIcon,
+  SearchIcon,
+  VideoIcon
+} from './icons'
 import CallPanel, { JoinCallBar } from './CallPanel'
 import { useCalls } from '../calls/callState'
 import MessageItem, { type ShownMessage } from './MessageItem'
@@ -40,6 +48,10 @@ type ChatViewProps = {
   /** Pins or unpins this chat in the sidebar */
   onTogglePin: () => void
   onSessionExpired: () => void
+  /** Opens message search for this chat (header button, Ctrl+F) */
+  onSearch: () => void
+  /** A message to scroll to and highlight (from search); nonce makes the same one jump again */
+  jumpRequest: { messageId: string; nonce: number } | null
 }
 
 /** A message still on its way, or one that didn't send. */
@@ -151,7 +163,9 @@ export default function ChatView({
   onViewProfile,
   onGroupSettings,
   onTogglePin,
-  onSessionExpired
+  onSessionExpired,
+  onSearch,
+  jumpRequest
 }: ChatViewProps): React.JSX.Element {
   const partner = conversation.partner
   const isGroup = conversation.kind === 'group'
@@ -581,6 +595,62 @@ export default function ChatView({
     setTimeout(() => setHighlightId((id) => (id === messageId ? null : id)), 1600)
   }
 
+  // Jumping to a search result: load older messages until it's here (up to ~2,000 back),
+  // then scroll to it and highlight it.
+  const messagesRef = useRef(messages)
+  const hasMoreRef = useRef(hasMore)
+  useEffect(() => {
+    messagesRef.current = messages
+    hasMoreRef.current = hasMore
+  }, [messages, hasMore])
+  const revealing = useRef(0)
+  useEffect(() => {
+    if (!jumpRequest || loading) return
+    const attempt = ++revealing.current
+    const id = jumpRequest.messageId
+    const nextFrame = (): Promise<void> =>
+      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+    void (async () => {
+      for (let page = 0; page < 40; page++) {
+        if (attempt !== revealing.current) return // another jump started
+        const el = listRef.current?.querySelector(`[data-message-id="${id}"]`)
+        if (el) {
+          stickToBottom.current = false
+          el.scrollIntoView({ behavior: page === 0 ? 'smooth' : 'auto', block: 'center' })
+          setHighlightId(id)
+          setTimeout(() => setHighlightId((h) => (h === id ? null : h)), 2400)
+          return
+        }
+        const oldest = messagesRef.current[0]
+        if (!hasMoreRef.current || !oldest) break
+        const result = await window.glofly.conversations.messages(conversation.id, oldest.id)
+        if (!result.ok) break
+        setMessages((list) => [
+          ...result.data.messages.filter((m) => !list.some((x) => x.id === m.id)),
+          ...list
+        ])
+        setHasMore(result.data.hasMore)
+        rememberPeople(result.data.people)
+        await nextFrame()
+      }
+      if (attempt === revealing.current)
+        setNotice("Couldn't find that message. It may have been deleted.")
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per jump request
+  }, [jumpRequest, loading])
+
+  // Ctrl+F searches this chat.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        onSearch()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onSearch])
+
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
     // Enter sends; Shift+Enter adds a new line.
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -816,6 +886,15 @@ export default function ChatView({
               </button>
             </>
           }
+          <button
+            type="button"
+            className="chat-header-button"
+            aria-label="Search this chat"
+            title="Search messages (Ctrl+F)"
+            onClick={onSearch}
+          >
+            <SearchIcon size={19} />
+          </button>
           <button
             type="button"
             className={

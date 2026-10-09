@@ -1,6 +1,6 @@
 import express, { Router, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
-import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { alias } from "drizzle-orm/pg-core";
@@ -49,6 +49,15 @@ const sendLimiter = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "too_many_requests", message: "You're sending messages very fast. Take a breath and try again." },
+});
+
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  keyGenerator: (_req, res) => me(res).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "That's a lot of searching. Try again in a minute." },
 });
 
 const idParam = z.uuid();
@@ -783,6 +792,68 @@ conversationsRouter.delete("/:id/members/:userId", groupLimiter, async (req, res
 });
 
 // GET /conversations/:id/messages?before=<messageId>&limit=50 — history, oldest first.
+// GET /conversations/messages/search?q=&chat=&before= — find messages containing these words,
+// newest first, 25 at a time. Only chats you're in now; never deleted messages or event lines.
+// chat: one chat only. before: the last result you have (for "Show more").
+conversationsRouter.get("/messages/search", searchLimiter, async (req, res) => {
+  const myId = me(res).id;
+  const q = z.string().trim().min(2).max(100).safeParse(req.query.q);
+  if (!q.success) {
+    res.status(400).json({ error: "invalid", message: "Type at least 2 characters to search." });
+    return;
+  }
+  const chat = req.query.chat === undefined ? null : idParam.safeParse(req.query.chat);
+  if (chat && !chat.success) {
+    res.status(400).json({ error: "invalid" });
+    return;
+  }
+  if (chat && (await access(chat.data, myId)) === null) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const before = idParam.safeParse(req.query.before);
+  const PAGE = 25;
+
+  // Words are matched as typed, anywhere in the message, ignoring case. % and _ match literally.
+  const pattern = `%${q.data.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const myChats = db
+    .select({ id: conversationMembers.conversationId })
+    .from(conversationMembers)
+    .where(eq(conversationMembers.userId, myId));
+
+  let olderThan = undefined;
+  if (before.success) {
+    const [anchor] = await db
+      .select({ createdAt: messages.createdAt })
+      .from(messages)
+      .where(eq(messages.id, before.data));
+    if (anchor) {
+      olderThan = or(
+        lt(messages.createdAt, anchor.createdAt),
+        and(eq(messages.createdAt, anchor.createdAt), lt(messages.id, before.data)),
+      );
+    }
+  }
+
+  const rows = await db
+    .select(messageFields)
+    .from(messages)
+    .where(
+      and(
+        chat ? eq(messages.conversationId, chat.data) : inArray(messages.conversationId, myChats),
+        isNull(messages.deletedAt),
+        isNull(messages.event),
+        ilike(messages.body, pattern),
+        olderThan,
+      ),
+    )
+    .orderBy(desc(messages.createdAt), desc(messages.id))
+    .limit(PAGE + 1);
+
+  const page = rows.slice(0, PAGE);
+  res.json({ results: await hydrate(page), hasMore: rows.length > PAGE, people: await peopleFor(page) });
+});
+
 conversationsRouter.get("/:id/messages", async (req, res) => {
   const id = idParam.safeParse(req.params.id);
   const myId = me(res).id;

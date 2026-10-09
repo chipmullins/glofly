@@ -9,7 +9,7 @@ import { playing, presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
 import EmojiText from './EmojiText'
 import GroupAvatar from './GroupAvatar'
-import { ChatIcon, GroupIcon, LeaveIcon, PlusIcon, ProfileIcon } from './icons'
+import { ChatIcon, GroupIcon, LeaveIcon, PlusIcon, ProfileIcon, SearchIcon } from './icons'
 
 export function PinIcon({ size = 13 }: { size?: number }): React.JSX.Element {
   return (
@@ -49,6 +49,8 @@ type ChatListProps = {
   onLeaveGroup: (conversation: ConversationSummary) => void
   onNewMessage: () => void
   onNewGroup: () => void
+  /** Opens message search across all chats with this text */
+  onSearchMessages: (query: string) => void
 }
 
 /** The sidebar's one-line preview of a chat's latest message. */
@@ -312,7 +314,8 @@ export default function ChatList({
   onGroupSettings,
   onLeaveGroup,
   onNewMessage,
-  onNewGroup
+  onNewGroup,
+  onSearchMessages
 }: ChatListProps): React.JSX.Element {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const typing = useTypingByChat(me.id)
@@ -424,6 +427,19 @@ export default function ChatList({
               )
             })}
           </div>
+        )}
+        {query.trim().length >= 2 && (
+          <button
+            type="button"
+            className="search-messages-row"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onSearchMessages(query.trim())}
+          >
+            <SearchIcon size={17} />
+            <span>
+              Search messages for <strong>“{query.trim()}”</strong>
+            </span>
+          </button>
         )}
       </>
     )

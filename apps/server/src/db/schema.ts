@@ -229,7 +229,11 @@ export const messages = pgTable(
     event: jsonb("event").$type<ChatEvent>(),
   },
   // Loading a chat = newest messages in one conversation, so index exactly that.
-  (t) => [index("messages_conversation_created_idx").on(t.conversationId, t.createdAt, t.id)],
+  // Searching messages = "contains these words": a trigram index keeps that fast.
+  (t) => [
+    index("messages_conversation_created_idx").on(t.conversationId, t.createdAt, t.id),
+    index("messages_body_trgm_idx").using("gin", sql`${t.body} gin_trgm_ops`),
+  ],
 );
 
 // One row per person per emoji per message.

@@ -3,7 +3,8 @@ import type {
   Attachment,
   ConversationSummary,
   Message,
-  MessagePage
+  MessagePage,
+  MessageSearchPage
 } from '../preload/api-types'
 import { request } from './api'
 
@@ -63,6 +64,18 @@ export function loadMessages(
 ): Promise<ApiResult<MessagePage>> {
   const query = beforeMessageId ? `?before=${beforeMessageId}` : ''
   return request<MessagePage>('GET', `/conversations/${conversationId}/messages${query}`)
+}
+
+/** Messages containing these words, newest first (one chat, or all of them). */
+export function searchMessages(
+  query: string,
+  conversationId?: string,
+  beforeMessageId?: string
+): Promise<ApiResult<MessageSearchPage>> {
+  const params = new URLSearchParams({ q: query })
+  if (conversationId) params.set('chat', conversationId)
+  if (beforeMessageId) params.set('before', beforeMessageId)
+  return request<MessageSearchPage>('GET', `/conversations/messages/search?${params}`)
 }
 
 const unwrap = (result: ApiResult<{ message: Message }>): ApiResult<Message> =>

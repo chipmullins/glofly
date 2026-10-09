@@ -27,6 +27,7 @@ import {
   editMessage,
   listConversations,
   loadMessages,
+  searchMessages,
   markRead,
   pinConversation,
   openDm,
@@ -486,6 +487,16 @@ function registerIpcHandlers(): void {
   ipcMain.handle('conversations:messages', (event, id: unknown, before: unknown) =>
     fromApp(event) && isUserId(id) && (before === undefined || isUserId(before))
       ? loadMessages(id, before)
+      : invalid
+  )
+  ipcMain.handle('conversations:search', (event, query: unknown, id: unknown, before: unknown) =>
+    fromApp(event) &&
+    typeof query === 'string' &&
+    query.trim().length >= 2 &&
+    query.length <= 100 &&
+    (id === undefined || isUserId(id)) &&
+    (before === undefined || isUserId(before))
+      ? searchMessages(query.trim(), id, before)
       : invalid
   )
   const isAttachmentIds = (v: unknown): v is string[] =>

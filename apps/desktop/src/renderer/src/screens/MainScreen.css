@@ -322,6 +322,7 @@
 /* ---------- Main content ---------- */
 
 .content {
+  position: relative; /* for the search panel */
   flex: 999 1 560px;
   min-width: 0;
   display: flex;
@@ -1041,4 +1042,35 @@
   .dm-typing-dots span {
     animation: none;
   }
+}
+
+/* Under the sidebar search results: "Search messages for "pizza"" */
+.search-messages-row {
+  margin: 8px 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--glo-line-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--glo-icon);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.search-messages-row:hover {
+  border-style: solid;
+  border-color: var(--glo-accent);
+  color: var(--glo-link);
+}
+.search-messages-row svg {
+  flex: none;
+}
+.search-messages-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

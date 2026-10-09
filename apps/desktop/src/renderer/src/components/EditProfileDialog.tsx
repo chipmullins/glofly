@@ -8,7 +8,7 @@ import type {
 } from '../../../preload/api-types'
 import { initials, shortDate } from '../lib/names'
 import { AvatarFace } from './Avatar'
-import { CameraIcon, CalendarIcon } from './icons'
+import { CalendarIcon, PencilIcon } from './icons'
 import { ProfileHero } from './ProfileCard'
 import './dialogs.css'
 import './ProfileDialogs.css'
@@ -225,28 +225,37 @@ export default function EditProfileDialog({
 
         <div className="profile-body">
           <div className="profile-side">
-            <button
-              type="button"
-              className="avatar avatar--me photo-button profile-photo"
-              aria-label="Change profile photo"
-              onClick={() => fileRef.current?.click()}
-            >
-              {photo?.kind === 'new' ? (
-                <img className="avatar-photo" src={photo.preview} alt="" draggable={false} />
-              ) : photo?.kind === 'remove' ? (
-                initials(displayName || user.displayName)
-              ) : (
-                <AvatarFace
-                  id={user.id}
-                  name={displayName || user.displayName}
-                  avatarVersion={user.avatarVersion}
-                />
-              )}
-              <span className="photo-button-label">
-                <CameraIcon size={16} strokeWidth={2} />
-                Change photo
-              </span>
-            </button>
+            {/* The photo itself opens the file picker too; the small Edit pill makes that clear. */}
+            <div className="photo-wrap">
+              <button
+                type="button"
+                className="avatar avatar--me photo-button profile-photo"
+                aria-label="Change profile photo"
+                onClick={() => fileRef.current?.click()}
+              >
+                {photo?.kind === 'new' ? (
+                  <img className="avatar-photo" src={photo.preview} alt="" draggable={false} />
+                ) : photo?.kind === 'remove' ? (
+                  initials(displayName || user.displayName)
+                ) : (
+                  <AvatarFace
+                    id={user.id}
+                    name={displayName || user.displayName}
+                    avatarVersion={user.avatarVersion}
+                  />
+                )}
+              </button>
+              <button
+                type="button"
+                className="photo-edit"
+                tabIndex={-1}
+                aria-hidden="true"
+                onClick={() => fileRef.current?.click()}
+              >
+                <PencilIcon size={13} strokeWidth={2.2} />
+                Edit
+              </button>
+            </div>
             <input
               ref={fileRef}
               type="file"

@@ -36,6 +36,7 @@ import StatusDot from '../components/StatusDot'
 import StatusMenu from '../components/StatusMenu'
 import SettingsDialog from '../components/SettingsDialog'
 import GameNotice from '../components/GameNotice'
+import SearchPanel from '../components/SearchPanel'
 import '../components/dialogs.css'
 import './MainScreen.css'
 import EmojiText from '../components/EmojiText'
@@ -389,6 +390,21 @@ export default function MainScreen({
   const [myStatus, setMyStatus] = useState<MyStatus>({ status: 'online', statusText: null })
   const [statusOpen, setStatusOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  /** Message search: one chat (chatId) or all chats (null) */
+  const [messageSearch, setMessageSearch] = useState<{
+    chatId: string | null
+    query: string
+  } | null>(null)
+  /** A search result to show: its chat opens scrolled to it */
+  const [jump, setJump] = useState<{
+    conversationId: string
+    messageId: string
+    nonce: number
+  } | null>(null)
+  const searchThisChat = useCallback(
+    (chatId: string) => setMessageSearch((s) => ({ chatId, query: s?.query ?? '' })),
+    []
+  )
   const [editingProfile, setEditingProfile] = useState(false)
   const [viewing, setViewing] = useState<PublicUser | null>(null)
   const [groupPicker, setGroupPicker] = useState<GroupPicker>(null)
@@ -1108,12 +1124,26 @@ export default function MainScreen({
               setFilter('all')
             }}
             onNewGroup={() => setGroupPicker({ groupId: null })}
+            onSearchMessages={(q) => setMessageSearch({ chatId: null, query: q })}
           />
         </aside>
 
         <main className="content">
           <UpdateBar />
           <CallFloat openChatId={openChatId} onOpenChat={setOpenChatId} />
+          {messageSearch && (
+            <SearchPanel
+              me={user}
+              conversations={conversations}
+              chatId={messageSearch.chatId}
+              initialQuery={messageSearch.query}
+              onClose={() => setMessageSearch(null)}
+              onOpen={(conversationId, messageId) => {
+                setOpenChatId(conversationId)
+                setJump((j) => ({ conversationId, messageId, nonce: (j?.nonce ?? 0) + 1 }))
+              }}
+            />
+          )}
           {!connected && (
             <div className="connection-banner" role="status">
               Reconnecting to Glofly…
@@ -1131,6 +1161,12 @@ export default function MainScreen({
               onGroupSettings={() => setSettingsFor(openChat.id)}
               onTogglePin={() => void togglePin(openChat)}
               onSessionExpired={onSessionExpired}
+              onSearch={() => searchThisChat(openChat.id)}
+              jumpRequest={
+                jump && jump.conversationId === openChat.id
+                  ? { messageId: jump.messageId, nonce: jump.nonce }
+                  : null
+              }
             />
           ) : (
             <>

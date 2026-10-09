@@ -81,6 +81,8 @@ const glofly: GloflyApi = {
       ipcRenderer.invoke('conversations:remove-member', conversationId, userId),
     messages: (conversationId: string, beforeMessageId?: string) =>
       ipcRenderer.invoke('conversations:messages', conversationId, beforeMessageId),
+    search: (query: string, conversationId?: string, beforeMessageId?: string) =>
+      ipcRenderer.invoke('conversations:search', query, conversationId, beforeMessageId),
     send: (conversationId: string, body: string, replyToId?: string, attachmentIds?: string[]) =>
       ipcRenderer.invoke('conversations:send', conversationId, body, replyToId, attachmentIds),
     upload: (conversationId: string, data: ArrayBuffer, name: string) =>
