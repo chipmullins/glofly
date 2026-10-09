@@ -540,6 +540,27 @@
   text-align: center;
   color: var(--glo-muted);
 }
+/* Mac: Screen Recording isn't allowed yet */
+.screen-picker-permission {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--glo-line);
+  border-radius: 12px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.screen-picker-permission p {
+  margin: 0;
+  flex: 1;
+}
+.screen-picker-permission button {
+  flex: none;
+}
 .screen-group h2 {
   margin: 0 0 10px;
   font-size: 12px;

@@ -48,7 +48,9 @@ export function restartToUpdate(): void {
 
 export function startAutoUpdates(): void {
   const url = updatesUrl()
-  if (!app.isPackaged || !url) return
+  // Mac test builds aren't signed by Apple, and macOS only installs signed updates, so Mac
+  // copies don't check for now (testers download the new .dmg instead).
+  if (!app.isPackaged || !url || process.platform === 'darwin') return
 
   autoUpdater.setFeedURL({ provider: 'generic', url })
   autoUpdater.autoDownload = true

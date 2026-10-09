@@ -31,6 +31,7 @@ import {
   type IncomingCallInfo
 } from './callState'
 import '../components/CallPanel.css'
+import { privacySettingsPath } from '../lib/platform'
 
 // Everything about calls in one place: the call you're in (and its LiveKit room), a call ringing
 // for you, a call you're in on another device, and which chats have a call going on. It lives
@@ -48,7 +49,7 @@ function deviceProblem(err: unknown, device: 'microphone' | 'camera'): string {
   const name = (err as { name?: string })?.name
   const which = device === 'microphone' ? 'Microphone' : 'Camera'
   if (name === 'NotAllowedError' || name === 'SecurityError') {
-    return `Glofly isn't allowed to use your ${device}. Turn it on in Windows Settings → Privacy & security → ${which}.`
+    return `Glofly isn't allowed to use your ${device}. Turn it on in ${privacySettingsPath(which)}.`
   }
   if (name === 'NotFoundError' || name === 'OverconstrainedError') {
     return `No ${device} found. Plug one in, or pick another in Settings → Voice & video.`

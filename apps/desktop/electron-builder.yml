@@ -31,15 +31,31 @@ nsis:
   runAfterFinish: true
   deleteAppDataOnUninstall: false # keeps sign-in and settings if Glofly is reinstalled
   include: build/installer.nsh # the red Glofly splash while installing
+# Mac test builds (npm run build:mac, or the "Mac build" GitHub Action): one universal .dmg
+# that runs on Apple Silicon and Intel Macs. Not signed by Apple or notarized yet (no Apple
+# Developer account), so testers open it with System Settings → Privacy & Security →
+# Open Anyway. It's "ad-hoc" signed (identity "-"): Apple Silicon Macs refuse to run apps with
+# no signature at all, calling them "damaged". Auto-updates are off on Mac for now (updater.ts).
 mac:
   icon: build/icon.icns
-  entitlementsInherit: build/entitlements.mac.plist
-  extendInfo:
-    - NSCameraUsageDescription: Glofly uses your camera for video calls.
-    - NSMicrophoneUsageDescription: Glofly uses your microphone for voice and video calls.
+  category: public.app-category.social-networking
+  target:
+    - target: dmg
+      arch: universal
+  identity: '-'
+  # Hardened runtime and notarization come with the Apple Developer account. (Ad-hoc signing
+  # with the hardened runtime on would stop Glofly loading its own Electron framework.)
+  hardenedRuntime: false
+  gatekeeperAssess: false
   notarize: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # The words in macOS's permission prompts. Without them macOS won't let Glofly ask at all.
+  extendInfo:
+    NSCameraUsageDescription: Glofly uses your camera for video calls.
+    NSMicrophoneUsageDescription: Glofly uses your microphone for voice and video calls.
 dmg:
-  artifactName: Glofly-${version}.${ext}
+  artifactName: Glofly-${version}-mac.${ext}
 linux:
   target:
     - AppImage

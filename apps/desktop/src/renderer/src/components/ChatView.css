@@ -54,6 +54,9 @@
   padding-right: 162px; /* room for the Windows window buttons */
   -webkit-app-region: drag;
 }
+.mac-titlebar .chat-header {
+  -webkit-app-region: drag; /* empty parts drag the window (Mac) */
+}
 /* Header buttons from the design (Chat.dc.html): voice call, video call, pin, profile. */
 .chat-header-actions {
   display: flex;

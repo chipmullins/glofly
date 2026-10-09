@@ -34,6 +34,7 @@ import {
   VideoIcon,
   VideoOffIcon
 } from './icons'
+import { isMac } from '../lib/platform'
 import './CallPanel.css'
 
 // The call, shown at the top of its chat (Calling.dc.html, GroupCall.dc.html): a tile for you
@@ -203,7 +204,7 @@ function Tile({
   )
 }
 
-/** Pick a screen or window to share (pictures from Windows, like the system picker). */
+/** Pick a screen or window to share (with pictures, like the system picker). */
 export function ScreenPicker({
   onPick,
   onClose
@@ -213,13 +214,19 @@ export function ScreenPicker({
 }): React.JSX.Element {
   const [sources, setSources] = useState<ScreenSource[] | null>(null)
   const [picked, setPicked] = useState<string | null>(null)
+  // Mac: macOS must allow Screen Recording, or the list only has Glofly and the wallpaper.
+  const [needsMacPermission, setNeedsMacPermission] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    void window.glofly.calls.screenSources().then((list) => {
+    void window.glofly.calls.screenSources().then(async (list) => {
       if (cancelled) return
       setSources(list)
       setPicked(list[0]?.id ?? null)
+      // Asked after listing: the first listing is what makes macOS show its own prompt.
+      if (isMac && (await window.glofly.calls.screenAccess()) !== 'granted' && !cancelled) {
+        setNeedsMacPermission(true)
+      }
     })
     return () => {
       cancelled = true
@@ -283,6 +290,21 @@ export function ScreenPicker({
           <p>Pick what they&apos;ll see. You can stop sharing anytime.</p>
         </div>
         <div className="screen-picker-body">
+          {needsMacPermission && (
+            <div className="screen-picker-permission" role="note">
+              <p>
+                To share your screen, allow Glofly in System Settings → Privacy &amp; Security →
+                Screen &amp; System Audio Recording, then quit and reopen Glofly.
+              </p>
+              <button
+                type="button"
+                className="small-button small-button--quiet"
+                onClick={() => window.glofly.app.openPrivacySettings('screen')}
+              >
+                Open System Settings
+              </button>
+            </div>
+          )}
           {sources === null ? (
             <p className="screen-picker-note">Looking for screens and windows…</p>
           ) : sources.length === 0 ? (

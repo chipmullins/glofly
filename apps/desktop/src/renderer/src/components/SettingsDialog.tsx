@@ -16,8 +16,19 @@ import AboutSettings from './AboutSettings'
 import VoiceVideoSettings from './VoiceVideoSettings'
 import { previewSound, setSoundSettings, SOUND_FILES, stopPreview } from '../lib/sounds'
 import { setNotificationSettings } from '../lib/notify'
+import { isMac } from '../lib/platform'
 import './dialogs.css'
 import './SettingsDialog.css'
+
+// Settings → App says it the Mac way on a Mac. (A Mac keeps Glofly running in the Dock after
+// the window closes, so there the setting is only about the icon in the menu bar.)
+const START_LABEL = isMac ? 'Open Glofly at login' : 'Open Glofly when my computer starts'
+const TRAY_LABEL = isMac
+  ? 'Show Glofly in the menu bar'
+  : 'Keep running in the system tray when closed'
+const TRAY_DESC = isMac
+  ? 'Closing the window keeps Glofly running in the Dock, so you still get messages and calls.'
+  : 'So you still get messages and calls after closing the window.'
 
 type SettingsDialogProps = {
   user: SignedInUser
@@ -658,7 +669,8 @@ export default function SettingsDialog({
                       <div className="settings-row-text">
                         <span className="settings-row-label">Desktop notifications</span>
                         <span className="settings-row-desc">
-                          Show new messages and calls in Windows when Glofly isn&apos;t in front.
+                          Show new messages and calls {isMac ? 'on your Mac' : 'in Windows'} when
+                          Glofly isn&apos;t in front.
                         </span>
                       </div>
                       {appSettings ? (
@@ -747,9 +759,7 @@ export default function SettingsDialog({
                   <div className="settings-card">
                     <div className="settings-row">
                       <div className="settings-row-text">
-                        <span className="settings-row-label">
-                          Open Glofly when my computer starts
-                        </span>
+                        <span className="settings-row-label">{START_LABEL}</span>
                         {appSettings && !appSettings.startupAvailable && (
                           <span className="settings-row-desc">
                             Works in the installed app (not while developing).
@@ -759,7 +769,7 @@ export default function SettingsDialog({
                       {appSettings ? (
                         <Toggle
                           on={appSettings.openAtLogin}
-                          label="Open Glofly when my computer starts"
+                          label={START_LABEL}
                           disabled={!appSettings.startupAvailable}
                           onChange={(on) => void changeApp({ openAtLogin: on })}
                         />
@@ -769,17 +779,13 @@ export default function SettingsDialog({
                     </div>
                     <div className="settings-row">
                       <div className="settings-row-text">
-                        <span className="settings-row-label">
-                          Keep running in the system tray when closed
-                        </span>
-                        <span className="settings-row-desc">
-                          So you still get messages and calls after closing the window.
-                        </span>
+                        <span className="settings-row-label">{TRAY_LABEL}</span>
+                        <span className="settings-row-desc">{TRAY_DESC}</span>
                       </div>
                       {appSettings ? (
                         <Toggle
                           on={appSettings.closeToTray}
-                          label="Keep running in the system tray when closed"
+                          label={TRAY_LABEL}
                           onChange={(on) => void changeApp({ closeToTray: on })}
                         />
                       ) : (

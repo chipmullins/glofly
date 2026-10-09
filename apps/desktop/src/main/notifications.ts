@@ -84,11 +84,14 @@ export function clearAllNotifications(): void {
   for (const key of [...shown.keys()]) clearNotification(key)
 }
 
-/** The unread count on the taskbar icon (a small red badge drawn by the window). */
+/** The unread count on the taskbar icon (a small red badge drawn by the window), or the Mac Dock. */
 export function setBadge(window: BrowserWindow | null, count: number, image: unknown): void {
   const n = Number.isInteger(count) && count > 0 ? Math.min(count, 999) : 0
   if (process.platform === 'win32') {
     window?.setOverlayIcon(n > 0 ? (picture(image) ?? null) : null, n > 0 ? `${n} unread` : '')
+  } else if (process.platform === 'darwin') {
+    // The red badge on Glofly's Dock icon (drawn by macOS; "99+" like the taskbar badge).
+    app.dock?.setBadge(n === 0 ? '' : n > 99 ? '99+' : String(n))
   } else {
     app.setBadgeCount(n)
   }

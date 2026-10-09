@@ -478,6 +478,8 @@ export type GloflyApi = {
   app: {
     getSettings: () => Promise<AppSettings>
     setSettings: (changes: AppSettingsChanges) => Promise<AppSettings>
+    /** Mac: opens System Settings → Privacy & Security at that list (does nothing on Windows). */
+    openPrivacySettings: (pane: 'microphone' | 'camera' | 'screen') => void
     /** Theme and accent at startup, known before anything is drawn (so nothing flashes). */
     initialAppearance: { accent: AccentChoice; dark: boolean }
   }
@@ -601,6 +603,11 @@ export type GloflyApi = {
     screenSources: () => Promise<ScreenSource[]>
     /** Picks what the next screen share shows (the share itself starts in the call). */
     chooseScreen: (sourceId: string) => Promise<boolean>
+    /**
+     * Mac: whether macOS allows Glofly to record the screen (System Settings → Privacy &
+     * Security → Screen & System Audio Recording). Always "granted" on Windows.
+     */
+    screenAccess: () => Promise<'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown'>
   }
   notifications: {
     show: (notification: ShowNotification) => void

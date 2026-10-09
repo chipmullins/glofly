@@ -9,6 +9,8 @@ import { setNotificationSettings } from './lib/notify'
 
 // On Windows the app draws its own top area (see MainScreen.css and LoginScreen.css).
 if (window.glofly.platform === 'win32') document.documentElement.classList.add('has-titlebar')
+// On a Mac too, with macOS's traffic-light buttons over the top-left corner.
+if (window.glofly.platform === 'darwin') document.documentElement.classList.add('mac-titlebar')
 
 // Light or dark theme and the accent color, set before anything is drawn.
 startAppearance()

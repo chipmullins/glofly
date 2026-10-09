@@ -414,6 +414,19 @@
 .has-titlebar .brand {
   -webkit-app-region: drag;
 }
+/* Mac: the same strip and panel drag the window (traffic lights sit over the dark panel). */
+.mac-titlebar .titlebar-drag {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+.mac-titlebar .brand {
+  -webkit-app-region: drag;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .glo-fly {

@@ -243,7 +243,18 @@ export function setAppSettings(changes: AppSettingsChanges): AppSettings {
 }
 
 /** Started with the computer and allowed to sit in the tray: don't pop the window up. */
-export const startHidden = (): boolean => process.argv.includes(STARTUP_ARG) && saved.closeToTray
+export const startHidden = (): boolean =>
+  (process.argv.includes(STARTUP_ARG) || openedAtMacLogin()) && saved.closeToTray
+
+/** Mac: opened by "Open Glofly at login" (macOS passes no startup flag, so ask it). */
+function openedAtMacLogin(): boolean {
+  if (process.platform !== 'darwin' || !app.isPackaged) return false
+  try {
+    return app.getLoginItemSettings().wasOpenedAtLogin
+  } catch {
+    return false
+  }
+}
 
 // ---------------------------------------------------------------------------------------
 // The system tray icon, and closing the window to it.
@@ -261,10 +272,12 @@ function showWindow(): void {
   window.focus()
 }
 
+const isMac = process.platform === 'darwin'
+
 function updateTray(): void {
-  // The tray icon is there while Glofly keeps running in the background (not on Mac,
-  // which has the dock for that).
-  const wanted = saved.closeToTray && process.platform !== 'darwin'
+  // Windows: the tray icon is there while Glofly keeps running in the background.
+  // Mac: the same setting shows Glofly's icon in the menu bar (top right of the screen).
+  const wanted = saved.closeToTray
   if (!wanted) {
     tray?.destroy()
     tray = null
@@ -272,7 +285,14 @@ function updateTray(): void {
   }
   if (tray) return
   try {
-    const image = nativeImage.createFromPath(trayIcon).resize({ width: 16, height: 16 })
+    let image: Electron.NativeImage
+    if (isMac) {
+      // A black firefly silhouette that macOS recolors to match the menu bar.
+      image = nativeImage.createFromPath(trayIcon)
+      image.setTemplateImage(true)
+    } else {
+      image = nativeImage.createFromPath(trayIcon).resize({ width: 16, height: 16 })
+    }
     tray = new Tray(image)
     tray.setToolTip('Glofly')
     tray.setContextMenu(
@@ -282,7 +302,8 @@ function updateTray(): void {
         { label: 'Quit Glofly', click: () => app.quit() }
       ])
     )
-    tray.on('click', showWindow)
+    // (On a Mac, clicking the menu-bar icon opens this menu instead.)
+    if (!isMac) tray.on('click', showWindow)
   } catch (err) {
     // No tray on this system: closing the window just quits, as usual.
     console.error("Couldn't add the tray icon", err)
@@ -305,7 +326,10 @@ export function setUpTray(window: () => BrowserWindow | null, icon: string): voi
 
 /** Called from the window's close event. True means "hide it to the tray instead". */
 export function shouldHideOnClose(): boolean {
-  return !quitting && saved.closeToTray && tray !== null && process.platform !== 'darwin'
+  // Mac: closing the window never quits, as with any Mac chat app. Glofly stays in the Dock
+  // (messages, calls and notifications keep coming); ⌘Q or Quit Glofly really quits.
+  if (isMac) return !quitting
+  return !quitting && saved.closeToTray && tray !== null
 }
 
 /** Brings the window back (opening Glofly again while it's in the tray). */

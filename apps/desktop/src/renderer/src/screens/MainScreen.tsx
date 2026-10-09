@@ -52,6 +52,7 @@ import ConfirmEmailBar from '../components/ConfirmEmailBar'
 import type { CallsValue } from '../calls/callState'
 import { CallFloat, CallStrip } from '../components/CallPanel'
 import { GameIcon, PhoneIcon, VideoIcon } from '../components/icons'
+import { isShortcutKey, shortcutLabel } from '../lib/platform'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -677,10 +678,10 @@ export default function MainScreen({
     setOpenChatId(conversation.id)
   }
 
-  // Ctrl+K (or Cmd+K) jumps to "Find a friend or chat" from anywhere.
+  // Ctrl+K (⌘K on a Mac) jumps to "Find a friend or chat" from anywhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if (isShortcutKey(e) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         chatSearchRef.current?.focus()
         chatSearchRef.current?.select()
@@ -1032,7 +1033,7 @@ export default function MainScreen({
                 className="search-input"
                 aria-label="Find a friend or chat"
                 placeholder="Find a friend or chat"
-                title="Find a friend or chat (Ctrl+K)"
+                title={`Find a friend or chat (${shortcutLabel('K')})`}
                 role="combobox"
                 aria-expanded={chatQuery.trim().length > 0}
                 aria-controls="chat-search-results"

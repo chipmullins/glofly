@@ -1,0 +1,83 @@
+# Mac build: one universal .dmg (Apple Silicon + Intel) of the Glofly desktop app, pointed at
+# the live server (https://api.glofly.app, from apps/desktop/.env.production).
+#
+# Runs when:
+#   - you start it by hand: GitHub → Actions → "Mac build" → Run workflow → pick a branch (dev)
+#   - a release tag is pushed (npm run release pushes v0.1.x), so every release gets a Mac copy
+# The .dmg is under the run's "Artifacts" (GitHub zips it; unzip to get Glofly-<version>-mac.dmg).
+#
+# Not signed by Apple or notarized yet (no Apple Developer account): it's "ad-hoc" signed so
+# Apple Silicon Macs will run it at all, and testers open it once with System Settings →
+# Privacy & Security → Open Anyway. Auto-updates are off on Mac for now.
+#
+# Mac minutes count 10× against a private repo's free Actions minutes (a build takes ~10 min),
+# so it doesn't run on every push.
+
+name: Mac build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Check the build will use the live server
+        # These local-override files are git-ignored, but make sure nothing points the build at
+        # someone's PC.
+        run: |
+          test ! -e apps/desktop/.env.production.local
+          test ! -e apps/desktop/.env.local
+          grep -q '^MAIN_VITE_SERVER_URL=https://api.glofly.app$' apps/desktop/.env.production
+
+      - name: Typecheck and build
+        run: npm run build -w apps/desktop
+
+      - name: Confirm the live server address is baked in
+        run: grep -q 'https://api.glofly.app' apps/desktop/out/main/index.js
+
+      - name: Package the universal .dmg
+        working-directory: apps/desktop
+        run: npx electron-builder --mac --universal --publish never
+
+      - name: Check the app (both chips, signature, permission prompts)
+        working-directory: apps/desktop/dist/mac-universal
+        run: |
+          archs="$(lipo -archs Glofly.app/Contents/MacOS/Glofly)"
+          echo "Architectures: $archs"
+          [[ "$archs" == *x86_64* && "$archs" == *arm64* ]]
+          codesign --verify --deep --strict --verbose=2 Glofly.app
+          /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' Glofly.app/Contents/Info.plist
+          /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' Glofly.app/Contents/Info.plist
+
+      - name: Read the version
+        id: version
+        run: echo "version=$(node -p "require('./apps/desktop/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Glofly-${{ steps.version.outputs.version }}-mac
+          path: apps/desktop/dist/Glofly-*-mac.dmg
+          if-no-files-found: error
+          compression-level: 0 # a .dmg is already compressed
+          retention-days: 30

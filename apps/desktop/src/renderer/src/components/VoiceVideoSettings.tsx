@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { audioCapture, getCallPrefs, setCallPrefs, type CallPrefs } from '../lib/callPrefs'
 import { SOUND_FILES } from '../lib/sounds'
 import { Toggle } from './SettingsDialog'
+import { privacySettingsPath } from '../lib/platform'
 
 // Settings → Voice & video: pick the microphone, speakers and camera for calls, check they
 // work, and choose how your voice is cleaned up. Saved on this computer. Changes made during
@@ -62,9 +63,7 @@ function useMicLevel(on: boolean, prefs: CallPrefs): { level: number; error: str
       })
       .catch(() => {
         if (!cancelled)
-          setError(
-            "Glofly can't hear your microphone. Check Windows Settings → Privacy & security → Microphone."
-          )
+          setError(`Glofly can't hear your microphone. Check ${privacySettingsPath('Microphone')}.`)
       })
     return () => {
       cancelled = true
@@ -139,7 +138,7 @@ export default function VoiceVideoSettings(): React.JSX.Element {
       .catch(() => {
         if (!cancelled) {
           setCameraError(
-            "Glofly can't use your camera. Check that it's plugged in and allowed in Windows Settings → Privacy & security → Camera."
+            `Glofly can't use your camera. Check that it's plugged in and allowed in ${privacySettingsPath('Camera')}.`
           )
           setPreviewing(false)
         }

@@ -32,6 +32,7 @@ import { PinIcon } from './ChatList'
 import EmojiPicker from './EmojiPicker'
 import EmojiText from './EmojiText'
 import './ChatView.css'
+import { isShortcutKey, shortcutLabel } from '../lib/platform'
 
 type ChatViewProps = {
   me: SignedInUser
@@ -639,10 +640,10 @@ export default function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per jump request
   }, [jumpRequest, loading])
 
-  // Ctrl+F searches this chat.
+  // Ctrl+F (⌘F on a Mac) searches this chat.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'f') {
+      if (isShortcutKey(e) && !e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         onSearch()
       }
@@ -890,7 +891,7 @@ export default function ChatView({
             type="button"
             className="chat-header-button"
             aria-label="Search this chat"
-            title="Search messages (Ctrl+F)"
+            title={`Search messages (${shortcutLabel('F')})`}
             onClick={onSearch}
           >
             <SearchIcon size={19} />

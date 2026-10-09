@@ -12,6 +12,8 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+// Mac menu-bar icon (macOS picks trayTemplate@2x.png beside it on Retina screens).
+import menuBarIcon from '../../resources/trayTemplate.png?asset'
 import {
   API_URL,
   checkUsername,
@@ -104,6 +106,14 @@ import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } fr
 import { isUserId } from './api'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
 import { restartToUpdate, startAutoUpdates, updateReady } from './updater'
+import {
+  askMacMediaAccess,
+  isMac,
+  isPrivacyPane,
+  macScreenAccess,
+  openMacPrivacySettings,
+  setUpMacMenu
+} from './mac'
 import { getMyProfile, getProfile, removePhoto, setPhoto, updateProfile } from './profile'
 import {
   acceptRequest,
@@ -161,6 +171,14 @@ protocol.registerSchemesAsPrivileged([
 // buttons (keeping Snap Layouts and double-click-to-maximize).
 const customTitleBar = process.platform === 'win32'
 
+// On a Mac, the page runs up to the top edge too, with macOS's red / yellow / green buttons
+// (traffic lights) over its top-left corner. The page leaves room for them (main.tsx adds
+// .mac-titlebar). Double-clicking the empty top area zooms the window, as on any Mac app.
+const macTitleBar = {
+  titleBarStyle: 'hidden',
+  trafficLightPosition: { x: 18, y: 18 }
+} as const
+
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 1280,
@@ -172,6 +190,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     ...(customTitleBar ? { titleBarStyle: 'hidden', titleBarOverlay: titleBarFor('login') } : {}),
+    ...(isMac ? macTitleBar : {}),
     // The Glofly icon on the window and taskbar (the installed app also has it built in).
     ...(process.platform !== 'darwin' ? { icon } : {}),
     webPreferences: {
@@ -248,7 +267,13 @@ function setUpPermissions(): void {
       permission !== 'media' ||
       ('mediaTypes' in details &&
         (details.mediaTypes ?? []).every((t) => t === 'audio' || t === 'video'))
-    callback(ALLOWED_PERMISSIONS.has(permission) && media && isAppUrl(details.requestingUrl))
+    const allowed = ALLOWED_PERMISSIONS.has(permission) && media && isAppUrl(details.requestingUrl)
+    // Mac: the microphone and camera also need macOS's own yes (its prompt the first time).
+    if (allowed && isMac && permission === 'media' && 'mediaTypes' in details) {
+      void askMacMediaAccess(details.mediaTypes ?? []).then(callback)
+      return
+    }
+    callback(allowed)
   })
   ses.setPermissionCheckHandler((contents, permission, _origin, details) => {
     const url = details.requestingUrl ?? contents?.getURL() ?? ''
@@ -648,6 +673,11 @@ function registerIpcHandlers(): void {
     fromApp(event) && isUserId(id) && isPeople(userIds) ? ringPeople(id, userIds) : invalid
   )
   ipcMain.handle('calls:screen-sources', (event) => (fromApp(event) ? screenSources() : []))
+  // Mac: is Screen Recording allowed, and opening System Settings at the right place.
+  ipcMain.handle('calls:screen-access', (event) => (fromApp(event) ? macScreenAccess() : 'unknown'))
+  ipcMain.on('app:open-privacy-settings', (event, pane: unknown) => {
+    if (isAppUrl(event.senderFrame?.url ?? '') && isPrivacyPane(pane)) openMacPrivacySettings(pane)
+  })
   ipcMain.handle('calls:choose-screen', (event, sourceId: unknown) =>
     fromApp(event) &&
     typeof sourceId === 'string' &&
@@ -752,12 +782,13 @@ app.whenReady().then(() => {
   })
 
   protocol.handle(MEDIA_SCHEME, handleMediaRequest)
+  setUpMacMenu()
   setUpPermissions()
   loadAppSettings()
   registerIpcHandlers()
   startIdleWatch()
   createWindow()
-  setUpTray(() => mainWindow, icon)
+  setUpTray(() => mainWindow, isMac ? menuBarIcon : icon)
   startAutoUpdates()
   startGameWatch(shareActivity)
 
@@ -774,8 +805,9 @@ app.whenReady().then(() => {
   })
 
   app.on('activate', function () {
-    // macOS: reopen the window when the dock icon is clicked.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    // macOS: clicking the Dock icon brings the window back (closing it only hid it).
+    if (mainWindow) showWindow()
+    else createWindow()
   })
 })
 

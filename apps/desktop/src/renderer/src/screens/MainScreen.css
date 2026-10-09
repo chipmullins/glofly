@@ -721,6 +721,33 @@
   -webkit-app-region: no-drag;
 }
 
+/* ---------- Mac title bar ----------
+   macOS draws the red / yellow / green buttons over the top-left corner of the sidebar
+   (about 70 × 30px). The sidebar starts below them, and the empty top areas drag the window. */
+
+.mac-titlebar .sidebar {
+  position: relative;
+  padding-top: 44px;
+}
+.mac-titlebar .sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+.mac-titlebar .content-header,
+.mac-titlebar .sidebar-top {
+  -webkit-app-region: drag;
+}
+.mac-titlebar .content-header button,
+.mac-titlebar .content-header nav,
+.mac-titlebar .sidebar-top input {
+  -webkit-app-region: no-drag;
+}
+
 /* Fade in after the firefly takeoff or on launch */
 .main--enter {
   animation: mainEnter 0.45s ease-out both;
