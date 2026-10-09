@@ -1,8 +1,28 @@
-# Caddy gets and renews the https certificate for the API address automatically
-# (Let's Encrypt), and passes everything, including the real-time connection,
-# to the Glofly server. It replaces any X-Forwarded-For a visitor sends, so the
-# server's per-IP rate limits can't be fooled.
+# Caddy gets and renews the https certificates automatically (Let's Encrypt).
+# It replaces any X-Forwarded-For a visitor sends, so the server's per-IP rate
+# limits can't be fooled.
+
+# The Glofly server: API + real-time connection.
 {$API_DOMAIN} {
 	encode zstd gzip
 	reverse_proxy server:4000
+}
+
+# The website (the site/ folder in the repo).
+{$SITE_DOMAIN} {
+	encode zstd gzip
+	# Always the newest installer (each release also uploads Glofly-Setup.exe).
+	redir /download https://glofly-updates.s3.us-east-2.amazonaws.com/Glofly-Setup.exe 302
+	header {
+		Content-Security-Policy "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000"
+	}
+	root * /srv/site
+	file_server
+}
+
+www.{$SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
 }
