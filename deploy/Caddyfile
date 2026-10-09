@@ -29,6 +29,8 @@
 			Strict-Transport-Security "max-age=31536000"
 		}
 		root * /srv/site
+		# /terms and /privacy serve terms.html and privacy.html
+		try_files {path} {path}.html
 		file_server
 	}
 }

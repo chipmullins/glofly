@@ -77,7 +77,8 @@ function render({ to, subject, heading, paragraphs, button, footnotes }: Layout)
         ${footnotes.map(small).join("\n        ")}
       </td></tr>
       <tr><td style="padding:18px 4px 0;font:400 12px/1.5 ${FONT};color:#6b5547;">
-        Say it. Send it. Glofly. · You're getting this because of your Glofly account. <a href="https://glofly.app" style="color:#6b5547;">glofly.app</a>
+        Say it. Send it. Glofly. · You're getting this because of your Glofly account. Questions? Reply to this email.<br>
+        <a href="https://glofly.app" style="color:#6b5547;">glofly.app</a> · <a href="https://glofly.app/privacy" style="color:#6b5547;">Privacy</a> · <a href="https://glofly.app/terms" style="color:#6b5547;">Terms</a>
       </td></tr>
     </table>
   </td></tr>
@@ -92,6 +93,7 @@ function render({ to, subject, heading, paragraphs, button, footnotes }: Layout)
     ...(button ? [`${button.label}: ${button.url}`, ""] : []),
     ...footnotes,
     "",
+    "Questions? Reply to this email or write to support@glofly.app.",
     "— Glofly · https://glofly.app",
   ].join("\n");
 
@@ -169,7 +171,9 @@ export const emailChangedNotice = (user: Person, oldEmail: string, newEmail: str
       `Hi ${user.displayName},`,
       `The email for @${user.username} is now ${maskEmail(newEmail)}. Glofly won't send anything to this address any more.`,
     ],
-    footnotes: ["Didn't do this? Contact Glofly right away so we can help you get your account back."],
+    footnotes: [
+      "Didn't do this? Email support@glofly.app right away (or reply to this email) so we can help you get your account back.",
+    ],
   });
 
 export const passwordChangedNotice = (user: Person): Email =>

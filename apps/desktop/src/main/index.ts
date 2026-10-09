@@ -67,7 +67,10 @@ import {
   changePassword,
   deleteAccount,
   getAccount,
-  resendVerification
+  listSessions,
+  resendVerification,
+  signOutDevice,
+  signOutOtherDevices
 } from './account'
 import {
   appearanceArgs,
@@ -207,7 +210,10 @@ function createWindow(): void {
 
   // Links that try to open a new window go to the real browser instead (https only).
   window.webContents.setWindowOpenHandler((details) => {
-    if (details.url.startsWith('https://')) shell.openExternal(details.url)
+    // https links open in the browser; the only email link allowed is Glofly support's.
+    if (details.url.startsWith('https://') || details.url === 'mailto:support@glofly.app') {
+      shell.openExternal(details.url)
+    }
     return { action: 'deny' }
   })
 
@@ -421,6 +427,14 @@ function registerIpcHandlers(): void {
   )
   ipcMain.handle('account:cancel-email-change', (event) =>
     fromApp(event) ? cancelEmailChange() : invalid
+  )
+  // Where you're signed in. Session ids are UUIDs (checked so nothing else reaches the URL).
+  ipcMain.handle('account:sessions', (event) => (fromApp(event) ? listSessions() : invalid))
+  ipcMain.handle('account:sign-out-device', (event, sessionId: unknown) =>
+    fromApp(event) && isUserId(sessionId) ? signOutDevice(sessionId) : invalid
+  )
+  ipcMain.handle('account:sign-out-other-devices', (event) =>
+    fromApp(event) ? signOutOtherDevices() : invalid
   )
 
   // Your status.

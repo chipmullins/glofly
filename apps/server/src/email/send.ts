@@ -11,6 +11,8 @@ export type Email = { to: string; subject: string; html: string; text: string };
 
 const useSes = process.env.EMAIL_TRANSPORT === "ses";
 const FROM = process.env.EMAIL_FROM || "Glofly <noreply@glofly.app>";
+// Replies to Glofly's emails go here instead of the noreply address.
+const REPLY_TO = process.env.EMAIL_REPLY_TO || "support@glofly.app";
 
 let ses: SESv2Client | null = null;
 const client = (): SESv2Client =>
@@ -19,6 +21,8 @@ const client = (): SESv2Client =>
 export const emailKind = useSes ? "Amazon SES" : "printed in this terminal";
 
 export async function sendEmail(email: Email): Promise<void> {
+  // For testing what people see when Amazon refuses an email: EMAIL_TRANSPORT=fail.
+  if (process.env.EMAIL_TRANSPORT === "fail") throw new Error("EMAIL_TRANSPORT=fail (testing)");
   if (!useSes) {
     console.log(
       [
@@ -37,6 +41,7 @@ export async function sendEmail(email: Email): Promise<void> {
   await client().send(
     new SendEmailCommand({
       FromEmailAddress: FROM,
+      ReplyToAddresses: REPLY_TO ? [REPLY_TO] : undefined,
       Destination: { ToAddresses: [email.to] },
       Content: {
         Simple: {
@@ -56,8 +61,20 @@ export async function sendEmail(email: Email): Promise<void> {
  * otherwise ignored: the person can always ask for another email.
  */
 export function sendInBackground(email: Email): void {
-  sendEmail(email).catch((err: unknown) => {
+  void sendNow(email);
+}
+
+/**
+ * Sends and waits for Amazon's answer: true if it was accepted. A failure is logged (never the
+ * link itself). Used where the person is signed in and should hear if it didn't go out.
+ */
+export async function sendNow(email: Email): Promise<boolean> {
+  try {
+    await sendEmail(email);
+    return true;
+  } catch (err) {
     const e = err as { name?: string; message?: string };
     console.error(`Email "${email.subject}" couldn't be sent: ${e?.name ?? "Error"} ${e?.message ?? ""}`);
-  });
+    return false;
+  }
 }

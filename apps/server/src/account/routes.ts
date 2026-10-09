@@ -1,6 +1,6 @@
 import { Router, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
-import { and, eq, ne } from "drizzle-orm";
+import { and, desc, eq, gt, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { sessions, users } from "../db/schema";
@@ -14,10 +14,10 @@ import {
   requestEmailChange,
   resendVerification,
 } from "./email";
-import { disconnectSessions } from "../realtime";
+import { connectedSessionIds, disconnectSession, disconnectSessions, emitToUser } from "../realtime";
 import { scheduleDeletion } from "./deletion";
 
-// Settings → Account: email (confirm, change), change password, delete account.
+// Settings → Account: email (confirm, change), where you're signed in, change password, delete account.
 export const accountRouter = Router();
 accountRouter.use(requireAuth);
 
@@ -39,6 +39,12 @@ const passwordCheckLimiter = rateLimit({
 });
 
 const WRONG_PASSWORD = "That isn't your current password.";
+
+// Amazon didn't accept an email (it's logged on the server). Nothing was changed.
+const EMAIL_FAILED = {
+  error: "email_failed",
+  message: "We couldn't send the email right now. Try again in a few minutes.",
+};
 
 async function passwordMatches(userId: string, password: string): Promise<boolean> {
   const [row] = await db
@@ -82,6 +88,10 @@ accountRouter.post("/email/verify", async (_req, res) => {
       error: "too_many_requests",
       message: "We've sent a few already. Check your spam folder, or try again in an hour.",
     });
+    return;
+  }
+  if (result === "send_failed") {
+    res.status(503).json(EMAIL_FAILED);
     return;
   }
   res.json({ ok: true });
@@ -130,6 +140,10 @@ accountRouter.post("/email", passwordCheckLimiter, async (req, res) => {
       error: "too_many_requests",
       message: "Too many email changes. Try again in an hour.",
     });
+    return;
+  }
+  if (result === "send_failed") {
+    res.status(503).json(EMAIL_FAILED);
     return;
   }
   res.json({ ok: true, pendingEmail: newEmail });
@@ -207,4 +221,72 @@ accountRouter.post("/delete", passwordCheckLimiter, async (req, res) => {
   }
   const deleteAfter = await scheduleDeletion(myId);
   res.json({ ok: true, deleteAfter: deleteAfter.toISOString() });
+});
+
+// ───────────── Where you're signed in ─────────────
+
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// GET /account/sessions — every device signed in to this account (this one first).
+accountRouter.get("/sessions", async (_req, res) => {
+  const myId = me(res).id;
+  const thisSession = res.locals.sessionId as string;
+  const rows = await db
+    .select({
+      id: sessions.id,
+      deviceName: sessions.deviceName,
+      persistent: sessions.persistent,
+      createdAt: sessions.createdAt,
+      lastUsedAt: sessions.lastUsedAt,
+    })
+    .from(sessions)
+    .where(and(eq(sessions.userId, myId), gt(sessions.expiresAt, new Date())))
+    .orderBy(desc(sessions.lastUsedAt));
+  const online = await connectedSessionIds(myId);
+  const list = rows.map((r) => ({
+    ...r,
+    current: r.id === thisSession,
+    // The app is open and connected on that device right now.
+    online: online.has(r.id),
+  }));
+  list.sort((a, b) => Number(b.current) - Number(a.current));
+  res.json({ sessions: list });
+});
+
+// DELETE /account/sessions/:id — sign one other device out. (This device: use Log out.)
+accountRouter.delete("/sessions/:id", async (req, res) => {
+  const myId = me(res).id;
+  const id = String(req.params.id);
+  if (!SESSION_ID.test(id)) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (id === res.locals.sessionId) {
+    res.status(400).json({ error: "current_session", message: "To sign out of this device, use Log out." });
+    return;
+  }
+  const removed = await db
+    .delete(sessions)
+    .where(and(eq(sessions.id, id), eq(sessions.userId, myId)))
+    .returning({ id: sessions.id });
+  if (!removed.length) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  await disconnectSession(myId, id);
+  emitToUser(myId, "account:changed", {});
+  res.json({ ok: true });
+});
+
+// DELETE /account/sessions — sign out every device except this one.
+accountRouter.delete("/sessions", async (_req, res) => {
+  const myId = me(res).id;
+  const thisSession = res.locals.sessionId as string;
+  const removed = await db
+    .delete(sessions)
+    .where(and(eq(sessions.userId, myId), ne(sessions.id, thisSession)))
+    .returning({ id: sessions.id });
+  await disconnectSessions(myId, thisSession);
+  emitToUser(myId, "account:changed", {});
+  res.json({ ok: true, signedOut: removed.length });
 });

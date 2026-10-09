@@ -40,6 +40,11 @@ export async function issueToken(userId: string, kind: EmailTokenKind, email: st
 
 export type EmailToken = typeof emailTokens.$inferSelect;
 
+/** Removes a link that never went out (its email couldn't be sent), so it doesn't count towards limits. */
+export async function discardToken(token: string): Promise<void> {
+  await db.delete(emailTokens).where(eq(emailTokens.tokenHash, hash(token)));
+}
+
 /** A link that still works (unused, not expired), or null. Doesn't use it up. */
 export async function findToken(token: string, kinds: EmailTokenKind[]): Promise<EmailToken | null> {
   if (!looksLikeToken(token)) return null;

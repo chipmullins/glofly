@@ -3,7 +3,7 @@ import { db } from "../db";
 import { sessions, users } from "../db/schema";
 import { hashPassword } from "../auth/passwords";
 import { disconnectSessions, emitToUser } from "../realtime";
-import { sendInBackground } from "../email/send";
+import { sendInBackground, sendNow } from "../email/send";
 import {
   changeEmailConfirm,
   changeEmailRequested,
@@ -13,7 +13,7 @@ import {
   SITE_URL,
   verifyEmail,
 } from "../email/templates";
-import { cancelTokens, consumeToken, type EmailToken, issueToken, sentRecently } from "../email/tokens";
+import { cancelTokens, consumeToken, discardToken, type EmailToken, issueToken, sentRecently } from "../email/tokens";
 
 // Everything email-related about an account: Forgot password, confirming the email,
 // and changing it. The routes (auth/routes.ts, account/routes.ts) and the pages people
@@ -49,23 +49,34 @@ const announceAccount = (userId: string): void => emitToUser(userId, "account:ch
 
 // ───────────── Confirming the email ─────────────
 
-/** Sends the "Confirm your email" link to the address on the account. */
-export async function sendVerification(userId: string): Promise<void> {
+/**
+ * Sends the "Confirm your email" link to the address on the account. With wait, it waits for
+ * Amazon's answer and returns whether the email went out (a link that didn't is thrown away).
+ */
+export async function sendVerification(userId: string, wait = false): Promise<boolean> {
   const user = await person(userId);
-  if (!user || user.emailVerifiedAt) return;
+  if (!user || user.emailVerifiedAt) return true;
   const token = await issueToken(user.id, "verify_email", user.email);
-  sendInBackground(verifyEmail(user, linkFor("confirm", token)));
+  const email = verifyEmail(user, linkFor("confirm", token));
+  if (!wait) {
+    sendInBackground(email);
+    return true;
+  }
+  if (await sendNow(email)) return true;
+  await discardToken(token);
+  return false;
 }
 
 export const VERIFY_RESENDS_PER_HOUR = 3;
 
 /** Settings → Account / the reminder: "Resend link". */
-export async function resendVerification(userId: string): Promise<"sent" | "already_verified" | "too_many"> {
+export async function resendVerification(
+  userId: string,
+): Promise<"sent" | "already_verified" | "too_many" | "send_failed"> {
   const user = await person(userId);
   if (!user || user.emailVerifiedAt) return "already_verified";
   if ((await sentRecently(userId, "verify_email", HOUR)) >= VERIFY_RESENDS_PER_HOUR) return "too_many";
-  await sendVerification(userId);
-  return "sent";
+  return (await sendVerification(userId, true)) ? "sent" : "send_failed";
 }
 
 // ───────────── Forgot password ─────────────
@@ -125,7 +136,7 @@ export async function notifyPasswordChanged(userId: string): Promise<void> {
 
 export const EMAIL_CHANGES_PER_HOUR = 5;
 
-export type ChangeRequest = "sent" | "same" | "taken" | "too_many";
+export type ChangeRequest = "sent" | "same" | "taken" | "too_many" | "send_failed";
 
 /** Settings → Account → Change email: sends a confirm link to the new address. */
 export async function requestEmailChange(userId: string, newEmail: string): Promise<ChangeRequest> {
@@ -136,7 +147,11 @@ export async function requestEmailChange(userId: string, newEmail: string): Prom
   if ((await sentRecently(userId, "change_email", HOUR)) >= EMAIL_CHANGES_PER_HOUR) return "too_many";
 
   const token = await issueToken(userId, "change_email", newEmail);
-  sendInBackground(changeEmailConfirm(user, newEmail, linkFor("confirm", token)));
+  // Wait for this one: if the new address can't be emailed, there's no change to wait for.
+  if (!(await sendNow(changeEmailConfirm(user, newEmail, linkFor("confirm", token))))) {
+    await discardToken(token);
+    return "send_failed";
+  }
   sendInBackground(changeEmailRequested(user, newEmail));
   announceAccount(userId);
   return "sent";

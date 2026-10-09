@@ -3,6 +3,7 @@ import type { AccountDetails, SignedInUser } from '../../../preload/api-types'
 import { missingRule, STRENGTH_LABELS, strengthOf } from '../lib/passwords'
 import Avatar from './Avatar'
 import EmailSettings from './EmailSettings'
+import DevicesSettings from './DevicesSettings'
 
 type AccountSettingsProps = {
   user: SignedInUser
@@ -234,6 +235,11 @@ export default function AccountSettings({
           onRefresh={loadDetails}
           onSessionExpired={onSessionExpired}
         />
+      </section>
+
+      <section className="settings-section">
+        <h2>Where you’re signed in</h2>
+        <DevicesSettings onSessionExpired={onSessionExpired} />
       </section>
 
       <section className="settings-section">

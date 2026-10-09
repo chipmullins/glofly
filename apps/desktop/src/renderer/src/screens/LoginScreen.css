@@ -313,6 +313,7 @@
   font: inherit;
   font-weight: 500;
   color: var(--glo-link);
+  text-decoration: none; /* also used on <a> (Terms / Privacy) */
   cursor: pointer;
 }
 .link-button:hover {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { RegisterRequest } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import wordmarkImg from '../assets/glofly-wordmark.png'
+import { PRIVACY_URL, TERMS_URL } from '../lib/links'
 import './LoginScreen.css'
 import './RegisterScreen.css'
 import { PASSWORD_RULES, STRENGTH_LABELS } from '../lib/passwords'
@@ -558,13 +559,23 @@ export default function RegisterScreen({
                 />
                 <span>
                   I agree to the{' '}
-                  <button type="button" className="link-button link-button--strong">
+                  <a
+                    className="link-button link-button--strong"
+                    href={TERMS_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     Terms of Service
-                  </button>{' '}
+                  </a>{' '}
                   and{' '}
-                  <button type="button" className="link-button link-button--strong">
+                  <a
+                    className="link-button link-button--strong"
+                    href={PRIVACY_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     Privacy Policy
-                  </button>
+                  </a>
                 </span>
               </label>
               {errors.acceptTerms && (

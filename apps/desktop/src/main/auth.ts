@@ -7,6 +7,7 @@ import type {
   SignedInUser,
   UsernameCheck
 } from '../preload/api-types'
+import { hostname } from 'node:os'
 import { clearToken, loadToken, saveToken } from './session-store'
 
 // Where the Glofly server lives. This PC (localhost) unless apps/desktop/.env.local says
@@ -29,9 +30,20 @@ function serverUrl(setting: string | undefined): string {
   }
 }
 
-const DEVICE_NAME = `Glofly Desktop on ${
-  process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'Mac' : 'Linux'
-}`
+// Shown in Settings → Account → Where you're signed in, only to you: "Windows · DESKTOP-4KQ2".
+const DEVICE_NAME = deviceName()
+
+function deviceName(): string {
+  const system =
+    process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'Mac' : 'Linux'
+  // The computer's name, without anything that could break a layout; cut to fit the server's 60.
+  const computer = hostname()
+    .replace(/\.local$/i, '')
+    .replace(/[^\p{L}\p{N} ._-]/gu, '')
+    .trim()
+    .slice(0, 40)
+  return computer ? `${system} · ${computer}` : `Glofly Desktop on ${system}`
+}
 
 // The session token is kept here in the main process, never handed to the UI.
 // That way, nothing running inside the window can read or steal it.

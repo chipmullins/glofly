@@ -12,6 +12,7 @@ import type {
 import ActivitySettings from './ActivitySettings'
 import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
+import AboutSettings from './AboutSettings'
 import VoiceVideoSettings from './VoiceVideoSettings'
 import { previewSound, setSoundSettings, SOUND_FILES, stopPreview } from '../lib/sounds'
 import { setNotificationSettings } from '../lib/notify'
@@ -29,7 +30,7 @@ type SettingsDialogProps = {
   initialPage?: SettingsPage
 }
 
-export type SettingsPage = 'general' | 'voice' | 'account'
+export type SettingsPage = 'general' | 'voice' | 'account' | 'about'
 type Page = SettingsPage
 
 type ToggleKey = 'readReceipts' | 'showLastSeen' | 'showTyping'
@@ -305,6 +306,26 @@ function AccountIcon({ active }: { active: boolean }): React.JSX.Element {
   )
 }
 
+function AboutIcon({ active }: { active: boolean }): React.JSX.Element {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{ stroke: active ? 'var(--glo-link)' : 'currentColor' }}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5" />
+      <path d="M12 7.8v.2" />
+    </svg>
+  )
+}
+
 function VoiceIcon({ active }: { active: boolean }): React.JSX.Element {
   return (
     <svg
@@ -480,6 +501,19 @@ export default function SettingsDialog({
               <AccountIcon active={page === 'account'} />
               Account
             </button>
+            <button
+              type="button"
+              className={
+                page === 'about'
+                  ? 'settings-nav-item settings-nav-item--active'
+                  : 'settings-nav-item'
+              }
+              aria-current={page === 'about' ? 'page' : undefined}
+              onClick={() => openPage('about')}
+            >
+              <AboutIcon active={page === 'about'} />
+              About
+            </button>
             <div className="settings-nav-spacer" />
             {appSettings && <span className="settings-version">Glofly v{appSettings.version}</span>}
           </nav>
@@ -493,6 +527,8 @@ export default function SettingsDialog({
 
             {page === 'voice' ? (
               <VoiceVideoSettings />
+            ) : page === 'about' ? (
+              <AboutSettings version={appSettings?.version ?? null} />
             ) : page === 'account' ? (
               <AccountSettings
                 user={user}

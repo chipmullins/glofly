@@ -302,6 +302,22 @@ export type AccountDetails = {
   pendingEmail?: string | null
 }
 
+/** Settings → Account → Where you're signed in. */
+export type SignedInDevice = {
+  id: string
+  /** e.g. "Windows · DESKTOP-4KQ2" (older sign-ins: "Glofly Desktop on Windows") */
+  deviceName: string | null
+  /** "Keep me signed in" (30 days, renewed while used) vs 1 day */
+  persistent: boolean
+  createdAt: string
+  /** Updated at most once an hour while the device is in use */
+  lastUsedAt: string
+  /** This computer */
+  current: boolean
+  /** Glofly is open and connected on that device right now */
+  online: boolean
+}
+
 /** Forgot password: the server answers the same whether or not the account exists. */
 export type ForgotPasswordResult = { ok: true } | { ok: false; message: string }
 
@@ -476,6 +492,12 @@ export type GloflyApi = {
       password: string
     ) => Promise<ApiResult<{ pendingEmail: string }>>
     cancelEmailChange: () => Promise<ApiResult<{ ok: true }>>
+    /** Every device signed in to this account, this one first. */
+    sessions: () => Promise<ApiResult<{ sessions: SignedInDevice[] }>>
+    /** Signs one other device out right away. */
+    signOutDevice: (sessionId: string) => Promise<ApiResult<{ ok: true }>>
+    /** Signs out every device except this one. */
+    signOutOtherDevices: () => Promise<ApiResult<{ signedOut: number }>>
   }
   status: {
     get: () => Promise<ApiResult<MyStatus>>

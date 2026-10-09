@@ -1,4 +1,4 @@
-import type { AccountDetails, ApiResult } from '../preload/api-types'
+import type { AccountDetails, ApiResult, SignedInDevice } from '../preload/api-types'
 import { request } from './api'
 import { endSessionLocally } from './auth'
 import { disconnectRealtime } from './realtime'
@@ -25,6 +25,15 @@ export const changeEmail = (
 
 export const cancelEmailChange = (): Promise<ApiResult<{ ok: true }>> =>
   request('DELETE', '/account/email/pending')
+
+export const listSessions = (): Promise<ApiResult<{ sessions: SignedInDevice[] }>> =>
+  request('GET', '/account/sessions')
+
+export const signOutDevice = (sessionId: string): Promise<ApiResult<{ ok: true }>> =>
+  request('DELETE', `/account/sessions/${sessionId}`)
+
+export const signOutOtherDevices = (): Promise<ApiResult<{ signedOut: number }>> =>
+  request('DELETE', '/account/sessions')
 
 /** Deleting signs out every device, this one included, so forget the session here too. */
 export async function deleteAccount(password: string): Promise<ApiResult<{ deleteAfter: string }>> {

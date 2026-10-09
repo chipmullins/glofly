@@ -65,7 +65,10 @@ const glofly: GloflyApi = {
     resendVerification: () => ipcRenderer.invoke('account:resend-verification'),
     changeEmail: (newEmail: string, password: string) =>
       ipcRenderer.invoke('account:change-email', newEmail, password),
-    cancelEmailChange: () => ipcRenderer.invoke('account:cancel-email-change')
+    cancelEmailChange: () => ipcRenderer.invoke('account:cancel-email-change'),
+    sessions: () => ipcRenderer.invoke('account:sessions'),
+    signOutDevice: (sessionId: string) => ipcRenderer.invoke('account:sign-out-device', sessionId),
+    signOutOtherDevices: () => ipcRenderer.invoke('account:sign-out-other-devices')
   },
   status: {
     get: () => ipcRenderer.invoke('status:get'),

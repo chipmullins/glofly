@@ -187,3 +187,21 @@ export async function disconnectSessions(userId: string, keepSessionId?: string)
     if (socket.data.sessionId !== keepSessionId) socket.disconnect(true);
   }
 }
+
+/** Closes the live connection of one signed-out device (one session). */
+export async function disconnectSession(userId: string, sessionId: string): Promise<void> {
+  if (!io) return;
+  for (const socket of await io.in(userRoom(userId)).fetchSockets()) {
+    if (socket.data.sessionId === sessionId) socket.disconnect(true);
+  }
+}
+
+/** Which of a person's sessions have the app open and connected right now. */
+export async function connectedSessionIds(userId: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  if (!io) return ids;
+  for (const socket of await io.in(userRoom(userId)).fetchSockets()) {
+    if (typeof socket.data.sessionId === "string") ids.add(socket.data.sessionId);
+  }
+  return ids;
+}
