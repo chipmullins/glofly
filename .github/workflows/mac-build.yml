@@ -4,6 +4,9 @@
 # Runs when:
 #   - you start it by hand: GitHub → Actions → "Mac build" → Run workflow → pick a branch (dev)
 #   - a release tag is pushed (npm run release pushes v0.1.x), so every release gets a Mac copy
+#   - this file changes on dev
+# ("Run workflow" only shows once this file is on the repo's default branch: main today, or
+# switch the default branch to dev as planned.)
 # The .dmg is under the run's "Artifacts" (GitHub zips it; unzip to get Glofly-<version>-mac.dmg).
 #
 # Not signed by Apple or notarized yet (no Apple Developer account): it's "ad-hoc" signed so
@@ -19,6 +22,9 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    # Also when this file changes on dev, so a change to the build gets tried right away.
+    branches: [dev]
+    paths: ['.github/workflows/mac-build.yml']
 
 permissions:
   contents: read
