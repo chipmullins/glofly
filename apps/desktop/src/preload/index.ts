@@ -32,7 +32,8 @@ const glofly: GloflyApi = {
     register: (request: RegisterRequest) => ipcRenderer.invoke('auth:register', request),
     checkUsername: (username: string) => ipcRenderer.invoke('auth:check-username', username),
     restore: () => ipcRenderer.invoke('auth:restore'),
-    logout: () => ipcRenderer.invoke('auth:logout')
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    forgotPassword: (identifier: string) => ipcRenderer.invoke('auth:forgot-password', identifier)
   },
   friends: {
     list: () => ipcRenderer.invoke('friends:list'),
@@ -60,7 +61,11 @@ const glofly: GloflyApi = {
     get: () => ipcRenderer.invoke('account:get'),
     changePassword: (currentPassword: string, newPassword: string, signOutOthers: boolean) =>
       ipcRenderer.invoke('account:change-password', currentPassword, newPassword, signOutOthers),
-    delete: (password: string) => ipcRenderer.invoke('account:delete', password)
+    delete: (password: string) => ipcRenderer.invoke('account:delete', password),
+    resendVerification: () => ipcRenderer.invoke('account:resend-verification'),
+    changeEmail: (newEmail: string, password: string) =>
+      ipcRenderer.invoke('account:change-email', newEmail, password),
+    cancelEmailChange: () => ipcRenderer.invoke('account:cancel-email-change')
   },
   status: {
     get: () => ipcRenderer.invoke('status:get'),

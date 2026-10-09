@@ -6,11 +6,18 @@ import { db } from "../db";
 import { sessions, users } from "../db/schema";
 import { hashPassword, verifyPassword } from "../auth/passwords";
 import { requireAuth } from "../auth/sessions";
-import { passwordSchema, PASSWORD_MAX } from "../auth/validation";
+import { emailSchema, passwordSchema, PASSWORD_MAX } from "../auth/validation";
+import { pendingEmailFor } from "../email/tokens";
+import {
+  cancelEmailChange,
+  notifyPasswordChanged,
+  requestEmailChange,
+  resendVerification,
+} from "./email";
 import { disconnectSessions } from "../realtime";
 import { scheduleDeletion } from "./deletion";
 
-// Settings → Account: change password, delete account.
+// Settings → Account: email (confirm, change), change password, delete account.
 export const accountRouter = Router();
 accountRouter.use(requireAuth);
 
@@ -42,12 +49,96 @@ async function passwordMatches(userId: string, password: string): Promise<boolea
 }
 
 // GET /account — the private details only you see on the Account page.
+// emailVerified / pendingEmail were added later; older app versions just ignore them.
 accountRouter.get("/", async (_req, res) => {
+  const myId = me(res).id;
   const [row] = await db
-    .select({ username: users.username, email: users.email, createdAt: users.createdAt })
+    .select({
+      username: users.username,
+      email: users.email,
+      emailVerifiedAt: users.emailVerifiedAt,
+      createdAt: users.createdAt,
+    })
     .from(users)
-    .where(eq(users.id, me(res).id));
-  res.json(row);
+    .where(eq(users.id, myId));
+  res.json({
+    username: row.username,
+    email: row.email,
+    emailVerified: !!row.emailVerifiedAt,
+    pendingEmail: await pendingEmailFor(myId),
+    createdAt: row.createdAt,
+  });
+});
+
+// POST /account/email/verify — send the "Confirm your email" link again.
+accountRouter.post("/email/verify", async (_req, res) => {
+  const result = await resendVerification(me(res).id);
+  if (result === "already_verified") {
+    res.status(409).json({ error: "already_verified", message: "Your email is already confirmed." });
+    return;
+  }
+  if (result === "too_many") {
+    res.status(429).json({
+      error: "too_many_requests",
+      message: "We've sent a few already. Check your spam folder, or try again in an hour.",
+    });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+const changeEmailSchema = z.object({
+  newEmail: emailSchema,
+  password: z.string().min(1).max(PASSWORD_MAX),
+});
+
+// POST /account/email  { newEmail, password }
+// Sends a confirm link to the new address. The email only changes once that link is used;
+// until then the old one keeps working (and gets a heads-up).
+accountRouter.post("/email", passwordCheckLimiter, async (req, res) => {
+  const parsed = changeEmailSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const field = String(parsed.error.issues[0].path[0] ?? "newEmail");
+    res.status(400).json({
+      error: "invalid",
+      fields: {
+        [field]: field === "password" ? "Enter your password." : parsed.error.issues[0].message,
+      },
+    });
+    return;
+  }
+  const { newEmail, password } = parsed.data;
+  const myId = me(res).id;
+  if (!(await passwordMatches(myId, password))) {
+    res.status(400).json({ error: "wrong_password", fields: { password: "That password isn't right." } });
+    return;
+  }
+  const result = await requestEmailChange(myId, newEmail);
+  if (result === "same") {
+    res.status(400).json({ error: "invalid", fields: { newEmail: "That's already your email." } });
+    return;
+  }
+  if (result === "taken") {
+    res.status(409).json({
+      error: "taken",
+      fields: { newEmail: "An account with this email already exists." },
+    });
+    return;
+  }
+  if (result === "too_many") {
+    res.status(429).json({
+      error: "too_many_requests",
+      message: "Too many email changes. Try again in an hour.",
+    });
+    return;
+  }
+  res.json({ ok: true, pendingEmail: newEmail });
+});
+
+// DELETE /account/email/pending — cancel a change that hasn't been confirmed.
+accountRouter.delete("/email/pending", async (_req, res) => {
+  await cancelEmailChange(me(res).id);
+  res.json({ ok: true });
 });
 
 const changePasswordSchema = z.object({
@@ -96,6 +187,7 @@ accountRouter.post("/password", passwordCheckLimiter, async (req, res) => {
     signedOut = removed.length;
     await disconnectSessions(myId, thisSession);
   }
+  await notifyPasswordChanged(myId);
   res.json({ ok: true, signedOut });
 });
 

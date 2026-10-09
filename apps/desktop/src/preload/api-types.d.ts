@@ -292,7 +292,18 @@ export type PrivacySettings = {
 }
 
 /** Settings → Account: private details only you see. */
-export type AccountDetails = { username: string; email: string; createdAt: string }
+export type AccountDetails = {
+  username: string
+  email: string
+  createdAt: string
+  /** Whether they've clicked the link in "Confirm your email". (Missing from older servers.) */
+  emailVerified?: boolean
+  /** A new address waiting for its confirm link to be clicked, if any. */
+  pendingEmail?: string | null
+}
+
+/** Forgot password: the server answers the same whether or not the account exists. */
+export type ForgotPasswordResult = { ok: true } | { ok: false; message: string }
 
 export type AppSettingsChanges = Partial<
   Pick<AppSettings, 'closeToTray' | 'openAtLogin' | 'theme' | 'accent' | 'textSize'>
@@ -398,6 +409,8 @@ export type GloflyEvent =
   | { type: 'conversation:read'; conversationId: string; userId: string; readAt: string }
   | { type: 'conversations:changed' }
   | { type: 'profile:changed'; userId: string }
+  /** Your email was confirmed or changed (here or on another device): refetch account details. */
+  | { type: 'account:changed' }
   | { type: 'call:updated'; call: Call; caller: PublicUser | null }
   | { type: 'connection'; connected: boolean }
   | { type: 'session:expired' }
@@ -420,6 +433,8 @@ export type GloflyApi = {
     /** Signs back in with a saved "Keep me signed in" session. Null if there isn't a valid one. */
     restore: () => Promise<SignedInUser | null>
     logout: () => Promise<void>
+    /** Emails a reset link if the username or email belongs to an account. */
+    forgotPassword: (identifier: string) => Promise<ForgotPasswordResult>
   }
   friends: {
     list: () => Promise<ApiResult<FriendLists>>
@@ -453,6 +468,14 @@ export type GloflyApi = {
     ) => Promise<ApiResult<{ signedOut: number }>>
     /** Signs out everywhere. The account is removed for good after 30 days unless restored. */
     delete: (password: string) => Promise<ApiResult<{ deleteAfter: string }>>
+    /** Sends the "Confirm your email" link again. */
+    resendVerification: () => Promise<ApiResult<{ ok: true }>>
+    /** Sends a confirm link to the new address; the email changes once it's clicked. */
+    changeEmail: (
+      newEmail: string,
+      password: string
+    ) => Promise<ApiResult<{ pendingEmail: string }>>
+    cancelEmailChange: () => Promise<ApiResult<{ ok: true }>>
   }
   status: {
     get: () => Promise<ApiResult<MyStatus>>

@@ -25,9 +25,12 @@ type SettingsDialogProps = {
   onSessionExpired: () => void
   /** The account is set to be deleted and this device is signed out. */
   onAccountDeleted: (deleteAfter: string) => void
+  /** Which page to open on (General unless said otherwise). */
+  initialPage?: SettingsPage
 }
 
-type Page = 'general' | 'voice' | 'account'
+export type SettingsPage = 'general' | 'voice' | 'account'
+type Page = SettingsPage
 
 type ToggleKey = 'readReceipts' | 'showLastSeen' | 'showTyping'
 type Row = { key: ToggleKey; label: string; desc?: string }
@@ -327,9 +330,10 @@ export default function SettingsDialog({
   onClose,
   onLogout,
   onSessionExpired,
-  onAccountDeleted
+  onAccountDeleted,
+  initialPage = 'general'
 }: SettingsDialogProps): React.JSX.Element {
-  const [page, setPage] = useState<Page>('general')
+  const [page, setPage] = useState<Page>(initialPage)
   const [settings, setSettings] = useState<PrivacySettings | null>(null)
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null)
   const [notice, setNotice] = useState<string | null>(null)

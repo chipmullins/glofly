@@ -44,6 +44,9 @@ export const users = pgTable(
     displayName: text("display_name").notNull(),
 
     email: text("email").notNull(),
+    // When they proved they own `email` (clicked the link we sent). Null = not confirmed yet.
+    // Changing the email sets this again, since the new address is confirmed by its link.
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
 
     // Argon2 hash of the password. The real password is never stored.
     passwordHash: text("password_hash").notNull(),
@@ -120,6 +123,34 @@ export const sessions = pgTable(
 );
 
 export type Session = typeof sessions.$inferSelect;
+
+export const emailTokenKind = pgEnum("email_token_kind", [
+  "reset_password", // Forgot password: the link lets them choose a new one
+  "verify_email", // confirms the address they signed up with
+  "change_email", // confirms a new address before it replaces the old one
+]);
+
+// One-time links sent by email. Like sessions, only a hash of the token is stored.
+export const emailTokens = pgTable(
+  "email_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: emailTokenKind("kind").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    // The address the link was sent to (for change_email: the new address).
+    email: text("email").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    // Set when the link is used, or replaced by a newer one. A used link never works again.
+    usedAt: timestamp("used_at", { withTimezone: true }),
+  },
+  (t) => [index("email_tokens_user_kind_idx").on(t.userId, t.kind)],
+);
+
+export type EmailTokenKind = (typeof emailTokenKind.enumValues)[number];
 
 export const friendshipStatus = pgEnum("friendship_status", ["pending", "accepted"]);
 

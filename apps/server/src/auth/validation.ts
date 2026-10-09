@@ -51,7 +51,7 @@ const displayNameSchema = z
   .max(DISPLAY_NAME_MAX, `Display names can be at most ${DISPLAY_NAME_MAX} characters.`)
   .refine((n) => !CONTROL_CHARS.test(n), "Display names can't contain hidden characters.");
 
-const emailSchema = z
+export const emailSchema = z
   .string({ error: "Enter your email address." })
   .trim()
   .max(254, "That email address is too long.")
@@ -113,6 +113,10 @@ export const loginSchema = z.object({
   deviceName: z.string().trim().max(60).optional(),
   // Logging in to an account that's set to be deleted: true restores it.
   restore: z.boolean().default(false),
+});
+
+export const forgotPasswordSchema = z.object({
+  identifier: z.string().trim().min(1).max(254),
 });
 
 /** Turns validation problems into { field: "message" }, first problem per field. */

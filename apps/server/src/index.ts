@@ -16,6 +16,9 @@ import { sweepUnsentUploads } from "./messages/attachments";
 import { startRealtime } from "./realtime";
 import { connectRedis } from "./redis";
 import { storageKind } from "./storage";
+import { webRouter } from "./web/pages";
+import { emailKind } from "./email/send";
+import { sweepEmailTokens } from "./email/tokens";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -46,6 +49,8 @@ app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
 app.use("/conversations", conversationsRouter);
 app.use("/calls", callsRouter);
+// Pages opened from emails (glofly.app/reset, /confirm). Plain HTML, not JSON.
+app.use(webRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "not_found" });
@@ -71,7 +76,7 @@ startRealtime(server);
 connectRedis()
   .then(() => {
     server.listen(PORT, () => {
-      console.log(`Glofly server running at http://localhost:${PORT} (files: ${storageKind})`);
+      console.log(`Glofly server running at http://localhost:${PORT} (files: ${storageKind}; emails: ${emailKind})`);
       if (!livekitConfigured) console.log("Calls are off: add the LIVEKIT_ settings to .env to turn them on.");
     });
     // Calls nobody answered become missed; calls someone dropped out of are ended.
@@ -87,6 +92,11 @@ connectRedis()
       purgeDeletedAccounts().catch((err) => console.error("Account removal failed", err));
     purge();
     setInterval(purge, 60 * 60 * 1000);
+    // Expired email links are cleared out (hourly).
+    const sweepLinks = () =>
+      sweepEmailTokens().catch((err) => console.error("Email link cleanup failed", err));
+    sweepLinks();
+    setInterval(sweepLinks, 60 * 60 * 1000);
   })
   .catch((err) => {
     console.error("Couldn't connect to Redis. Is Docker running? (docker compose up -d)", err);

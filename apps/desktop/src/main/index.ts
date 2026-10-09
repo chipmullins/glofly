@@ -16,6 +16,7 @@ import {
   API_URL,
   checkUsername,
   endSessionLocally,
+  forgotPassword,
   getSessionToken,
   login,
   logout,
@@ -60,7 +61,14 @@ import {
   screenSources,
   startCall
 } from './calls'
-import { changePassword, deleteAccount, getAccount } from './account'
+import {
+  cancelEmailChange,
+  changeEmail,
+  changePassword,
+  deleteAccount,
+  getAccount,
+  resendVerification
+} from './account'
 import {
   appearanceArgs,
   getAppSettings,
@@ -400,6 +408,20 @@ function registerIpcHandlers(): void {
   ipcMain.handle('account:delete', (event, password: unknown) =>
     fromApp(event) && isPassword(password) ? deleteAccount(password) : invalid
   )
+  // Email: shape only (an @ and a sensible length); the server checks properly.
+  const isEmail = (v: unknown): v is string =>
+    typeof v === 'string' && v.length >= 3 && v.length <= 254 && v.includes('@')
+  ipcMain.handle('account:resend-verification', (event) =>
+    fromApp(event) ? resendVerification() : invalid
+  )
+  ipcMain.handle('account:change-email', (event, newEmail: unknown, password: unknown) =>
+    fromApp(event) && isEmail(newEmail) && isPassword(password)
+      ? changeEmail(newEmail.trim(), password)
+      : invalid
+  )
+  ipcMain.handle('account:cancel-email-change', (event) =>
+    fromApp(event) ? cancelEmailChange() : invalid
+  )
 
   // Your status.
   ipcMain.handle('status:get', (event) => (fromApp(event) ? getMyStatus() : invalid))
@@ -677,6 +699,18 @@ function registerIpcHandlers(): void {
       return { ok: false, reason: 'invalid', message: 'Check your details.' }
     }
     return thenGoLive(login(request))
+  })
+
+  ipcMain.handle('auth:forgot-password', (event, identifier: unknown) => {
+    if (
+      !fromApp(event) ||
+      typeof identifier !== 'string' ||
+      !identifier.trim() ||
+      identifier.length > 254
+    ) {
+      return { ok: false, message: 'Enter your username or email.' }
+    }
+    return forgotPassword(identifier.trim())
   })
 
   ipcMain.handle('auth:logout', (event) => {

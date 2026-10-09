@@ -468,3 +468,10 @@
   outline: 3px solid rgba(var(--glo-accent-rgb), 0.45);
   outline-offset: 2px;
 }
+
+/* Forgot password: the address they typed, kept on one line where possible */
+.login-sent-to {
+  color: var(--glo-ink);
+  font-weight: 600;
+  word-break: break-all;
+}

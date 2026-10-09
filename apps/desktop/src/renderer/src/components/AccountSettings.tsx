@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AccountDetails, SignedInUser } from '../../../preload/api-types'
 import { missingRule, STRENGTH_LABELS, strengthOf } from '../lib/passwords'
 import Avatar from './Avatar'
+import EmailSettings from './EmailSettings'
 
 type AccountSettingsProps = {
   user: SignedInUser
@@ -153,12 +154,20 @@ export default function AccountSettings({
   const currentRef = useRef<HTMLInputElement>(null)
   const nextRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
+  const loadDetails = useCallback(() => {
     window.glofly.account.get().then((result) => {
       if (result.ok) setDetails(result.data)
       else if (result.error === 'unauthorized') onSessionExpired()
     })
   }, [onSessionExpired])
+
+  // Confirmed or changed in the browser (or on another device): show it right away.
+  useEffect(() => {
+    loadDetails()
+    return window.glofly.onEvent((event) => {
+      if (event.type === 'account:changed') loadDetails()
+    })
+  }, [loadDetails])
 
   const strength = strengthOf(next)
 
@@ -220,14 +229,11 @@ export default function AccountSettings({
 
       <section className="settings-section">
         <h2>Email</h2>
-        <div className="settings-card acct-card acct-card--row">
-          <div className="settings-row-text">
-            <span className="settings-row-label">{details?.email ?? ' '}</span>
-            <span className="settings-row-desc">
-              Used to log in. You’ll be able to change it once email verification is added.
-            </span>
-          </div>
-        </div>
+        <EmailSettings
+          details={details}
+          onRefresh={loadDetails}
+          onSessionExpired={onSessionExpired}
+        />
       </section>
 
       <section className="settings-section">

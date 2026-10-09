@@ -5,8 +5,9 @@ import { db } from "../db";
 import { users } from "../db/schema";
 import { hashPassword, verifyPassword } from "./passwords";
 import { cancelDeletion } from "../account/deletion";
+import { requestPasswordReset, sendVerification } from "../account/email";
 import { bearerToken, createSession, deleteSession, requireAuth } from "./sessions";
-import { fieldErrors, loginSchema, registerSchema, usernameSchema } from "./validation";
+import { fieldErrors, forgotPasswordSchema, loginSchema, registerSchema, usernameSchema } from "./validation";
 
 export const authRouter = Router();
 
@@ -129,6 +130,8 @@ authRouter.post("/register", registerLimiter, async (req, res) => {
     // Sign the new account straight in on this device ("Keep me signed in" on, like most
     // desktop messengers). They can log out from the settings menu.
     const session = await createSession(user.id, true, input.deviceName ?? null);
+    // "Confirm your email": sent in the background so signing up stays quick.
+    sendVerification(user.id).catch((err) => console.error("Couldn't send the confirm email", err));
     res.status(201).json({
       token: session.token,
       expiresAt: session.expiresAt.toISOString(),
@@ -212,6 +215,30 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
       avatarVersion: user.avatarVersion,
     },
   });
+});
+
+// Forgot password: a handful per IP. Each account also gets at most a few reset emails an hour.
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "Too many tries. Wait a few minutes and try again." },
+});
+
+// POST /auth/forgot-password  { identifier: username or email }
+// Always the same answer, sent before any lookup happens, so neither the reply nor how long it
+// takes says whether an account exists. The email goes out in the background.
+authRouter.post("/forgot-password", forgotLimiter, (req, res) => {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: "Enter your username or email." });
+    return;
+  }
+  res.json({ ok: true });
+  requestPasswordReset(parsed.data.identifier).catch((err) =>
+    console.error("Forgot password failed", err),
+  );
 });
 
 // GET /auth/me — who is this token signed in as?

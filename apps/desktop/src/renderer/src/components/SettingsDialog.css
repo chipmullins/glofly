@@ -615,3 +615,99 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ---------- Account → Email ---------- */
+.acct-email {
+  gap: 12px;
+}
+.acct-email-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.acct-email-row .settings-row-text {
+  flex: 1;
+  min-width: 0;
+}
+.acct-email-address {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.acct-email-value {
+  overflow-wrap: anywhere;
+}
+.acct-email-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.acct-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.acct-pill--good {
+  background: var(--glo-good-bg);
+  color: var(--glo-good-text);
+}
+.acct-pill--warn {
+  background: var(--glo-warn-bg);
+  color: var(--glo-warn-text);
+}
+.acct-pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--glo-subtle);
+  border: 1px solid var(--glo-line-soft);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--glo-muted);
+}
+.acct-pending > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.acct-pending strong {
+  color: var(--glo-ink);
+}
+.acct-pending-cancel {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.acct-email-note {
+  text-align: left;
+}
+.acct-email-dialog {
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.acct-email-dialog .confirm-actions {
+  margin-top: 14px;
+}
+.acct-email-text {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--glo-muted);
+  overflow-wrap: anywhere;
+}
+.acct-email-text strong {
+  color: var(--glo-ink);
+  font-weight: 600;
+}
+.acct-label--spaced {
+  margin-top: 8px;
+}

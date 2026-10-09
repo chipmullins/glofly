@@ -34,7 +34,7 @@ import { playSound, setQuiet } from '../lib/sounds'
 import { activityLine, dotFor, playing, presenceLine, STATUS_LABEL } from '../lib/presence'
 import StatusDot from '../components/StatusDot'
 import StatusMenu from '../components/StatusMenu'
-import SettingsDialog from '../components/SettingsDialog'
+import SettingsDialog, { type SettingsPage } from '../components/SettingsDialog'
 import GameNotice from '../components/GameNotice'
 import SearchPanel from '../components/SearchPanel'
 import '../components/dialogs.css'
@@ -48,6 +48,7 @@ import { attachmentSummary } from '../lib/attachments'
 import { badgeImage, clearNotification, notify, previewsOn, shouldNotify } from '../lib/notify'
 import { CallProvider } from '../calls/CallContext'
 import UpdateBar from '../components/UpdateBar'
+import ConfirmEmailBar from '../components/ConfirmEmailBar'
 import type { CallsValue } from '../calls/callState'
 import { CallFloat, CallStrip } from '../components/CallPanel'
 import { GameIcon, PhoneIcon, VideoIcon } from '../components/icons'
@@ -389,7 +390,8 @@ export default function MainScreen({
   const [presence, setPresence] = useState<Record<string, Presence>>({})
   const [myStatus, setMyStatus] = useState<MyStatus>({ status: 'online', statusText: null })
   const [statusOpen, setStatusOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  /** Settings, and the page it opens on (false = closed). */
+  const [settingsOpen, setSettingsOpen] = useState<false | SettingsPage>(false)
   /** Message search: one chat (chatId) or all chats (null) */
   const [messageSearch, setMessageSearch] = useState<{
     chatId: string | null
@@ -1072,7 +1074,7 @@ export default function MainScreen({
             </div>
             <SettingsMenu
               onLogout={onLogout}
-              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenSettings={() => setSettingsOpen('general')}
               onEditProfile={() => setEditingProfile(true)}
             />
             {statusOpen && (
@@ -1130,6 +1132,11 @@ export default function MainScreen({
 
         <main className="content">
           <UpdateBar />
+          <ConfirmEmailBar
+            userId={user.id}
+            onChangeEmail={() => setSettingsOpen('account')}
+            onSessionExpired={onSessionExpired}
+          />
           <CallFloat openChatId={openChatId} onOpenChat={setOpenChatId} />
           {messageSearch && (
             <SearchPanel
@@ -1287,6 +1294,7 @@ export default function MainScreen({
         {settingsOpen && (
           <SettingsDialog
             user={user}
+            initialPage={settingsOpen}
             onClose={() => setSettingsOpen(false)}
             onLogout={onLogout}
             onAccountDeleted={onAccountDeleted}
@@ -1354,7 +1362,7 @@ export default function MainScreen({
             onCancel={() => setConfirm(null)}
           />
         )}
-        <GameNotice onOpenSettings={() => setSettingsOpen(true)} />
+        <GameNotice onOpenSettings={() => setSettingsOpen('general')} />
         {toast && (
           <div className="call-toast" role="status">
             {toast}

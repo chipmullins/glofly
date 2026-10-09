@@ -14,6 +14,18 @@ export const changePassword = (
 ): Promise<ApiResult<{ signedOut: number }>> =>
   request('POST', '/account/password', { currentPassword, newPassword, signOutOthers })
 
+export const resendVerification = (): Promise<ApiResult<{ ok: true }>> =>
+  request('POST', '/account/email/verify', {})
+
+export const changeEmail = (
+  newEmail: string,
+  password: string
+): Promise<ApiResult<{ pendingEmail: string }>> =>
+  request('POST', '/account/email', { newEmail, password })
+
+export const cancelEmailChange = (): Promise<ApiResult<{ ok: true }>> =>
+  request('DELETE', '/account/email/pending')
+
 /** Deleting signs out every device, this one included, so forget the session here too. */
 export async function deleteAccount(password: string): Promise<ApiResult<{ deleteAfter: string }>> {
   const result = await request<{ deleteAfter: string }>('POST', '/account/delete', { password })

@@ -1,4 +1,5 @@
 import type {
+  ForgotPasswordResult,
   LoginRequest,
   LoginResult,
   RegisterRequest,
@@ -155,6 +156,31 @@ export async function register(request: RegisterRequest): Promise<RegisterResult
     fields: {},
     message: 'Something went wrong on our end. Try again in a moment.'
   }
+}
+
+/** Forgot password. Not signed in, so it doesn't go through the shared request helper. */
+export async function forgotPassword(identifier: string): Promise<ForgotPasswordResult> {
+  let response: Response
+  try {
+    response = await fetch(`${API_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier }),
+      signal: AbortSignal.timeout(10_000)
+    })
+  } catch {
+    return { ok: false, message: UNREACHABLE }
+  }
+  if (response.ok) return { ok: true }
+  const body = (await response.json().catch(() => null)) as { message?: string } | null
+  if (response.status === 429) {
+    return {
+      ok: false,
+      message: body?.message ?? 'Too many tries. Wait a few minutes and try again.'
+    }
+  }
+  if (response.status === 400) return { ok: false, message: 'Enter your username or email.' }
+  return { ok: false, message: 'Something went wrong on our end. Try again in a moment.' }
 }
 
 export async function checkUsername(username: string): Promise<UsernameCheck | null> {

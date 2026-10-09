@@ -71,6 +71,7 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
   })
   socket.on('friends:changed', () => forward({ type: 'friends:changed' }))
   socket.on('conversations:changed', () => forward({ type: 'conversations:changed' }))
+  socket.on('account:changed', () => forward({ type: 'account:changed' }))
   socket.on('profile:changed', (p) => {
     if (typeof p?.userId === 'string') forward({ type: 'profile:changed', userId: p.userId })
   })
