@@ -8,6 +8,10 @@
 # ("Run workflow" only shows once this file is on the repo's default branch: main today, or
 # switch the default branch to dev as planned.)
 # The .dmg is under the run's "Artifacts" (GitHub zips it; unzip to get Glofly-<version>-mac.dmg).
+# Release tags (and manual runs with "publish" ticked) also upload it to the glofly-updates
+# bucket, which https://glofly.app/download/mac points at. That needs two repository secrets
+# (Settings → Secrets and variables → Actions) holding the glofly-release IAM user's access key:
+# RELEASE_AWS_ACCESS_KEY_ID and RELEASE_AWS_SECRET_ACCESS_KEY. Without them the step is skipped.
 #
 # Not signed by Apple or notarized yet (no Apple Developer account): it's "ad-hoc" signed so
 # Apple Silicon Macs will run it at all, and testers open it once with System Settings →
@@ -20,6 +24,11 @@ name: Mac build
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Also put it on glofly.app/download/mac'
+        type: boolean
+        default: false
   push:
     tags: ['v*']
     # Also when this file changes on dev, so a change to the build gets tried right away.
@@ -87,3 +96,27 @@ jobs:
           if-no-files-found: error
           compression-level: 0 # a .dmg is already compressed
           retention-days: 30
+
+      - name: Put it on glofly.app/download/mac
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-2
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "::warning::No RELEASE_AWS_* secrets, so the .dmg wasn't put on glofly.app (it's still in Artifacts)."
+            exit 0
+          fi
+          dmg="apps/desktop/dist/Glofly-$VERSION-mac.dmg"
+          type="--content-type application/x-apple-diskimage --only-show-errors"
+          # This version's file, then the always-newest name the website links to.
+          aws s3 cp "$dmg" "s3://glofly-updates/mac/Glofly-$VERSION-mac.dmg" $type
+          aws s3 cp "$dmg" "s3://glofly-updates/Glofly-Mac.dmg" $type --cache-control no-cache
+          code=$(curl -s -o /dev/null -w '%{http_code}' -I "https://glofly-updates.s3.us-east-2.amazonaws.com/Glofly-Mac.dmg")
+          echo "Public check: HTTP $code"
+          if [ "$code" != 200 ]; then
+            echo "::error::Uploaded, but it isn't publicly downloadable (HTTP $code). Check the glofly-updates bucket policy allows public reads of Glofly-Mac.dmg."
+            exit 1
+          fi

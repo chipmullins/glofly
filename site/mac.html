@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/icon.png">
+<title>Glofly for Mac</title>
+<meta name="description" content="How to install the early test build of Glofly on a Mac.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,600&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fffcf9; --sand: #f7f0e9; --line: #eaddd1; --ink: #24170f; --muted: #6b5547;
+    --red: #e0193a; --red-deep: #c0122f; --red-tint: #fce8eb; --red-rgb: 224, 25, 58;
+    --white: #ffffff;
+    --font-display: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--page); }
+  body { margin: 0; color: var(--ink); font: 400 17px/1.6 var(--font-body); -webkit-font-smoothing: antialiased; }
+  a { color: var(--red-deep); }
+  a:focus-visible { outline: 3px solid rgba(var(--red-rgb), 0.45); outline-offset: 3px; border-radius: 10px; }
+  .wrap { width: 100%; max-width: 760px; margin: 0 auto; padding-inline: 24px; }
+  @media (max-width: 480px) { .wrap { padding-inline: 16px; } }
+  .top { padding-block: 22px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+  .brand img { width: 36px; height: 36px; border-radius: 10px; }
+  .brand span { font: 700 22px/1 var(--font-display); }
+  main { padding-block: 24px 80px; }
+  .eyebrow {
+    display: inline-block; font: 600 13px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--red-deep); background: var(--red-tint); padding: 8px 12px; border-radius: 999px;
+  }
+  h1 { margin: 18px 0 12px; font: 800 clamp(36px, 6vw, 54px)/1.02 var(--font-display); letter-spacing: -0.03em; text-wrap: balance; }
+  .lede { margin: 0 0 28px; color: var(--muted); font-size: 19px; }
+  .download {
+    display: inline-flex; align-items: center; gap: 12px; padding: 16px 26px; border-radius: 14px;
+    text-decoration: none; background: var(--red); color: var(--white); font: 700 18px/1 var(--font-display);
+    box-shadow: 0 14px 30px -12px rgba(var(--red-rgb), 0.75), inset 0 -2px 0 rgba(0,0,0,0.12);
+  }
+  .download:hover { background: var(--red-deep); }
+  .download svg { width: 22px; height: 22px; }
+  .meta { margin: 12px 0 40px; font-size: 14px; color: var(--muted); }
+  h2 { margin: 0 0 16px; font: 700 26px/1.2 var(--font-display); letter-spacing: -0.015em; }
+  ol { list-style: none; margin: 0 0 32px; padding: 0; display: grid; gap: 12px; counter-reset: step; }
+  li {
+    counter-increment: step; position: relative; padding: 18px 20px 18px 66px;
+    background: var(--white); border: 1px solid var(--line); border-radius: 16px;
+  }
+  li::before {
+    content: counter(step); position: absolute; left: 18px; top: 16px; width: 32px; height: 32px; border-radius: 50%;
+    display: grid; place-items: center; background: var(--red-tint); color: var(--red-deep); font: 700 15px/1 var(--font-display);
+  }
+  li b { font-weight: 600; }
+  .note { padding: 18px 20px; border-radius: 16px; background: var(--sand); font-size: 15px; color: var(--muted); }
+  .note p { margin: 0 0 8px; } .note p:last-child { margin: 0; }
+  code { display: block; margin: 8px 0; overflow-x: auto; white-space: nowrap; font-size: 13px; background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--ink); }
+  footer { border-top: 1px solid var(--line); padding-block: 28px 40px; font-size: 14px; color: var(--muted); }
+  footer p { margin: 0; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/icon.png" alt=""><span>Glofly</span></a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <span class="eyebrow">Early test build</span>
+    <h1>Glofly for Mac</h1>
+    <p class="lede">One download for every Mac, Apple Silicon or Intel. It's an early test version, so macOS asks you to confirm it the first time you open it.</p>
+
+    <a class="download" href="/download/mac">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20"/><path d="M10 19l.6-1.4h2.8L14 19"/></svg>
+      Download for Mac
+    </a>
+    <p class="meta">macOS 12 or newer · Updates aren't automatic on Mac yet, so download again for a newer version.</p>
+
+    <h2>Opening it the first time</h2>
+    <ol>
+      <li>Open the downloaded <b>Glofly .dmg</b> and drag <b>Glofly</b> into <b>Applications</b>.</li>
+      <li>Open Glofly from Applications. macOS says it can't check it for malicious software. Click <b>Done</b>.</li>
+      <li>Open <b>System Settings → Privacy &amp; Security</b>, scroll down to the message about Glofly, and click <b>Open Anyway</b>.</li>
+      <li>Click <b>Open Anyway</b> again and enter your Mac password. From now on Glofly opens like any other app.</li>
+      <li>For calls, allow the microphone and camera when macOS asks. To share your screen, turn Glofly on in <b>Privacy &amp; Security → Screen &amp; System Audio Recording</b>, then quit and reopen Glofly.</li>
+    </ol>
+
+    <div class="note">
+      <p><b>Why the extra step?</b> Glofly isn't registered with Apple yet. That comes before the Mac version is finished.</p>
+      <p>If macOS says Glofly "is damaged and can't be opened", open Terminal, run this, then open Glofly again:<code>xattr -dr com.apple.quarantine /Applications/Glofly.app</code></p>
+      <p>Stuck? Email <a href="mailto:support@glofly.app">support@glofly.app</a>.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 Glofly · <a href="/">Home</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>
+  </div>
+</footer>
+</body>
+</html>

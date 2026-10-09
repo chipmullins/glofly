@@ -61,6 +61,38 @@
   }
   .top-link:hover { border-color: var(--red); color: var(--red-deep); }
 
+  /* Download menu in the top bar (no scripts on this site: a <details> opens and closes it) */
+  .dl { position: relative; }
+  .dl > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; user-select: none; }
+  .dl > summary::-webkit-details-marker { display: none; }
+  .dl > summary svg { width: 12px; height: 12px; transition: transform 0.15s ease; }
+  .dl[open] > summary { border-color: var(--red); color: var(--red-deep); }
+  .dl[open] > summary svg { transform: rotate(180deg); }
+  .dl-menu {
+    position: absolute; right: 0; top: calc(100% + 10px); z-index: 10; width: 268px;
+    padding: 8px; border-radius: 16px; background: var(--white); border: 1px solid var(--line);
+    box-shadow: 0 24px 48px -20px rgba(36, 23, 15, 0.35), 0 6px 14px -8px rgba(36, 23, 15, 0.18);
+    animation: dl-in 0.14s ease-out;
+  }
+  @keyframes dl-in { from { opacity: 0; transform: translateY(-4px); } }
+  @media (prefers-reduced-motion: reduce) { .dl-menu { animation: none; } .dl > summary svg { transition: none; } }
+  .dl-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 11px;
+    text-decoration: none; color: var(--ink);
+  }
+  .dl-item:hover, .dl-item:focus-visible { background: var(--red-tint); }
+  .dl-ic { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--sand); color: var(--ink); }
+  .dl-item:hover .dl-ic { background: var(--red); color: var(--white); }
+  .dl-ic svg { width: 18px; height: 18px; }
+  .dl-item b { display: block; font: 600 15px/1.2 var(--font-display); }
+  .dl-item small { display: block; font-size: 13px; line-height: 1.3; color: var(--muted); }
+  .tag {
+    display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px; vertical-align: 1px;
+    font: 700 10px/1.4 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--red-deep); background: var(--red-tint);
+  }
+  .dl-item:hover .tag { background: var(--white); }
+
   /* ---------- Hero ---------- */
   .hero { position: relative; padding-block: 40px 80px; overflow: hidden; }
   .hero .wrap { display: grid; grid-template-columns: 1.02fr 1fr; gap: 56px; align-items: center; }
@@ -94,6 +126,12 @@
   }
   .download:hover { background: var(--red-deep); transform: translateY(-1px); box-shadow: 0 18px 34px -12px rgba(var(--red-rgb), 0.8); }
   .download svg { width: 22px; height: 22px; flex: none; }
+  .download.alt {
+    background: var(--white); color: var(--ink); border: 1.5px solid var(--line);
+    padding: 14.5px 24px; box-shadow: 0 10px 24px -16px rgba(36, 23, 15, 0.4);
+  }
+  .download.alt:hover { background: var(--white); border-color: var(--red); color: var(--red-deep); box-shadow: 0 14px 28px -16px rgba(36, 23, 15, 0.45); }
+  .downloads { display: flex; flex-wrap: wrap; gap: 12px; }
   .meta { font-size: 14px; color: var(--muted); line-height: 1.45; }
   .meta strong { color: var(--ink); font-weight: 600; }
 
@@ -272,7 +310,19 @@
       </span>
       <span class="brand-name">Glofly</span>
     </a>
-    <a class="top-link" href="/download">Download</a>
+    <details class="dl">
+      <summary class="top-link">Download <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+      <div class="dl-menu">
+        <a class="dl-item" href="/download">
+          <span class="dl-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.3H3zm0 13.6 7.4 1.2v-7.2H3zm8.4 1.4L21 21.6v-8.8h-9.6zm0-16.4v7.5H21V2.4z"/></svg></span>
+          <span><b>Windows</b><small>Windows 10 and 11</small></span>
+        </a>
+        <a class="dl-item" href="/download/mac">
+          <span class="dl-ic"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20"/><path d="M10 19l.6-1.4h2.8L14 19"/></svg></span>
+          <span><b>macOS <span class="tag">Beta</span></b><small>Apple Silicon and Intel</small></span>
+        </a>
+      </div>
+    </details>
   </div>
 </header>
 
@@ -314,11 +364,17 @@
         <h1><span class="say">Say it.</span><span class="send">Send it.</span><span class="glofly">Glofly.</span></h1>
         <p class="lede">A messenger for you and your friends. Chat one-on-one or in groups, share photos and files, and jump on a voice or video call with a single click.</p>
         <div class="cta-row">
-          <a class="download" href="/download">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.3H3zm0 13.6 7.4 1.2v-7.2H3zm8.4 1.4L21 21.6v-8.8h-9.6zm0-16.4v7.5H21V2.4z"/></svg>
-            Download for Windows
-          </a>
-          <p class="meta"><strong>Free</strong> · Windows 10 and 11<br>Updates itself automatically</p>
+          <div class="downloads">
+            <a class="download" href="/download">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.3H3zm0 13.6 7.4 1.2v-7.2H3zm8.4 1.4L21 21.6v-8.8h-9.6zm0-16.4v7.5H21V2.4z"/></svg>
+              Download for Windows
+            </a>
+            <a class="download alt" href="/download/mac">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20"/><path d="M10 19l.6-1.4h2.8L14 19"/></svg>
+              Download for Mac
+            </a>
+          </div>
+          <p class="meta"><strong>Free</strong> · Windows 10 and 11 · macOS 12 or newer<br>The Mac version is an early test build · <a href="/mac">How to open it</a></p>
         </div>
       </div>
 
@@ -366,7 +422,7 @@
         <article class="feature">
           <span class="ic"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
           <h3>Chats and group chats</h3>
-          <p>Replies, reactions, edits, read receipts and typing dots. Pin the chats you care about and find anything with Ctrl+K.</p>
+          <p>Replies, reactions, edits, read receipts and typing dots. Pin the chats you care about and find anything with Ctrl+K (⌘K on a Mac).</p>
           <span class="fact">Groups of up to 25 friends</span>
         </article>
         <article class="feature">
