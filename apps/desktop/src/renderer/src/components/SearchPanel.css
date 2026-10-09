@@ -13,6 +13,13 @@
   border-left: 1px solid var(--glo-line);
   box-shadow: -12px 0 32px -16px rgba(var(--glo-shadow-rgb), 0.25);
 }
+/* With Glofly's own title bar, Windows' minimize/maximize/close buttons sit over the top
+   40px on the right: start the panel below them so its close button stays reachable. */
+.has-titlebar .search-panel {
+  top: 40px;
+  border-top: 1px solid var(--glo-line);
+  border-top-left-radius: 12px;
+}
 .search-panel-head {
   display: flex;
   align-items: center;

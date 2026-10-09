@@ -375,6 +375,7 @@
 }
 .photo-wrap {
   position: relative;
+  margin-bottom: 8px; /* room for the Edit pill hanging below the photo */
 }
 /* A soft darkening on hover, so the photo reads as clickable. */
 .photo-button.avatar::after {
@@ -391,8 +392,9 @@
 /* The small "Edit" pill on the photo's lower edge. */
 .photo-edit {
   position: absolute;
-  right: 4px;
-  bottom: 10px;
+  left: 50%;
+  bottom: -8px;
+  transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   gap: 5px;
