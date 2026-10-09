@@ -1,6 +1,6 @@
 {
   "name": "@glofly/desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Glofly instant messenger",
   "main": "./out/main/index.js",
   "author": "Glofly",
