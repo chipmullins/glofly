@@ -1,6 +1,10 @@
 {
   "name": "glofly",
   "private": true,
+  "scripts": {
+    "release": "node scripts/release.mjs",
+    "release:upload": "node scripts/release-upload.mjs"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
