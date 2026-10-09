@@ -42,11 +42,15 @@ if (out('git rev-parse --abbrev-ref HEAD') !== 'dev') {
 if (out('git status --porcelain')) {
   fail('You have changes that aren\'t committed. Commit (or undo) them first, then run this again.')
 }
-if (existsSync(join(DESKTOP, '.env.local'))) {
-  fail(
-    'apps\\desktop\\.env.local exists, so the installer would point at your PC instead of\n' +
-      '  api.glofly.app. Delete it (it\'s only for home-network testing), then run this again.'
-  )
+// Installer builds use production mode, where .env.production.local is the file that wins over
+// .env.production (.env.local does not). Either one here means a test build, not a release.
+for (const name of ['.env.production.local', '.env.local']) {
+  if (existsSync(join(DESKTOP, name))) {
+    fail(
+      `apps\\desktop\\${name} exists, so the installer might not point at api.glofly.app.\n` +
+        '  Delete it (it\'s only for testing against your PC), then run this again.'
+    )
+  }
 }
 checkAws()
 
