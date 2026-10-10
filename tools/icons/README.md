@@ -25,3 +25,15 @@ Sizes up to 40 px leave out the stars and use thicker wings so the firefly still
 
 To switch: set `ACTIVE` to another name, run the script, rebuild (`npm run build:win`, or
 `npm run release`). `resources/icon-options/` is left out of the installer (electron-builder.yml).
+
+## Glofly Control's icon
+
+```
+node tools/icons/make-icons.mjs control
+```
+
+writes only Control's icon (`apps/control/build/icon.ico`, `icon.icns`, `icon.png`,
+`apps/control/resources/icon.png` + `icon.svg`): the Twilight tile with the firefly moved up
+and left and a gold shield badge in the bottom-right corner, so it's easy to tell apart from
+Glofly on the taskbar (Oct 10). The same logo is drawn in Control's sidebar and sign-in
+screen (`apps/control/src/renderer/src/components/icons.tsx`, `Logo`).
