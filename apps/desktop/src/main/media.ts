@@ -4,6 +4,7 @@ import { isUserId } from './api'
 // Photos are only given to signed-in people, so the window can't load them straight
 // from the server (it never sees the session token). Instead it asks for
 //   glofly-media://avatars/<userId>/<version>                       profile photos
+//   glofly-media://groups/<conversationId>/<version>                group photos (0.2.1)
 //   glofly-media://attachments/<conversationId>/<id>/<preview|full> photos in chats
 //   glofly-media://attachments/<conversationId>/<id>/voice          voice messages (0.2.1)
 // and this fetches them with the token, here in the main process. Only these shapes are
@@ -39,6 +40,9 @@ function serverPathFor(url: URL): { path: string; maxBytes: number; audio?: bool
   const parts = url.pathname.split('/').slice(1)
   if (url.host === 'avatars' && parts.length === 2 && parts.every(isUserId)) {
     return { path: `/avatars/${parts[0]}/${parts[1]}`, maxBytes: 2 * MB }
+  }
+  if (url.host === 'groups' && parts.length === 2 && parts.every(isUserId)) {
+    return { path: `/conversations/${parts[0]}/photo/${parts[1]}`, maxBytes: 2 * MB }
   }
   if (
     url.host === 'attachments' &&

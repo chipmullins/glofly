@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import express, { Router, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
-import sharp from "sharp";
+import { squarePhoto } from "./photo";
 import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -23,7 +23,6 @@ const me = (res: Response): Me => res.locals.user as Me;
 
 const BIO_MAX = 190;
 const AVATAR_UPLOAD_MAX = "8mb";
-const AVATAR_SIZE = 512; // stored as a 512×512 square
 
 const uploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -170,23 +169,9 @@ profileRouter.put(
       return;
     }
 
-    let output: Buffer;
-    try {
-      // Read the file as an image, whatever it claims to be. Anything that isn't a real
-      // image fails here. Huge dimensions are refused so nobody can overload the server.
-      const image = sharp(input, { limitInputPixels: 50_000_000 });
-      const meta = await image.metadata();
-      if (!["jpeg", "png", "webp", "gif", "heif", "avif"].includes(meta.format ?? "")) {
-        throw new Error("unsupported format");
-      }
-      // Turned the right way up, cropped to a square, and re-saved as WebP. Re-saving drops
-      // hidden photo data (like the GPS location phones add), so nothing private leaks.
-      output = await image
-        .rotate()
-        .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: "cover" })
-        .webp({ quality: 85 })
-        .toBuffer();
-    } catch {
+    // Turned the right way up, cropped to a square, re-saved as WebP (hidden data dropped).
+    const output = await squarePhoto(input);
+    if (!output) {
       res.status(400).json({ error: "invalid", message: "That file isn't a photo Glofly can use." });
       return;
     }

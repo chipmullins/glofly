@@ -167,7 +167,7 @@ function DmRow({
             ring={ring}
           />
         ) : (
-          <GroupAvatar members={c.members} me={me} size={40} ring={ring} />
+          <GroupAvatar members={c.members} me={me} size={40} ring={ring} group={c} />
         )}
         <span className="dm-text">
           <span
@@ -375,6 +375,7 @@ export default function ChatList({
                   >
                     <GroupAvatar
                       members={g.members}
+                      group={g}
                       me={me}
                       size={40}
                       ring={i === highlighted ? 'var(--glo-hover)' : 'var(--glo-sidebar)'}

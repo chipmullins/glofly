@@ -6,7 +6,8 @@ import type {
   MessagePage,
   MessageSearchPage,
   MuteDuration,
-  VoiceInfo
+  VoiceInfo,
+  PhotoType
 } from '../preload/api-types'
 import { request } from './api'
 
@@ -34,6 +35,20 @@ export async function createGroup(
 ): Promise<ApiResult<ConversationSummary>> {
   return unwrapConversation(await request('POST', '/conversations/group', { userIds, name }))
 }
+
+/** Sets a group's photo (anyone in the group can). */
+export const setGroupPhoto = (
+  conversationId: string,
+  data: Uint8Array,
+  type: PhotoType
+): Promise<ApiResult<{ photoVersion: string }>> =>
+  request('PUT', `/conversations/${conversationId}/photo`, undefined, { data, type })
+
+/** Back to the members' faces. */
+export const removeGroupPhoto = (
+  conversationId: string
+): Promise<ApiResult<{ photoVersion: null }>> =>
+  request('DELETE', `/conversations/${conversationId}/photo`)
 
 export async function renameGroup(
   conversationId: string,

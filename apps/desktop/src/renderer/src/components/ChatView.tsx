@@ -1046,7 +1046,13 @@ export default function ChatView({
             aria-label="Group settings"
             onClick={onGroupSettings}
           >
-            <GroupAvatar members={conversation.members} me={me} size={44} ring="var(--glo-bg)" />
+            <GroupAvatar
+              members={conversation.members}
+              me={me}
+              size={44}
+              ring="var(--glo-bg)"
+              group={conversation}
+            />
           </button>
         )}
         <div className="chat-title">
@@ -1219,7 +1225,13 @@ export default function ChatView({
                 size={72}
               />
             ) : (
-              <GroupAvatar members={conversation.members} me={me} size={72} ring="var(--glo-bg)" />
+              <GroupAvatar
+                members={conversation.members}
+                me={me}
+                size={72}
+                ring="var(--glo-bg)"
+                group={conversation}
+              />
             )}
             <h2>
               <EmojiText text={title} />

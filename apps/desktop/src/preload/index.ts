@@ -93,6 +93,10 @@ const glofly: GloflyApi = {
     openDm: (userId: string) => ipcRenderer.invoke('conversations:open-dm', userId),
     createGroup: (userIds: string[], name: string | null) =>
       ipcRenderer.invoke('conversations:create-group', userIds, name),
+    setGroupPhoto: (conversationId: string, data: ArrayBuffer, type: PhotoType) =>
+      ipcRenderer.invoke('conversations:set-group-photo', conversationId, data, type),
+    removeGroupPhoto: (conversationId: string) =>
+      ipcRenderer.invoke('conversations:remove-group-photo', conversationId),
     renameGroup: (conversationId: string, name: string | null) =>
       ipcRenderer.invoke('conversations:rename-group', conversationId, name),
     addMembers: (conversationId: string, userIds: string[]) =>

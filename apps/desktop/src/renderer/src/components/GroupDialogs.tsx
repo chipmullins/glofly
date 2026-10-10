@@ -9,7 +9,10 @@ import type {
 import { chatTitle, GROUP_MAX, GROUP_NAME_MAX, memberCountLabel } from '../lib/groups'
 import { presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
+import GroupAvatar from './GroupAvatar'
+import PhotoCropper from './PhotoCropper'
 import ConfirmDialog from './ConfirmDialog'
+import { PHOTO_TYPES, readPhoto, type PickedPhoto } from '../lib/photoPick'
 import EmojiText from './EmojiText'
 import { AddFriendIcon, CloseIcon, LeaveIcon, PencilIcon, SearchIcon } from './icons'
 import './dialogs.css'
@@ -304,7 +307,11 @@ export function GroupSettingsDialog({
   const [message, setMessage] = useState<string | null>(null)
   const [removing, setRemoving] = useState<PublicUser | null>(null)
   const [busyRemove, setBusyRemove] = useState(false)
-  useEscape(onClose, !removing)
+  // Group photo: picked → positioned in the cropper → uploaded right away.
+  const [cropping, setCropping] = useState<PickedPhoto | null>(null)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const photoInput = useRef<HTMLInputElement>(null)
+  useEscape(onClose, !removing && !cropping)
 
   // Someone else renamed it while this is open: show the new name (unless you're typing).
   const [shownName, setShownName] = useState(group.name)
@@ -335,6 +342,30 @@ export function GroupSettingsDialog({
     else setMessage(result.message)
   }
 
+  async function pickPhoto(file: File | undefined): Promise<void> {
+    if (!file) return
+    const picked = await readPhoto(file)
+    if ('error' in picked) setMessage(picked.error)
+    else {
+      setMessage(null)
+      setCropping(picked)
+    }
+  }
+
+  async function savePhoto(data: ArrayBuffer | null): Promise<void> {
+    setPhotoBusy(true)
+    setMessage(null)
+    const result = data
+      ? await window.glofly.conversations.setGroupPhoto(group.id, data, 'image/webp')
+      : await window.glofly.conversations.removeGroupPhoto(group.id)
+    setPhotoBusy(false)
+    // The new photo shows everywhere once the group list refreshes (it's live for everyone).
+    if (!result.ok) {
+      if (result.error === 'unauthorized') onSessionExpired()
+      else setMessage(result.message)
+    }
+  }
+
   async function remove(): Promise<void> {
     if (!removing) return
     setBusyRemove(true)
@@ -358,11 +389,60 @@ export function GroupSettingsDialog({
         <div className="dialog-head">
           <div>
             <h1 id="group-settings-title">Group settings</h1>
-            <p>Anyone in the group can rename it and add their friends.</p>
+            <p>Anyone in the group can change its photo and name, and add their friends.</p>
           </div>
           <button type="button" className="dialog-close" aria-label="Close" onClick={onClose}>
             <CloseIcon />
           </button>
+        </div>
+
+        <div className="group-photo-row">
+          <GroupAvatar
+            members={group.members}
+            me={me}
+            size={64}
+            ring="var(--glo-surface)"
+            group={group}
+          />
+          <div className="group-photo-text">
+            <span className="group-photo-label">Group photo</span>
+            <span className="group-photo-desc">
+              {group.photoVersion
+                ? 'Everyone in the group sees it.'
+                : 'Shown as two members’ faces until someone adds one.'}
+            </span>
+          </div>
+          <div className="group-photo-actions">
+            <button
+              type="button"
+              className="small-button small-button--quiet"
+              disabled={photoBusy}
+              onClick={() => photoInput.current?.click()}
+            >
+              {group.photoVersion ? 'Change photo' : 'Add photo'}
+            </button>
+            {group.photoVersion && (
+              <button
+                type="button"
+                className="small-button small-button--quiet"
+                disabled={photoBusy}
+                onClick={() => void savePhoto(null)}
+              >
+                Remove
+              </button>
+            )}
+            <input
+              ref={photoInput}
+              type="file"
+              accept={PHOTO_TYPES.join(',')}
+              hidden
+              aria-label="Choose a group photo"
+              onChange={(e) => {
+                void pickPhoto(e.target.files?.[0])
+                e.target.value = ''
+              }}
+            />
+          </div>
         </div>
 
         <form
@@ -471,6 +551,18 @@ export function GroupSettingsDialog({
         </div>
       </div>
 
+      {cropping && (
+        <PhotoCropper
+          src={cropping.src}
+          animated={false}
+          onApply={({ data }) => {
+            setCropping(null)
+            void savePhoto(data)
+          }}
+          onUseWhole={() => setCropping(null)}
+          onCancel={() => setCropping(null)}
+        />
+      )}
       {removing && (
         <ConfirmDialog
           title={`Remove ${removing.displayName}?`}

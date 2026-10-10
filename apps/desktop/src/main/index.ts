@@ -40,6 +40,8 @@ import {
   openDm,
   createGroup,
   renameGroup,
+  setGroupPhoto,
+  removeGroupPhoto,
   addMembers,
   removeMember,
   reactToMessage,
@@ -553,6 +555,26 @@ function registerIpcHandlers(): void {
     v === null || (typeof v === 'string' && v.length <= 200)
   ipcMain.handle('conversations:create-group', (event, userIds: unknown, name: unknown) =>
     fromApp(event) && isPeople(userIds) && isGroupName(name) ? createGroup(userIds, name) : invalid
+  )
+  ipcMain.handle(
+    'conversations:set-group-photo',
+    (event, id: unknown, data: unknown, type: unknown) => {
+      if (
+        !fromApp(event) ||
+        !isUserId(id) ||
+        !(data instanceof ArrayBuffer) ||
+        !PHOTO_TYPES.includes(type as PhotoType)
+      ) {
+        return invalid
+      }
+      if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
+        return { ok: false, error: 'invalid', message: 'Photos can be up to 8 MB.' }
+      }
+      return setGroupPhoto(id, new Uint8Array(data), type as PhotoType)
+    }
+  )
+  ipcMain.handle('conversations:remove-group-photo', (event, id: unknown) =>
+    fromApp(event) && isUserId(id) ? removeGroupPhoto(id) : invalid
   )
   ipcMain.handle('conversations:rename-group', (event, id: unknown, name: unknown) =>
     fromApp(event) && isUserId(id) && isGroupName(name) ? renameGroup(id, name) : invalid

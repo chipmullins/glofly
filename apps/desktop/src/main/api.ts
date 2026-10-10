@@ -39,7 +39,7 @@ export async function request<T>(
   const json = (await response.json().catch(() => null)) as
     (T & { message?: string; error?: string; fields?: Record<string, string> }) | null
 
-  if (response.ok && json) return { ok: true, data: json }
+  if (response.ok && json) return { ok: true, data: upgradeEvents(json) }
 
   if (response.status === 426 && json?.error === 'update_required') {
     const required = noteUpdateRequired(json)
@@ -77,3 +77,27 @@ export async function request<T>(
 export const isUserId = (value: unknown): value is string =>
   typeof value === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+
+/**
+ * Event lines newer than 0.2.0 (a group photo change) arrive as `eventLine`, with `event` empty
+ * and a plain-text body, so 0.2.0 apps show them as an ordinary message. This app knows them,
+ * so they become lines again. Works on any API answer or live event (changes it in place).
+ */
+export function upgradeEvents<T>(value: T, depth = 0): T {
+  if (depth > 8 || !value || typeof value !== 'object') return value
+  if (Array.isArray(value)) {
+    for (const item of value) upgradeEvents(item, depth + 1)
+    return value
+  }
+  const o = value as Record<string, unknown>
+  const line = o.eventLine as { type?: unknown } | undefined
+  if (line && typeof line === 'object' && typeof line.type === 'string' && o.event === null) {
+    o.event = line
+    o.body = ''
+  }
+  delete o.eventLine
+  for (const key of Object.keys(o)) {
+    if (o[key] && typeof o[key] === 'object') upgradeEvents(o[key], depth + 1)
+  }
+  return value
+}

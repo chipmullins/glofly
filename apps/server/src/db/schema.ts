@@ -28,6 +28,9 @@ export type ChatEvent =
   | { type: "added"; userIds: string[] }
   | { type: "removed"; userId: string }
   | { type: "left" }
+  // 0.2.1: someone set or removed the group photo. Older apps get it as a plain line of text
+  // (see legacyEvent in messages/routes.ts).
+  | { type: "photo"; removed: boolean }
   // A call. The line changes as the call goes: ringing → ongoing → ended (or missed / declined).
   | { type: "call"; callId: string; video: boolean; status: CallStatus; durationSec: number | null };
 
@@ -215,6 +218,8 @@ export const conversations = pgTable("conversations", {
   dmKey: text("dm_key").unique(),
   // Group chats: the name anyone in the group can set (null = shown as members' names).
   name: text("name"),
+  // Group chats: the group photo's version (null = the members' faces). Anyone in it can set it.
+  photoVersion: text("photo_version"),
   // Group chats: who made it. They can remove people. If they leave, it passes to whoever
   // has been in the group longest.
   createdBy: uuid("created_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),

@@ -1,3 +1,4 @@
+import { upgradeEvents } from './api'
 import { app, BrowserWindow } from 'electron'
 import { io, type Socket } from 'socket.io-client'
 import type {
@@ -116,11 +117,13 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
   socket.on('message:new', (payload) => {
     if (payload?.message?.id) {
       const people = Array.isArray(payload.people) ? payload.people : undefined
-      forward({ type: 'message:new', message: payload.message, people })
+      forward({ type: 'message:new', message: upgradeEvents(payload.message), people })
     }
   })
   socket.on('message:updated', (payload) => {
-    if (payload?.message?.id) forward({ type: 'message:updated', message: payload.message })
+    if (payload?.message?.id) {
+      forward({ type: 'message:updated', message: upgradeEvents(payload.message) })
+    }
   })
   socket.on('typing', (payload) => {
     if (typeof payload?.conversationId === 'string' && typeof payload?.userId === 'string') {

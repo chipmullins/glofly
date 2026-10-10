@@ -121,7 +121,7 @@ function GroupRow({
           <GripIcon />
         </span>
       )}
-      <GroupAvatar members={group.members} me={me} size={44} ring="var(--glo-bg)" />
+      <GroupAvatar members={group.members} me={me} size={44} ring="var(--glo-bg)" group={group} />
       <div className="friend-text">
         <div className="friend-names">
           <span className="friend-name">

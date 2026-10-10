@@ -213,6 +213,8 @@ export type ChatEvent =
       /** How long it lasted, once ended */
       durationSec: number | null
     }
+  /** 0.2.1: someone set (or removed) the group photo */
+  | { type: 'photo'; removed: boolean }
 
 export type CallStatus = 'ringing' | 'ongoing' | 'ended' | 'missed' | 'declined'
 
@@ -304,6 +306,8 @@ export type GroupSummary = ConversationBase & {
   partnerReadAt: null
   /** Where you dragged it on the Groups page (lower first); null = never moved */
   groupPosition?: number | null
+  /** The group photo's version (null = two members' faces). Missing from servers before 0.2.1. */
+  photoVersion?: string | null
 }
 
 export type ConversationSummary = DmSummary | GroupSummary
@@ -601,6 +605,14 @@ export type GloflyApi = {
     /** Starts a group with at least two friends (up to 25 people, including you). */
     createGroup: (userIds: string[], name: string | null) => Promise<ApiResult<ConversationSummary>>
     /** Anyone in the group can rename it. Null or empty clears the name. */
+    /** Sets the group photo (anyone in the group can; a line in the chat says so). */
+    setGroupPhoto: (
+      conversationId: string,
+      data: ArrayBuffer,
+      type: PhotoType
+    ) => Promise<ApiResult<{ photoVersion: string }>>
+    /** Back to the members' faces. */
+    removeGroupPhoto: (conversationId: string) => Promise<ApiResult<{ photoVersion: null }>>
     renameGroup: (
       conversationId: string,
       name: string | null

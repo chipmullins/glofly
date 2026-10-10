@@ -1,0 +1,1 @@
+ALTER TABLE "conversations" ADD COLUMN "photo_version" text;

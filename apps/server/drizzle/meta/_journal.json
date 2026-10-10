@@ -141,6 +141,13 @@
       "when": 1791662874257,
       "tag": "0019_voice_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791663970741,
+      "tag": "0020_group_photos",
+      "breakpoints": true
     }
   ]
 }

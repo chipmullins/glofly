@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import express, { Router, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { and, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
@@ -39,6 +40,7 @@ import { blockedEitherWay, canMessage, deletionPending, pair } from "../friends/
 import { emitToUser } from "../realtime";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
+import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
 export const conversationsRouter = Router();
 conversationsRouter.use(requireAuth);
@@ -162,16 +164,20 @@ async function hydrate(rows: MessageRow[]) {
       }
     }
     const reply = r.replyToId ? replies.find((x) => x.id === r.replyToId) : undefined;
+    const legacy = legacyEvent(r.event);
     return {
       id: r.id,
       conversationId: r.conversationId,
       senderId: r.senderId,
-      body: deleted ? "" : r.body,
+      body: deleted ? "" : (legacy?.body ?? r.body),
       createdAt: r.createdAt,
       editedAt: deleted ? null : r.editedAt,
       deleted,
       // Group events ("Chip renamed the group"): shown as a line, not a message bubble.
-      event: r.event ?? null,
+      event: legacy ? null : (r.event ?? null),
+      // Event lines added after 0.2.0 (a group photo): 0.2.1+ apps show these as lines; older
+      // apps don't know them, so for them it's a plain message ("changed the group photo").
+      ...(legacy ? { eventLine: r.event } : {}),
       // Group members this message @mentions.
       mentions: deleted ? [] : (r.mentions ?? []),
       replyTo: reply
@@ -188,6 +194,16 @@ async function hydrate(rows: MessageRow[]) {
       attachments: deleted ? [] : (files.get(r.id) ?? []),
     };
   });
+}
+
+/** Event types every app version knows. */
+const EVENTS_IN_020 = new Set(["created", "renamed", "added", "removed", "left", "call"]);
+
+/** For an event 0.2.0 apps don't know: the text they show instead (as a normal message). */
+function legacyEvent(event: ChatEvent | null): { body: string } | null {
+  if (!event || EVENTS_IN_020.has(event.type)) return null;
+  if (event.type === "photo") return { body: event.removed ? "removed the group photo" : "changed the group photo" };
+  return { body: "" };
 }
 
 function quoteOf(list: { kind: "image" | "file"; name: string; voice?: unknown }[] | undefined) {
@@ -281,6 +297,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
       id: conversations.id,
       kind: conversations.kind,
       name: conversations.name,
+      photoVersion: conversations.photoVersion,
       createdBy: conversations.createdBy,
       lastMessageAt: conversations.lastMessageAt,
       createdAt: conversations.createdAt,
@@ -395,6 +412,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
         kind: "group" as const,
         partner: null,
         name: c.name,
+        // The group photo (null = shown as two members' faces).
+        photoVersion: c.photoVersion,
         // The other members, longest-standing first.
         members: members.map(person),
         memberCount: members.length + 1,
@@ -830,6 +849,107 @@ conversationsRouter.patch("/:id", groupLimiter, async (req, res) => {
   res.json({ conversation: summary });
 });
 
+// ---------------------------------------------------------------------------------------
+// Group photos (0.2.1). Anyone in the group can set or remove it; a line in the chat says so.
+
+/** Removes a group photo file (a new one replaced it, or the group is gone). */
+export async function removeGroupPhoto(conversationId: string, version: string): Promise<void> {
+  await storage
+    .remove(groupPhotoKey(conversationId, version))
+    .catch((err) => console.error("Couldn't remove a group photo", err));
+}
+
+/** Sets (or, with null, removes) a group's photo and posts the line about it. */
+async function changeGroupPhoto(
+  chat: { id: string; memberIds: string[] },
+  myId: string,
+  photo: Buffer | null,
+): Promise<string | null> {
+  const version = photo ? randomUUID() : null;
+  if (photo && version) await storage.put(groupPhotoKey(chat.id, version), photo, "image/webp");
+  const { row, before } = await db.transaction(async (tx) => {
+    const [old] = await tx
+      .select({ photoVersion: conversations.photoVersion })
+      .from(conversations)
+      .where(eq(conversations.id, chat.id))
+      .for("update");
+    await tx.update(conversations).set({ photoVersion: version }).where(eq(conversations.id, chat.id));
+    const row =
+      photo || old?.photoVersion ? await postEvent(tx, chat.id, myId, { type: "photo", removed: !photo }) : null;
+    return { row, before: old?.photoVersion ?? null };
+  });
+  if (before) await removeGroupPhoto(chat.id, before);
+  if (row) await announce(row, chat.memberIds);
+  return version;
+}
+
+// PUT /conversations/:id/photo — a new group photo (the image itself is the request body).
+conversationsRouter.put(
+  "/:id/photo",
+  groupLimiter,
+  express.raw({ type: "image/*", limit: PHOTO_UPLOAD_MAX }),
+  async (req, res) => {
+    const myId = me(res).id;
+    const chat = await myGroup(req.params.id, myId);
+    if (!chat) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    if (await deletionPending(myId)) {
+      res.status(403).json({ error: "forbidden", message: CANT_POST });
+      return;
+    }
+    const input = req.body;
+    const photo = Buffer.isBuffer(input) && input.length > 0 ? await squarePhoto(input) : null;
+    if (!photo) {
+      res.status(400).json({ error: "invalid", message: "That file isn't a photo Glofly can use." });
+      return;
+    }
+    const photoVersion = await changeGroupPhoto(chat, myId, photo);
+    res.json({ photoVersion });
+  },
+);
+
+// DELETE /conversations/:id/photo — back to the members' faces.
+conversationsRouter.delete("/:id/photo", groupLimiter, async (req, res) => {
+  const myId = me(res).id;
+  const chat = await myGroup(req.params.id, myId);
+  if (!chat) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (await deletionPending(myId)) {
+    res.status(403).json({ error: "forbidden", message: CANT_POST });
+    return;
+  }
+  await changeGroupPhoto(chat, myId, null);
+  res.json({ photoVersion: null });
+});
+
+// GET /conversations/:id/photo/:version — the group photo (people in the group only). The
+// version changes with every new photo, so it can be kept for good.
+conversationsRouter.get("/:id/photo/:version", async (req, res) => {
+  const chat = await myGroup(req.params.id, me(res).id);
+  const version = z.uuid().safeParse(req.params.version);
+  if (!chat || !version.success) {
+    res.status(404).end();
+    return;
+  }
+  const [row] = await db
+    .select({ photoVersion: conversations.photoVersion })
+    .from(conversations)
+    .where(eq(conversations.id, chat.id));
+  const file = row?.photoVersion === version.data ? await storage.get(groupPhotoKey(chat.id, version.data)) : null;
+  if (!file) {
+    res.status(404).end();
+    return;
+  }
+  res.setHeader("Content-Type", "image/webp");
+  res.setHeader("Content-Length", String(file.size));
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  file.stream.pipe(res);
+});
+
 // POST /conversations/:id/members  { userIds } — add friends to a group.
 conversationsRouter.post("/:id/members", groupLimiter, async (req, res) => {
   const myId = me(res).id;
@@ -930,8 +1050,11 @@ conversationsRouter.delete("/:id/members/:userId", groupLimiter, async (req, res
         .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
         .from(attachments)
         .where(eq(attachments.conversationId, chat.id));
-      await tx.delete(conversations).where(eq(conversations.id, chat.id));
-      return { kind: "empty" as const, files: [...unsent, ...files] };
+      const [gone] = await tx
+        .delete(conversations)
+        .where(eq(conversations.id, chat.id))
+        .returning({ photoVersion: conversations.photoVersion });
+      return { kind: "empty" as const, files: [...unsent, ...files], photo: gone?.photoVersion ?? null };
     }
     const [group] = await tx
       .select({ createdBy: conversations.createdBy })
@@ -950,6 +1073,7 @@ conversationsRouter.delete("/:id/members/:userId", groupLimiter, async (req, res
   });
 
   if (outcome.kind !== "gone") await removeFiles(outcome.files);
+  if (outcome.kind === "empty" && outcome.photo) await removeGroupPhoto(chat.id, outcome.photo);
   // Someone who leaves (or is removed) drops out of the group's call straight away.
   if (outcome.kind !== "gone") await removeFromChatCall(chat.id, target.data);
   if (outcome.kind === "posted") await announce(outcome.row, outcome.memberIds);

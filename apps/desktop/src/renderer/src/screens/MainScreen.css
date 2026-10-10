@@ -975,6 +975,31 @@
   background: var(--glo-panel);
   color: var(--glo-icon);
 }
+/* A group photo (0.2.1), round like a profile photo, with a three-people badge bottom-right */
+.group-photo {
+  position: relative;
+  flex: none;
+  display: block;
+}
+.group-photo-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--glo-panel);
+}
+.group-photo-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+}
 .section-head-actions {
   display: flex;
   align-items: center;

@@ -5,6 +5,7 @@ import { chatPartnersOf } from "../friends/routes";
 import { announcePresence, friendIdsOf } from "../presence";
 import { disconnectSessions, emitToUser } from "../realtime";
 import { removeFiles } from "../messages/attachments";
+import { removeGroupPhoto } from "../messages/routes";
 import { storage } from "../storage";
 import { endCallsFor } from "../calls/service";
 
@@ -75,6 +76,7 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
       .innerJoin(conversationMembers, eq(conversationMembers.conversationId, conversations.id))
       .where(and(eq(conversationMembers.userId, user.id), isNotNull(conversations.dmKey)));
     const dmIds = dms.map((c) => c.id);
+    const groupPhotos: { groupId: string; version: string }[] = [];
     const files = dmIds.length
       ? await db
           .select({
@@ -118,7 +120,11 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
               .from(attachments)
               .where(eq(attachments.conversationId, groupId))),
           );
-          await tx.delete(conversations).where(eq(conversations.id, groupId));
+          const [gone] = await tx
+            .delete(conversations)
+            .where(eq(conversations.id, groupId))
+            .returning({ photoVersion: conversations.photoVersion });
+          if (gone?.photoVersion) groupPhotos.push({ groupId, version: gone.photoVersion });
         } else {
           // If they made the group, whoever has been in it longest takes over.
           await tx
@@ -132,6 +138,7 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
     });
 
     await removeFiles([...new Map(files.map((f) => [f.id, f])).values()]);
+    for (const p of groupPhotos) await removeGroupPhoto(p.groupId, p.version);
     if (user.avatarVersion) {
       await storage
         .remove(`avatars/${user.id}/${user.avatarVersion}.webp`)

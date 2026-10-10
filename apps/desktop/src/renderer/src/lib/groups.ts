@@ -57,6 +57,11 @@ export function eventText(
       return `${actor} left the group`
     case 'call':
       return callLine(event, actorId, meId, nameOf)
+    case 'photo':
+      return event.removed ? `${actor} removed the group photo` : `${actor} changed the group photo`
+    default:
+      // A line from a newer version of Glofly: nothing to show rather than breaking the chat.
+      return ''
   }
 }
 
