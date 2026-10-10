@@ -49,7 +49,7 @@ import GroupsPage from '../components/GroupsPage'
 import MuteMenuItems from '../components/MuteMenu'
 import ReportDialog from '../components/ReportDialog'
 import { AnnouncementBar, TeamNoticeDialog } from '../components/TeamNotice'
-import { isMuted, mentionsMe, muteUntil } from '../lib/mentions'
+import { isClosed, isMuted, mentionsMe, muteUntil } from '../lib/mentions'
 import { findChats, type ChatResult } from '../lib/chatSearch'
 import { GroupPeopleDialog, GroupSettingsDialog } from '../components/GroupDialogs'
 import { chatTitle } from '../lib/groups'
@@ -813,6 +813,36 @@ export default function MainScreen({
     else setNotice(result.message)
   }
 
+  /**
+   * Closes a chat in the sidebar: hidden (and marked read) until a new message arrives or it's
+   * opened again. Nothing is deleted. Shown right away; put back if the server says no.
+   */
+  async function closeChat(c: ConversationSummary): Promise<void> {
+    if (c.pinnedAt) return
+    if (openChatId === c.id) setOpenChatId(null)
+    const closedAt = new Date().toISOString()
+    setConversations((list) =>
+      list.map((x) => (x.id === c.id ? { ...x, closedAt, unreadCount: 0, mentionCount: 0 } : x))
+    )
+    clearNotification(c.id)
+    const result = await window.glofly.conversations.close(c.id, true)
+    if (result.ok) return
+    setConversations((list) =>
+      list.map((x) =>
+        x.id === c.id
+          ? {
+              ...x,
+              closedAt: c.closedAt ?? null,
+              unreadCount: c.unreadCount,
+              mentionCount: c.mentionCount
+            }
+          : x
+      )
+    )
+    if (result.error === 'unauthorized') onSessionExpired()
+    else setNotice(result.message)
+  }
+
   /** Saves a new order for the Groups page (shown right away; put back if the server says no). */
   async function reorderGroups(ids: string[]): Promise<void> {
     const before = conversations
@@ -872,6 +902,16 @@ export default function MainScreen({
   }, [])
 
   const openChat = conversations.find((c) => c.id === openChatId) ?? null
+
+  // Opening a closed chat from anywhere (search, Friends, Groups, a notification) puts it back
+  // in the sidebar, here and on my other devices.
+  const reopenId = openChat && isClosed(openChat) ? openChat.id : null
+  useEffect(() => {
+    if (!reopenId) return
+    // The open chat always shows in the sidebar; the server's conversations:changed refreshes
+    // the list for this device and the others.
+    void window.glofly.conversations.close(reopenId, false)
+  }, [reopenId])
   const settingsGroup = conversations.find((c) => c.id === settingsFor && c.kind === 'group')
   const pickerGroup = groupPicker?.groupId
     ? conversations.find((c) => c.id === groupPicker.groupId && c.kind === 'group')
@@ -1237,6 +1277,7 @@ export default function MainScreen({
             onGroupSettings={(c) => setSettingsFor(c.id)}
             onLeaveGroup={setLeaving}
             onMute={(c, d) => void muteChat(c, d)}
+            onCloseChat={(c) => void closeChat(c)}
             onNewMessage={() => {
               setOpenChatId(null)
               setPage('friends')

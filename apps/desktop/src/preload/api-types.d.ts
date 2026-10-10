@@ -274,6 +274,8 @@ type ConversationBase = {
   mutedUntil?: string | null
   /** Unread messages that @mention you (groups) */
   mentionCount?: number
+  /** When you closed it in the sidebar (ISO date), or null. Hidden until a newer message. */
+  closedAt?: string | null
 }
 
 /** How long to mute a chat for. */
@@ -645,6 +647,8 @@ export type GloflyApi = {
       conversationId: string,
       duration: MuteDuration | null
     ) => Promise<ApiResult<{ mutedUntil: string | null }>>
+    /** Closes a chat in the sidebar (history kept; comes back with a new message), or reopens it. */
+    close: (conversationId: string, closed: boolean) => Promise<ApiResult<null>>
     typing: (conversationId: string) => void
   }
   files: {

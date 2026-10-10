@@ -72,6 +72,19 @@ export function mentionSuggestions(query: string, people: PublicUser[], limit = 
 }
 
 // ---------------------------------------------------------------------------------------
+// Closing a chat in the sidebar
+
+/**
+ * True while you've closed this chat and nothing newer has arrived since. Closed chats keep
+ * their history; they're just left out of the sidebar's Chats list.
+ */
+export function isClosed(c: Pick<ConversationSummary, 'closedAt' | 'lastMessage'>): boolean {
+  if (!c.closedAt) return false
+  const last = c.lastMessage?.createdAt
+  return !last || new Date(last).getTime() <= new Date(c.closedAt).getTime()
+}
+
+// ---------------------------------------------------------------------------------------
 // Muting
 
 /** True while you've muted this chat. */

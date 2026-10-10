@@ -242,6 +242,9 @@ export const conversationMembers = pgTable(
     // Muted by this person until then (no sound or notification; mentions still get through).
     // Far in the future = "until I turn it back on". Null = not muted.
     mutedUntil: timestamp("muted_until", { withTimezone: true }),
+    // When this person closed the chat in their sidebar (history kept). It stays hidden until
+    // a message newer than this arrives, or they open it again. Null = not closed.
+    closedAt: timestamp("closed_at", { withTimezone: true }),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

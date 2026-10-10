@@ -1230,3 +1230,43 @@
 .dm-badges .badge {
   margin-left: 0;
 }
+
+/* ---------- Close chat (0.2.1): an X on hover, over the row's badges ---------- */
+.dm-row-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.dm-row-wrap > .dm-row {
+  width: 100%;
+}
+.dm-close {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: var(--glo-surface);
+  color: var(--glo-muted);
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--glo-line);
+}
+.dm-close:hover {
+  color: var(--glo-ink);
+  background: var(--glo-hover);
+}
+.dm-row-wrap--closable:hover .dm-close,
+.dm-row-wrap--closable:focus-within .dm-close {
+  display: flex;
+}
+.dm-row-wrap--closable:hover .dm-badges,
+.dm-row-wrap--closable:focus-within .dm-badges {
+  visibility: hidden;
+}

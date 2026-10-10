@@ -160,6 +160,15 @@ export async function pinConversation(
   return result.ok ? { ok: true, data: null } : result
 }
 
+/** Closes a chat in my sidebar (nothing deleted), or reopens it. */
+export async function closeConversation(
+  conversationId: string,
+  closed: boolean
+): Promise<ApiResult<null>> {
+  const result = await request(closed ? 'PUT' : 'DELETE', `/conversations/${conversationId}/close`)
+  return result.ok ? { ok: true, data: null } : result
+}
+
 /** My order for the Groups page (after dragging a group to a new place). */
 export async function orderGroups(ids: string[]): Promise<ApiResult<null>> {
   const result = await request('PUT', '/conversations/groups/order', { ids })

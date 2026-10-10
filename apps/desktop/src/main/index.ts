@@ -36,6 +36,7 @@ import {
   pinConversation,
   orderGroups,
   muteConversation,
+  closeConversation,
   openDm,
   createGroup,
   renameGroup,
@@ -668,6 +669,11 @@ function registerIpcHandlers(): void {
     isUserId(id) &&
     (duration === null || ['1h', '8h', '24h', 'forever'].includes(duration as string))
       ? muteConversation(id, duration as MuteDuration | null)
+      : invalid
+  )
+  ipcMain.handle('conversations:close', (event, id: unknown, closed: unknown) =>
+    fromApp(event) && isUserId(id) && typeof closed === 'boolean'
+      ? closeConversation(id, closed)
       : invalid
   )
   ipcMain.on('conversations:typing', (event, id: unknown) => {

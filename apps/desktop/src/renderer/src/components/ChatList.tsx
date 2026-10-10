@@ -16,10 +16,11 @@ import EmojiText from './EmojiText'
 import GroupAvatar from './GroupAvatar'
 import ContextMenu, { MenuItem } from './ContextMenu'
 import MuteMenuItems from './MuteMenu'
-import { isMuted, mutedLabel } from '../lib/mentions'
+import { isClosed, isMuted, mutedLabel } from '../lib/mentions'
 import {
   BellOffIcon,
   ChatIcon,
+  CloseIcon,
   GroupIcon,
   LeaveIcon,
   PlusIcon,
@@ -64,6 +65,8 @@ type ChatListProps = {
   onGroupSettings: (conversation: ConversationSummary) => void
   onLeaveGroup: (conversation: ConversationSummary) => void
   onMute: (conversation: ConversationSummary, duration: MuteDuration | null) => void
+  /** Hides a chat from the sidebar (history kept) until a new message arrives */
+  onCloseChat: (conversation: ConversationSummary) => void
   onNewMessage: () => void
   onNewGroup: () => void
   /** Opens message search across all chats with this text */
@@ -95,7 +98,8 @@ function DmRow({
   now,
   typingIds,
   onOpen,
-  onMenu
+  onMenu,
+  onCloseChat
 }: {
   c: ConversationSummary
   me: PublicUser
@@ -106,6 +110,8 @@ function DmRow({
   typingIds: string[] | undefined
   onOpen: () => void
   onMenu: (x: number, y: number) => void
+  /** Closes it in the sidebar (unpinned chats only); null hides the X */
+  onCloseChat: (() => void) | null
 }): React.JSX.Element {
   // Like the design: friends show their status; otherwise the last message (groups always).
   // A call going on shows instead: "In call · 4 of 6" (GroupCall.dc.html).
@@ -136,87 +142,100 @@ function DmRow({
   const ring = active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'
   const muted = isMuted(c, now)
   return (
-    <button
-      type="button"
-      className={['dm-row', active ? 'dm-row--active' : '', muted ? 'dm-row--muted' : '']
-        .filter(Boolean)
-        .join(' ')}
-      aria-current={active ? 'page' : undefined}
-      onClick={onOpen}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        // From the keyboard (menu key) there's no pointer position: open it by the row.
-        const rect = e.currentTarget.getBoundingClientRect()
-        onMenu(e.clientX || rect.left + 40, e.clientY || rect.bottom)
-      }}
-    >
-      {c.kind === 'dm' ? (
-        <Avatar
-          id={c.partner.id}
-          name={c.partner.displayName}
-          avatarVersion={c.partner.avatarVersion}
-          size={40}
-          status={presence?.status}
-          ring={ring}
-        />
-      ) : (
-        <GroupAvatar members={c.members} me={me} size={40} ring={ring} />
-      )}
-      <span className="dm-text">
-        <span
-          className={c.unreadCount > 0 || active ? 'dm-name dm-name--strong' : 'dm-name'}
-          title={c.kind === 'group' ? `${title} · ${memberCountLabel(c.memberCount)}` : undefined}
+    <div className={onCloseChat ? 'dm-row-wrap dm-row-wrap--closable' : 'dm-row-wrap'}>
+      <button
+        type="button"
+        className={['dm-row', active ? 'dm-row--active' : '', muted ? 'dm-row--muted' : '']
+          .filter(Boolean)
+          .join(' ')}
+        aria-current={active ? 'page' : undefined}
+        onClick={onOpen}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          // From the keyboard (menu key) there's no pointer position: open it by the row.
+          const rect = e.currentTarget.getBoundingClientRect()
+          onMenu(e.clientX || rect.left + 40, e.clientY || rect.bottom)
+        }}
+      >
+        {c.kind === 'dm' ? (
+          <Avatar
+            id={c.partner.id}
+            name={c.partner.displayName}
+            avatarVersion={c.partner.avatarVersion}
+            size={40}
+            status={presence?.status}
+            ring={ring}
+          />
+        ) : (
+          <GroupAvatar members={c.members} me={me} size={40} ring={ring} />
+        )}
+        <span className="dm-text">
+          <span
+            className={c.unreadCount > 0 || active ? 'dm-name dm-name--strong' : 'dm-name'}
+            title={c.kind === 'group' ? `${title} · ${memberCountLabel(c.memberCount)}` : undefined}
+          >
+            <EmojiText text={title} />
+          </span>
+          <span
+            className={
+              callLabel
+                ? 'dm-preview dm-preview--call'
+                : typingLabel
+                  ? 'dm-preview dm-preview--typing'
+                  : c.kind === 'dm' && playing(presence)
+                    ? 'dm-preview dm-preview--playing'
+                    : 'dm-preview'
+            }
+          >
+            {typingLabel && !callLabel && (
+              <span className="dm-typing-dots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+            )}
+            <EmojiText text={preview} />
+          </span>
+        </span>
+        {(muted || (c.unreadCount > 0 && !active)) && (
+          <span className="dm-badges">
+            {muted && (
+              <span className="dm-muted" title={c.mutedUntil ? mutedLabel(c.mutedUntil) : 'Muted'}>
+                <BellOffIcon size={15} />
+              </span>
+            )}
+            {!active && (c.mentionCount ?? 0) > 0 && (
+              <span
+                className="badge badge--mention"
+                aria-label={`${c.mentionCount} mention${c.mentionCount === 1 ? '' : 's'}`}
+                title="You were mentioned"
+              >
+                @
+              </span>
+            )}
+            {c.unreadCount > 0 && !active && (
+              <span
+                className={muted ? 'badge badge--muted' : 'badge'}
+                aria-label={`${c.unreadCount} unread`}
+              >
+                {c.unreadCount > 99 ? '99+' : c.unreadCount}
+              </span>
+            )}
+          </span>
+        )}
+      </button>
+      {onCloseChat && (
+        <button
+          type="button"
+          className="dm-close"
+          aria-label={`Close ${title}`}
+          title="Close chat"
+          onClick={onCloseChat}
         >
-          <EmojiText text={title} />
-        </span>
-        <span
-          className={
-            callLabel
-              ? 'dm-preview dm-preview--call'
-              : typingLabel
-                ? 'dm-preview dm-preview--typing'
-                : c.kind === 'dm' && playing(presence)
-                  ? 'dm-preview dm-preview--playing'
-                  : 'dm-preview'
-          }
-        >
-          {typingLabel && !callLabel && (
-            <span className="dm-typing-dots" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
-          )}
-          <EmojiText text={preview} />
-        </span>
-      </span>
-      {(muted || (c.unreadCount > 0 && !active)) && (
-        <span className="dm-badges">
-          {muted && (
-            <span className="dm-muted" title={c.mutedUntil ? mutedLabel(c.mutedUntil) : 'Muted'}>
-              <BellOffIcon size={15} />
-            </span>
-          )}
-          {!active && (c.mentionCount ?? 0) > 0 && (
-            <span
-              className="badge badge--mention"
-              aria-label={`${c.mentionCount} mention${c.mentionCount === 1 ? '' : 's'}`}
-              title="You were mentioned"
-            >
-              @
-            </span>
-          )}
-          {c.unreadCount > 0 && !active && (
-            <span
-              className={muted ? 'badge badge--muted' : 'badge'}
-              aria-label={`${c.unreadCount} unread`}
-            >
-              {c.unreadCount > 99 ? '99+' : c.unreadCount}
-            </span>
-          )}
-        </span>
+          <CloseIcon size={14} />
+        </button>
       )}
-    </button>
+    </div>
   )
 }
 
@@ -230,11 +249,13 @@ function RowMenu({
   onGroupSettings,
   onLeaveGroup,
   onMute,
+  onCloseChat,
   onClose
 }: {
   conversation: ConversationSummary
   x: number
   y: number
+  onCloseChat: () => void
   onTogglePin: () => void
   onViewProfile: () => void
   onGroupSettings: () => void
@@ -264,6 +285,14 @@ function RowMenu({
           </MenuItem>
         </>
       )}
+      {!pinned && (
+        <>
+          <div className="menu-divider" role="separator" />
+          <MenuItem icon={<CloseIcon size={18} />} onClose={onClose} onClick={onCloseChat}>
+            Close chat
+          </MenuItem>
+        </>
+      )}
     </ContextMenu>
   )
 }
@@ -284,6 +313,7 @@ export default function ChatList({
   onGroupSettings,
   onLeaveGroup,
   onMute,
+  onCloseChat,
   onNewMessage,
   onNewGroup,
   onSearchMessages
@@ -296,7 +326,8 @@ export default function ChatList({
   const pinned = conversations
     .filter((c) => c.pinnedAt)
     .sort((a, b) => (a.pinnedAt ?? '').localeCompare(b.pinnedAt ?? ''))
-  const others = conversations.filter((c) => !c.pinnedAt)
+  // Closed chats stay out of the list until something new arrives (or they're opened again).
+  const others = conversations.filter((c) => !c.pinnedAt && (c.id === openChatId || !isClosed(c)))
 
   const row = (c: ConversationSummary): React.ReactNode => (
     <DmRow
@@ -309,6 +340,7 @@ export default function ChatList({
       typingIds={typing[c.id]}
       onOpen={() => onOpen(c.id)}
       onMenu={(x, y) => setMenu({ id: c.id, x, y })}
+      onCloseChat={c.pinnedAt ? null : () => onCloseChat(c)}
     />
   )
 
@@ -462,7 +494,11 @@ export default function ChatList({
           <p>No conversations yet. Messages and group chats with friends will show up here.</p>
         </div>
       ) : others.length === 0 ? (
-        <p className="search-empty">All your chats are pinned.</p>
+        <p className="search-empty">
+          {pinned.length
+            ? 'All your other chats are pinned or closed.'
+            : 'All your chats are closed. Search or a new message brings them back.'}
+        </p>
       ) : (
         <nav aria-label="Chats" className="dm-list">
           {others.map(row)}
@@ -479,6 +515,7 @@ export default function ChatList({
           onGroupSettings={() => onGroupSettings(menuFor)}
           onLeaveGroup={() => onLeaveGroup(menuFor)}
           onMute={(duration) => onMute(menuFor, duration)}
+          onCloseChat={() => onCloseChat(menuFor)}
           onClose={() => setMenu(null)}
         />
       )}

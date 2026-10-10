@@ -127,6 +127,13 @@
       "when": 1791607570892,
       "tag": "0017_v020_groups_mentions_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791661185626,
+      "tag": "0018_close_chat",
+      "breakpoints": true
     }
   ]
 }

@@ -283,6 +283,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
       joinedAt: conversationMembers.joinedAt,
       groupPosition: conversationMembers.groupPosition,
       mutedUntil: conversationMembers.mutedUntil,
+      closedAt: conversationMembers.closedAt,
     })
     .from(conversationMembers)
     .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
@@ -379,6 +380,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
       pinnedAt: c.pinnedAt?.toISOString() ?? null,
       // When I joined (groups page: groups never moved sit at the top, newest first).
       joinedAt: c.joinedAt.toISOString(),
+      // When I closed it in my sidebar. The app hides it until a newer message arrives.
+      closedAt: c.closedAt?.toISOString() ?? null,
     };
     if (c.kind === "group") {
       result.push({
@@ -428,7 +431,7 @@ export const MAX_PINNED = 10;
 async function setPinned(myId: string, conversationId: string, pinned: boolean) {
   const updated = await db
     .update(conversationMembers)
-    .set({ pinnedAt: pinned ? new Date() : null })
+    .set(pinned ? { pinnedAt: new Date(), closedAt: null } : { pinnedAt: null }) // pinning reopens a closed chat
     .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, myId)))
     .returning({ id: conversationMembers.conversationId });
   if (updated.length) emitToUser(myId, "conversations:changed", {});
@@ -472,6 +475,57 @@ conversationsRouter.put("/:id/pin", async (req, res) => {
 conversationsRouter.delete("/:id/pin", async (req, res) => {
   const id = idParam.safeParse(req.params.id);
   if (id.success) await setPinned(me(res).id, id.data, false);
+  res.status(204).end();
+});
+
+/** Closes or reopens a chat in my sidebar; my other devices update right away. */
+async function setClosed(myId: string, conversationId: string, closed: boolean) {
+  const now = new Date();
+  const updated = await db
+    .update(conversationMembers)
+    // Closing also marks it read, so it can't keep counting on the unread badge while hidden.
+    .set(closed ? { closedAt: now, lastReadAt: now } : { closedAt: null })
+    .where(
+      and(
+        eq(conversationMembers.conversationId, conversationId),
+        eq(conversationMembers.userId, myId),
+        closed ? undefined : isNotNull(conversationMembers.closedAt),
+      ),
+    )
+    .returning({ id: conversationMembers.conversationId });
+  if (updated.length) emitToUser(myId, "conversations:changed", {});
+  return updated.length > 0;
+}
+
+// PUT /conversations/:id/close — hide a chat from my sidebar (nothing is deleted). It comes
+// back by itself when a new message arrives. Pinned chats have to be unpinned first.
+conversationsRouter.put("/:id/close", async (req, res) => {
+  const id = idParam.safeParse(req.params.id);
+  const myId = me(res).id;
+  if (!id.success) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const [mine] = await db
+    .select({ pinnedAt: conversationMembers.pinnedAt })
+    .from(conversationMembers)
+    .where(and(eq(conversationMembers.conversationId, id.data), eq(conversationMembers.userId, myId)));
+  if (!mine) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (mine.pinnedAt) {
+    res.status(409).json({ error: "pinned", message: "Unpin this chat before closing it." });
+    return;
+  }
+  await setClosed(myId, id.data, true);
+  res.status(204).end();
+});
+
+// DELETE /conversations/:id/close — open it again (from search, Friends or Groups).
+conversationsRouter.delete("/:id/close", async (req, res) => {
+  const id = idParam.safeParse(req.params.id);
+  if (id.success) await setClosed(me(res).id, id.data, false);
   res.status(204).end();
 });
 
@@ -595,6 +649,8 @@ conversationsRouter.post("/dm", async (req, res) => {
     return existing.id;
   });
 
+  // Opening a chat I'd closed brings it back to my sidebar.
+  await setClosed(myId, conversationId, false);
   const [summary] = await summaries(myId, [conversationId]);
   res.json({ conversation: summary });
 });

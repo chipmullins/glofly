@@ -120,6 +120,8 @@ const glofly: GloflyApi = {
     orderGroups: (ids: string[]) => ipcRenderer.invoke('conversations:orderGroups', ids),
     mute: (conversationId: string, duration: MuteDuration | null) =>
       ipcRenderer.invoke('conversations:mute', conversationId, duration),
+    close: (conversationId: string, closed: boolean) =>
+      ipcRenderer.invoke('conversations:close', conversationId, closed),
     typing: (conversationId: string) => ipcRenderer.send('conversations:typing', conversationId)
   },
   files: {
