@@ -187,6 +187,8 @@ export type Message = {
   attachments: Attachment[]
   /** Group chats: a line like "Chip renamed the group" instead of a message (sent by senderId). */
   event: ChatEvent | null
+  /** Group members this message @mentions. Missing from servers before 0.2.0. */
+  mentions?: string[]
 }
 
 /** Things that happen in a chat, shown as a line ("Chip added Maya", "Chip started a video call"). */
@@ -263,7 +265,16 @@ type ConversationBase = {
   members: PublicUser[]
   /** Including you */
   memberCount: number
+  /** When you joined it (ISO date). Missing from servers before 0.2.0. */
+  joinedAt?: string
+  /** Muted by you until then (ISO date; far in the future = until you unmute), or null */
+  mutedUntil?: string | null
+  /** Unread messages that @mention you (groups) */
+  mentionCount?: number
 }
+
+/** How long to mute a chat for. */
+export type MuteDuration = '1h' | '8h' | '24h' | 'forever'
 
 export type DmSummary = ConversationBase & {
   kind: 'dm'
@@ -282,6 +293,8 @@ export type GroupSummary = ConversationBase & {
   /** Who can remove people (whoever made it, or whoever took over) */
   createdBy: string | null
   partnerReadAt: null
+  /** Where you dragged it on the Groups page (lower first); null = never moved */
+  groupPosition?: number | null
 }
 
 export type ConversationSummary = DmSummary | GroupSummary
@@ -579,6 +592,13 @@ export type GloflyApi = {
     markRead: (conversationId: string) => Promise<ApiResult<null>>
     /** Pins a chat to the top of the sidebar (up to 10, saved on your account), or unpins it. */
     pin: (conversationId: string, pinned: boolean) => Promise<ApiResult<null>>
+    /** Your order for the Groups page (saved on your account). */
+    orderGroups: (ids: string[]) => Promise<ApiResult<null>>
+    /** Mutes a chat for a while or until turned back on; null unmutes. */
+    mute: (
+      conversationId: string,
+      duration: MuteDuration | null
+    ) => Promise<ApiResult<{ mutedUntil: string | null }>>
     typing: (conversationId: string) => void
   }
   files: {

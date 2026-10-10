@@ -399,3 +399,96 @@ export function CallLineIcon({ missed = false }: { missed?: boolean }): React.JS
     </svg>
   )
 }
+
+// ---------- 0.2.0: groups page, mute, mentions, reports, call audio ----------
+
+/** Mute: a bell with a line through it */
+export function BellOffIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+      <path d="M18 13V9a6 6 0 0 0-9.3-5" />
+      <path d="M6.3 6.3A6 6 0 0 0 6 9c0 5-2 7-3 8h14" />
+      <path d="M3 3l18 18" />
+    </Svg>
+  )
+}
+
+/** Unmute: a bell */
+export function BellIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 7 3 8H3c1-1 3-3 3-8" />
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+    </Svg>
+  )
+}
+
+export function ArrowUpIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M12 19V5" />
+      <path d="M6 11l6-6 6 6" />
+    </Svg>
+  )
+}
+
+export function ArrowDownIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M12 5v14" />
+      <path d="M6 13l6 6 6-6" />
+    </Svg>
+  )
+}
+
+/** Drag handle: six dots */
+export function GripIcon(p: IconProps): React.JSX.Element {
+  return (
+    <svg
+      width={p.size ?? 16}
+      height={p.size ?? 16}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <circle cx="9" cy="6" r="1.6" />
+      <circle cx="15" cy="6" r="1.6" />
+      <circle cx="9" cy="12" r="1.6" />
+      <circle cx="15" cy="12" r="1.6" />
+      <circle cx="9" cy="18" r="1.6" />
+      <circle cx="15" cy="18" r="1.6" />
+    </svg>
+  )
+}
+
+/** Report: a flag */
+export function FlagIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M5 21V4" />
+      <path d="M5 4h11l-2 4 2 4H5" />
+    </Svg>
+  )
+}
+
+/** Call audio: a speaker with sound waves */
+export function SpeakerIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M4 9h4l5-4v14l-5-4H4z" />
+      <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M19.5 5.5a9 9 0 0 1 0 13" />
+    </Svg>
+  )
+}
+
+/** A megaphone (announcements) */
+export function MegaphoneIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M3 10v4a1 1 0 0 0 1 1h3l8 4V5L7 9H4a1 1 0 0 0-1 1z" />
+      <path d="M19 9a4 4 0 0 1 0 6" />
+    </Svg>
+  )
+}

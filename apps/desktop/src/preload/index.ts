@@ -7,6 +7,7 @@ import type {
   GameState,
   GloflyEvent,
   LoginRequest,
+  MuteDuration,
   MyStatus,
   PhotoType,
   PrivacySettings,
@@ -115,6 +116,9 @@ const glofly: GloflyApi = {
     markRead: (conversationId: string) => ipcRenderer.invoke('conversations:read', conversationId),
     pin: (conversationId: string, pinned: boolean) =>
       ipcRenderer.invoke('conversations:pin', conversationId, pinned),
+    orderGroups: (ids: string[]) => ipcRenderer.invoke('conversations:orderGroups', ids),
+    mute: (conversationId: string, duration: MuteDuration | null) =>
+      ipcRenderer.invoke('conversations:mute', conversationId, duration),
     typing: (conversationId: string) => ipcRenderer.send('conversations:typing', conversationId)
   },
   files: {

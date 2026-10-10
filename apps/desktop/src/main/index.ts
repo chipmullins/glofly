@@ -34,6 +34,8 @@ import {
   searchMessages,
   markRead,
   pinConversation,
+  orderGroups,
+  muteConversation,
   openDm,
   createGroup,
   renameGroup,
@@ -127,6 +129,7 @@ import {
 } from './friends'
 import type {
   LoginRequest,
+  MuteDuration,
   PhotoType,
   PrivacySettings,
   ProfileChanges,
@@ -647,6 +650,22 @@ function registerIpcHandlers(): void {
   ipcMain.handle('conversations:pin', (event, id: unknown, pinned: unknown) =>
     fromApp(event) && isUserId(id) && typeof pinned === 'boolean'
       ? pinConversation(id, pinned)
+      : invalid
+  )
+  ipcMain.handle('conversations:orderGroups', (event, ids: unknown) =>
+    fromApp(event) &&
+    Array.isArray(ids) &&
+    ids.length > 0 &&
+    ids.length <= 1000 &&
+    ids.every(isUserId)
+      ? orderGroups(ids)
+      : invalid
+  )
+  ipcMain.handle('conversations:mute', (event, id: unknown, duration: unknown) =>
+    fromApp(event) &&
+    isUserId(id) &&
+    (duration === null || ['1h', '8h', '24h', 'forever'].includes(duration as string))
+      ? muteConversation(id, duration as MuteDuration | null)
       : invalid
   )
   ipcMain.on('conversations:typing', (event, id: unknown) => {

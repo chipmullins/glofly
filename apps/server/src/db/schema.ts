@@ -236,6 +236,12 @@ export const conversationMembers = pgTable(
     lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull().defaultNow(),
     // When this person pinned the chat to the top of their sidebar (null = not pinned).
     pinnedAt: timestamp("pinned_at", { withTimezone: true }),
+    // Groups page: where this person dragged the group to (lower first). Null = never moved:
+    // those sit above the moved ones, newest first.
+    groupPosition: integer("group_position"),
+    // Muted by this person until then (no sound or notification; mentions still get through).
+    // Far in the future = "until I turn it back on". Null = not muted.
+    mutedUntil: timestamp("muted_until", { withTimezone: true }),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -266,12 +272,16 @@ export const messages = pgTable(
     // Group events shown as a line in the chat ("Chip renamed the group …"). The sender is
     // who did it; the body is empty. Null for ordinary messages.
     event: jsonb("event").$type<ChatEvent>(),
+    // Group members this message @mentions (checked against the group when sent or edited).
+    mentions: uuid("mentions").array().notNull().default(sql`'{}'::uuid[]`),
   },
   // Loading a chat = newest messages in one conversation, so index exactly that.
   // Searching messages = "contains these words": a trigram index keeps that fast.
   (t) => [
     index("messages_conversation_created_idx").on(t.conversationId, t.createdAt, t.id),
     index("messages_body_trgm_idx").using("gin", sql`${t.body} gin_trgm_ops`),
+    // "Messages that mention me" (unread mention counts).
+    index("messages_mentions_idx").using("gin", t.mentions),
   ],
 );
 
@@ -520,3 +530,96 @@ export const adminAuditLog = pgTable(
     index("admin_audit_target_idx").on(t.targetUserId),
   ],
 );
+
+// ───────────── Reports, warnings and announcements (Glofly Control v2) ─────────────
+
+export const reportReason = pgEnum("report_reason", [
+  "spam",
+  "harassment", // harassment or bullying
+  "hate",
+  "sexual",
+  "violence", // violence or threats
+  "self_harm",
+  "other",
+]);
+export const reportStatus = pgEnum("report_status", ["open", "resolved"]);
+export const reportOutcome = pgEnum("report_outcome", ["dismissed", "removed", "warned", "suspended"]);
+
+/** What a report keeps of the conversation, as it was when it was reported. */
+export type ReportSnapshot = {
+  /** The reported message (null when a person was reported from their profile) */
+  message: { id: string; senderId: string; body: string; createdAt: string; attachments: string[] } | null;
+  /** Up to 5 messages before and after it, the way the reporter saw them */
+  context: { id: string; senderId: string; body: string; createdAt: string; deleted: boolean; attachments: string[] }[];
+  /** Names as they were (people can rename or delete their account) */
+  people: { id: string; username: string; displayName: string }[];
+  chat: { kind: "dm" | "group"; name: string | null } | null;
+};
+
+// "Report" in Glofly: a message (from its menu) or a person (from their profile card).
+// Reviewed in Glofly Control. Accounts are referenced without foreign keys, so a report
+// stays after either account is removed; the snapshot keeps the names.
+export const reports = pgTable(
+  "reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    reporterId: uuid("reporter_id"),
+    reportedUserId: uuid("reported_user_id").notNull(),
+    conversationId: uuid("conversation_id"),
+    messageId: uuid("message_id"),
+    reason: reportReason("reason").notNull(),
+    details: text("details"),
+    snapshot: jsonb("snapshot").$type<ReportSnapshot>().notNull(),
+    status: reportStatus("status").notNull().default("open"),
+    outcome: reportOutcome("outcome"),
+    resolvedBy: uuid("resolved_by"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    // The admin's note when resolving it.
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("reports_status_created_idx").on(t.status, t.createdAt),
+    index("reports_reported_user_idx").on(t.reportedUserId),
+    // One open report per person per message.
+    uniqueIndex("reports_one_open_per_message_idx")
+      .on(t.reporterId, t.messageId)
+      .where(sql`${t.status} = 'open' and ${t.messageId} is not null`),
+  ],
+);
+
+// Messages from the Glofly team to one person (a warning from Control). Shown in their app
+// as a dialog until they press "I understand".
+export const userNotices = pgTable(
+  "user_notices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull().default("warning"),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    seenAt: timestamp("seen_at", { withTimezone: true }),
+  },
+  (t) => [index("user_notices_user_idx").on(t.userId)],
+);
+
+export const announcementTone = pgEnum("announcement_tone", ["info", "important"]);
+
+// The banner at the top of everyone's app. At most one is showing at a time (a new one ends
+// the old one). Kept afterwards as a history.
+export const announcements = pgTable("announcements", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  body: text("body").notNull(),
+  tone: announcementTone("tone").notNull().default("info"),
+  // Optional "Learn more" link (https only).
+  linkUrl: text("link_url"),
+  linkLabel: text("link_label"),
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Ends by itself then (null = until ended in Control).
+  endsAt: timestamp("ends_at", { withTimezone: true }),
+  // Ended early in Control, or replaced by a newer one.
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+});

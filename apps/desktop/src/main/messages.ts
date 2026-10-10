@@ -4,7 +4,8 @@ import type {
   ConversationSummary,
   Message,
   MessagePage,
-  MessageSearchPage
+  MessageSearchPage,
+  MuteDuration
 } from '../preload/api-types'
 import { request } from './api'
 
@@ -157,6 +158,28 @@ export async function pinConversation(
 ): Promise<ApiResult<null>> {
   const result = await request(pinned ? 'PUT' : 'DELETE', `/conversations/${conversationId}/pin`)
   return result.ok ? { ok: true, data: null } : result
+}
+
+/** My order for the Groups page (after dragging a group to a new place). */
+export async function orderGroups(ids: string[]): Promise<ApiResult<null>> {
+  const result = await request('PUT', '/conversations/groups/order', { ids })
+  return result.ok ? { ok: true, data: null } : result
+}
+
+/** Mutes a chat for a while ('1h', '8h', '24h') or until turned back on ('forever'); null unmutes. */
+export async function muteConversation(
+  conversationId: string,
+  duration: MuteDuration | null
+): Promise<ApiResult<{ mutedUntil: string | null }>> {
+  const result = duration
+    ? await request<{ mutedUntil: string | null }>('PUT', `/conversations/${conversationId}/mute`, {
+        duration
+      })
+    : await request<{ mutedUntil: string | null }>(
+        'DELETE',
+        `/conversations/${conversationId}/mute`
+      )
+  return result.ok ? { ok: true, data: { mutedUntil: result.data.mutedUntil ?? null } } : result
 }
 
 export async function markRead(conversationId: string): Promise<ApiResult<null>> {

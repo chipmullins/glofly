@@ -22,6 +22,7 @@ import {
   BlockIcon,
   ChatIcon,
   FriendsIcon,
+  GroupIcon,
   LogOutIcon,
   MoreIcon,
   ProfileIcon,
@@ -41,6 +42,7 @@ import '../components/dialogs.css'
 import './MainScreen.css'
 import EmojiText from '../components/EmojiText'
 import ChatList from '../components/ChatList'
+import GroupsPage from '../components/GroupsPage'
 import { findChats, type ChatResult } from '../lib/chatSearch'
 import { GroupPeopleDialog, GroupSettingsDialog } from '../components/GroupDialogs'
 import { chatTitle } from '../lib/groups'
@@ -379,6 +381,9 @@ export default function MainScreen({
   onUserChange
 }: MainScreenProps): React.JSX.Element {
   const [filter, setFilter] = useState<FriendFilter>('all')
+  /** What shows when no chat is open: Friends, or the Groups page (sidebar, under Friends) */
+  const [page, setPage] = useState<'friends' | 'groups'>('friends')
+  const [groupsNotice, setGroupsNotice] = useState<string | null>(null)
   const [lists, setLists] = useState<FriendLists | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -632,6 +637,7 @@ export default function MainScreen({
           if (event.conversationId) setOpenChatId(event.conversationId)
           else {
             setOpenChatId(null)
+            setPage('friends')
             setFilter('pending')
           }
           break
@@ -731,6 +737,25 @@ export default function MainScreen({
     )
     if (result.error === 'unauthorized') onSessionExpired()
     else setNotice(result.message)
+  }
+
+  /** Saves a new order for the Groups page (shown right away; put back if the server says no). */
+  async function reorderGroups(ids: string[]): Promise<void> {
+    const before = conversations
+    setConversations((list) =>
+      list.map((c) => {
+        const i = ids.indexOf(c.id)
+        return c.kind === 'group' && i >= 0 ? { ...c, groupPosition: i } : c
+      })
+    )
+    const result = await window.glofly.conversations.orderGroups(ids)
+    if (result.ok) {
+      setGroupsNotice(null)
+      return
+    }
+    setConversations(before)
+    if (result.error === 'unauthorized') onSessionExpired()
+    else setGroupsNotice(result.message)
   }
 
   /** A new or changed chat from the server: put it in the list (and open it, if asked). */
@@ -1087,23 +1112,38 @@ export default function MainScreen({
             )}
           </div>
 
-          <button
-            type="button"
-            className={openChat ? 'nav-item' : 'nav-item nav-item--active'}
-            aria-current={openChat ? undefined : 'page'}
-            onClick={() => {
-              setOpenChatId(null)
-              setFilter(incomingCount > 0 ? 'pending' : 'all')
-            }}
-          >
-            <FriendsIcon />
-            Friends
-            {incomingCount > 0 && (
-              <span className="badge" aria-label={`${incomingCount} friend requests`}>
-                {incomingCount}
-              </span>
-            )}
-          </button>
+          <nav className="sidebar-nav" aria-label="Main">
+            <button
+              type="button"
+              className={!openChat && page === 'friends' ? 'nav-item nav-item--active' : 'nav-item'}
+              aria-current={!openChat && page === 'friends' ? 'page' : undefined}
+              onClick={() => {
+                setOpenChatId(null)
+                setPage('friends')
+                setFilter(incomingCount > 0 ? 'pending' : 'all')
+              }}
+            >
+              <FriendsIcon />
+              Friends
+              {incomingCount > 0 && (
+                <span className="badge" aria-label={`${incomingCount} friend requests`}>
+                  {incomingCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              className={!openChat && page === 'groups' ? 'nav-item nav-item--active' : 'nav-item'}
+              aria-current={!openChat && page === 'groups' ? 'page' : undefined}
+              onClick={() => {
+                setOpenChatId(null)
+                setPage('groups')
+              }}
+            >
+              <GroupIcon />
+              Groups
+            </button>
+          </nav>
 
           <CallStrip openChatId={openChatId} onOpenChat={setOpenChatId} />
 
@@ -1124,6 +1164,7 @@ export default function MainScreen({
             onLeaveGroup={setLeaving}
             onNewMessage={() => {
               setOpenChatId(null)
+              setPage('friends')
               setFilter('all')
             }}
             onNewGroup={() => setGroupPicker({ groupId: null })}
@@ -1175,6 +1216,19 @@ export default function MainScreen({
                   ? { messageId: jump.messageId, nonce: jump.nonce }
                   : null
               }
+            />
+          ) : page === 'groups' ? (
+            <GroupsPage
+              me={user}
+              conversations={conversations}
+              presence={presence}
+              notice={groupsNotice}
+              onOpen={(id) => setOpenChatId(id)}
+              onNewGroup={() => setGroupPicker({ groupId: null })}
+              onTogglePin={(g) => void togglePin(g)}
+              onGroupSettings={(g) => setSettingsFor(g.id)}
+              onLeave={setLeaving}
+              onReorder={(ids) => void reorderGroups(ids)}
             />
           ) : (
             <>

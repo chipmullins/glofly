@@ -275,6 +275,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
       createdAt: conversations.createdAt,
       lastReadAt: conversationMembers.lastReadAt,
       pinnedAt: conversationMembers.pinnedAt,
+      joinedAt: conversationMembers.joinedAt,
+      groupPosition: conversationMembers.groupPosition,
     })
     .from(conversationMembers)
     .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
@@ -361,6 +363,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
       activityAt: (c.lastMessageAt ?? c.createdAt).toISOString(),
       // Pinned chats sit at the top of the sidebar, in the order they were pinned.
       pinnedAt: c.pinnedAt?.toISOString() ?? null,
+      // When I joined (groups page: groups never moved sit at the top, newest first).
+      joinedAt: c.joinedAt.toISOString(),
     };
     if (c.kind === "group") {
       result.push({
@@ -374,6 +378,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
         createdBy: c.createdBy,
         canMessage: !iAmLeaving,
         partnerReadAt: null,
+        // Where I dragged it on the Groups page (null = never moved).
+        groupPosition: c.groupPosition,
       });
       continue;
     }
@@ -391,6 +397,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
       // How far they've read, shown as "Seen". Only when both people allow read receipts.
       partnerReadAt:
         mySettings?.readReceipts && partner.readReceipts ? partner.lastReadAt.toISOString() : null,
+      groupPosition: null,
     });
   }
   return result.sort((a, b) => b.activityAt.localeCompare(a.activityAt));
@@ -451,6 +458,42 @@ conversationsRouter.put("/:id/pin", async (req, res) => {
 conversationsRouter.delete("/:id/pin", async (req, res) => {
   const id = idParam.safeParse(req.params.id);
   if (id.success) await setPinned(me(res).id, id.data, false);
+  res.status(204).end();
+});
+
+// PUT /conversations/groups/order  { ids } — my order for the Groups page (drag to reorder).
+// Groups listed get positions 0, 1, 2…; groups I'm in but not listed keep theirs.
+conversationsRouter.put("/groups/order", async (req, res) => {
+  const myId = me(res).id;
+  const parsed = z.object({ ids: z.array(idParam).min(1).max(1000) }).safeParse(req.body);
+  if (!parsed.success || new Set(parsed.data.ids).size !== parsed.data.ids.length) {
+    res.status(400).json({ error: "invalid", message: "That order didn't make sense. Try again." });
+    return;
+  }
+  const ids = parsed.data.ids;
+  const mine = await db
+    .select({ id: conversationMembers.conversationId })
+    .from(conversationMembers)
+    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
+    .where(
+      and(
+        eq(conversationMembers.userId, myId),
+        eq(conversations.kind, "group"),
+        inArray(conversationMembers.conversationId, ids),
+      ),
+    );
+  const allowed = new Set(mine.map((m) => m.id));
+  await db.transaction(async (tx) => {
+    let position = 0;
+    for (const id of ids) {
+      if (!allowed.has(id)) continue; // not mine (or left meanwhile): skipped
+      await tx
+        .update(conversationMembers)
+        .set({ groupPosition: position++ })
+        .where(and(eq(conversationMembers.conversationId, id), eq(conversationMembers.userId, myId)));
+    }
+  });
+  emitToUser(myId, "conversations:changed", {});
   res.status(204).end();
 });
 

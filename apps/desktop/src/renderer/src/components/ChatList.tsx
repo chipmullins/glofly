@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { ConversationSummary, Presence, PublicUser } from '../../../preload/api-types'
 import { attachmentSummary } from '../lib/attachments'
 import type { ChatResult } from '../lib/chatSearch'
@@ -9,6 +9,7 @@ import { playing, presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
 import EmojiText from './EmojiText'
 import GroupAvatar from './GroupAvatar'
+import ContextMenu, { MenuItem } from './ContextMenu'
 import { ChatIcon, GroupIcon, LeaveIcon, PlusIcon, ProfileIcon, SearchIcon } from './icons'
 
 export function PinIcon({ size = 13 }: { size?: number }): React.JSX.Element {
@@ -199,102 +200,28 @@ function RowMenu({
   onLeaveGroup: () => void
   onClose: () => void
 }): React.JSX.Element {
-  const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ left: x, top: y })
-
-  // Keep it inside the window.
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const { width, height } = el.getBoundingClientRect()
-    setPos({
-      left: Math.min(x, window.innerWidth - width - 8),
-      top: Math.min(y, window.innerHeight - height - 8)
-    })
-    el.querySelector<HTMLButtonElement>('button')?.focus()
-  }, [x, y])
-
-  useEffect(() => {
-    const onDown = (e: MouseEvent): void => {
-      if (!ref.current?.contains(e.target as Node)) onClose()
-    }
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    window.addEventListener('blur', onClose)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-      window.removeEventListener('blur', onClose)
-    }
-  }, [onClose])
-
   const pinned = !!conversation.pinnedAt
   return (
-    <div
-      ref={ref}
-      role="menu"
-      aria-label={`${chatTitle(conversation)} chat options`}
-      className="menu row-menu"
-      style={{ left: pos.left, top: pos.top }}
-    >
-      <button
-        type="button"
-        role="menuitem"
-        className="menu-item"
-        onClick={() => {
-          onClose()
-          onTogglePin()
-        }}
-      >
-        <PinIcon size={18} />
+    <ContextMenu x={x} y={y} label={`${chatTitle(conversation)} chat options`} onClose={onClose}>
+      <MenuItem icon={<PinIcon size={18} />} onClose={onClose} onClick={onTogglePin}>
         {pinned ? 'Unpin chat' : 'Pin chat'}
-      </button>
+      </MenuItem>
       {conversation.kind === 'dm' ? (
-        <button
-          type="button"
-          role="menuitem"
-          className="menu-item"
-          onClick={() => {
-            onClose()
-            onViewProfile()
-          }}
-        >
-          <ProfileIcon size={18} />
+        <MenuItem icon={<ProfileIcon size={18} />} onClose={onClose} onClick={onViewProfile}>
           View profile
-        </button>
+        </MenuItem>
       ) : (
         <>
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item"
-            onClick={() => {
-              onClose()
-              onGroupSettings()
-            }}
-          >
-            <GroupIcon size={18} />
+          <MenuItem icon={<GroupIcon size={18} />} onClose={onClose} onClick={onGroupSettings}>
             Group settings
-          </button>
+          </MenuItem>
           <div className="menu-divider" role="separator" />
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item menu-item--danger"
-            onClick={() => {
-              onClose()
-              onLeaveGroup()
-            }}
-          >
-            <LeaveIcon size={18} />
+          <MenuItem icon={<LeaveIcon size={18} />} danger onClose={onClose} onClick={onLeaveGroup}>
             Leave group
-          </button>
+          </MenuItem>
         </>
       )}
-    </div>
+    </ContextMenu>
   )
 }
 

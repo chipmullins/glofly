@@ -105,3 +105,30 @@ export function typingText(names: string[]): string {
   if (names.length <= 3) return `${listNames(names)} are typing…`
   return 'Several people are typing…'
 }
+
+/**
+ * The Groups page's order: groups you've never moved at the top (newest first), then the ones
+ * you dragged into place, in your order.
+ */
+export function sortGroups<T extends ConversationSummary>(groups: T[]): T[] {
+  return [...groups].sort((a, b) => {
+    const pa = a.kind === 'group' ? (a.groupPosition ?? null) : null
+    const pb = b.kind === 'group' ? (b.groupPosition ?? null) : null
+    if (pa === null && pb === null) {
+      return (b.joinedAt ?? b.activityAt).localeCompare(a.joinedAt ?? a.activityAt)
+    }
+    if (pa === null) return -1
+    if (pb === null) return 1
+    return pa - pb
+  })
+}
+
+/** Groups page search: matches the group's name or anyone in it. */
+export function groupMatches(c: ConversationSummary, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  if (chatTitle(c).toLowerCase().includes(q)) return true
+  return c.members.some(
+    (m) => m.displayName.toLowerCase().includes(q) || m.username.toLowerCase().includes(q)
+  )
+}
