@@ -33,6 +33,7 @@ import { requireAuth } from "../auth/sessions";
 import { blockedEitherWay, canMessage, deletionPending, pair } from "../friends/rules";
 import { emitToUser } from "../realtime";
 import { removeFromChatCall } from "../calls/service";
+import { mentionsIn } from "./mentions";
 
 export const conversationsRouter = Router();
 conversationsRouter.use(requireAuth);
@@ -71,6 +72,7 @@ const messageFields = {
   editedAt: messages.editedAt,
   deletedAt: messages.deletedAt,
   event: messages.event,
+  mentions: messages.mentions,
 };
 export type MessageRow = {
   id: string;
@@ -82,6 +84,7 @@ export type MessageRow = {
   editedAt: Date | null;
   deletedAt: Date | null;
   event: ChatEvent | null;
+  mentions: string[];
 };
 
 const messageBody = z
@@ -164,6 +167,8 @@ async function hydrate(rows: MessageRow[]) {
       deleted,
       // Group events ("Chip renamed the group"): shown as a line, not a message bubble.
       event: r.event ?? null,
+      // Group members this message @mentions.
+      mentions: deleted ? [] : (r.mentions ?? []),
       replyTo: reply
         ? {
             id: reply.id,
@@ -277,6 +282,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
       pinnedAt: conversationMembers.pinnedAt,
       joinedAt: conversationMembers.joinedAt,
       groupPosition: conversationMembers.groupPosition,
+      mutedUntil: conversationMembers.mutedUntil,
     })
     .from(conversationMembers)
     .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
@@ -324,7 +330,12 @@ async function summaries(myId: string, conversationIds?: string[]) {
   // Messages from other people since I last read the chat. Lines like "Chip added Maya" don't
   // count; a call you missed does.
   const unread = await db
-    .select({ conversationId: messages.conversationId, count: sql<number>`count(*)::int` })
+    .select({
+      conversationId: messages.conversationId,
+      count: sql<number>`count(*)::int`,
+      // Of those, the ones that @mention me.
+      mentions: sql<number>`count(*) filter (where ${myId}::uuid = any(${messages.mentions}))::int`,
+    })
     .from(messages)
     .innerJoin(
       conversationMembers,
@@ -360,6 +371,9 @@ async function summaries(myId: string, conversationIds?: string[]) {
       id: c.id,
       lastMessage: latest.find((m) => m.conversationId === c.id) ?? null,
       unreadCount: unread.find((u) => u.conversationId === c.id)?.count ?? 0,
+      mentionCount: unread.find((u) => u.conversationId === c.id)?.mentions ?? 0,
+      // Muted by me until then (null once it's over).
+      mutedUntil: c.mutedUntil && c.mutedUntil.getTime() > Date.now() ? c.mutedUntil.toISOString() : null,
       activityAt: (c.lastMessageAt ?? c.createdAt).toISOString(),
       // Pinned chats sit at the top of the sidebar, in the order they were pinned.
       pinnedAt: c.pinnedAt?.toISOString() ?? null,
@@ -459,6 +473,54 @@ conversationsRouter.delete("/:id/pin", async (req, res) => {
   const id = idParam.safeParse(req.params.id);
   if (id.success) await setPinned(me(res).id, id.data, false);
   res.status(204).end();
+});
+
+/** "Until I turn it back on": far enough ahead to never run out. */
+export const MUTED_FOREVER = new Date("2100-01-01T00:00:00Z");
+const MUTE_HOURS = { "1h": 1, "8h": 8, "24h": 24 } as const;
+
+// PUT /conversations/:id/mute  { duration: "1h" | "8h" | "24h" | "forever" } — no sounds or
+// notifications from this chat for a while (mentions of me still get through).
+conversationsRouter.put("/:id/mute", async (req, res) => {
+  const id = idParam.safeParse(req.params.id);
+  const duration = z.object({ duration: z.enum(["1h", "8h", "24h", "forever"]) }).safeParse(req.body);
+  if (!id.success) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (!duration.success) {
+    res.status(400).json({ error: "invalid", message: "Pick how long to mute it for." });
+    return;
+  }
+  const d = duration.data.duration;
+  const until = d === "forever" ? MUTED_FOREVER : new Date(Date.now() + MUTE_HOURS[d] * 60 * 60 * 1000);
+  const myId = me(res).id;
+  const updated = await db
+    .update(conversationMembers)
+    .set({ mutedUntil: until })
+    .where(and(eq(conversationMembers.conversationId, id.data), eq(conversationMembers.userId, myId)))
+    .returning({ id: conversationMembers.conversationId });
+  if (!updated.length) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  emitToUser(myId, "conversations:changed", {});
+  res.json({ mutedUntil: until.toISOString() });
+});
+
+// DELETE /conversations/:id/mute — unmute.
+conversationsRouter.delete("/:id/mute", async (req, res) => {
+  const id = idParam.safeParse(req.params.id);
+  const myId = me(res).id;
+  if (id.success) {
+    const updated = await db
+      .update(conversationMembers)
+      .set({ mutedUntil: null })
+      .where(and(eq(conversationMembers.conversationId, id.data), eq(conversationMembers.userId, myId)))
+      .returning({ id: conversationMembers.conversationId });
+    if (updated.length) emitToUser(myId, "conversations:changed", {});
+  }
+  res.json({ mutedUntil: null });
 });
 
 // PUT /conversations/groups/order  { ids } — my order for the Groups page (drag to reorder).
@@ -984,12 +1046,15 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     }
   }
 
+  // Groups: who this @mentions (only people in the group right now).
+  const mentions = chat.kind === "group" ? await mentionsIn(body.data, chat.memberIds, myId) : [];
+
   let inserted: MessageRow;
   try {
     inserted = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)
-        .values({ conversationId: id.data, senderId: myId, body: body.data, replyToId })
+        .values({ conversationId: id.data, senderId: myId, body: body.data, replyToId, mentions })
         .returning(messageFields);
       const inserted = row;
       // Attach your uploads, in the order given. Each must be yours, for this chat, and unsent.
@@ -1089,9 +1154,11 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
     return;
   }
   if (body.data !== message.body) {
+    // Mentions follow the new text (an edit doesn't notify anyone again).
+    const mentions = chat.kind === "group" ? await mentionsIn(body.data, chat.memberIds, myId) : [];
     await db
       .update(messages)
-      .set({ body: body.data, editedAt: new Date() })
+      .set({ body: body.data, editedAt: new Date(), mentions })
       .where(eq(messages.id, message.id));
   }
   res.json({ message: await sendUpdated(message.id, conversationId) });
@@ -1115,7 +1182,7 @@ conversationsRouter.delete("/:id/messages/:messageId", async (req, res) => {
     const removed = await db.transaction(async (tx) => {
       await tx
         .update(messages)
-        .set({ body: "", deletedAt: new Date(), editedAt: null })
+        .set({ body: "", deletedAt: new Date(), editedAt: null, mentions: [] })
         .where(eq(messages.id, message.id));
       await tx.delete(messageReactions).where(eq(messageReactions.messageId, message.id));
       // Photos and files go too, for good.

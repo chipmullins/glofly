@@ -3,6 +3,7 @@ import type {
   Attachment,
   ConversationSummary,
   Message,
+  MuteDuration,
   Presence,
   PublicUser,
   ReplyPreview,
@@ -19,6 +20,8 @@ import { attachmentSummary } from '../lib/attachments'
 import {
   CallLineIcon,
   FileIcon,
+  BellIcon,
+  BellOffIcon,
   GroupIcon,
   PhoneIcon,
   ProfileIcon,
@@ -33,6 +36,13 @@ import EmojiPicker from './EmojiPicker'
 import EmojiText from './EmojiText'
 import './ChatView.css'
 import { isShortcutKey, shortcutLabel } from '../lib/platform'
+import {
+  isMuted,
+  mentionQuery,
+  mentionSuggestions,
+  MUTE_CHOICES,
+  mutedLabel
+} from '../lib/mentions'
 
 type ChatViewProps = {
   me: SignedInUser
@@ -53,6 +63,10 @@ type ChatViewProps = {
   onSearch: () => void
   /** A message to scroll to and highlight (from search); nonce makes the same one jump again */
   jumpRequest: { messageId: string; nonce: number } | null
+  /** Mutes this chat for a while (null unmutes) */
+  onMute: (duration: MuteDuration | null) => void
+  /** Report someone else's message */
+  onReport?: (message: Message) => void
 }
 
 /** A message still on its way, or one that didn't send. */
@@ -166,7 +180,9 @@ export default function ChatView({
   onTogglePin,
   onSessionExpired,
   onSearch,
-  jumpRequest
+  jumpRequest,
+  onMute,
+  onReport
 }: ChatViewProps): React.JSX.Element {
   const partner = conversation.partner
   const isGroup = conversation.kind === 'group'
@@ -201,6 +217,13 @@ export default function ChatView({
   const [uploads, setUploads] = useState<Upload[]>([])
   const [viewing, setViewing] = useState<{ photos: Attachment[]; index: number } | null>(null)
   const [dragging, setDragging] = useState(false)
+  /** Typing "@ma" in a group: who to suggest, and which one the arrow keys are on */
+  const [mention, setMention] = useState<{ query: string; start: number; index: number } | null>(
+    null
+  )
+  /** The header's mute menu */
+  const [muteOpen, setMuteOpen] = useState(false)
+  const muteRef = useRef<HTMLDivElement>(null)
   /** The 😊 button, while the emoji picker it opened is showing */
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null)
   /** Where the cursor goes after an emoji is added (applied once the text updates). */
@@ -226,6 +249,10 @@ export default function ChatView({
         : (conversation.members.find((m) => m.id === userId) ?? formerPeople[userId] ?? null),
     [me, conversation.members, formerPeople]
   )
+  // Groups: everyone who can be @mentioned (you too, so your own name shows as a mention).
+  const mentionPeople = isGroup ? [me, ...conversation.members] : []
+  const suggestions =
+    mention && isGroup ? mentionSuggestions(mention.query, conversation.members) : []
   const nameOf = useCallback(
     (userId: string) => personOf(userId)?.displayName ?? 'Former member',
     [personOf]
@@ -435,6 +462,7 @@ export default function ChatView({
     stickToBottom.current = true
     setPending((p) => [...p, item])
     setDraft('')
+    setMention(null)
     setReplyingTo(null)
     setUploads([]) // sent ones go with the message; failed ones are dropped
     void deliver(item)
@@ -653,6 +681,28 @@ export default function ChatView({
   }, [onSearch])
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    // "@" suggestions: arrows move, Enter or Tab picks, Escape closes.
+    if (mention && suggestions.length > 0) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const step = e.key === 'ArrowDown' ? 1 : -1
+        setMention({
+          ...mention,
+          index: (mention.index + step + suggestions.length) % suggestions.length
+        })
+        return
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && !e.nativeEvent.isComposing) {
+        e.preventDefault()
+        pickMention(suggestions[Math.min(mention.index, suggestions.length - 1)])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMention(null)
+        return
+      }
+    }
     // Enter sends; Shift+Enter adds a new line.
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
@@ -687,7 +737,49 @@ export default function ChatView({
   function onChange(e: React.ChangeEvent<HTMLTextAreaElement>): void {
     setDraft(e.target.value)
     noteTyping(e.target.value)
+    checkMention(e.target.value, e.target.selectionStart)
   }
+
+  /** Groups: is the cursor right after "@something"? Then suggest people. */
+  function checkMention(text: string, cursor: number | null): void {
+    if (!isGroup || cursor === null) return setMention(null)
+    const found = mentionQuery(text, cursor)
+    setMention((old) =>
+      found ? { ...found, index: old && old.start === found.start ? old.index : 0 } : null
+    )
+  }
+
+  /** Puts "@username " in place of what was typed after the @. */
+  function pickMention(person: PublicUser): void {
+    if (!mention) return
+    const input = inputRef.current
+    const cursor = input?.selectionStart ?? draft.length
+    const insert = `@${person.username} `
+    const next = draft.slice(0, mention.start) + insert + draft.slice(cursor)
+    if (next.length > MESSAGE_MAX + 200) return
+    cursorAfterInsert.current = mention.start + insert.length
+    setDraft(next)
+    setMention(null)
+    input?.focus()
+  }
+
+  // The mute menu closes on a click elsewhere or Escape.
+  useEffect(() => {
+    if (!muteOpen) return
+    const onDown = (e: MouseEvent): void => {
+      if (!muteRef.current?.contains(e.target as Node)) setMuteOpen(false)
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMuteOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [muteOpen])
+  const muted = isMuted(conversation, now)
 
   /** Puts an emoji where the cursor was (replacing any selected text). */
   function insertEmoji(emoji: string, keepOpen: boolean): void {
@@ -896,6 +988,65 @@ export default function ChatView({
           >
             <SearchIcon size={19} />
           </button>
+          <div className="chat-header-wrap" ref={muteRef}>
+            <button
+              type="button"
+              className={muted ? 'chat-header-button chat-header-button--on' : 'chat-header-button'}
+              aria-label={muted ? 'Unmute this chat' : 'Mute this chat'}
+              aria-haspopup="menu"
+              aria-expanded={muteOpen}
+              title={
+                muted && conversation.mutedUntil ? mutedLabel(conversation.mutedUntil) : 'Mute'
+              }
+              onClick={() => setMuteOpen((v) => !v)}
+            >
+              {muted ? <BellOffIcon size={19} /> : <BellIcon size={19} />}
+            </button>
+            {muteOpen && (
+              <div role="menu" className="menu chat-mute-menu">
+                {muted && conversation.mutedUntil ? (
+                  <>
+                    <span className="menu-subhead">{mutedLabel(conversation.mutedUntil)}</span>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        setMuteOpen(false)
+                        onMute(null)
+                      }}
+                    >
+                      <BellIcon size={18} />
+                      Unmute
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="menu-subhead">Mute {isGroup ? 'group' : 'chat'}</span>
+                    {MUTE_CHOICES.map((c) => (
+                      <button
+                        key={c.duration}
+                        type="button"
+                        role="menuitem"
+                        className="menu-item menu-item--indent"
+                        onClick={() => {
+                          setMuteOpen(false)
+                          onMute(c.duration)
+                        }}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                    <span className="menu-note">
+                      {isGroup
+                        ? 'No sounds or notifications. You’ll still hear about @mentions.'
+                        : 'No sounds or notifications from this chat.'}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className={
@@ -1077,6 +1228,9 @@ export default function ChatView({
                     void window.glofly.conversations.removeUpload(conversation.id, a.id)
                   }
                 }}
+                people={mentionPeople}
+                onMentionClick={(u) => onViewProfile(u)}
+                onReport={onReport && !item.pending ? () => onReport(m) : undefined}
                 attachments={
                   m.attachments.length > 0 ? (
                     <MessageAttachments
@@ -1150,6 +1304,39 @@ export default function ChatView({
                 </button>
               </div>
             )}
+            {suggestions.length > 0 && mention && (
+              <div
+                className="mention-picker"
+                role="listbox"
+                id="mention-picker"
+                aria-label="People to mention"
+              >
+                <span className="mention-picker-head">Mention someone</span>
+                {suggestions.map((p, i) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="option"
+                    id={`mention-option-${i}`}
+                    aria-selected={i === mention.index}
+                    className="mention-option"
+                    // Keep the cursor in the message box.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseEnter={() => setMention({ ...mention, index: i })}
+                    onClick={() => pickMention(p)}
+                  >
+                    <Avatar
+                      id={p.id}
+                      name={p.displayName}
+                      avatarVersion={p.avatarVersion}
+                      size={28}
+                    />
+                    <span className="mention-option-name">{p.displayName}</span>
+                    <span className="mention-option-user">@{p.username}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="composer-row">
               <button
                 type="button"
@@ -1180,6 +1367,15 @@ export default function ChatView({
                 onChange={onChange}
                 onKeyDown={onKeyDown}
                 onPaste={onPaste}
+                onSelect={(e) => {
+                  if (mention) checkMention(e.currentTarget.value, e.currentTarget.selectionStart)
+                }}
+                onBlur={() => setMention(null)}
+                aria-autocomplete={isGroup ? 'list' : undefined}
+                aria-controls={suggestions.length > 0 ? 'mention-picker' : undefined}
+                aria-activedescendant={
+                  suggestions.length > 0 && mention ? `mention-option-${mention.index}` : undefined
+                }
               />
               <button
                 type="button"

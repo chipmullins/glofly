@@ -1,5 +1,10 @@
 import { useState } from 'react'
-import type { ConversationSummary, Presence, PublicUser } from '../../../preload/api-types'
+import type {
+  ConversationSummary,
+  MuteDuration,
+  Presence,
+  PublicUser
+} from '../../../preload/api-types'
 import { attachmentSummary } from '../lib/attachments'
 import type { ChatResult } from '../lib/chatSearch'
 import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
@@ -10,7 +15,17 @@ import Avatar from './Avatar'
 import EmojiText from './EmojiText'
 import GroupAvatar from './GroupAvatar'
 import ContextMenu, { MenuItem } from './ContextMenu'
-import { ChatIcon, GroupIcon, LeaveIcon, PlusIcon, ProfileIcon, SearchIcon } from './icons'
+import MuteMenuItems from './MuteMenu'
+import { isMuted, mutedLabel } from '../lib/mentions'
+import {
+  BellOffIcon,
+  ChatIcon,
+  GroupIcon,
+  LeaveIcon,
+  PlusIcon,
+  ProfileIcon,
+  SearchIcon
+} from './icons'
 
 export function PinIcon({ size = 13 }: { size?: number }): React.JSX.Element {
   return (
@@ -48,6 +63,7 @@ type ChatListProps = {
   onViewProfile: (user: PublicUser) => void
   onGroupSettings: (conversation: ConversationSummary) => void
   onLeaveGroup: (conversation: ConversationSummary) => void
+  onMute: (conversation: ConversationSummary, duration: MuteDuration | null) => void
   onNewMessage: () => void
   onNewGroup: () => void
   /** Opens message search across all chats with this text */
@@ -118,10 +134,13 @@ function DmRow({
     (presence && c.kind === 'dm' ? presenceLine(presence, now) : lastMessagePreview(c, me))
   const title = chatTitle(c)
   const ring = active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'
+  const muted = isMuted(c, now)
   return (
     <button
       type="button"
-      className={active ? 'dm-row dm-row--active' : 'dm-row'}
+      className={['dm-row', active ? 'dm-row--active' : '', muted ? 'dm-row--muted' : '']
+        .filter(Boolean)
+        .join(' ')}
       aria-current={active ? 'page' : undefined}
       onClick={onOpen}
       onContextMenu={(e) => {
@@ -171,9 +190,30 @@ function DmRow({
           <EmojiText text={preview} />
         </span>
       </span>
-      {c.unreadCount > 0 && !active && (
-        <span className="badge" aria-label={`${c.unreadCount} unread`}>
-          {c.unreadCount > 99 ? '99+' : c.unreadCount}
+      {(muted || (c.unreadCount > 0 && !active)) && (
+        <span className="dm-badges">
+          {muted && (
+            <span className="dm-muted" title={c.mutedUntil ? mutedLabel(c.mutedUntil) : 'Muted'}>
+              <BellOffIcon size={15} />
+            </span>
+          )}
+          {!active && (c.mentionCount ?? 0) > 0 && (
+            <span
+              className="badge badge--mention"
+              aria-label={`${c.mentionCount} mention${c.mentionCount === 1 ? '' : 's'}`}
+              title="You were mentioned"
+            >
+              @
+            </span>
+          )}
+          {c.unreadCount > 0 && !active && (
+            <span
+              className={muted ? 'badge badge--muted' : 'badge'}
+              aria-label={`${c.unreadCount} unread`}
+            >
+              {c.unreadCount > 99 ? '99+' : c.unreadCount}
+            </span>
+          )}
         </span>
       )}
     </button>
@@ -189,6 +229,7 @@ function RowMenu({
   onViewProfile,
   onGroupSettings,
   onLeaveGroup,
+  onMute,
   onClose
 }: {
   conversation: ConversationSummary
@@ -198,6 +239,7 @@ function RowMenu({
   onViewProfile: () => void
   onGroupSettings: () => void
   onLeaveGroup: () => void
+  onMute: (duration: MuteDuration | null) => void
   onClose: () => void
 }): React.JSX.Element {
   const pinned = !!conversation.pinnedAt
@@ -206,6 +248,7 @@ function RowMenu({
       <MenuItem icon={<PinIcon size={18} />} onClose={onClose} onClick={onTogglePin}>
         {pinned ? 'Unpin chat' : 'Pin chat'}
       </MenuItem>
+      <MuteMenuItems conversation={conversation} onMute={onMute} onClose={onClose} />
       {conversation.kind === 'dm' ? (
         <MenuItem icon={<ProfileIcon size={18} />} onClose={onClose} onClick={onViewProfile}>
           View profile
@@ -240,6 +283,7 @@ export default function ChatList({
   onViewProfile,
   onGroupSettings,
   onLeaveGroup,
+  onMute,
   onNewMessage,
   onNewGroup,
   onSearchMessages
@@ -434,6 +478,7 @@ export default function ChatList({
           onViewProfile={() => menuFor.partner && onViewProfile(menuFor.partner)}
           onGroupSettings={() => onGroupSettings(menuFor)}
           onLeaveGroup={() => onLeaveGroup(menuFor)}
+          onMute={(duration) => onMute(menuFor, duration)}
           onClose={() => setMenu(null)}
         />
       )}

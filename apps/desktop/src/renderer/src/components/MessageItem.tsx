@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { Message } from '../../../preload/api-types'
+import type { Message, PublicUser } from '../../../preload/api-types'
+import { splitMentions } from '../lib/mentions'
 import { quoteSummary } from '../lib/attachments'
 import { addRecent, isJumbo } from '../lib/emoji'
 import EmojiPicker from './EmojiPicker'
@@ -35,6 +36,46 @@ type MessageItemProps = {
   onDiscard: () => void
   /** The message's photos and files, if any. */
   attachments: React.ReactNode
+  /** Groups: everyone in the chat (you included), so "@maya" shows as a mention */
+  people?: PublicUser[]
+  /** Clicking a mention (opens their profile) */
+  onMentionClick?: (user: PublicUser) => void
+  /** Report someone else's message (opens the Report dialog) */
+  onReport?: () => void
+}
+
+/** Message text with "@username" of people in the chat shown as mentions (you stand out). */
+function MentionText({
+  text,
+  people,
+  meId,
+  onClick
+}: {
+  text: string
+  people: PublicUser[]
+  meId: string
+  onClick?: (user: PublicUser) => void
+}): React.JSX.Element {
+  const pieces = splitMentions(text, people)
+  return (
+    <>
+      {pieces.map((piece, i) =>
+        piece.user ? (
+          <button
+            key={i}
+            type="button"
+            className={piece.user.id === meId ? 'mention mention--me' : 'mention'}
+            title={piece.user.displayName}
+            onClick={() => piece.user && onClick?.(piece.user)}
+          >
+            {piece.text}
+          </button>
+        ) : (
+          <EmojiText key={i} text={piece.text} />
+        )
+      )}
+    </>
+  )
 }
 
 // The quick reactions offered by the 😊 button (the + after them opens the full picker).
@@ -156,7 +197,10 @@ export default function MessageItem({
   onJumpTo,
   onRetry,
   onDiscard,
-  attachments
+  attachments,
+  people,
+  onMentionClick,
+  onReport
 }: MessageItemProps): React.JSX.Element {
   const m = item.message
   const mine = m.senderId === meId
@@ -210,6 +254,9 @@ export default function MessageItem({
   if (popup || pickerAnchor) classes.push('message--active')
   if (highlighted) classes.push('message--highlight')
   if (editing) classes.push('message--editing')
+  if (!item.pending && !m.deleted && !mine && m.mentions?.includes(meId)) {
+    classes.push('message--mentions-me')
+  }
 
   const bodyClass = item.pending
     ? item.pending.failed
@@ -278,7 +325,11 @@ export default function MessageItem({
             className={jumbo ? `${bodyClass} message-body--jumbo` : bodyClass}
             title={grouped ? time : undefined}
           >
-            <EmojiText text={m.body} />
+            {people?.length ? (
+              <MentionText text={m.body} people={people} meId={meId} onClick={onMentionClick} />
+            ) : (
+              <EmojiText text={m.body} />
+            )}
             {m.editedAt && (
               <span
                 className="message-edited"
@@ -458,6 +509,23 @@ export default function MessageItem({
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                   </Icon>
                   Copy text
+                </button>
+              )}
+              {!mine && onReport && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="menu-item menu-item--danger"
+                  onClick={() => {
+                    setPopup(null)
+                    onReport()
+                  }}
+                >
+                  <Icon>
+                    <path d="M5 21V4" />
+                    <path d="M5 4h11l-2 4 2 4H5" />
+                  </Icon>
+                  Report message
                 </button>
               )}
               {mine && (

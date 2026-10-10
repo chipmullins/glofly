@@ -7,6 +7,7 @@ import type {
   FriendEntry,
   FriendLists,
   Message,
+  MuteDuration,
   PublicUser,
   SignedInUser
 } from '../../../preload/api-types'
@@ -43,6 +44,8 @@ import './MainScreen.css'
 import EmojiText from '../components/EmojiText'
 import ChatList from '../components/ChatList'
 import GroupsPage from '../components/GroupsPage'
+import MuteMenuItems from '../components/MuteMenu'
+import { isMuted, mentionsMe, muteUntil } from '../lib/mentions'
 import { findChats, type ChatResult } from '../lib/chatSearch'
 import { GroupPeopleDialog, GroupSettingsDialog } from '../components/GroupDialogs'
 import { chatTitle } from '../lib/groups'
@@ -539,7 +542,11 @@ export default function MainScreen({
 
   // The unread count on the taskbar icon.
   useEffect(() => {
-    const total = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
+    // Muted chats only count their @mentions of you.
+    const total = conversations.reduce(
+      (sum, c) => sum + (isMuted(c) ? (c.mentionCount ?? 0) : c.unreadCount),
+      0
+    )
     window.glofly.notifications.badge(total, total > 0 ? badgeImage(total) : null)
   }, [conversations])
 
@@ -552,8 +559,12 @@ export default function MainScreen({
           const viewing = openChatRef.current === m.conversationId && document.hasFocus()
           // Group events ("Maya renamed the group") don't ding or count as unread.
           const fromOthers = m.senderId !== user.id && !m.event
-          if (fromOthers && !viewing) playSound('message')
-          if (fromOthers && shouldNotify()) notifyMessage(m, event.people)
+          // A muted chat stays quiet, unless the message @mentions you.
+          const chat = conversationsRef.current.find((c) => c.id === m.conversationId)
+          const mentioned = fromOthers && mentionsMe(m, user.id)
+          const quiet = !!chat && isMuted(chat) && !mentioned
+          if (fromOthers && !viewing && !quiet) playSound('message')
+          if (fromOthers && !quiet && shouldNotify()) notifyMessage(m, event.people)
           setConversations((list) => {
             const existing = list.find((c) => c.id === m.conversationId)
             if (!existing) {
@@ -567,7 +578,11 @@ export default function MainScreen({
               unreadCount:
                 fromOthers && openChatRef.current !== m.conversationId
                   ? existing.unreadCount + 1
-                  : existing.unreadCount
+                  : existing.unreadCount,
+              mentionCount:
+                mentioned && openChatRef.current !== m.conversationId
+                  ? (existing.mentionCount ?? 0) + 1
+                  : existing.mentionCount
             }
             return [updated, ...list.filter((c) => c.id !== m.conversationId)]
           })
@@ -739,6 +754,26 @@ export default function MainScreen({
     else setNotice(result.message)
   }
 
+  /** Mutes or unmutes a chat (shown right away; put back if the server says no). */
+  async function muteChat(c: ConversationSummary, duration: MuteDuration | null): Promise<void> {
+    const mutedUntil = duration ? muteUntil(duration) : null
+    setConversations((list) => list.map((x) => (x.id === c.id ? { ...x, mutedUntil } : x)))
+    const result = await window.glofly.conversations.mute(c.id, duration)
+    if (result.ok) {
+      setConversations((list) =>
+        list.map((x) => (x.id === c.id ? { ...x, mutedUntil: result.data.mutedUntil } : x))
+      )
+      // Muting also quiets a notification that's already showing for it.
+      if (duration) clearNotification(c.id)
+      return
+    }
+    setConversations((list) =>
+      list.map((x) => (x.id === c.id ? { ...x, mutedUntil: c.mutedUntil ?? null } : x))
+    )
+    if (result.error === 'unauthorized') onSessionExpired()
+    else setNotice(result.message)
+  }
+
   /** Saves a new order for the Groups page (shown right away; put back if the server says no). */
   async function reorderGroups(ids: string[]): Promise<void> {
     const before = conversations
@@ -793,7 +828,7 @@ export default function MainScreen({
     unseen.current.delete(conversationId)
     clearNotification(conversationId)
     setConversations((list) =>
-      list.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
+      list.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0, mentionCount: 0 } : c))
     )
   }, [])
 
@@ -1162,6 +1197,7 @@ export default function MainScreen({
             onViewProfile={viewPerson}
             onGroupSettings={(c) => setSettingsFor(c.id)}
             onLeaveGroup={setLeaving}
+            onMute={(c, d) => void muteChat(c, d)}
             onNewMessage={() => {
               setOpenChatId(null)
               setPage('friends')
@@ -1211,6 +1247,7 @@ export default function MainScreen({
               onTogglePin={() => void togglePin(openChat)}
               onSessionExpired={onSessionExpired}
               onSearch={() => searchThisChat(openChat.id)}
+              onMute={(d) => void muteChat(openChat, d)}
               jumpRequest={
                 jump && jump.conversationId === openChat.id
                   ? { messageId: jump.messageId, nonce: jump.nonce }
@@ -1229,6 +1266,13 @@ export default function MainScreen({
               onGroupSettings={(g) => setSettingsFor(g.id)}
               onLeave={setLeaving}
               onReorder={(ids) => void reorderGroups(ids)}
+              extraMenu={(g, close) => (
+                <MuteMenuItems
+                  conversation={g}
+                  onMute={(d) => void muteChat(g, d)}
+                  onClose={close}
+                />
+              )}
             />
           ) : (
             <>

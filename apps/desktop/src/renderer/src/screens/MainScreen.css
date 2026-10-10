@@ -1169,3 +1169,64 @@
   color: var(--glo-good-text);
   font-weight: 600;
 }
+
+/* ---------- Mute (right-click menus) and mentions in the sidebar ---------- */
+
+.menu-item-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.menu-item-sub {
+  font-size: 12px;
+  color: var(--glo-muted);
+  font-weight: 400;
+}
+.menu-item:has(.menu-item-sub) {
+  height: auto;
+  min-height: 40px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.menu-subgroup {
+  display: flex;
+  flex-direction: column;
+}
+.menu-subhead {
+  padding: 6px 10px 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.menu-item--indent {
+  padding-left: 16px;
+  height: 36px;
+}
+.badge--muted {
+  background: var(--glo-line-strong);
+  color: var(--glo-ink);
+}
+.badge--mention {
+  min-width: 20px;
+  font-weight: 800;
+}
+.dm-muted {
+  display: flex;
+  flex: none;
+  color: var(--glo-faint);
+}
+.dm-row--muted .dm-name {
+  color: var(--glo-muted);
+}
+.dm-badges {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.dm-badges .badge {
+  margin-left: 0;
+}

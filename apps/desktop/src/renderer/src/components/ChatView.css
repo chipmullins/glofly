@@ -773,3 +773,99 @@
   color: var(--glo-faint);
   white-space: nowrap;
 }
+
+/* ---------- @mentions ---------- */
+
+.mention {
+  display: inline;
+  padding: 0 3px;
+  margin: 0;
+  border: 0;
+  border-radius: 5px;
+  background: var(--glo-accent-tint);
+  color: var(--glo-link);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mention:hover {
+  text-decoration: underline;
+}
+.mention--me {
+  background: rgba(var(--glo-accent-rgb), 0.22);
+  color: var(--glo-ink);
+}
+/* A message that mentions you: a soft accent wash and a bar on the left */
+.message--mentions-me {
+  background: rgba(var(--glo-accent-rgb), 0.08);
+  box-shadow: inset 3px 0 0 var(--glo-accent);
+}
+.message--mentions-me:hover {
+  background: rgba(var(--glo-accent-rgb), 0.12);
+}
+
+/* "@" suggestions above the message box */
+.composer {
+  position: relative;
+}
+.mention-picker {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  padding: 6px;
+  background: var(--glo-surface);
+  border: 1px solid var(--glo-line);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mention-picker-head {
+  padding: 4px 8px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.mention-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--glo-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mention-option[aria-selected='true'] {
+  background: var(--glo-accent-tint);
+}
+.mention-option-name {
+  font-weight: 600;
+}
+.mention-option-user {
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+/* Muted chat: the bell button in the header */
+.chat-header-wrap {
+  position: relative;
+}
+.chat-mute-menu {
+  right: 0;
+  top: 44px;
+  width: 250px;
+}
+.menu-note {
+  padding: 6px 10px 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--glo-muted);
+}
