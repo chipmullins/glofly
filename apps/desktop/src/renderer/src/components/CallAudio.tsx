@@ -222,17 +222,26 @@ export function PersonVolumeMenu({
   person,
   x,
   y,
-  onClose
+  onClose,
+  children
 }: {
   person: PublicUser
   x: number
   y: number
   onClose: () => void
+  /** Menu items above the volume (the call view: pin, full screen) */
+  children?: React.ReactNode
 }): React.JSX.Element {
   const audio = useCallAudio()
   const muted = isMutedForMe(person.id, audio)
   return (
     <ContextMenu x={x} y={y} label={`${person.displayName}'s volume`} onClose={onClose}>
+      {children && (
+        <>
+          {children}
+          <div className="menu-divider" role="separator" />
+        </>
+      )}
       <div className="person-volume">
         <span className="person-volume-name">
           <SpeakerIcon size={16} />

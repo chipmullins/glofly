@@ -1240,3 +1240,127 @@
 .call-panel--full.call-panel--idle .call-ptt {
   opacity: 0;
 }
+
+/* ---------- Call view controls (0.2.1): pin someone or the screen, full screen one tile ---------- */
+
+/* Hover buttons in a tile's top-right corner (and the shared screen's) */
+.call-tile-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.call-tile:hover .call-tile-actions,
+.call-tile:focus-within .call-tile-actions,
+.call-stage:hover .call-tile-actions,
+.call-stage:focus-within .call-tile-actions,
+.call-tile--pinned .call-tile-actions {
+  opacity: 1;
+}
+.call-tile-action {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--glo-call-tag);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.call-tile-action:hover {
+  background: var(--glo-call-button-hover);
+}
+.call-tile-action[aria-pressed='true'] {
+  color: var(--glo-call-dot);
+}
+.call-tile-action:focus-visible {
+  outline: 2px solid var(--glo-call-glow);
+  outline-offset: 1px;
+}
+/* The smallest tiles (a strip) keep only the pin button visible on hover */
+.call-tiles--strip .call-tile-action {
+  width: 26px;
+  height: 26px;
+}
+.call-tiles--strip .call-tile-actions {
+  top: 6px;
+  right: 6px;
+  gap: 4px;
+}
+
+/* Pinned: one big view, everyone else in a strip underneath */
+.call-media--spotlight {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.call-spot {
+  height: var(--stage-h, clamp(220px, 44vh, 480px));
+  display: flex;
+}
+.call-spot > .call-tile {
+  flex: 1;
+  height: 100%;
+}
+.call-spot .call-video--cover {
+  object-fit: contain;
+}
+.call-tiles--strip {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 10px;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+.call-tiles--strip .call-tile {
+  flex: none;
+  width: auto;
+  height: 96px;
+  aspect-ratio: 16 / 9;
+}
+.call-tiles--strip .call-tile-status {
+  display: none;
+}
+.call-tiles--strip .call-tag {
+  left: 6px;
+  bottom: 6px;
+  padding: 3px 7px;
+  font-size: 12px;
+}
+.call-tile--screen-thumb {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  background: var(--glo-call-video);
+}
+
+/* One tile full screen on its own */
+.call-tile:fullscreen {
+  border-radius: 0;
+  height: 100%;
+  width: 100%;
+  background: var(--glo-call-bg);
+}
+.call-tile:fullscreen .call-video--cover {
+  object-fit: contain;
+}
+.call-tile:fullscreen .call-tile-actions {
+  top: 18px;
+  right: 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call-tile-actions {
+    transition: none;
+  }
+}
