@@ -1,16 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RegisterRequest, SignupMode } from '../../../preload/api-types'
+import type { PhotoType, RegisterRequest, SignupMode } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import wordmarkImg from '../assets/glofly-wordmark.png'
 import { PRIVACY_URL, TERMS_URL } from '../lib/links'
 import './LoginScreen.css'
 import './RegisterScreen.css'
 import { PASSWORD_RULES, STRENGTH_LABELS } from '../lib/passwords'
+import { initials } from '../lib/names'
+import { PHOTO_TYPES, readPhoto, type PickedPhoto } from '../lib/photoPick'
+import PhotoCropper from '../components/PhotoCropper'
+
+/** The optional profile photo, uploaded right after the account is made. */
+export type RegisterPhoto = { data: ArrayBuffer; type: PhotoType }
 
 type RegisterScreenProps = {
   /** Resolves to null on success, or a message per field (and/or a general message). */
   onRegister: (
-    request: RegisterRequest
+    request: RegisterRequest,
+    photo: RegisterPhoto | null
   ) => Promise<{ fields: Record<string, string>; message?: string } | null>
   onLogin: () => void
   busy?: boolean
@@ -53,6 +60,25 @@ function CheckIcon({ size = 14 }: { size?: number }): React.JSX.Element {
       aria-hidden="true"
     >
       <path d="M5 12l5 5L20 7" />
+    </svg>
+  )
+}
+
+function CameraIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+      <circle cx="12" cy="13" r="3.5" />
     </svg>
   )
 }
@@ -141,6 +167,11 @@ export default function RegisterScreen({
   // Who can sign up (set in Glofly Control): invite only asks for a code; closed says so.
   const [signupMode, setSignupMode] = useState<SignupMode | null>(null)
   const [inviteCode, setInviteCode] = useState('')
+  // Optional profile photo: positioned in the crop window, kept here until the account exists.
+  const [photo, setPhoto] = useState<(RegisterPhoto & { preview: string }) | null>(null)
+  const [cropping, setCropping] = useState<PickedPhoto | null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const closed = signupMode === 'closed'
   const locked = busy || submitting || closed
@@ -185,6 +216,19 @@ export default function RegisterScreen({
 
   const ruleResults = PASSWORD_RULES.map((r) => ({ ...r, met: r.test(password) }))
   const strength = password ? ruleResults.filter((r) => r.met).length : 0
+
+  async function pickPhoto(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = e.target.files?.[0]
+    e.target.value = '' // so picking the same file again still counts
+    if (!file) return
+    const picked = await readPhoto(file)
+    if ('error' in picked) {
+      setPhotoError(picked.error)
+      return
+    }
+    setPhotoError(null)
+    setCropping(picked)
+  }
 
   function clearError(field: string): void {
     if (!errors[field]) return
@@ -241,15 +285,18 @@ export default function RegisterScreen({
     const birthday = `${year.padStart(4, '0')}-${monthNumber}-${day.padStart(2, '0')}`
 
     setSubmitting(true)
-    const failure = await onRegister({
-      email: email.trim(),
-      username: username.trim(),
-      displayName: displayName.trim(),
-      password,
-      birthday,
-      acceptTerms,
-      ...(signupMode === 'invite' ? { inviteCode: inviteCode.trim() } : {})
-    })
+    const failure = await onRegister(
+      {
+        email: email.trim(),
+        username: username.trim(),
+        displayName: displayName.trim(),
+        password,
+        birthday,
+        acceptTerms,
+        ...(signupMode === 'invite' ? { inviteCode: inviteCode.trim() } : {})
+      },
+      photo ? { data: photo.data, type: photo.type } : null
+    )
     setSubmitting(false)
     if (failure) {
       setErrors(failure.fields)
@@ -468,26 +515,75 @@ export default function RegisterScreen({
 
             <div className="field">
               <label htmlFor="reg-display">Display name</label>
-              <input
-                id="reg-display"
-                data-field="displayName"
-                className="text-input"
-                type="text"
-                placeholder="Chip"
-                autoComplete="nickname"
-                maxLength={32}
-                value={displayName}
-                aria-invalid={errors.displayName ? true : undefined}
-                aria-describedby={describe('displayName', true)}
-                onChange={(e) => {
-                  setDisplayName(e.target.value)
-                  clearError('displayName')
-                }}
-              />
+              <div className="display-row">
+                {/* Optional profile photo: the circle shows your initials until you pick one. */}
+                <div className="reg-photo-wrap">
+                  <button
+                    type="button"
+                    className={photo ? 'reg-photo reg-photo--set' : 'reg-photo'}
+                    aria-label={photo ? 'Change profile photo' : 'Add a profile photo (optional)'}
+                    title={photo ? 'Change photo' : 'Add a photo (optional)'}
+                    disabled={locked}
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    {photo ? (
+                      <img src={photo.preview} alt="" draggable={false} />
+                    ) : (
+                      <span className="reg-photo-initials" aria-hidden="true">
+                        {displayName.trim() ? initials(displayName) : <CameraIcon />}
+                      </span>
+                    )}
+                    {!photo && (
+                      <span className="reg-photo-plus" aria-hidden="true">
+                        +
+                      </span>
+                    )}
+                  </button>
+                  {photo && (
+                    <button
+                      type="button"
+                      className="reg-photo-remove"
+                      aria-label="Remove photo"
+                      title="Remove photo"
+                      disabled={locked}
+                      onClick={() => setPhoto(null)}
+                    >
+                      ×
+                    </button>
+                  )}
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept={PHOTO_TYPES.join(',')}
+                    hidden
+                    onChange={(e) => void pickPhoto(e)}
+                  />
+                </div>
+                <input
+                  id="reg-display"
+                  data-field="displayName"
+                  className="text-input"
+                  type="text"
+                  placeholder="Chip"
+                  autoComplete="nickname"
+                  maxLength={32}
+                  value={displayName}
+                  aria-invalid={errors.displayName ? true : undefined}
+                  aria-describedby={describe('displayName', true)}
+                  onChange={(e) => {
+                    setDisplayName(e.target.value)
+                    clearError('displayName')
+                  }}
+                />
+              </div>
               <Hint
                 id="reg-displayName-hint"
-                error={errors.displayName}
-                helper="What friends see in chats. You can change it anytime."
+                error={errors.displayName ?? photoError ?? undefined}
+                helper={
+                  photo
+                    ? 'What friends see in chats. Click the photo to change it.'
+                    : 'What friends see in chats. Adding a photo is optional.'
+                }
               />
             </div>
 
@@ -681,6 +777,21 @@ export default function RegisterScreen({
           </p>
         </form>
       </section>
+      {cropping && (
+        <PhotoCropper
+          src={cropping.src}
+          animated={cropping.type === 'image/gif'}
+          onApply={({ data, preview }) => {
+            setPhoto({ data, type: 'image/webp', preview })
+            setCropping(null)
+          }}
+          onUseWhole={() => {
+            setPhoto({ data: cropping.data, type: cropping.type, preview: cropping.src })
+            setCropping(null)
+          }}
+          onCancel={() => setCropping(null)}
+        />
+      )}
     </div>
   )
 }

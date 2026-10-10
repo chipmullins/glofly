@@ -13,6 +13,7 @@ import { ProfileHero } from './ProfileCard'
 import './dialogs.css'
 import './ProfileDialogs.css'
 import PhotoCropper from './PhotoCropper'
+import { PHOTO_TYPES, readPhoto, type PickedPhoto } from '../lib/photoPick'
 
 type EditProfileDialogProps = {
   user: SignedInUser
@@ -26,8 +27,6 @@ type EditProfileDialogProps = {
 const DISPLAY_NAME_MAX = 32
 const STATUS_TEXT_MAX = 80
 const BIO_MAX = 190
-const PHOTO_MAX_BYTES = 8 * 1024 * 1024
-const PHOTO_TYPES: PhotoType[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 // Labels from the design's status picker.
 const STATUS_CHOICES: { id: MyStatusChoice; label: string }[] = [
@@ -48,21 +47,6 @@ type PhotoChange =
       original: PickedPhoto
     }
   | { kind: 'remove' }
-
-/** A photo just picked, before it's positioned in the circle. */
-type PickedPhoto = { data: ArrayBuffer; type: PhotoType; src: string }
-
-function readFile(file: File): Promise<{ data: ArrayBuffer; preview: string }> {
-  return Promise.all([
-    file.arrayBuffer(),
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(file)
-    })
-  ]).then(([data, preview]) => ({ data, preview }))
-}
 
 /** Edit my profile (EditProfile.dc.html). */
 export default function EditProfileDialog({
@@ -115,22 +99,14 @@ export default function EditProfileDialog({
     const file = e.target.files?.[0]
     e.target.value = '' // so picking the same file again still counts
     if (!file) return
-    if (!PHOTO_TYPES.includes(file.type as PhotoType)) {
-      setError('Choose a JPG, PNG, WebP or GIF photo.')
+    const picked = await readPhoto(file)
+    if ('error' in picked) {
+      setError(picked.error)
       return
     }
-    if (file.size > PHOTO_MAX_BYTES) {
-      setError('That photo is too big. Photos can be up to 8 MB.')
-      return
-    }
-    try {
-      const { data, preview } = await readFile(file)
-      // Choose what's in the circle first.
-      setCropping({ data, type: file.type as PhotoType, src: preview })
-      setError(null)
-    } catch {
-      setError("Couldn't open that photo. Try another one.")
-    }
+    // Choose what's in the circle first.
+    setCropping(picked)
+    setError(null)
   }
 
   const hasPhoto = photo ? photo.kind === 'new' : user.avatarVersion !== null

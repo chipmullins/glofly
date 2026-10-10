@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+// Its own styles, so it works on any screen (Edit profile, and the Register screen).
+import './dialogs.css'
+import './ProfileDialogs.css'
 
 // Choose what's in your profile photo's circle: drag to move the photo, zoom with the slider,
 // the mouse wheel or + / −. Apply draws exactly what's in the circle as a 512×512 picture,

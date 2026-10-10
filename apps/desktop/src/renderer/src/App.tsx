@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RegisterRequest, SignedInUser } from '../../preload/api-types'
 import LoginScreen, { type LoginDetails, type LoginProblem } from './screens/LoginScreen'
-import RegisterScreen from './screens/RegisterScreen'
+import RegisterScreen, { type RegisterPhoto } from './screens/RegisterScreen'
 import MainScreen from './screens/MainScreen'
 import FireflyTakeoff from './components/FireflyTakeoff'
 import { playSound } from './lib/sounds'
@@ -59,11 +59,25 @@ export default function App(): React.JSX.Element {
   }
 
   async function handleRegister(
-    request: RegisterRequest
+    request: RegisterRequest,
+    photo: RegisterPhoto | null
   ): Promise<{ fields: Record<string, string>; message?: string } | null> {
     const result = await window.glofly.auth.register(request)
     if (!result.ok) return { fields: result.fields, message: result.message }
     setScreen({ name: 'takeoff', form: 'register', user: result.user, isNew: true })
+    // The photo picked on the Register screen goes up while the firefly flies. If it doesn't
+    // make it, the account is fine: they can add a photo later in Edit profile.
+    if (photo) {
+      void window.glofly.profile.setPhoto(photo.data, photo.type).then((uploaded) => {
+        if (!uploaded.ok) return
+        const { avatarVersion } = uploaded.data
+        setScreen((s) =>
+          (s.name === 'takeoff' || s.name === 'app') && s.user.id === result.user.id
+            ? { ...s, user: { ...s.user, avatarVersion } }
+            : s
+        )
+      })
+    }
     return null
   }
 

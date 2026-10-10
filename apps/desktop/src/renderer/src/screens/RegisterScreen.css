@@ -292,3 +292,92 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* Display name with the optional profile photo beside it */
+.display-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.display-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+.reg-photo-wrap {
+  position: relative;
+  flex: none;
+}
+.reg-photo {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px dashed var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+.reg-photo:hover:not(:disabled),
+.reg-photo:focus-visible {
+  border-color: var(--glo-orange);
+  color: var(--glo-ink);
+}
+.reg-photo:focus-visible {
+  outline: 2px solid var(--glo-orange);
+  outline-offset: 2px;
+}
+.reg-photo:disabled {
+  cursor: default;
+}
+.reg-photo--set {
+  border-style: solid;
+  border-color: transparent;
+}
+.reg-photo img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.reg-photo-initials {
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 15px;
+  display: grid;
+  place-items: center;
+}
+.reg-photo-plus {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--glo-orange);
+  color: var(--glo-on-accent);
+  font-size: 14px;
+  line-height: 17px;
+  font-weight: 700;
+  border: 2px solid var(--glo-cream);
+}
+.reg-photo-remove {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--glo-cream);
+  background: var(--glo-ink);
+  color: var(--glo-cream);
+  font-size: 12px;
+  line-height: 13px;
+  cursor: pointer;
+}
