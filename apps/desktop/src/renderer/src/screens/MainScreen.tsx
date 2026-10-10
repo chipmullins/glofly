@@ -6,10 +6,12 @@ import type {
   Presence,
   FriendEntry,
   FriendLists,
+  Announcement,
   Message,
   MuteDuration,
   PublicUser,
-  SignedInUser
+  SignedInUser,
+  TeamNotice
 } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import AddFriendDialog from '../components/AddFriendDialog'
@@ -45,6 +47,8 @@ import EmojiText from '../components/EmojiText'
 import ChatList from '../components/ChatList'
 import GroupsPage from '../components/GroupsPage'
 import MuteMenuItems from '../components/MuteMenu'
+import ReportDialog from '../components/ReportDialog'
+import { AnnouncementBar, TeamNoticeDialog } from '../components/TeamNotice'
 import { isMuted, mentionsMe, muteUntil } from '../lib/mentions'
 import { findChats, type ChatResult } from '../lib/chatSearch'
 import { GroupPeopleDialog, GroupSettingsDialog } from '../components/GroupDialogs'
@@ -387,6 +391,14 @@ export default function MainScreen({
   /** What shows when no chat is open: Friends, or the Groups page (sidebar, under Friends) */
   const [page, setPage] = useState<'friends' | 'groups'>('friends')
   const [groupsNotice, setGroupsNotice] = useState<string | null>(null)
+  /** Report dialog: a message (from its menu) or a person (from their profile card) */
+  const [reporting, setReporting] = useState<{
+    person: PublicUser
+    message: { id: string; conversationId: string; preview: string } | null
+  } | null>(null)
+  /** Messages from the Glofly team waiting for "I understand", and the banner */
+  const [teamNotices, setTeamNotices] = useState<TeamNotice[]>([])
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null)
   const [lists, setLists] = useState<FriendLists | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -510,9 +522,25 @@ export default function MainScreen({
     else if (result.error === 'unauthorized') onSessionExpired()
   }, [onSessionExpired])
 
+  const refreshNotices = useCallback(async () => {
+    const result = await window.glofly.notices.list()
+    if (!result.ok) return
+    setTeamNotices(result.data.notices)
+    setAnnouncement(result.data.announcement)
+  }, [])
+
   const refresh = useCallback(async () => {
     await Promise.all([refreshFriends(), refreshConversations()])
   }, [refreshFriends, refreshConversations])
+
+  // Messages from the Glofly team and the banner: on sign-in, and after reconnecting.
+  useEffect(() => {
+    window.glofly.notices.list().then((result) => {
+      if (!result.ok) return
+      setTeamNotices(result.data.notices)
+      setAnnouncement(result.data.announcement)
+    })
+  }, [])
 
   /**
    * A Windows notification for a new message: who sent it and what it says (or "New message"
@@ -642,7 +670,18 @@ export default function MainScreen({
           break
         case 'connection':
           setConnected(event.connected)
-          if (event.connected) void refresh() // catch up on anything missed while offline
+          if (event.connected) {
+            void refresh() // catch up on anything missed while offline
+            void refreshNotices()
+          }
+          break
+        case 'notice:new':
+          setTeamNotices((list) =>
+            list.some((n) => n.id === event.notice.id) ? list : [...list, event.notice]
+          )
+          break
+        case 'announcement':
+          setAnnouncement(event.announcement)
           break
         case 'session:expired':
           onSessionExpired()
@@ -658,7 +697,7 @@ export default function MainScreen({
           break
       }
     })
-  }, [user.id, refresh, refreshConversations, onSessionExpired, notifyMessage])
+  }, [user.id, refresh, refreshConversations, refreshNotices, onSessionExpired, notifyMessage])
 
   useEffect(() => {
     if (!toast) return
@@ -1210,6 +1249,7 @@ export default function MainScreen({
 
         <main className="content">
           <UpdateBar />
+          <AnnouncementBar announcement={announcement} />
           <ConfirmEmailBar
             userId={user.id}
             onChangeEmail={() => setSettingsOpen('account')}
@@ -1248,6 +1288,18 @@ export default function MainScreen({
               onSessionExpired={onSessionExpired}
               onSearch={() => searchThisChat(openChat.id)}
               onMute={(d) => void muteChat(openChat, d)}
+              onReport={(m) => {
+                const sender = openChat.members.find((p) => p.id === m.senderId)
+                if (!sender) return
+                setReporting({
+                  person: sender,
+                  message: {
+                    id: m.id,
+                    conversationId: m.conversationId,
+                    preview: (m.body || attachmentSummary(m.attachments)).slice(0, 300)
+                  }
+                })
+              }}
               jumpRequest={
                 jump && jump.conversationId === openChat.id
                   ? { messageId: jump.messageId, nonce: jump.nonce }
@@ -1438,6 +1490,10 @@ export default function MainScreen({
               setViewing(null)
               setConfirm({ kind: 'block', person: viewing })
             }}
+            onReport={() => {
+              setViewing(null)
+              setReporting({ person: viewing, message: null })
+            }}
             onClose={() => setViewing(null)}
             onSessionExpired={onSessionExpired}
           />
@@ -1462,6 +1518,28 @@ export default function MainScreen({
           />
         )}
         <GameNotice onOpenSettings={() => setSettingsOpen('general')} />
+        {reporting && (
+          <ReportDialog
+            person={reporting.person}
+            message={reporting.message}
+            canBlock={!(lists?.blocked ?? []).some((b) => b.id === reporting.person.id)}
+            onClose={() => setReporting(null)}
+            onSessionExpired={onSessionExpired}
+            onDone={(blocked) => {
+              if (blocked) void refresh()
+            }}
+          />
+        )}
+        {teamNotices[0] && (
+          <TeamNoticeDialog
+            notice={teamNotices[0]}
+            onSeen={() => {
+              const id = teamNotices[0].id
+              setTeamNotices((list) => list.filter((n) => n.id !== id))
+              void window.glofly.notices.seen(id)
+            }}
+          />
+        )}
         {toast && (
           <div className="call-toast" role="status">
             {toast}

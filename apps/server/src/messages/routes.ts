@@ -1178,23 +1178,41 @@ conversationsRouter.delete("/:id/messages/:messageId", async (req, res) => {
     res.status(403).json({ error: "forbidden", message: "You can only delete your own messages." });
     return;
   }
-  if (!message.deletedAt) {
-    const removed = await db.transaction(async (tx) => {
-      await tx
-        .update(messages)
-        .set({ body: "", deletedAt: new Date(), editedAt: null, mentions: [] })
-        .where(eq(messages.id, message.id));
-      await tx.delete(messageReactions).where(eq(messageReactions.messageId, message.id));
-      // Photos and files go too, for good.
-      return tx
-        .delete(attachments)
-        .where(eq(attachments.messageId, message.id))
-        .returning({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind });
-    });
-    await removeFiles(removed);
-  }
+  if (!message.deletedAt) await wipeMessage(message.id);
   res.json({ message: await sendUpdated(message.id, conversationId) });
 });
+
+/** Deletes a message's text, reactions and files for good (its "deleted" placeholder stays). */
+async function wipeMessage(messageId: string): Promise<void> {
+  const removed = await db.transaction(async (tx) => {
+    await tx
+      .update(messages)
+      .set({ body: "", deletedAt: new Date(), editedAt: null, mentions: [] })
+      .where(eq(messages.id, messageId));
+    await tx.delete(messageReactions).where(eq(messageReactions.messageId, messageId));
+    // Photos and files go too, for good.
+    return tx
+      .delete(attachments)
+      .where(eq(attachments.messageId, messageId))
+      .returning({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind });
+  });
+  await removeFiles(removed);
+}
+
+/**
+ * Removes a reported message (Glofly Control): the same as its sender deleting it, and
+ * everyone in the chat sees it go. False if it was already gone.
+ */
+export async function removeMessageForGood(messageId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ conversationId: messages.conversationId, deletedAt: messages.deletedAt, event: messages.event })
+    .from(messages)
+    .where(eq(messages.id, messageId));
+  if (!row || row.deletedAt || row.event) return false;
+  await wipeMessage(messageId);
+  await sendUpdated(messageId, row.conversationId);
+  return true;
+}
 
 // PUT /conversations/:id/messages/:messageId/reactions/:emoji — add your reaction.
 conversationsRouter.put("/:id/messages/:messageId/reactions/:emoji", sendLimiter, async (req, res) => {

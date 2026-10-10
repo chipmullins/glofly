@@ -1,6 +1,14 @@
-import { BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { io, type Socket } from 'socket.io-client'
-import type { Activity, Call, CallMember, GloflyEvent, PublicUser } from '../preload/api-types'
+import type {
+  Activity,
+  Announcement,
+  Call,
+  CallMember,
+  GloflyEvent,
+  PublicUser
+} from '../preload/api-types'
+import { noteUpdateRequired } from './app-status'
 
 // The live connection to the server lives here in the main process, like the
 // session token. Events are passed on to the window as plain data.
@@ -22,10 +30,33 @@ function forward(event: GloflyEvent): void {
   }
 }
 
+/** Only the fields the banner uses, and only https links. */
+export function cleanAnnouncement(a: unknown): Announcement | null {
+  const x = a as Record<string, unknown> | null | undefined
+  if (!x || typeof x.id !== 'string' || typeof x.body !== 'string') return null
+  let linkUrl: string | null = null
+  if (typeof x.linkUrl === 'string') {
+    try {
+      linkUrl = new URL(x.linkUrl).protocol === 'https:' ? x.linkUrl : null
+    } catch {
+      linkUrl = null
+    }
+  }
+  return {
+    id: x.id,
+    body: x.body.slice(0, 300),
+    tone: x.tone === 'important' ? 'important' : 'info',
+    linkUrl,
+    linkLabel: linkUrl && typeof x.linkLabel === 'string' ? x.linkLabel.slice(0, 40) : null,
+    createdAt: String(x.createdAt ?? ''),
+    endsAt: typeof x.endsAt === 'string' ? x.endsAt : null
+  }
+}
+
 export function connectRealtime(url: string, token: string, onUnauthorized: () => void): void {
   disconnectRealtime()
   socket = io(url, {
-    auth: { token },
+    auth: { token, version: app.getVersion() },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000 // keeps retrying if the connection drops
   })
@@ -34,6 +65,27 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
     forward({ type: 'connection', connected: true })
     if (idle) socket?.emit('idle', true) // the server assumes a fresh connection is active
     if (activity) socket?.emit('activity', { name: activity })
+  })
+  socket.on('app:update-required', (body) => {
+    disconnectRealtime()
+    noteUpdateRequired(body)
+  })
+  socket.on('notice:new', (p) => {
+    const n = p?.notice
+    if (typeof n?.id === 'string' && typeof n.body === 'string') {
+      forward({
+        type: 'notice:new',
+        notice: {
+          id: n.id,
+          kind: typeof n.kind === 'string' ? n.kind : 'warning',
+          body: n.body.slice(0, 1000),
+          createdAt: String(n.createdAt)
+        }
+      })
+    }
+  })
+  socket.on('announcement', (p) => {
+    forward({ type: 'announcement', announcement: cleanAnnouncement(p?.announcement) })
   })
   socket.on('disconnect', (reason) => {
     // The server only closes a connection itself when that device was signed out
@@ -47,6 +99,12 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
     forward({ type: 'connection', connected: false })
   })
   socket.on('connect_error', (err) => {
+    // Too old for the server (Control → minimum app version): stop retrying, ask to update.
+    if (err.message === 'update_required') {
+      disconnectRealtime()
+      noteUpdateRequired(null)
+      return
+    }
     if (err.message === 'unauthorized') {
       disconnectRealtime()
       onUnauthorized()

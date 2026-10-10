@@ -20,6 +20,7 @@ import { webRouter } from "./web/pages";
 import { emailKind } from "./email/send";
 import { sweepEmailTokens } from "./email/tokens";
 import { controlRouter } from "./admin";
+import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -50,6 +51,8 @@ app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
 app.use("/conversations", conversationsRouter);
 app.use("/calls", callsRouter);
+app.use("/reports", reportsRouter);
+app.use("/notices", noticesRouter);
 // Glofly Control (admin app): only from the admin's network, separate sign-in with a code.
 app.use("/admin", controlRouter);
 // Pages opened from emails (glofly.app/reset, /confirm). Plain HTML, not JSON.
@@ -100,6 +103,11 @@ connectRedis()
       sweepEmailTokens().catch((err) => console.error("Email link cleanup failed", err));
     sweepLinks();
     setInterval(sweepLinks, 60 * 60 * 1000);
+    // Resolved reports are removed a year after they were resolved (hourly).
+    const sweepReports = () =>
+      purgeOldReports().catch((err) => console.error("Report cleanup failed", err));
+    sweepReports();
+    setInterval(sweepReports, 60 * 60 * 1000);
   })
   .catch((err) => {
     console.error("Couldn't connect to Redis. Is Docker running? (docker compose up -d)", err);

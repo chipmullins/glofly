@@ -4,6 +4,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { db } from "./db";
 import { conversationMembers, conversations, users } from "./db/schema";
 import { findSession } from "./auth/sessions";
+import { appVersionFrom, compareVersions, tooOld, updateRequiredBody } from "./app-version";
 import { blockedEitherWay, canMessage } from "./friends/rules";
 import {
   announcePresence,
@@ -43,8 +44,12 @@ export function startRealtime(httpServer: HttpServer): void {
       const found =
         typeof token === "string" && token.length <= 200 ? await findSession(token) : null;
       if (!found) return next(new Error("unauthorized"));
+      // Newer apps say their version here; 0.1.8 only on requests (kept on the session).
+      const version = appVersionFrom(socket.handshake.auth?.version) ?? found.session.appVersion;
+      if (await tooOld(version)) return next(new Error("update_required"));
       socket.data.user = found.user;
       socket.data.sessionId = found.session.id;
+      socket.data.appVersion = version;
       next();
     } catch (err) {
       // A database hiccup must never take the whole server down. The app retries.
@@ -216,4 +221,28 @@ export async function connectedSummary(): Promise<{ devices: number; userIds: Se
     if (id) userIds.add(id);
   }
   return { devices: sockets.length, userIds };
+}
+
+/** Sends an event to every connected app (an announcement changed, say). */
+export function emitToAll(event: string, payload: unknown): void {
+  io?.emit(event, payload);
+}
+
+/**
+ * A new minimum app version: apps older than it are told to update, then disconnected (their
+ * requests are refused from now on too). Returns how many devices that was.
+ */
+export async function dropOutdatedApps(minVersion: string): Promise<number> {
+  if (!io) return 0;
+  const body = await updateRequiredBody();
+  let dropped = 0;
+  for (const socket of await io.fetchSockets()) {
+    const version = typeof socket.data.appVersion === "string" ? socket.data.appVersion : "0.0.0";
+    if (compareVersions(version, minVersion) < 0) {
+      socket.emit("app:update-required", body);
+      socket.disconnect(true);
+      dropped++;
+    }
+  }
+  return dropped;
 }

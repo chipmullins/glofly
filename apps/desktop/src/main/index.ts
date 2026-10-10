@@ -106,8 +106,10 @@ import {
 } from './games'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isUserId } from './api'
+import { getUpdateRequired } from './app-status'
+import { isReportRequest, listNotices, noticeSeen, sendReport } from './safety'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
-import { restartToUpdate, startAutoUpdates, updateReady } from './updater'
+import { checkNow, restartToUpdate, startAutoUpdates, updateReady } from './updater'
 import {
   askMacMediaAccess,
   isMac,
@@ -746,6 +748,15 @@ function registerIpcHandlers(): void {
 
   // Auto-updates: is a new version downloaded and waiting, and "Restart to update".
   ipcMain.handle('updates:status', (event) => (fromApp(event) ? updateReady() : null))
+  ipcMain.handle('updates:check-now', (event) => (fromApp(event) ? checkNow() : 'unavailable'))
+  ipcMain.handle('app:update-required', (event) => (fromApp(event) ? getUpdateRequired() : null))
+  ipcMain.handle('reports:send', (event, report: unknown) =>
+    fromApp(event) && isReportRequest(report) ? sendReport(report) : invalid
+  )
+  ipcMain.handle('notices:list', (event) => (fromApp(event) ? listNotices() : invalid))
+  ipcMain.handle('notices:seen', (event, id: unknown) =>
+    fromApp(event) && isUserId(id) ? noticeSeen(id) : invalid
+  )
   ipcMain.on('updates:restart', (event) => {
     if (!isAppUrl(event.senderFrame?.url ?? '')) return
     restartToUpdate()

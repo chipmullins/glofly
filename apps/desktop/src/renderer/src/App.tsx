@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { RegisterRequest, SignedInUser } from '../../preload/api-types'
+import type { RegisterRequest, SignedInUser, UpdateRequired } from '../../preload/api-types'
 import LoginScreen, { type LoginDetails, type LoginProblem } from './screens/LoginScreen'
 import RegisterScreen, { type RegisterPhoto } from './screens/RegisterScreen'
 import MainScreen from './screens/MainScreen'
 import FireflyTakeoff from './components/FireflyTakeoff'
+import UpdateRequiredScreen from './components/UpdateRequired'
 import { playSound } from './lib/sounds'
 
 type AuthScreen = 'login' | 'register'
@@ -19,6 +20,20 @@ const TAKEOFF_MS = 3200
 
 export default function App(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ name: 'starting' })
+  // The server needs a newer Glofly (Control → minimum app version): covers everything.
+  const [updateRequired, setUpdateRequired] = useState<UpdateRequired | null>(null)
+  useEffect(() => {
+    void window.glofly.appStatus.updateRequired().then((info) => info && setUpdateRequired(info))
+    return window.glofly.onEvent((event) => {
+      if (event.type === 'app:update-required') {
+        setUpdateRequired({
+          message: event.message,
+          minVersion: event.minVersion,
+          downloadUrl: event.downloadUrl
+        })
+      }
+    })
+  }, [])
 
   // On launch, try the saved session. If it's valid, go straight into the app.
   useEffect(() => {
@@ -112,6 +127,8 @@ export default function App(): React.JSX.Element {
   )
 
   const showForm = (form: AuthScreen) => () => setScreen({ name: 'auth', form })
+
+  if (updateRequired) return <UpdateRequiredScreen info={updateRequired} />
 
   switch (screen.name) {
     case 'starting':

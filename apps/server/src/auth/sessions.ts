@@ -3,6 +3,7 @@ import type { RequestHandler } from "express";
 import { and, eq, gt, lt } from "drizzle-orm";
 import { db } from "../db";
 import { sessions, users } from "../db/schema";
+import { appVersionFrom, refuseIfTooOld } from "../app-version";
 
 const DAY = 24 * 60 * 60 * 1000;
 const PERSISTENT_LIFETIME = 30 * DAY; // "Keep me signed in"
@@ -13,10 +14,7 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** "0.1.8" from the app's X-Glofly-Version header, or null (older apps don't send it). */
-export function appVersionFrom(header: unknown): string | null {
-  return typeof header === "string" && /^\d{1,3}\.\d{1,3}\.\d{1,4}$/.test(header) ? header : null;
-}
+export { appVersionFrom };
 
 export async function createSession(
   userId: string,
@@ -97,6 +95,8 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     res.status(401).json({ error: "unauthorized" });
     return;
   }
+  // Too old for this server (Control → minimum app version): "Please update Glofly".
+  if (await refuseIfTooOld(req, res)) return;
   // Which app version this device runs (Control → App versions in use).
   const version = appVersionFrom(req.headers["x-glofly-version"]);
   if (version && version !== found.session.appVersion) {

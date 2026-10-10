@@ -1,0 +1,262 @@
+/* Reports, messages from the Glofly team, the announcement banner, and "Please update Glofly". */
+
+/* ---------- Report dialog ---------- */
+
+.report-dialog {
+  max-width: 520px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.report-quote {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--glo-line-strong);
+  border-radius: 6px;
+  background: var(--glo-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+.report-quote span {
+  color: var(--glo-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  white-space: pre-wrap;
+}
+.report-reasons {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.report-reasons legend {
+  padding: 0 0 6px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.report-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--glo-line-soft);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.report-reason:hover {
+  background: var(--glo-subtle);
+}
+.report-reason--on {
+  border-color: var(--glo-danger-line);
+  background: var(--glo-danger-bg);
+}
+.report-reason input {
+  margin-top: 3px;
+  accent-color: var(--glo-danger);
+}
+.report-reason > span {
+  display: flex;
+  flex-direction: column;
+}
+.report-reason-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+.report-reason-desc {
+  font-size: 12.5px;
+  color: var(--glo-muted);
+}
+.report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.report-field label {
+  font-weight: 700;
+  font-size: 14px;
+}
+.report-field label span {
+  font-weight: 400;
+  color: var(--glo-muted);
+}
+.report-field textarea {
+  resize: vertical;
+  min-height: 70px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--glo-line);
+  border-radius: 10px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+}
+.report-field textarea:focus {
+  outline: none;
+  border-color: var(--glo-accent);
+}
+.report-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.report-block input {
+  accent-color: var(--glo-danger);
+}
+.report-sent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.report-sent p {
+  margin: 0;
+}
+.report-urgent {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--glo-accent-tint);
+  font-weight: 600;
+}
+
+/* ---------- A message from the Glofly team ---------- */
+
+.team-notice {
+  max-width: 460px;
+}
+.team-notice-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.team-notice-head img {
+  width: 34px;
+  height: 34px;
+}
+.team-notice-head h1 {
+  margin: 0;
+}
+.dialog .team-notice-body {
+  margin: 0 0 12px;
+  color: var(--glo-ink);
+  white-space: pre-wrap;
+}
+.dialog .team-notice-foot {
+  font-size: 13px;
+}
+
+/* ---------- Announcement banner (top of the app) ---------- */
+
+.announcement-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 8px 24px;
+  background: var(--glo-subtle);
+  border-bottom: 1px solid var(--glo-line-soft);
+  color: var(--glo-ink);
+  font-size: 13.5px;
+}
+.announcement-bar svg {
+  flex: none;
+  color: var(--glo-link);
+}
+.announcement-bar--important {
+  background: var(--glo-accent-tint);
+  border-bottom-color: var(--glo-accent-soft);
+  font-weight: 600;
+}
+.announcement-text {
+  flex: 1;
+  min-width: 0;
+}
+.announcement-link {
+  flex: none;
+  color: var(--glo-link);
+  font-weight: 700;
+  text-decoration: none;
+}
+.announcement-link:hover {
+  text-decoration: underline;
+}
+.announcement-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--glo-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.announcement-close:hover {
+  background: var(--glo-hover);
+  color: var(--glo-ink);
+}
+
+/* ---------- Please update Glofly ---------- */
+
+.update-required {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--glo-night);
+  color: #fff7ef;
+  font-family: var(--glo-font-body);
+}
+.update-required-card {
+  max-width: 420px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.update-required-fly {
+  width: 72px;
+  height: 72px;
+  filter: drop-shadow(0 0 22px rgba(255, 196, 92, 0.55));
+}
+.update-required h1 {
+  margin: 8px 0 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 30px;
+}
+.update-required p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgba(255, 247, 239, 0.8);
+}
+.update-required .update-required-version {
+  color: rgba(255, 247, 239, 0.6);
+  font-size: 14px;
+}
+.update-required-actions {
+  width: 100%;
+  margin-top: 14px;
+}
+.update-required-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.update-required .update-required-hint {
+  font-size: 13px;
+  color: rgba(255, 247, 239, 0.55);
+}

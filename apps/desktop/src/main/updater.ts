@@ -46,6 +46,15 @@ export function restartToUpdate(): void {
   autoUpdater.quitAndInstall(true, true)
 }
 
+let checkForUpdates: (() => void) | null = null
+
+/** "Check for updates" (the update screen): looks right away, if this copy can update itself. */
+export function checkNow(): 'checking' | 'unavailable' {
+  if (!checkForUpdates) return 'unavailable'
+  checkForUpdates()
+  return 'checking'
+}
+
 export function startAutoUpdates(): void {
   const url = updatesUrl()
   // Mac test builds aren't signed by Apple, and macOS only installs signed updates, so Mac
@@ -67,6 +76,7 @@ export function startAutoUpdates(): void {
       .checkForUpdates()
       .catch((err) => console.error('Update check failed:', err?.message ?? err))
   }
+  checkForUpdates = check
   setTimeout(check, 30 * 1000) // let sign-in and the first screen settle first
   setInterval(check, CHECK_EVERY)
 }

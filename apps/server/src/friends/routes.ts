@@ -415,14 +415,19 @@ blocksRouter.post("/:userId", async (req, res) => {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  await db.transaction(async (tx) => {
-    await tx.insert(blocks).values({ blockerId: myId, blockedId: them.data }).onConflictDoNothing();
-    await tx.delete(friendships).where(pairIs(myId, them.data));
-  });
-  friendsChanged(myId, them.data);
-  await endCallsBetween(myId, them.data);
+  await blockPerson(myId, them.data);
   res.status(204).end();
 });
+
+/** Blocks someone: any friendship or request between you goes, and any call between you ends. */
+export async function blockPerson(myId: string, themId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.insert(blocks).values({ blockerId: myId, blockedId: themId }).onConflictDoNothing();
+    await tx.delete(friendships).where(pairIs(myId, themId));
+  });
+  friendsChanged(myId, themId);
+  await endCallsBetween(myId, themId);
+}
 
 // DELETE /blocks/:userId — unblock.
 blocksRouter.delete("/:userId", async (req, res) => {

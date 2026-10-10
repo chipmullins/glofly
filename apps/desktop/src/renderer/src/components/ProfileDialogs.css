@@ -669,3 +669,22 @@
 .crop-whole {
   margin-right: auto;
 }
+/* "Report @maya" under Remove / Block */
+.profile-report {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--glo-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.profile-report:hover {
+  color: var(--glo-danger);
+  background: var(--glo-danger-bg);
+}

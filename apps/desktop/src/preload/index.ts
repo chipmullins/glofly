@@ -13,6 +13,7 @@ import type {
   PrivacySettings,
   ProfileChanges,
   RegisterRequest,
+  ReportRequest,
   ShowNotification,
   WindowTheme
 } from './api-types'
@@ -170,6 +171,16 @@ const glofly: GloflyApi = {
       return () => ipcRenderer.removeListener('games:changed', handler)
     }
   },
+  reports: {
+    send: (request: ReportRequest) => ipcRenderer.invoke('reports:send', request)
+  },
+  notices: {
+    list: () => ipcRenderer.invoke('notices:list'),
+    seen: (noticeId: string) => ipcRenderer.invoke('notices:seen', noticeId)
+  },
+  appStatus: {
+    updateRequired: () => ipcRenderer.invoke('app:update-required')
+  },
   updates: {
     status: () => ipcRenderer.invoke('updates:status'),
     onReady: (listener: (version: string) => void) => {
@@ -179,7 +190,8 @@ const glofly: GloflyApi = {
       ipcRenderer.on('updates:ready', handler)
       return () => ipcRenderer.removeListener('updates:ready', handler)
     },
-    restart: () => ipcRenderer.send('updates:restart')
+    restart: () => ipcRenderer.send('updates:restart'),
+    checkNow: () => ipcRenderer.invoke('updates:check-now')
   },
   window: {
     setTheme: (theme: WindowTheme) => ipcRenderer.send('window:theme', theme),

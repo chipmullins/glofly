@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
+import { requireCurrentApp } from "../app-version";
 import { users } from "../db/schema";
 import { hashPassword, verifyPassword } from "./passwords";
 import { cancelDeletion } from "../account/deletion";
@@ -98,7 +99,7 @@ const BAD_INVITE_CODE = "That invite code doesn't work. Check it, or ask for a n
 // POST /auth/register
 // Body: { email, username, displayName, password, birthday: "YYYY-MM-DD", acceptTerms: true, deviceName? }
 // Returns a session token too, so the new account is signed in right away.
-authRouter.post("/register", registerLimiter, async (req, res) => {
+authRouter.post("/register", requireCurrentApp, registerLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid", fields: fieldErrors(parsed.error) });
@@ -207,7 +208,7 @@ const WRONG_DETAILS = "That username or password isn't right.";
 
 // POST /auth/login
 // Body: { identifier: username or email, password, keepSignedIn, deviceName? }
-authRouter.post("/login", loginLimiter, async (req, res) => {
+authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid", message: "Enter your username or email and password." });

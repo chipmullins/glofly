@@ -1,3 +1,4 @@
+import { noteUpdateRequired } from './app-status'
 import type {
   ForgotPasswordResult,
   SignupMode,
@@ -96,6 +97,9 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
     return { ok: true, user: body.user }
   }
 
+  if (response.status === 426 && body?.error === 'update_required') {
+    return { ok: false, reason: 'update_required', message: noteUpdateRequired(body).message }
+  }
   if (
     response.status === 403 &&
     body?.error === 'deletion_scheduled' &&
@@ -151,8 +155,12 @@ export async function register(request: RegisterRequest): Promise<RegisterResult
     user?: SignedInUser
     fields?: Record<string, string>
     message?: string
+    error?: string
   } | null
 
+  if (response.status === 426 && body?.error === 'update_required') {
+    return { ok: false, fields: {}, message: noteUpdateRequired(body).message }
+  }
   if (response.status === 201 && body?.token && body.user) {
     sessionToken = body.token
     await saveToken(body.token) // new accounts start out kept signed in
@@ -250,6 +258,11 @@ export async function restore(): Promise<SignedInUser | null> {
   if (response.status === 401) {
     // Expired or signed out elsewhere: forget it.
     await clearToken()
+    return null
+  }
+  if (response.status === 426) {
+    // Too old for the server: keep the saved session for after the update.
+    noteUpdateRequired(await response.json().catch(() => null))
     return null
   }
 

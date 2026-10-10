@@ -1,6 +1,7 @@
 import type { ApiError, ApiResult } from '../preload/api-types'
 import { API_URL, endSessionLocally, getSessionToken, VERSION_HEADER } from './auth'
 import { disconnectRealtime } from './realtime'
+import { noteUpdateRequired } from './app-status'
 
 /** Calls the server as the signed-in user and turns the answer into an ApiResult. */
 export async function request<T>(
@@ -40,6 +41,10 @@ export async function request<T>(
 
   if (response.ok && json) return { ok: true, data: json }
 
+  if (response.status === 426 && json?.error === 'update_required') {
+    const required = noteUpdateRequired(json)
+    return { ok: false, error: 'update_required', message: required.message }
+  }
   if (response.status === 401) {
     disconnectRealtime()
     await endSessionLocally()

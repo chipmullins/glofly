@@ -24,6 +24,7 @@ export type LoginFailureReason =
   | 'unreachable'
   | 'server_error'
   | 'deletion_scheduled' // right password, but the account is set to be deleted
+  | 'update_required' // this version is too old: the update screen shows
 
 export type LoginResult =
   | { ok: true; user: SignedInUser }
@@ -137,6 +138,8 @@ export type ApiError =
   | 'forbidden'
   | 'too_many_requests'
   | 'server_error'
+  /** This version of Glofly is too old for the server: the app shows "Please update Glofly" */
+  | 'update_required'
 export type ApiResult<T> =
   | { ok: true; data: T }
   | {
@@ -455,6 +458,49 @@ export type GloflyEvent =
   | { type: 'appearance'; accent: AccentChoice; dark: boolean }
   /** A Windows notification was clicked (Glofly is already brought to the front). */
   | { type: 'notification:click'; conversationId: string | null }
+  /** This version is too old for the server: show "Please update Glofly". */
+  | ({ type: 'app:update-required' } & UpdateRequired)
+  /** A message from the Glofly team (a warning) */
+  | { type: 'notice:new'; notice: TeamNotice }
+  /** The announcement banner changed (null: none showing now) */
+  | { type: 'announcement'; announcement: Announcement | null }
+
+/** The server needs a newer Glofly (Control → minimum app version). */
+export type UpdateRequired = {
+  message: string
+  minVersion: string | null
+  /** Where to get it (glofly.app/download) */
+  downloadUrl: string
+}
+
+/** A message from the Glofly team to you (a warning from Glofly Control). */
+export type TeamNotice = { id: string; kind: string; body: string; createdAt: string }
+
+/** The banner at the top of everyone's app (Glofly Control → Announcements). */
+export type Announcement = {
+  id: string
+  body: string
+  tone: 'info' | 'important'
+  /** Optional "Learn more" link (https only) */
+  linkUrl: string | null
+  linkLabel: string | null
+  createdAt: string
+  endsAt: string | null
+}
+
+export type ReportReason =
+  'spam' | 'harassment' | 'hate' | 'sexual' | 'violence' | 'self_harm' | 'other'
+
+/** Report a message (messageId + conversationId) or a person (userId). */
+export type ReportRequest = {
+  messageId?: string
+  conversationId?: string
+  userId?: string
+  reason: ReportReason
+  details?: string
+  /** Also block them */
+  block?: boolean
+}
 
 /** Which screen is showing, so the window buttons can match its colors. */
 export type WindowTheme = 'login' | 'app'
@@ -654,6 +700,20 @@ export type GloflyApi = {
     noticeShown: () => void
     onChange: (listener: (state: GameState) => void) => () => void
   }
+  /** Report a message or a person to the Glofly team. */
+  reports: {
+    send: (request: ReportRequest) => Promise<ApiResult<{ ok: true; alreadyReported?: boolean }>>
+  }
+  /** Messages from the Glofly team, and the announcement banner. */
+  notices: {
+    list: () => Promise<ApiResult<{ notices: TeamNotice[]; announcement: Announcement | null }>>
+    /** "I understand" */
+    seen: (noticeId: string) => Promise<ApiResult<null>>
+  }
+  /** Set when the server needs a newer Glofly (checked at startup). */
+  appStatus: {
+    updateRequired: () => Promise<UpdateRequired | null>
+  }
   /** New versions of Glofly (installed app only). */
   updates: {
     /** The version downloaded and waiting for a restart, or null. */
@@ -662,6 +722,8 @@ export type GloflyApi = {
     onReady: (listener: (version: string) => void) => () => void
     /** Closes Glofly, installs the new version and opens it again. */
     restart: () => void
+    /** Looks for a new version right away. 'unavailable': this copy can't update itself. */
+    checkNow: () => Promise<'checking' | 'unavailable'>
   }
   window: {
     setTheme: (theme: WindowTheme) => void

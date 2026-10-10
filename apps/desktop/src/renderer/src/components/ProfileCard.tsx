@@ -6,6 +6,7 @@ import { playedFor, playing, STATUS_LABEL } from '../lib/presence'
 import Avatar from './Avatar'
 import {
   BlockIcon,
+  FlagIcon,
   CalendarIcon,
   ChatIcon,
   CloseIcon,
@@ -70,6 +71,8 @@ type ProfileCardProps = {
   onCall?: (video: boolean) => void
   onRemove: () => void
   onBlock: () => void
+  /** Report this person to the Glofly team */
+  onReport?: () => void
   onClose: () => void
   onSessionExpired: () => void
 }
@@ -83,6 +86,7 @@ export default function ProfileCard({
   onCall,
   onRemove,
   onBlock,
+  onReport,
   onClose,
   onSessionExpired
 }: ProfileCardProps): React.JSX.Element {
@@ -189,6 +193,12 @@ export default function ProfileCard({
                 Block
               </button>
             </div>
+            {onReport && (
+              <button type="button" className="profile-report" onClick={onReport}>
+                <FlagIcon size={14} />
+                Report @{person.username}
+              </button>
+            )}
 
             {shown.joinedAt && (
               <div className="profile-joined">

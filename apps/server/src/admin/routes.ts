@@ -14,6 +14,7 @@ import {
   inviteCodes,
   inviteCodeUses,
   messages,
+  reports,
   sessions,
   signupMode,
   users,
@@ -30,6 +31,7 @@ import { adminChangeEmail, adminResendVerification, adminSendPasswordReset } fro
 import { cancelDeletion, deleteNow } from "../account/deletion";
 import { profileChanged } from "../profile/routes";
 import { storageKind } from "../storage";
+import { getMinVersion } from "../app-version";
 import { logAction, noteSchema } from "./audit";
 import type { AdminLocals } from "./auth";
 import {
@@ -228,6 +230,9 @@ adminRouter.get("/dashboard", async (req, res) => {
     daily: daily.rows,
     versions: versions.rows,
     signupMode: await getSignupMode(),
+    // Control v2: reports waiting for review, and the minimum app version.
+    openReports: (await db.select({ n: count() }).from(reports).where(eq(reports.status, "open")))[0].n,
+    minVersion: (await getMinVersion()).min,
     recentAccounts,
     recentActions,
   });
@@ -455,6 +460,13 @@ async function target(res: Response, id: unknown) {
 const noteOnly = z.object({ note: noteSchema });
 
 /** Signs every device out and closes their live connections. */
+/** Suspends an account: logging in is refused (showing the reason), every device signed out. */
+export async function suspendAccount(userId: string, reason: string): Promise<number> {
+  await db.update(users).set({ suspendedAt: new Date(), suspendReason: reason }).where(eq(users.id, userId));
+  await endCallsFor(userId);
+  return signOutEverywhere(userId);
+}
+
 async function signOutEverywhere(userId: string): Promise<number> {
   const removed = await db.delete(sessions).where(eq(sessions.userId, userId)).returning({ id: sessions.id });
   await disconnectSessions(userId);
@@ -618,12 +630,7 @@ adminRouter.post("/accounts/:id/suspend", async (req, res) => {
     res.status(400).json({ error: "invalid", message: "You can't suspend your own account." });
     return;
   }
-  await db
-    .update(users)
-    .set({ suspendedAt: new Date(), suspendReason: parsed.data.reason })
-    .where(eq(users.id, user.id));
-  await endCallsFor(user.id);
-  const devices = await signOutEverywhere(user.id);
+  const devices = await suspendAccount(user.id, parsed.data.reason);
   await logAction({
     adminId: admin(res).id,
     action: "Suspended",
