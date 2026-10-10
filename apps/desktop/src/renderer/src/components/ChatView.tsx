@@ -36,6 +36,8 @@ import EmojiPicker from './EmojiPicker'
 import EmojiText from './EmojiText'
 import './ChatView.css'
 import { isShortcutKey, shortcutLabel } from '../lib/platform'
+import { useVoiceRecorder, voiceTime, VOICE_MAX_MS, type Recorded } from '../lib/voice'
+import { MicIcon } from './icons'
 import {
   isMuted,
   mentionQuery,
@@ -124,13 +126,36 @@ const preview = (m: Message): ReplyPreview => ({
   body: m.body.slice(0, 200),
   deleted: m.deleted,
   attachment: m.attachments[0]
-    ? { kind: m.attachments[0].kind, name: m.attachments[0].name, count: m.attachments.length }
+    ? {
+        kind: m.attachments[0].kind,
+        name: m.attachments[0].name,
+        count: m.attachments.length,
+        voice: !!m.attachments[0].voice
+      }
     : null
 })
 
 /** Short text for a message: its words, or "Photo" / the file name if it has none. */
 const textOf = (m: Pick<Message, 'body' | 'attachments'>): string =>
   m.body || attachmentSummary(m.attachments)
+
+function TrashIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+    </svg>
+  )
+}
 
 function EmojiIcon(): React.JSX.Element {
   return (
@@ -442,6 +467,101 @@ export default function ChatView({
     u.status === 'ready' && u.attachment ? [u.attachment] : []
   )
   const canSend = !uploading && (draft.trim().length > 0 || readyFiles.length > 0)
+
+  // Voice messages: click the mic to record (then send or cancel), or hold it and let go to
+  // send. While holding, sliding left or Escape cancels.
+  const recorder = useVoiceRecorder(
+    (r) => void sendVoice(r),
+    (message) => setNotice(message)
+  )
+  const recording = recorder.state !== 'idle'
+  const hold = useRef<{ x: number; at: number } | null>(null)
+  /** A press on the mic while recording in click mode: letting go sends it. */
+  const sendPress = useRef(false)
+  const [holding, setHolding] = useState(false)
+  const [slid, setSlid] = useState(0)
+  const SLIDE_TO_CANCEL = 90
+
+  useEffect(() => {
+    if (!recording) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      hold.current = null
+      setHolding(false)
+      setSlid(0)
+      recorder.cancel()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [recording, recorder])
+
+  function micDown(e: React.PointerEvent<HTMLButtonElement>): void {
+    if (e.button !== 0 || !conversation.canMessage) return
+    if (recording && !holding) {
+      sendPress.current = true // clicked to record earlier: this click sends it
+      return
+    }
+    e.currentTarget.setPointerCapture(e.pointerId)
+    hold.current = { x: e.clientX, at: Date.now() }
+    setHolding(true)
+    setSlid(0)
+    recorder.start()
+  }
+
+  function micMove(e: React.PointerEvent<HTMLButtonElement>): void {
+    const h = hold.current
+    if (!h) return
+    const dx = Math.max(0, h.x - e.clientX)
+    setSlid(dx)
+    if (dx >= SLIDE_TO_CANCEL) {
+      hold.current = null
+      setHolding(false)
+      setSlid(0)
+      recorder.cancel()
+    }
+  }
+
+  function micUp(): void {
+    if (sendPress.current) {
+      sendPress.current = false
+      recorder.finish()
+      return
+    }
+    const h = hold.current
+    if (!h) return
+    hold.current = null
+    setHolding(false)
+    setSlid(0)
+    // A quick click keeps recording until Send (or cancel); holding sends when let go.
+    if (Date.now() - h.at >= 400) recorder.finish()
+  }
+
+  async function sendVoice(r: Recorded): Promise<void> {
+    if (!chatOpen.current || !conversation.canMessage) return
+    const replyTo = replyingTo ? preview(replyingTo) : null
+    setReplyingTo(null)
+    const up = await window.glofly.conversations.upload(
+      conversation.id,
+      r.data,
+      'Voice message.webm',
+      r.voice
+    )
+    if (!up.ok) return handleFailure(up.error, up.message)
+    tempCounter.current += 1
+    const item: Pending = {
+      tempId: `pending-${tempCounter.current}`,
+      body: '',
+      createdAt: new Date().toISOString(),
+      failed: false,
+      replyTo,
+      attachments: [up.data]
+    }
+    stickToBottom.current = true
+    setPending((p) => [...p, item])
+    void deliver(item)
+  }
 
   function send(): void {
     const body = draft.trim()
@@ -1337,67 +1457,142 @@ export default function ChatView({
                 ))}
               </div>
             )}
-            <div className="composer-row">
+            <div className={recording ? 'composer-row composer-row--recording' : 'composer-row'}>
+              {recording ? (
+                <div className="voice-recording" role="status" aria-live="polite">
+                  <button
+                    type="button"
+                    className="voice-cancel"
+                    aria-label="Cancel voice message"
+                    title="Cancel (Esc)"
+                    onClick={recorder.cancel}
+                  >
+                    <TrashIcon />
+                  </button>
+                  <span className="voice-rec-dot" aria-hidden="true" />
+                  <span className="voice-rec-time">
+                    {voiceTime(recorder.elapsedMs)}
+                    <span className="voice-rec-max"> / {voiceTime(VOICE_MAX_MS)}</span>
+                  </span>
+                  <span className="voice-rec-bars" aria-hidden="true">
+                    {recorder.live.map((l, i) => (
+                      <span key={i} style={{ height: `${Math.max(10, Math.round(l * 100))}%` }} />
+                    ))}
+                  </span>
+                  <span
+                    className="voice-rec-hint"
+                    style={holding ? { opacity: 1 - slid / SLIDE_TO_CANCEL } : undefined}
+                  >
+                    {recorder.state === 'starting'
+                      ? 'Starting your mic…'
+                      : holding
+                        ? '‹ Slide left to cancel · let go to send'
+                        : 'Recording · Esc to cancel'}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="attach-button"
+                    aria-label="Attach a file"
+                    title="Attach photos or files"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <AttachIcon />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    hidden
+                    onChange={(e) => {
+                      addFiles(Array.from(e.target.files ?? []))
+                      e.target.value = '' // so the same file can be picked again
+                    }}
+                  />
+                  <textarea
+                    ref={inputRef}
+                    rows={1}
+                    aria-label={`Message ${title}`}
+                    placeholder={partner ? `Message @${partner.username}` : `Message ${title}`}
+                    value={draft}
+                    maxLength={MESSAGE_MAX + 200}
+                    onChange={onChange}
+                    onKeyDown={onKeyDown}
+                    onPaste={onPaste}
+                    onSelect={(e) => {
+                      if (mention)
+                        checkMention(e.currentTarget.value, e.currentTarget.selectionStart)
+                    }}
+                    onBlur={() => setMention(null)}
+                    aria-autocomplete={isGroup ? 'list' : undefined}
+                    aria-controls={suggestions.length > 0 ? 'mention-picker' : undefined}
+                    aria-activedescendant={
+                      suggestions.length > 0 && mention
+                        ? `mention-option-${mention.index}`
+                        : undefined
+                    }
+                  />
+                  <button
+                    type="button"
+                    className={emojiAnchor ? 'emoji-button emoji-button--open' : 'emoji-button'}
+                    aria-label="Emoji"
+                    aria-expanded={!!emojiAnchor}
+                    aria-haspopup="dialog"
+                    title="Emoji"
+                    onClick={(e) => (emojiAnchor ? closeEmoji() : setEmojiAnchor(e.currentTarget))}
+                  >
+                    <EmojiIcon />
+                  </button>
+                </>
+              )}
               <button
                 type="button"
-                className="attach-button"
-                aria-label="Attach a file"
-                title="Attach photos or files"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <AttachIcon />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                hidden
-                onChange={(e) => {
-                  addFiles(Array.from(e.target.files ?? []))
-                  e.target.value = '' // so the same file can be picked again
-                }}
-              />
-              <textarea
-                ref={inputRef}
-                rows={1}
-                aria-label={`Message ${title}`}
-                placeholder={partner ? `Message @${partner.username}` : `Message ${title}`}
-                value={draft}
-                maxLength={MESSAGE_MAX + 200}
-                onChange={onChange}
-                onKeyDown={onKeyDown}
-                onPaste={onPaste}
-                onSelect={(e) => {
-                  if (mention) checkMention(e.currentTarget.value, e.currentTarget.selectionStart)
-                }}
-                onBlur={() => setMention(null)}
-                aria-autocomplete={isGroup ? 'list' : undefined}
-                aria-controls={suggestions.length > 0 ? 'mention-picker' : undefined}
-                aria-activedescendant={
-                  suggestions.length > 0 && mention ? `mention-option-${mention.index}` : undefined
+                className={[
+                  'mic-button',
+                  recording && 'mic-button--recording',
+                  holding && 'mic-button--holding'
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-label={recording && !holding ? 'Send voice message' : 'Record a voice message'}
+                title={
+                  recording ? undefined : 'Voice message (click to record, or hold and let go)'
                 }
-              />
-              <button
-                type="button"
-                className={emojiAnchor ? 'emoji-button emoji-button--open' : 'emoji-button'}
-                aria-label="Emoji"
-                aria-expanded={!!emojiAnchor}
-                aria-haspopup="dialog"
-                title="Emoji"
-                onClick={(e) => (emojiAnchor ? closeEmoji() : setEmojiAnchor(e.currentTarget))}
+                style={
+                  holding && slid
+                    ? { transform: `translateX(-${Math.min(slid, 60)}px)` }
+                    : undefined
+                }
+                onPointerDown={micDown}
+                onPointerMove={micMove}
+                onPointerUp={micUp}
+                onPointerCancel={() => {
+                  sendPress.current = false
+                  micUp()
+                }}
+                onClick={(e) => {
+                  // From the keyboard (Enter / Space): start recording, then send.
+                  if (e.detail !== 0) return
+                  if (recording) recorder.finish()
+                  else recorder.start()
+                }}
               >
-                <EmojiIcon />
+                {recording && !holding ? <SendIcon /> : <MicIcon size={20} />}
               </button>
-              <button
-                type="button"
-                className="send-button"
-                aria-label="Send message"
-                title={uploading ? 'Waiting for files to upload…' : undefined}
-                disabled={!canSend}
-                onClick={send}
-              >
-                <SendIcon />
-              </button>
+              {!recording && (
+                <button
+                  type="button"
+                  className="send-button"
+                  aria-label="Send message"
+                  title={uploading ? 'Waiting for files to upload…' : undefined}
+                  disabled={!canSend}
+                  onClick={send}
+                >
+                  <SendIcon />
+                </button>
+              )}
             </div>
           </div>
         ) : (

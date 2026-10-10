@@ -132,6 +132,7 @@ import {
   unblockUser
 } from './friends'
 import type {
+  VoiceInfo,
   LoginRequest,
   MuteDuration,
   PhotoType,
@@ -171,7 +172,10 @@ let mainWindow: BrowserWindow | null = null
 // starts, as a secure scheme so the window treats it like https.
 protocol.registerSchemesAsPrivileged([
   // corsEnabled: the window can draw a profile photo onto a canvas (notification pictures).
-  { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, corsEnabled: true } }
+  {
+    scheme: MEDIA_SCHEME,
+    privileges: { standard: true, secure: true, corsEnabled: true, supportFetchAPI: true }
+  }
 ])
 
 // On Windows, Glofly draws its own top area and Windows only draws the window
@@ -590,23 +594,47 @@ function registerIpcHandlers(): void {
 
   // Photos and files in chats.
   const FILE_MAX_BYTES = 25 * 1024 * 1024
-  ipcMain.handle('conversations:upload', (event, id: unknown, data: unknown, name: unknown) => {
-    if (
-      !fromApp(event) ||
-      !isUserId(id) ||
-      !(data instanceof ArrayBuffer) ||
-      typeof name !== 'string' ||
-      name.length > 1000
-    ) {
-      return invalid
+  const VOICE_MAX_BYTES = 6 * 1024 * 1024
+  /** A voice message's length (up to 5 minutes) and waveform (up to 64 bars, 0–100). */
+  const isVoiceInfo = (v: unknown): v is VoiceInfo => {
+    const x = v as Partial<VoiceInfo> | null
+    return (
+      typeof x === 'object' &&
+      x !== null &&
+      typeof x.durationMs === 'number' &&
+      Number.isFinite(x.durationMs) &&
+      x.durationMs >= 200 &&
+      x.durationMs <= 305_000 &&
+      Array.isArray(x.peaks) &&
+      x.peaks.length >= 1 &&
+      x.peaks.length <= 64 &&
+      x.peaks.every((p) => Number.isInteger(p) && p >= 0 && p <= 100)
+    )
+  }
+  ipcMain.handle(
+    'conversations:upload',
+    (event, id: unknown, data: unknown, name: unknown, voice: unknown) => {
+      if (
+        !fromApp(event) ||
+        !isUserId(id) ||
+        !(data instanceof ArrayBuffer) ||
+        typeof name !== 'string' ||
+        name.length > 1000 ||
+        (voice !== undefined && !isVoiceInfo(voice))
+      ) {
+        return invalid
+      }
+      if (data.byteLength === 0)
+        return { ok: false, error: 'invalid', message: 'That file is empty.' }
+      if (data.byteLength > FILE_MAX_BYTES) {
+        return { ok: false, error: 'invalid', message: 'Files can be up to 25 MB.' }
+      }
+      if (voice && data.byteLength > VOICE_MAX_BYTES) {
+        return { ok: false, error: 'invalid', message: 'Voice messages can be up to 5 minutes.' }
+      }
+      return uploadAttachment(id, new Uint8Array(data), name, voice as VoiceInfo | undefined)
     }
-    if (data.byteLength === 0)
-      return { ok: false, error: 'invalid', message: 'That file is empty.' }
-    if (data.byteLength > FILE_MAX_BYTES) {
-      return { ok: false, error: 'invalid', message: 'Files can be up to 25 MB.' }
-    }
-    return uploadAttachment(id, new Uint8Array(data), name)
-  })
+  )
   ipcMain.handle('conversations:remove-upload', (event, id: unknown, attachmentId: unknown) =>
     fromApp(event) && isUserId(id) && isUserId(attachmentId)
       ? removeUpload(id, attachmentId)

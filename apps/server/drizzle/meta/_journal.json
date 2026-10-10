@@ -134,6 +134,13 @@
       "when": 1791661185626,
       "tag": "0018_close_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791662874257,
+      "tag": "0019_voice_messages",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { db } from "../db";
-import { attachments } from "../db/schema";
+import { attachments, type VoiceInfo } from "../db/schema";
 import { storage } from "../storage";
 
 // Photos and files shared in chats.
@@ -30,7 +30,21 @@ export type AttachmentInfo = {
   size: number;
   width: number | null;
   height: number | null;
+  /** Voice messages only */
+  voice: VoiceInfo | null;
 };
+
+// Voice messages: Opus audio recorded in Glofly, up to 5 minutes (about 1–2 MB).
+export const VOICE_MAX_MS = 5 * 60 * 1000;
+export const VOICE_MAX_BYTES = 6 * 1024 * 1024;
+export const VOICE_PEAKS_MAX = 64;
+
+/** WebM (what Glofly records) or Ogg, by the bytes the file starts with. */
+export function voiceFormat(data: Buffer): "webm" | "ogg" | null {
+  if (data.length >= 4 && data[0] === 0x1a && data[1] === 0x45 && data[2] === 0xdf && data[3] === 0xa3) return "webm";
+  if (data.length >= 4 && data.toString("latin1", 0, 4) === "OggS") return "ogg";
+  return null;
+}
 
 /** Where each version of an attachment is kept. */
 export function keysFor(a: { id: string; conversationId: string; kind: AttachmentKind }): string[] {
@@ -221,6 +235,7 @@ export async function storeUpload(
   uploaderId: string,
   name: string,
   processed: Processed,
+  voice: VoiceInfo | null = null,
 ): Promise<AttachmentInfo> {
   const id = randomUUID();
   const base = { id, conversationId, kind: processed.kind };
@@ -241,6 +256,7 @@ export async function storeUpload(
       size,
       width: processed.kind === "image" ? processed.width : null,
       height: processed.kind === "image" ? processed.height : null,
+      voice: processed.kind === "file" ? voice : null,
     });
   } catch (err) {
     await removeFiles([base]);
@@ -253,6 +269,7 @@ export async function storeUpload(
     size,
     width: processed.kind === "image" ? processed.width : null,
     height: processed.kind === "image" ? processed.height : null,
+    voice: processed.kind === "file" ? voice : null,
   };
 }
 
@@ -279,6 +296,7 @@ export async function attachmentsOf(messageIds: string[]): Promise<Map<string, A
       size: attachments.size,
       width: attachments.width,
       height: attachments.height,
+      voice: attachments.voice,
     })
     .from(attachments)
     .where(inArray(attachments.messageId, messageIds))

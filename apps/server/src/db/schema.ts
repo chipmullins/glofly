@@ -304,6 +304,9 @@ export const messageReactions = pgTable(
   (t) => [primaryKey({ columns: [t.messageId, t.userId, t.emoji] })],
 );
 
+/** A voice message's length and its waveform (bar heights 0–100). */
+export type VoiceInfo = { durationMs: number; peaks: number[] };
+
 export const attachmentKind = pgEnum("attachment_kind", ["image", "file"]);
 
 // Photos and files shared in chats. Uploaded first (message_id empty), then attached
@@ -329,6 +332,9 @@ export const attachments = pgTable(
     // Photos only: size of the full-size version.
     width: integer("width"),
     height: integer("height"),
+    // Voice messages (0.2.1): how long it is and its waveform. They're kind "file", so apps
+    // before 0.2.1 show them as a downloadable "Voice message.webm".
+    voice: jsonb("voice").$type<VoiceInfo>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

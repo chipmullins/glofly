@@ -12,13 +12,18 @@ import {
   messages,
   users,
   type ChatEvent,
+  type VoiceInfo,
 } from "../db/schema";
 import { storage } from "../storage";
 import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENTS_PER_MESSAGE,
   UNSENT_PER_PERSON,
+  VOICE_MAX_BYTES,
+  VOICE_MAX_MS,
+  VOICE_PEAKS_MAX,
   attachmentsOf,
+  voiceFormat,
   cleanFileName,
   isBlocked,
   keyFor,
@@ -185,9 +190,10 @@ async function hydrate(rows: MessageRow[]) {
   });
 }
 
-function quoteOf(list: { kind: "image" | "file"; name: string }[] | undefined) {
+function quoteOf(list: { kind: "image" | "file"; name: string; voice?: unknown }[] | undefined) {
   const first = list?.[0];
-  return first ? { kind: first.kind, name: first.name, count: list.length } : null;
+  // voice: so a reply to a voice message can say "Voice message" (0.2.1+; older apps show the name).
+  return first ? { kind: first.kind, name: first.name, count: list.length, voice: !!first.voice } : null;
 }
 
 /** Sends an event to everyone in a conversation. */
@@ -1366,7 +1372,21 @@ conversationsRouter.post(
       res.status(400).json({ error: "invalid", message: "That file is empty." });
       return;
     }
-    const rawName = z.string().max(1000).catch("file").parse(req.query.name);
+    // A voice message (?voice=1&duration=<ms>&peaks=<0–100,…>): Opus audio Glofly recorded.
+    // Stored like any file (old apps offer it as a download), with its length and waveform.
+    let voice: VoiceInfo | null = null;
+    if (req.query.voice !== undefined) {
+      const parsed = voiceQuery.safeParse(req.query);
+      const format = voiceFormat(data);
+      if (!parsed.success || !format || data.length > VOICE_MAX_BYTES) {
+        res.status(400).json({ error: "invalid", message: "That voice message couldn't be sent. Try recording it again." });
+        return;
+      }
+      voice = parsed.data;
+    }
+    const rawName = voice
+      ? `Voice message.${voiceFormat(data)}`
+      : z.string().max(1000).catch("file").parse(req.query.name);
     const name = cleanFileName(rawName);
     if (isBlocked(name, data)) {
       res.status(400).json({
@@ -1382,10 +1402,28 @@ conversationsRouter.post(
       });
       return;
     }
-    const attachment = await storeUpload(id.data, myId, name, await processUpload(data));
+    const attachment = await storeUpload(
+      id.data,
+      myId,
+      name,
+      voice ? { kind: "file", data } : await processUpload(data),
+      voice,
+    );
     res.status(201).json({ attachment });
   },
 );
+
+const voiceQuery = z
+  .object({
+    voice: z.literal("1"),
+    duration: z.coerce.number().int().min(200).max(VOICE_MAX_MS + 5000),
+    peaks: z
+      .string()
+      .max(VOICE_PEAKS_MAX * 4)
+      .transform((s) => s.split(",").map(Number))
+      .pipe(z.array(z.number().int().min(0).max(100)).min(1).max(VOICE_PEAKS_MAX)),
+  })
+  .transform((q) => ({ durationMs: Math.min(q.duration, VOICE_MAX_MS), peaks: q.peaks }));
 
 /** Loads an attachment you're allowed to see: it's in your chat and sent (or you uploaded it). */
 async function loadAttachment(conversationIdRaw: unknown, attachmentIdRaw: unknown, myId: string) {

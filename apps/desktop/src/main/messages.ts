@@ -5,7 +5,8 @@ import type {
   Message,
   MessagePage,
   MessageSearchPage,
-  MuteDuration
+  MuteDuration,
+  VoiceInfo
 } from '../preload/api-types'
 import { request } from './api'
 
@@ -101,11 +102,15 @@ export async function sendMessage(
 export async function uploadAttachment(
   conversationId: string,
   data: Uint8Array,
-  name: string
+  name: string,
+  voice?: VoiceInfo
 ): Promise<ApiResult<Attachment>> {
+  const voiceQuery = voice
+    ? `&voice=1&duration=${Math.round(voice.durationMs)}&peaks=${voice.peaks.join(',')}`
+    : ''
   const result = await request<{ attachment: Attachment }>(
     'POST',
-    `/conversations/${conversationId}/attachments?name=${encodeURIComponent(name)}`,
+    `/conversations/${conversationId}/attachments?name=${encodeURIComponent(name)}${voiceQuery}`,
     undefined,
     { data, type: 'application/octet-stream' }
   )

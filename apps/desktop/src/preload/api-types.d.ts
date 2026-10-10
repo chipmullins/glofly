@@ -161,7 +161,11 @@ export type Attachment = {
   size: number
   width: number | null
   height: number | null
+  /** Voice messages: length and waveform (bar heights 0–100). Missing from older servers. */
+  voice?: VoiceInfo | null
 }
+
+export type VoiceInfo = { durationMs: number; peaks: number[] }
 
 /** A short preview of the message being replied to. */
 export type ReplyPreview = {
@@ -170,7 +174,7 @@ export type ReplyPreview = {
   body: string
   deleted: boolean
   /** Its first photo or file (and how many it has), so "Photo" can show when there's no text. */
-  attachment?: { kind: 'image' | 'file'; name: string; count: number } | null
+  attachment?: { kind: 'image' | 'file'; name: string; count: number; voice?: boolean } | null
 }
 
 export type Message = {
@@ -627,7 +631,9 @@ export type GloflyApi = {
     upload: (
       conversationId: string,
       data: ArrayBuffer,
-      name: string
+      name: string,
+      /** A voice message recorded in Glofly (Opus, up to 5 minutes) */
+      voice?: VoiceInfo
     ) => Promise<ApiResult<Attachment>>
     /** Removes an upload that hasn't been sent. */
     removeUpload: (conversationId: string, attachmentId: string) => Promise<ApiResult<null>>

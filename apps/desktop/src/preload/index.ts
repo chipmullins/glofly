@@ -15,6 +15,7 @@ import type {
   RegisterRequest,
   ReportRequest,
   ShowNotification,
+  VoiceInfo,
   WindowTheme
 } from './api-types'
 
@@ -104,8 +105,8 @@ const glofly: GloflyApi = {
       ipcRenderer.invoke('conversations:search', query, conversationId, beforeMessageId),
     send: (conversationId: string, body: string, replyToId?: string, attachmentIds?: string[]) =>
       ipcRenderer.invoke('conversations:send', conversationId, body, replyToId, attachmentIds),
-    upload: (conversationId: string, data: ArrayBuffer, name: string) =>
-      ipcRenderer.invoke('conversations:upload', conversationId, data, name),
+    upload: (conversationId: string, data: ArrayBuffer, name: string, voice?: VoiceInfo) =>
+      ipcRenderer.invoke('conversations:upload', conversationId, data, name, voice),
     removeUpload: (conversationId: string, attachmentId: string) =>
       ipcRenderer.invoke('conversations:remove-upload', conversationId, attachmentId),
     edit: (conversationId: string, messageId: string, body: string) =>

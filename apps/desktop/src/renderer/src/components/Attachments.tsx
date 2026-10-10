@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Attachment } from '../../../preload/api-types'
-import { fileTypeLabel, formatSize, photoUrl } from '../lib/attachments'
+import { fileTypeLabel, formatSize, photoUrl, voiceUrl } from '../lib/attachments'
+import { playVoice, stopVoice, voiceTime } from '../lib/voice'
 import { ChevronIcon, CloseIcon, DownloadIcon, FileIcon, PhotoIcon } from './icons'
 import './Attachments.css'
 
@@ -119,7 +120,8 @@ export function MessageAttachments({
   onFailure: Failure
 }): React.JSX.Element {
   const photos = attachments.filter((a) => a.kind === 'image')
-  const files = attachments.filter((a) => a.kind === 'file')
+  const files = attachments.filter((a) => a.kind === 'file' && !a.voice)
+  const voices = attachments.filter((a) => a.kind === 'file' && a.voice)
   const single = photos.length === 1 ? singleSize(photos[0]) : null
 
   return (
@@ -141,10 +143,137 @@ export function MessageAttachments({
           ))}
         </div>
       )}
+      {voices.map((a) => (
+        <VoiceBubble key={a.id} conversationId={conversationId} attachment={a} />
+      ))}
       {files.map((a) => (
         <FileCard key={a.id} conversationId={conversationId} attachment={a} onFailure={onFailure} />
       ))}
     </div>
+  )
+}
+
+/**
+ * A voice message: play / pause, its waveform (click or drag along it to jump), and the
+ * time (its length, or where it's at while playing).
+ */
+function VoiceBubble({
+  conversationId,
+  attachment
+}: {
+  conversationId: string
+  attachment: Attachment
+}): React.JSX.Element {
+  const voice = attachment.voice!
+  const [playing, setPlaying] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [at, setAt] = useState(0) // seconds
+  const [length, setLength] = useState(voice.durationMs / 1000)
+  const [failed, setFailed] = useState(false)
+  const url = voiceUrl(conversationId, attachment.id)
+
+  // Stops when the message scrolls away for good (chat closed).
+  useEffect(() => () => (playing ? stopVoice() : undefined), [playing])
+
+  async function play(from: number): Promise<void> {
+    setLoading(true)
+    setFailed(false)
+    try {
+      const exact = await playVoice(
+        url,
+        from >= length - 0.1 ? 0 : from,
+        (sec) => setAt(sec),
+        (reachedEnd) => {
+          setPlaying(false)
+          if (reachedEnd) setAt(0)
+        }
+      )
+      setLength(exact)
+      setPlaying(true)
+    } catch {
+      setFailed(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function toggle(): void {
+    if (playing) stopVoice()
+    else void play(at)
+  }
+
+  function seek(e: React.PointerEvent<HTMLDivElement>): void {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const to = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) * length
+    setAt(to)
+    if (playing) void play(to)
+  }
+
+  const progress = length > 0 ? at / length : 0
+  return (
+    <div className={playing ? 'voice-bubble voice-bubble--playing' : 'voice-bubble'}>
+      <button
+        type="button"
+        className="voice-play"
+        aria-label={playing ? 'Pause voice message' : 'Play voice message'}
+        disabled={loading}
+        onClick={toggle}
+      >
+        {playing ? <PauseIcon /> : <PlayIcon />}
+      </button>
+      <div
+        className="voice-wave"
+        role="slider"
+        tabIndex={0}
+        aria-label="Voice message position"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(length)}
+        aria-valuenow={Math.round(at)}
+        aria-valuetext={`${voiceTime(at * 1000)} of ${voiceTime(length * 1000)}`}
+        onPointerDown={seek}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+            e.preventDefault()
+            const to = Math.min(length, Math.max(0, at + (e.key === 'ArrowRight' ? 5 : -5)))
+            setAt(to)
+            if (playing) void play(to)
+          } else if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault()
+            toggle()
+          }
+        }}
+      >
+        {voice.peaks.map((p, i) => (
+          <span
+            key={i}
+            className={
+              (i + 0.5) / voice.peaks.length <= progress ? 'voice-bar voice-bar--done' : 'voice-bar'
+            }
+            style={{ height: `${Math.max(12, p)}%` }}
+          />
+        ))}
+      </div>
+      <span className="voice-time">
+        {failed ? "Couldn't play" : voiceTime((playing || at > 0 ? at : length) * 1000)}
+      </span>
+    </div>
+  )
+}
+
+function PlayIcon(): React.JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 4.5v15l13-7.5z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function PauseIcon(): React.JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor" />
+      <rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor" />
+    </svg>
   )
 }
 

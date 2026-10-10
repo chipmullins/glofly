@@ -1,4 +1,9 @@
 import type { Attachment } from '../../../preload/api-types'
+import { voiceTime } from './voice'
+
+/** Where a voice message plays from (fetched by the main process, see src/main/media.ts). */
+export const voiceUrl = (conversationId: string, attachmentId: string): string =>
+  `glofly-media://attachments/${conversationId}/${attachmentId}/voice`
 
 /** Where a photo in a chat loads from (fetched by the main process, see src/main/media.ts). */
 export const photoUrl = (
@@ -22,8 +27,10 @@ export function fileTypeLabel(name: string): string {
 }
 
 /** What to show for photos/files when there's no text: "Photo", "3 photos", "Report.pdf", "2 files". */
-export function attachmentSummary(list: Pick<Attachment, 'kind' | 'name'>[]): string {
+export function attachmentSummary(list: Pick<Attachment, 'kind' | 'name' | 'voice'>[]): string {
   if (!list.length) return ''
+  if (list.length === 1 && list[0].voice)
+    return `Voice message (${voiceTime(list[0].voice.durationMs)})`
   const photos = list.filter((a) => a.kind === 'image').length
   if (photos === list.length) return photos === 1 ? 'Photo' : `${photos} photos`
   if (photos === 0) return list.length === 1 ? list[0].name : `${list.length} files`
@@ -31,7 +38,12 @@ export function attachmentSummary(list: Pick<Attachment, 'kind' | 'name'>[]): st
 }
 
 /** Same, for a reply quote (which only knows the first attachment and how many there are). */
-export function quoteSummary(a: { kind: 'image' | 'file'; name: string; count: number }): string {
-  const first = a.kind === 'image' ? 'Photo' : a.name
+export function quoteSummary(a: {
+  kind: 'image' | 'file'
+  name: string
+  count: number
+  voice?: boolean
+}): string {
+  const first = a.voice ? 'Voice message' : a.kind === 'image' ? 'Photo' : a.name
   return a.count > 1 ? `${first} and ${a.count - 1} more` : first
 }
