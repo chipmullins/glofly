@@ -55,7 +55,7 @@ const glofly: GloflyApi = {
   app: {
     getSettings: () => ipcRenderer.invoke('app:get-settings'),
     setSettings: (changes: AppSettingsChanges) => ipcRenderer.invoke('app:set-settings', changes),
-    openPrivacySettings: (pane: 'microphone' | 'camera' | 'screen') =>
+    openPrivacySettings: (pane: 'microphone' | 'camera' | 'screen' | 'accessibility') =>
       ipcRenderer.send('app:open-privacy-settings', pane),
     initialAppearance: {
       accent: accentFromArgs(),
@@ -147,6 +147,10 @@ const glofly: GloflyApi = {
     screenSources: () => ipcRenderer.invoke('calls:screen-sources'),
     chooseScreen: (sourceId: string) => ipcRenderer.invoke('calls:choose-screen', sourceId),
     screenAccess: () => ipcRenderer.invoke('calls:screen-access')
+  },
+  ptt: {
+    start: (choice: string) => ipcRenderer.invoke('ptt:start', choice),
+    stop: () => ipcRenderer.send('ptt:stop')
   },
   notifications: {
     show: (notification: ShowNotification) => ipcRenderer.send('notifications:show', notification),

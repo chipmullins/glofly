@@ -14,6 +14,8 @@ files:
   - '!resources/icon-options/**' # saved icon designs: kept in the repo, not shipped
 asarUnpack:
   - resources/**
+  # Push to talk's native keyboard hook: .node files can't load from inside the archive
+  - '**/node_modules/uiohook-napi/**'
 win:
   executableName: Glofly
   icon: build/icon.ico

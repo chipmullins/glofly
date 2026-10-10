@@ -1197,3 +1197,46 @@
   background: var(--glo-ink);
   color: var(--glo-surface);
 }
+
+/* Push to talk: a quiet line under the controls ("Hold ` to talk" / "Talking…") */
+.call-ptt {
+  margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--glo-call-muted);
+  font-size: 13px;
+  text-align: center;
+}
+.call-ptt kbd {
+  padding: 1px 7px;
+  border: 1px solid var(--glo-call-line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--glo-call-button);
+  color: var(--glo-call-text);
+  font: 600 12px/1.4 inherit;
+  font-family: inherit;
+}
+.call-ptt--talking {
+  color: var(--glo-call-glow);
+  font-weight: 600;
+}
+.call-ptt--warn {
+  color: var(--glo-call-soft);
+}
+.call-ptt-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--glo-call-kind);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.call-panel--full.call-panel--idle .call-ptt {
+  opacity: 0;
+}

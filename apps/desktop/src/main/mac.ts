@@ -110,7 +110,9 @@ export function macScreenAccess(): ScreenAccess {
 const PRIVACY_PANES = {
   microphone: 'Privacy_Microphone',
   camera: 'Privacy_Camera',
-  screen: 'Privacy_ScreenCapture'
+  screen: 'Privacy_ScreenCapture',
+  // Push to talk: seeing keys pressed in other apps
+  accessibility: 'Privacy_Accessibility'
 } as const
 export type PrivacyPane = keyof typeof PRIVACY_PANES
 

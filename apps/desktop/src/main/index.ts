@@ -111,6 +111,7 @@ import { getUpdateRequired } from './app-status'
 import { isReportRequest, listNotices, noticeSeen, sendReport } from './safety'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
 import { checkNow, restartToUpdate, startAutoUpdates, updateReady } from './updater'
+import { isPttBinding, startPtt, stopPtt } from './ptt'
 import {
   askMacMediaAccess,
   isMac,
@@ -713,6 +714,17 @@ function registerIpcHandlers(): void {
       : false
   )
 
+  // Push to talk: listen for the chosen key while in a call (works with a game in front).
+  ipcMain.handle('ptt:start', (event, choice: unknown) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    return fromApp(event) && window && isPttBinding(choice)
+      ? startPtt(window, choice)
+      : 'unavailable'
+  })
+  ipcMain.on('ptt:stop', (event) => {
+    if (isAppUrl(event.senderFrame?.url ?? '')) stopPtt()
+  })
+
   // Windows notifications and the taskbar badge (the window decides when and what).
   ipcMain.on('notifications:show', (event, notification: unknown) => {
     if (isAppUrl(event.senderFrame?.url ?? '') && isShowNotification(notification)) {
@@ -846,6 +858,9 @@ app.whenReady().then(() => {
     else createWindow()
   })
 })
+
+// The push-to-talk keyboard hook never outlives Glofly.
+app.on('will-quit', () => stopPtt())
 
 // Quit when all windows are closed, except on macOS.
 app.on('window-all-closed', () => {

@@ -933,3 +933,22 @@
   font-variant-numeric: tabular-nums;
   color: var(--glo-muted);
 }
+
+/* Push-to-talk key (Settings → Voice & video → Input mode) */
+.ptt-key {
+  min-width: 34px;
+  padding: 5px 10px;
+  border: 1px solid var(--glo-line);
+  border-bottom-width: 2px;
+  border-radius: 7px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: 600 13px/1.2 inherit;
+  font-family: inherit;
+  text-align: center;
+  white-space: nowrap;
+}
+.ptt-key--recording {
+  border-color: var(--glo-accent);
+  color: var(--glo-accent);
+}

@@ -448,6 +448,8 @@ export type GloflyEvent =
   | { type: 'message:updated'; message: Message }
   | { type: 'typing'; conversationId: string; userId: string }
   | { type: 'friends:changed' }
+  /** Push to talk: the chosen key went down or came up */
+  | { type: 'ptt'; down: boolean }
   | ({ type: 'presence'; userId: string } & Presence)
   | { type: 'conversation:read'; conversationId: string; userId: string; readAt: string }
   | { type: 'conversations:changed' }
@@ -544,7 +546,7 @@ export type GloflyApi = {
     getSettings: () => Promise<AppSettings>
     setSettings: (changes: AppSettingsChanges) => Promise<AppSettings>
     /** Mac: opens System Settings → Privacy & Security at that list (does nothing on Windows). */
-    openPrivacySettings: (pane: 'microphone' | 'camera' | 'screen') => void
+    openPrivacySettings: (pane: 'microphone' | 'camera' | 'screen' | 'accessibility') => void
     /** Theme and accent at startup, known before anything is drawn (so nothing flashes). */
     initialAppearance: { accent: AccentChoice; dark: boolean }
   }
@@ -682,6 +684,15 @@ export type GloflyApi = {
      * Security → Screen & System Audio Recording). Always "granted" on Windows.
      */
     screenAccess: () => Promise<'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown'>
+  }
+  ptt: {
+    /**
+     * Push to talk: starts listening for the chosen key or mouse button ("key:Backquote",
+     * "mouse:4") during a call, even with another app in front. Holding it sends
+     * { type: 'ptt', down } events. "permission": Mac needs Glofly allowed under Accessibility.
+     */
+    start: (choice: string) => Promise<'ok' | 'permission' | 'unavailable'>
+    stop: () => void
   }
   notifications: {
     show: (notification: ShowNotification) => void

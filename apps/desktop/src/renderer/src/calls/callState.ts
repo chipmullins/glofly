@@ -37,6 +37,16 @@ export type IncomingCallInfo = { call: Call; caller: PublicUser; chat: CallChat 
 /** You're in this call on another device (or Glofly restarted mid-call). */
 export type ElsewhereCall = { call: Call; chat: CallChat }
 
+/** Push to talk during a call. */
+export type PttState = {
+  /** The key, as shown ("`", "Mouse 4 (back)") */
+  label: string
+  /** Being held right now (you're talking) */
+  held: boolean
+  /** "permission": a Mac hasn't allowed Glofly under Accessibility yet */
+  status: 'ok' | 'permission' | 'unavailable'
+}
+
 export type CallsValue = {
   current: CurrentCall | null
   incoming: IncomingCallInfo | null
@@ -45,6 +55,8 @@ export type CallsValue = {
   room: Room | null
   /** Changes whenever something in the room changes (tracks, mutes, who's talking) */
   tick: number
+  /** Push to talk, when it's on (null = open mic) */
+  ptt: PttState | null
   /** A ringing or ongoing call in this chat, if any (yours or not) */
   callIn: (conversationId: string) => Call | null
   /** Starts a call, or joins the one already going on in a group. */

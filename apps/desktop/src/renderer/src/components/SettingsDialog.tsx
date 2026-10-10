@@ -89,7 +89,7 @@ export function Toggle({
 }
 
 /** A row of choices where one is picked, like the design's Theme and Accent color. */
-function Segmented<T extends string>({
+export function Segmented<T extends string>({
   label,
   options,
   value,

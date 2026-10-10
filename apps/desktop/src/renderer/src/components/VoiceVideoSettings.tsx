@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { audioCapture, getCallPrefs, setCallPrefs, type CallPrefs } from '../lib/callPrefs'
+import {
+  audioCapture,
+  getCallPrefs,
+  pttFromKey,
+  pttFromMouse,
+  setCallPrefs,
+  type CallPrefs
+} from '../lib/callPrefs'
 import { SOUND_FILES } from '../lib/sounds'
-import { Toggle } from './SettingsDialog'
-import { privacySettingsPath } from '../lib/platform'
+import { Segmented, Toggle } from './SettingsDialog'
+import { isMac, privacySettingsPath } from '../lib/platform'
 
 // Settings → Voice & video: pick the microphone, speakers and camera for calls, check they
 // work, and choose how your voice is cleaned up. Saved on this computer. Changes made during
@@ -273,6 +280,8 @@ export default function VoiceVideoSettings(): React.JSX.Element {
         </div>
       </section>
 
+      <PushToTalk prefs={prefs} onChange={change} />
+
       <section className="settings-section">
         <h2>Camera</h2>
         <div className="settings-card">
@@ -352,5 +361,122 @@ export default function VoiceVideoSettings(): React.JSX.Element {
         </div>
       </section>
     </>
+  )
+}
+
+/**
+ * Input mode: open mic, or push to talk with a key or mouse button you pick. The key works
+ * while a game or another app is in front.
+ */
+function PushToTalk({
+  prefs,
+  onChange
+}: {
+  prefs: CallPrefs
+  onChange: (changes: Partial<CallPrefs>) => void
+}): React.JSX.Element {
+  const [recording, setRecording] = useState(false)
+  const [refused, setRefused] = useState(false)
+
+  // Waiting for a key: the next key or mouse side button becomes the push-to-talk key.
+  useEffect(() => {
+    if (!recording) return
+    const onKey = (e: KeyboardEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.repeat) return
+      if (e.code === 'Escape') {
+        setRecording(false)
+        return
+      }
+      const picked = pttFromKey(e.code)
+      if (!picked) {
+        setRefused(true)
+        return
+      }
+      onChange(picked)
+      setRefused(false)
+      setRecording(false)
+    }
+    const onMouse = (e: MouseEvent): void => {
+      const picked = pttFromMouse(e.button)
+      if (!picked) return // left/right clicks keep working (Cancel, closing Settings)
+      e.preventDefault()
+      e.stopPropagation()
+      onChange(picked)
+      setRefused(false)
+      setRecording(false)
+    }
+    // Side buttons would otherwise act as Back / Forward.
+    const swallow = (e: MouseEvent): void => {
+      if (e.button === 3 || e.button === 4) e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('mousedown', onMouse, true)
+    window.addEventListener('mouseup', swallow, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('mousedown', onMouse, true)
+      window.removeEventListener('mouseup', swallow, true)
+    }
+  }, [recording, onChange])
+
+  const ptt = prefs.inputMode === 'ptt'
+  return (
+    <section className="settings-section">
+      <h2>Input mode</h2>
+      <div className="settings-card">
+        <div className="settings-row">
+          <div className="settings-row-text">
+            <span className="settings-row-label">How your microphone turns on</span>
+            <span className="settings-row-desc">
+              {ptt
+                ? 'Your mic is off in calls until you hold your push-to-talk key.'
+                : 'Your mic is on in calls until you mute it.'}
+            </span>
+          </div>
+          <Segmented
+            label="Input mode"
+            value={prefs.inputMode}
+            options={[
+              { value: 'open', label: 'Open mic' },
+              { value: 'ptt', label: 'Push to talk' }
+            ]}
+            onChange={(inputMode) => onChange({ inputMode })}
+          />
+        </div>
+        {ptt && (
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <span className="settings-row-label">Push-to-talk key</span>
+              <span className="settings-row-desc">
+                {recording
+                  ? refused
+                    ? "That key can't be used. Try another key or a mouse side button."
+                    : 'Press a key or a mouse side button… (Esc to cancel)'
+                  : isMac
+                    ? 'Works while other apps are in front, once Glofly is allowed under Privacy & Security → Accessibility.'
+                    : 'Works while games and other apps are in front. Games run as administrator need Glofly run as administrator too.'}
+              </span>
+            </div>
+            <div className="voice-inline">
+              <kbd className={recording ? 'ptt-key ptt-key--recording' : 'ptt-key'}>
+                {recording ? '…' : prefs.pttLabel}
+              </kbd>
+              <button
+                type="button"
+                className="small-button small-button--quiet"
+                onClick={() => {
+                  setRefused(false)
+                  setRecording((v) => !v)
+                }}
+              >
+                {recording ? 'Cancel' : 'Change key'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }

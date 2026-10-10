@@ -30,7 +30,8 @@ import {
   type CallsValue,
   type CurrentCall,
   type ElsewhereCall,
-  type IncomingCallInfo
+  type IncomingCallInfo,
+  type PttState
 } from './callState'
 import '../components/CallPanel.css'
 import { privacySettingsPath } from '../lib/platform'
@@ -107,6 +108,10 @@ export function CallProvider({
   const [active, setActive] = useState<Record<string, Call>>({})
   const [room, setRoom] = useState<Room | null>(null)
   const [tick, setTick] = useState(0)
+  /** Push to talk while in a call (null = open mic) */
+  const [ptt, setPtt] = useState<PttState | null>(null)
+  /** True while push to talk is working: the microphone stays off unless the key is held */
+  const pttLive = useRef(false)
 
   // The latest of everything, for event handlers and async steps.
   const currentRef = useRef<CurrentCall | null>(null)
@@ -348,6 +353,8 @@ export function CallProvider({
       }
       try {
         await next.localParticipant.setMicrophoneEnabled(true)
+        // Push to talk: the microphone is ready but stays off until the key is held.
+        if (pttLive.current) await next.localParticipant.setMicrophoneEnabled(false)
       } catch (err) {
         problem(deviceProblem(err, 'microphone'))
       }
@@ -785,6 +792,70 @@ export function CallProvider({
     })
   }, [bump])
 
+  // Push to talk (Settings → Voice & video). While in a call, the main process listens for
+  // the chosen key, even with a game in front; holding it turns the microphone on. Letting go
+  // turns it off a moment later, so the end of a word isn't cut off.
+  useEffect(() => {
+    if (!room) return
+    let mode: CallPrefs['inputMode'] | null = null
+    let key: string | null = null
+    let ended = false
+    let release: ReturnType<typeof setTimeout> | null = null
+    const setMic = (on: boolean): void => {
+      void room.localParticipant
+        .setMicrophoneEnabled(on)
+        .catch((err) => problem(deviceProblem(err, 'microphone')))
+        .finally(bump)
+    }
+    const apply = async (p: CallPrefs): Promise<void> => {
+      if (p.inputMode === mode && p.pttKey === key) return
+      const wasPtt = mode === 'ptt'
+      mode = p.inputMode
+      key = p.pttKey
+      if (p.inputMode !== 'ptt') {
+        window.glofly.ptt.stop()
+        pttLive.current = false
+        setPtt(null)
+        if (wasPtt) setMic(true) // back to open mic
+        return
+      }
+      const status = await window.glofly.ptt.start(p.pttKey)
+      if (ended || key !== p.pttKey) return
+      pttLive.current = status === 'ok'
+      setPtt({ label: p.pttLabel, held: false, status })
+      // If the key can't be heard, the microphone stays on rather than leaving you unheard.
+      setMic(status !== 'ok')
+      if (status === 'unavailable') {
+        problem("Push to talk isn't working on this computer, so your microphone is on.")
+      }
+    }
+    void apply(getCallPrefs())
+    const stopPrefs = onCallPrefsChange((p) => void apply(p))
+    const stopEvents = window.glofly.onEvent((e) => {
+      if (e.type !== 'ptt' || !pttLive.current) return
+      if (release) clearTimeout(release)
+      release = null
+      if (e.down) {
+        setMic(true)
+        setPtt((x) => (x ? { ...x, held: true } : x))
+      } else {
+        release = setTimeout(() => {
+          setMic(false)
+          setPtt((x) => (x ? { ...x, held: false } : x))
+        }, 150)
+      }
+    })
+    return () => {
+      ended = true
+      stopPrefs()
+      stopEvents()
+      if (release) clearTimeout(release)
+      if (mode === 'ptt') window.glofly.ptt.stop()
+      pttLive.current = false
+      setPtt(null)
+    }
+  }, [room, bump, problem])
+
   // Signing out (or the window closing) ends the call.
   useEffect(() => {
     return () => {
@@ -803,6 +874,7 @@ export function CallProvider({
     elsewhere,
     room,
     tick,
+    ptt,
     callIn,
     start,
     answer,

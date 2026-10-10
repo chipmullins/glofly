@@ -14,6 +14,7 @@
     "electron@39.2.6": true,
     "esbuild@0.25.12": true,
     "electron-winstaller@5.4.0": true,
-    "esbuild@0.18.20": true
+    "esbuild@0.18.20": true,
+    "uiohook-napi@1.5.5": true
   }
 }

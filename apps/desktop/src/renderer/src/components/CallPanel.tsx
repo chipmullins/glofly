@@ -13,7 +13,8 @@ import {
   joinedCount,
   memberState,
   useCalls,
-  type CurrentCall
+  type CurrentCall,
+  type PttState
 } from '../calls/callState'
 import { getCallPrefs } from '../lib/callPrefs'
 import { isMutedForMe } from '../lib/callAudio'
@@ -821,6 +822,8 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         </button>
       </div>
 
+      {calls.ptt && ready && <PttNote ptt={calls.ptt} talking={micOn} />}
+
       {volumeFor && (
         <PersonVolumeMenu
           person={volumeFor.person}
@@ -1228,5 +1231,43 @@ export function CallFloat({
         </button>
       </div>
     </div>
+  )
+}
+
+/** Under the call controls while push to talk is on: "Hold ` to talk", or "Talking…". */
+function PttNote({ ptt, talking }: { ptt: PttState; talking: boolean }): React.JSX.Element {
+  if (ptt.status === 'permission') {
+    return (
+      <p className="call-ptt call-ptt--warn" role="status">
+        Push to talk needs Glofly allowed under Accessibility. Your mic is on until then.
+        <button
+          type="button"
+          className="call-ptt-link"
+          onClick={() => window.glofly.app.openPrivacySettings('accessibility')}
+        >
+          Open System Settings
+        </button>
+      </p>
+    )
+  }
+  if (ptt.status === 'unavailable') {
+    return (
+      <p className="call-ptt call-ptt--warn" role="status">
+        Push to talk isn&apos;t working on this computer. Your mic is on.
+      </p>
+    )
+  }
+  return (
+    <p className={talking ? 'call-ptt call-ptt--talking' : 'call-ptt'} role="status">
+      {talking ? (
+        <>
+          <MicIcon size={14} /> Talking…
+        </>
+      ) : (
+        <>
+          Hold <kbd>{ptt.label}</kbd> to talk
+        </>
+      )}
+    </p>
   )
 }
