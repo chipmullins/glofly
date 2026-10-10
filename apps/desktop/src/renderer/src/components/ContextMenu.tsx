@@ -37,7 +37,10 @@ export default function ContextMenu({
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
       // Up/down move between the items.
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const typing = (document.activeElement as HTMLElement | null)?.closest(
+        'input, select, textarea'
+      )
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !typing) {
         const items = [...(ref.current?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
         const i = items.indexOf(document.activeElement as HTMLButtonElement)
         const next = items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]

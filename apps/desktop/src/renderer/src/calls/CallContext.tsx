@@ -5,6 +5,7 @@ import {
   RoomEvent,
   Track,
   VideoPresets,
+  type RemoteParticipant,
   type RemoteTrack
 } from 'livekit-client'
 import type {
@@ -17,6 +18,7 @@ import type {
 import { chatTitle } from '../lib/groups'
 import { audioCapture, getCallPrefs, onCallPrefsChange, type CallPrefs } from '../lib/callPrefs'
 import { playSound, startLoop } from '../lib/sounds'
+import { effectiveVolume, onCallAudioChange } from '../lib/callAudio'
 import { clearNotification, notify, shouldNotify } from '../lib/notify'
 import IncomingCall from '../components/IncomingCall'
 import {
@@ -254,16 +256,24 @@ export function CallProvider({
       })
 
       next
-        .on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
-          // Their voices play through hidden audio elements (on the speakers picked in Settings).
-          if (track.kind === Track.Kind.Audio) audioRoot.current?.append(track.attach())
-          bump()
-        })
+        .on(
+          RoomEvent.TrackSubscribed,
+          (track: RemoteTrack, _publication: unknown, participant: RemoteParticipant) => {
+            // Their voices play through hidden audio elements (on the speakers picked in Settings),
+            // at the volume set for the call and for them (the call's Audio button).
+            if (track.kind === Track.Kind.Audio) {
+              audioRoot.current?.append(track.attach())
+              participant.setVolume(effectiveVolume(participant.identity))
+            }
+            bump()
+          }
+        )
         .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
           for (const el of track.detach()) el.remove()
           bump()
         })
-        .on(RoomEvent.ParticipantConnected, () => {
+        .on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
+          participant.setVolume(effectiveVolume(participant.identity))
           if (awayTimer.current) clearTimeout(awayTimer.current)
           awayTimer.current = null
           setCurrent((c) => (c ? { ...c, partnerAway: false } : c))
@@ -760,6 +770,17 @@ export function CallProvider({
           .restartTrack(audioCapture(p))
           .catch(() => {})
       }
+      bump()
+    })
+  }, [bump])
+
+  // Call volume and each person's volume (the Audio button, or right-clicking a tile) apply
+  // straight away.
+  useEffect(() => {
+    return onCallAudioChange((a) => {
+      const r = roomRef.current
+      if (!r) return
+      for (const p of r.remoteParticipants.values()) p.setVolume(effectiveVolume(p.identity, a))
       bump()
     })
   }, [bump])

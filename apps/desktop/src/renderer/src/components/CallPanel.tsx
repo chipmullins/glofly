@@ -16,6 +16,8 @@ import {
   type CurrentCall
 } from '../calls/callState'
 import { getCallPrefs } from '../lib/callPrefs'
+import { isMutedForMe } from '../lib/callAudio'
+import { CallAudioPanel, PersonVolumeMenu } from './CallAudio'
 import Avatar from './Avatar'
 import {
   AddFriendIcon,
@@ -29,6 +31,8 @@ import {
   PhoneIcon,
   ScreenShareIcon,
   ShrinkIcon,
+  SpeakerIcon,
+  SpeakerOffIcon,
   SpeakingIcon,
   StopShareIcon,
   VideoIcon,
@@ -140,6 +144,10 @@ let rememberedSize: 'normal' | 'large' = 'normal'
 
 type TileInfo = {
   person: PublicUser
+  /** Someone else (right-click for their volume) */
+  remote?: boolean
+  /** You muted them for yourself (the call's Audio button) */
+  mutedForMe?: boolean
   label: string
   camera: VideoTrack | null
   mirror?: boolean
@@ -152,15 +160,30 @@ type TileInfo = {
 function Tile({
   tile,
   face,
-  ringFace
+  ringFace,
+  onMenu
 }: {
   tile: TileInfo
   face: number
   ringFace: number
+  /** Right-click: this person's volume */
+  onMenu?: (x: number, y: number) => void
 }): React.JSX.Element {
-  const { person, label, camera, mirror, muted, speaking, ringing, status } = tile
+  const { person, label, camera, mirror, muted, speaking, ringing, status, mutedForMe } = tile
   return (
-    <div className={speaking ? 'call-tile call-tile--speaking' : 'call-tile'}>
+    <div
+      className={speaking ? 'call-tile call-tile--speaking' : 'call-tile'}
+      title={onMenu ? `Right-click for ${person.displayName}'s volume` : undefined}
+      onContextMenu={
+        onMenu
+          ? (e) => {
+              e.preventDefault()
+              const rect = e.currentTarget.getBoundingClientRect()
+              onMenu(e.clientX || rect.left + 20, e.clientY || rect.top + 20)
+            }
+          : undefined
+      }
+    >
       {camera ? (
         <TrackVideo track={camera} mirror={mirror} />
       ) : (
@@ -188,6 +211,11 @@ function Tile({
         </div>
       )}
       <span className="call-tag">
+        {mutedForMe && (
+          <span className="call-tag-muted" title="Muted for you">
+            <SpeakerOffIcon />
+          </span>
+        )}
         {muted && (
           <span className="call-tag-muted" title="Muted">
             <MicOffIcon size={14} strokeWidth={2.2} />
@@ -454,6 +482,11 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   const { current, room } = calls
   const [picking, setPicking] = useState(false)
   const [adding, setAdding] = useState(false)
+  /** The Audio button's panel, and right-clicking someone's tile */
+  const [audioOpen, setAudioOpen] = useState(false)
+  const [volumeFor, setVolumeFor] = useState<{ person: PublicUser; x: number; y: number } | null>(
+    null
+  )
   const stageRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLElement>(null)
   const [size, setSizeState] = useState<'normal' | 'large'>(rememberedSize)
@@ -544,6 +577,8 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
     else if (!remote) status = 'Connecting…'
     others.push({
       person,
+      remote: true,
+      mutedForMe: isMutedForMe(person.id),
       label: group ? firstName(person) : person.displayName,
       camera: videoOf(remote, Track.Source.Camera),
       muted: !!remote && !remote.isMicrophoneEnabled,
@@ -697,6 +732,11 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
               tile={t}
               face={screen ? Math.min(grid.face, 56) : grid.face}
               ringFace={screen ? Math.min(grid.ringFace, 56) : grid.ringFace}
+              onMenu={
+                t.remote && !t.ringing
+                  ? (x, y) => setVolumeFor({ person: t.person, x, y })
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -725,6 +765,29 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         >
           {micOn || !ready ? <MicIcon size={22} /> : <MicOffIcon size={22} />}
         </button>
+        <span className="call-audio-wrap">
+          <button
+            type="button"
+            className={
+              audioOpen
+                ? 'call-button call-audio-button call-button--open'
+                : 'call-button call-audio-button'
+            }
+            aria-label="Call audio: microphone, speakers and volume"
+            aria-expanded={audioOpen}
+            aria-haspopup="dialog"
+            title="Audio"
+            onClick={() => setAudioOpen((v) => !v)}
+          >
+            <SpeakerIcon size={22} />
+          </button>
+          {audioOpen && (
+            <CallAudioPanel
+              people={others.filter((t) => !t.ringing).map((t) => t.person)}
+              onClose={() => setAudioOpen(false)}
+            />
+          )}
+        </span>
         <button
           type="button"
           className={sharing ? 'call-button call-button--sharing' : 'call-button'}
@@ -758,6 +821,14 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         </button>
       </div>
 
+      {volumeFor && (
+        <PersonVolumeMenu
+          person={volumeFor.person}
+          x={volumeFor.x}
+          y={volumeFor.y}
+          onClose={() => setVolumeFor(null)}
+        />
+      )}
       {picking && (
         <ScreenPicker
           onClose={() => setPicking(false)}

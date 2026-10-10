@@ -492,3 +492,13 @@ export function MegaphoneIcon(p: IconProps): React.JSX.Element {
     </Svg>
   )
 }
+
+/** Muted for you (a person's volume in a call): a speaker with a cross */
+export function SpeakerOffIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg size={14} strokeWidth={2.2} {...p}>
+      <path d="M4 9h4l5-4v14l-5-4H4z" />
+      <path d="M17 9l5 5M22 9l-5 5" />
+    </Svg>
+  )
+}

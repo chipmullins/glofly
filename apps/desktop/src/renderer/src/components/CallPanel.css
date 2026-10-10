@@ -1000,3 +1000,200 @@
   color: var(--glo-call-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Call audio: the Audio button's panel, and a person's volume (right-click a tile) ---------- */
+
+.call-audio-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.call-button--open {
+  background: var(--glo-call-button-hover);
+  box-shadow: 0 0 0 2px rgba(var(--glo-call-glow-rgb), 0.55);
+}
+.call-audio-panel {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: 340px;
+  max-height: min(70vh, 460px);
+  overflow-y: auto;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--glo-call-bg);
+  border: 1px solid var(--glo-call-line);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  color: var(--glo-call-text);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+.call-audio-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.call-audio-row label,
+.call-audio-label,
+.call-audio-head {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--glo-call-muted);
+}
+.call-audio-row select {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--glo-call-line);
+  background: var(--glo-call-tile);
+  color: var(--glo-call-text);
+  font: inherit;
+  font-size: 13.5px;
+}
+.call-audio-row select:focus-visible {
+  outline: 2px solid var(--glo-call-glow);
+  outline-offset: 1px;
+}
+.call-audio-people {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--glo-call-line);
+}
+.call-audio-person {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 140px auto;
+  align-items: center;
+  gap: 8px;
+}
+.call-audio-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.call-audio-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--glo-call-muted);
+}
+.call-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.call-range {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.call-range::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--glo-call-glow) 0 var(--fill, 100%),
+    var(--glo-call-line) var(--fill, 100%) 100%
+  );
+}
+.call-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: var(--glo-call-text);
+  border: 0;
+}
+.call-range:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.call-range:focus-visible {
+  outline: none;
+}
+.call-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(var(--glo-call-glow-rgb), 0.45);
+}
+.call-volume-value {
+  width: 38px;
+  flex: none;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--glo-call-muted);
+}
+.call-mute-me {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--glo-call-line);
+  background: transparent;
+  color: var(--glo-call-soft);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.call-mute-me:hover {
+  background: var(--glo-call-button);
+}
+.call-mute-me--on {
+  background: var(--glo-call-off-bg);
+  color: var(--glo-call-off-ink);
+  border-color: transparent;
+}
+/* Right-click a tile */
+.person-volume {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 6px 4px;
+  width: 220px;
+}
+.person-volume-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.person-volume .call-range::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    var(--glo-accent) 0 var(--fill, 100%),
+    var(--glo-line) var(--fill, 100%) 100%
+  );
+}
+.person-volume .call-range::-webkit-slider-thumb {
+  background: var(--glo-surface);
+  border: 2px solid var(--glo-accent);
+}
+.person-volume .call-volume-value {
+  color: var(--glo-muted);
+}
+.person-volume .call-mute-me {
+  align-self: flex-start;
+  border-color: var(--glo-line);
+  color: var(--glo-ink);
+}
+.person-volume .call-mute-me:hover {
+  background: var(--glo-subtle);
+}
+.person-volume .call-mute-me--on {
+  background: var(--glo-ink);
+  color: var(--glo-surface);
+}
