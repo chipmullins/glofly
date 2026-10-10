@@ -53,6 +53,8 @@ export const SOUND_FILES: Record<SoundFile, { label: string; url: string }> = {
 let settings: SoundSettings = {
   enabled: true,
   dndSilence: true,
+  volume: 100,
+  callVolume: 100,
   message: 'chime',
   friendRequest: 'chime',
   login: 'hello',
@@ -81,6 +83,16 @@ export const isSilenced = (): boolean => quiet && settings.dndSilence
 
 const lastPlayed = new Map<SoundName, number>()
 
+/** 0–100 from Settings → 0–1 for an audio element (older saved settings have no volume yet). */
+const level = (percent: number | undefined): number =>
+  Math.min(1, Math.max(0, (percent ?? 100) / 100))
+
+/** How loud a sound plays: the overall Volume, and for ringing sounds the ringing volume too. */
+export function volumeFor(name: SoundName): number {
+  const overall = level(settings.volume)
+  return name === 'ringtone' || name === 'outgoing' ? overall * level(settings.callVolume) : overall
+}
+
 /** Plays the sound picked for this moment, unless sounds are off or you're in Do not disturb. */
 export function playSound(name: SoundName): void {
   if (!settings.enabled || (quiet && settings.dndSilence)) return
@@ -90,7 +102,10 @@ export function playSound(name: SoundName): void {
   const now = Date.now()
   if (now - (lastPlayed.get(name) ?? 0) < 800) return
   lastPlayed.set(name, now)
+  const volume = volumeFor(name)
+  if (volume === 0) return
   const audio = new Audio(SOUND_FILES[choice].url)
+  audio.volume = volume
   void audio.play().catch(() => {
     // The computer has no sound device, or it's busy: nothing to do.
   })
@@ -107,6 +122,7 @@ export function startLoop(name: 'ringtone' | 'outgoing'): () => void {
   if (!choice || choice === 'none' || !(choice in SOUND_FILES)) return () => {}
   const audio = new Audio(SOUND_FILES[choice].url)
   audio.loop = true
+  audio.volume = volumeFor(name)
   let stopped = false
   void audio.play().catch(() => {
     // No sound device: nothing to do.
@@ -134,10 +150,14 @@ export function stopPreview(): void {
   previewDone = null
 }
 
-/** Plays a sound from the library; onEnd runs when it finishes or is stopped. */
-export function previewSound(file: SoundFile, onEnd: () => void): void {
+/**
+ * Plays a sound from the library at the given volume (0–1, from the Volume sliders);
+ * onEnd runs when it finishes or is stopped.
+ */
+export function previewSound(file: SoundFile, onEnd: () => void, volume = 1): void {
   stopPreview()
   const audio = new Audio(SOUND_FILES[file].url)
+  audio.volume = Math.min(1, Math.max(0, volume))
   preview = audio
   previewDone = onEnd
   audio.addEventListener('ended', () => {

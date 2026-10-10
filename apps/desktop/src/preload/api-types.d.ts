@@ -374,6 +374,10 @@ export type SoundSettings = {
   enabled: boolean
   /** "Silence everything in Do Not Disturb" */
   dndSilence: boolean
+  /** "Volume": how loud every Glofly sound plays, 0–100 */
+  volume: number
+  /** "Ringtone & jingle volume": the ringtone and outgoing call jingle, 0–100 */
+  callVolume: number
   message: AlertSound
   friendRequest: AlertSound
   login: AlertSound

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type {
   AlertSound,
   AppSettings,
@@ -269,6 +269,65 @@ function SoundRow({
   )
 }
 
+/**
+ * A volume slider (0–100%). It moves freely while dragged; letting go saves it and plays a
+ * short sample at the new volume, so you can hear the difference.
+ */
+function VolumeRow({
+  id,
+  label,
+  desc,
+  value,
+  disabled,
+  onCommit
+}: {
+  id: string
+  label: string
+  desc: string
+  value: number | undefined
+  disabled?: boolean
+  onCommit: (value: number) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState<number | null>(null)
+  const shown = draft ?? value ?? 100
+  const commit = (): void => {
+    if (draft === null) return
+    setDraft(null)
+    if (draft !== value) onCommit(draft)
+  }
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <label className="settings-row-label" htmlFor={id}>
+          {label}
+        </label>
+        <span className="settings-row-desc">{desc}</span>
+      </div>
+      <div className="settings-volume">
+        <input
+          id={id}
+          type="range"
+          className="settings-range"
+          min={0}
+          max={100}
+          step={5}
+          value={shown}
+          disabled={disabled || value === undefined}
+          style={{ '--fill': `${shown}%` } as React.CSSProperties}
+          aria-valuetext={`${shown}%`}
+          onChange={(e) => setDraft(Number(e.target.value))}
+          onPointerUp={commit}
+          onKeyUp={commit}
+          onBlur={commit}
+        />
+        <span className="settings-volume-value" aria-hidden="true">
+          {shown}%
+        </span>
+      </div>
+    </div>
+  )
+}
+
 const TEXT_SIZES: { value: TextSize; label: string }[] = [
   { value: 'small', label: 'Small' },
   { value: 'default', label: 'Default' },
@@ -442,7 +501,28 @@ export default function SettingsDialog({
       return
     }
     setPlaying(key)
-    previewSound(choice, () => setPlaying((p) => (p === key ? null : p)))
+    previewSound(choice, () => setPlaying((p) => (p === key ? null : p)), previewVolume(key))
+  }
+
+  /** The volume a sound row's preview plays at (the sliders below). */
+  function previewVolume(key: SoundKey, sounds = appSettings?.sounds): number {
+    const overall = (sounds?.volume ?? 100) / 100
+    const ringing = key === 'ringtone' || key === 'outgoing'
+    return ringing ? overall * ((sounds?.callVolume ?? 100) / 100) : overall
+  }
+
+  /** Saves a volume and plays a short sample at it (the message sound, or the ringtone). */
+  function changeVolume(which: 'volume' | 'callVolume', value: number): void {
+    if (!appSettings) return
+    const sounds = { ...appSettings.sounds, [which]: value }
+    changeSound({ [which]: value })
+    const key: SoundKey = which === 'volume' ? 'message' : 'ringtone'
+    const choice = sounds[key]
+    const fallback = which === 'volume' ? 'chime' : 'ring'
+    setPlaying(null)
+    previewSound(choice === 'none' ? fallback : choice, () => {}, previewVolume(key, sounds))
+    // A short taste of the ringtone is enough.
+    if (which === 'callVolume') setTimeout(stopPreview, 2500)
   }
 
   function openPage(next: Page): void {
@@ -719,18 +799,37 @@ export default function SettingsDialog({
                         <span className="toggle toggle--loading" aria-hidden="true" />
                       )}
                     </div>
+                    <VolumeRow
+                      id="settings-volume"
+                      label="Volume"
+                      desc="How loud every Glofly sound plays."
+                      value={appSettings?.sounds.volume}
+                      disabled={appSettings ? !appSettings.sounds.enabled : true}
+                      onCommit={(v) => changeVolume('volume', v)}
+                    />
                     {SOUND_ROWS.map((row) => (
-                      <SoundRow
-                        key={row.key}
-                        row={row}
-                        value={appSettings?.sounds[row.key]}
-                        playing={playing === row.key}
-                        onChange={(value) => {
-                          if (playing === row.key) stopPreview()
-                          changeSound({ [row.key]: value })
-                        }}
-                        onPlay={() => togglePreview(row.key)}
-                      />
+                      <Fragment key={row.key}>
+                        <SoundRow
+                          row={row}
+                          value={appSettings?.sounds[row.key]}
+                          playing={playing === row.key}
+                          onChange={(value) => {
+                            if (playing === row.key) stopPreview()
+                            changeSound({ [row.key]: value })
+                          }}
+                          onPlay={() => togglePreview(row.key)}
+                        />
+                        {row.key === 'outgoing' && (
+                          <VolumeRow
+                            id="settings-call-volume"
+                            label="Ringtone & jingle volume"
+                            desc="The ringtone and outgoing call jingle, on top of Volume."
+                            value={appSettings?.sounds.callVolume}
+                            disabled={appSettings ? !appSettings.sounds.enabled : true}
+                            onCommit={(v) => changeVolume('callVolume', v)}
+                          />
+                        )}
+                      </Fragment>
                     ))}
                     <div className="settings-row">
                       <div className="settings-row-text">

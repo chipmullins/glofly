@@ -33,6 +33,8 @@ const saved: Saved = {
   sounds: {
     enabled: true,
     dndSilence: true,
+    volume: 100,
+    callVolume: 100,
     message: 'chime',
     friendRequest: 'chime',
     login: 'hello',
@@ -77,6 +79,9 @@ function soundSettingOk(key: string, value: unknown): boolean {
     case 'enabled':
     case 'dndSilence':
       return typeof value === 'boolean'
+    case 'volume':
+    case 'callVolume':
+      return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100
     case 'message':
     case 'friendRequest':
     case 'login':

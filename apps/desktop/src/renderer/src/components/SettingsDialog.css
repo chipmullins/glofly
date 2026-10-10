@@ -877,3 +877,59 @@
   line-height: 1.5;
   color: var(--glo-muted);
 }
+
+/* Volume sliders (Notifications & sounds): as wide as a sound choice + its Play button */
+.settings-volume {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  width: 246px;
+}
+.settings-range {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.settings-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--glo-accent) 0 var(--fill, 100%),
+    var(--glo-line) var(--fill, 100%) 100%
+  );
+}
+.settings-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--glo-accent);
+  background: var(--glo-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.settings-range:focus-visible {
+  outline: none;
+}
+.settings-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(var(--glo-accent-rgb), 0.25);
+}
+.settings-range:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.settings-volume-value {
+  width: 42px;
+  flex: none;
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--glo-muted);
+}
