@@ -96,6 +96,31 @@ const DESIGNS = {
     )
   },
 
+  // Glofly Control (Chip's admin app, Oct 10): Twilight with a gold shield badge in the corner,
+  // so it's easy to tell apart from Glofly on the taskbar and desktop.
+  control(size) {
+    const small = size <= 40
+    const stars = size <= 64 ? '' : `<circle cx="104" cy="108" r="4.5" fill="#fff" opacity="0.6"/>
+         <circle cx="404" cy="96" r="3.5" fill="#fff" opacity="0.5"/>`
+    const shield = (strokeWidth) => `
+      <path d="M372 282 L438 308 V358 C438 404 410 434 372 450 C334 434 306 404 306 358 V308 Z"
+        fill="url(#sh)" stroke="#140c2c" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
+      <path d="M340 364 L364 388 L406 340" fill="none" stroke="#3d2775" stroke-width="${small ? 26 : 20}"
+        stroke-linecap="round" stroke-linejoin="round"/>`
+    return svg(
+      size,
+      BG('#3d2775', '#140c2c') + GLOW('#ffc24a', small ? 0.62 : 0.55) + BODY() + BUBBLE() +
+        `<linearGradient id="sh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD24A"/><stop offset="1" stop-color="#FFA81A"/></linearGradient>`,
+      TILE() +
+        `<circle cx="236" cy="232" r="180" fill="url(#gl)"/>` +
+        stars +
+        firefly(small
+          ? { x: 230, y: 230, scale: 0.47, wing: '#FFA030', wingWidth: 42 }
+          : { x: 236, y: 234, scale: 0.43, wing: '#FFA030', wingWidth: 30 }) +
+        shield(small ? 18 : 12)
+    )
+  },
+
   // 1 · Night Glow: the login screen's night sky.
   'night-glow'(size) {
     const small = size <= 40
@@ -209,9 +234,22 @@ const write = (path, data) => {
   console.log(`  ${path.slice(ROOT.length + 1)}  (${Math.round(data.length / 1024)} KB)`)
 }
 
-console.log(`App icon: ${ACTIVE}`)
 const ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
 const ICNS_SIZES = [16, 32, 64, 128, 256, 512, 1024]
+
+// `node tools/icons/make-icons.mjs control` → only Glofly Control's icon (apps/control).
+if (process.argv[2] === 'control') {
+  const CONTROL = join(ROOT, 'apps', 'control')
+  console.log('Glofly Control icon')
+  write(join(CONTROL, 'build', 'icon.ico'), ico(await Promise.all(ICO_SIZES.map(async (size) => ({ size, data: await png('control', size) })))))
+  write(join(CONTROL, 'build', 'icon.icns'), icns(await Promise.all(ICNS_SIZES.map(async (size) => ({ size, data: await png('control', size) })))))
+  write(join(CONTROL, 'build', 'icon.png'), await png('control', 512))
+  write(join(CONTROL, 'resources', 'icon.png'), await png('control', 512))
+  write(join(CONTROL, 'resources', 'icon.svg'), Buffer.from(DESIGNS.control(512)))
+  process.exit(0)
+}
+
+console.log(`App icon: ${ACTIVE}`)
 write(join(DESKTOP, 'build', 'icon.ico'), ico(await Promise.all(ICO_SIZES.map(async (size) => ({ size, data: await png(ACTIVE, size) })))))
 write(join(DESKTOP, 'build', 'icon.icns'), icns(await Promise.all(ICNS_SIZES.map(async (size) => ({ size, data: await png(ACTIVE, size) })))))
 write(join(DESKTOP, 'build', 'icon.png'), await png(ACTIVE, 512))

@@ -3,19 +3,18 @@ import { Icon, ICONS, Logo } from './icons'
 import { initials } from '../lib/format'
 import type { AdminUser } from '../../../preload/types'
 
-export type Page = 'dashboard' | 'accounts' | 'signups' | 'audit'
+export type Page = 'dashboard' | 'accounts' | 'signups' | 'reports' | 'announcements' | 'audit'
 
 const ITEMS: {
-  id: Page | 'reports' | 'announcements'
+  id: Page
   label: string
   icon: string
-  later?: boolean
 }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: ICONS.dashboard },
   { id: 'accounts', label: 'Accounts', icon: ICONS.accounts },
   { id: 'signups', label: 'Sign-ups', icon: ICONS.signups },
-  { id: 'reports', label: 'Reports', icon: ICONS.reports, later: true },
-  { id: 'announcements', label: 'Announcements', icon: ICONS.announcements, later: true },
+  { id: 'reports', label: 'Reports', icon: ICONS.reports },
+  { id: 'announcements', label: 'Announcements', icon: ICONS.announcements },
   { id: 'audit', label: 'Audit log', icon: ICONS.audit }
 ]
 
@@ -34,12 +33,15 @@ export function Sidebar({
   onPage,
   admin,
   expiresAt,
+  openReports,
   onSignOut
 }: {
   page: Page
   onPage: (page: Page) => void
   admin: AdminUser
   expiresAt: string
+  /** Reports waiting for review (a count next to Reports) */
+  openReports: number
   onSignOut: () => void
 }): JSX.Element {
   const minutes = useMinutesLeft(expiresAt)
@@ -59,14 +61,16 @@ export function Sidebar({
             key={item.id}
             type="button"
             className="nav-item"
-            disabled={item.later}
             aria-current={item.id === page ? 'page' : undefined}
-            title={item.later ? 'Coming in Control v2' : undefined}
-            onClick={() => !item.later && onPage(item.id as Page)}
+            onClick={() => onPage(item.id)}
           >
             <Icon d={item.icon} />
             <span className="label">{item.label}</span>
-            {item.later && <span className="later">v2</span>}
+            {item.id === 'reports' && openReports > 0 && (
+              <span className="nav-count" aria-label={`${openReports} open`}>
+                {openReports > 99 ? '99+' : openReports}
+              </span>
+            )}
           </button>
         ))}
       </div>

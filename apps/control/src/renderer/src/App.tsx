@@ -5,6 +5,9 @@ import { Accounts } from './screens/Accounts'
 import { Signups } from './screens/Signups'
 import { AuditLog } from './screens/AuditLog'
 import { CreateAccount } from './screens/CreateAccount'
+import { Reports } from './screens/Reports'
+import { Announcements } from './screens/Announcements'
+import { api } from './lib/api'
 import { Sidebar, type Page } from './components/Sidebar'
 import { Toast } from './components/common'
 import type { AdminUser } from '../../preload/types'
@@ -20,6 +23,18 @@ export default function App(): JSX.Element {
   const [creating, setCreating] = useState(false)
   const [toast, setToast] = useState<{ message: string; bad?: boolean } | null>(null)
   const [refresh, setRefresh] = useState(0)
+  const [openReports, setOpenReports] = useState(0)
+
+  // The sidebar's open-reports count: on sign-in, then every minute.
+  useEffect(() => {
+    if (!session) return
+    const check = (): void => {
+      void api.reports('open').then((r) => r.ok && setOpenReports(r.data.counts.open))
+    }
+    check()
+    const timer = setInterval(check, 60_000)
+    return () => clearInterval(timer)
+  }, [session])
 
   useEffect(
     () =>
@@ -78,6 +93,7 @@ export default function App(): JSX.Element {
         onPage={setPage}
         admin={session.admin}
         expiresAt={session.expiresAt}
+        openReports={openReports}
         onSignOut={() => {
           void window.control.signIn.signOut().then(() => {
             setSession(null)
@@ -107,6 +123,14 @@ export default function App(): JSX.Element {
           />
         )}
         {page === 'signups' && <Signups toast={showToast} />}
+        {page === 'reports' && (
+          <Reports
+            toast={showToast}
+            onOpenAccount={(id) => openAccounts('', id)}
+            onCountChange={setOpenReports}
+          />
+        )}
+        {page === 'announcements' && <Announcements toast={showToast} />}
         {page === 'audit' && (
           <AuditLog toast={showToast} onOpenAccount={(id) => openAccounts('', id)} />
         )}

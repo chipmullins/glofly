@@ -41,7 +41,7 @@ export const ICONS = {
   refresh: 'M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5'
 } as const
 
-/** The Glofly firefly on the Twilight tile. */
+/** The Glofly firefly on the Twilight tile, with Control's gold shield (same as its app icon). */
 export function Logo({ size = 36 }: { size?: number }): JSX.Element {
   return (
     <svg
@@ -60,6 +60,10 @@ export function Logo({ size = 36 }: { size?: number }): JSX.Element {
           <stop offset="0" stopColor="#ffc24a" stopOpacity="0.66" />
           <stop offset="1" stopColor="#ff8a1f" stopOpacity="0" />
         </radialGradient>
+        <linearGradient id="logo-shield" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FFD24A" />
+          <stop offset="1" stopColor="#FFA81A" />
+        </linearGradient>
       </defs>
       <rect
         x="16"
@@ -71,8 +75,8 @@ export function Logo({ size = 36 }: { size?: number }): JSX.Element {
         stroke="#5a4296"
         strokeWidth="10"
       />
-      <circle cx="262" cy="250" r="196" fill="url(#logo-glow)" />
-      <g transform="translate(258 254) scale(0.53) translate(-525 -545)">
+      <circle cx="236" cy="232" r="180" fill="url(#logo-glow)" />
+      <g transform="translate(230 230) scale(0.47) translate(-525 -545)">
         <ellipse cx="455" cy="528" rx="78" ry="52" transform="rotate(-38 455 528)" fill="#FFC21A" />
         <circle cx="540" cy="428" r="74" fill="#FFC21A" />
         <g fill="none" stroke="#FFA030" strokeWidth="40" strokeLinejoin="round">
@@ -82,6 +86,21 @@ export function Logo({ size = 36 }: { size?: number }): JSX.Element {
         </g>
         <rect x="282" y="588" width="216" height="154" rx="50" fill="#FF9A10" />
       </g>
+      <path
+        d="M372 282 L438 308 V358 C438 404 410 434 372 450 C334 434 306 404 306 358 V308 Z"
+        fill="url(#logo-shield)"
+        stroke="#140c2c"
+        strokeWidth="18"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M340 364 L364 388 L406 340"
+        fill="none"
+        stroke="#3d2775"
+        strokeWidth="26"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }

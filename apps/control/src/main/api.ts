@@ -188,7 +188,16 @@ const ALLOWED: [string, RegExp][] = [
   ['PUT', new RegExp(`^/admin/signups/mode$`)],
   ['POST', new RegExp(`^/admin/invite-codes$`)],
   ['POST', new RegExp(`^/admin/invite-codes/${ID}/disable$`)],
-  ['GET', new RegExp(`^/admin/audit${QUERY}$`)]
+  ['GET', new RegExp(`^/admin/audit${QUERY}$`)],
+  // Control v2: reports, announcements, minimum app version
+  ['GET', new RegExp(`^/admin/reports${QUERY}$`)],
+  ['GET', new RegExp(`^/admin/reports/${ID}$`)],
+  ['POST', new RegExp(`^/admin/reports/${ID}/resolve$`)],
+  ['GET', new RegExp(`^/admin/announcements$`)],
+  ['POST', new RegExp(`^/admin/announcements$`)],
+  ['POST', new RegExp(`^/admin/announcements/${ID}/end$`)],
+  ['GET', new RegExp(`^/admin/app-version${QUERY}$`)],
+  ['PUT', new RegExp(`^/admin/app-version$`)]
 ]
 
 export function isAllowedCall(method: unknown, path: unknown): boolean {
