@@ -8,7 +8,11 @@ import { useFonts } from 'expo-font'
 import { DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-google-fonts/dm-sans'
 import { Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit'
 import * as SystemUI from 'expo-system-ui'
-import { useTheme } from '@/ui/theme'
+import { useTheme, useThemeChoice, type ThemeChoice } from '@/ui/theme'
+import { DialogHost } from '@/ui/dialogs'
+import { UpdateRequired } from '@/ui/UpdateRequired'
+import { restoreSession, useSession } from '@/state/session'
+import { prefs } from '@/lib/storage'
 
 void SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -21,22 +25,39 @@ export default function RootLayout() {
     Outfit_600SemiBold,
     Outfit_700Bold,
   })
+  const status = useSession((s) => s.status)
   const { c, dark } = useTheme()
+
+  useEffect(() => {
+    void prefs.get<ThemeChoice>('theme', 'system').then((t) => useThemeChoice.getState().set(t))
+    void restoreSession()
+  }, [])
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(c.bg).catch(() => {})
   }, [c.bg])
 
+  const ready = fontsReady && status !== 'starting'
   useEffect(() => {
-    if (fontsReady) void SplashScreen.hideAsync().catch(() => {})
-  }, [fontsReady])
+    if (ready) void SplashScreen.hideAsync().catch(() => {})
+  }, [ready])
 
-  if (!fontsReady) return null
+  if (!ready) return null
+  const signedIn = status === 'signedIn'
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: c.bg }}>
       <SafeAreaProvider>
         <StatusBar style={dark ? 'light' : 'dark'} />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'slide_from_right' }} />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'slide_from_right' }}>
+          <Stack.Protected guard={signedIn}>
+            <Stack.Screen name="(main)" />
+          </Stack.Protected>
+          <Stack.Protected guard={!signedIn}>
+            <Stack.Screen name="(auth)" />
+          </Stack.Protected>
+        </Stack>
+        <DialogHost />
+        <UpdateRequired />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )

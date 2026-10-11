@@ -1,6 +1,7 @@
 import { forwardRef, useState, type ReactNode } from 'react'
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   Text as RNText,
   TextInput,
@@ -17,6 +18,9 @@ import { font, useTheme, type Colors } from './theme'
 import { Icon, type IconName } from './icons'
 
 // The building blocks every screen uses, styled from the design canvas.
+
+/** The browser preview draws its own focus box inside our field; the field shows focus itself. */
+export const webNoOutline = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null
 
 type Tone = 'ink' | 'ink2' | 'muted' | 'faint' | 'accent' | 'danger' | 'online' | 'accentInk'
 
@@ -210,6 +214,7 @@ export const Field = forwardRef<
           placeholderTextColor={c.faint}
           selectionColor={c.accent}
           secureTextEntry={secure && !shown}
+          accessibilityLabel={rest.accessibilityLabel ?? label}
           onFocus={(e) => {
             setFocused(true)
             rest.onFocus?.(e)
@@ -219,7 +224,7 @@ export const Field = forwardRef<
             rest.onBlur?.(e)
           }}
           {...rest}
-          style={[{ flex: 1, minHeight: 46, color: c.ink, fontFamily: font.body, fontSize: 16, paddingRight: 14 }, style as StyleProp<TextStyle>]}
+          style={[{ flex: 1, minHeight: 46, color: c.ink, fontFamily: font.body, fontSize: 16, paddingRight: 14 }, webNoOutline, style as StyleProp<TextStyle>]}
         />
         {secure ? (
           <IconButton name={shown ? 'eyeOff' : 'eye'} label={shown ? 'Hide password' : 'Show password'} onPress={() => setShown((s) => !s)} color={c.muted} size={20} box={44} />

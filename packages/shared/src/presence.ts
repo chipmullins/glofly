@@ -8,7 +8,20 @@ export const STATUS_LABEL: Record<PresenceStatus | MyStatusChoice, string> = {
   invisible: 'Invisible'
 }
 
-const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+// Some JavaScript engines (Hermes on older Android setups) don't have Intl.RelativeTimeFormat:
+// fall back to plain English rather than failing to load.
+type Unit = 'minute' | 'hour' | 'day'
+const relative: { format: (value: number, unit: Unit) => string } =
+  typeof Intl !== 'undefined' && typeof Intl.RelativeTimeFormat === 'function'
+    ? new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+    : {
+        format: (value, unit) => {
+          const n = Math.abs(value)
+          if (unit === 'day' && n === 1) return value < 0 ? 'yesterday' : 'tomorrow'
+          const words = `${n} ${unit}${n === 1 ? '' : 's'}`
+          return value < 0 ? `${words} ago` : `in ${words}`
+        }
+      }
 
 /** "just now", "5 minutes ago", "2 hours ago", "yesterday", "3 days ago", or a date. */
 export function timeAgo(iso: string, now = Date.now()): string {
