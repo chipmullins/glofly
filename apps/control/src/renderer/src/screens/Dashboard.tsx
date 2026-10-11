@@ -165,7 +165,18 @@ function DashboardBody({
       name: 'Calls (LiveKit)',
       state: h.calls.configured ? 'Set up' : 'Not set up',
       light: h.calls.configured ? 'ok' : 'warn'
-    }
+    },
+    ...(h.push
+      ? [
+          {
+            name: 'Phone notifications',
+            state: h.push.configured
+              ? `Firebase · ${h.push.failedToday} failed today`
+              : 'Not set up',
+            light: (h.push.configured && h.push.failedToday === 0 ? 'ok' : 'warn') as 'ok' | 'warn'
+          }
+        ]
+      : [])
   ]
 
   const maxPeople = Math.max(1, ...data.versions.map((v) => v.people))

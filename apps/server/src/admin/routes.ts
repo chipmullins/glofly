@@ -25,6 +25,7 @@ import { announcePresence } from "../presence";
 import { endCallsFor } from "../calls/service";
 import { livekitConfigured } from "../calls/livekit";
 import { emailKind, failedKey } from "../email/send";
+import { failedPushesToday, pushConfigured } from "../push/fcm";
 import { pendingEmailFor } from "../email/tokens";
 import { displayNameSchema, emailSchema, fieldErrors, usernameSchema } from "../auth/validation";
 import { adminChangeEmail, adminResendVerification, adminSendPasswordReset } from "../account/email";
@@ -228,6 +229,7 @@ adminRouter.get("/dashboard", async (req, res) => {
       realtime: { devices: live.devices },
       email: { transport: emailKind, failedToday },
       calls: { configured: livekitConfigured },
+      push: { configured: pushConfigured, failedToday: await failedPushesToday() },
     },
     daily: daily.rows,
     versions: versions.rows,

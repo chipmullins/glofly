@@ -60,6 +60,8 @@ export type Dashboard = {
     realtime: { devices: number }
     email: { transport: string; failedToday: number }
     calls: { configured: boolean }
+    /** Push notifications to phones (missing from servers before the phone apps) */
+    push?: { configured: boolean; failedToday: number }
   }
   daily: { day: string; messages: number; calls: number; signups: number }[]
   /** platform: 'desktop' | 'android' | 'ios' (missing from servers before the phone apps = desktop) */

@@ -10,6 +10,7 @@ import { endCallsBetween } from "../calls/service";
 import { announcePresence, presenceOf } from "../presence";
 import { blockedEitherWay, pair, pairIs } from "./rules";
 import { STATUS_TEXT_MAX } from "@glofly/shared";
+import { inBackground, notifyFriendRequest } from "../push/notify";
 
 // Everything here needs a signed-in user.
 export const usersRouter = Router();
@@ -19,7 +20,7 @@ usersRouter.use(requireAuth);
 friendsRouter.use(requireAuth);
 blocksRouter.use(requireAuth);
 
-type Me = { id: string; username: string; displayName: string };
+type Me = { id: string; username: string; displayName: string; avatarVersion: string | null };
 const me = (res: Response): Me => res.locals.user as Me;
 
 // Limits are per account, not per connection.
@@ -348,6 +349,7 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
     .onConflictDoNothing();
   friendsChanged(myId, target.id);
   res.status(201).json({ status: "pending", user: target });
+  inBackground(notifyFriendRequest(target.id, me(res)));
 });
 
 // POST /friends/requests/:userId/accept — accept a request they sent you.

@@ -196,6 +196,23 @@ export async function disconnectSessions(userId: string, keepSessionId?: string)
   }
 }
 
+/**
+ * Which sessions of these people have Glofly open right now (a live connection). Phones close
+ * theirs when Glofly goes to the background, so this is "using Glofly on that phone now".
+ */
+export async function liveSessions(userIds: string[]): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>();
+  if (!io || !userIds.length) return out;
+  for (const socket of await io.in(userIds.map(userRoom)).fetchSockets()) {
+    const user = socket.data.user as { id: string } | undefined;
+    const session = socket.data.sessionId as string | undefined;
+    if (!user || !session) continue;
+    if (!out.has(user.id)) out.set(user.id, new Set());
+    out.get(user.id)!.add(session);
+  }
+  return out;
+}
+
 /** Closes the live connection of one signed-out device (one session). */
 export async function disconnectSession(userId: string, sessionId: string): Promise<void> {
   if (!io) return;

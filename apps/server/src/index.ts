@@ -20,6 +20,8 @@ import { webRouter } from "./web/pages";
 import { emailKind } from "./email/send";
 import { sweepEmailTokens } from "./email/tokens";
 import { controlRouter } from "./admin";
+import { devicesRouter } from "./push/devices";
+import { pushKind } from "./push/fcm";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
 const app = express();
@@ -53,6 +55,8 @@ app.use("/conversations", conversationsRouter);
 app.use("/calls", callsRouter);
 app.use("/reports", reportsRouter);
 app.use("/notices", noticesRouter);
+// Phones: where to send push notifications.
+app.use("/devices", devicesRouter);
 // Glofly Control (admin app): only from the admin's network, separate sign-in with a code.
 app.use("/admin", controlRouter);
 // Pages opened from emails (glofly.app/reset, /confirm). Plain HTML, not JSON.
@@ -84,6 +88,11 @@ connectRedis()
     server.listen(PORT, () => {
       console.log(`Glofly server running at http://localhost:${PORT} (files: ${storageKind}; emails: ${emailKind})`);
       if (!livekitConfigured) console.log("Calls are off: add the LIVEKIT_ settings to .env to turn them on.");
+      console.log(
+        pushKind === "off"
+          ? "Push notifications are off: set FCM_SERVICE_ACCOUNT_FILE to turn them on."
+          : `Push notifications: ${pushKind}`,
+      );
     });
     // Calls nobody answered become missed; calls someone dropped out of are ended.
     setInterval(() => {

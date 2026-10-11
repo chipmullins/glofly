@@ -1,0 +1,179 @@
+import { and, eq, inArray, ne } from "drizzle-orm";
+import { attachmentSummary, listNames, type Attachment } from "@glofly/shared";
+import { db } from "../db";
+import { conversationMembers, pushDevices, users } from "../db/schema";
+import { blockedEitherWay } from "../friends/rules";
+import { liveSessions } from "../realtime";
+import { pushConfigured, sendPush, type PushData } from "./fcm";
+import { forgetTokens } from "./devices";
+
+// What phones are told, and when. Every push is a data message the Glofly app turns into a
+// notification (see apps/mobile). The rules:
+//
+// - Never to the phone you're using Glofly on right now (its live connection is open, so the
+//   app already shows the message), and never to the sender.
+// - Muted chats stay quiet, except for messages that @mention you.
+// - Do not disturb: no message notifications (calls still show, silently: see calls).
+// - "Show message preview" off on a phone: "New message" instead of the text.
+// - Reading a chat on any device clears its notification on your other phones.
+
+type Device = { token: string; sessionId: string; preview: boolean };
+
+/** Sends to every device given, forgetting tokens Firebase says are gone. */
+async function deliver(list: { device: Device; data: PushData; ttl?: number }[]): Promise<void> {
+  const results = await Promise.all(list.map((p) => sendPush(p.device.token, p.data, p.ttl)));
+  await forgetTokens(list.filter((_, i) => results[i] === "gone").map((p) => p.device.token));
+}
+
+const firstName = (name: string, username: string) => name.trim().split(/\s+/)[0] || username;
+
+const PREVIEW_MAX = 300;
+
+/** What notifyMessage needs to know about a message (the server's own message shape fits). */
+type NewMessage = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  body: string;
+  createdAt: Date | string;
+  event: unknown;
+  mentions?: string[];
+  attachments: Pick<Attachment, "kind" | "name" | "voice">[];
+};
+
+/** The notification for a new message, to everyone in the chat who should get one. */
+export async function notifyMessage(
+  message: NewMessage,
+  chat: { kind: "dm" | "group"; memberIds: string[]; name: string | null; photoVersion?: string | null },
+): Promise<void> {
+  if (!pushConfigured || message.event) return;
+  const recipients = chat.memberIds.filter((id) => id !== message.senderId);
+  if (!recipients.length) return;
+
+  const devices = await db
+    .select({
+      userId: pushDevices.userId,
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      status: users.statusPreference,
+      mutedUntil: conversationMembers.mutedUntil,
+    })
+    .from(pushDevices)
+    .innerJoin(users, eq(users.id, pushDevices.userId))
+    .innerJoin(
+      conversationMembers,
+      and(
+        eq(conversationMembers.userId, pushDevices.userId),
+        eq(conversationMembers.conversationId, message.conversationId),
+      ),
+    )
+    .where(inArray(pushDevices.userId, recipients));
+  if (!devices.length) return;
+
+  const people = await db
+    .select({ id: users.id, displayName: users.displayName, username: users.username, avatarVersion: users.avatarVersion })
+    .from(users)
+    .where(inArray(users.id, chat.memberIds));
+  const sender = people.find((p) => p.id === message.senderId);
+  if (!sender) return;
+  const live = await liveSessions([...new Set(devices.map((d) => d.userId))]);
+
+  const text = (message.body || attachmentSummary(message.attachments)).slice(0, PREVIEW_MAX);
+  const now = Date.now();
+  const out: { device: Device; data: PushData }[] = [];
+  const blocked = new Map<string, boolean>();
+
+  for (const d of devices) {
+    if (live.get(d.userId)?.has(d.sessionId)) continue;
+    const mention = !!message.mentions?.includes(d.userId);
+    const muted = d.mutedUntil !== null && d.mutedUntil.getTime() > now;
+    if (muted && !mention) continue;
+    if (d.status === "dnd") continue;
+    if (chat.kind === "group") {
+      // Inside a shared group, someone you blocked (or who blocked you) doesn't reach you.
+      if (!blocked.has(d.userId)) blocked.set(d.userId, await blockedEitherWay(d.userId, message.senderId));
+      if (blocked.get(d.userId)) continue;
+    }
+    // A group without a name is called after the others in it (everyone but the reader).
+    const groupTitle =
+      chat.kind === "group"
+        ? chat.name ||
+          listNames(people.filter((p) => p.id !== d.userId).map((p) => firstName(p.displayName, p.username)))
+        : "";
+    out.push({
+      device: d,
+      data: {
+        type: "message",
+        conversationId: message.conversationId,
+        messageId: message.id,
+        chatKind: chat.kind,
+        chatTitle: groupTitle,
+        groupPhoto: chat.kind === "group" ? (chat.photoVersion ?? "") : "",
+        senderId: sender.id,
+        senderName: sender.displayName,
+        senderAvatar: sender.avatarVersion ?? "",
+        title: chat.kind === "group" ? `${sender.displayName} · ${groupTitle}` : sender.displayName,
+        text: d.preview ? text : "New message",
+        preview: d.preview ? "1" : "0",
+        mention: mention ? "1" : "0",
+        sentAt: new Date(message.createdAt).toISOString(),
+      },
+    });
+  }
+  await deliver(out);
+}
+
+/** You read a chat (or sent in it): its notification goes away on your other phones. */
+export async function notifyRead(userId: string, conversationId: string, exceptSessionId?: string): Promise<void> {
+  if (!pushConfigured) return;
+  const devices = await db
+    .select({ token: pushDevices.token, sessionId: pushDevices.sessionId, preview: pushDevices.preview })
+    .from(pushDevices)
+    .where(
+      exceptSessionId
+        ? and(eq(pushDevices.userId, userId), ne(pushDevices.sessionId, exceptSessionId))
+        : eq(pushDevices.userId, userId),
+    );
+  // Short-lived: a clear that arrives days later doesn't matter.
+  await deliver(devices.map((device) => ({ device, data: { type: "clear", conversationId }, ttl: 60 * 60 })));
+}
+
+/** "Maya Patel sent you a friend request" (not in Do not disturb). */
+export async function notifyFriendRequest(
+  toUserId: string,
+  from: { id: string; displayName: string; avatarVersion: string | null },
+): Promise<void> {
+  if (!pushConfigured) return;
+  const devices = await db
+    .select({
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      status: users.statusPreference,
+    })
+    .from(pushDevices)
+    .innerJoin(users, eq(users.id, pushDevices.userId))
+    .where(eq(pushDevices.userId, toUserId));
+  const live = (await liveSessions([toUserId])).get(toUserId);
+  await deliver(
+    devices
+      .filter((d) => d.status !== "dnd" && !live?.has(d.sessionId))
+      .map((device) => ({
+        device,
+        data: {
+          type: "friend_request",
+          userId: from.id,
+          senderName: from.displayName,
+          senderAvatar: from.avatarVersion ?? "",
+          title: from.displayName,
+          text: "sent you a friend request",
+        },
+      })),
+  );
+}
+
+/** Runs a push in the background: it must never slow down or break the request that caused it. */
+export function inBackground(task: Promise<unknown>): void {
+  task.catch((err) => console.error("Push failed", err));
+}

@@ -19,6 +19,10 @@ services:
       SITE_URL: https://${SITE_DOMAIN:-glofly.app}
       # Glofly Control: only from these addresses (Caddy checks too). ADMIN_KEY comes from .env.
       ADMIN_IPS: ${ADMIN_IPS:-127.0.0.1}
+    volumes:
+      # Files the server reads but that must never be in the repo (the Firebase key for push
+      # notifications). Put them in deploy/secrets/ on the server (chmod 600).
+      - ./secrets:/run/glofly-secrets:ro
     depends_on:
       - redis
     logging:

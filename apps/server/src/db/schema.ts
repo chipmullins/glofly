@@ -137,6 +137,31 @@ export const sessions = pgTable(
 
 export type Session = typeof sessions.$inferSelect;
 
+// Phones that get push notifications (Firebase Cloud Messaging). One per signed-in phone: the
+// row belongs to its session, so signing out (anywhere, any way) stops its pushes too.
+export const pushDevices = pgTable(
+  "push_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .unique()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // "android" or "ios"
+    platform: text("platform").notNull(),
+    // The phone's push address from Firebase. One phone, one row: a token moves with sign-ins.
+    token: text("token").notNull().unique(),
+    // "Show message preview" on this phone: off sends "New message" without the text.
+    preview: boolean("preview").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("push_devices_user_id_idx").on(t.userId)],
+);
+
 export const emailTokenKind = pgEnum("email_token_kind", [
   "reset_password", // Forgot password: the link lets them choose a new one
   "verify_email", // confirms the address they signed up with

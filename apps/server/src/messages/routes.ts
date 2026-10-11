@@ -40,6 +40,7 @@ import { blockedEitherWay, canMessage, deletionPending, pair } from "../friends/
 import { emitToUser } from "../realtime";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
+import { inBackground, notifyMessage, notifyRead } from "../push/notify";
 import {
   GROUP_MAX,
   GROUP_NAME_MAX,
@@ -261,12 +262,19 @@ export type Access = {
   /** Groups: who can remove people */
   createdBy: string | null;
   name: string | null;
+  /** Groups: the group photo's version (null = members' faces) */
+  photoVersion: string | null;
 };
 
 /** A chat I'm in (null if it doesn't exist or I'm not a member). */
 export async function access(conversationId: string, myId: string): Promise<Access | null> {
   const [conversation] = await db
-    .select({ kind: conversations.kind, createdBy: conversations.createdBy, name: conversations.name })
+    .select({
+      kind: conversations.kind,
+      createdBy: conversations.createdBy,
+      name: conversations.name,
+      photoVersion: conversations.photoVersion,
+    })
     .from(conversations)
     .where(eq(conversations.id, conversationId));
   if (!conversation) return null;
@@ -282,6 +290,7 @@ export async function access(conversationId: string, myId: string): Promise<Acce
     partner: conversation.kind === "dm" ? (memberIds.find((id) => id !== myId) ?? null) : null,
     createdBy: conversation.createdBy,
     name: conversation.name,
+    photoVersion: conversation.photoVersion,
   };
 }
 
@@ -1289,6 +1298,9 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   // Replying means you've read everything before it ("Seen" is for DMs).
   if (chat.partner) await shareReadPosition(id.data, myId, chat.partner, inserted.createdAt);
   res.status(201).json({ message });
+  // Phones: a notification for everyone else, and this chat's notification cleared on your others.
+  inBackground(notifyMessage(message, chat));
+  inBackground(notifyRead(myId, id.data, res.locals.sessionId));
 });
 
 class AttachmentGone extends Error {}
@@ -1468,6 +1480,8 @@ conversationsRouter.post("/:id/read", async (req, res) => {
     if (updated.length) {
       const chat = await access(id.data, myId);
       if (chat?.partner) await shareReadPosition(id.data, myId, chat.partner, now);
+      // Read here: the chat's notification goes away on your other phones.
+      inBackground(notifyRead(myId, id.data, res.locals.sessionId));
     }
   }
   res.status(204).end();
