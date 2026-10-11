@@ -132,7 +132,7 @@ type Layout = 'frame' | 'side' | 'grid' | 'pinned' | 'screen'
 /** Height of the call area for every layout but the grid. */
 function areaHeight(layout: Layout, view: CallView): string {
   if (view === 'full') return '100%'
-  const base = layout === 'frame' ? 'clamp(260px, 54vh, 480px)' : 'clamp(220px, 38vh, 400px)'
+  const base = layout === 'frame' ? 'clamp(260px, 54vh, 560px)' : 'clamp(220px, 38vh, 420px)'
   if (view === 'normal') return base
   // Bigger: as tall as the window allows, leaving the chat header, a few messages and the
   // message box (full frame has its title and buttons on the video, so it needs less).
@@ -159,7 +159,7 @@ function gridFor(
   if (view === 'normal') return { cols, rows, height: `${normalPx}px`, face, ringFace: face }
   // Bigger and full screen: up to three rows share the free height (more scroll).
   const shown = Math.min(rows, 3)
-  const reserved = view === 'full' ? 32 : GRID_RESERVED
+  const reserved = view === 'full' ? 100 : GRID_RESERVED // full: title row + margins
   const freePx = (windowHeight - reserved - (shown - 1) * 10) / shown
   const tilePx = Math.round(Math.max(normalPx, freePx))
   const bigFace = Math.max(face, Math.min(112, Math.round(tilePx * 0.4)))
@@ -1185,6 +1185,7 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         .filter(Boolean)
         .join(' ')}
       aria-label="Call"
+      style={{ '--area-h': areaHeight(layout, view) } as React.CSSProperties}
       onFocus={(e) => {
         if ((e.target as HTMLElement).matches(':focus-visible')) setKeyboardIn(true)
       }}
@@ -1285,7 +1286,6 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         className={`call-media call-media--${layout}`}
         style={
           {
-            '--area-h': areaHeight(layout, view),
             '--cols': grid.cols,
             '--rows': grid.rows,
             '--tile-h': grid.height

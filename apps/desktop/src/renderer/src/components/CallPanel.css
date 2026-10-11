@@ -243,56 +243,88 @@
   gap: 12px;
 }
 
+/* Tiles never get wider than a camera (16:9), however wide the window: on a big monitor the
+   tiles sit centered in the panel instead of stretching into strips. The layouts measure their
+   own area (container units: cqw / cqh = 1% of the area's width / height). */
+
 /* Side by side: two big tiles */
 .call-media--side {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  justify-content: center;
+  align-items: center;
   gap: 12px;
   height: var(--area-h);
+  container-type: size;
+}
+.call-media--side > .call-tile {
+  flex: none;
+  width: min(calc((100cqw - 12px) / 2), calc(100cqh * 16 / 9));
+  aspect-ratio: 16 / 9;
 }
 /* Groups: everyone in a grid; three rows show, the rest scroll */
 .call-media--grid {
   display: grid;
-  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, calc(var(--tile-h) * 16 / 9)));
   grid-auto-rows: var(--tile-h);
+  justify-content: center;
   gap: 10px;
   max-height: calc(var(--tile-h) * 3 + 20px);
   overflow-y: auto;
 }
 /* Pinned: them big, everyone else in a column on the right */
 .call-media--pinned {
-  display: flex;
-  gap: 10px;
-  height: var(--area-h);
-}
-.call-media--pinned > .call-tile {
-  flex: 1;
-}
-.call-column {
-  width: 190px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-}
-.call-column > .call-tile {
-  flex: 1 0 96px;
-}
-/* A shared screen: in its own shape (never cropped), with everyone beside it */
-.call-media--screen {
+  /* three 16:9 tiles fit the height */
+  --column-w: clamp(170px, calc((100cqh - 20px) / 3 * 16 / 9), 28cqw);
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 10px;
   height: var(--area-h);
   container-type: size;
 }
-/* As tall as the area, unless that would leave less than 170px beside it: then shorter, so the
-   box always keeps the screen's own shape. */
+.call-media--pinned > .call-tile {
+  flex: none;
+  width: min(calc(100cqw - var(--column-w) - 10px), calc(100cqh * 16 / 9));
+  aspect-ratio: 16 / 9;
+}
+.call-column,
+.call-beside {
+  scrollbar-width: thin;
+}
+.call-column {
+  width: var(--column-w);
+  height: 100%;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  gap: 10px;
+  overflow-y: auto;
+}
+.call-column > .call-tile {
+  flex: none;
+  aspect-ratio: 16 / 9;
+}
+/* A shared screen: in its own shape (never cropped), with everyone beside it in tiles that keep
+   a camera's shape. --bw is how wide the people beside it get. */
+.call-media--screen {
+  /* two 16:9 tiles stacked fit the height */
+  --bw: clamp(170px, calc((100cqh - 10px) / 2 * 16 / 9), 34cqw);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  height: var(--area-h);
+  container-type: size;
+}
+.call-media--screen:has(.call-beside:not(.call-beside--column)) {
+  /* a double tile and a row of two fit the height */
+  --bw: clamp(170px, calc((100cqh - 16px) / 3 * 32 / 9 + 8px), 40cqw);
+}
+/* As big as the area allows next to the people, keeping the screen's own shape. */
 .call-stage {
   position: relative;
-  height: min(100%, calc((100cqw - 170px) / var(--ratio, 1.7778)));
-  align-self: center;
+  height: min(100%, calc((100cqw - var(--bw) - 10px) / var(--ratio, 1.7778)));
   min-width: 0;
   flex: none;
   aspect-ratio: var(--shape, 16 / 9);
@@ -307,19 +339,25 @@
   border-radius: 0;
 }
 .call-beside {
-  flex: 1 1 180px;
-  min-width: 160px;
+  width: var(--bw);
+  max-height: 100%;
+  flex: none;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(64px, 1fr);
+  grid-auto-rows: calc((var(--bw) - 8px) / 2 * 9 / 16);
+  align-content: safe center;
   gap: 8px;
   overflow-y: auto;
 }
+/* An odd number: whoever's sharing gets a double-size tile across the top */
 .call-beside[data-odd] > .call-tile:first-child {
   grid-column: span 2;
+  grid-row: span 2;
 }
 .call-beside--column {
   grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: calc(var(--bw) * 9 / 16);
+  gap: 10px;
 }
 /* Small tiles (the pinned column, beside a screen): smaller tags, no status line */
 .call-tile--small .call-tag {
@@ -355,6 +393,15 @@
 .call-panel--overlay {
   padding: 0;
   gap: 0;
+}
+/* Never wider than twice its height: on a wide monitor full frame is a centered video, not a
+   strip that crops their face. */
+.call-panel--overlay:not(.call-panel--full) {
+  width: min(calc(100% - 48px), calc(var(--area-h) * 2));
+  margin-inline: auto;
+}
+.call-media--frame {
+  container-type: size;
 }
 .call-panel--overlay .call-media {
   height: var(--area-h);
@@ -508,7 +555,7 @@
 /* Your camera on top of the video: drag it anywhere. --px/--py (0..1) place it across the space
    left over; it keeps clear of the title and buttons while they show. */
 .call-pip {
-  --pip-w: 200px;
+  --pip-w: clamp(150px, 20cqw, 300px);
   --pip-h: calc(var(--pip-w) * 9 / 16);
   --pip-m: 16px;
   --pip-mt: 60px;
@@ -535,11 +582,8 @@
   --pip-mt: 16px;
   --pip-mb: 16px;
 }
-.call-panel--large .call-pip {
-  --pip-w: 240px;
-}
 .call-panel--full .call-pip {
-  --pip-w: 272px;
+  --pip-w: clamp(220px, 17cqw, 380px);
   --pip-m: 28px;
   --pip-mt: 76px;
   --pip-mb: 112px;
@@ -588,7 +632,7 @@
   opacity: 1;
 }
 /* Hidden: a small "You" chip in the same spot */
-.call-pip--chip {
+.call-panel .call-pip.call-pip--chip {
   --pip-w: 68px;
   --pip-h: 30px;
   background: none;
@@ -674,8 +718,16 @@
   max-height: none;
 }
 .call-panel--full .call-media--grid {
-  grid-template-rows: repeat(var(--rows, 1), minmax(110px, 1fr));
-  grid-auto-rows: minmax(110px, 1fr);
+  align-content: center;
+}
+.call-panel--full .call-media--screen {
+  --bw: clamp(220px, 20cqw, 420px);
+}
+.call-panel--full .call-media--screen:has(.call-beside:not(.call-beside--column)) {
+  --bw: clamp(240px, 26cqw, 560px);
+}
+.call-panel--full .call-media--pinned {
+  --column-w: clamp(220px, calc((100cqh - 30px) / 4 * 16 / 9), 22cqw);
 }
 .call-panel--full .call-media--side::before,
 .call-panel--full .call-media--grid::before,
@@ -686,12 +738,6 @@
 .call-panel--full .call-media--pinned::after,
 .call-panel--full .call-media--screen::after {
   display: none;
-}
-.call-panel--full .call-media--screen .call-stage {
-  height: min(100%, calc((100cqw - 240px) / var(--ratio, 1.7778)));
-}
-.call-panel--full .call-column {
-  width: 240px;
 }
 
 /* On the dark theme the panel would melt into the page: a faint glow-colored edge keeps it apart. */
