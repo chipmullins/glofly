@@ -7,13 +7,37 @@ import { serverSettings } from "./db/schema";
 // asked to update: every signed-in request, logging in, signing up and the live connection
 // answer 426 "update_required" instead. Apps from before 0.1.8 don't say their version, so
 // they count as older than any minimum. Nothing is required until a minimum is set.
+//
+// Each platform has its own minimum, since the phone apps number their versions separately
+// (they start at 1.0.0). Apps say which they are in X-Glofly-Platform ("android", "ios");
+// the desktop apps don't send it, so no header means desktop and nothing changes for them.
 
 /** "0.1.8" from the app's X-Glofly-Version header, or null (older apps don't send it). */
 export function appVersionFrom(header: unknown): string | null {
   return typeof header === "string" && /^\d{1,3}\.\d{1,3}\.\d{1,4}$/.test(header) ? header : null;
 }
 
+export type AppPlatform = "desktop" | "android" | "ios";
+export const PLATFORMS: AppPlatform[] = ["desktop", "android", "ios"];
+
+/** Which app this is, from X-Glofly-Platform (or the live connection's auth). Missing = desktop. */
+export function platformFrom(value: unknown): AppPlatform {
+  return value === "android" || value === "ios" ? value : "desktop";
+}
+
+export const isPlatform = (v: unknown): v is AppPlatform => v === "desktop" || v === "android" || v === "ios";
+
 export const DOWNLOAD_URL = "https://glofly.app/download";
+
+/** Where each app gets its update ("Please update Glofly" → Download). */
+export const DOWNLOAD_URLS: Record<AppPlatform, string> = {
+  desktop: DOWNLOAD_URL,
+  android: "https://play.google.com/store/apps/details?id=com.glofly.app",
+  ios: "https://glofly.app/download/ios",
+};
+
+/** The settings key: desktop keeps the original "minVersion" (Control v2 wrote it). */
+const settingsKey = (platform: AppPlatform) => (platform === "desktop" ? "minVersion" : `minVersion:${platform}`);
 
 /** Compares "0.2.0"-style versions: negative if a is older than b. */
 export function compareVersions(a: string, b: string): number {
@@ -31,56 +55,66 @@ export const isVersion = (v: unknown): v is string =>
 
 // Checked on every request, so it's kept for a few seconds (and updated at once when Control
 // changes it on this server).
-let cached: { min: string | null; message: string | null; at: number } | null = null;
+type Minimum = { min: string | null; message: string | null; at: number };
+const cached = new Map<AppPlatform, Minimum>();
 
-export async function getMinVersion(): Promise<{ min: string | null; message: string | null }> {
-  if (cached && Date.now() - cached.at < 10_000) return cached;
+export async function getMinVersion(
+  platform: AppPlatform = "desktop",
+): Promise<{ min: string | null; message: string | null }> {
+  const hit = cached.get(platform);
+  if (hit && Date.now() - hit.at < 10_000) return hit;
   try {
-    const [row] = await db.select().from(serverSettings).where(eq(serverSettings.key, "minVersion"));
+    const [row] = await db.select().from(serverSettings).where(eq(serverSettings.key, settingsKey(platform)));
     const value = row?.value as { version?: unknown; message?: unknown } | undefined;
-    cached = {
+    const fresh: Minimum = {
       min: isVersion(value?.version) ? value.version : null,
       message: typeof value?.message === "string" && value.message ? value.message : null,
       at: Date.now(),
     };
+    cached.set(platform, fresh);
+    return fresh;
   } catch {
     // The database is having a moment: don't lock anyone out over it.
-    return cached ?? { min: null, message: null };
+    return hit ?? { min: null, message: null };
   }
-  return cached;
 }
 
-export async function setMinVersion(version: string | null, message: string | null): Promise<void> {
+export async function setMinVersion(
+  version: string | null,
+  message: string | null,
+  platform: AppPlatform = "desktop",
+): Promise<void> {
   const value = { version, message };
   await db
     .insert(serverSettings)
-    .values({ key: "minVersion", value })
+    .values({ key: settingsKey(platform), value })
     .onConflictDoUpdate({ target: serverSettings.key, set: { value, updatedAt: new Date() } });
-  cached = { min: version, message, at: Date.now() };
+  cached.set(platform, { min: version, message, at: Date.now() });
 }
 
-/** Is an app reporting this version (or nothing) too old? */
-export async function tooOld(versionHeader: unknown): Promise<boolean> {
-  const { min } = await getMinVersion();
+/** Is an app reporting this version (or nothing) too old for its platform's minimum? */
+export async function tooOld(versionHeader: unknown, platform: AppPlatform = "desktop"): Promise<boolean> {
+  const { min } = await getMinVersion(platform);
   if (!min) return false;
   const version = appVersionFrom(versionHeader) ?? "0.0.0";
   return compareVersions(version, min) < 0;
 }
 
 /** What a too-old app is told (the app shows "Please update Glofly"). */
-export async function updateRequiredBody() {
-  const { min, message } = await getMinVersion();
+export async function updateRequiredBody(platform: AppPlatform = "desktop") {
+  const { min, message } = await getMinVersion(platform);
   return {
     error: "update_required",
     message: message ?? "This version of Glofly is too old. Please update to keep using it.",
     minVersion: min,
-    downloadUrl: DOWNLOAD_URL,
+    downloadUrl: DOWNLOAD_URLS[platform],
   };
 }
 
 export async function refuseIfTooOld(req: Request, res: Response): Promise<boolean> {
-  if (!(await tooOld(req.headers["x-glofly-version"]))) return false;
-  res.status(426).json(await updateRequiredBody());
+  const platform = platformFrom(req.headers["x-glofly-platform"]);
+  if (!(await tooOld(req.headers["x-glofly-version"], platform))) return false;
+  res.status(426).json(await updateRequiredBody(platform));
   return true;
 }
 

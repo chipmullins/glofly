@@ -62,11 +62,14 @@ export type Dashboard = {
     calls: { configured: boolean }
   }
   daily: { day: string; messages: number; calls: number; signups: number }[]
-  versions: { version: string | null; people: number }[]
+  /** platform: 'desktop' | 'android' | 'ios' (missing from servers before the phone apps = desktop) */
+  versions: { platform?: AppPlatform; version: string | null; people: number }[]
   signupMode: SignupMode
   /** Control v2 (missing from older servers) */
   openReports?: number
   minVersion?: string | null
+  /** Per platform (missing from servers before the phone apps) */
+  minVersions?: Record<AppPlatform, string | null>
   recentAccounts: {
     kind: 'account' | 'invite'
     id: string
@@ -229,7 +232,17 @@ export type Announcement = {
   endedAt?: string | null
 }
 
+/** Which Glofly app: each has its own version numbers and its own minimum. */
+export type AppPlatform = 'desktop' | 'android' | 'ios'
+
+export const PLATFORM_LABEL: Record<AppPlatform, string> = {
+  desktop: 'Desktop',
+  android: 'Android',
+  ios: 'iPhone'
+}
+
 export type AppVersionInfo = {
+  platform?: AppPlatform
   minVersion: string | null
   message: string | null
   newest: string | null
@@ -300,11 +313,18 @@ export const api = {
   }) => call<Done>('POST', '/admin/announcements', body),
   endAnnouncement: (id: string, note: string) =>
     call<Done>('POST', `/admin/announcements/${id}/end`, { note }),
-  appVersion: (check?: string) => call<AppVersionInfo>('GET', `/admin/app-version${q({ check })}`),
-  setAppVersion: (version: string | null, message: string, note: string) =>
+  appVersion: (check?: string, platform: AppPlatform = 'desktop') =>
+    call<AppVersionInfo>('GET', `/admin/app-version${q({ check, platform })}`),
+  setAppVersion: (
+    version: string | null,
+    message: string,
+    note: string,
+    platform: AppPlatform = 'desktop'
+  ) =>
     call<Done>('PUT', '/admin/app-version', {
       version,
       ...(message ? { message } : {}),
+      platform,
       note
     }),
   audit: (search: string, before?: string) =>

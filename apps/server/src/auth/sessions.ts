@@ -3,7 +3,7 @@ import type { RequestHandler } from "express";
 import { and, eq, gt, lt } from "drizzle-orm";
 import { db } from "../db";
 import { sessions, users } from "../db/schema";
-import { appVersionFrom, refuseIfTooOld } from "../app-version";
+import { appVersionFrom, platformFrom, refuseIfTooOld } from "../app-version";
 
 const DAY = 24 * 60 * 60 * 1000;
 const PERSISTENT_LIFETIME = 30 * DAY; // "Keep me signed in"
@@ -14,13 +14,20 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export { appVersionFrom };
+export { appVersionFrom, platformFrom };
+
+/** The session's platform column: null for desktop (as older rows are). */
+export const platformColumn = (header: unknown) => {
+  const p = platformFrom(header);
+  return p === "desktop" ? null : p;
+};
 
 export async function createSession(
   userId: string,
   persistent: boolean,
   deviceName: string | null,
   appVersion: string | null = null,
+  platform: string | null = null,
 ) {
   // 32 random bytes: far too many possibilities to ever guess.
   const token = randomBytes(32).toString("base64url");
@@ -32,6 +39,7 @@ export async function createSession(
     persistent,
     deviceName,
     appVersion,
+    platform,
     expiresAt,
   });
 
@@ -99,8 +107,9 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   if (await refuseIfTooOld(req, res)) return;
   // Which app version this device runs (Control → App versions in use).
   const version = appVersionFrom(req.headers["x-glofly-version"]);
-  if (version && version !== found.session.appVersion) {
-    await db.update(sessions).set({ appVersion: version }).where(eq(sessions.id, found.session.id));
+  const platform = platformColumn(req.headers["x-glofly-platform"]);
+  if (version && (version !== found.session.appVersion || platform !== found.session.platform)) {
+    await db.update(sessions).set({ appVersion: version, platform }).where(eq(sessions.id, found.session.id));
   }
   res.locals.user = found.user;
   res.locals.sessionToken = token;

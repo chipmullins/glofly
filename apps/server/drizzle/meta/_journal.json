@@ -148,6 +148,13 @@
       "when": 1791663970741,
       "tag": "0020_group_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791692892377,
+      "tag": "0021_session_platform",
+      "breakpoints": true
     }
   ]
 }

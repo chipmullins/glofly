@@ -125,6 +125,8 @@ export const sessions = pgTable(
     // The app version this device last reported (X-Glofly-Version), for Control's
     // "App versions in use". Null = an app from before versions were reported (0.1.7 and older).
     appVersion: text("app_version"),
+    // Which app: "android" / "ios" (X-Glofly-Platform). Null = desktop (it doesn't send one).
+    platform: text("platform"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
-import { api, type Dashboard as DashboardData } from '../lib/api'
+import { api, PLATFORM_LABEL, type Dashboard as DashboardData } from '../lib/api'
 import { Avatar, StatusChip } from '../components/common'
 import { Icon, ICONS } from '../components/icons'
 import { ago, bytes, plural, uptime, when } from '../lib/format'
@@ -169,8 +169,16 @@ function DashboardBody({
   ]
 
   const maxPeople = Math.max(1, ...data.versions.map((v) => v.people))
-  const newest = data.versions.find((v) => v.version)?.version ?? null
-  const behind = data.versions.filter((v) => v.version !== newest).reduce((n, v) => n + v.people, 0)
+  // Each app (desktop, Android, iPhone) numbers its versions separately.
+  const platforms = (['desktop', 'android', 'ios'] as const)
+    .map((platform) => {
+      const rows = data.versions.filter((v) => (v.platform ?? 'desktop') === platform)
+      const newest = rows.find((v) => v.version)?.version ?? null
+      const behind = rows.filter((v) => v.version !== newest).reduce((n, v) => n + v.people, 0)
+      return { platform, rows, newest, behind }
+    })
+    .filter((p) => p.rows.length > 0)
+  const several = platforms.length > 1
   const maxDay = Math.max(1, ...data.daily.map((d) => Math.max(d.messages, d.calls)))
 
   return (
@@ -211,27 +219,40 @@ function DashboardBody({
           <p className="hint" style={{ margin: 0, fontSize: 13 }}>
             Each person counted once, by the device they used last (past 30 days).
           </p>
-          <div className="versions">
-            {data.versions.length === 0 && (
-              <p className="empty">Nobody has used Glofly in the past 30 days.</p>
-            )}
-            {data.versions.map((v) => (
-              <div key={v.version ?? 'old'} className="version-row">
-                <span className="v">{v.version ?? 'Older'}</span>
-                <span className="bar" aria-hidden="true">
-                  <span style={{ width: `${Math.round((v.people / maxPeople) * 100)}%` }} />
-                </span>
-                <span className="n">{plural(v.people, 'person', 'people')}</span>
-              </div>
-            ))}
-          </div>
-          {behind > 0 && newest && (
-            <p className="notice notice--warn" style={{ margin: '12px 0 0' }}>
-              {plural(behind, 'person is', 'people are')} still on an older version than {newest}
-              {data.versions.some((v) => v.version === null) ? ' ("Older" = 0.1.7 or before)' : ''}.
-              Setting a minimum version (v2) would ask them to update.
-            </p>
+          {data.versions.length === 0 && (
+            <p className="empty">Nobody has used Glofly in the past 30 days.</p>
           )}
+          {platforms.map(({ platform, rows, newest, behind }) => (
+            <div key={platform}>
+              {several && (
+                <h3 style={{ margin: '14px 0 0', fontSize: 14, fontWeight: 600 }}>
+                  {PLATFORM_LABEL[platform]}
+                </h3>
+              )}
+              <div className="versions">
+                {rows.map((v) => (
+                  <div key={v.version ?? 'old'} className="version-row">
+                    <span className="v">{v.version ?? 'Older'}</span>
+                    <span className="bar" aria-hidden="true">
+                      <span style={{ width: `${Math.round((v.people / maxPeople) * 100)}%` }} />
+                    </span>
+                    <span className="n">{plural(v.people, 'person', 'people')}</span>
+                  </div>
+                ))}
+              </div>
+              {behind > 0 && newest && (
+                <p className="notice notice--warn" style={{ margin: '12px 0 0' }}>
+                  {plural(behind, 'person is', 'people are')} still on an older
+                  {several ? ` ${PLATFORM_LABEL[platform]}` : ''} version than {newest}
+                  {platform === 'desktop' && rows.some((v) => v.version === null)
+                    ? ' ("Older" = 0.1.7 or before)'
+                    : ''}
+                  . Setting a minimum version (Announcements → Required update) would ask them to
+                  update.
+                </p>
+              )}
+            </div>
+          ))}
         </section>
       </div>
 

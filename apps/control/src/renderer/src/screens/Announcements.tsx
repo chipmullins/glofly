@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useId, useState, type JSX } from 'react'
-import { api, type Announcement, type AppVersionInfo } from '../lib/api'
+import {
+  api,
+  PLATFORM_LABEL,
+  type Announcement,
+  type AppPlatform,
+  type AppVersionInfo
+} from '../lib/api'
 import { Chip, Dialog, NoteField, TextField } from '../components/common'
 import { Icon, ICONS } from '../components/icons'
 import { longDate, plural, when } from '../lib/format'
@@ -19,6 +25,8 @@ export function Announcements({
   const [writing, setWriting] = useState(false)
   const [ending, setEnding] = useState<Announcement | null>(null)
   const [requiring, setRequiring] = useState(false)
+  // Desktop, Android and iPhone each have their own version numbers, so each has its own minimum.
+  const [platform, setPlatform] = useState<AppPlatform>('desktop')
 
   const load = useCallback(() => {
     void api.announcements().then((result) => {
@@ -27,8 +35,8 @@ export function Announcements({
       setCurrent(result.data.current)
       setHistory(result.data.history)
     })
-    void api.appVersion().then((result) => result.ok && setVersion(result.data))
-  }, [])
+    void api.appVersion(undefined, platform).then((result) => result.ok && setVersion(result.data))
+  }, [platform])
 
   useEffect(() => {
     load()
@@ -136,8 +144,22 @@ export function Announcements({
             </h2>
             <p>
               Apps older than the minimum show “Please update Glofly” and can&apos;t carry on until
-              they update. Apps from 0.1.7 and older count as older than any minimum.
+              they update. Each app has its own version numbers, so each has its own minimum.
+              Desktop apps from 0.1.7 and older count as older than any minimum.
             </p>
+            <div className="filters" role="group" aria-label="Which app" style={{ marginTop: 10 }}>
+              {(['desktop', 'android', 'ios'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className="filter"
+                  aria-pressed={platform === p}
+                  onClick={() => setPlatform(p)}
+                >
+                  {PLATFORM_LABEL[p]}
+                </button>
+              ))}
+            </div>
           </div>
           <button type="button" className="btn btn--primary" onClick={() => setRequiring(true)}>
             {version?.minVersion ? 'Change' : 'Set a minimum'}
@@ -189,6 +211,7 @@ export function Announcements({
       {requiring && version && (
         <RequireVersion
           info={version}
+          platform={platform}
           onClose={() => setRequiring(false)}
           onDone={(message) => {
             setRequiring(false)
@@ -437,10 +460,12 @@ function EndAnnouncement({
 
 function RequireVersion({
   info,
+  platform,
   onClose,
   onDone
 }: {
   info: AppVersionInfo
+  platform: AppPlatform
   onClose: () => void
   onDone: (message: string) => void
 }): JSX.Element {
@@ -459,13 +484,15 @@ function RequireVersion({
     const v = value.trim()
     let alive = true
     const timer = setTimeout(() => {
-      void api.appVersion(v).then((result) => alive && result.ok && setCheck(result.data.check))
+      void api
+        .appVersion(v, platform)
+        .then((result) => alive && result.ok && setCheck(result.data.check))
     }, 300)
     return () => {
       alive = false
       clearTimeout(timer)
     }
-  }, [value, valid])
+  }, [value, valid, platform])
 
   async function save(version: string | null): Promise<void> {
     const local: Record<string, string> = {}
@@ -475,7 +502,7 @@ function RequireVersion({
     setFormError(null)
     if (Object.keys(local).length) return
     setBusy(true)
-    const result = await api.setAppVersion(version, message.trim(), note.trim())
+    const result = await api.setAppVersion(version, message.trim(), note.trim(), platform)
     setBusy(false)
     if (result.ok) onDone(result.data.message ?? 'Saved.')
     else if (result.fields) setErrors(result.fields)
@@ -484,8 +511,8 @@ function RequireVersion({
 
   return (
     <Dialog
-      title="Required update"
-      intro={`The newest version anyone is running is ${info.newest ?? 'unknown'}. You can't require a version nobody has yet.`}
+      title={`Required update · ${PLATFORM_LABEL[platform]}`}
+      intro={`The newest ${PLATFORM_LABEL[platform]} version anyone is running is ${info.newest ?? 'unknown'}. You can't require a version nobody has yet.`}
       onClose={onClose}
       narrow
       busy={busy}

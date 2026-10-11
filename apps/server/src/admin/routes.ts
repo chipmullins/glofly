@@ -148,15 +148,17 @@ adminRouter.get("/dashboard", async (req, res) => {
   `);
 
   // App versions: each person counts once, by the device they used most recently (last 30 days).
-  const versions = await db.execute<{ version: string | null; people: number }>(sql`
-    select version, count(*)::int as people from (
-      select distinct on (user_id) user_id, app_version as version
+  // Per platform (desktop, android, ios), since the phone apps number their versions separately.
+  const versions = await db.execute<{ platform: string; version: string | null; people: number }>(sql`
+    select platform, version, count(*)::int as people from (
+      select distinct on (user_id, coalesce(platform, 'desktop')) user_id,
+        coalesce(platform, 'desktop') as platform, app_version as version
       from sessions
       where last_used_at > now() - interval '30 days'
-      order by user_id, last_used_at desc
+      order by user_id, coalesce(platform, 'desktop'), last_used_at desc
     ) latest
-    group by version
-    order by version desc nulls last
+    group by platform, version
+    order by platform, version desc nulls last
   `);
 
   let redisOk = true;
@@ -233,6 +235,11 @@ adminRouter.get("/dashboard", async (req, res) => {
     // Control v2: reports waiting for review, and the minimum app version.
     openReports: (await db.select({ n: count() }).from(reports).where(eq(reports.status, "open")))[0].n,
     minVersion: (await getMinVersion()).min,
+    minVersions: {
+      desktop: (await getMinVersion("desktop")).min,
+      android: (await getMinVersion("android")).min,
+      ios: (await getMinVersion("ios")).min,
+    },
     recentAccounts,
     recentActions,
   });
@@ -373,6 +380,7 @@ adminRouter.get("/accounts/:id", async (req, res) => {
         id: sessions.id,
         deviceName: sessions.deviceName,
         appVersion: sessions.appVersion,
+        platform: sessions.platform,
         createdAt: sessions.createdAt,
         lastUsedAt: sessions.lastUsedAt,
       })

@@ -4,7 +4,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { db } from "./db";
 import { conversationMembers, conversations, users } from "./db/schema";
 import { findSession } from "./auth/sessions";
-import { appVersionFrom, compareVersions, tooOld, updateRequiredBody } from "./app-version";
+import { appVersionFrom, compareVersions, platformFrom, tooOld, updateRequiredBody, type AppPlatform } from "./app-version";
 import { blockedEitherWay, canMessage } from "./friends/rules";
 import {
   announcePresence,
@@ -46,7 +46,10 @@ export function startRealtime(httpServer: HttpServer): void {
       if (!found) return next(new Error("unauthorized"));
       // Newer apps say their version here; 0.1.8 only on requests (kept on the session).
       const version = appVersionFrom(socket.handshake.auth?.version) ?? found.session.appVersion;
-      if (await tooOld(version)) return next(new Error("update_required"));
+      // Phones say which app they are (desktop apps don't: missing = desktop).
+      const platform = platformFrom(socket.handshake.auth?.platform ?? found.session.platform);
+      if (await tooOld(version, platform)) return next(new Error("update_required"));
+      socket.data.platform = platform;
       socket.data.user = found.user;
       socket.data.sessionId = found.session.id;
       socket.data.appVersion = version;
@@ -232,11 +235,12 @@ export function emitToAll(event: string, payload: unknown): void {
  * A new minimum app version: apps older than it are told to update, then disconnected (their
  * requests are refused from now on too). Returns how many devices that was.
  */
-export async function dropOutdatedApps(minVersion: string): Promise<number> {
+export async function dropOutdatedApps(minVersion: string, platform: AppPlatform = "desktop"): Promise<number> {
   if (!io) return 0;
-  const body = await updateRequiredBody();
+  const body = await updateRequiredBody(platform);
   let dropped = 0;
   for (const socket of await io.fetchSockets()) {
+    if ((socket.data.platform ?? "desktop") !== platform) continue;
     const version = typeof socket.data.appVersion === "string" ? socket.data.appVersion : "0.0.0";
     if (compareVersions(version, minVersion) < 0) {
       socket.emit("app:update-required", body);

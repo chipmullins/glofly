@@ -7,7 +7,7 @@ import { fieldErrors } from "../auth/validation";
 import { emitToAll, emitToUser, dropOutdatedApps } from "../realtime";
 import { removeMessageForGood } from "../messages/routes";
 import { currentAnnouncement } from "../safety/routes";
-import { compareVersions, getMinVersion, isVersion, setMinVersion } from "../app-version";
+import { compareVersions, getMinVersion, isPlatform, isVersion, setMinVersion, type AppPlatform } from "../app-version";
 import { logAction, noteSchema } from "./audit";
 import type { AdminLocals } from "./auth";
 import { suspendAccount } from "./routes";
@@ -303,7 +303,15 @@ moderationRouter.get("/announcements", async (_req, res) => {
   const history = await db.select().from(announcements).orderBy(desc(announcements.createdAt)).limit(20);
   const current = await currentAnnouncement();
   const { min, message } = await getMinVersion();
-  res.json({ current, history, minVersion: { version: min, message } });
+  const minVersions = Object.fromEntries(
+    await Promise.all(
+      (["desktop", "android", "ios"] as const).map(async (p) => {
+        const m = await getMinVersion(p);
+        return [p, { version: m.min, message: m.message }] as const;
+      }),
+    ),
+  );
+  res.json({ current, history, minVersion: { version: min, message }, minVersions });
 });
 
 moderationRouter.post("/announcements", async (req, res) => {
@@ -368,25 +376,37 @@ moderationRouter.post("/announcements/:id/end", async (req, res) => {
 
 // ───────────── Minimum app version ─────────────
 
-/** Signed-in devices (used in the last 30 days) and the versions they run. */
-async function deviceVersions() {
+/** Signed-in devices of one platform (used in the last 30 days) and the versions they run. */
+async function deviceVersions(platform: AppPlatform) {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   return db
     .select({ userId: sessions.userId, version: sessions.appVersion })
     .from(sessions)
-    .where(and(gt(sessions.expiresAt, new Date()), gt(sessions.lastUsedAt, since)));
+    .where(
+      and(
+        gt(sessions.expiresAt, new Date()),
+        gt(sessions.lastUsedAt, since),
+        // Desktop sessions have no platform (older rows, and desktop apps don't send one).
+        platform === "desktop" ? isNull(sessions.platform) : eq(sessions.platform, platform),
+      ),
+    );
 }
 
-// GET /admin/app-version?check=0.2.0 — the minimum now, the newest version any device runs,
-// and (with check) how many devices and people would be asked to update.
+/** ?platform= / { platform } — which app's minimum (desktop when left out, as Control v2 sends). */
+const platformOf = (value: unknown): AppPlatform => (isPlatform(value) ? value : "desktop");
+
+// GET /admin/app-version?check=0.2.0&platform=android — the minimum now, the newest version any
+// device of that platform runs, and (with check) how many devices and people would be asked to update.
 moderationRouter.get("/app-version", async (req, res) => {
-  const { min, message } = await getMinVersion();
-  const devices = await deviceVersions();
+  const platform = platformOf(req.query.platform);
+  const { min, message } = await getMinVersion(platform);
+  const devices = await deviceVersions(platform);
   const known = devices.map((d) => d.version).filter(isVersion);
   const newest = known.sort(compareVersions).at(-1) ?? null;
   const check = isVersion(req.query.check) ? req.query.check : null;
   const below = check ? devices.filter((d) => compareVersions(d.version ?? "0.0.0", check) < 0) : [];
   res.json({
+    platform,
     minVersion: min,
     message,
     newest,
@@ -406,12 +426,13 @@ moderationRouter.put("/app-version", async (req, res) => {
         .refine(isVersion, "Use a version like 0.2.0.")
         .nullable(),
       message: z.string().trim().max(200, "Keep the message under 200 characters.").optional(),
+      platform: z.enum(["desktop", "android", "ios"]).default("desktop"),
       note: noteSchema,
     })
     .safeParse(req.body);
   if (!parsed.success) return invalid(res, parsed.error);
-  const { version, note } = parsed.data;
-  const devices = await deviceVersions();
+  const { version, note, platform } = parsed.data;
+  const devices = await deviceVersions(platform);
   const newest = devices.map((d) => d.version).filter(isVersion).sort(compareVersions).at(-1) ?? null;
   // A minimum nobody can have yet would lock everyone out.
   if (version && (!newest || compareVersions(version, newest) > 0)) {
@@ -422,21 +443,22 @@ moderationRouter.put("/app-version", async (req, res) => {
     });
     return;
   }
-  const before = (await getMinVersion()).min;
-  await setMinVersion(version, parsed.data.message || null);
-  const dropped = version ? await dropOutdatedApps(version) : 0;
+  const before = (await getMinVersion(platform)).min;
+  await setMinVersion(version, parsed.data.message || null, platform);
+  const dropped = version ? await dropOutdatedApps(version, platform) : 0;
+  const label = { desktop: "Desktop", android: "Android", ios: "iPhone" }[platform];
   await logAction({
     adminId: admin(res).id,
     action: version ? "Set minimum app version" : "Removed minimum app version",
-    targetLabel: `${before ?? "none"} → ${version ?? "none"}`,
-    details: { disconnected: dropped },
+    targetLabel: `${label}: ${before ?? "none"} → ${version ?? "none"}`,
+    details: { disconnected: dropped, platform },
     note,
     ip: ip(res),
   });
   res.json({
     ok: true,
     message: version
-      ? `Apps older than ${version} now have to update${dropped ? ` (${dropped} open now were asked)` : ""}.`
+      ? `${label} apps older than ${version} now have to update${dropped ? ` (${dropped} open now were asked)` : ""}.`
       : "No update is required any more.",
   });
 });

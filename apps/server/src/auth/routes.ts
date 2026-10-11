@@ -7,7 +7,7 @@ import { users } from "../db/schema";
 import { hashPassword, verifyPassword } from "./passwords";
 import { cancelDeletion } from "../account/deletion";
 import { requestPasswordReset, sendVerification } from "../account/email";
-import { appVersionFrom, bearerToken, createSession, deleteSession, requireAuth } from "./sessions";
+import { appVersionFrom, bearerToken, createSession, deleteSession, platformColumn, requireAuth } from "./sessions";
 import {
   claimInviteCode,
   emailHeldByInvite,
@@ -180,6 +180,7 @@ authRouter.post("/register", requireCurrentApp, registerLimiter, async (req, res
       true,
       input.deviceName ?? null,
       appVersionFrom(req.headers["x-glofly-version"]),
+      platformColumn(req.headers["x-glofly-platform"]),
     );
     // "Confirm your email": sent in the background so signing up stays quick.
     sendVerification(user.id).catch((err) => console.error("Couldn't send the confirm email", err));
@@ -275,6 +276,7 @@ authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
     keepSignedIn,
     deviceName ?? null,
     appVersionFrom(req.headers["x-glofly-version"]),
+      platformColumn(req.headers["x-glofly-platform"]),
   );
   res.json({
     token: session.token,
