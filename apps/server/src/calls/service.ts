@@ -14,6 +14,7 @@ import { pair } from "../friends/rules";
 import { emitToUser } from "../realtime";
 import { sendUpdated } from "../messages/routes";
 import { closeRoom, livekitConfigured, peopleInRoom, removeFromRoom } from "./livekit";
+import { syncCallPushes } from "../push/calls";
 
 // How a call goes:
 //
@@ -121,6 +122,8 @@ export async function announceCall(row: CallRow, alsoTell: string[] = []): Promi
   for (const userId of new Set([...(await membersOf(row.conversationId)), ...alsoTell])) {
     emitToUser(userId, "call:updated", payload);
   }
+  // Phones that aren't showing Glofly: ring, stop ringing, or a missed call.
+  syncCallPushes(payload.call, payload.caller).catch((err) => console.error("Call push failed", err));
 }
 
 async function reload(callId: string): Promise<CallRow | null> {
