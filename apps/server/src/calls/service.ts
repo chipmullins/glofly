@@ -30,7 +30,8 @@ import { closeRoom, livekitConfigured, peopleInRoom, removeFromRoom } from "./li
 // (`call:updated`), on every device, so they all stay in step.
 
 /** How long someone is rung before it counts as missed (matches the ringtone and jingle). */
-export const RING_MS = 23_000;
+export { RING_MS } from "@glofly/shared";
+import { RING_MS } from "@glofly/shared";
 /** 1-on-1: the other person gone from the room this long ends the call. */
 const DM_ALONE_MS = 45_000;
 /** Groups: someone who joined but has been gone from the room this long counts as left. */

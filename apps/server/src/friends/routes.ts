@@ -9,6 +9,7 @@ import { emitToUser } from "../realtime";
 import { endCallsBetween } from "../calls/service";
 import { announcePresence, presenceOf } from "../presence";
 import { blockedEitherWay, pair, pairIs } from "./rules";
+import { STATUS_TEXT_MAX } from "@glofly/shared";
 
 // Everything here needs a signed-in user.
 export const usersRouter = Router();
@@ -61,7 +62,7 @@ const statusSchema = z.object({
   statusText: z
     .string()
     .trim()
-    .max(80, "Custom status can be up to 80 characters.")
+    .max(STATUS_TEXT_MAX, `Custom status can be up to ${STATUS_TEXT_MAX} characters.`)
     // eslint-disable-next-line no-control-regex
     .refine((t) => !/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/.test(t), "That status has hidden characters.")
     .transform((t) => (t === "" ? null : t))

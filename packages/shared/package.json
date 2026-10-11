@@ -1,0 +1,21 @@
+{
+  "name": "@glofly/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Types, rules and helpers shared by the Glofly server and apps",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test test/shared.test.cjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^6.0.3"
+  }
+}

@@ -21,7 +21,7 @@ avatarsRouter.use(requireAuth);
 type Me = { id: string; username: string; displayName: string };
 const me = (res: Response): Me => res.locals.user as Me;
 
-const BIO_MAX = 190;
+import { BIO_MAX } from "@glofly/shared";
 const AVATAR_UPLOAD_MAX = "8mb";
 
 const uploadLimiter = rateLimit({

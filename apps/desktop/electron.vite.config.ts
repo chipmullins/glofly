@@ -66,14 +66,21 @@ function twemoji(): Plugin {
   }
 }
 
+/**
+ * @glofly/shared (types, rules and helpers shared with the server and the mobile app) is read
+ * from its TypeScript source and bundled into each part of the app.
+ */
+const shared = [
+  { find: /^@glofly\/shared$/, replacement: resolve('../../packages/shared/src/index.ts') },
+  { find: /^@glofly\/shared\/(.*)$/, replacement: resolve('../../packages/shared/src') + '/$1' }
+]
+
 export default defineConfig({
-  main: {},
-  preload: {},
+  main: { resolve: { alias: shared } },
+  preload: { resolve: { alias: shared } },
   renderer: {
     resolve: {
-      alias: {
-        '@renderer': resolve('src/renderer/src')
-      }
+      alias: [...shared, { find: '@renderer', replacement: resolve('src/renderer/src') }]
     },
     plugins: [react(), twemoji()]
   }

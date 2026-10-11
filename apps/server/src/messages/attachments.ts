@@ -11,8 +11,7 @@ import { storage } from "../storage";
 // full-size version), which drops hidden data like the GPS location phones add.
 // Everything else is stored exactly as sent and only ever offered as a download.
 
-export const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
-export const ATTACHMENTS_PER_MESSAGE = 10;
+export { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE } from "@glofly/shared";
 /** Uploads waiting to be sent, per person. Stops someone filling the server with unsent files. */
 export const UNSENT_PER_PERSON = 20;
 const UNSENT_KEEP_MS = 60 * 60 * 1000; // unsent uploads are removed after an hour
@@ -35,9 +34,7 @@ export type AttachmentInfo = {
 };
 
 // Voice messages: Opus audio recorded in Glofly, up to 5 minutes (about 1–2 MB).
-export const VOICE_MAX_MS = 5 * 60 * 1000;
-export const VOICE_MAX_BYTES = 6 * 1024 * 1024;
-export const VOICE_PEAKS_MAX = 64;
+export { VOICE_MAX_MS, VOICE_MAX_BYTES, VOICE_PEAKS_MAX } from "@glofly/shared";
 
 /** WebM (what Glofly records) or Ogg, by the bytes the file starts with. */
 export function voiceFormat(data: Buffer): "webm" | "ogg" | null {

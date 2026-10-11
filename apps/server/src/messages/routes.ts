@@ -40,6 +40,14 @@ import { blockedEitherWay, canMessage, deletionPending, pair } from "../friends/
 import { emitToUser } from "../realtime";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
+import {
+  GROUP_MAX,
+  GROUP_NAME_MAX,
+  legacyEventBody,
+  MAX_PINNED,
+  MAX_REACTIONS_PER_PERSON,
+  MESSAGE_MAX,
+} from "@glofly/shared";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
 export const conversationsRouter = Router();
@@ -48,7 +56,7 @@ conversationsRouter.use(requireAuth);
 type Me = { id: string; username: string; displayName: string };
 const me = (res: Response): Me => res.locals.user as Me;
 
-export const MESSAGE_MAX = 4000;
+export { MESSAGE_MAX, MAX_PINNED, GROUP_MAX, GROUP_NAME_MAX } from "@glofly/shared";
 
 const sendLimiter = rateLimit({
   windowMs: 10 * 1000,
@@ -126,7 +134,6 @@ const emojiParam = z
         /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(e) &&
         !/^[0-9#*]+$/.test(e)),
   );
-const MAX_REACTIONS_PER_PERSON = 20;
 
 /**
  * Adds everything the app shows with a message: the message it replies to, and reactions.
@@ -197,13 +204,9 @@ async function hydrate(rows: MessageRow[]) {
 }
 
 /** Event types every app version knows. */
-const EVENTS_IN_020 = new Set(["created", "renamed", "added", "removed", "left", "call"]);
-
-/** For an event 0.2.0 apps don't know: the text they show instead (as a normal message). */
 function legacyEvent(event: ChatEvent | null): { body: string } | null {
-  if (!event || EVENTS_IN_020.has(event.type)) return null;
-  if (event.type === "photo") return { body: event.removed ? "removed the group photo" : "changed the group photo" };
-  return { body: "" };
+  const body = legacyEventBody(event);
+  return body === null ? null : { body };
 }
 
 function quoteOf(list: { kind: "image" | "file"; name: string; voice?: unknown }[] | undefined) {
@@ -450,7 +453,6 @@ conversationsRouter.get("/", async (_req, res) => {
   res.json({ conversations: await summaries(me(res).id) });
 });
 
-export const MAX_PINNED = 10;
 
 /** Pins or unpins a chat for me; my other devices update right away. */
 async function setPinned(myId: string, conversationId: string, pinned: boolean) {
@@ -685,8 +687,6 @@ conversationsRouter.post("/dm", async (req, res) => {
 // add their friends; the person who made it can remove people. Anyone can leave. If the
 // creator leaves, whoever has been in the group longest takes over.
 
-export const GROUP_MAX = 25;
-export const GROUP_NAME_MAX = 50;
 const GROUP_HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
 
 const groupLimiter = rateLimit({

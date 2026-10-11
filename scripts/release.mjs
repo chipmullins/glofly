@@ -63,7 +63,7 @@ if (!ok('git merge-base --is-ancestor origin/main HEAD')) {
 }
 
 // Anything the live server runs (server code, deploy files, the website) changed since the last release?
-const serverChanged = !ok('git diff --quiet origin/main HEAD -- apps/server deploy')
+const serverChanged = !ok('git diff --quiet origin/main HEAD -- apps/server packages/shared deploy')
 const siteChanged = !ok('git diff --quiet origin/main HEAD -- site')
 
 const from = desktopVersion()

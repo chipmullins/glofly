@@ -10,34 +10,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { VoiceInfo } from '../../../preload/api-types'
 import { audioCapture, getCallPrefs } from './callPrefs'
+import { toPeaks } from '@glofly/shared/voice'
 
 export const VOICE_MAX_MS = 5 * 60 * 1000
-const BARS = 48
 const SAMPLE_MS = 50
 
 export type Recorded = { data: ArrayBuffer; type: string; voice: VoiceInfo }
 
-/** "0:07", "4:59" */
-export function voiceTime(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
-/** Loudness samples (0–1) → BARS bar heights (0–100), scaled so the loudest bar is full. */
-export function toPeaks(levels: number[]): number[] {
-  if (levels.length === 0) return [0]
-  const bars: number[] = []
-  const per = levels.length / Math.min(BARS, levels.length)
-  for (let i = 0; i < Math.min(BARS, levels.length); i++) {
-    const slice = levels.slice(
-      Math.floor(i * per),
-      Math.max(Math.floor((i + 1) * per), Math.floor(i * per) + 1)
-    )
-    bars.push(Math.max(...slice))
-  }
-  const top = Math.max(...bars, 0.02)
-  return bars.map((b) => Math.round(Math.min(1, b / top) * 100))
-}
+export { voiceTime, toPeaks } from '@glofly/shared/voice'
 
 type RecorderState = 'idle' | 'starting' | 'recording'
 

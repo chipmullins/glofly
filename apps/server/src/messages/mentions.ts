@@ -4,17 +4,10 @@ import { users } from "../db/schema";
 
 // @mentions in group chats. A message mentions someone when it contains "@theirusername" and
 // they're in the group right now. The app highlights these and always notifies the person
-// mentioned, even in a chat they muted. (The app uses the same pattern: lib/mentions.ts.)
+// mentioned, even in a chat they muted. (The pattern is shared with the apps: @glofly/shared.)
 
-/** "@maya.p" anywhere a word could start (not inside an email address like a@b.com). */
-export const MENTION_PATTERN = /(?<![\w@.])@([a-zA-Z0-9](?:[a-zA-Z0-9._]*[a-zA-Z0-9])?)/g;
-
-/** The usernames a text mentions (lower case, each once). */
-export function mentionedNames(body: string): string[] {
-  const names = new Set<string>();
-  for (const match of body.matchAll(MENTION_PATTERN)) names.add(match[1].toLowerCase());
-  return [...names].slice(0, 50);
-}
+import { mentionedNames } from "@glofly/shared";
+export { MENTION_PATTERN, mentionedNames } from "@glofly/shared";
 
 /** Which of these group members the text mentions (never the sender). */
 export async function mentionsIn(body: string, memberIds: string[], senderId: string): Promise<string[]> {
