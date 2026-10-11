@@ -1,0 +1,134 @@
+import { useColorScheme } from 'react-native'
+import { create } from 'zustand'
+
+// Colors from the "Glofly Mobile" design canvas (Glow Orange, light and dark). Every color in the
+// app comes from here, like the desktop's --glo-* tokens.
+
+const light = {
+  bg: '#FFFFFF',
+  surface: '#F7F0E9',
+  surface2: '#EFE5DB',
+  line: '#EADDD1',
+  field: '#FFFFFF',
+  fieldLine: '#DCC8B8',
+  ink: '#24170F',
+  ink2: '#4A372B',
+  muted: '#6B5547',
+  faint: '#8F7868',
+  accent: '#F47A1F',
+  accentInk: '#2A1406',
+  accentText: '#B8430A',
+  accentSoft: '#FCE2CC',
+  focus: 'rgba(244,122,31,0.18)',
+  glow: 'rgba(244,122,31,0.35)',
+  online: '#2E9E5B',
+  onlineText: '#1F7A45',
+  onlineSoft: '#EAF5EE',
+  away: '#E2A00F',
+  dnd: '#D33A2C',
+  danger: '#B42318',
+  dangerSoft: '#FDECEA',
+  dangerLine: '#F1C9C3',
+  them: '#F7F0E9',
+  me: '#F47A1F',
+  meInk: '#2A1406',
+  quoteBg: 'rgba(255,255,255,0.32)',
+  chip: '#FFFFFF',
+  chipMine: '#FDE6D3',
+  barBg: '#FBF7F3',
+  navBg: '#F7F0E9',
+  sheet: '#FFFFFF',
+  backdrop: 'rgba(36,23,15,0.45)',
+  shadow: 'rgba(36,23,15,0.22)',
+  mentionWash: 'rgba(244,122,31,0.10)',
+  mutedBadge: '#B4A296',
+  info: '#1E4E8C',
+  infoSoft: '#E5EEF8',
+}
+
+export type Colors = typeof light
+
+const dark: Colors = {
+  bg: '#1E1916',
+  surface: '#2A231F',
+  surface2: '#342B26',
+  line: '#3A302A',
+  field: '#2A231F',
+  fieldLine: '#3A302A',
+  ink: '#F5EDE6',
+  ink2: '#D9C8BC',
+  muted: '#B8A699',
+  faint: '#8E7D71',
+  accent: '#F7893A',
+  accentInk: '#2A1406',
+  accentText: '#FFA96A',
+  accentSoft: '#4A2E1C',
+  focus: 'rgba(247,137,58,0.22)',
+  glow: 'rgba(247,137,58,0.35)',
+  online: '#3DBA6E',
+  onlineText: '#6FD69A',
+  onlineSoft: '#1E3326',
+  away: '#F0B429',
+  dnd: '#F0544A',
+  danger: '#FF8A80',
+  dangerSoft: '#3A1F1C',
+  dangerLine: '#5A2A26',
+  them: '#2A231F',
+  me: '#F7893A',
+  meInk: '#2A1406',
+  quoteBg: 'rgba(42,20,6,0.16)',
+  chip: '#1E1916',
+  chipMine: '#4A2E1C',
+  barBg: '#171310',
+  navBg: '#171310',
+  sheet: '#231D1A',
+  backdrop: 'rgba(0,0,0,0.6)',
+  shadow: 'rgba(0,0,0,0.5)',
+  mentionWash: 'rgba(247,137,58,0.14)',
+  mutedBadge: '#6E5F55',
+  info: '#9CC2F0',
+  infoSoft: '#1C2A3A',
+}
+
+/** Calls look the same in every theme (dark, with firefly glows), like the desktop's --glo-call-*. */
+export const call = {
+  bg: '#120D0B',
+  panel: '#1C1411',
+  tile: '#2A1F1A',
+  ink: '#FFFFFF',
+  muted: 'rgba(255,255,255,0.72)',
+  faint: 'rgba(255,255,255,0.5)',
+  button: 'rgba(255,255,255,0.14)',
+  buttonOn: '#FFFFFF',
+  buttonOnInk: '#1C1411',
+  hangup: '#E5372A',
+  answer: '#2E9E5B',
+  glow: '#FFB347',
+  talking: '#FFC15E',
+}
+
+export type ThemeChoice = 'system' | 'light' | 'dark'
+
+export const useThemeChoice = create<{ choice: ThemeChoice; set: (c: ThemeChoice) => void }>((set) => ({
+  choice: 'system',
+  set: (choice) => set({ choice }),
+}))
+
+export function useTheme(): { c: Colors; dark: boolean } {
+  const system = useColorScheme()
+  const choice = useThemeChoice((s) => s.choice)
+  const isDark = choice === 'system' ? system === 'dark' : choice === 'dark'
+  return { c: isDark ? dark : light, dark: isDark }
+}
+
+export const themes = { light, dark }
+
+/** Font families (bundled Google fonts: Outfit for titles, DM Sans for everything else). */
+export const font = {
+  body: 'DMSans_400Regular',
+  bodyMedium: 'DMSans_500Medium',
+  bodyBold: 'DMSans_700Bold',
+  display: 'Outfit_600SemiBold',
+  displayMedium: 'Outfit_500Medium',
+  displayBold: 'Outfit_700Bold',
+}

@@ -11,6 +11,7 @@ COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/control/package.json apps/control/
+COPY apps/mobile/package.json apps/mobile/
 COPY packages/shared/package.json packages/shared/
 RUN npm ci -w @glofly/server -w @glofly/shared --ignore-scripts --no-audit --no-fund
 # Types, rules and helpers shared with the apps (built to packages/shared/dist first).
@@ -26,6 +27,7 @@ COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/control/package.json apps/control/
+COPY apps/mobile/package.json apps/mobile/
 COPY packages/shared/package.json packages/shared/
 RUN npm ci -w @glofly/server --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
 

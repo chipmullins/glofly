@@ -237,6 +237,41 @@ const write = (path, data) => {
 const ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
 const ICNS_SIZES = [16, 32, 64, 128, 256, 512, 1024]
 
+// `node tools/icons/make-icons.mjs mobile` → the phone app's icons (apps/mobile/assets):
+// the Twilight tile, Android's adaptive icon layers (background, foreground, monochrome),
+// the small white notification icon and the splash firefly.
+if (process.argv[2] === 'mobile') {
+  const OUT = join(ROOT, 'apps', 'mobile', 'assets')
+  const square = (size, defs, body) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512"><defs>${defs}</defs>${body}</svg>`
+  const stars = `<circle cx="108" cy="112" r="4.5" fill="#fff" opacity="0.6"/><circle cx="398" cy="98" r="3.5" fill="#fff" opacity="0.5"/><circle cx="430" cy="300" r="3" fill="#fff" opacity="0.45"/>`
+  const trail = (dx = 0, dy = 0, k = 1) =>
+    `<g transform="translate(${dx} ${dy}) scale(${k})"><circle cx="92" cy="408" r="6" fill="#ffc24a" opacity="0.7"/><circle cx="122" cy="376" r="4.5" fill="#ffc24a" opacity="0.55"/><circle cx="148" cy="352" r="3" fill="#ffc24a" opacity="0.45"/></g>`
+  // White silhouette (Android monochrome icon, notification icon): every fill and stroke white.
+  const white = (opts) =>
+    firefly({ ...opts, wing: '#FFFFFF', antenna: '#FFFFFF' }).replaceAll('url(#b)', '#FFFFFF').replaceAll('url(#u)', '#FFFFFF').replaceAll('#FF7000', '#FFFFFF')
+  const files = {
+    // Full-bleed square (stores and launchers round the corners themselves).
+    'icon.png': [1024, square(1024, BG('#3d2775', '#140c2c') + GLOW('#ffc24a', 0.58) + BODY() + BUBBLE(),
+      `<rect width="512" height="512" fill="url(#bg)"/><circle cx="262" cy="250" r="196" fill="url(#gl)"/>${stars}${trail()}` +
+        firefly({ x: 262, y: 252, scale: 0.48, wing: '#FFA030', wingWidth: 30 }))],
+    // Adaptive icon: launchers show the middle ~66%, so the firefly sits smaller.
+    'android-icon-background.png': [1024, square(1024, BG('#3d2775', '#140c2c'), `<rect width="512" height="512" fill="url(#bg)"/>${stars}`)],
+    'android-icon-foreground.png': [1024, square(1024, GLOW('#ffc24a', 0.58) + BODY() + BUBBLE(),
+      `<circle cx="258" cy="252" r="140" fill="url(#gl)"/>` +
+        firefly({ x: 258, y: 254, scale: 0.33, wing: '#FFA030', wingWidth: 34 }))],
+    'android-icon-monochrome.png': [1024, square(1024, '', white({ x: 258, y: 254, scale: 0.33, wingWidth: 40 }))],
+    // Status-bar icon: white on transparent, filling most of the square.
+    'notification-icon.png': [96, square(96, '', white({ x: 262, y: 262, scale: 0.6, wingWidth: 52 }))],
+    'splash-icon.png': [512, square(512, GLOW('#ffc24a', 0.5) + BODY() + BUBBLE(),
+      `<circle cx="258" cy="252" r="200" fill="url(#gl)"/>` + firefly({ x: 258, y: 254, scale: 0.46, wing: '#FFA030', wingWidth: 30 }))],
+  }
+  for (const [name, [size, image]] of Object.entries(files)) {
+    write(join(OUT, name), await sharp(Buffer.from(image)).resize(size, size).png({ compressionLevel: 9 }).toBuffer())
+  }
+  process.exit(0)
+}
+
 // `node tools/icons/make-icons.mjs control` → only Glofly Control's icon (apps/control).
 if (process.argv[2] === 'control') {
   const CONTROL = join(ROOT, 'apps', 'control')

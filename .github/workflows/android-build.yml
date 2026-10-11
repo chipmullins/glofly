@@ -1,0 +1,99 @@
+# Android build: compiles the Glofly phone app (apps/mobile) into an installable APK.
+#
+# Two jobs in one:
+#   - a check that the native Android code still compiles (Claude's sandbox can't build Android,
+#     so this is where Kotlin and Gradle mistakes show up)
+#   - a test APK anyone can install: Actions → Android build → the run → Artifacts →
+#     "Glofly-android-<run>" (GitHub zips it; unzip → Glofly.apk). On the phone: allow
+#     "Install unknown apps" for the browser or Files app once, then open the APK.
+# The APK talks to the live server (https://api.glofly.app) and is signed with a throwaway debug
+# key, so Android treats it as a different app from the Play Store / EAS builds: uninstall one
+# before installing the other. Real releases come from EAS (`eas build`), not from here.
+#
+# Push notifications need the Firebase settings file: add a repository secret
+# GOOGLE_SERVICES_JSON (Settings → Secrets and variables → Actions) holding the whole
+# google-services.json. Without it the APK works, just without push.
+#
+# Runs on pushes to dev that touch the phone app or the shared package, and by hand
+# (Run workflow, once this file is on the default branch). Linux minutes count 1× (~15 min a build).
+
+name: Android build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - 'package-lock.json'
+      - '.github/workflows/android-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      APP_VARIANT: preview
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install packages
+        # The desktop app's install step (rebuilding its native keyboard hook for Electron) isn't
+        # needed here, so install scripts are skipped.
+        run: npm ci --ignore-scripts
+
+      - name: Firebase settings (if the secret is set)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > apps/mobile/google-services.json
+            echo "Push notifications: on"
+          else
+            echo "::warning::No GOOGLE_SERVICES_JSON secret: this APK has no push notifications."
+          fi
+
+      - name: Typecheck
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: Generate the Android project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build the APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64
+
+      - name: Collect the APK
+        run: |
+          mkdir -p out
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk out/Glofly.apk
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Glofly-android-${{ github.run_number }}
+          path: out/Glofly.apk
+          retention-days: 14
