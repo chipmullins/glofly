@@ -6,15 +6,35 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.core.app.NotificationManagerCompat
+import com.google.firebase.FirebaseApp
+import com.google.firebase.messaging.FirebaseMessaging
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.lang.ref.WeakReference
 
 /**
- * Glofly's own Android code, reached from JavaScript as `GloflyNative`:
- * voice-message recording (Opus), and later push notifications and call ringing.
+ * Glofly's own Android code, reached from JavaScript as `GloflyNative`: push notifications
+ * (Firebase token, chat / call notifications, Reply and Decline from the notification), the
+ * "Call in progress" service, ringing over the lock screen, and voice-message recording (Opus).
  */
 class GloflyNativeModule : Module() {
+  companion object {
+    private var instance: WeakReference<GloflyNativeModule>? = null
+
+    /** From the messaging service and notification buttons, when the JavaScript side is running. */
+    fun emitEvent(name: String, body: Map<String, Any?>) {
+      try {
+        instance?.get()?.sendEvent(name, body)
+      } catch (_: Exception) {
+      }
+    }
+
+    fun emitToken(token: String) = emitEvent("pushToken", mapOf("token" to token))
+  }
+
   private val context
     get() = requireNotNull(appContext.reactContext) { "No React context" }
 
@@ -23,6 +43,64 @@ class GloflyNativeModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("GloflyNative")
+    Events("pushToken", "callRing", "hangUp")
+
+    OnCreate {
+      instance = WeakReference(this@GloflyNativeModule)
+      try {
+        Notifier.ensureChannels(context.applicationContext)
+      } catch (_: Exception) {
+      }
+    }
+
+    // ---- Push notifications ----
+
+    AsyncFunction("getPushToken") { promise: Promise ->
+      val ctx = context.applicationContext
+      if (FirebaseApp.getApps(ctx).isEmpty()) {
+        // Built without Firebase settings (google-services.json): no push on this build.
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      FirebaseMessaging.getInstance().token
+        .addOnSuccessListener { token ->
+          PushStore.saveFcmToken(ctx, token)
+          promise.resolve(token)
+        }
+        .addOnFailureListener { promise.resolve(PushStore.fcmToken(ctx)) }
+    }
+
+    Function("configurePush") { c: Map<String, Any?> ->
+      PushStore.saveConfig(
+        context.applicationContext,
+        PushStore.Config(
+          serverUrl = c["serverUrl"] as? String ?: return@Function,
+          token = c["token"] as? String ?: return@Function,
+          version = c["version"] as? String ?: "1.0.0",
+          platform = c["platform"] as? String ?: "android",
+          meId = c["meId"] as? String ?: "",
+          meName = c["meName"] as? String ?: "You",
+          meAvatar = c["meAvatar"] as? String,
+          vibrate = c["vibrate"] as? Boolean ?: true,
+        ),
+      )
+    }
+
+    /** Signed out: forget the session and remove every Glofly notification. */
+    Function("clearPush") {
+      val ctx = context.applicationContext
+      PushStore.clear(ctx)
+      Notifier.cancelAll(ctx)
+      OngoingCallService.stop(ctx)
+    }
+
+    Function("cancelChatNotification") { conversationId: String ->
+      Notifier.cancelChat(context.applicationContext, conversationId)
+    }
+
+    Function("cancelCallNotification") { callId: String ->
+      Notifier.cancelCall(context.applicationContext, callId)
+    }
 
     Function("notificationsEnabled") {
       NotificationManagerCompat.from(context).areNotificationsEnabled()
@@ -45,6 +123,42 @@ class GloflyNativeModule : Module() {
       }
     }
 
+    // ---- Calls ----
+
+    /** While the incoming call screen shows: over the lock screen, screen on. */
+    Function("showOverLockScreen") { on: Boolean ->
+      val activity = appContext.currentActivity ?: return@Function
+      activity.runOnUiThread {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+          activity.setShowWhenLocked(on)
+          activity.setTurnScreenOn(on)
+        } else {
+          @Suppress("DEPRECATION")
+          val flags = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+          if (on) activity.window.addFlags(flags) else activity.window.clearFlags(flags)
+        }
+      }
+    }
+
+    /** Keeps the screen on during video calls. */
+    Function("keepScreenOn") { on: Boolean ->
+      val activity = appContext.currentActivity ?: return@Function
+      activity.runOnUiThread {
+        if (on) activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+      }
+    }
+
+    Function("startOngoingCall") { callId: String, conversationId: String, title: String, video: Boolean ->
+      OngoingCallService.start(context.applicationContext, callId, conversationId, title, video)
+    }
+
+    Function("stopOngoingCall") {
+      OngoingCallService.stop(context.applicationContext)
+    }
+
+    // ---- Voice messages ----
+
     AsyncFunction("startVoice") {
       recorder().start()
     }
@@ -60,6 +174,7 @@ class GloflyNativeModule : Module() {
 
     OnDestroy {
       voice?.cancel()
+      if (instance?.get() === this@GloflyNativeModule) instance = null
     }
   }
 

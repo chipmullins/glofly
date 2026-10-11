@@ -5,6 +5,16 @@ import { requireOptionalNativeModule } from 'expo-modules-core'
 // the app can be tried in a browser.
 
 type Native = {
+  getPushToken(): Promise<string | null>
+  configurePush(config: PushConfig): void
+  clearPush(): void
+  cancelChatNotification(conversationId: string): void
+  cancelCallNotification(callId: string): void
+  showOverLockScreen(on: boolean): void
+  keepScreenOn(on: boolean): void
+  startOngoingCall(callId: string, conversationId: string, title: string, video: boolean): void
+  stopOngoingCall(): void
+  addListener(event: string, fn: (body: Record<string, string>) => void): { remove(): void }
   notificationsEnabled(): boolean
   openNotificationSettings(): boolean
   canUseFullScreenIntent(): boolean
@@ -16,6 +26,17 @@ type Native = {
 }
 
 const native = requireOptionalNativeModule<Native>('GloflyNative')
+
+export type PushConfig = {
+  serverUrl: string
+  token: string
+  version: string
+  platform: string
+  meId: string
+  meName: string
+  meAvatar: string | null
+  vibrate: boolean
+}
 
 export type Recording = { uri: string; durationMs: number; mime: string; size: number }
 
@@ -87,3 +108,27 @@ export const notificationsEnabled = (): boolean => (native ? native.notification
 export const openNotificationSettings = (): boolean => (native ? native.openNotificationSettings() : false)
 export const canUseFullScreenIntent = (): boolean => (native ? native.canUseFullScreenIntent() : false)
 export const openFullScreenIntentSettings = (): boolean => (native ? native.openFullScreenIntentSettings() : false)
+
+// ---- Push ----
+
+/** The Firebase token for this phone (null on the web preview or builds without Firebase). */
+export const getPushToken = async (): Promise<string | null> => (native ? native.getPushToken() : null)
+/** What notification buttons (Reply, Decline) need to reach the server without the app open. */
+export const configurePush = (c: PushConfig) => native?.configurePush(c)
+export const clearPush = () => native?.clearPush()
+export const cancelChatNotification = (id: string) => native?.cancelChatNotification(id)
+export const cancelCallNotification = (id: string) => native?.cancelCallNotification(id)
+
+export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp'
+export function onNativeEvent(event: NativeEvent, fn: (body: Record<string, string>) => void): () => void {
+  if (!native) return () => {}
+  const sub = native.addListener(event, fn)
+  return () => sub.remove()
+}
+
+// ---- Calls ----
+
+export const showOverLockScreen = (on: boolean) => native?.showOverLockScreen(on)
+export const keepScreenOn = (on: boolean) => native?.keepScreenOn(on)
+export const startOngoingCall = (callId: string, conversationId: string, title: string, video: boolean) => native?.startOngoingCall(callId, conversationId, title, video)
+export const stopOngoingCall = () => native?.stopOngoingCall()

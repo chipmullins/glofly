@@ -22,7 +22,8 @@ name: Android build
 on:
   workflow_dispatch:
   push:
-    branches: [dev]
+    # ci/* branches: Claude's compile checks for native code before it lands on dev.
+    branches: [dev, 'ci/**']
     paths:
       - 'apps/mobile/**'
       - 'packages/shared/**'

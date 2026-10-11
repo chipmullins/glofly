@@ -189,11 +189,11 @@ export function startRealtime() {
       if (!socket) connect()
       else if (socket.connected) void refreshAll()
     } else if (!backgroundTimer && keepAliveReasons.size === 0) {
-      // A few seconds' grace for quick app switches, then push notifications take over.
+      // A moment's grace for quick app switches, then push notifications take over.
       backgroundTimer = setTimeout(() => {
         backgroundTimer = null
         if (appState !== 'active' && keepAliveReasons.size === 0) disconnect()
-      }, 5000)
+      }, 1500)
     }
   }
   AppState.addEventListener('change', (next) => {

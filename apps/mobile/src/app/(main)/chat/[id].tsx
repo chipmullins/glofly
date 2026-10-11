@@ -29,6 +29,7 @@ import { Composer, type ComposerHandle } from '@/chat/Composer'
 import { MessageRow, type RowInfo } from '@/chat/MessageRow'
 import { TypingBubble } from '@/chat/TypingBubble'
 import { discard, isLocal, retry, sendText, setViewing, useOutbox } from '@/chat/send'
+import { chatOpened } from '@/push'
 import { attachMenu, UploadTray, useUploads } from '@/chat/uploads'
 import { VoiceRecorderBar, RecordButton, useVoice } from '@/chat/voice'
 import { PhotoViewer, type ViewerState } from '@/chat/PhotoViewer'
@@ -70,6 +71,7 @@ export default function ChatScreen() {
   useFocusEffect(
     useCallback(() => {
       setViewing(id)
+      chatOpened(id)
       return () => setViewing(null)
     }, [id]),
   )

@@ -4,6 +4,9 @@ const path = require('path')
 const { getDefaultConfig } = require('expo/metro-config')
 
 const config = getDefaultConfig(__dirname)
+// Glofly's sounds are Ogg Opus files (the same as the desktop app's).
+if (!config.resolver.assetExts.includes('ogg')) config.resolver.assetExts.push('ogg')
+
 const sharedSrc = path.resolve(__dirname, '../../packages/shared/src')
 
 const defaultResolve = config.resolver.resolveRequest
