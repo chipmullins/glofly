@@ -46,6 +46,22 @@ import ringInFmbellsFile from '../assets/sounds/ring-in-fmbells.ogg'
 import pluckFile from '../assets/sounds/pluck.ogg'
 import fadeFile from '../assets/sounds/fade.ogg'
 import noAnswerFile from '../assets/sounds/no-answer.ogg'
+import pttFireflyDownFile from '../assets/sounds/ptt-firefly-down.ogg'
+import pttFireflyUpFile from '../assets/sounds/ptt-firefly-up.ogg'
+import pttBlinkDownFile from '../assets/sounds/ptt-blink-down.ogg'
+import pttBlinkUpFile from '../assets/sounds/ptt-blink-up.ogg'
+import pttPluckDownFile from '../assets/sounds/ptt-pluck-down.ogg'
+import pttPluckUpFile from '../assets/sounds/ptt-pluck-up.ogg'
+import pttBellDownFile from '../assets/sounds/ptt-bell-down.ogg'
+import pttBellUpFile from '../assets/sounds/ptt-bell-up.ogg'
+import pttGlassDownFile from '../assets/sounds/ptt-glass-down.ogg'
+import pttGlassUpFile from '../assets/sounds/ptt-glass-up.ogg'
+import pttRadioDownFile from '../assets/sounds/ptt-radio-down.ogg'
+import pttRadioUpFile from '../assets/sounds/ptt-radio-up.ogg'
+import pttTapDownFile from '../assets/sounds/ptt-tap-down.ogg'
+import pttTapUpFile from '../assets/sounds/ptt-tap-up.ogg'
+import pttSparkDownFile from '../assets/sounds/ptt-spark-down.ogg'
+import pttSparkUpFile from '../assets/sounds/ptt-spark-up.ogg'
 
 export type SoundName =
   | 'message' // a message arrives
@@ -307,4 +323,52 @@ export function previewSound(file: SoundFile, onEnd: () => void, volume = 1): vo
     if (preview === audio) stopPreview()
   })
   void audio.play().catch(() => stopPreview())
+}
+
+// ---------------------------------------------------------------------------------------
+// Push to talk (Settings → Voice & video): a short sound when the key goes down and a softer
+// one when you let go (tools/sounds/ptt.py). Only you hear them. They follow mute, Do not
+// disturb and the volume; decoded ahead of time so they play the instant the key moves.
+
+export type PttSound = 'firefly' | 'blink' | 'pluck' | 'bell' | 'glass' | 'radio' | 'tap' | 'spark'
+
+export const PTT_SOUNDS: Record<PttSound, { label: string; down: string; up: string }> = {
+  firefly: { label: 'Firefly', down: pttFireflyDownFile, up: pttFireflyUpFile },
+  blink: { label: 'Blink', down: pttBlinkDownFile, up: pttBlinkUpFile },
+  pluck: { label: 'Pluck', down: pttPluckDownFile, up: pttPluckUpFile },
+  bell: { label: 'Bell', down: pttBellDownFile, up: pttBellUpFile },
+  glass: { label: 'Glass', down: pttGlassDownFile, up: pttGlassUpFile },
+  radio: { label: 'Radio', down: pttRadioDownFile, up: pttRadioUpFile },
+  tap: { label: 'Tap', down: pttTapDownFile, up: pttTapUpFile },
+  spark: { label: 'Spark', down: pttSparkDownFile, up: pttSparkUpFile }
+}
+
+export const isPttSound = (v: unknown): v is PttSound => typeof v === 'string' && v in PTT_SOUNDS
+
+/** Decodes a push-to-talk pair ahead of time (when push to talk starts). */
+export function preloadPtt(name: PttSound | 'none'): void {
+  if (name === 'none') return
+  void bufferOf(PTT_SOUNDS[name].down).catch(() => {})
+  void bufferOf(PTT_SOUNDS[name].up).catch(() => {})
+}
+
+/** The push-to-talk key went down ('down') or came up ('up'). `preview` ignores mute. */
+export function playPtt(name: PttSound | 'none', which: 'down' | 'up', preview = false): void {
+  if (name === 'none') return
+  if (!preview && (!settings.enabled || (quiet && settings.dndSilence))) return
+  const volume = level(settings.volume)
+  if (volume === 0) return
+  void bufferOf(PTT_SOUNDS[name][which])
+    .then(async (buffer) => {
+      if (!audioContext) return
+      if (audioContext.state === 'suspended') await audioContext.resume().catch(() => {})
+      const gain = audioContext.createGain()
+      gain.gain.value = volume
+      gain.connect(audioContext.destination)
+      const source = audioContext.createBufferSource()
+      source.buffer = buffer
+      source.connect(gain)
+      source.start()
+    })
+    .catch(() => {})
 }

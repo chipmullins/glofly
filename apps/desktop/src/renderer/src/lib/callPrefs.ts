@@ -1,4 +1,5 @@
 import { isMac } from './platform'
+import { isPttSound, type PttSound } from './sounds'
 
 // Settings → Voice & video: which microphone, speakers and camera calls use, and how the
 // microphone is cleaned up. Saved on this computer (device ids only mean something here).
@@ -22,6 +23,8 @@ export type CallPrefs = {
   pttKey: string
   /** How that key is shown ("`", "F", "Mouse 4") */
   pttLabel: string
+  /** The sound when the key goes down / comes up (only you hear it) */
+  pttSound: PttSound | 'none'
 }
 
 const KEY = 'glofly.voiceVideo'
@@ -36,7 +39,8 @@ const DEFAULTS: CallPrefs = {
   mirrorCamera: true,
   inputMode: 'open',
   pttKey: 'key:Backquote',
-  pttLabel: '`'
+  pttLabel: '`',
+  pttSound: 'firefly'
 }
 
 let prefs: CallPrefs = load()
@@ -50,6 +54,7 @@ function load(): CallPrefs {
       if (typeof saved[k] === typeof DEFAULTS[k]) (result[k] as unknown) = saved[k]
     }
     if (result.inputMode !== 'ptt') result.inputMode = 'open'
+    if (result.pttSound !== 'none' && !isPttSound(result.pttSound)) result.pttSound = 'firefly'
     if (!isPttKey(result.pttKey)) {
       result.pttKey = DEFAULTS.pttKey
       result.pttLabel = DEFAULTS.pttLabel

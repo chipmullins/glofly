@@ -9,6 +9,7 @@ python synth_round1.py   # pairs A–C (writes .wav files here)
 python synth_round2.py   # pairs D–H + group join/leave (writes into round2/)
 python ring.py .         # 0.2.2 ringing round 1: out-1..6, in-1..6, noanswer-1..5 (loops are one cycle each)
 python ring2.py .        # 0.2.2 ringing round 2: out-7..14, in-7..12, noanswer-6..9
+python ptt.py .         # 0.2.2 push-to-talk pairs: ptt-<n>-<name>-down/-up
 python logoff.py         # log-off options (needs login.wav: ffmpeg -i ../../apps/desktop/src/renderer/src/assets/sounds/login.ogg -ac 1 -ar 48000 login.wav)
 ```
 
@@ -33,3 +34,5 @@ Convert a pick for the app: `ffmpeg -i in.wav -c:a libopus -b:a 128k out.ogg` �
 | No answer (fixed, not a setting) | no-answer.ogg | ring.py noanswer-4-dim |
 | Pluck (any short sound) | pluck.ogg | ring.py noanswer-3-pluck |
 | Fade (any short sound, meant for Log out) | fade.ogg | ring.py noanswer-1-fade |
+
+**0.2.2 push-to-talk sounds** (Oct 10, Chip kept all eight pairs). `ptt.py` writes `ptt-<n>-<name>-down.wav` (key goes down, you're live) and `-up.wav` (let go); in the app they are `ptt-<name>-down.ogg` / `ptt-<name>-up.ogg` for Firefly (default), Blink, Pluck, Bell, Glass, Radio, Tap and Spark. Picked in Settings → Voice & video (shown when Push to talk is on), plus None. They play only on your own computer.

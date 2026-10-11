@@ -7,7 +7,7 @@ import {
   setCallPrefs,
   type CallPrefs
 } from '../lib/callPrefs'
-import { SOUND_FILES } from '../lib/sounds'
+import { playPtt, PTT_SOUNDS, SOUND_FILES, type PttSound } from '../lib/sounds'
 import { Segmented, Toggle } from './SettingsDialog'
 import { isMac, privacySettingsPath } from '../lib/platform'
 
@@ -364,6 +364,13 @@ export default function VoiceVideoSettings(): React.JSX.Element {
   )
 }
 
+/** Plays a push-to-talk pair: the press, then the let-go a moment later. */
+function previewPtt(sound: PttSound | 'none'): void {
+  if (sound === 'none') return
+  playPtt(sound, 'down', true)
+  setTimeout(() => playPtt(sound, 'up', true), 650)
+}
+
 /**
  * Input mode: open mic, or push to talk with a key or mouse button you pick. The key works
  * while a game or another app is in front.
@@ -472,6 +479,45 @@ function PushToTalk({
                 }}
               >
                 {recording ? 'Cancel' : 'Change key'}
+              </button>
+            </div>
+          </div>
+        )}
+        {ptt && (
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <label className="settings-row-label" htmlFor="voice-ptt-sound">
+                Push-to-talk sound
+              </label>
+              <span className="settings-row-desc">
+                Plays when you press the key and when you let go. Only you hear it.
+              </span>
+            </div>
+            <div className="voice-inline">
+              <select
+                id="voice-ptt-sound"
+                className="settings-select"
+                value={prefs.pttSound}
+                onChange={(e) => {
+                  const pttSound = e.target.value as PttSound | 'none'
+                  onChange({ pttSound })
+                  previewPtt(pttSound)
+                }}
+              >
+                {(Object.keys(PTT_SOUNDS) as PttSound[]).map((k) => (
+                  <option key={k} value={k}>
+                    {PTT_SOUNDS[k].label}
+                  </option>
+                ))}
+                <option value="none">None</option>
+              </select>
+              <button
+                type="button"
+                className="small-button small-button--quiet"
+                disabled={prefs.pttSound === 'none'}
+                onClick={() => previewPtt(prefs.pttSound)}
+              >
+                Play
               </button>
             </div>
           </div>

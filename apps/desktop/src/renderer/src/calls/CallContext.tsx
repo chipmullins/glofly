@@ -17,7 +17,7 @@ import type {
 } from '../../../preload/api-types'
 import { chatTitle } from '../lib/groups'
 import { audioCapture, getCallPrefs, onCallPrefsChange, type CallPrefs } from '../lib/callPrefs'
-import { playNoAnswer, playSound, startLoop } from '../lib/sounds'
+import { playNoAnswer, playPtt, playSound, preloadPtt, startLoop } from '../lib/sounds'
 import { effectiveVolume, onCallAudioChange } from '../lib/callAudio'
 import { clearNotification, notify, shouldNotify } from '../lib/notify'
 import IncomingCall from '../components/IncomingCall'
@@ -820,6 +820,7 @@ export function CallProvider({
         if (wasPtt) setMic(true) // back to open mic
         return
       }
+      preloadPtt(p.pttSound)
       const status = await window.glofly.ptt.start(p.pttKey)
       if (ended || key !== p.pttKey) return
       pttLive.current = status === 'ok'
@@ -836,10 +837,13 @@ export function CallProvider({
       if (e.type !== 'ptt' || !pttLive.current) return
       if (release) clearTimeout(release)
       release = null
+      const sound = getCallPrefs().pttSound
       if (e.down) {
+        playPtt(sound, 'down')
         setMic(true)
         setPtt((x) => (x ? { ...x, held: true } : x))
       } else {
+        playPtt(sound, 'up')
         release = setTimeout(() => {
           setMic(false)
           setPtt((x) => (x ? { ...x, held: false } : x))
