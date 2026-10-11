@@ -14,6 +14,7 @@ import { SheetHost } from '@/ui/sheets'
 import { UpdateRequired } from '@/ui/UpdateRequired'
 import { restoreSession, useSession } from '@/state/session'
 import { prefs } from '@/lib/storage'
+import { loadPhonePrefs } from '@/state/prefs'
 
 void SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -31,6 +32,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     void prefs.get<ThemeChoice>('theme', 'system').then((t) => useThemeChoice.getState().set(t))
+    void loadPhonePrefs()
     void restoreSession()
   }, [])
 

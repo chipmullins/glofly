@@ -5,6 +5,10 @@ import { requireOptionalNativeModule } from 'expo-modules-core'
 // the app can be tried in a browser.
 
 type Native = {
+  notificationsEnabled(): boolean
+  openNotificationSettings(): boolean
+  canUseFullScreenIntent(): boolean
+  openFullScreenIntentSettings(): boolean
   startVoice(): Promise<void>
   voiceLevel(): number
   stopVoice(): Promise<{ uri: string; durationMs: number; mime: string; size: number } | null>
@@ -76,3 +80,10 @@ export function cancelVoice(): void {
 }
 
 export const hasNative = !!native
+
+// ---- Notifications and lock-screen calls ----
+
+export const notificationsEnabled = (): boolean => (native ? native.notificationsEnabled() : false)
+export const openNotificationSettings = (): boolean => (native ? native.openNotificationSettings() : false)
+export const canUseFullScreenIntent = (): boolean => (native ? native.canUseFullScreenIntent() : false)
+export const openFullScreenIntentSettings = (): boolean => (native ? native.openFullScreenIntentSettings() : false)

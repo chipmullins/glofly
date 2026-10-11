@@ -74,7 +74,11 @@ export function onSignOut(fn: () => void): () => void {
 
 /** Forget the session on this phone (the server side is handled by the caller, if needed). */
 export async function endSessionLocally(note: string | null = null): Promise<void> {
-  if (useSession.getState().status !== 'signedIn') return
+  if (useSession.getState().status !== 'signedIn') {
+    // Already signed out (the server closed the connection first): keep the more useful note.
+    if (note) useSession.setState({ signedOutNote: note })
+    return
+  }
   await clearSaved()
   useSession.setState({ status: 'signedOut', token: null, user: null, signedOutNote: note })
   for (const fn of signOutListeners) {

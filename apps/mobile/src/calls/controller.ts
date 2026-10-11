@@ -8,3 +8,7 @@ export async function joinCallIn(_conversationId: string, _video: boolean): Prom
 export async function startCallIn(_conversationId: string, _video: boolean): Promise<void> {
   await inform('Calls are coming soon')
 }
+
+export async function startCallWith(_userId: string, _video: boolean): Promise<void> {
+  await inform('Calls are coming soon')
+}
