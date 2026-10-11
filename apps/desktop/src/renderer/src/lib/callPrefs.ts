@@ -32,6 +32,8 @@ export type CallPrefs = {
   /** Where your own camera sits over the video: 0 = left/top edge, 1 = right/bottom edge */
   pipX: number
   pipY: number
+  /** Which defaults the saved settings were made with (2 = 0.2.3: side by side first) */
+  prefsVersion: number
 }
 
 const KEY = 'glofly.voiceVideo'
@@ -49,9 +51,10 @@ const DEFAULTS: CallPrefs = {
   pttLabel: '`',
   pttSound: 'firefly',
   callControls: 'hover',
-  duoLayout: 'frame',
+  duoLayout: 'side',
   pipX: 1,
-  pipY: 1
+  pipY: 1,
+  prefsVersion: 2
 }
 
 let prefs: CallPrefs = load()
@@ -66,7 +69,11 @@ function load(): CallPrefs {
     }
     if (result.inputMode !== 'ptt') result.inputMode = 'open'
     if (result.callControls !== 'always') result.callControls = 'hover'
-    if (result.duoLayout !== 'side') result.duoLayout = 'frame'
+    if (result.duoLayout !== 'frame') result.duoLayout = 'side'
+    // 0.2.2 started on Full frame and saved it with every other call setting, so a saved
+    // 'frame' from then is just the old default: move it to Side by side once.
+    if ((saved.prefsVersion ?? 1) < 2) result.duoLayout = 'side'
+    result.prefsVersion = 2
     for (const k of ['pipX', 'pipY'] as const) {
       if (!Number.isFinite(result[k])) result[k] = 1
       result[k] = Math.min(1, Math.max(0, result[k]))

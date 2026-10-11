@@ -136,11 +136,11 @@ function areaHeight(layout: Layout, view: CallView): string {
   if (view === 'normal') return base
   // Bigger: as tall as the window allows, leaving the chat header, a few messages and the
   // message box (full frame has its title and buttons on the video, so it needs less).
-  return `max(${base}, calc(100vh - ${layout === 'frame' ? 330 : 440}px))`
+  return `max(${base}, calc(100vh - ${layout === 'frame' ? 370 : 510}px))`
 }
 
 /** Space the rest of the window needs around a bigger grid (px). */
-const GRID_RESERVED = 470
+const GRID_RESERVED = 510
 
 /**
  * The grid for this many people: columns, rows and a tile height that follows the window. Tiles
@@ -166,8 +166,8 @@ function gridFor(
   return { cols, rows, height: `${tilePx}px`, face: bigFace, ringFace: bigFace }
 }
 
-/** Bigger or normal is remembered while Glofly is open, so switching chats keeps your choice. */
-let rememberedSize: 'normal' | 'large' = 'normal'
+/** Bigger (the default) or normal is remembered while Glofly is open, so switching chats keeps your choice. */
+let rememberedSize: 'normal' | 'large' = 'large'
 /** "Hide my camera" lasts until Glofly closes. */
 let rememberedPipHidden = false
 
@@ -1286,6 +1286,7 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         className={`call-media call-media--${layout}`}
         style={
           {
+            '--ratio': screenShape.w / screenShape.h,
             '--cols': grid.cols,
             '--rows': grid.rows,
             '--tile-h': grid.height

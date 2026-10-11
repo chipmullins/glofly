@@ -253,7 +253,10 @@
   justify-content: center;
   align-items: center;
   gap: 12px;
-  height: var(--area-h);
+  /* as tall as the tiles need, up to the area's height: no empty band above and below */
+  width: 100%;
+  aspect-ratio: 32 / 9;
+  max-height: var(--area-h);
   container-type: size;
 }
 .call-media--side > .call-tile {
@@ -279,7 +282,10 @@
   justify-content: center;
   align-items: center;
   gap: 10px;
-  height: var(--area-h);
+  /* as tall as the tiles need, up to the area's height: no empty band above and below */
+  width: 100%;
+  aspect-ratio: 2.45;
+  max-height: var(--area-h);
   container-type: size;
 }
 .call-media--pinned > .call-tile {
@@ -314,10 +320,14 @@
   justify-content: center;
   align-items: center;
   gap: 10px;
-  height: var(--area-h);
+  /* as tall as the tiles need, up to the area's height: no empty band above and below */
+  width: 100%;
+  aspect-ratio: calc(var(--ratio, 1.7778) + 0.95);
+  max-height: var(--area-h);
   container-type: size;
 }
 .call-media--screen:has(.call-beside:not(.call-beside--column)) {
+  aspect-ratio: calc(var(--ratio, 1.7778) + 1.25);
   /* a double tile and a row of two fit the height */
   --bw: clamp(170px, calc((100cqh - 16px) / 3 * 32 / 9 + 8px), 40cqw);
 }
@@ -716,6 +726,8 @@
   box-sizing: border-box;
   padding: 72px 20px 20px;
   max-height: none;
+  aspect-ratio: auto;
+  height: 100%;
 }
 .call-panel--full .call-media--grid {
   align-content: center;
@@ -1422,7 +1434,7 @@
 
 /* Bigger: the panel grows, and a few messages plus the message box stay visible below. */
 .call-panel--large ~ .chat-messages {
-  min-height: 120px;
+  min-height: min(120px, 10vh);
 }
 
 /* ---------- Floating call video (on another chat) ---------- */
