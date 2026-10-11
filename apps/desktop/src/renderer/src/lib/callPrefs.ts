@@ -116,7 +116,12 @@ export function audioCapture(p: CallPrefs = prefs): MediaTrackConstraints & { de
 // ---------------------------------------------------------------------------------------
 // Push to talk keys
 
-export const isPttKey = (v: string): boolean => /^(key:[A-Za-z0-9]{1,24}|mouse:[345])$/.test(v)
+// A function declaration (not a const) on purpose: load() runs when this file is first imported,
+// above this line, and a const isn't usable yet there. That made every load fail and fall back to
+// the defaults (0.2.1–0.2.2: Voice & video settings were forgotten when Glofly restarted).
+export function isPttKey(v: string): boolean {
+  return /^(key:[A-Za-z0-9]{1,24}|mouse:[345])$/.test(v)
+}
 
 /** Keys that would get in the way as a push-to-talk key. */
 const REFUSED = new Set(['Escape', 'Enter', 'Tab', 'Backspace', 'Delete', 'NumpadEnter'])
