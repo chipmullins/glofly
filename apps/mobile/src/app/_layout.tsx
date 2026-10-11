@@ -10,6 +10,7 @@ import { Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold } from '@expo-goog
 import * as SystemUI from 'expo-system-ui'
 import { useTheme, useThemeChoice, type ThemeChoice } from '@/ui/theme'
 import { DialogHost } from '@/ui/dialogs'
+import { SheetHost } from '@/ui/sheets'
 import { UpdateRequired } from '@/ui/UpdateRequired'
 import { restoreSession, useSession } from '@/state/session'
 import { prefs } from '@/lib/storage'
@@ -56,6 +57,7 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)" />
           </Stack.Protected>
         </Stack>
+        <SheetHost />
         <DialogHost />
         <UpdateRequired />
       </SafeAreaProvider>
