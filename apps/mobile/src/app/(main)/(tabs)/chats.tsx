@@ -1,17 +1,186 @@
-import { View } from 'react-native'
-import { Button, Text } from '@/ui/kit'
-import { useTheme } from '@/ui/theme'
+import { useMemo, useState } from 'react'
+import { FlatList, Pressable, RefreshControl, TextInput, View } from 'react-native'
+import { router } from 'expo-router'
+import { Image } from 'expo-image'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { chatTitle, dotFor, findChats, type ChatResult, type ConversationSummary } from '@glofly/shared'
+import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
-import { logout } from '@/api/auth'
+import { refreshAll } from '@/state/sync'
+import { chatSections, makeNameOf } from '@/lib/chats'
+import { chatMenu, openChat, openDmWith } from '@/lib/chatActions'
+import { statusMenu } from '@/lib/status'
+import { useNow } from '@/lib/hooks'
+import { joinCallIn } from '@/calls/controller'
+import { Avatar, ChatAvatar } from '@/ui/Avatar'
+import { ChatRow } from '@/ui/ChatRow'
+import { Banners } from '@/ui/Banners'
+import { Icon } from '@/ui/icons'
+import { SectionLabel, Spinner, Text, webNoOutline } from '@/ui/kit'
+import { Fab } from '@/ui/Fab'
+import { font, useTheme } from '@/ui/theme'
 
-// Placeholder (the chats list comes next).
-export default function Chats() {
+type Item = { type: 'label'; key: string; label: string } | { type: 'chat'; key: string; chat: ConversationSummary } | { type: 'result'; key: string; result: ChatResult }
+
+export function SearchPill({ value, onChange, placeholder }: { value: string; onChange: (s: string) => void; placeholder: string }) {
   const { c } = useTheme()
   const user = useSession((s) => s.user)
+  const myStatus = useStore((s) => s.myStatus)
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, backgroundColor: c.bg }}>
-      <Text display size={24}>Signed in as {user?.displayName}</Text>
-      <Button label="Log out" kind="secondary" onPress={() => void logout()} />
+    <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 4, paddingRight: 6, borderRadius: 28, backgroundColor: c.surface }}>
+      <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+        {value ? <Icon name="search" size={22} color={c.muted} /> : <Image source={require('../../../../assets/firefly.png')} style={{ width: 26, height: 19 }} contentFit="contain" />}
+      </View>
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={c.muted}
+        accessibilityLabel={placeholder}
+        selectionColor={c.accent}
+        autoCorrect={false}
+        style={[{ flex: 1, height: 48, color: c.ink, fontFamily: font.body, fontSize: 16 }, webNoOutline]}
+        returnKeyType="search"
+      />
+      {value ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => onChange('')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="close" size={20} color={c.muted} />
+        </Pressable>
+      ) : user ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Your status: ${myStatus?.status ?? 'online'}`}
+          onPress={() => void statusMenu()}
+          style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Avatar user={user} size={34} status={dotFor(myStatus?.status ?? 'online')} ring={c.surface} />
+        </Pressable>
+      ) : null}
     </View>
+  )
+}
+
+export default function Chats() {
+  const { c } = useTheme()
+  const insets = useSafeAreaInsets()
+  const meId = useSession((s) => s.user?.id ?? '')
+  const conversations = useStore((s) => s.conversations)
+  const people = useStore((s) => s.people)
+  const presence = useStore((s) => s.presence)
+  const typing = useStore((s) => s.typing)
+  const calls = useStore((s) => s.calls)
+  const friends = useStore((s) => s.friends.friends)
+  const connected = useStore((s) => s.connected)
+  const [query, setQuery] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const now = useNow(4000)
+  const nameOf = useMemo(() => makeNameOf(people), [people])
+  const all = useMemo(() => Object.values(conversations), [conversations])
+
+  const items: Item[] = useMemo(() => {
+    if (query.trim()) return findChats(query, all, friends).map((r) => ({ type: 'result', key: r.kind === 'group' ? r.conversation.id : r.user.id, result: r }))
+    const { pinned, chats } = chatSections(all)
+    return [
+      ...(pinned.length ? [{ type: 'label' as const, key: 'l-pinned', label: 'Pinned' }] : []),
+      ...pinned.map((chat) => ({ type: 'chat' as const, key: chat.id, chat })),
+      ...(pinned.length && chats.length ? [{ type: 'label' as const, key: 'l-chats', label: 'Chats' }] : []),
+      ...chats.map((chat) => ({ type: 'chat' as const, key: chat.id, chat })),
+    ]
+  }, [all, friends, query])
+
+  const loading = !connected && all.length === 0
+
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 }}>
+        <SearchPill value={query} onChange={setQuery} placeholder="Find a friend or chat" />
+      </View>
+      {!query ? <Banners /> : null}
+      <FlatList
+        data={items}
+        keyExtractor={(i) => i.key}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 96 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            colors={[c.accent]}
+            progressBackgroundColor={c.surface}
+            onRefresh={async () => {
+              setRefreshing(true)
+              await refreshAll()
+              setRefreshing(false)
+            }}
+          />
+        }
+        ListEmptyComponent={
+          loading ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <Spinner />
+            </View>
+          ) : query ? (
+            <Text tone="muted" style={{ textAlign: 'center', padding: 32 }}>
+              No friends or chats match “{query.trim()}”.
+            </Text>
+          ) : (
+            <View style={{ padding: 32, alignItems: 'center', gap: 10 }}>
+              <Image source={require('../../../../assets/firefly.png')} style={{ width: 64, height: 47, opacity: 0.85 }} contentFit="contain" />
+              <Text display size={20}>
+                No chats yet
+              </Text>
+              <Text tone="muted" style={{ textAlign: 'center' }}>
+                Start one with a friend, or add friends from the Friends tab.
+              </Text>
+            </View>
+          )
+        }
+        renderItem={({ item }) => {
+          if (item.type === 'label') return <SectionLabel>{item.label}</SectionLabel>
+          if (item.type === 'chat') {
+            const chat = item.chat
+            return (
+              <ChatRow
+                chat={chat}
+                meId={meId}
+                nameOf={nameOf}
+                presence={chat.kind === 'dm' ? presence[chat.partner.id] : undefined}
+                typing={typing[chat.id]}
+                call={calls[chat.id]}
+                now={now}
+                onPress={() => void openChat(chat.id)}
+                onLongPress={() => void chatMenu(chat)}
+                onJoin={() => void joinCallIn(chat.id, false)}
+              />
+            )
+          }
+          return <ResultRow result={item.result} onOpen={() => setQuery('')} />
+        }}
+      />
+      <Fab label="New chat" icon="edit" onPress={() => router.push('/new-chat')} />
+    </View>
+  )
+}
+
+function ResultRow({ result, onOpen }: { result: ChatResult; onOpen: () => void }) {
+  const { c } = useTheme()
+  const presence = useStore((s) => (result.kind === 'person' ? s.presence[result.user.id] : undefined))
+  const open = () => {
+    onOpen()
+    if (result.kind === 'group') void openChat(result.conversation.id)
+    else if (result.conversation) void openChat(result.conversation.id)
+    else void openDmWith(result.user.id)
+  }
+  return (
+    <Pressable accessibilityRole="button" onPress={open} android_ripple={{ color: c.line }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9, paddingHorizontal: 16 }}>
+      {result.kind === 'group' ? <ChatAvatar chat={result.conversation} size={48} /> : <Avatar user={result.user} size={48} status={presence?.status ?? null} />}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text size={16} weight="bold" numberOfLines={1}>
+          {result.kind === 'group' ? chatTitle(result.conversation) : result.user.displayName}
+        </Text>
+        <Text size={13} tone="muted" numberOfLines={1}>
+          {result.kind === 'group' ? `Group · ${result.conversation.memberCount} members` : `@${result.user.username}${result.conversation ? '' : ' · Start a chat'}`}
+        </Text>
+      </View>
+    </Pressable>
   )
 }

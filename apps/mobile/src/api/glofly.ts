@@ -72,6 +72,7 @@ export const muteChat = async (id: string, duration: MuteDuration | null) =>
       : await request<{ mutedUntil: string | null }>('DELETE', `/conversations/${id}/mute`),
     (d) => d?.mutedUntil ?? null,
   )
+export const orderGroups = async (ids: string[]) => none(await request('PUT', '/conversations/groups/order', { ids }))
 export const markRead = async (id: string) => none(await request('POST', `/conversations/${id}/read`))
 
 // ---- Messages ----
