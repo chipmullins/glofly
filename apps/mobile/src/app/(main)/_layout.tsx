@@ -5,6 +5,7 @@ import { startRealtime } from '@/api/realtime'
 import { startPush } from '@/push'
 import { startCalls } from '@/calls/controller'
 import { CallOverlay, WithCallStrip } from '@/calls/CallOverlay'
+import { TeamNotice } from '@/ui/TeamNotice'
 
 // Everything after signing in: the live connection, push notifications and calls start here.
 
@@ -26,6 +27,7 @@ export default function MainLayout() {
         </Stack>
       </WithCallStrip>
       <CallOverlay />
+      <TeamNotice />
     </>
   )
 }
