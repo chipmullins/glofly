@@ -153,3 +153,6 @@ vite.config.ts.timestamp-*
 
 # Desktop production addresses (public, committed)
 !apps/desktop/.env.production
+
+# Redis snapshots
+dump.rdb
