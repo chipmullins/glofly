@@ -1,3 +1,42 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+
+  <application>
+    <!-- Glofly's push messages (data-only, so they arrive even when Glofly is closed). -->
+    <service
+      android:name="com.glofly.nativebridge.GloflyMessagingService"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+      </intent-filter>
+    </service>
+
+    <!-- Reply / Mark as read / Decline / Hang up buttons on notifications. -->
+    <receiver
+      android:name="com.glofly.nativebridge.ActionReceiver"
+      android:exported="false" />
+
+    <!-- Keeps a call's microphone (and camera) going when Glofly leaves the screen. -->
+    <service
+      android:name="com.glofly.nativebridge.OngoingCallService"
+      android:exported="false"
+      android:foregroundServiceType="phoneCall|microphone|camera" />
+
+    <!-- Notifications use Glofly's own small icon and color unless a message says otherwise. -->
+    <meta-data
+      android:name="com.google.firebase.messaging.default_notification_icon"
+      android:resource="@drawable/glofly_notification" />
+    <meta-data
+      android:name="com.google.firebase.messaging.default_notification_channel_id"
+      android:value="glofly_messages" />
+  </application>
 </manifest>
