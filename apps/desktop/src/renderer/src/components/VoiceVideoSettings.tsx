@@ -343,6 +343,31 @@ export default function VoiceVideoSettings(): React.JSX.Element {
       </section>
 
       <section className="settings-section">
+        <h2>During calls</h2>
+        <div className="settings-card">
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <span className="settings-row-label">Call controls</span>
+              <span className="settings-row-desc">
+                {prefs.callControls === 'hover'
+                  ? 'In full frame and full screen, the buttons fade away until you move the mouse over the call.'
+                  : 'The buttons always show, even in full frame and full screen.'}
+              </span>
+            </div>
+            <Segmented
+              label="Call controls"
+              value={prefs.callControls}
+              options={[
+                { value: 'hover', label: 'Show when hovering' },
+                { value: 'always', label: 'Always show' }
+              ]}
+              onChange={(callControls) => change({ callControls })}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-section">
         <h2>Voice processing</h2>
         <div className="settings-card">
           {CLEANUP.map((row) => (

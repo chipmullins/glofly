@@ -16,7 +16,7 @@ import {
   type CurrentCall,
   type PttState
 } from '../calls/callState'
-import { getCallPrefs } from '../lib/callPrefs'
+import { getCallPrefs, onCallPrefsChange, setCallPrefs, type CallPrefs } from '../lib/callPrefs'
 import { isMutedForMe } from '../lib/callAudio'
 import { CallAudioPanel, PersonVolumeMenu } from './CallAudio'
 import ContextMenu, { MenuItem } from './ContextMenu'
@@ -27,13 +27,17 @@ import {
   CloseIcon,
   ExitFullscreenIcon,
   ExpandIcon,
+  FullFrameIcon,
   FullscreenIcon,
+  GridIcon,
   HangUpIcon,
   MicIcon,
   MicOffIcon,
+  MinimizeIcon,
   PhoneIcon,
   ScreenShareIcon,
   ShrinkIcon,
+  SideBySideIcon,
   SpeakerIcon,
   SpeakerOffIcon,
   SpeakingIcon,
@@ -44,26 +48,43 @@ import {
 import { isMac } from '../lib/platform'
 import './CallPanel.css'
 
-// The call, shown at the top of its chat (Calling.dc.html, GroupCall.dc.html): a tile for you
-// and everyone in or being rung for the call, a shared screen beside them when someone shares,
-// and the controls underneath. Dark in every theme.
+// The call, shown at the top of its chat. Dark in every theme. 0.2.2 layouts (the "Glofly call
+// layouts" mockups): two people in full frame (their camera fills the call, yours small and
+// draggable on top, controls on the video that hide until you move the mouse) or side by side;
+// groups in a grid, or one person pinned with everyone else in a column; a shared screen big in
+// its own shape with everyone beside it; and full screen on the whole call, one person or the
+// screen. Cameras always fill their box; screens are never cropped.
 
 /** A camera or screen, playing in a video element. */
 function TrackVideo({
   track,
   mirror = false,
-  fit = 'cover'
+  fit = 'cover',
+  onShape
 }: {
   track: VideoTrack
   mirror?: boolean
   fit?: 'cover' | 'contain'
+  /** The video's own width and height, when it starts and whenever it changes */
+  onShape?: (w: number, h: number) => void
 }): React.JSX.Element {
   const ref = useRef<HTMLVideoElement>(null)
+  const shapeRef = useRef(onShape)
+  useEffect(() => {
+    shapeRef.current = onShape
+  })
   useEffect(() => {
     const el = ref.current
     if (!el) return
     track.attach(el)
+    const report = (): void => {
+      if (el.videoWidth > 0 && el.videoHeight > 0) shapeRef.current?.(el.videoWidth, el.videoHeight)
+    }
+    el.addEventListener('loadedmetadata', report)
+    el.addEventListener('resize', report)
     return () => {
+      el.removeEventListener('loadedmetadata', report)
+      el.removeEventListener('resize', report)
       track.detach(el)
     }
   }, [track])
@@ -95,58 +116,65 @@ function videoOf(p: Participant | undefined, source: Track.Source): VideoTrack |
   return pub.videoTrack
 }
 
-/** The three ways to see a call: in the chat, bigger (message box still below), or full screen. */
+/** The three sizes of the call: in the chat, bigger (message box still below), or full screen. */
 export type CallView = 'normal' | 'large' | 'full'
 
-/** Space the rest of the window needs around the tiles, in each view (px). */
-const RESERVED: Record<'large' | 'full', number> = {
-  large: 470, // chat header + panel title/controls + a few messages + the message box
-  full: 200 // title and controls
+/**
+ * How the call area is laid out (0.2.2, the "Glofly call layouts" mockups):
+ * - frame: one person (or a screen) fills the call, your camera small on top, controls on the video
+ * - side: two people side by side
+ * - grid: everyone in a grid (groups)
+ * - pinned: one person big, everyone else in a column on the right (groups)
+ * - screen: a shared screen big, in its own shape, with everyone beside it
+ */
+type Layout = 'frame' | 'side' | 'grid' | 'pinned' | 'screen'
+
+/** Height of the call area for every layout but the grid. */
+function areaHeight(layout: Layout, view: CallView): string {
+  if (view === 'full') return '100%'
+  const base = layout === 'frame' ? 'clamp(260px, 54vh, 480px)' : 'clamp(220px, 38vh, 400px)'
+  if (view === 'normal') return base
+  // Bigger: as tall as the window allows, leaving the chat header, a few messages and the
+  // message box (full frame has its title and buttons on the video, so it needs less).
+  return `max(${base}, calc(100vh - ${layout === 'frame' ? 330 : 440}px))`
 }
 
+/** Space the rest of the window needs around a bigger grid (px). */
+const GRID_RESERVED = 470
+
 /**
- * How the tiles are laid out for this many people: columns, and a tile height that follows the
- * window. Tiles keep a 16:9 shape (centered), so a wide window doesn't stretch them.
+ * The grid for this many people: columns, rows and a tile height that follows the window. Tiles
+ * share the width; cameras fill them.
  */
 function gridFor(
   count: number,
-  view: CallView = 'normal',
-  windowHeight: number = window.innerHeight
-): { cols: number; height: string; face: number; ringFace: number } {
+  view: CallView,
+  windowHeight: number
+): { cols: number; rows: number; height: string; face: number; ringFace: number } {
   const cols = count <= 2 ? Math.max(count, 1) : count <= 4 ? 2 : count <= 9 ? 3 : 4
-  // Normal view: [smallest, share of the window height, largest] tile height, and photo sizes.
-  const [min, vh, max, face, ringFace] =
-    count <= 2
-      ? [170, 32, 300, 96, 112]
-      : count <= 4
-        ? [120, 21, 220, 76, 76]
-        : count <= 9
-          ? [100, 18, 200, 64, 64]
-          : [84, 13, 150, 48, 48]
-  if (view === 'normal')
-    return { cols, height: `clamp(${min}px, ${vh}vh, ${max}px)`, face, ringFace }
-  // Bigger views: as many rows as needed (up to three; more scroll) share the free height, never
-  // smaller than the normal view (on a short window they match it). Photos grow with the tiles.
+  const rows = Math.ceil(count / cols)
+  const [min, vh, max, face] =
+    count <= 4 ? [130, 22, 210, 76] : count <= 9 ? [100, 18, 180, 64] : [84, 13, 140, 48]
   const normalPx = Math.min(Math.max(min, (windowHeight * vh) / 100), max)
-  const rows = Math.min(Math.ceil(count / cols), 3)
-  const freePx = (windowHeight - RESERVED[view]) / rows - ((rows - 1) * 16) / rows
+  if (view === 'normal') return { cols, rows, height: `${normalPx}px`, face, ringFace: face }
+  // Bigger and full screen: up to three rows share the free height (more scroll).
+  const shown = Math.min(rows, 3)
+  const reserved = view === 'full' ? 32 : GRID_RESERVED
+  const freePx = (windowHeight - reserved - (shown - 1) * 10) / shown
   const tilePx = Math.round(Math.max(normalPx, freePx))
-  const bigFace = Math.max(face, Math.min(count <= 2 ? 136 : 112, Math.round(tilePx * 0.45)))
-  return { cols, height: `${tilePx}px`, face: bigFace, ringFace: Math.max(ringFace, bigFace) }
-}
-
-/** Height of a shared screen in each view. */
-function stageHeight(view: CallView): string {
-  return view === 'normal'
-    ? 'clamp(220px, 44vh, 480px)'
-    : `max(clamp(220px, 44vh, 480px), calc(100vh - ${RESERVED[view]}px))`
+  const bigFace = Math.max(face, Math.min(112, Math.round(tilePx * 0.4)))
+  return { cols, rows, height: `${tilePx}px`, face: bigFace, ringFace: bigFace }
 }
 
 /** Bigger or normal is remembered while Glofly is open, so switching chats keeps your choice. */
 let rememberedSize: 'normal' | 'large' = 'normal'
+/** "Hide my camera" lasts until Glofly closes. */
+let rememberedPipHidden = false
 
 type TileInfo = {
   person: PublicUser
+  /** You */
+  me?: boolean
   /** Someone else (right-click for their volume) */
   remote?: boolean
   /** You muted them for yourself (the call's Audio button) */
@@ -160,12 +188,15 @@ type TileInfo = {
   status: string | null
 }
 
-type TileView = {
-  pinned: boolean
+/** The hover buttons in a tile's corner. */
+type TileActions = {
+  /** Groups: pin this person (they fill most of the call) */
+  pin?: { pinned: boolean; onPin: () => void }
+  /** Two people side by side: switch to full frame */
+  onFrame?: () => void
+  /** Full screen this person (or back) */
   full: boolean
-  onPin: () => void
   onFull: () => void
-  register: (el: HTMLDivElement | null) => void
 }
 
 function Tile({
@@ -173,27 +204,30 @@ function Tile({
   face,
   ringFace,
   onMenu,
-  view
+  actions,
+  className
 }: {
   tile: TileInfo
   face: number
   ringFace: number
-  /** Right-click: pin, full screen, and (others) their volume */
+  /** Right-click: view options, and (others) their volume */
   onMenu?: (x: number, y: number) => void
-  /** The hover buttons: pin / unpin and full screen (null = none, e.g. while ringing) */
-  view?: TileView | null
+  actions?: TileActions | null
+  className?: string
 }): React.JSX.Element {
-  const { person, label, camera, mirror, muted, speaking, ringing, status, mutedForMe } = tile
+  const { person, label, camera, mirror, speaking, ringing, status } = tile
   return (
     <div
-      ref={view?.register}
       className={[
         'call-tile',
+        tile.me && 'call-tile--me',
         speaking && 'call-tile--speaking',
-        view?.pinned && 'call-tile--pinned'
+        actions?.pin?.pinned && 'call-tile--pinned',
+        className
       ]
         .filter(Boolean)
         .join(' ')}
+      data-full={ringing ? undefined : person.id}
       title={
         onMenu
           ? tile.remote
@@ -237,49 +271,288 @@ function Tile({
           )}
         </div>
       )}
-      <span className="call-tag">
-        {mutedForMe && (
-          <span className="call-tag-muted" title="Muted for you">
-            <SpeakerOffIcon />
-          </span>
-        )}
-        {muted && (
-          <span className="call-tag-muted" title="Muted">
-            <MicOffIcon size={14} strokeWidth={2.2} />
-          </span>
-        )}
-        {speaking && !muted && (
-          <span className="call-tag-speaking">
-            <SpeakingIcon />
-          </span>
-        )}
-        {label}
-      </span>
-      {view && (
+      <TileTag tile={tile} />
+      {actions && (
         <span className="call-tile-actions">
+          {actions.onFrame && (
+            <button
+              type="button"
+              className="call-tile-action"
+              aria-label={`Full frame ${label}`}
+              title="Full frame"
+              onClick={actions.onFrame}
+            >
+              <FullFrameIcon size={16} />
+            </button>
+          )}
+          {actions.pin && (
+            <button
+              type="button"
+              className="call-tile-action"
+              aria-label={actions.pin.pinned ? `Unpin ${label}` : `Pin ${label}`}
+              title={actions.pin.pinned ? 'Unpin' : 'Pin (make them big)'}
+              aria-pressed={actions.pin.pinned}
+              onClick={actions.pin.onPin}
+            >
+              <PinIcon size={16} />
+            </button>
+          )}
           <button
             type="button"
             className="call-tile-action"
-            aria-label={view.pinned ? `Unpin ${label}` : `Pin ${label}`}
-            title={view.pinned ? 'Unpin' : 'Pin (fill the call)'}
-            aria-pressed={view.pinned}
-            onClick={view.onPin}
+            aria-label={actions.full ? 'Exit full screen' : `Full screen ${label}`}
+            title={actions.full ? 'Exit full screen (Esc)' : 'Full screen'}
+            onClick={actions.onFull}
           >
-            <PinIcon size={16} />
-          </button>
-          <button
-            type="button"
-            className="call-tile-action"
-            aria-label={view.full ? 'Exit full screen' : `Full screen ${label}`}
-            title={view.full ? 'Exit full screen (Esc)' : 'Full screen'}
-            onClick={view.onFull}
-          >
-            {view.full ? <ExitFullscreenIcon size={16} /> : <FullscreenIcon size={16} />}
+            {actions.full ? <ExitFullscreenIcon size={16} /> : <FullscreenIcon size={16} />}
           </button>
         </span>
       )}
     </div>
   )
+}
+
+/** The name tag in a tile's corner, with the muted / talking icons. */
+function TileTag({ tile }: { tile: TileInfo }): React.JSX.Element {
+  const { muted, speaking, mutedForMe, label } = tile
+  return (
+    <span className="call-tag">
+      {mutedForMe && (
+        <span className="call-tag-muted" title="Muted for you">
+          <SpeakerOffIcon />
+        </span>
+      )}
+      {muted && (
+        <span className="call-tag-muted" title="Muted">
+          <MicOffIcon size={14} strokeWidth={2.2} />
+        </span>
+      )}
+      {speaking && !muted && (
+        <span className="call-tag-speaking">
+          <SpeakingIcon />
+        </span>
+      )}
+      {label}
+    </span>
+  )
+}
+
+/** A corner is "near" when a drop lands within this share of the free space from its edges. */
+const SNAP = 0.18
+
+/**
+ * Your own camera, small on top of the video (full frame and full screen). Drag it anywhere; it
+ * snaps into a corner when dropped near one, and the spot is remembered on this computer.
+ * Double-click puts it back bottom-right. The − button shrinks it to a "You" chip.
+ */
+function SelfPip({
+  tile,
+  x,
+  y,
+  hidden,
+  onMove,
+  onDrop,
+  onHide,
+  onShow
+}: {
+  tile: TileInfo
+  x: number
+  y: number
+  hidden: boolean
+  /** While dragging (0..1 across the free space) */
+  onMove: (x: number, y: number) => void
+  /** Dropped (after snapping), or double-clicked back to the corner */
+  onDrop: (x: number, y: number) => void
+  onHide: () => void
+  onShow: () => void
+}): React.JSX.Element {
+  const drag = useRef<{
+    dx: number
+    dy: number
+    startX: number
+    startY: number
+    moved: boolean
+    x: number
+    y: number
+  } | null>(null)
+  const [dragging, setDragging] = useState(false)
+
+  /** Where the box would be (0..1) with its top-left corner at this point on screen. */
+  const fractionAt = (el: HTMLElement, left: number, top: number): { x: number; y: number } => {
+    const area = el.offsetParent as HTMLElement | null
+    if (!area) return { x, y }
+    const rect = area.getBoundingClientRect()
+    const css = getComputedStyle(el)
+    const m = parseFloat(css.getPropertyValue('--pip-m')) || 0
+    const mt = parseFloat(css.getPropertyValue('--pip-mt')) || 0
+    const mb = parseFloat(css.getPropertyValue('--pip-mb')) || 0
+    const freeW = rect.width - el.offsetWidth - 2 * m
+    const freeH = rect.height - el.offsetHeight - mt - mb
+    const clamp = (v: number): number => Math.min(1, Math.max(0, v))
+    return {
+      x: freeW > 0 ? clamp((left - rect.left - m) / freeW) : 1,
+      y: freeH > 0 ? clamp((top - rect.top - mt) / freeH) : 1
+    }
+  }
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button')) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    drag.current = {
+      dx: e.clientX - rect.left,
+      dy: e.clientY - rect.top,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      x,
+      y
+    }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const d = drag.current
+    if (!d) return
+    if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 4) return
+    if (!d.moved) setDragging(true)
+    d.moved = true
+    const f = fractionAt(e.currentTarget, e.clientX - d.dx, e.clientY - d.dy)
+    d.x = f.x
+    d.y = f.y
+    onMove(f.x, f.y)
+  }
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const d = drag.current
+    drag.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    if (!d?.moved) return
+    setDragging(false)
+    const nearX = d.x < SNAP || d.x > 1 - SNAP
+    const nearY = d.y < SNAP || d.y > 1 - SNAP
+    if (nearX && nearY) onDrop(Math.round(d.x), Math.round(d.y))
+    else onDrop(d.x, d.y)
+  }
+
+  const style = { '--px': x, '--py': y } as React.CSSProperties
+  if (hidden) {
+    return (
+      <div className="call-pip call-pip--chip" style={style}>
+        <button
+          type="button"
+          className="call-pip-show"
+          aria-label="Show your camera"
+          title="Show your camera"
+          onClick={onShow}
+        >
+          {tile.muted ? <MicOffIcon size={14} strokeWidth={2.2} /> : <VideoIcon size={14} />}
+          You
+        </button>
+      </div>
+    )
+  }
+  return (
+    <div
+      className={[
+        'call-pip',
+        dragging && 'call-pip--dragging',
+        tile.speaking && 'call-pip--speaking'
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      style={style}
+      title="Drag to move · double-click to put it back in the corner"
+      data-self-pip=""
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => {
+        drag.current = null
+        setDragging(false)
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        if ((e.target as HTMLElement).closest('button')) return
+        onDrop(1, 1)
+      }}
+    >
+      {tile.camera ? (
+        <TrackVideo track={tile.camera} mirror={tile.mirror} />
+      ) : (
+        <div className="call-pip-face">
+          <Avatar
+            id={tile.person.id}
+            name={tile.person.displayName}
+            avatarVersion={tile.person.avatarVersion}
+            size={44}
+          />
+        </div>
+      )}
+      <TileTag tile={tile} />
+      <button
+        type="button"
+        className="call-pip-hide"
+        aria-label="Hide your camera (they still see you)"
+        title="Hide (they still see you)"
+        onClick={onHide}
+      >
+        <MinimizeIcon size={14} />
+      </button>
+    </div>
+  )
+}
+
+/** How long the call's title and buttons stay after the mouse stops (full frame, full screen). */
+const HIDE_AFTER = 3000
+/** …and at the start of a call, or when full frame / full screen begins. */
+const FIRST_SHOW = 5000
+
+/**
+ * Full frame and full screen: the title and buttons fade away a few seconds after the mouse stops
+ * moving over the call, and come back when it moves. `wake` brings them back for a moment.
+ */
+function useAutoHide(
+  enabled: boolean,
+  panelRef: React.RefObject<HTMLElement | null>
+): { idle: boolean; wake: (ms?: number) => void } {
+  const [idle, setIdle] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const enabledRef = useRef(enabled)
+  const wake = useCallback((ms: number = HIDE_AFTER) => {
+    clearTimeout(timer.current)
+    setIdle(false)
+    if (enabledRef.current) timer.current = setTimeout(() => setIdle(true), ms)
+  }, [])
+  useEffect(() => {
+    enabledRef.current = enabled
+    if (!enabled) return
+    const el = panelRef.current
+    timer.current = setTimeout(() => setIdle(true), FIRST_SHOW)
+    const onMove = (): void => wake()
+    // Keys only count in full screen (typing a message under the call shouldn't wake it).
+    const onKey = (): void => {
+      if (el && document.fullscreenElement === el) wake()
+    }
+    el?.addEventListener('mousemove', onMove)
+    el?.addEventListener('mousedown', onMove)
+    el?.addEventListener('wheel', onMove, { passive: true })
+    document.addEventListener('keydown', onKey)
+    return () => {
+      clearTimeout(timer.current)
+      el?.removeEventListener('mousemove', onMove)
+      el?.removeEventListener('mousedown', onMove)
+      el?.removeEventListener('wheel', onMove)
+      document.removeEventListener('keydown', onKey)
+      setIdle(false)
+    }
+  }, [enabled, panelRef, wake])
+  return { idle: enabled && idle, wake }
+}
+
+/** The settings this panel follows, kept up to date while it's open. */
+function useCallPrefsLive(): CallPrefs {
+  const [prefs, setPrefs] = useState(getCallPrefs)
+  useEffect(() => onCallPrefsChange(setPrefs), [])
+  return prefs
 }
 
 /** Pick a screen or window to share (with pictures, like the system picker). */
@@ -526,42 +799,34 @@ function titleOf(c: CurrentCall): { text: string; sub: string | null; timerSince
     timerSince: call.answeredAt
   }
 }
-
 export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Element | null {
   const calls = useCalls()
   const { current, room } = calls
+  const prefs = useCallPrefsLive()
   const [picking, setPicking] = useState(false)
   const [adding, setAdding] = useState(false)
   /** The Audio button's panel, and right-clicking someone's tile */
   const [audioOpen, setAudioOpen] = useState(false)
   /** Right-click on a tile (a person) or on the shared screen */
   const [menuAt, setMenuAt] = useState<MenuAt | null>(null)
-  /** Pinned: one person, or the shared screen, fills the call; everyone else in a strip */
+  /** Pinned: one person big with everyone else in a column (groups), or the screen filling the call */
   const [focus, setFocus] = useState<{ kind: 'person'; id: string } | { kind: 'screen' } | null>(
     null
   )
-  /** Which tile (person id) or 'screen' is full screen on its own */
-  const [fullOne, setFullOne] = useState<string | null>(null)
-  const stageRef = useRef<HTMLDivElement>(null)
-  const tileEls = useRef(new Map<string, HTMLDivElement>())
-  const registerTile = useCallback((id: string, el: HTMLDivElement | null) => {
-    if (el) tileEls.current.set(id, el)
-    else tileEls.current.delete(id)
-  }, [])
-  /** One person's tile (or the shared screen) full screen on its own, or back. */
-  const toggleFullOne = useCallback((id: string): void => {
-    const el = id === 'screen' ? stageRef.current : tileEls.current.get(id)
-    if (!el) return
-    if (document.fullscreenElement === el) void document.exitFullscreen().catch(() => {})
-    else void el.requestFullscreen().catch(() => {})
-  }, [])
   const panelRef = useRef<HTMLElement>(null)
   const [size, setSizeState] = useState<'normal' | 'large'>(rememberedSize)
   const [full, setFull] = useState(false)
-  /** Full screen: the title and controls fade away after a few seconds without the mouse moving. */
-  const [idle, setIdle] = useState(false)
-  /** The bigger views size their tiles from the window height. */
+  /** Full screen on one person ('person id') or the shared screen ('screen'); null = the whole call */
+  const [fullTarget, setFullTarget] = useState<string | null>(null)
+  /** Your camera's spot over the video, while it's being dragged (saved when dropped) */
+  const [pip, setPip] = useState(() => ({ x: prefs.pipX, y: prefs.pipY }))
+  const [pipHidden, setPipHiddenState] = useState(rememberedPipHidden)
+  /** Keyboard focus is on the call's buttons: they stay showing */
+  const [keyboardIn, setKeyboardIn] = useState(false)
+  /** The bigger views size the grid from the window height. */
   const [windowHeight, setWindowHeight] = useState(() => window.innerHeight)
+  /** A shared screen's shape, so its box fits it exactly */
+  const [screenShape, setScreenShape] = useState({ w: 16, h: 9 })
   useEffect(() => {
     const onResize = (): void => setWindowHeight(window.innerHeight)
     window.addEventListener('resize', onResize)
@@ -572,40 +837,21 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
     rememberedSize = next
     setSizeState(next)
   }
+  const setPipHidden = (hidden: boolean): void => {
+    rememberedPipHidden = hidden
+    setPipHiddenState(hidden)
+  }
 
   // Follow full screen however it ends (the button, Escape, or Windows).
   useEffect(() => {
     const onChange = (): void => {
-      setIdle(false)
-      const el = document.fullscreenElement
-      setFull(!!panelRef.current && el === panelRef.current)
-      let one: string | null = el && el === stageRef.current ? 'screen' : null
-      for (const [id, tile] of tileEls.current) if (el === tile) one = id
-      setFullOne(one)
+      const isFull = !!panelRef.current && document.fullscreenElement === panelRef.current
+      setFull(isFull)
+      if (!isFull) setFullTarget(null)
     }
     document.addEventListener('fullscreenchange', onChange)
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
-
-  useEffect(() => {
-    if (!full) return
-    let timer = setTimeout(() => setIdle(true), 3000)
-    const wake = (): void => {
-      setIdle(false)
-      clearTimeout(timer)
-      timer = setTimeout(() => setIdle(true), 3000)
-    }
-    const el = panelRef.current
-    el?.addEventListener('mousemove', wake)
-    el?.addEventListener('mousedown', wake)
-    document.addEventListener('keydown', wake)
-    return () => {
-      clearTimeout(timer)
-      el?.removeEventListener('mousemove', wake)
-      el?.removeEventListener('mousedown', wake)
-      document.removeEventListener('keydown', wake)
-    }
-  }, [full])
 
   // The call ending (or leaving its chat) takes the window out of full screen.
   useEffect(() => {
@@ -615,36 +861,36 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
     }
   }, [current?.conversationId])
 
-  const toggleFull = (): void => {
+  /** Full screen: the whole call (null), one person, or the shared screen. */
+  const enterFull = useCallback((target: string | null): void => {
+    setFullTarget(target)
     const el = panelRef.current
-    if (!el) return
+    if (el && document.fullscreenElement !== el) void el.requestFullscreen().catch(() => {})
+  }, [])
+  const exitFull = (): void => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
-    else void el.requestFullscreen().catch(() => {})
   }
 
-  if (!current) return null
-  const view: CallView = full ? 'full' : size
-
-  const call = current.call
-  const group = current.chat.kind === 'group'
+  // ---- what's in the call ----
+  const call = current?.call ?? null
+  const group = current?.chat.kind === 'group'
   const local = room?.localParticipant
   const ready = !!room && room.state === 'connected'
   const micOn = local?.isMicrophoneEnabled ?? false
   const cameraOn = local?.isCameraEnabled ?? false
   const sharing = local?.isScreenShareEnabled ?? false
   const waiting = !call || call.status === 'ringing'
-  const title = titleOf(current)
 
   // Everyone else to show: in the room, joined (still connecting), or being rung.
   const others: TileInfo[] = []
-  for (const person of current.chat.people) {
+  for (const person of current?.chat.people ?? []) {
     const remote = room?.remoteParticipants.get(person.id)
     const state = call ? memberState(call, person.id) : 'ringing'
     const ringing = !remote && (state === 'ringing' || (!group && waiting))
     if (group && !remote && !ringing && state !== 'joined') continue
     let status: string | null = null
     if (ringing) status = 'Ringing…'
-    else if (!remote && current.partnerAway) status = 'Their connection dropped. Waiting for them…'
+    else if (!remote && current?.partnerAway) status = 'Their connection dropped. Waiting for them…'
     else if (!remote) status = 'Connecting…'
     others.push({
       person,
@@ -660,105 +906,271 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   }
   // People who are here first, then whoever's still being rung.
   others.sort((a, b) => Number(a.ringing) - Number(b.ringing))
-
-  const tiles: TileInfo[] = [
-    {
-      person: me,
-      label: 'You',
-      camera: videoOf(local, Track.Source.Camera),
-      mirror: getCallPrefs().mirrorCamera,
-      muted: ready && !micOn,
-      speaking: !!local?.isSpeaking,
-      ringing: false,
-      status: null
-    },
-    ...others
-  ]
+  const mine: TileInfo = {
+    person: me,
+    me: true,
+    label: 'You',
+    camera: videoOf(local, Track.Source.Camera),
+    mirror: prefs.mirrorCamera,
+    muted: ready && !micOn,
+    speaking: !!local?.isSpeaking,
+    ringing: false,
+    status: null
+  }
+  const tiles: TileInfo[] = [mine, ...others]
 
   // A shared screen: someone else's first (one shows at a time), otherwise yours.
   let screen: VideoTrack | null = null
   let screenLabel = ''
+  let sharerId: string | null = null
   for (const p of room?.remoteParticipants.values() ?? []) {
     const track = videoOf(p, Track.Source.ScreenShare)
     if (track) {
       screen = track
-      const person = current.chat.people.find((x) => x.id === p.identity)
+      sharerId = p.identity
+      const person = current?.chat.people.find((x) => x.id === p.identity)
       screenLabel = person ? `${firstName(person)}'s screen` : 'Shared screen'
       break
     }
   }
-  const sharedByOther = !!screen
   if (!screen) {
     screen = videoOf(local, Track.Source.ScreenShare)
     screenLabel = 'Your screen'
+    if (screen) sharerId = me.id
   }
 
-  const grid = gridFor(tiles.length, view, windowHeight)
+  // ---- the layout ----
+  const duo = tiles.length === 2
+  const live = (id: string): TileInfo | undefined =>
+    tiles.find((t) => t.person.id === id && !t.ringing)
+  const targetTile = full && fullTarget && fullTarget !== 'screen' ? live(fullTarget) : undefined
+  const targetScreen = full && fullTarget === 'screen' && !!screen
+  const pinnedTile = !duo && focus?.kind === 'person' ? live(focus.id) : undefined
+  const screenFill = focus?.kind === 'screen' && !!screen
+  let layout: Layout
+  /** Full frame: who (or what) fills the call */
+  let main: TileInfo | 'screen' | null = null
+  if (targetScreen) {
+    layout = 'frame'
+    main = 'screen'
+  } else if (targetTile) {
+    layout = 'frame'
+    main = targetTile
+  } else if (screenFill) {
+    layout = 'frame'
+    main = 'screen'
+  } else if (pinnedTile) {
+    layout = 'pinned'
+  } else if (screen) {
+    layout = 'screen'
+  } else if (duo) {
+    layout = prefs.duoLayout
+    if (layout === 'frame') main = others[0]
+  } else {
+    layout = 'grid'
+  }
+  const view: CallView = full ? 'full' : size
+  const overlay = layout === 'frame' || full
+  const autoHide = overlay && prefs.callControls === 'hover'
+  const { idle, wake } = useAutoHide(autoHide, panelRef)
+  const hold = audioOpen || !!menuAt || picking || adding || keyboardIn
+  const hidden = idle && !hold
+
+  // The buttons come back for a moment when something changes: you're muted or unmuted (not by
+  // push to talk), your camera, or the connection.
+  const pttOn = !!calls.ptt
+  const micWake = pttOn ? null : micOn
+  const phase = current?.phase
+  const firstWake = useRef(true)
+  useEffect(() => {
+    if (firstWake.current) {
+      firstWake.current = false
+      return
+    }
+    const t = setTimeout(() => wake(), 0)
+    return () => clearTimeout(t)
+  }, [micWake, cameraOn, phase, wake])
+  // …and stay a few seconds after a menu or the Audio panel closes.
+  useEffect(() => {
+    if (hold) return
+    const t = setTimeout(() => wake(), 0)
+    return () => clearTimeout(t)
+  }, [hold, wake])
+
+  if (!current) return null
+  const title = titleOf(current)
   const canAdd =
     group &&
     ready &&
     !!call &&
     current.chat.people.some((p) => memberState(call, p.id) !== 'joined')
 
-  // Pinning (from a tile's hover buttons or its right-click menu). A pin on someone who's
-  // gone, or on a screen that stopped, is simply ignored.
-  const pinnedTile =
-    focus?.kind === 'person' ? tiles.find((t) => t.person.id === focus.id && !t.ringing) : undefined
-  const screenFill = focus?.kind === 'screen' && !!screen
-  const spotlight = !!pinnedTile || screenFill
-  const viewFor = (t: TileInfo): TileView | null =>
+  // ---- view actions (hover buttons and right-click menus) ----
+  const isFullOn = (id: string): boolean =>
+    full && (fullTarget === id || (id !== 'screen' && main !== 'screen' && main?.person.id === id))
+  const toggleFullOn = (id: string): void => (isFullOn(id) ? exitFull() : enterFull(id))
+  const setDuoLayout = (duoLayout: 'frame' | 'side'): void => {
+    setCallPrefs({ duoLayout })
+  }
+  const actionsFor = (t: TileInfo): TileActions | null =>
     t.ringing
       ? null
       : {
-          pinned: t === pinnedTile,
-          full: fullOne === t.person.id,
-          onPin: () => setFocus(t === pinnedTile ? null : { kind: 'person', id: t.person.id }),
-          onFull: () => toggleFullOne(t.person.id),
-          register: (el: HTMLDivElement | null) => registerTile(t.person.id, el)
+          pin: duo
+            ? undefined
+            : {
+                pinned: t === pinnedTile,
+                onPin: () => setFocus(t === pinnedTile ? null : { kind: 'person', id: t.person.id })
+              },
+          onFrame: duo && layout === 'side' && !t.me ? () => setDuoLayout('frame') : undefined,
+          full: isFullOn(t.person.id),
+          onFull: () => toggleFullOn(t.person.id)
         }
   const menuFor = (t: TileInfo): ((x: number, y: number) => void) | undefined =>
     t.ringing
       ? undefined
       : (x: number, y: number) =>
           setMenuAt({ kind: 'person', person: t.person, remote: !!t.remote, x, y })
-  const screenStage = (track: VideoTrack): React.JSX.Element => (
-    <div
-      className="call-stage"
-      ref={stageRef}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        setMenuAt({ kind: 'screen', x: e.clientX, y: e.clientY })
-      }}
-    >
-      <TrackVideo track={track} fit="contain" />
-      <span className="call-tag">{screenLabel}</span>
-      <span className="call-tile-actions call-tile-actions--stage">
-        <button
-          type="button"
-          className="call-tile-action"
-          aria-label={
-            screenFill ? 'Show everyone beside the screen' : 'Make the screen fill the call'
-          }
-          title={screenFill ? 'Show everyone beside it' : 'Fill the call'}
-          aria-pressed={screenFill}
-          onClick={() => setFocus(screenFill ? null : { kind: 'screen' })}
-        >
-          <PinIcon size={16} />
-        </button>
-        {(sharedByOther || screenFill) && (
-          <button
-            type="button"
-            className="call-tile-action"
-            aria-label={fullOne === 'screen' ? 'Exit full screen' : 'Full screen'}
-            title={fullOne === 'screen' ? 'Exit full screen (Esc)' : 'Full screen'}
-            onClick={() => toggleFullOne('screen')}
-          >
-            {fullOne === 'screen' ? <ExitFullscreenIcon size={16} /> : <FullscreenIcon size={16} />}
-          </button>
-        )}
-      </span>
-    </div>
+
+  const tileEl = (
+    t: TileInfo,
+    face: number,
+    className?: string,
+    withActions = true
+  ): React.JSX.Element => (
+    <Tile
+      key={t.person.id}
+      tile={t}
+      face={face}
+      ringFace={face}
+      onMenu={menuFor(t)}
+      actions={withActions ? actionsFor(t) : null}
+      className={className}
+    />
   )
+
+  const screenBox = (fill: boolean): React.JSX.Element | null =>
+    screen && (
+      <div
+        className={fill ? 'call-stage call-stage--fill' : 'call-stage'}
+        data-full="screen"
+        style={
+          fill
+            ? undefined
+            : ({
+                '--shape': `${screenShape.w} / ${screenShape.h}`,
+                '--ratio': screenShape.w / screenShape.h
+              } as React.CSSProperties)
+        }
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setMenuAt({ kind: 'screen', x: e.clientX, y: e.clientY })
+        }}
+      >
+        <TrackVideo
+          track={screen}
+          fit="contain"
+          onShape={(w, h) => setScreenShape((s) => (s.w === w && s.h === h ? s : { w, h }))}
+        />
+        <span className="call-tag">{screenLabel}</span>
+        {!targetScreen && (
+          <span className="call-tile-actions">
+            <button
+              type="button"
+              className="call-tile-action"
+              aria-label={
+                screenFill ? 'Show everyone beside the screen' : 'Make the screen fill the call'
+              }
+              title={screenFill ? 'Show everyone beside it' : 'Fill the call'}
+              aria-pressed={screenFill}
+              onClick={() => setFocus(screenFill ? null : { kind: 'screen' })}
+            >
+              <PinIcon size={16} />
+            </button>
+            <button
+              type="button"
+              className="call-tile-action"
+              aria-label={isFullOn('screen') ? 'Exit full screen' : `Full screen ${screenLabel}`}
+              title={isFullOn('screen') ? 'Exit full screen (Esc)' : 'Full screen'}
+              onClick={() => toggleFullOn('screen')}
+            >
+              {isFullOn('screen') ? <ExitFullscreenIcon size={16} /> : <FullscreenIcon size={16} />}
+            </button>
+          </span>
+        )}
+      </div>
+    )
+
+  const grid = gridFor(tiles.length, view, windowHeight)
+  let media: React.ReactNode
+  if (layout === 'frame') {
+    media = (
+      <>
+        {main === 'screen' ? screenBox(true) : main && tileEl(main, 136, 'call-tile--main', false)}
+        {(main === 'screen' || !main?.me) && (
+          <SelfPip
+            tile={mine}
+            x={pip.x}
+            y={pip.y}
+            hidden={pipHidden}
+            onMove={(x, y) => setPip({ x, y })}
+            onDrop={(x, y) => {
+              setPip({ x, y })
+              setCallPrefs({ pipX: x, pipY: y })
+            }}
+            onHide={() => setPipHidden(true)}
+            onShow={() => setPipHidden(false)}
+          />
+        )}
+      </>
+    )
+  } else if (layout === 'side') {
+    // Them on the left, you on the right
+    media = [...others, mine].map((t) => tileEl(t, view === 'normal' ? 96 : 136))
+  } else if (layout === 'grid') {
+    media = tiles.map((t) => tileEl(t, grid.face))
+  } else if (layout === 'pinned' && pinnedTile) {
+    media = (
+      <>
+        {tileEl(pinnedTile, 112, 'call-tile--big')}
+        <div className="call-column">
+          {tiles.filter((t) => t !== pinnedTile).map((t) => tileEl(t, 44, 'call-tile--small'))}
+          {screen && (
+            <button
+              type="button"
+              className="call-tile call-tile--small call-tile--screen-thumb"
+              aria-label={`Show ${screenLabel} big`}
+              title="Show the shared screen"
+              onClick={() => setFocus(null)}
+            >
+              <TrackVideo track={screen} fit="contain" />
+              <span className="call-tag">{screenLabel}</span>
+            </button>
+          )}
+        </div>
+      </>
+    )
+  } else {
+    // A shared screen: big, in its own shape, with everyone beside it (who's sharing first).
+    const beside = [...tiles].sort(
+      (a, b) => Number(b.person.id === sharerId) - Number(a.person.id === sharerId)
+    )
+    const two = beside.length <= 2
+    media = (
+      <>
+        {screenBox(false)}
+        <div
+          className={two ? 'call-beside call-beside--column' : 'call-beside'}
+          data-odd={!two && beside.length % 2 === 1 ? '' : undefined}
+        >
+          {beside.map((t) => tileEl(t, two ? 64 : 40, 'call-tile--small'))}
+        </div>
+      </>
+    )
+  }
+
+  const pinnedName =
+    layout === 'pinned' && pinnedTile ? pinnedTile.label : screenFill && !full ? screenLabel : null
 
   return (
     <section
@@ -767,36 +1179,18 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         'call-panel',
         view === 'large' && 'call-panel--large',
         full && 'call-panel--full',
-        full && idle && 'call-panel--idle'
+        overlay && 'call-panel--overlay',
+        hidden && 'call-panel--hidden'
       ]
         .filter(Boolean)
         .join(' ')}
       aria-label="Call"
+      onFocus={(e) => {
+        if ((e.target as HTMLElement).matches(':focus-visible')) setKeyboardIn(true)
+      }}
+      onBlur={() => setKeyboardIn(false)}
     >
-      <div className="call-view-buttons">
-        {!full && (
-          <button
-            type="button"
-            className="call-view-button"
-            aria-label={size === 'large' ? 'Make the call smaller' : 'Make the call bigger'}
-            title={size === 'large' ? 'Smaller' : 'Bigger'}
-            onClick={() => setSize(size === 'large' ? 'normal' : 'large')}
-          >
-            {size === 'large' ? <ShrinkIcon size={18} /> : <ExpandIcon size={18} />}
-          </button>
-        )}
-        <button
-          type="button"
-          className="call-view-button"
-          aria-label={full ? 'Exit full screen' : 'Full screen'}
-          title={full ? 'Exit full screen (Esc)' : 'Full screen'}
-          onClick={toggleFull}
-        >
-          {full ? <ExitFullscreenIcon size={18} /> : <FullscreenIcon size={18} />}
-        </button>
-      </div>
-
-      <div className="call-title">
+      <div className="call-head">
         <span className="call-dot" aria-hidden="true" />
         <h2>{title.text}</h2>
         {(title.sub || title.timerSince) && (
@@ -809,6 +1203,73 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
             )}
           </span>
         )}
+        <span className="call-head-actions">
+          {duo && (layout === 'frame' || layout === 'side') && !targetTile && !targetScreen && (
+            <span className="call-layout" role="radiogroup" aria-label="Call layout">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={layout === 'side'}
+                className={
+                  layout === 'side'
+                    ? 'call-layout-option call-layout-option--on'
+                    : 'call-layout-option'
+                }
+                onClick={() => setDuoLayout('side')}
+              >
+                <SideBySideIcon size={16} />
+                Side by side
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={layout === 'frame'}
+                className={
+                  layout === 'frame'
+                    ? 'call-layout-option call-layout-option--on'
+                    : 'call-layout-option'
+                }
+                onClick={() => setDuoLayout('frame')}
+              >
+                <FullFrameIcon size={16} />
+                Full frame
+              </button>
+            </span>
+          )}
+          {pinnedName && (
+            <button type="button" className="call-head-button" onClick={() => setFocus(null)}>
+              <GridIcon size={16} />
+              {pinnedName} pinned · {layout === 'pinned' ? 'Back to grid' : 'Show everyone'}
+            </button>
+          )}
+          {full ? (
+            <button type="button" className="call-head-button" onClick={exitFull}>
+              <ExitFullscreenIcon size={16} />
+              Exit full screen (Esc)
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="call-view-button"
+                aria-label={size === 'large' ? 'Make the call smaller' : 'Make the call bigger'}
+                title={size === 'large' ? 'Smaller' : 'Bigger'}
+                onClick={() => setSize(size === 'large' ? 'normal' : 'large')}
+              >
+                {size === 'large' ? <ShrinkIcon size={17} /> : <ExpandIcon size={17} />}
+              </button>
+              <button
+                type="button"
+                className="call-view-button"
+                aria-label="Full screen"
+                title="Full screen"
+                onClick={() => enterFull(null)}
+              >
+                <FullscreenIcon size={17} />
+              </button>
+            </>
+          )}
+        </span>
       </div>
 
       {current.problem && (
@@ -820,65 +1281,26 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         </p>
       )}
 
-      {/* A shared screen sits beside everyone's tiles; pinning someone (or the screen) makes
-          it fill the call with everyone else in a strip underneath. */}
       <div
-        className={
-          spotlight
-            ? 'call-media call-media--spotlight'
-            : screen
-              ? 'call-media call-media--screen'
-              : 'call-media'
+        className={`call-media call-media--${layout}`}
+        style={
+          {
+            '--area-h': areaHeight(layout, view),
+            '--cols': grid.cols,
+            '--rows': grid.rows,
+            '--tile-h': grid.height
+          } as React.CSSProperties
         }
-        style={{ '--stage-h': stageHeight(view) } as React.CSSProperties}
         onDoubleClick={(e) => {
-          // Double-click the video to go full screen (or back), like most video players.
-          if ((e.target as HTMLElement).closest('button')) return
-          toggleFull()
+          // Double-click a person or the screen for full screen on them; again to come back.
+          const el = e.target as HTMLElement
+          if (el.closest('button') || el.closest('[data-self-pip]')) return
+          if (full) return exitFull()
+          const id = el.closest<HTMLElement>('[data-full]')?.dataset.full
+          enterFull(layout === 'frame' ? null : (id ?? null))
         }}
       >
-        {screen && (!spotlight || screenFill) && screenStage(screen)}
-        {pinnedTile && (
-          <div className="call-spot">
-            <Tile
-              tile={pinnedTile}
-              face={Math.max(grid.face, 112)}
-              ringFace={Math.max(grid.ringFace, 112)}
-              onMenu={menuFor(pinnedTile)}
-              view={viewFor(pinnedTile)}
-            />
-          </div>
-        )}
-
-        <div
-          className={spotlight ? 'call-tiles call-tiles--strip' : 'call-tiles'}
-          style={{ '--cols': grid.cols, '--tile-h': grid.height } as React.CSSProperties}
-        >
-          {tiles
-            .filter((t) => t !== pinnedTile)
-            .map((t) => (
-              <Tile
-                key={t.person.id}
-                tile={t}
-                face={spotlight ? 40 : screen ? Math.min(grid.face, 56) : grid.face}
-                ringFace={spotlight ? 40 : screen ? Math.min(grid.ringFace, 56) : grid.ringFace}
-                onMenu={menuFor(t)}
-                view={viewFor(t)}
-              />
-            ))}
-          {pinnedTile && screen && (
-            <button
-              type="button"
-              className="call-tile call-tile--screen-thumb"
-              aria-label={`Show ${screenLabel} big`}
-              title="Pin the shared screen"
-              onClick={() => setFocus({ kind: 'screen' })}
-            >
-              <TrackVideo track={screen} fit="contain" />
-              <span className="call-tag">{screenLabel}</span>
-            </button>
-          )}
-        </div>
+        {media}
       </div>
 
       <div className="call-controls">
@@ -963,24 +1385,7 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       {calls.ptt && ready && <PttNote ptt={calls.ptt} talking={micOn} />}
 
       {menuAt && (
-        <TileViewMenu
-          at={menuAt}
-          pinned={
-            menuAt.kind === 'screen' ? screenFill : pinnedTile?.person.id === menuAt.person.id
-          }
-          full={fullOne === (menuAt.kind === 'screen' ? 'screen' : menuAt.person.id)}
-          onPin={(pin) =>
-            setFocus(
-              !pin
-                ? null
-                : menuAt.kind === 'screen'
-                  ? { kind: 'screen' }
-                  : { kind: 'person', id: menuAt.person.id }
-            )
-          }
-          onFull={() => toggleFullOne(menuAt.kind === 'screen' ? 'screen' : menuAt.person.id)}
-          onClose={() => setMenuAt(null)}
-        />
+        <TileViewMenu at={menuAt} items={menuItemsFor(menuAt)} onClose={() => setMenuAt(null)} />
       )}
       {picking && (
         <ScreenPicker
@@ -1004,6 +1409,55 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       )}
     </section>
   )
+
+  /** Right-click menu: the view options for that person or the screen. */
+  function menuItemsFor(at: MenuAt): ViewMenuItem[] {
+    const items: ViewMenuItem[] = []
+    if (at.kind === 'screen') {
+      if (!targetScreen) {
+        items.push({
+          label: screenFill ? 'Show everyone beside it' : 'Fill the call',
+          icon: <PinIcon size={18} />,
+          onClick: () => setFocus(screenFill ? null : { kind: 'screen' })
+        })
+      }
+      items.push(fullItem('screen'))
+      return items
+    }
+    const id = at.person.id
+    if (duo) {
+      if (layout === 'side' && at.remote) {
+        items.push({
+          label: 'Full frame',
+          icon: <FullFrameIcon size={18} />,
+          onClick: () => setDuoLayout('frame')
+        })
+      } else if (layout === 'frame' && !full) {
+        items.push({
+          label: 'Side by side',
+          icon: <SideBySideIcon size={18} />,
+          onClick: () => setDuoLayout('side')
+        })
+      }
+    } else if (!targetTile) {
+      const pinned = pinnedTile?.person.id === id
+      items.push({
+        label: pinned ? 'Unpin' : 'Pin',
+        icon: <PinIcon size={18} />,
+        onClick: () => setFocus(pinned ? null : { kind: 'person', id })
+      })
+    }
+    items.push(fullItem(id))
+    return items
+  }
+  function fullItem(id: string): ViewMenuItem {
+    const on = isFullOn(id)
+    return {
+      label: on ? 'Exit full screen' : 'Full screen',
+      icon: on ? <ExitFullscreenIcon size={18} /> : <FullscreenIcon size={18} />,
+      onClick: () => toggleFullOn(id)
+    }
+  }
 }
 
 /** A group call going on in this chat that you're not in: who's there, and Join. */
@@ -1426,49 +1880,34 @@ type MenuAt =
   | { kind: 'person'; person: PublicUser; remote: boolean; x: number; y: number }
   | { kind: 'screen'; x: number; y: number }
 
+type ViewMenuItem = { label: string; icon: React.ReactNode; onClick: () => void }
+
 /**
- * Right-click on a tile or the shared screen: pin it (it fills the call) or full screen it.
+ * Right-click on a tile or the shared screen: its view options (pin, full frame, full screen).
  * For someone else, their volume follows.
  */
 function TileViewMenu({
   at,
-  pinned,
-  full,
-  onPin,
-  onFull,
+  items,
   onClose
 }: {
   at: MenuAt
-  pinned: boolean
-  full: boolean
-  onPin: (pin: boolean) => void
-  onFull: () => void
+  items: ViewMenuItem[]
   onClose: () => void
 }): React.JSX.Element {
-  const items = (
+  const list = (
     <>
-      <MenuItem icon={<PinIcon size={18} />} onClose={onClose} onClick={() => onPin(!pinned)}>
-        {at.kind === 'screen'
-          ? pinned
-            ? 'Show everyone beside it'
-            : 'Fill the call'
-          : pinned
-            ? 'Unpin'
-            : 'Pin'}
-      </MenuItem>
-      <MenuItem
-        icon={full ? <ExitFullscreenIcon size={18} /> : <FullscreenIcon size={18} />}
-        onClose={onClose}
-        onClick={onFull}
-      >
-        {full ? 'Exit full screen' : 'Full screen'}
-      </MenuItem>
+      {items.map((item) => (
+        <MenuItem key={item.label} icon={item.icon} onClose={onClose} onClick={item.onClick}>
+          {item.label}
+        </MenuItem>
+      ))}
     </>
   )
   if (at.kind === 'person' && at.remote) {
     return (
       <PersonVolumeMenu person={at.person} x={at.x} y={at.y} onClose={onClose}>
-        {items}
+        {list}
       </PersonVolumeMenu>
     )
   }
@@ -1479,7 +1918,7 @@ function TileViewMenu({
       label={at.kind === 'screen' ? 'Shared screen' : 'Your tile'}
       onClose={onClose}
     >
-      {items}
+      {list}
     </ContextMenu>
   )
 }

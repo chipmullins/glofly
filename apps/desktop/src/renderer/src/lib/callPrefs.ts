@@ -25,6 +25,13 @@ export type CallPrefs = {
   pttLabel: string
   /** The sound when the key goes down / comes up (only you hear it) */
   pttSound: PttSound | 'none'
+  /** Full frame and full screen: hide the title and buttons until the mouse moves, or always show */
+  callControls: 'hover' | 'always'
+  /** A call with one other person: their camera fills the call (you in a corner), or side by side */
+  duoLayout: 'frame' | 'side'
+  /** Where your own camera sits over the video: 0 = left/top edge, 1 = right/bottom edge */
+  pipX: number
+  pipY: number
 }
 
 const KEY = 'glofly.voiceVideo'
@@ -40,7 +47,11 @@ const DEFAULTS: CallPrefs = {
   inputMode: 'open',
   pttKey: 'key:Backquote',
   pttLabel: '`',
-  pttSound: 'firefly'
+  pttSound: 'firefly',
+  callControls: 'hover',
+  duoLayout: 'frame',
+  pipX: 1,
+  pipY: 1
 }
 
 let prefs: CallPrefs = load()
@@ -54,6 +65,12 @@ function load(): CallPrefs {
       if (typeof saved[k] === typeof DEFAULTS[k]) (result[k] as unknown) = saved[k]
     }
     if (result.inputMode !== 'ptt') result.inputMode = 'open'
+    if (result.callControls !== 'always') result.callControls = 'hover'
+    if (result.duoLayout !== 'side') result.duoLayout = 'frame'
+    for (const k of ['pipX', 'pipY'] as const) {
+      if (!Number.isFinite(result[k])) result[k] = 1
+      result[k] = Math.min(1, Math.max(0, result[k]))
+    }
     if (result.pttSound !== 'none' && !isPttSound(result.pttSound)) result.pttSound = 'firefly'
     if (!isPttKey(result.pttKey)) {
       result.pttKey = DEFAULTS.pttKey

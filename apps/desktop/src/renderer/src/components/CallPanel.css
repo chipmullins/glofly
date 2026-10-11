@@ -53,37 +53,653 @@
 /* ---------- The panel at the top of the chat ---------- */
 
 .call-panel {
-  margin: 16px 24px 0;
-  padding: 22px 24px 20px;
+  margin: 14px 24px 0;
+  padding: 14px 18px 16px;
   background: var(--glo-call-bg);
   border-radius: 20px;
   color: var(--glo-call-text);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   flex: none;
-  position: relative; /* for the view buttons */
+  position: relative;
 }
+
+/* The title row: who and how long on the left; layout, bigger and full screen on the right. */
+.call-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  min-width: 0;
+}
+.call-head h2 {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.call-sub {
+  font-size: 13.5px;
+  color: var(--glo-call-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.call-head-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.call-view-button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--glo-call-tag);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.call-view-button:hover,
+.call-head-button:hover {
+  background: var(--glo-call-button-hover);
+}
+.call-head-button {
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--glo-call-button);
+  color: var(--glo-call-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* Two people: Side by side | Full frame */
+.call-layout {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--glo-call-tile);
+}
+.call-layout-option {
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--glo-call-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.call-layout-option:hover {
+  color: var(--glo-call-text);
+}
+.call-layout-option--on {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--glo-call-text);
+}
+/* Narrow windows: the layout switch keeps only its icons */
+@media (max-width: 860px) {
+  .call-layout-option {
+    font-size: 0;
+    gap: 0;
+  }
+  .call-layout-option svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.call-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--glo-call-dot);
+  box-shadow: 0 0 10px 3px rgba(255, 179, 71, 0.7);
+}
+
+.call-problem {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--glo-call-tile-me);
+  color: var(--glo-call-soft);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.call-problem button {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* ---------- The call area, in each layout ---------- */
+
+.call-media {
+  position: relative;
+  isolation: isolate;
+  min-height: 0;
+}
+.call-tile {
+  position: relative;
+  min-width: 0;
+  border-radius: 14px;
+  background: var(--glo-call-tile);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.15s;
+}
+.call-tile--me {
+  background: var(--glo-call-tile-me);
+}
+/* Talking: a glow around their tile, with a ring drawn over the video so it shows in every layout */
+.call-tile--speaking {
+  box-shadow: 0 0 22px 2px rgba(var(--glo-call-glow-rgb), 0.4);
+}
+.call-tile--speaking::after,
+.call-pip--speaking::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 3px var(--glo-call-glow);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.call-controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* Side by side: two big tiles */
+.call-media--side {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  height: var(--area-h);
+}
+/* Groups: everyone in a grid; three rows show, the rest scroll */
+.call-media--grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+  grid-auto-rows: var(--tile-h);
+  gap: 10px;
+  max-height: calc(var(--tile-h) * 3 + 20px);
+  overflow-y: auto;
+}
+/* Pinned: them big, everyone else in a column on the right */
+.call-media--pinned {
+  display: flex;
+  gap: 10px;
+  height: var(--area-h);
+}
+.call-media--pinned > .call-tile {
+  flex: 1;
+}
+.call-column {
+  width: 190px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.call-column > .call-tile {
+  flex: 1 0 96px;
+}
+/* A shared screen: in its own shape (never cropped), with everyone beside it */
+.call-media--screen {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  height: var(--area-h);
+  container-type: size;
+}
+/* As tall as the area, unless that would leave less than 170px beside it: then shorter, so the
+   box always keeps the screen's own shape. */
+.call-stage {
+  position: relative;
+  height: min(100%, calc((100cqw - 170px) / var(--ratio, 1.7778)));
+  align-self: center;
+  min-width: 0;
+  flex: none;
+  aspect-ratio: var(--shape, 16 / 9);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--glo-call-video);
+}
+.call-stage--fill {
+  aspect-ratio: auto;
+  height: 100%;
+  width: 100%;
+  border-radius: 0;
+}
+.call-beside {
+  flex: 1 1 180px;
+  min-width: 160px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(64px, 1fr);
+  gap: 8px;
+  overflow-y: auto;
+}
+.call-beside[data-odd] > .call-tile:first-child {
+  grid-column: span 2;
+}
+.call-beside--column {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Small tiles (the pinned column, beside a screen): smaller tags, no status line */
+.call-tile--small .call-tag {
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.call-tile--small .call-tile-status {
+  display: none;
+}
+.call-tile--small .call-tile-actions {
+  top: 6px;
+  right: 6px;
+  gap: 4px;
+}
+.call-tile--small .call-tile-action {
+  width: 26px;
+  height: 26px;
+}
+.call-tile--screen-thumb {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  background: var(--glo-call-video);
+}
+
+/* ---------- Full frame: one person (or a screen) fills the call, controls on the video ---------- */
+
+.call-panel--overlay {
+  padding: 0;
+  gap: 0;
+}
+.call-panel--overlay .call-media {
+  height: var(--area-h);
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--glo-call-video);
+}
+.call-media--frame > .call-tile,
+.call-media--frame > .call-stage {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  border-radius: 0;
+}
+.call-media--frame > .call-tile--speaking {
+  box-shadow: none;
+}
+.call-media--frame .call-tile-actions {
+  top: 60px;
+  right: 14px;
+}
+.call-media--frame > .call-tile .call-tag,
+.call-media--frame > .call-stage .call-tag {
+  left: 18px;
+  bottom: 26px;
+  z-index: 3;
+}
+/* Shading behind the title and buttons, so they read on any video */
+.call-panel--overlay .call-media::before,
+.call-panel--overlay .call-media::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.call-panel--overlay .call-media::before {
+  top: 0;
+  height: 90px;
+  background: linear-gradient(rgba(28, 18, 16, 0.7), rgba(28, 18, 16, 0));
+}
+.call-panel--overlay .call-media::after {
+  bottom: 0;
+  height: 120px;
+  background: linear-gradient(rgba(28, 18, 16, 0), rgba(28, 18, 16, 0.75));
+}
+.call-panel--overlay .call-head {
+  position: absolute;
+  top: 12px;
+  left: 18px;
+  right: 14px;
+  z-index: 5;
+}
+.call-panel--overlay .call-sub {
+  color: var(--glo-call-soft);
+}
+.call-panel--overlay .call-layout,
+.call-panel--overlay .call-view-button,
+.call-panel--overlay .call-head-button {
+  background: rgba(28, 18, 16, 0.55);
+}
+.call-panel--overlay .call-layout-option--on {
+  background: rgba(255, 255, 255, 0.18);
+}
+.call-panel--overlay .call-problem {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 36px));
+  z-index: 5;
+}
+.call-panel--overlay .call-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  z-index: 5;
+  pointer-events: none;
+}
+.call-panel--overlay .call-controls > * {
+  pointer-events: auto;
+}
+.call-panel--overlay .call-button {
+  width: 48px;
+  height: 48px;
+  background: rgba(28, 18, 16, 0.72);
+  backdrop-filter: blur(6px);
+}
+.call-panel--overlay .call-button:hover:not(:disabled) {
+  background: rgba(74, 55, 43, 0.9);
+}
+.call-panel--overlay .call-button--off,
+.call-panel--overlay .call-button--off:hover:not(:disabled) {
+  background: var(--glo-call-off-bg);
+}
+.call-panel--overlay .call-button--sharing,
+.call-panel--overlay .call-button--sharing:hover:not(:disabled) {
+  background: var(--glo-call-glow);
+}
+.call-panel--overlay .call-button--open {
+  background: rgba(74, 55, 43, 0.95);
+}
+.call-panel--overlay .call-hangup {
+  width: 68px;
+  height: 48px;
+  border-radius: 24px;
+}
+.call-panel--overlay .call-ptt {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(28, 18, 16, 0.72);
+  z-index: 5;
+  white-space: nowrap;
+  transition:
+    bottom 0.25s ease,
+    opacity 0.3s ease;
+}
+/* Hidden until the mouse moves: the title, buttons and shading fade away. Name tags, the muted
+   icon, the talking glow and "Talking…" stay. */
+.call-panel .call-head,
+.call-panel .call-controls {
+  transition: opacity 0.3s ease;
+}
+.call-panel--hidden .call-head,
+.call-panel--hidden .call-controls,
+.call-panel--hidden .call-problem,
+.call-panel--hidden .call-media::before,
+.call-panel--hidden .call-media::after,
+.call-panel--hidden .call-tile-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+.call-panel--hidden .call-ptt:not(.call-ptt--talking) {
+  opacity: 0;
+}
+.call-panel--hidden .call-ptt {
+  bottom: 18px;
+}
+.call-panel--full.call-panel--hidden {
+  cursor: none;
+}
+
+/* Your camera on top of the video: drag it anywhere. --px/--py (0..1) place it across the space
+   left over; it keeps clear of the title and buttons while they show. */
+.call-pip {
+  --pip-w: 200px;
+  --pip-h: calc(var(--pip-w) * 9 / 16);
+  --pip-m: 16px;
+  --pip-mt: 60px;
+  --pip-mb: 82px;
+  position: absolute;
+  z-index: 4;
+  width: var(--pip-w);
+  height: var(--pip-h);
+  left: calc(var(--pip-m) + (100% - var(--pip-w) - 2 * var(--pip-m)) * var(--px, 1));
+  top: calc(var(--pip-mt) + (100% - var(--pip-h) - var(--pip-mt) - var(--pip-mb)) * var(--py, 1));
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--glo-call-tile-me);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.85),
+    0 8px 24px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    top 0.25s ease,
+    left 0.25s ease;
+}
+.call-panel--hidden .call-pip {
+  --pip-mt: 16px;
+  --pip-mb: 16px;
+}
+.call-panel--large .call-pip {
+  --pip-w: 240px;
+}
+.call-panel--full .call-pip {
+  --pip-w: 272px;
+  --pip-m: 28px;
+  --pip-mt: 76px;
+  --pip-mb: 112px;
+}
+.call-panel--full.call-panel--hidden .call-pip {
+  --pip-mt: 28px;
+  --pip-mb: 28px;
+}
+.call-pip--dragging {
+  cursor: grabbing;
+  transition: none;
+}
+.call-pip .call-tag {
+  left: 8px;
+  bottom: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.call-pip-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.call-pip-hide {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--glo-call-tag);
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.call-pip:hover .call-pip-hide,
+.call-pip-hide:focus-visible {
+  opacity: 1;
+}
+/* Hidden: a small "You" chip in the same spot */
+.call-pip--chip {
+  --pip-w: 68px;
+  --pip-h: 30px;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+  cursor: default;
+}
+.call-pip-show {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 15px;
+  background: rgba(28, 18, 16, 0.78);
+  color: var(--glo-call-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+.call-pip-show:hover {
+  background: var(--glo-call-button-hover);
+}
+
+/* ---------- Full screen: edge to edge ---------- */
+
+.call-panel:fullscreen {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  background: #000000;
+}
+.call-panel--full .call-media {
+  height: 100%;
+  border-radius: 0;
+}
+.call-panel--full .call-head {
+  top: 22px;
+  left: 28px;
+  right: 24px;
+}
+.call-panel--full .call-head h2 {
+  font-size: 22px;
+}
+.call-panel--full .call-controls {
+  bottom: 28px;
+  gap: 14px;
+}
+.call-panel--full .call-button {
+  width: 54px;
+  height: 54px;
+}
+.call-panel--full .call-hangup {
+  width: 76px;
+  height: 54px;
+  border-radius: 27px;
+}
+.call-panel--full .call-media--frame > .call-tile .call-tag,
+.call-panel--full .call-media--frame > .call-stage .call-tag {
+  left: 28px;
+  bottom: 40px;
+  font-size: 14px;
+}
+.call-panel--full .call-ptt {
+  bottom: 96px;
+}
+.call-panel--full.call-panel--hidden .call-ptt {
+  bottom: 28px;
+}
+/* Every other layout in full screen: the whole monitor, with a little room around the tiles */
+.call-panel--full .call-media--side,
+.call-panel--full .call-media--grid,
+.call-panel--full .call-media--pinned,
+.call-panel--full .call-media--screen {
+  box-sizing: border-box;
+  padding: 72px 20px 20px;
+  max-height: none;
+}
+.call-panel--full .call-media--grid {
+  grid-template-rows: repeat(var(--rows, 1), minmax(110px, 1fr));
+  grid-auto-rows: minmax(110px, 1fr);
+}
+.call-panel--full .call-media--side::before,
+.call-panel--full .call-media--grid::before,
+.call-panel--full .call-media--pinned::before,
+.call-panel--full .call-media--screen::before,
+.call-panel--full .call-media--side::after,
+.call-panel--full .call-media--grid::after,
+.call-panel--full .call-media--pinned::after,
+.call-panel--full .call-media--screen::after {
+  display: none;
+}
+.call-panel--full .call-media--screen .call-stage {
+  height: min(100%, calc((100cqw - 240px) / var(--ratio, 1.7778)));
+}
+.call-panel--full .call-column {
+  width: 240px;
+}
+
 /* On the dark theme the panel would melt into the page: a faint glow-colored edge keeps it apart. */
 :root[data-theme='dark'] .call-panel,
 :root[data-theme='dark'] .call-strip {
   box-shadow: 0 0 0 1px rgba(var(--glo-call-glow-rgb), 0.16);
 }
 
-.call-title {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  min-height: 26px;
-}
-.call-title h2 {
-  margin: 0;
-  font-family: var(--glo-font-display);
-  font-weight: 600;
-  font-size: 20px;
-}
 .call-sub {
   font-size: 14px;
   color: var(--glo-call-muted);
@@ -120,64 +736,6 @@
   cursor: pointer;
 }
 
-.call-media {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
-}
-.call-tiles {
-  /* --cols and --tile-h come from the number of people (CallPanel.tsx gridFor). Each tile keeps a
-     16:9 shape and the grid centers itself, so wide windows don't stretch the video. */
-  display: grid;
-  grid-template-columns: repeat(var(--cols, 2), minmax(0, calc(var(--tile-h) * 16 / 9)));
-  justify-content: center;
-  gap: 16px;
-  /* Big groups: three rows show, the rest scroll. */
-  max-height: calc(var(--tile-h) * 3 + 32px);
-  overflow-y: auto;
-}
-.call-tile {
-  position: relative;
-  height: var(--tile-h);
-  border-radius: 16px;
-  background: var(--glo-call-tile);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: box-shadow 0.15s;
-}
-.call-tile:first-child {
-  background: var(--glo-call-tile-me);
-}
-.call-tile--speaking {
-  box-shadow:
-    inset 0 0 0 3px var(--glo-call-glow),
-    0 0 24px 2px rgba(var(--glo-call-glow-rgb), 0.45);
-}
-/* A shared screen: big on the left, everyone's tiles in a scrolling column on the right. */
-.call-media--screen {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(160px, 20%, 240px);
-  gap: 12px;
-}
-.call-media--screen .call-tiles {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 12px;
-  max-height: var(--stage-h, clamp(220px, 44vh, 480px));
-}
-.call-media--screen .call-tile {
-  flex: none;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-}
-.call-media--screen .call-tile-status {
-  display: none;
-}
 .call-tile-face {
   display: flex;
   flex-direction: column;
@@ -245,41 +803,6 @@
   color: var(--glo-call-dot);
 }
 
-.call-stage {
-  position: relative;
-  height: var(--stage-h, clamp(220px, 44vh, 480px));
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--glo-call-video);
-}
-.call-stage:fullscreen {
-  border-radius: 0;
-  height: 100%;
-}
-.call-stage-full {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 36px;
-  height: 36px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--glo-call-tag);
-  color: var(--glo-call-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.call-stage-full:hover {
-  background: var(--glo-call-button-hover);
-}
-
-.call-controls {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-}
 .call-button {
   width: 52px;
   height: 52px;
@@ -851,75 +1374,9 @@
 
 /* ---------- Call views: bigger, and full screen ---------- */
 
-.call-view-buttons {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  display: flex;
-  gap: 6px;
-  z-index: 1;
-}
-.call-view-button {
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--glo-call-tag);
-  color: var(--glo-call-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.call-view-button:hover {
-  background: var(--glo-call-button-hover);
-}
-/* Keep the title clear of the buttons on narrow windows. */
-.call-title {
-  padding-inline: 84px;
-}
-
 /* Bigger: the panel grows, and a few messages plus the message box stay visible below. */
 .call-panel--large ~ .chat-messages {
   min-height: 120px;
-}
-
-/* Full screen: the call fills the monitor. */
-.call-panel:fullscreen {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
-  padding: 24px 32px;
-  box-shadow: none;
-}
-.call-panel--full .call-media {
-  flex: 1;
-  justify-content: center;
-}
-.call-panel--full .call-media--screen {
-  align-content: center;
-}
-/* After a few seconds without the mouse moving, the title and controls fade out. */
-.call-panel .call-title,
-.call-panel .call-controls,
-.call-panel .call-view-buttons {
-  transition: opacity 0.3s ease;
-}
-.call-panel--idle {
-  cursor: none;
-}
-.call-panel--idle .call-title,
-.call-panel--idle .call-controls,
-.call-panel--idle .call-view-buttons {
-  opacity: 0;
-}
-@media (prefers-reduced-motion: reduce) {
-  .call-panel .call-title,
-  .call-panel .call-controls,
-  .call-panel .call-view-buttons {
-    transition: none;
-  }
 }
 
 /* ---------- Floating call video (on another chat) ---------- */
@@ -1237,10 +1694,6 @@
   text-decoration: underline;
   cursor: pointer;
 }
-.call-panel--full.call-panel--idle .call-ptt {
-  opacity: 0;
-}
-
 /* ---------- Call view controls (0.2.1): pin someone or the screen, full screen one tile ---------- */
 
 /* Hover buttons in a tile's top-right corner (and the shared screen's) */
@@ -1282,59 +1735,6 @@
   outline: 2px solid var(--glo-call-glow);
   outline-offset: 1px;
 }
-/* The smallest tiles (a strip) keep only the pin button visible on hover */
-.call-tiles--strip .call-tile-action {
-  width: 26px;
-  height: 26px;
-}
-.call-tiles--strip .call-tile-actions {
-  top: 6px;
-  right: 6px;
-  gap: 4px;
-}
-
-/* Pinned: one big view, everyone else in a strip underneath */
-.call-media--spotlight {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.call-spot {
-  height: var(--stage-h, clamp(220px, 44vh, 480px));
-  display: flex;
-}
-.call-spot > .call-tile {
-  flex: 1;
-  height: 100%;
-}
-.call-spot .call-video--cover {
-  object-fit: contain;
-}
-.call-tiles--strip {
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  gap: 10px;
-  max-height: none;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 2px;
-}
-.call-tiles--strip .call-tile {
-  flex: none;
-  width: auto;
-  height: 96px;
-  aspect-ratio: 16 / 9;
-}
-.call-tiles--strip .call-tile-status {
-  display: none;
-}
-.call-tiles--strip .call-tag {
-  left: 6px;
-  bottom: 6px;
-  padding: 3px 7px;
-  font-size: 12px;
-}
 .call-tile--screen-thumb {
   border: 0;
   padding: 0;
@@ -1342,21 +1742,6 @@
   font: inherit;
   cursor: pointer;
   background: var(--glo-call-video);
-}
-
-/* One tile full screen on its own */
-.call-tile:fullscreen {
-  border-radius: 0;
-  height: 100%;
-  width: 100%;
-  background: var(--glo-call-bg);
-}
-.call-tile:fullscreen .call-video--cover {
-  object-fit: contain;
-}
-.call-tile:fullscreen .call-tile-actions {
-  top: 18px;
-  right: 18px;
 }
 
 @media (prefers-reduced-motion: reduce) {

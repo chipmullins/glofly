@@ -502,3 +502,44 @@ export function SpeakerOffIcon(p: IconProps): React.JSX.Element {
     </Svg>
   )
 }
+
+/** Call layout: two people side by side. */
+export function SideBySideIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="5" width="8" height="14" rx="2" />
+      <rect x="13" y="5" width="8" height="14" rx="2" />
+    </Svg>
+  )
+}
+
+/** Call layout: them filling the frame, you small in the corner. */
+export function FullFrameIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <rect x="13" y="12" width="6" height="5" rx="1" />
+    </Svg>
+  )
+}
+
+/** Call layout: back to everyone in a grid. */
+export function GridIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </Svg>
+  )
+}
+
+/** Shrink your own camera preview to a small chip. */
+export function MinimizeIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={2} {...p}>
+      <path d="M5 12h14" />
+    </Svg>
+  )
+}
