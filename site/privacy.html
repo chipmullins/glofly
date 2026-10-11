@@ -60,7 +60,7 @@
 <main>
   <div class="wrap">
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated October 10, 2026</p>
+    <p class="updated">Last updated October 11, 2026</p>
 
     <div class="summary">
       <p>The short version</p>
@@ -68,7 +68,7 @@
         <li>Glofly keeps what it needs to run your account, your chats and your calls. Nothing more.</li>
         <li>No ads, no selling or renting your information, no tracking you around the web.</li>
         <li>Messages are encrypted on their way to and from our servers, but they are <strong>not end-to-end encrypted</strong>: they're stored on Glofly's servers so they reach all your devices.</li>
-        <li>Delete your account any time from Settings. It's removed for good after 30 days.</li>
+        <li>Delete your account any time from Settings (or <a href="/delete-account">without the app</a>). It's removed for good after 30 days.</li>
       </ul>
     </div>
 
@@ -83,14 +83,15 @@
       <li><strong>Your profile:</strong> profile photo, "About me", status and custom status. Location and camera details are removed from photos when you upload them.</li>
       <li><strong>Messages and files:</strong> the messages, photos, files, voice messages and reactions you send, and the chats and groups you're in.</li>
       <li><strong>Friends and blocks:</strong> friend requests, friends, and people you've blocked.</li>
-      <li><strong>Settings:</strong> your privacy choices (read receipts, last seen, typing, who can send friend requests). Appearance, sound and device choices stay on your own computer.</li>
+      <li><strong>Settings:</strong> your privacy choices (read receipts, last seen, typing, who can send friend requests). Appearance, sound and device choices stay on your own computer or phone.</li>
       <li><strong>Messages to us:</strong> if you email us, we keep that conversation to help you.</li>
     </ul>
     <h3>Things created as you use Glofly</h3>
     <ul>
-      <li><strong>Sign-ins:</strong> one record per signed-in device, with a device name (like "Windows · DESKTOP-4KQ2"), when it signed in and when it was last used. You can see these and sign devices out in Settings → Account.</li>
+      <li><strong>Sign-ins:</strong> one record per signed-in device, with a device name (like "Windows · DESKTOP-4KQ2" or "Android · Pixel 8"), when it signed in and when it was last used. You can see these and sign devices out in Settings → Account.</li>
       <li><strong>Presence:</strong> whether you're online, away or busy, and when you were last seen. This lives briefly in memory and is shared only with your friends, following your settings.</li>
       <li><strong>"Playing …":</strong> if Activity is on, Glofly checks your computer for games it recognises and shares the game's name with your friends while you play. This check happens on your computer; only the game's name is sent. Turn it off in Settings → Activity.</li>
+      <li><strong>Phone notifications:</strong> if you use Glofly on a phone and allow notifications, the phone gives Glofly a push address (a token from Google) so we can tell it about new messages and calls. It's kept with that phone's sign-in and deleted when you sign out or turn notifications off.</li>
       <li><strong>Calls:</strong> when a call started and ended, who was in it, and whether it was missed. We don't record calls.</li>
       <li><strong>Network address:</strong> your IP address is used for a few minutes to stop abuse (like too many sign-in attempts). We don't keep it in our records.</li>
     </ul>
@@ -119,7 +120,9 @@
         <thead><tr><th scope="col">Service</th><th scope="col">What it does</th><th scope="col">Where</th></tr></thead>
         <tbody>
           <tr><td>Amazon Web Services</td><td>Hosts Glofly's servers, database, stored files and app updates, and sends Glofly's emails</td><td>United States (Ohio)</td></tr>
-          <tr><td>LiveKit</td><td>Carries the audio, video and screen sharing in calls while they happen. Calls aren't recorded or stored</td><td>Global network</td></tr>        </tbody>
+          <tr><td>LiveKit</td><td>Carries the audio, video and screen sharing in calls while they happen. Calls aren't recorded or stored</td><td>Global network</td></tr>
+          <tr><td>Google (Firebase Cloud Messaging)</td><td>Delivers notifications to Glofly on Android phones. A notification carries the sender's name and, unless you turn off message previews on that phone, the message text. Google doesn't store them after they're delivered</td><td>Global network</td></tr>
+        </tbody>
       </table>
     </div>
     <p>We don't sell, rent or trade your information. We'd share it otherwise only if the law requires it, to protect someone from serious harm, or as part of Glofly changing hands (in which case this policy keeps applying to your information).</p>
@@ -127,7 +130,7 @@
     <h2>How long we keep it</h2>
     <ul>
       <li><strong>Messages and files</strong> stay until you delete them or your account is removed. Deleting a message removes its text, photos, files and voice messages; a small "message deleted" note stays in the chat.</li>
-      <li><strong>Deleting your account</strong> (Settings → Account) hides it right away and signs you out everywhere. After 30 days your profile, photo, friends, direct messages (for both people), and the messages and files you sent in groups are removed for good. Log in within the 30 days to restore it.</li>
+      <li><strong>Deleting your account</strong> (Settings → Account, or <a href="/delete-account">these steps</a> if you can't use the app) hides it right away and signs you out everywhere. After 30 days your profile, photo, friends, direct messages (for both people), and the messages and files you sent in groups are removed for good. Log in within the 30 days to restore it.</li>
       <li><strong>Reports</strong> and the copy of the messages they include are kept for up to a year after they're resolved, so repeated problems can be spotted, and may be kept longer if the law requires it.</li>
       <li><strong>Email links</strong> (password reset, confirm email) expire within 7 days and are cleared soon after.</li>
       <li><strong>Backups:</strong> our database is backed up daily for recovery after a problem. Removed information can stay in those backups for a short time until they're replaced.</li>
@@ -137,13 +140,14 @@
     <ul>
       <li>Change your profile, email and password, and see where you're signed in, in Settings.</li>
       <li>Turn off read receipts, last seen, typing indicators, "Playing …", or friend requests from everyone.</li>
+      <li>Turn off notifications, or just message previews, on each phone.</li>
       <li>Block anyone. They can't message you, call you or find you, and they aren't told.</li>
       <li>Delete messages you sent, or your whole account.</li>
       <li>Email <a href="mailto:support@glofly.app">support@glofly.app</a> to ask for a copy of your information or anything else about it. We'll answer within 30 days.</li>
     </ul>
 
     <h2>Security</h2>
-    <p>Connections to Glofly are encrypted (https), passwords are stored as Argon2 hashes, saved sign-ins on your computer are encrypted by Windows, and our database isn't reachable from the internet. No system is perfectly secure, so if something ever goes wrong that affects your information, we'll tell you.</p>
+    <p>Connections to Glofly are encrypted (https), passwords are stored as Argon2 hashes, saved sign-ins are encrypted by your computer or phone, and our database isn't reachable from the internet. No system is perfectly secure, so if something ever goes wrong that affects your information, we'll tell you.</p>
 
     <h2>Children</h2>
     <p>Glofly is for people 13 and older. We don't knowingly collect information from anyone younger. If you believe a child under 13 has an account, email us and we'll remove it.</p>
@@ -156,7 +160,7 @@
 <footer>
   <div class="wrap">
     <p>© 2026 Glofly · Created by Chip Mullins</p>
-    <p><a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · <a href="mailto:support@glofly.app">support@glofly.app</a></p>
+    <p><a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · <a href="/delete-account">Delete your account</a> · <a href="mailto:support@glofly.app">support@glofly.app</a></p>
   </div>
 </footer>
 </body>
