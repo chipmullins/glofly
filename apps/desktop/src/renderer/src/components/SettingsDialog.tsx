@@ -14,7 +14,13 @@ import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
 import AboutSettings from './AboutSettings'
 import VoiceVideoSettings from './VoiceVideoSettings'
-import { previewSound, setSoundSettings, SOUND_FILES, stopPreview } from '../lib/sounds'
+import {
+  previewSound,
+  setSoundSettings,
+  SOUND_FILES,
+  stopPreview,
+  type SoundFile
+} from '../lib/sounds'
 import { setNotificationSettings } from '../lib/notify'
 import { isMac } from '../lib/platform'
 import './dialogs.css'
@@ -163,7 +169,7 @@ const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' |
   { key: 'ringtone', label: 'Ringtone', desc: 'Plays when someone calls you.', kind: 'call' },
   {
     key: 'outgoing',
-    label: 'Outgoing call jingle',
+    label: 'Outgoing call sound',
     desc: 'Plays while you wait for someone to answer.',
     kind: 'call'
   },
@@ -204,9 +210,23 @@ const ALERT_CHOICES: AlertSound[] = [
   'glowOff',
   'blinkIn',
   'blinkOut',
+  'pluck',
+  'fade',
   'none'
 ]
-const CALL_CHOICES: CallSound[] = ['ring', 'jingle', 'none']
+/** Ringing rows: that row's own set first (incoming for the ringtone, outgoing for the other),
+ * then Chip's two originals, then None. */
+const ringChoices = (side: 'in' | 'out'): CallSound[] => [
+  ...(Object.keys(SOUND_FILES) as SoundFile[]).filter(
+    (k): k is Exclude<CallSound, 'none'> =>
+      SOUND_FILES[k].ring === side && k !== 'ring' && k !== 'jingle'
+  ),
+  'ring',
+  'jingle',
+  'none'
+]
+const RINGTONE_CHOICES = ringChoices('in')
+const OUTGOING_CHOICES = ringChoices('out')
 
 function PlayIcon({ playing }: { playing: boolean }): React.JSX.Element {
   return (
@@ -230,7 +250,12 @@ function SoundRow({
   onChange: (value: AlertSound | CallSound) => void
   onPlay: () => void
 }): React.JSX.Element {
-  const choices = row.kind === 'alert' ? ALERT_CHOICES : CALL_CHOICES
+  const choices =
+    row.kind === 'alert'
+      ? ALERT_CHOICES
+      : row.key === 'ringtone'
+        ? RINGTONE_CHOICES
+        : OUTGOING_CHOICES
   const id = `settings-sound-${row.key}`
   return (
     <div className="settings-row">
@@ -822,8 +847,8 @@ export default function SettingsDialog({
                         {row.key === 'outgoing' && (
                           <VolumeRow
                             id="settings-call-volume"
-                            label="Ringtone & jingle volume"
-                            desc="The ringtone and outgoing call jingle, on top of Volume."
+                            label="Ringing volume"
+                            desc="The ringtone and outgoing call sound, on top of Volume."
                             value={appSettings?.sounds.callVolume}
                             disabled={appSettings ? !appSettings.sounds.enabled : true}
                             onCommit={(v) => changeVolume('callVolume', v)}

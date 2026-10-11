@@ -391,8 +391,40 @@ export type AlertSound =
   | 'dewdrop'
   | 'starfall'
   | 'pebble'
+  /** 0.2.2: from the "no answer" round, offered for any short sound */
+  | 'pluck'
+  | 'fade'
   | 'none'
-export type CallSound = 'ring' | 'jingle' | 'none'
+/** Ringing sounds (they loop). 0.2.2 adds the in- and out- sets; ring and jingle are Chip's originals. */
+export type CallSound = 'ring' | 'jingle' | OutgoingSound | IncomingSound | 'none'
+export type OutgoingSound =
+  | 'synthArp'
+  | 'lantern'
+  | 'fireflyOut'
+  | 'marimbaOut'
+  | 'glassOut'
+  | 'breathe'
+  | 'kalimbaOut'
+  | 'evening'
+  | 'pixel'
+  | 'vibesOut'
+  | 'musicBox'
+  | 'nightDrive'
+  | 'steelOut'
+  | 'digital'
+export type IncomingSound =
+  | 'fireflyDance'
+  | 'glowBells'
+  | 'marimbaRing'
+  | 'kalimbaRing'
+  | 'glassChimes'
+  | 'classic'
+  | 'electro'
+  | 'chiptune'
+  | 'groove'
+  | 'steelDrums'
+  | 'vibesRing'
+  | 'digitalBells'
 
 /** Settings → Notifications & sounds */
 export type SoundSettings = {

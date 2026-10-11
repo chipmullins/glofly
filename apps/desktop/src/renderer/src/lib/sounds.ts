@@ -17,6 +17,35 @@ import sparkTrailFile from '../assets/sounds/spark-trail.ogg'
 import dewdropFile from '../assets/sounds/dewdrop.ogg'
 import starfallFile from '../assets/sounds/starfall.ogg'
 import pebbleFile from '../assets/sounds/pebble.ogg'
+import ringOutSynthArpFile from '../assets/sounds/ring-out-synth-arp.ogg'
+import ringOutLanternFile from '../assets/sounds/ring-out-lantern.ogg'
+import ringOutFireflyFile from '../assets/sounds/ring-out-firefly.ogg'
+import ringOutMarimbaFile from '../assets/sounds/ring-out-marimba.ogg'
+import ringOutGlassFile from '../assets/sounds/ring-out-glass.ogg'
+import ringOutBreatheFile from '../assets/sounds/ring-out-breathe.ogg'
+import ringOutKalimbaFile from '../assets/sounds/ring-out-kalimba.ogg'
+import ringOutEveningFile from '../assets/sounds/ring-out-evening.ogg'
+import ringOutPixelFile from '../assets/sounds/ring-out-pixel.ogg'
+import ringOutVibesFile from '../assets/sounds/ring-out-vibes.ogg'
+import ringOutMusicboxFile from '../assets/sounds/ring-out-musicbox.ogg'
+import ringOutNightdriveFile from '../assets/sounds/ring-out-nightdrive.ogg'
+import ringOutSteelFile from '../assets/sounds/ring-out-steel.ogg'
+import ringOutDigitalFile from '../assets/sounds/ring-out-digital.ogg'
+import ringInFireflyFile from '../assets/sounds/ring-in-firefly.ogg'
+import ringInGlowbellsFile from '../assets/sounds/ring-in-glowbells.ogg'
+import ringInMarimbaFile from '../assets/sounds/ring-in-marimba.ogg'
+import ringInKalimbaFile from '../assets/sounds/ring-in-kalimba.ogg'
+import ringInGlassFile from '../assets/sounds/ring-in-glass.ogg'
+import ringInClassicFile from '../assets/sounds/ring-in-classic.ogg'
+import ringInElectroFile from '../assets/sounds/ring-in-electro.ogg'
+import ringInChiptuneFile from '../assets/sounds/ring-in-chiptune.ogg'
+import ringInGrooveFile from '../assets/sounds/ring-in-groove.ogg'
+import ringInSteelFile from '../assets/sounds/ring-in-steel.ogg'
+import ringInVibesFile from '../assets/sounds/ring-in-vibes.ogg'
+import ringInFmbellsFile from '../assets/sounds/ring-in-fmbells.ogg'
+import pluckFile from '../assets/sounds/pluck.ogg'
+import fadeFile from '../assets/sounds/fade.ogg'
+import noAnswerFile from '../assets/sounds/no-answer.ogg'
 
 export type SoundName =
   | 'message' // a message arrives
@@ -33,11 +62,21 @@ export type SoundName =
 export type SoundFile = Exclude<AlertSound | CallSound, 'none'>
 
 /** The sound library, with the names shown in Settings. */
-export const SOUND_FILES: Record<SoundFile, { label: string; url: string }> = {
+export const SOUND_FILES: Record<
+  SoundFile,
+  {
+    label: string
+    url: string
+    /** Ringing sounds: which list they're offered in (outgoing / incoming) */
+    ring?: 'out' | 'in'
+    /** Ringing sounds made as one seamless loop cycle: its length in seconds */
+    loop?: number
+  }
+> = {
   chime: { label: 'Firefly chime', url: messageFile },
   hello: { label: 'Glofly hello', url: loginFile },
-  ring: { label: 'Glow ring', url: ringtoneFile },
-  jingle: { label: 'Glofly jingle', url: outgoingFile },
+  ring: { label: 'Glow ring', url: ringtoneFile, ring: 'in' },
+  jingle: { label: 'Glofly jingle', url: outgoingFile, ring: 'out' },
   // Made Oct 8 from the same notes (C, E, G, B) and tone as the sounds above.
   glowOn: { label: 'Glow on', url: glowOnFile },
   glowOff: { label: 'Glow off', url: glowOffFile },
@@ -47,7 +86,38 @@ export const SOUND_FILES: Record<SoundFile, { label: string; url: string }> = {
   sparkTrail: { label: 'Spark trail', url: sparkTrailFile },
   dewdrop: { label: 'Dewdrop', url: dewdropFile },
   starfall: { label: 'Starfall', url: starfallFile },
-  pebble: { label: 'Pebble', url: pebbleFile }
+  pebble: { label: 'Pebble', url: pebbleFile },
+  // 0.2.2, from the "no answer" round: offered for any short sound.
+  pluck: { label: 'Pluck', url: pluckFile },
+  fade: { label: 'Fade', url: fadeFile },
+  // 0.2.2 ringing sounds (tools/sounds/ring.py, ring2.py). Each file is ONE loop cycle `loop`
+  // seconds long (its echo is folded onto the start), so it repeats with no gap.
+  synthArp: { label: 'Synth arp', url: ringOutSynthArpFile, ring: 'out', loop: 4.0 },
+  lantern: { label: 'Lantern', url: ringOutLanternFile, ring: 'out', loop: 3.0 },
+  fireflyOut: { label: 'Firefly', url: ringOutFireflyFile, ring: 'out', loop: 2.8 },
+  marimbaOut: { label: 'Marimba', url: ringOutMarimbaFile, ring: 'out', loop: 3.0 },
+  glassOut: { label: 'Glass', url: ringOutGlassFile, ring: 'out', loop: 3.2 },
+  breathe: { label: 'Breathe', url: ringOutBreatheFile, ring: 'out', loop: 3.4 },
+  kalimbaOut: { label: 'Kalimba', url: ringOutKalimbaFile, ring: 'out', loop: 3.0 },
+  evening: { label: 'Evening', url: ringOutEveningFile, ring: 'out', loop: 6.0 },
+  pixel: { label: 'Pixel', url: ringOutPixelFile, ring: 'out', loop: 2.24 },
+  vibesOut: { label: 'Vibes', url: ringOutVibesFile, ring: 'out', loop: 5.0 },
+  musicBox: { label: 'Music box', url: ringOutMusicboxFile, ring: 'out', loop: 3.2 },
+  nightDrive: { label: 'Night drive', url: ringOutNightdriveFile, ring: 'out', loop: 4.0 },
+  steelOut: { label: 'Steel drum', url: ringOutSteelFile, ring: 'out', loop: 3.04 },
+  digital: { label: 'Digital', url: ringOutDigitalFile, ring: 'out', loop: 3.0 },
+  fireflyDance: { label: 'Firefly dance', url: ringInFireflyFile, ring: 'in', loop: 2.8 },
+  glowBells: { label: 'Glow bells', url: ringInGlowbellsFile, ring: 'in', loop: 3.2 },
+  marimbaRing: { label: 'Marimba', url: ringInMarimbaFile, ring: 'in', loop: 2.8 },
+  kalimbaRing: { label: 'Kalimba', url: ringInKalimbaFile, ring: 'in', loop: 3.0 },
+  glassChimes: { label: 'Glass chimes', url: ringInGlassFile, ring: 'in', loop: 3.0 },
+  classic: { label: 'Classic', url: ringInClassicFile, ring: 'in', loop: 3.0 },
+  electro: { label: 'Electro', url: ringInElectroFile, ring: 'in', loop: 2.6 },
+  chiptune: { label: 'Chiptune', url: ringInChiptuneFile, ring: 'in', loop: 2.6 },
+  groove: { label: 'Groove', url: ringInGrooveFile, ring: 'in', loop: 2.6 },
+  steelDrums: { label: 'Steel drums', url: ringInSteelFile, ring: 'in', loop: 2.8 },
+  vibesRing: { label: 'Vibes', url: ringInVibesFile, ring: 'in', loop: 2.8 },
+  digitalBells: { label: 'Digital bells', url: ringInFmbellsFile, ring: 'in', loop: 2.8 }
 }
 
 let settings: SoundSettings = {
@@ -63,8 +133,8 @@ let settings: SoundSettings = {
   callEnded: 'glowOff',
   memberJoined: 'blinkIn',
   memberLeft: 'blinkOut',
-  ringtone: 'ring',
-  outgoing: 'jingle'
+  ringtone: 'fireflyDance',
+  outgoing: 'synthArp'
 }
 
 /** Called at startup and whenever Settings changes them. */
@@ -112,28 +182,86 @@ export function playSound(name: SoundName): void {
 }
 
 /**
- * Plays a call sound over and over (the ringtone, or the jingle while you wait for someone to
- * answer) until the returned function is called. Silent if sounds are off or you're in
- * Do not disturb.
+ * Plays a call sound over and over (the ringtone, or the outgoing sound while you wait for
+ * someone to answer) until the returned function is called. Silent if sounds are off or you're
+ * in Do not disturb.
  */
 export function startLoop(name: 'ringtone' | 'outgoing'): () => void {
   if (!settings.enabled || (quiet && settings.dndSilence)) return () => {}
   const choice = settings[name]
   if (!choice || choice === 'none' || !(choice in SOUND_FILES)) return () => {}
-  const audio = new Audio(SOUND_FILES[choice].url)
-  audio.loop = true
-  audio.volume = volumeFor(name)
+  return loopSound(choice as SoundFile, volumeFor(name))
+}
+
+let audioContext: AudioContext | null = null
+const decoded = new Map<string, Promise<AudioBuffer>>()
+
+/** Web Audio, decoded once per file (used for loops, which need to be gapless). */
+function bufferOf(url: string): Promise<AudioBuffer> {
+  audioContext ??= new AudioContext()
+  const ctx = audioContext
+  let p = decoded.get(url)
+  if (!p) {
+    p = fetch(url)
+      .then((r) => r.arrayBuffer())
+      .then((data) => ctx.decodeAudioData(data))
+    p.catch(() => decoded.delete(url))
+    decoded.set(url, p)
+  }
+  return p
+}
+
+/**
+ * Loops one sound until the returned function is called. Sounds made as a loop cycle repeat
+ * exactly at their cycle length (no gap from the file's own padding); Chip's original long
+ * recordings simply start over at the end.
+ */
+function loopSound(file: SoundFile, volume: number): () => void {
+  const info = SOUND_FILES[file]
   let stopped = false
-  void audio.play().catch(() => {
-    // No sound device: nothing to do.
-  })
+  let source: AudioBufferSourceNode | null = null
+  void bufferOf(info.url)
+    .then(async (buffer) => {
+      if (stopped || !audioContext) return
+      if (audioContext.state === 'suspended') await audioContext.resume().catch(() => {})
+      const gain = audioContext.createGain()
+      gain.gain.value = volume
+      gain.connect(audioContext.destination)
+      source = audioContext.createBufferSource()
+      source.buffer = buffer
+      source.loop = true
+      if (info.loop && info.loop < buffer.duration) {
+        source.loopStart = 0
+        source.loopEnd = info.loop
+      }
+      source.connect(gain)
+      source.start()
+    })
+    .catch(() => {
+      // No sound device, or the file couldn't be read: nothing to do.
+    })
   return () => {
     if (stopped) return
     stopped = true
-    audio.pause()
-    audio.removeAttribute('src')
-    audio.load()
+    try {
+      source?.stop()
+    } catch {
+      // Not started yet.
+    }
   }
+}
+
+/**
+ * "No answer": plays once when your call rings out with nobody picking up. It's always the
+ * same sound (Dim; not a setting), and it follows mute, Do not disturb and the volume.
+ */
+export function playNoAnswer(): void {
+  if (!settings.enabled || (quiet && settings.dndSilence)) return
+  const volume = level(settings.volume)
+  if (volume === 0) return
+  const audio = new Audio(noAnswerFile)
+  audio.volume = volume
+  void audio.play().catch(() => {})
 }
 
 // ---------------------------------------------------------------------------------------
@@ -141,11 +269,14 @@ export function startLoop(name: 'ringtone' | 'outgoing'): () => void {
 // to stop. Only one preview plays at a time.
 
 let preview: HTMLAudioElement | null = null
+let previewStop: (() => void) | null = null
 let previewDone: (() => void) | null = null
 
 export function stopPreview(): void {
   preview?.pause()
   preview = null
+  previewStop?.()
+  previewStop = null
   previewDone?.()
   previewDone = null
 }
@@ -156,6 +287,18 @@ export function stopPreview(): void {
  */
 export function previewSound(file: SoundFile, onEnd: () => void, volume = 1): void {
   stopPreview()
+  // A ringing sound made as a loop cycle is only a few seconds: let it ring three times.
+  const info = SOUND_FILES[file]
+  if (info.loop) {
+    const stop = loopSound(file, Math.min(1, Math.max(0, volume)))
+    const timer = setTimeout(() => stopPreview(), info.loop * 3 * 1000)
+    previewStop = () => {
+      clearTimeout(timer)
+      stop()
+    }
+    previewDone = onEnd
+    return
+  }
   const audio = new Audio(SOUND_FILES[file].url)
   audio.volume = Math.min(1, Math.max(0, volume))
   preview = audio

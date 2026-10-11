@@ -24,6 +24,8 @@ type Saved = {
   textSize: TextSize
   sounds: SoundSettings
   notifications: NotificationSettings
+  /** Which set of default sounds the saved choices were made under (see SOUND_DEFAULTS_VERSION) */
+  soundDefaultsVersion?: number
 }
 const saved: Saved = {
   closeToTray: true, // the design has it on by default
@@ -43,8 +45,8 @@ const saved: Saved = {
     callEnded: 'glowOff',
     memberJoined: 'blinkIn',
     memberLeft: 'blinkOut',
-    ringtone: 'ring',
-    outgoing: 'jingle'
+    ringtone: 'fireflyDance',
+    outgoing: 'synthArp'
   },
   notifications: { enabled: true, preview: true }
 }
@@ -69,9 +71,49 @@ const ALERT_SOUNDS: AlertSound[] = [
   'dewdrop',
   'starfall',
   'pebble',
+  'pluck',
+  'fade',
   'none'
 ]
-const CALL_SOUNDS: CallSound[] = ['ring', 'jingle', 'none']
+// Keep in step with SOUND_FILES in the window (renderer/src/lib/sounds.ts).
+const CALL_SOUNDS: CallSound[] = [
+  'ring',
+  'jingle',
+  'synthArp',
+  'lantern',
+  'fireflyOut',
+  'marimbaOut',
+  'glassOut',
+  'breathe',
+  'kalimbaOut',
+  'evening',
+  'pixel',
+  'vibesOut',
+  'musicBox',
+  'nightDrive',
+  'steelOut',
+  'digital',
+  'fireflyDance',
+  'glowBells',
+  'marimbaRing',
+  'kalimbaRing',
+  'glassChimes',
+  'classic',
+  'electro',
+  'chiptune',
+  'groove',
+  'steelDrums',
+  'vibesRing',
+  'digitalBells',
+  'none'
+]
+
+/**
+ * 0.2.2 changed the default ringing sounds (Glow ring → Firefly dance, Glofly jingle → Synth
+ * arp). Settings saved before that still hold the old defaults, so they move over once; anyone
+ * who had picked something else keeps it. Bumped only when defaults change.
+ */
+const SOUND_DEFAULTS_VERSION = 2
 
 /** Checks a sound setting (from the window or the saved file) before using it. */
 function soundSettingOk(key: string, value: unknown): boolean {
@@ -130,6 +172,10 @@ export function loadAppSettings(): void {
       for (const [k, v] of Object.entries(value.sounds)) {
         if (soundSettingOk(k, v)) (saved.sounds as Record<string, unknown>)[k] = v
       }
+      if ((value.soundDefaultsVersion ?? 1) < SOUND_DEFAULTS_VERSION) {
+        if (saved.sounds.ringtone === 'ring') saved.sounds.ringtone = 'fireflyDance'
+        if (saved.sounds.outgoing === 'jingle') saved.sounds.outgoing = 'synthArp'
+      }
     }
     if (isNotificationChanges(value.notifications)) {
       saved.notifications = { ...saved.notifications, ...value.notifications }
@@ -166,7 +212,10 @@ export const zoomFactor = (): number => TEXT_SIZES[saved.textSize]
 
 function save(): void {
   try {
-    writeFileSync(file(), JSON.stringify(saved))
+    writeFileSync(
+      file(),
+      JSON.stringify({ ...saved, soundDefaultsVersion: SOUND_DEFAULTS_VERSION })
+    )
   } catch (err) {
     console.error("Couldn't save app settings", err)
   }

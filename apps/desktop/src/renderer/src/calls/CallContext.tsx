@@ -17,7 +17,7 @@ import type {
 } from '../../../preload/api-types'
 import { chatTitle } from '../lib/groups'
 import { audioCapture, getCallPrefs, onCallPrefsChange, type CallPrefs } from '../lib/callPrefs'
-import { playSound, startLoop } from '../lib/sounds'
+import { playNoAnswer, playSound, startLoop } from '../lib/sounds'
 import { effectiveVolume, onCallAudioChange } from '../lib/callAudio'
 import { clearNotification, notify, shouldNotify } from '../lib/notify'
 import IncomingCall from '../components/IncomingCall'
@@ -628,6 +628,7 @@ export function CallProvider({
           const unanswered = call.callerId === me.id && call.status !== 'ended'
           teardown()
           if (unanswered) {
+            playNoAnswer() // Dim: always the same sound, after the ringing stops
             const partner = cur.chat.kind === 'dm' ? cur.chat.people[0] : undefined
             callbacks.current.onNotice(
               partner ? `${firstName(partner)} didn't pick up.` : 'Nobody picked up.'
