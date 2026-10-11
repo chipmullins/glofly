@@ -137,6 +137,7 @@ export default function ChatScreen() {
     }
     const ready = uploads.readyAttachments()
     if (uploads.busy) return void inform('Still uploading', 'Wait for your photos and files to finish, then send.')
+    if (!text && !ready.length) return
     sendText(id, text, reply, ready)
     uploads.clear()
     setReply(null)
@@ -336,6 +337,7 @@ export default function ChatScreen() {
           onTyping={() => sendTyping(id)}
           onAttach={() => void attachMenu(uploads)}
           topSlot={<UploadTray uploads={uploads} />}
+          canSendEmpty={uploads.items.length > 0}
           voice={voice.recording ? <VoiceRecorderBar voice={voice} /> : undefined}
           recordButton={<RecordButton voice={voice} />}
         />

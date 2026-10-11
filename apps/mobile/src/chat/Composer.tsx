@@ -29,10 +29,12 @@ type Props = {
   canRecord?: boolean
   recordButton?: ReactNode
   topSlot?: ReactNode
+  /** Photos or files are ready, so Send works with an empty box. */
+  canSendEmpty?: boolean
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot },
+  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot, canSendEmpty },
   ref,
 ) {
   const { c } = useTheme()
@@ -80,13 +82,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   function send() {
     const body = text.trim()
-    if (!body) return
+    if (!body && !canSendEmpty) return
     onSend(body)
     setText('')
     setSelection({ start: 0, end: 0 })
   }
 
-  const showSend = text.trim().length > 0 || !!editing || !recordButton
+  const showSend = text.trim().length > 0 || !!editing || !!canSendEmpty || !recordButton
 
   return (
     <View style={{ backgroundColor: c.barBg, borderTopWidth: 0.5, borderTopColor: c.line, paddingHorizontal: 10, paddingTop: 6, paddingBottom: Math.max(insets.bottom, 8) + 4, gap: 8 }}>
@@ -132,8 +134,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </Pressable>
         </View>
       ) : null}
-      {voice ?? (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+      <View style={{ flexDirection: 'row', alignItems: voice ? 'center' : 'flex-end', gap: 6 }}>
+        {voice ? (
+          <View style={{ flex: 1, minWidth: 0 }}>{voice}</View>
+        ) : (
+          <>
           {!editing ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Add photos or files" onPress={onAttach} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="plus" size={22} color={c.ink2} strokeWidth={2.2} />
@@ -167,7 +172,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               <Icon name="emoji" size={22} color={c.muted} strokeWidth={1.9} />
             </Pressable>
           </View>
-          {showSend ? (
+          </>
+        )}
+        {!voice && showSend ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={editing ? 'Save edit' : 'Send'}
@@ -176,11 +183,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             >
               <Icon name={editing ? 'check' : 'send'} size={20} color={c.accentInk} strokeWidth={2.2} />
             </Pressable>
-          ) : (
-            recordButton
-          )}
-        </View>
-      )}
+        ) : (
+          recordButton
+        )}
+      </View>
     </View>
   )
 })

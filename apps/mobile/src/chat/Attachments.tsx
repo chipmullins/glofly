@@ -1,16 +1,182 @@
-import { View } from 'react-native'
-import { attachmentSummary, type Message } from '@glofly/shared'
+import { useEffect, useRef, useState } from 'react'
+import { Platform, Pressable, View, type LayoutChangeEvent } from 'react-native'
+import { Image } from 'expo-image'
+import { useAudioPlayer, useAudioPlayerStatus, type AudioPlayer } from 'expo-audio'
+import { fileTypeLabel, formatSize, voiceTime, type Attachment, type Message } from '@glofly/shared'
+import { authHeaders } from '@/api/http'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { useTheme } from '@/ui/theme'
+import { attachmentUrl, imageSource, shareFile } from './media'
 
-// Photos, files and voice messages in a bubble (simple summary for now; full view next step).
-export function Attachments({ message, mine }: { message: Message; mine: boolean; onOpenPhoto: (i: number) => void; onLongPress: () => void }) {
-  const { c } = useTheme()
+// Photos (a grid, or one photo in its own shape), file cards, and voice messages in a bubble.
+
+type Props = { message: Message; mine: boolean; onOpenPhoto: (index: number) => void; onLongPress: () => void }
+
+const MAX_W = 240
+
+export function Attachments({ message, mine, onOpenPhoto, onLongPress }: Props) {
+  const photos = message.attachments.filter((a) => a.kind === 'image')
+  const others = message.attachments.filter((a) => a.kind !== 'image')
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 6 }}>
-      <Icon name="attach" size={18} color={mine ? c.meInk : c.ink2} />
-      <Text size={14} style={{ color: mine ? c.meInk : c.ink }}>{attachmentSummary(message.attachments)}</Text>
+    <View style={{ gap: 6 }}>
+      {photos.length ? <PhotoGrid message={message} photos={photos} onOpen={(a) => onOpenPhoto(message.attachments.indexOf(a))} onLongPress={onLongPress} /> : null}
+      {others.map((a) =>
+        a.voice ? (
+          <VoiceBubble key={a.id} conversationId={message.conversationId} a={a} mine={mine} onLongPress={onLongPress} />
+        ) : (
+          <FileCard key={a.id} conversationId={message.conversationId} a={a} mine={mine} onLongPress={onLongPress} />
+        ),
+      )}
     </View>
+  )
+}
+
+function PhotoGrid({ message, photos, onOpen, onLongPress }: { message: Message; photos: Attachment[]; onOpen: (a: Attachment) => void; onLongPress: () => void }) {
+  const { c } = useTheme()
+  if (photos.length === 1) {
+    const a = photos[0]
+    const ratio = a.width && a.height ? a.width / a.height : 4 / 3
+    const w = Math.min(MAX_W, ratio >= 1 ? MAX_W : MAX_W * Math.max(ratio, 0.6))
+    const h = Math.min(320, w / ratio)
+    return (
+      <Pressable accessibilityRole="imagebutton" accessibilityLabel={`Photo: ${a.name}. Open`} onPress={() => onOpen(a)} onLongPress={onLongPress}>
+        <Image source={imageSource(message.conversationId, a, 'preview')} style={{ width: w, height: h, borderRadius: 14, backgroundColor: c.surface2 }} contentFit="cover" transition={150} cachePolicy="disk" />
+      </Pressable>
+    )
+  }
+  const size = photos.length === 2 ? (MAX_W - 4) / 2 : (MAX_W - 4) / 2
+  const shown = photos.slice(0, 4)
+  const extra = photos.length - shown.length
+  return (
+    <View style={{ width: MAX_W, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+      {shown.map((a, i) => (
+        <Pressable key={a.id} accessibilityRole="imagebutton" accessibilityLabel={`Photo ${i + 1} of ${photos.length}. Open`} onPress={() => onOpen(a)} onLongPress={onLongPress}>
+          <Image source={imageSource(message.conversationId, a, 'preview')} style={{ width: size, height: size, borderRadius: 10, backgroundColor: c.surface2 }} contentFit="cover" transition={150} cachePolicy="disk" />
+          {i === shown.length - 1 && extra > 0 ? (
+            <View style={{ position: 'absolute', inset: 0, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+              <Text display size={24} style={{ color: '#FFFFFF' }}>
+                +{extra}
+              </Text>
+            </View>
+          ) : null}
+        </Pressable>
+      ))}
+    </View>
+  )
+}
+
+function FileCard({ conversationId, a, mine, onLongPress }: { conversationId: string; a: Attachment; mine: boolean; onLongPress: () => void }) {
+  const { c } = useTheme()
+  const [busy, setBusy] = useState(false)
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`File ${a.name}, ${formatSize(a.size)}. Download`}
+      onPress={async () => {
+        setBusy(true)
+        await shareFile(conversationId, a)
+        setBusy(false)
+      }}
+      onLongPress={onLongPress}
+      style={{ width: MAX_W, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, backgroundColor: mine ? 'rgba(255,255,255,0.3)' : c.bg }}
+    >
+      <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: mine ? 'rgba(42,20,6,0.12)' : c.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name="file" size={20} color={mine ? c.meInk : c.ink2} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text size={14} weight="bold" numberOfLines={1} style={{ color: mine ? c.meInk : c.ink }}>
+          {a.name}
+        </Text>
+        <Text size={12} style={{ color: mine ? c.meInk : c.muted, opacity: mine ? 0.8 : 1 }}>
+          {fileTypeLabel(a.name)} · {formatSize(a.size)}
+        </Text>
+      </View>
+      <Icon name={busy ? 'clock' : 'download'} size={20} color={mine ? c.meInk : c.accentText} />
+    </Pressable>
+  )
+}
+
+// Only one voice message plays at a time.
+let playing: AudioPlayer | null = null
+
+function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId: string; a: Attachment; mine: boolean; onLongPress: () => void }) {
+  const { c } = useTheme()
+  const [source, setSource] = useState<{ uri: string; headers: Record<string, string> } | null>(null)
+  const player = useAudioPlayer(source)
+  const status = useAudioPlayerStatus(player)
+  const width = useRef(0)
+  const wantPlay = useRef(false)
+  const peaks = a.voice?.peaks?.length ? a.voice.peaks : [20]
+  const duration = (a.voice?.durationMs ?? 0) / 1000
+  const progress = duration ? Math.min(1, status.currentTime / (status.duration || duration)) : 0
+  const bars = 32
+  const sampled = Array.from({ length: bars }, (_, i) => peaks[Math.floor((i / bars) * peaks.length)] ?? 0)
+
+  useEffect(() => {
+    if (wantPlay.current && status.isLoaded) {
+      wantPlay.current = false
+      if (playing && playing !== player) playing.pause()
+      playing = player
+      player.play()
+    }
+  }, [status.isLoaded, player])
+
+  useEffect(() => {
+    if (status.didJustFinish) void player.seekTo(0)
+  }, [status.didJustFinish, player])
+
+  const toggle = () => {
+    if (!source) {
+      wantPlay.current = true
+      const uri = attachmentUrl(conversationId, a, 'file')
+      if (Platform.OS === 'web') {
+        // Browsers can't send the session header with <audio>, so the preview fetches it first.
+        void fetch(uri, { headers: authHeaders() })
+          .then((r) => r.blob())
+          .then((b) => setSource({ uri: URL.createObjectURL(b), headers: {} }))
+      } else setSource({ uri, headers: authHeaders() })
+      return
+    }
+    if (status.playing) player.pause()
+    else {
+      if (playing && playing !== player) playing.pause()
+      playing = player
+      player.play()
+    }
+  }
+
+  const seek = (x: number) => {
+    if (!source || !width.current) return
+    void player.seekTo(Math.max(0, Math.min(1, x / width.current)) * (status.duration || duration))
+  }
+
+  const ink = mine ? c.meInk : c.ink
+  const dim = mine ? 'rgba(42,20,6,0.35)' : c.faint
+  return (
+    <Pressable onLongPress={onLongPress} style={{ width: MAX_W, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4, paddingHorizontal: 4 }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={status.playing ? 'Pause voice message' : `Play voice message, ${voiceTime(a.voice?.durationMs ?? 0)}`}
+        onPress={toggle}
+        style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: mine ? c.meInk : c.accent, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Icon name={status.playing ? 'pause' : 'play'} size={18} color={mine ? c.me : c.accentInk} />
+      </Pressable>
+      <Pressable
+        accessibilityRole="adjustable"
+        accessibilityLabel="Voice message position"
+        onLayout={(e: LayoutChangeEvent) => (width.current = e.nativeEvent.layout.width)}
+        onPress={(e) => seek(e.nativeEvent.locationX)}
+        style={{ flex: 1, height: 32, flexDirection: 'row', alignItems: 'center', gap: 2 }}
+      >
+        {sampled.map((p, i) => (
+          <View key={i} style={{ flex: 1, height: Math.max(3, (p / 100) * 28), borderRadius: 2, backgroundColor: i / bars < progress ? ink : dim }} />
+        ))}
+      </Pressable>
+      <Text size={12} weight="medium" style={{ color: ink, minWidth: 30 }}>
+        {voiceTime(status.playing || status.currentTime > 0 ? status.currentTime * 1000 : (a.voice?.durationMs ?? 0))}
+      </Text>
+    </Pressable>
   )
 }

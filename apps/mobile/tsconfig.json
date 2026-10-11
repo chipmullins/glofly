@@ -4,11 +4,30 @@
     "strict": true,
     "noUncheckedIndexedAccess": false,
     "paths": {
-      "@/*": ["./src/*"],
-      "@glofly/shared": ["../../packages/shared/src/index.ts"],
-      "@glofly/shared/*": ["../../packages/shared/src/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@glofly/shared": [
+        "../../packages/shared/src/index.ts"
+      ],
+      "@glofly/shared/*": [
+        "../../packages/shared/src/*"
+      ],
+      "glofly-native": [
+        "./modules/glofly-native/index.ts"
+      ]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  "exclude": ["node_modules", "android", "ios", "dist"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "android",
+    "ios",
+    "dist"
+  ]
 }
