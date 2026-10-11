@@ -1,0 +1,369 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Animated, BackHandler, Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
+import { router } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { chatTitle, type PublicUser } from '@glofly/shared'
+import type { VideoTrack } from 'livekit-client'
+import { useCall, hangUp, setMic, setCamera, flipCamera, ringPeople, type Tile } from '@/calls/controller'
+import { CallVideo, audioRoutes, selectAudioRoute, type AudioRoute } from '@/calls/media'
+import { useStore } from '@/state/store'
+import { useSession } from '@/state/session'
+import { timer } from '@/lib/format'
+import { useNow } from '@/lib/hooks'
+import { Avatar } from '@/ui/Avatar'
+import { BottomSheet, chooseFrom } from '@/ui/dialogs'
+import { FriendPicker } from '@/ui/FriendPicker'
+import { Icon, type IconName } from '@/ui/icons'
+import { Button, Text } from '@/ui/kit'
+import { call as callColors } from '@/ui/theme'
+
+// The call screen, from the design: 1-on-1 video fills the screen with your camera on top (drag
+// it to any corner), voice calls show their photo with firefly glow rings, groups are a grid
+// (tap someone to pin them), and a shared screen shows big with everyone below it.
+
+const ROUTE_LABEL: Record<AudioRoute, string> = { speaker: 'Speaker', earpiece: 'Phone', headset: 'Headphones', bluetooth: 'Bluetooth' }
+const ROUTE_ICON: Record<AudioRoute, IconName> = { speaker: 'speaker', earpiece: 'earpiece', headset: 'speaker', bluetooth: 'bluetooth' }
+
+export default function CallScreen() {
+  const insets = useSafeAreaInsets()
+  const { width, height } = useWindowDimensions()
+  const s = useCall()
+  const meId = useSession((x) => x.user?.id ?? '')
+  const people = useStore((x) => x.people)
+  const me = useSession((x) => x.user)
+  const chat = useStore((x) => (s.call ? x.conversations[s.call.conversationId] : undefined))
+  const now = useNow(1000)
+  const [pinned, setPinned] = useState<string | null>(null)
+  const [route, setRoute] = useState<AudioRoute | null>(null)
+  const [adding, setAdding] = useState(false)
+
+  const leaveScreen = () => (router.canGoBack() ? router.back() : router.replace('/chats'))
+
+  useEffect(() => {
+    if (!s.call && !s.connecting) leaveScreen()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.call, s.connecting])
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      leaveScreen() // the call keeps going (the strip brings you back)
+      return true
+    })
+    return () => sub.remove()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const call = s.call
+  const isGroup = chat?.kind === 'group'
+  const personOf = (id: string): PublicUser => (id === meId && me ? me : (people[id] ?? { id, username: '', displayName: 'Someone', avatarVersion: null }))
+  const others = s.tiles.filter((t) => !t.local)
+  const self = s.tiles.find((t) => t.local)
+  const ringing = call ? call.members.filter((m) => m.state === 'ringing' && m.userId !== meId).map((m) => m.userId) : []
+  const joinedCount = call ? call.members.filter((m) => m.state === 'joined').length : 0
+  const screenTile = s.tiles.find((t) => t.screen)
+  const answered = !!call?.answeredAt || others.length > 0
+  const status = !call
+    ? 'Connecting…'
+    : !answered
+      ? isGroup
+        ? `Ringing ${ringing.length} ${ringing.length === 1 ? 'person' : 'people'}…`
+        : 'Ringing…'
+      : isGroup
+        ? `${joinedCount} of ${call.members.length} joined · ${timer(call.answeredAt ?? call.createdAt, now)}`
+        : timer(call.answeredAt ?? call.createdAt, now)
+  const title = chat ? chatTitle(chat) : 'Call'
+
+  async function pickRoute() {
+    const routes = await audioRoutes()
+    if (!routes.length) return
+    const pick = await chooseFrom(
+      routes.map((r) => ({ key: r, label: ROUTE_LABEL[r] ?? r, icon: ROUTE_ICON[r] ?? 'speaker', checked: r === route })),
+      'Play the call on',
+    )
+    if (!pick) return
+    await selectAudioRoute(pick as AudioRoute)
+    setRoute(pick as AudioRoute)
+  }
+
+  const oneOnOneVideo = !isGroup && !screenTile && others[0]?.camera
+  const voiceOnly = !isGroup && !screenTile && !others[0]?.camera
+
+  return (
+    <View style={{ flex: 1, backgroundColor: callColors.bg }}>
+      {/* Main area */}
+      <View style={{ flex: 1 }}>
+        {screenTile ? (
+          <View style={{ flex: 1, paddingTop: insets.top + 60 }}>
+            <View style={{ flex: 1, backgroundColor: '#000' }} accessibilityLabel={`${personOf(screenTile.userId).displayName}'s shared screen`}>
+              <CallVideo track={screenTile.screen!} contain style={{ flex: 1 }} />
+              <View style={{ position: 'absolute', left: 12, bottom: 12, paddingHorizontal: 12, height: 30, borderRadius: 15, backgroundColor: 'rgba(28,18,16,0.6)', justifyContent: 'center' }}>
+                <Text size={13} weight="bold" style={{ color: '#FFF' }}>
+                  {screenTile.local ? 'You are sharing your screen' : `${personOf(screenTile.userId).displayName.split(' ')[0]} is sharing their screen`}
+                </Text>
+              </View>
+            </View>
+            <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={{ padding: 10, gap: 8 }}>
+              {s.tiles.map((t) => (
+                <TileView key={t.userId} tile={t} person={personOf(t.userId)} w={120} h={90} />
+              ))}
+            </ScrollView>
+            <Text size={12} style={{ color: callColors.faint, textAlign: 'center', paddingBottom: 6 }}>
+              Turn your phone sideways to see it bigger
+            </Text>
+          </View>
+        ) : oneOnOneVideo ? (
+          <View style={{ flex: 1 }}>
+            <CallVideo track={others[0].camera!} style={{ position: 'absolute', top: 0, left: 0, width, height }} zOrder={0} />
+            <View style={{ position: 'absolute', left: 16, bottom: 140 + insets.bottom }}>{others[0].speaking ? <TalkingTag name={personOf(others[0].userId).displayName} /> : null}</View>
+          </View>
+        ) : !answered && s.cameraOn && self?.camera ? (
+          <View style={{ flex: 1 }}>
+            <CallVideo track={self.camera} mirror={s.frontCamera} style={{ position: 'absolute', top: 0, left: 0, width, height }} />
+            <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(18,13,11,0.35)' }} />
+            <VoiceStage person={chat?.kind === 'dm' ? chat.partner : personOf(meId)} speaking={false} ringing />
+          </View>
+        ) : voiceOnly ? (
+          <VoiceStage person={others[0] ? personOf(others[0].userId) : chat?.kind === 'dm' ? chat.partner : personOf(meId)} speaking={!!others[0]?.speaking} ringing={!answered} />
+        ) : (
+          <Grid
+            tiles={s.tiles}
+            ringing={ringing}
+            personOf={personOf}
+            pinned={pinned}
+            onPin={(id) => setPinned((p) => (p === id ? null : id))}
+            top={insets.top + 64}
+            bottom={140 + insets.bottom}
+          />
+        )}
+      </View>
+
+      {/* Your camera on top in 1-on-1 video */}
+      {oneOnOneVideo && self?.camera ? <SelfPip track={self.camera} mirror={s.frontCamera} top={insets.top + 70} bottom={150 + insets.bottom} /> : null}
+
+      {/* Title bar */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: insets.top, backgroundColor: oneOnOneVideo ? 'rgba(18,13,11,0.45)' : 'transparent' }}>
+        <View style={{ height: 60, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, gap: 4 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Back to chat, call keeps going" onPress={leaveScreen} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="chevronDown" size={26} color="#FFFFFF" />
+          </Pressable>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text size={17} weight="bold" numberOfLines={1} style={{ color: '#FFF' }}>
+              {title}
+            </Text>
+            <Text size={13} style={{ color: callColors.muted }}>
+              {status}
+            </Text>
+          </View>
+          {isGroup ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Add people to call" onPress={() => setAdding(true)} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="addPerson" size={22} color="#FFFFFF" />
+            </Pressable>
+          ) : (
+            <View style={{ width: 48 }} />
+          )}
+        </View>
+      </View>
+
+      {/* Controls */}
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, paddingBottom: insets.bottom + 18, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#2A1C17' }}>
+        <View style={{ alignSelf: 'center', width: 32, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.35)', marginBottom: 14 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <CtrlButton icon={s.cameraOn ? 'video' : 'videoOff'} label={s.cameraOn ? 'Turn camera off' : 'Turn camera on'} on={s.cameraOn} onPress={() => void setCamera(!s.cameraOn)} />
+          <CtrlButton icon={s.micOn ? 'mic' : 'micOff'} label={s.micOn ? 'Mute microphone' : 'Unmute microphone'} on={!s.micOn} onPress={() => void setMic(!s.micOn)} />
+          {s.cameraOn ? <CtrlButton icon="flip" label="Switch camera" onPress={() => void flipCamera()} /> : <CtrlButton icon={route ? ROUTE_ICON[route] : 'speaker'} label={`Audio: ${route ? ROUTE_LABEL[route] : 'choose where it plays'}`} onPress={() => void pickRoute()} />}
+          {s.cameraOn ? <CtrlButton icon={route ? ROUTE_ICON[route] : 'speaker'} label={`Audio: ${route ? ROUTE_LABEL[route] : 'choose where it plays'}`} onPress={() => void pickRoute()} /> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isGroup ? 'Leave call' : 'Hang up'}
+            onPress={() => void hangUp()}
+            style={{ width: 84, height: 56, borderRadius: 28, backgroundColor: '#D33A2C', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(211,58,44,0.45)' }}
+          >
+            <Icon name="hangup" size={26} color="#FFFFFF" fill="#FFFFFF" />
+          </Pressable>
+        </View>
+      </View>
+
+      {adding && call ? (
+        <AddToCall
+          exclude={call.members.filter((m) => m.state !== 'out').map((m) => m.userId)}
+          inChat={chat?.members.map((m) => m.id) ?? []}
+          onDone={(ids) => {
+            setAdding(false)
+            void ringPeople(ids)
+          }}
+        />
+      ) : null}
+    </View>
+  )
+}
+
+function CtrlButton({ icon, label, on, onPress }: { icon: IconName; label: string; on?: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: !!on }}
+      onPress={onPress}
+      style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: on ? '#F3E6DC' : '#3A2A22', alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Icon name={icon} size={24} color={on ? '#1C1210' : '#FFFFFF'} />
+    </Pressable>
+  )
+}
+
+function TalkingTag({ name }: { name: string }) {
+  return (
+    <View style={{ height: 30, paddingHorizontal: 12, borderRadius: 15, backgroundColor: 'rgba(28,18,16,0.6)', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFA54A', boxShadow: '0 0 8px 2px rgba(255,165,74,0.8)' }} />
+      <Text size={13} weight="bold" style={{ color: '#FFF' }}>
+        {name.split(' ')[0]} is talking
+      </Text>
+    </View>
+  )
+}
+
+function VoiceStage({ person, speaking, ringing }: { person: PublicUser; speaking: boolean; ringing: boolean }) {
+  const pulse = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 1800, useNativeDriver: true }))
+    loop.start()
+    return () => loop.stop()
+  }, [pulse])
+  const ring = (delay: number, size: number) => (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 2,
+        borderColor: callColors.glow,
+        opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [ringing || speaking ? 0.55 - delay : 0.18, 0] }),
+        transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] }) }],
+      }}
+    />
+  )
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, paddingBottom: 120 }}>
+      <View style={{ alignItems: 'center', justifyContent: 'center', width: 260, height: 260 }}>
+        {ring(0, 200)}
+        {ring(0.15, 240)}
+        <View style={{ borderRadius: 90, boxShadow: speaking ? '0 0 0 4px #FFA54A, 0 0 32px rgba(255,165,74,0.6)' : '0 0 40px rgba(255,179,71,0.25)' }}>
+          <Avatar user={person} size={160} />
+        </View>
+      </View>
+      <Text display size={28} style={{ color: '#FFF' }}>
+        {person.displayName}
+      </Text>
+    </View>
+  )
+}
+
+function TileView({ tile, person, w, h, ringing, onPress }: { tile: Tile | null; person: PublicUser; w: number; h: number; ringing?: boolean; onPress?: () => void }) {
+  const talking = tile?.speaking
+  return (
+    <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={`${person.displayName}${ringing ? ', ringing' : ''}${tile?.micMuted ? ', muted' : ''}${onPress ? '. Tap to pin' : ''}`}
+      onPress={onPress}
+      style={{ width: w, height: h, borderRadius: 16, overflow: 'hidden', backgroundColor: callColors.tile, alignItems: 'center', justifyContent: 'center', borderWidth: talking ? 3 : 0, borderColor: '#FFA54A' }}
+    >
+      {tile?.camera ? (
+        <CallVideo track={tile.camera} mirror={tile.local} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} />
+      ) : (
+        <View style={{ opacity: ringing ? 0.85 : 1, borderRadius: 60, boxShadow: ringing ? '0 0 24px rgba(255,179,71,0.6)' : undefined }}>
+          <Avatar user={person} size={Math.min(w, h) * 0.42} />
+        </View>
+      )}
+      <View style={{ position: 'absolute', left: 8, bottom: 8, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, height: 24, borderRadius: 12, backgroundColor: 'rgba(18,13,11,0.6)' }}>
+        {tile?.micMuted ? <Icon name="micOff" size={12} color="#FFF" /> : null}
+        <Text size={12} weight="bold" style={{ color: '#FFF' }} numberOfLines={1}>
+          {tile?.local ? 'You' : person.displayName.split(' ')[0]}
+          {ringing ? ' · Ringing…' : ''}
+        </Text>
+      </View>
+    </Pressable>
+  )
+}
+
+function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom }: { tiles: Tile[]; ringing: string[]; personOf: (id: string) => PublicUser; pinned: string | null; onPin: (id: string) => void; top: number; bottom: number }) {
+  const { width, height } = useWindowDimensions()
+  const all = useMemo(() => [...tiles.map((t) => ({ id: t.userId, tile: t as Tile | null, ringing: false })), ...ringing.filter((id) => !tiles.some((t) => t.userId === id)).map((id) => ({ id, tile: null, ringing: true }))], [tiles, ringing])
+  const available = height - top - bottom
+  const pin = pinned ? all.find((x) => x.id === pinned) : null
+  if (pin) {
+    const rest = all.filter((x) => x.id !== pin.id)
+    return (
+      <View style={{ position: 'absolute', top, left: 0, right: 0, bottom, padding: 10, gap: 10 }}>
+        <TileView tile={pin.tile} person={personOf(pin.id)} w={width - 20} h={available - 130} ringing={pin.ringing} onPress={() => onPin(pin.id)} />
+        <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
+          {rest.map((x) => (
+            <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={130} h={100} ringing={x.ringing} onPress={() => onPin(x.id)} />
+          ))}
+        </ScrollView>
+      </View>
+    )
+  }
+  const cols = all.length <= 4 ? 2 : 3
+  const rows = Math.ceil(all.length / cols)
+  const w = (width - 20 - (cols - 1) * 8) / cols
+  const h = Math.min(w * 1.3, (available - 20 - (Math.min(rows, 3) - 1) * 8) / Math.min(rows, 3))
+  return (
+    <ScrollView style={{ position: 'absolute', top, left: 0, right: 0, bottom }} contentContainerStyle={{ padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', minHeight: available, alignContent: 'center' }}>
+      {all.map((x) => (
+        <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={all.length === 1 ? width - 20 : w} h={all.length === 1 ? available - 20 : h} ringing={x.ringing} onPress={() => onPin(x.id)} />
+      ))}
+    </ScrollView>
+  )
+}
+
+/** Your camera on top: drag it, and it snaps to the nearest corner. */
+function SelfPip({ track, mirror, top, bottom }: { track: VideoTrack; mirror: boolean; top: number; bottom: number }) {
+  const { width, height } = useWindowDimensions()
+  const W = 108
+  const H = 156
+  const pos = useRef(new Animated.ValueXY({ x: width - W - 14, y: top })).current
+  const start = useRef({ x: 0, y: 0 })
+  const gesture = Gesture.Pan()
+    .runOnJS(true)
+    .onBegin(() => {
+      // @ts-expect-error Animated values hold their current number
+      start.current = { x: pos.x._value, y: pos.y._value }
+    })
+    .onUpdate((e) => pos.setValue({ x: start.current.x + e.translationX, y: start.current.y + e.translationY }))
+    .onEnd((e) => {
+      const x = start.current.x + e.translationX
+      const y = start.current.y + e.translationY
+      const toX = x + W / 2 < width / 2 ? 14 : width - W - 14
+      const toY = y + H / 2 < height / 2 ? top : height - bottom - H
+      Animated.spring(pos, { toValue: { x: toX, y: toY }, useNativeDriver: false }).start()
+    })
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View accessibilityLabel="Your camera (drag to move)" style={{ position: 'absolute', left: pos.x, top: pos.y, width: W, height: H, borderRadius: 16, overflow: 'hidden', backgroundColor: '#2E3A44', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+        <CallVideo track={track} mirror={mirror} style={{ width: W, height: H }} zOrder={1} />
+      </Animated.View>
+    </GestureDetector>
+  )
+}
+
+function AddToCall({ exclude, inChat, onDone }: { exclude: string[]; inChat: string[]; onDone: (ids: string[]) => void }) {
+  const [picked, setPicked] = useState<string[]>([])
+  const notIn = (useStore.getState().friends.friends.map((f) => f.id) as string[]).filter((id) => !inChat.includes(id))
+  return (
+    <BottomSheet onClose={() => onDone([])}>
+      <View style={{ height: 480 }}>
+        <Text display size={20} style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+          Add people to call
+        </Text>
+        <View style={{ flex: 1 }}>
+          <FriendPicker selected={picked} onToggle={(f) => setPicked((p) => (p.includes(f.id) ? p.filter((x) => x !== f.id) : [...p, f.id]))} exclude={[...exclude, ...notIn]} />
+        </View>
+        <View style={{ padding: 16 }}>
+          <Button label={picked.length ? `Ring ${picked.length}` : 'Pick people in the group'} disabled={!picked.length} onPress={() => onDone(picked)} />
+        </View>
+      </View>
+    </BottomSheet>
+  )
+}

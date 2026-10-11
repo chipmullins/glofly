@@ -15,6 +15,10 @@ import { UpdateRequired } from '@/ui/UpdateRequired'
 import { restoreSession, useSession } from '@/state/session'
 import { prefs } from '@/lib/storage'
 import { loadPhonePrefs } from '@/state/prefs'
+import { setupWebRTC } from '@/calls/media'
+
+// LiveKit needs WebRTC's globals before anything uses it.
+setupWebRTC()
 
 void SplashScreen.preventAutoHideAsync().catch(() => {})
 
