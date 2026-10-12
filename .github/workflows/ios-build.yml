@@ -31,7 +31,8 @@ concurrency:
 
 jobs:
   simulator:
-    runs-on: macos-15
+    # Expo SDK 57 needs Xcode 26 or newer (macos-15's default Xcode 16.4 can't build it, Oct 12).
+    runs-on: macos-26
     timeout-minutes: 75
     env:
       APP_VARIANT: preview
@@ -43,6 +44,13 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      - name: Use Xcode 26
+        # The newest Xcode 26 release on the runner (not a beta); otherwise the runner's default.
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1 || true)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
 
       - name: Install packages
         run: npm ci --ignore-scripts
@@ -62,7 +70,13 @@ jobs:
       - name: Build for the Simulator
         working-directory: apps/mobile/ios
         run: |
-          set -o pipefail
-          xcodebuild -workspace Glofly.xcworkspace -scheme Glofly -configuration Debug \
+          # The full log is huge; on failure, show the actual errors (the summary alone names only
+          # the step that failed).
+          if ! xcodebuild -workspace Glofly.xcworkspace -scheme Glofly -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build | tail -n 200
+            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build > build.log 2>&1; then
+            grep -n -B2 -A6 -E "error:|fatal error|Command .* failed|\*\* BUILD FAILED" build.log | head -n 300
+            tail -n 60 build.log
+            exit 1
+          fi
+          tail -n 5 build.log
