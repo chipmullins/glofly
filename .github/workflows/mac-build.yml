@@ -84,6 +84,12 @@ jobs:
           codesign --verify --deep --strict --verbose=2 Glofly.app
           /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' Glofly.app/Contents/Info.plist
           /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' Glofly.app/Contents/Info.plist
+          # Push to talk's keyboard hook: the prebuilt copy for each chip, and no compiled-here copy
+          # (that one would be picked first and only works on this runner's chip).
+          hook=Glofly.app/Contents/Resources/app.asar.unpacked/node_modules/uiohook-napi
+          lipo -archs "$hook/prebuilds/darwin-x64/uiohook-napi.node" | grep -qx x86_64
+          lipo -archs "$hook/prebuilds/darwin-arm64/uiohook-napi.node" | grep -qx arm64
+          test ! -e "$hook/build"
 
       - name: Read the version
         id: version

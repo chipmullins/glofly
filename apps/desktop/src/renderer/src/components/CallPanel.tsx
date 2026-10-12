@@ -46,6 +46,7 @@ import {
   VideoOffIcon
 } from './icons'
 import { isMac } from '../lib/platform'
+import { cameraFit, type VideoFit } from '../lib/videoFit'
 import './CallPanel.css'
 
 // The call, shown at the top of its chat. Dark in every theme. 0.2.2 layouts (the "Glofly call
@@ -53,23 +54,26 @@ import './CallPanel.css'
 // draggable on top, controls on the video that hide until you move the mouse) or side by side;
 // groups in a grid, or one person pinned with everyone else in a column; a shared screen big in
 // its own shape with everyone beside it; and full screen on the whole call, one person or the
-// screen. Cameras always fill their box; screens are never cropped.
+// screen. Cameras fill their box unless that would crop a lot (an upright phone in a wide tile
+// shows whole, with bars); screens are never cropped.
 
 /** A camera or screen, playing in a video element. */
 function TrackVideo({
   track,
   mirror = false,
-  fit = 'cover',
+  fit = 'auto',
   onShape
 }: {
   track: VideoTrack
   mirror?: boolean
-  fit?: 'cover' | 'contain'
+  /** 'auto' (cameras): fill the box unless that would crop a lot, e.g. an upright phone in a wide tile */
+  fit?: VideoFit | 'auto'
   /** The video's own width and height, when it starts and whenever it changes */
   onShape?: (w: number, h: number) => void
 }): React.JSX.Element {
   const ref = useRef<HTMLVideoElement>(null)
   const shapeRef = useRef(onShape)
+  const [autoFit, setAutoFit] = useState<VideoFit>('cover')
   useEffect(() => {
     shapeRef.current = onShape
   })
@@ -77,21 +81,31 @@ function TrackVideo({
     const el = ref.current
     if (!el) return
     track.attach(el)
+    const refit = (): void => {
+      const next = cameraFit(el.videoWidth, el.videoHeight, el.clientWidth, el.clientHeight)
+      setAutoFit((f) => (f === next ? f : next))
+    }
     const report = (): void => {
       if (el.videoWidth > 0 && el.videoHeight > 0) shapeRef.current?.(el.videoWidth, el.videoHeight)
+      refit()
     }
     el.addEventListener('loadedmetadata', report)
     el.addEventListener('resize', report)
+    // The box changes too: side by side vs full frame, full screen, the window resized.
+    const boxWatch = new ResizeObserver(refit)
+    boxWatch.observe(el)
     return () => {
       el.removeEventListener('loadedmetadata', report)
       el.removeEventListener('resize', report)
+      boxWatch.disconnect()
       track.detach(el)
     }
   }, [track])
+  const shown = fit === 'auto' ? autoFit : fit
   return (
     <video
       ref={ref}
-      className={`call-video call-video--${fit}${mirror ? ' call-video--mirror' : ''}`}
+      className={`call-video call-video--${shown}${mirror ? ' call-video--mirror' : ''}`}
       autoPlay
       playsInline
       muted
@@ -1681,7 +1695,7 @@ export function CallFloat({
 
   // What to show, most interesting first.
   let video: VideoTrack | null = null
-  let fit: 'cover' | 'contain' = 'cover'
+  let fit: VideoFit | 'auto' = 'auto'
   let label = ''
   let who: PublicUser | undefined
   for (const p of remotes) {

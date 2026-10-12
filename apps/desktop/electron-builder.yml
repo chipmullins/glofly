@@ -12,6 +12,11 @@ files:
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!resources/icon-options/**' # saved icon designs: kept in the repo, not shipped
+  # Push to talk's keyboard hook ships ready-made copies for every computer in prebuilds/. If npm
+  # also compiled one into build/ (it does on GitHub's Macs), that copy wins at runtime and is only
+  # for the chip it was built on, so it would break Push to talk on the other kind of Mac (and the
+  # universal Mac build refuses it). Leave it out: the prebuilt copies are always used.
+  - '!**/node_modules/uiohook-napi/build/**'
 asarUnpack:
   - resources/**
   # Push to talk's native keyboard hook: .node files can't load from inside the archive
@@ -52,6 +57,9 @@ mac:
   notarize: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  # Universal build: the keyboard hook's prebuilt darwin-x64 and darwin-arm64 files sit side by side
+  # in both halves and the right one is picked at runtime, so keep them as they are (no merging).
+  x64ArchFiles: '**/node_modules/uiohook-napi/prebuilds/darwin-*/*.node'
   # The words in macOS's permission prompts. Without them macOS won't let Glofly ask at all.
   extendInfo:
     NSCameraUsageDescription: Glofly uses your camera for video calls.

@@ -114,7 +114,9 @@ export default function CallScreen() {
           </View>
         ) : oneOnOneVideo ? (
           <View style={{ flex: 1 }}>
-            <CallVideo track={others[0].camera!} style={{ position: 'absolute', top: 0, left: 0, width, height }} zOrder={0} />
+            {/* Whole picture, never cropped: a computer's wide camera on an upright phone would otherwise be
+                a zoomed-in slice of the middle (faces cut off when someone sits off to the side). */}
+            <CallVideo track={others[0].camera!} contain style={{ position: 'absolute', top: 0, left: 0, width, height }} zOrder={0} />
             <View style={{ position: 'absolute', left: 16, bottom: 140 + insets.bottom }}>{others[0].speaking ? <TalkingTag name={personOf(others[0].userId).displayName} /> : null}</View>
           </View>
         ) : !answered && s.cameraOn && self?.camera ? (
@@ -270,7 +272,7 @@ function TileView({ tile, person, w, h, ringing, onPress }: { tile: Tile | null;
       style={{ width: w, height: h, borderRadius: 16, overflow: 'hidden', backgroundColor: callColors.tile, alignItems: 'center', justifyContent: 'center', borderWidth: talking ? 3 : 0, borderColor: '#FFA54A' }}
     >
       {tile?.camera ? (
-        <CallVideo track={tile.camera} mirror={tile.local} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} />
+        <CallVideo track={tile.camera} mirror={tile.local} contain style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} />
       ) : (
         <View style={{ opacity: ringing ? 0.85 : 1, borderRadius: 60, boxShadow: ringing ? '0 0 24px rgba(255,179,71,0.6)' : undefined }}>
           <Avatar user={person} size={Math.min(w, h) * 0.42} />
@@ -321,8 +323,9 @@ function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom }: { tiles:
 /** Your camera on top: drag it, and it snaps to the nearest corner. */
 function SelfPip({ track, mirror, top, bottom }: { track: VideoTrack; mirror: boolean; top: number; bottom: number }) {
   const { width, height } = useWindowDimensions()
+  // A phone camera's own shape (9:16), shown whole, so nothing of your face is cut off.
   const W = 108
-  const H = 156
+  const H = 192
   const pos = useRef(new Animated.ValueXY({ x: width - W - 14, y: top })).current
   const start = useRef({ x: 0, y: 0 })
   const gesture = Gesture.Pan()
@@ -342,7 +345,7 @@ function SelfPip({ track, mirror, top, bottom }: { track: VideoTrack; mirror: bo
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View accessibilityLabel="Your camera (drag to move)" style={{ position: 'absolute', left: pos.x, top: pos.y, width: W, height: H, borderRadius: 16, overflow: 'hidden', backgroundColor: '#2E3A44', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
-        <CallVideo track={track} mirror={mirror} style={{ width: W, height: H }} zOrder={1} />
+        <CallVideo track={track} mirror={mirror} contain style={{ width: W, height: H }} zOrder={1} />
       </Animated.View>
     </GestureDetector>
   )
