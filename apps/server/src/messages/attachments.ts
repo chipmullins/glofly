@@ -36,17 +36,22 @@ export type AttachmentInfo = {
 // Voice messages: Opus audio recorded in Glofly, up to 5 minutes (about 1–2 MB).
 export { VOICE_MAX_MS, VOICE_MAX_BYTES, VOICE_PEAKS_MAX } from "@glofly/shared";
 
-/** WebM (what Glofly records) or Ogg, by the bytes the file starts with. */
-export function voiceFormat(data: Buffer): "webm" | "ogg" | null {
+/**
+ * WebM (desktop), Ogg (Android) or MP4/AAC (iPhones can't record Opus), by the bytes the file
+ * starts with.
+ */
+export function voiceFormat(data: Buffer): "webm" | "ogg" | "m4a" | null {
   if (data.length >= 4 && data[0] === 0x1a && data[1] === 0x45 && data[2] === 0xdf && data[3] === 0xa3) return "webm";
   if (data.length >= 4 && data.toString("latin1", 0, 4) === "OggS") return "ogg";
+  if (data.length >= 12 && data.toString("latin1", 4, 8) === "ftyp") return "m4a";
   return null;
 }
 
 /** Where each version of an attachment is kept. */
 export function keysFor(a: { id: string; conversationId: string; kind: AttachmentKind }): string[] {
   const dir = `attachments/${a.conversationId}/${a.id}`;
-  return a.kind === "image" ? [`${dir}/preview.webp`, `${dir}/full.webp`] : [`${dir}/file.bin`];
+  // voice.m4a: a voice message turned into AAC for iPhones (only exists once one asked for it).
+  return a.kind === "image" ? [`${dir}/preview.webp`, `${dir}/full.webp`] : [`${dir}/file.bin`, `${dir}/voice.m4a`];
 }
 
 export function keyFor(

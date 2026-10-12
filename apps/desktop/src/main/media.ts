@@ -8,7 +8,7 @@ import { isUserId } from './api'
 //   glofly-media://attachments/<conversationId>/<id>/<preview|full> photos in chats
 //   glofly-media://attachments/<conversationId>/<id>/voice          voice messages (0.2.1)
 // and this fetches them with the token, here in the main process. Only these shapes are
-// allowed, and only WebP images (re-saved by the server) or Opus audio in WebM/Ogg (checked
+// allowed, and only WebP images (re-saved by the server) or voice audio (Opus in WebM/Ogg, AAC in MP4; checked
 // by its first bytes) are passed back.
 
 export const MEDIA_SCHEME = 'glofly-media'
@@ -127,11 +127,22 @@ export async function handleMediaRequest(req: Request): Promise<Response> {
   })
 }
 
-/** Opus audio from a voice message: WebM (what Glofly records) or Ogg, by its first bytes. */
-function audioType(data: Uint8Array): 'audio/webm' | 'audio/ogg' | null {
+/**
+ * A voice message's audio type by its first bytes: Opus in WebM (desktop) or Ogg (Android), or
+ * AAC in MP4 (iPhone; Electron's Chromium plays AAC).
+ */
+function audioType(data: Uint8Array): 'audio/webm' | 'audio/ogg' | 'audio/mp4' | null {
   if (data[0] === 0x1a && data[1] === 0x45 && data[2] === 0xdf && data[3] === 0xa3)
     return 'audio/webm'
   if (data[0] === 0x4f && data[1] === 0x67 && data[2] === 0x67 && data[3] === 0x53)
     return 'audio/ogg'
+  if (
+    data.length >= 12 &&
+    data[4] === 0x66 &&
+    data[5] === 0x74 &&
+    data[6] === 0x79 &&
+    data[7] === 0x70
+  )
+    return 'audio/mp4'
   return null
 }

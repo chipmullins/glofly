@@ -16,6 +16,7 @@ import { Icon } from '@/ui/icons'
 import { Field, Notice, Spinner, Text } from '@/ui/kit'
 import { Screen } from '@/ui/Screen'
 import { useTheme } from '@/ui/theme'
+import { APP_SETTINGS } from '@/lib/config'
 
 // Edit profile (from the design): photo, status, display name, status message, About me.
 
@@ -66,7 +67,7 @@ export default function EditProfile() {
     if (pick === 'remove') return setPhoto('remove')
     if (pick !== 'library' && pick !== 'camera') return
     const picked = await pickSquarePhoto(pick)
-    if (picked === 'denied') return void inform('Camera not allowed', 'Allow Glofly to use the camera in Android Settings.')
+    if (picked === 'denied') return void inform('Camera not allowed', `Allow Glofly to use the camera in ${APP_SETTINGS}.`)
     if (picked) setPhoto(picked)
   }
 

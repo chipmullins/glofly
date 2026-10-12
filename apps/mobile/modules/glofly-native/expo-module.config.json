@@ -1,6 +1,10 @@
 {
-  "platforms": ["android"],
+  "platforms": ["android", "apple"],
   "android": {
     "modules": ["com.glofly.nativebridge.GloflyNativeModule"]
+  },
+  "apple": {
+    "modules": ["GloflyNativeModule"],
+    "appDelegateSubscribers": ["GloflyAppDelegate"]
   }
 }

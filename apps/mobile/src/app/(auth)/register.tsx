@@ -27,6 +27,7 @@ import { font, useTheme } from '@/ui/theme'
 import { pickSquarePhoto } from '@/lib/photos'
 import type { Upload } from '@/api/http'
 import { BirthdayField } from '@/ui/BirthdayField'
+import { APP_SETTINGS } from '@/lib/config'
 
 type Check = { state: 'idle' | 'checking' | 'available' | 'taken'; message?: string }
 
@@ -84,7 +85,7 @@ export default function Register() {
     if (choice === 'remove') return setPhoto(null)
     if (choice !== 'library' && choice !== 'camera') return
     const picked = await pickSquarePhoto(choice)
-    if (picked === 'denied') return setFormError('Glofly needs camera access to take a photo. You can allow it in Android Settings.')
+    if (picked === 'denied') return setFormError(`Glofly needs camera access to take a photo. You can allow it in ${APP_SETTINGS}.`)
     if (picked) setPhoto(picked)
   }
 

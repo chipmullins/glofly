@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Platform, Pressable, View, type LayoutChangeEvent } from 'react-native'
 import { Image } from 'expo-image'
-import { useAudioPlayer, useAudioPlayerStatus, type AudioPlayer } from 'expo-audio'
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, type AudioPlayer } from 'expo-audio'
 import { fileTypeLabel, formatSize, voiceTime, type Attachment, type Message } from '@glofly/shared'
 import { authHeaders } from '@/api/http'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { useTheme } from '@/ui/theme'
-import { attachmentUrl, imageSource, shareFile } from './media'
+import { attachmentUrl, imageSource, shareFile, voiceFileForIos } from './media'
+import { inform } from '@/ui/dialogs'
 
 // Photos (a grid, or one photo in its own shape), file cards, and voice messages in a bubble.
 
@@ -118,19 +119,31 @@ function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId:
       wantPlay.current = false
       if (playing && playing !== player) playing.pause()
       playing = player
+      // iPhone: voice messages play even with the ring/silent switch on silent (Glofly's other
+      // sounds respect it again once it ends).
+      if (Platform.OS === 'ios') void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'doNotMix' }).catch(() => {})
       player.play()
     }
   }, [status.isLoaded, player])
 
   useEffect(() => {
-    if (status.didJustFinish) void player.seekTo(0)
+    if (!status.didJustFinish) return
+    void player.seekTo(0)
+    if (Platform.OS === 'ios') void setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {})
   }, [status.didJustFinish, player])
 
   const toggle = () => {
     if (!source) {
       wantPlay.current = true
       const uri = attachmentUrl(conversationId, a, 'file')
-      if (Platform.OS === 'web') {
+      if (Platform.OS === 'ios') {
+        void voiceFileForIos(conversationId, a)
+          .then((file) => setSource({ uri: file, headers: {} }))
+          .catch(() => {
+            wantPlay.current = false
+            void inform("Couldn't play the voice message", 'Check your connection and try again.')
+          })
+      } else if (Platform.OS === 'web') {
         // Browsers can't send the session header with <audio>, so the preview fetches it first.
         void fetch(uri, { headers: authHeaders() })
           .then((r) => r.blob())
@@ -142,6 +155,9 @@ function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId:
     else {
       if (playing && playing !== player) playing.pause()
       playing = player
+      // iPhone: voice messages play even with the ring/silent switch on silent (Glofly's other
+      // sounds respect it again once it ends).
+      if (Platform.OS === 'ios') void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'doNotMix' }).catch(() => {})
       player.play()
     }
   }

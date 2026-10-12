@@ -40,6 +40,7 @@ import { blockedEitherWay, canMessage, deletionPending, pair } from "../friends/
 import { emitToUser } from "../realtime";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
+import { voiceAsM4a } from "./voiceM4a";
 import { inBackground, notifyMessage, notifyRead } from "../push/notify";
 import {
   GROUP_MAX,
@@ -1588,6 +1589,24 @@ conversationsRouter.delete("/:id/attachments/:attachmentId", async (req, res) =>
   await db.delete(attachments).where(eq(attachments.id, row.id));
   await removeFiles([row]);
   res.status(204).end();
+});
+
+// GET /conversations/:id/attachments/:attachmentId/m4a — a voice message as AAC (.m4a) for
+// iPhones, which can't play the Opus audio the desktop and Android apps record (converted once).
+conversationsRouter.get("/:id/attachments/:attachmentId/m4a", async (req, res) => {
+  const row = await loadAttachment(req.params.id, req.params.attachmentId, me(res).id);
+  const data = row?.kind === "file" && row.voice ? await voiceAsM4a(row) : null;
+  if (!data) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  res.setHeader("Content-Type", "audio/mp4");
+  res.setHeader("Content-Length", String(data.length));
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("Content-Disposition", "attachment; filename=\"Voice message.m4a\"");
+  res.end(data);
 });
 
 // GET /conversations/:id/attachments/:attachmentId/:variant — preview | full (photos), file (files).

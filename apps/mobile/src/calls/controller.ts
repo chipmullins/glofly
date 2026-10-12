@@ -13,6 +13,7 @@ import { confirm, inform } from '@/ui/dialogs'
 import { playSound, startLoop } from '@/push/sounds'
 import { usePhonePrefs } from '@/state/prefs'
 import { setupWebRTC, startCallAudio, stopCallAudio } from './media'
+import { APP_SETTINGS } from '@/lib/config'
 
 // Calls: starting, answering and leaving, the LiveKit room, ringing in the app, and the
 // "Call in progress" service that keeps a call going when Glofly leaves the screen.
@@ -76,7 +77,7 @@ async function permissions(video: boolean): Promise<boolean> {
   const wanted = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, ...(video ? [PermissionsAndroid.PERMISSIONS.CAMERA] : [])]
   const result = await PermissionsAndroid.requestMultiple(wanted)
   if (result[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] !== PermissionsAndroid.RESULTS.GRANTED) {
-    void inform("Glofly can't use your microphone", 'Allow it in Android Settings → Apps → Glofly → Permissions to make calls.')
+    void inform("Glofly can't use your microphone", `Allow it in ${APP_SETTINGS} to make calls.`)
     return false
   }
   return true
@@ -155,7 +156,11 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
     } else cleanup('The call dropped.')
   })
   await r.connect(join.url, join.token, { autoSubscribe: true })
-  await r.localParticipant.setMicrophoneEnabled(true).catch(() => useCall.setState({ micOn: false }))
+  await r.localParticipant.setMicrophoneEnabled(true).catch(() => {
+    useCall.setState({ micOn: false })
+    // iPhone asks for the microphone the first time; if it was refused, say where to allow it.
+    if (Platform.OS === 'ios') void inform("Glofly can't use your microphone", 'Allow it in Settings → Glofly → Microphone.')
+  })
   if (video) await r.localParticipant.setCameraEnabled(true, { facingMode: 'user' }).catch(() => useCall.setState({ cameraOn: false }))
   refreshTiles()
   Native.startOngoingCall(join.call.id, join.call.conversationId, title(join.call), video)
@@ -267,10 +272,13 @@ export async function setMic(on: boolean) {
 export async function setCamera(on: boolean) {
   if (on && Platform.OS === 'android') {
     const r = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA)
-    if (r !== PermissionsAndroid.RESULTS.GRANTED) return void inform("Glofly can't use your camera", 'Allow it in Android Settings → Apps → Glofly → Permissions.')
+    if (r !== PermissionsAndroid.RESULTS.GRANTED) return void inform("Glofly can't use your camera", `Allow it in ${APP_SETTINGS}.`)
   }
   useCall.setState({ cameraOn: on })
-  await room?.localParticipant.setCameraEnabled(on, { facingMode: useCall.getState().frontCamera ? 'user' : 'environment' }).catch(() => useCall.setState({ cameraOn: !on }))
+  await room?.localParticipant.setCameraEnabled(on, { facingMode: useCall.getState().frontCamera ? 'user' : 'environment' }).catch(() => {
+    useCall.setState({ cameraOn: !on })
+    if (on && Platform.OS === 'ios') void inform("Glofly can't use your camera", 'Allow it in Settings → Glofly → Camera.')
+  })
   Native.keepScreenOn(on)
   refreshTiles()
 }

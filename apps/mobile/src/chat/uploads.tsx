@@ -9,6 +9,7 @@ import { chooseFrom, inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { useTheme } from '@/ui/theme'
+import { APP_SETTINGS } from '@/lib/config'
 
 // Photos and files waiting to be sent: they upload as soon as they're picked (with progress) and
 // are attached when you press Send. Shown as a tray above the message box.
@@ -105,7 +106,7 @@ export async function attachMenu(uploads: Uploads) {
   if (pick === 'photos' || pick === 'camera') {
     const left = ATTACHMENTS_PER_MESSAGE - uploads.items.length
     const photos = await pickChatPhotos(pick === 'camera' ? 'camera' : 'library', Math.max(1, left))
-    if (photos === 'denied') return void inform('Camera not allowed', 'Allow Glofly to use the camera in Android Settings → Apps → Glofly → Permissions.')
+    if (photos === 'denied') return void inform('Camera not allowed', `Allow Glofly to use the camera in ${APP_SETTINGS}.`)
     if (photos) uploads.add(photos.map((p) => ({ uri: p.uri, name: p.name, kind: 'image', size: p.size })))
   } else if (pick === 'file') {
     const r = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true })

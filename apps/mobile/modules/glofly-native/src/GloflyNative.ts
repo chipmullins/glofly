@@ -1,8 +1,9 @@
 import { Platform } from 'react-native'
 import { requireOptionalNativeModule } from 'expo-modules-core'
 
-// Glofly's own Android code (modules/glofly-native/android). The web preview gets stand-ins so
-// the app can be tried in a browser.
+// Glofly's own native code: Kotlin on Android (modules/glofly-native/android), Swift on iPhone
+// (modules/glofly-native/ios; Android-only calls are safe no-ops there). The web preview gets
+// stand-ins so the app can be tried in a browser.
 
 type Native = {
   getPushToken(): Promise<string | null>
@@ -16,6 +17,12 @@ type Native = {
   stopOngoingCall(): void
   addListener(event: string, fn: (body: Record<string, string>) => void): { remove(): void }
   notificationsEnabled(): boolean
+  /** iPhone only: 'granted' | 'denied' | 'unknown' (not asked yet). */
+  notificationStatus?(): Promise<string>
+  /** iPhone only: asks for notifications (once; later calls return the answer). */
+  requestNotifications?(): Promise<boolean>
+  /** iPhone only: the screen a notification tapped before the app was ready should open. */
+  takeLaunchLink?(): string | null
   openNotificationSettings(): boolean
   canUseFullScreenIntent(): boolean
   openFullScreenIntentSettings(): boolean
@@ -106,6 +113,8 @@ export const hasNative = !!native
 
 export const notificationsEnabled = (): boolean => (native ? native.notificationsEnabled() : false)
 export const openNotificationSettings = (): boolean => (native ? native.openNotificationSettings() : false)
+export const notificationStatus = async (): Promise<string> => (native?.notificationStatus ? native.notificationStatus() : 'unknown')
+export const requestNotifications = async (): Promise<boolean> => (native?.requestNotifications ? native.requestNotifications() : false)
 export const canUseFullScreenIntent = (): boolean => (native ? native.canUseFullScreenIntent() : false)
 export const openFullScreenIntentSettings = (): boolean => (native ? native.openFullScreenIntentSettings() : false)
 
@@ -118,6 +127,8 @@ export const configurePush = (c: PushConfig) => native?.configurePush(c)
 export const clearPush = () => native?.clearPush()
 export const cancelChatNotification = (id: string) => native?.cancelChatNotification(id)
 export const cancelCallNotification = (id: string) => native?.cancelCallNotification(id)
+/** iPhone: a glofly:// link from a notification tapped while the app was starting (once). */
+export const takeLaunchLink = (): string | null => native?.takeLaunchLink?.() ?? null
 
 export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp'
 export function onNativeEvent(event: NativeEvent, fn: (body: Record<string, string>) => void): () => void {

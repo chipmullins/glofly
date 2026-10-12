@@ -1,4 +1,4 @@
-import { Platform } from 'react-native'
+import { Linking, Platform } from 'react-native'
 import * as Native from 'glofly-native'
 import { isMuted, mentionsMe, type Message } from '@glofly/shared'
 import * as api from '@/api/glofly'
@@ -53,6 +53,9 @@ export function startPush(): void {
   if (started || Platform.OS === 'web') return
   started = true
   void register()
+  // iPhone: a notification tapped while Glofly was starting opens its screen now.
+  const link = Native.takeLaunchLink()
+  if (link) setTimeout(() => void Linking.openURL(link), 300)
   Native.onNativeEvent('pushToken', () => void register())
   onPhonePrefsChange(() => void register())
   useSession.subscribe((s, prev) => {

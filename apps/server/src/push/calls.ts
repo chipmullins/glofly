@@ -38,6 +38,7 @@ async function devicesOf(userIds: string[]) {
       userId: pushDevices.userId,
       token: pushDevices.token,
       sessionId: pushDevices.sessionId,
+      platform: pushDevices.platform,
       status: users.statusPreference,
     })
     .from(pushDevices)
@@ -67,8 +68,8 @@ async function chatTitles(conversationId: string, readerIds: string[]): Promise<
   return out;
 }
 
-async function send(list: { token: string; data: PushData; ttl: number }[]) {
-  const results = await Promise.all(list.map((p) => sendPush(p.token, p.data, p.ttl)));
+async function send(list: { token: string; data: PushData; ttl: number; platform: string }[]) {
+  const results = await Promise.all(list.map((p) => sendPush(p.token, p.data, p.ttl, p.platform)));
   await forgetTokens(list.filter((_, i) => results[i] === "gone").map((p) => p.token));
 }
 
@@ -94,7 +95,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
   if (!devices.length) return;
   const live = await liveSessions(everyone);
   const titles = await chatTitles(call.conversationId, everyone);
-  const out: { token: string; data: PushData; ttl: number }[] = [];
+  const out: { token: string; data: PushData; ttl: number; platform: string }[] = [];
   const callerName = caller?.displayName ?? "Someone";
   const base = {
     callId: call.id,
@@ -110,6 +111,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
       const until = now.get(d.userId)!;
       out.push({
         token: d.token,
+        platform: d.platform,
         ttl: Math.max(1, Math.ceil((new Date(until).getTime() - Date.now()) / 1000)),
         data: {
           type: "call_ring",
@@ -127,6 +129,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
       // Missed: the ringing stops and the missed call shows (one push does both).
       out.push({
         token: d.token,
+        platform: d.platform,
         ttl: 24 * 60 * 60,
         data: {
           type: "call_missed",
@@ -141,7 +144,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
         },
       });
     } else if (stopped.includes(d.userId)) {
-      out.push({ token: d.token, ttl: 60, data: { type: "call_stop", ...base, status: call.status } });
+      out.push({ token: d.token, platform: d.platform, ttl: 60, data: { type: "call_stop", ...base, status: call.status } });
     }
   }
   await send(out);

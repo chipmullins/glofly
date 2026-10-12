@@ -16,6 +16,9 @@ const isDev = variant === 'development'
 // file variable (GOOGLE_SERVICES_JSON); locally it can sit next to this file. Without it the app
 // still builds and runs, just without push notifications.
 const googleServices = process.env.GOOGLE_SERVICES_JSON ?? (existsSync(join(__dirname, 'google-services.json')) ? './google-services.json' : undefined)
+// The iPhone's Firebase settings file, the same way (GOOGLE_SERVICE_INFO_PLIST on EAS).
+const googleServiceInfo =
+  process.env.GOOGLE_SERVICE_INFO_PLIST ?? (existsSync(join(__dirname, 'GoogleService-Info.plist')) ? './GoogleService-Info.plist' : undefined)
 
 const config: ExpoConfig = {
   name: 'Glofly',
@@ -59,6 +62,28 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: 'com.glofly.app',
     supportsTablet: false,
+    icon: './assets/icon-ios.png',
+    ...(googleServiceInfo ? { googleServicesFile: googleServiceInfo } : {}),
+    infoPlist: {
+      NSMicrophoneUsageDescription: 'Glofly uses the microphone for calls and voice messages.',
+      NSCameraUsageDescription: 'Glofly uses the camera for video calls and photos you take.',
+      NSPhotoLibraryUsageDescription: 'Glofly lets you pick photos to send and for your profile.',
+      NSPhotoLibraryAddUsageDescription: 'Glofly saves photos from chats when you ask it to.',
+      // audio: a call keeps going with the screen locked. remote-notification: silent pushes that
+      // clear notifications read elsewhere. (voip comes with CallKit in round two.)
+      UIBackgroundModes: ['audio', 'remote-notification'],
+      // Glofly hands Apple's device token to Firebase itself (modules/glofly-native/ios).
+      FirebaseAppDelegateProxyEnabled: false,
+      ITSAppUsesNonExemptEncryption: false,
+      // Plain-http server addresses only in development builds (a PC on the home network).
+      ...(isDev ? { NSAppTransportSecurity: { NSAllowsArbitraryLoads: true } } : {}),
+    },
+    entitlements: {
+      // Development builds get pushes from Apple's sandbox; ad hoc and App Store builds from production.
+      'aps-environment': isDev ? 'development' : 'production',
+      // Incoming-call notifications break through Focus (time-sensitive).
+      'com.apple.developer.usernotifications.time-sensitive': true,
+    },
   },
   web: { output: 'single', favicon: './assets/firefly.png' },
   plugins: [
@@ -84,6 +109,8 @@ const config: ExpoConfig = {
           targetSdkVersion: 36,
           usesCleartextTraffic: isDev,
         },
+        // Firebase's iPhone pods (push notifications) need static frameworks.
+        ios: { useFrameworks: 'static' },
       },
     ],
     [

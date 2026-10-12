@@ -17,3 +17,6 @@ export const VERSION_HEADERS = { 'X-Glofly-Version': APP_VERSION, 'X-Glofly-Plat
 
 export const SITE_URL = 'https://glofly.app'
 export const SUPPORT_EMAIL = 'support@glofly.app'
+
+/** Where people allow a permission for Glofly on this phone (for "not allowed" messages). */
+export const APP_SETTINGS = Platform.OS === 'ios' ? 'Settings → Glofly' : 'Android Settings → Apps → Glofly → Permissions'

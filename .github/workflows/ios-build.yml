@@ -1,0 +1,68 @@
+# iOS build check: compiles the Glofly phone app (apps/mobile) for the iPhone Simulator.
+#
+# Claude's sandbox can't build iOS, so this is where Swift, CocoaPods and Xcode mistakes show up
+# (the same job the Android build does for Kotlin). It doesn't make anything installable: a real
+# iPhone build needs Apple signing, which EAS does (`eas build -p ios --profile preview`).
+#
+# macOS minutes count 10× against the free Actions allowance (~25 min a build ≈ 250 minutes), so
+# it only runs when the native side changes (Swift, the app config, packages), and by hand.
+
+name: iOS build
+
+on:
+  workflow_dispatch:
+  push:
+    # ci/* branches: Claude's compile checks before native code lands on dev.
+    branches: [dev, 'ci/**']
+    # Only what changes the native iPhone app (JavaScript-only changes don't need a compile).
+    paths:
+      - 'apps/mobile/modules/glofly-native/**'
+      - 'apps/mobile/app.config.ts'
+      - 'apps/mobile/package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ios-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      APP_VARIANT: preview
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install packages
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: Generate the iOS project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Install pods
+        working-directory: apps/mobile/ios
+        run: pod install
+
+      - name: Build for the Simulator
+        working-directory: apps/mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace Glofly.xcworkspace -scheme Glofly -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build | tail -n 200

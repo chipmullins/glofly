@@ -4,6 +4,7 @@ import * as Sharing from 'expo-sharing'
 import type { Attachment } from '@glofly/shared'
 import { authHeaders, url } from '@/api/http'
 import { inform } from '@/ui/dialogs'
+import { APP_SETTINGS } from '@/lib/config'
 
 // Loading chat photos, files and voice messages (they need the session, so headers go along),
 // and saving or sharing them.
@@ -27,7 +28,20 @@ async function download(conversationId: string, a: Attachment, variant: 'full' |
   return File.downloadFileAsync(attachmentUrl(conversationId, a, variant), target, { headers: authHeaders(), idempotent: true })
 }
 
-/** A file from a chat: opens Android's share sheet (save to Files or Drive, open in an app…). */
+/**
+ * A voice message as a file on this phone that iOS can play: iPhones can't play the Opus audio the
+ * desktop and Android apps record, so the server hands it over as AAC (.m4a, converted once).
+ */
+export async function voiceFileForIos(conversationId: string, a: Pick<Attachment, 'id'>): Promise<string> {
+  const dir = new Directory(Paths.cache, 'voice')
+  if (!dir.exists) dir.create({ intermediates: true })
+  const target = new File(dir, `${a.id}.m4a`)
+  if (target.exists && target.size > 0) return target.uri
+  const f = await File.downloadFileAsync(url(`/conversations/${conversationId}/attachments/${a.id}/m4a`), target, { headers: authHeaders(), idempotent: true })
+  return f.uri
+}
+
+/** A file from a chat: opens the phone's share sheet (save to Files or Drive, open in an app…). */
 export async function shareFile(conversationId: string, a: Attachment): Promise<void> {
   if (Platform.OS === 'web') return void inform('Files open in the app', 'Downloading files works in the Glofly app on your phone.')
   try {
@@ -45,7 +59,7 @@ export async function savePhoto(conversationId: string, a: Attachment): Promise<
     // Loaded only on phones (it has no web version).
     const MediaLibrary = require('expo-media-library') as typeof import('expo-media-library')
     const perm = await MediaLibrary.requestPermissionsAsync(true, ['photo'])
-    if (!perm.granted) return void inform('Not allowed', 'Allow Glofly to save photos in Android Settings → Apps → Glofly → Permissions.')
+    if (!perm.granted) return void inform('Not allowed', `Allow Glofly to save photos in ${APP_SETTINGS}.`)
     const f = await download(conversationId, a, 'full')
     await MediaLibrary.saveToLibraryAsync(f.uri)
     void inform('Saved', 'The photo is in your gallery.')

@@ -10,6 +10,7 @@ import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { useTheme } from '@/ui/theme'
 import { sendText } from './send'
+import { APP_SETTINGS } from '@/lib/config'
 
 // Voice messages: hold the mic and let go to send (slide left to cancel), or tap it to record
 // hands-free and press Send. Up to 5 minutes; under half a second isn't sent.
@@ -52,14 +53,16 @@ export function useVoice(conversationId: string): Voice {
     if (Platform.OS === 'android') {
       const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO)
       if (result !== PermissionsAndroid.RESULTS.GRANTED) {
-        void inform('Microphone not allowed', 'Allow Glofly to use the microphone in Android Settings → Apps → Glofly → Permissions.')
+        void inform('Microphone not allowed', `Allow Glofly to use the microphone in ${APP_SETTINGS}.`)
         return false
       }
     }
     try {
       await startVoice()
-    } catch {
-      void inform("Couldn't start recording", 'Another app may be using the microphone.')
+    } catch (e) {
+      // iPhone asks for the microphone in startVoice itself.
+      if ((e as { code?: string }).code === 'ERR_MIC_DENIED') void inform('Microphone not allowed', `Allow Glofly to use the microphone in ${APP_SETTINGS}.`)
+      else void inform("Couldn't start recording", 'Another app may be using the microphone.')
       return false
     }
     active.current = true
@@ -96,7 +99,7 @@ export function useVoice(conversationId: string): Voice {
     const durationMs = Math.min(rec.durationMs, VOICE_MAX_MS)
     if (durationMs < MIN_MS) return
     const peaks = toPeaks(all.current)
-    const ext = rec.mime.includes('ogg') ? 'ogg' : 'webm'
+    const ext = rec.mime.includes('ogg') ? 'ogg' : rec.mime.includes('mp4') ? 'm4a' : 'webm'
     const r = await api.uploadAttachment(conversationId, { uri: rec.uri, type: rec.mime, name: `Voice message.${ext}` }, { durationMs, peaks })
     if (!r.ok) return void inform("Couldn't send the voice message", r.message)
     sendText(conversationId, '', null, [r.data])

@@ -17,11 +17,11 @@ import { forgetTokens } from "./devices";
 // - "Show message preview" off on a phone: "New message" instead of the text.
 // - Reading a chat on any device clears its notification on your other phones.
 
-type Device = { token: string; sessionId: string; preview: boolean };
+type Device = { token: string; sessionId: string; preview: boolean; platform: string };
 
 /** Sends to every device given, forgetting tokens Firebase says are gone. */
 async function deliver(list: { device: Device; data: PushData; ttl?: number }[]): Promise<void> {
-  const results = await Promise.all(list.map((p) => sendPush(p.device.token, p.data, p.ttl)));
+  const results = await Promise.all(list.map((p) => sendPush(p.device.token, p.data, p.ttl, p.device.platform)));
   await forgetTokens(list.filter((_, i) => results[i] === "gone").map((p) => p.device.token));
 }
 
@@ -56,6 +56,7 @@ export async function notifyMessage(
       token: pushDevices.token,
       sessionId: pushDevices.sessionId,
       preview: pushDevices.preview,
+      platform: pushDevices.platform,
       status: users.statusPreference,
       mutedUntil: conversationMembers.mutedUntil,
     })
@@ -128,7 +129,7 @@ export async function notifyMessage(
 export async function notifyRead(userId: string, conversationId: string, exceptSessionId?: string): Promise<void> {
   if (!pushConfigured) return;
   const devices = await db
-    .select({ token: pushDevices.token, sessionId: pushDevices.sessionId, preview: pushDevices.preview })
+    .select({ token: pushDevices.token, sessionId: pushDevices.sessionId, preview: pushDevices.preview, platform: pushDevices.platform })
     .from(pushDevices)
     .where(
       exceptSessionId
@@ -150,6 +151,7 @@ export async function notifyFriendRequest(
       token: pushDevices.token,
       sessionId: pushDevices.sessionId,
       preview: pushDevices.preview,
+      platform: pushDevices.platform,
       status: users.statusPreference,
     })
     .from(pushDevices)

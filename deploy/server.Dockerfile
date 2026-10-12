@@ -22,6 +22,8 @@ RUN npm run build -w @glofly/shared && npm run build -w @glofly/server
 # ---- 2. Run: only what the server needs at runtime ----
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production
+# ffmpeg turns voice messages into AAC for iPhones (src/messages/voiceM4a.ts).
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/

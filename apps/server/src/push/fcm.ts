@@ -8,9 +8,10 @@ import { redis } from "../redis";
 // settings → Service accounts → Generate new private key). It lives only on the server, like
 // the RDS certificate; never in the repo. Without it, pushes are off and the server runs as usual.
 //
-// Every message is a data message: the Glofly app decides what to show (one notification per
-// chat, the incoming-call screen, clearing a chat's notification once it's read elsewhere), even
-// while it's closed. FCM_ENDPOINT points at a stand-in FCM for testing (like S3_ENDPOINT).
+// Android: every message is a data message, and the Glofly app decides what to show (one
+// notification per chat, the incoming-call screen, clearing a chat's notification once it's read
+// elsewhere), even while it's closed. iPhones don't run app code for a data message, so the same
+// data goes out with an APNs notification built from it (apnsFor); FCM hands it to Apple. FCM_ENDPOINT points at a stand-in FCM for testing (like S3_ENDPOINT).
 
 type ServiceAccount = { project_id: string; client_email: string; private_key: string; token_uri?: string };
 
@@ -92,11 +93,61 @@ async function countFailure() {
   }
 }
 
+/** The APNs part of a push for an iPhone, built from the same data the Android app gets. */
+export function apnsFor(data: PushData, ttlSeconds: number): Record<string, unknown> {
+  const expiration = String(Math.floor(Date.now() / 1000) + Math.max(0, Math.round(ttlSeconds)));
+  // Clearing a notification (read elsewhere, call answered or over): a silent background push the
+  // app handles if iOS wakes it (best effort; iOS can delay or skip these).
+  const silent = data.type === "clear" || data.type === "call_stop" || (data.type === "call_missed" && data.dnd === "1");
+  if (silent) {
+    return {
+      headers: { "apns-push-type": "background", "apns-priority": "5", "apns-expiration": expiration },
+      payload: { aps: { "content-available": 1 } },
+    };
+  }
+  const headers: Record<string, string> = { "apns-push-type": "alert", "apns-priority": "10", "apns-expiration": expiration };
+  const aps: Record<string, unknown> = { "mutable-content": 0 };
+  if (data.type === "message") {
+    aps.alert = { title: data.title || data.senderName || "Glofly", body: data.text || "New message" };
+    aps["thread-id"] = data.conversationId;
+    aps.category = "GLOFLY_MESSAGE";
+    aps.sound = "glofly_message.caf";
+  } else if (data.type === "friend_request") {
+    aps.alert = { title: data.title || "Glofly", body: data.text || "sent you a friend request" };
+    aps["thread-id"] = "friends";
+    aps.sound = "glofly_message.caf";
+  } else if (data.type === "call_ring") {
+    const kind = data.video === "1" ? "video" : "voice";
+    aps.alert = {
+      title: data.chatTitle ? `${data.callerName} · ${data.chatTitle}` : data.callerName || "Glofly",
+      body: data.group === "1" ? `Incoming group ${kind} call · Tap to answer` : `Incoming ${kind} call · Tap to answer`,
+    };
+    aps["interruption-level"] = "time-sensitive";
+    aps.category = "GLOFLY_CALL";
+    if (data.dnd !== "1") aps.sound = "glofly_ringtone.caf";
+    // The missed-call notification later replaces this one.
+    headers["apns-collapse-id"] = data.callId;
+  } else if (data.type === "call_missed") {
+    aps.alert = { title: data.title || "Missed call", body: data.text || "Missed call" };
+    aps["thread-id"] = data.conversationId;
+    aps.sound = "glofly_message.caf";
+    headers["apns-collapse-id"] = data.callId;
+  } else {
+    aps.alert = { title: data.title || "Glofly", body: data.text || "" };
+  }
+  return { headers, payload: { aps } };
+}
+
 /**
  * Sends one data message to one phone. `ttlSeconds`: how long FCM keeps trying if the phone is
  * offline (a ringing call is useless after it stops ringing).
  */
-export async function sendPush(token: string, data: PushData, ttlSeconds = 24 * 60 * 60): Promise<PushResult> {
+export async function sendPush(
+  token: string,
+  data: PushData,
+  ttlSeconds = 24 * 60 * 60,
+  platform: string = "android",
+): Promise<PushResult> {
   if (!account) return "failed";
   try {
     const res = await fetch(`${endpoint}/v1/projects/${account.project_id}/messages:send`, {
@@ -107,7 +158,9 @@ export async function sendPush(token: string, data: PushData, ttlSeconds = 24 * 
           token,
           data,
           // High priority wakes the phone right away; everything Glofly sends is shown or acted on.
-          android: { priority: "high", ttl: `${Math.max(0, Math.round(ttlSeconds))}s` },
+          ...(platform === "ios"
+            ? { apns: apnsFor(data, ttlSeconds) }
+            : { android: { priority: "high", ttl: `${Math.max(0, Math.round(ttlSeconds))}s` } }),
         },
       }),
       signal: AbortSignal.timeout(10_000),
