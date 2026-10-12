@@ -83,6 +83,21 @@ jobs:
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --no-install
 
+      - name: Install the Android NDK
+        # Gradle would download it itself, but gives up on one bad download ("Error on ZipFile
+        # unknown archive", Oct 12). Installing it first lets a broken download be retried.
+        # The version is the one Expo SDK 57 asks for (printed as "ndk:" when Gradle starts).
+        run: |
+          ndk="27.1.12297006"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          for try in 1 2 3; do
+            if [ -f "$ANDROID_HOME/ndk/$ndk/source.properties" ]; then echo "NDK $ndk ready"; exit 0; fi
+            rm -rf "$ANDROID_HOME/ndk/$ndk"
+            yes | "$sdkmanager" --install "ndk;$ndk" > /dev/null || echo "Download $try failed, trying again"
+            sleep 5
+          done
+          test -f "$ANDROID_HOME/ndk/$ndk/source.properties"
+
       - name: Build the APK
         working-directory: apps/mobile/android
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64
