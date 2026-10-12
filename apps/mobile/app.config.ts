@@ -137,7 +137,8 @@ const config: ExpoConfig = {
   experiments: { typedRoutes: false },
   extra: {
     variant,
-    eas: { projectId: process.env.EAS_PROJECT_ID },
+    // The Expo project (@chipmullins/glofly), from `eas init` (Oct 12).
+    eas: { projectId: '3aa33fd8-907f-4f50-b1a8-db37c96e107b' },
   },
 }
 
