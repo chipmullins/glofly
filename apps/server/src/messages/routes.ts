@@ -650,6 +650,48 @@ conversationsRouter.put("/groups/order", async (req, res) => {
   res.status(204).end();
 });
 
+// PUT /conversations/pins/order  { ids } — my order for the pinned chats in the sidebar (drag to
+// reorder). Pins are shown oldest pin first on every app, so the new order is saved by giving the
+// listed pins new pinned times in that order (starting from the earliest of them). Older apps then
+// show the new order too, with nothing new to learn. Chats not pinned by me are skipped.
+conversationsRouter.put("/pins/order", async (req, res) => {
+  const myId = me(res).id;
+  const parsed = z.object({ ids: z.array(idParam).min(1).max(50) }).safeParse(req.body);
+  if (!parsed.success || new Set(parsed.data.ids).size !== parsed.data.ids.length) {
+    res.status(400).json({ error: "invalid", message: "That order didn't make sense. Try again." });
+    return;
+  }
+  const ids = parsed.data.ids;
+  const pins = await db
+    .select({ id: conversationMembers.conversationId, pinnedAt: conversationMembers.pinnedAt })
+    .from(conversationMembers)
+    .where(
+      and(
+        eq(conversationMembers.userId, myId),
+        isNotNull(conversationMembers.pinnedAt),
+        inArray(conversationMembers.conversationId, ids),
+      ),
+    );
+  if (pins.length === 0) {
+    res.status(204).end();
+    return;
+  }
+  const allowed = new Set(pins.map((p) => p.id));
+  const base = Math.min(...pins.map((p) => p.pinnedAt!.getTime()));
+  await db.transaction(async (tx) => {
+    let step = 0;
+    for (const id of ids) {
+      if (!allowed.has(id)) continue; // unpinned (or left) meanwhile: skipped
+      await tx
+        .update(conversationMembers)
+        .set({ pinnedAt: new Date(base + step++) })
+        .where(and(eq(conversationMembers.conversationId, id), eq(conversationMembers.userId, myId)));
+    }
+  });
+  emitToUser(myId, "conversations:changed", {});
+  res.status(204).end();
+});
+
 // POST /conversations/dm  { userId } — open the DM with a friend (creates it the first time).
 conversationsRouter.post("/dm", async (req, res) => {
   const parsed = z.object({ userId: idParam }).safeParse(req.body);

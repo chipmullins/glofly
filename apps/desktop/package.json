@@ -17,6 +17,7 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac --publish never",
+    "build:mac:unsigned": "npm run build && electron-builder --mac --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
     "build:linux": "electron-vite build && electron-builder --linux",
     "second": "electron-vite preview --mode development",
     "build:release": "npm run build:win && node scripts/stable-copy.mjs"

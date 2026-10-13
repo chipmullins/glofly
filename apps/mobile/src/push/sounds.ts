@@ -20,13 +20,29 @@ export type SoundName = keyof typeof FILES
 
 const players = new Map<SoundName, AudioPlayer>()
 let modeSet = false
+let inCall = false
+
+// iPhone has one audio session for the whole app. Outside calls the sounds use a playback-only
+// mode; during a call they must use the call's own mode (play + record), or playing the outgoing
+// jingle / "connected" chime switches the session away from the call and both sides hear nothing.
+function applyMode() {
+  modeSet = true
+  const mode = inCall
+    ? { playsInSilentMode: true, allowsRecording: true, interruptionMode: 'mixWithOthers' as const }
+    : { playsInSilentMode: false, allowsRecording: false, interruptionMode: 'mixWithOthers' as const }
+  void setAudioModeAsync(mode).catch(() => {})
+}
+
+/** Call starting (before the outgoing jingle) or ended. Only changes anything on iPhone. */
+export function setCallAudioMode(on: boolean): void {
+  if (Platform.OS !== 'ios' || inCall === on) return
+  inCall = on
+  applyMode()
+}
 
 function player(name: SoundName): AudioPlayer | null {
   try {
-    if (!modeSet) {
-      modeSet = true
-      void setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {})
-    }
+    if (!modeSet) applyMode()
     let p = players.get(name)
     if (!p) {
       p = createAudioPlayer(FILES[name])

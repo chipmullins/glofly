@@ -12,11 +12,15 @@ export function setupWebRTC() {
   registerGlobals()
 }
 
-/** Starts the call audio session (voice calls start on the earpiece, video calls on the speaker). */
+/**
+ * Starts the call audio session. Android: every call starts on the speaker (Bluetooth or
+ * headphones first when connected); the Audio button switches to the earpiece. iPhone: voice calls
+ * start on the earpiece, video calls on the speaker.
+ */
 export async function startCallAudio(video: boolean): Promise<void> {
   await AudioSession.configureAudio({
     android: {
-      preferredOutputList: video ? ['bluetooth', 'headset', 'speaker'] : ['bluetooth', 'headset', 'earpiece'],
+      preferredOutputList: ['bluetooth', 'headset', 'speaker'],
       audioTypeOptions: AndroidAudioTypePresets.communication,
     },
     ios: { defaultOutput: video ? 'speaker' : 'earpiece' },

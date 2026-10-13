@@ -1181,6 +1181,18 @@
 .group-row:hover .group-grip {
   opacity: 1;
 }
+.dm-row-wrap--dragging {
+  opacity: 0.45;
+}
+/* Pinned chats: the line where a dragged chat will land */
+.dm-row-wrap--drop-above {
+  box-shadow: inset 0 3px 0 var(--glo-accent);
+  border-radius: 10px;
+}
+.dm-row-wrap--drop-below {
+  box-shadow: inset 0 -3px 0 var(--glo-accent);
+  border-radius: 10px;
+}
 .group-row--dragging {
   opacity: 0.45;
 }

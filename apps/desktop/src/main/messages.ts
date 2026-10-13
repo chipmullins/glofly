@@ -195,6 +195,12 @@ export async function orderGroups(ids: string[]): Promise<ApiResult<null>> {
   return result.ok ? { ok: true, data: null } : result
 }
 
+/** My order for the pinned chats in the sidebar (after dragging one to a new place). */
+export async function orderPins(ids: string[]): Promise<ApiResult<null>> {
+  const result = await request('PUT', '/conversations/pins/order', { ids })
+  return result.ok ? { ok: true, data: null } : result
+}
+
 /** Mutes a chat for a while ('1h', '8h', '24h') or until turned back on ('forever'); null unmutes. */
 export async function muteConversation(
   conversationId: string,

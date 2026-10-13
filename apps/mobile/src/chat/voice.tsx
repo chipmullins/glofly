@@ -95,7 +95,7 @@ export function useVoice(conversationId: string): Voice {
       return
     }
     const rec = await stopVoice()
-    if (!rec) return
+    if (!rec) return void inform("Couldn't send the voice message", "The recording didn't save. Try again.")
     const durationMs = Math.min(rec.durationMs, VOICE_MAX_MS)
     if (durationMs < MIN_MS) return
     const peaks = toPeaks(all.current)

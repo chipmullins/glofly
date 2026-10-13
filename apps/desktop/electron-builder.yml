@@ -38,23 +38,27 @@ nsis:
   runAfterFinish: true
   deleteAppDataOnUninstall: false # keeps sign-in and settings if Glofly is reinstalled
   include: build/installer.nsh # the red Glofly splash while installing
-# Mac test builds (npm run build:mac, or the "Mac build" GitHub Action): one universal .dmg
-# that runs on Apple Silicon and Intel Macs. Not signed by Apple or notarized yet (no Apple
-# Developer account), so testers open it with System Settings → Privacy & Security →
-# Open Anyway. It's "ad-hoc" signed (identity "-"): Apple Silicon Macs refuse to run apps with
-# no signature at all, calling them "damaged". Auto-updates are off on Mac for now (updater.ts).
+# Mac builds (the "Mac build" GitHub Action): one universal app (Apple Silicon + Intel) as a .dmg
+# for downloading and a .zip + latest-mac.yml for auto-updates.
+# Signed with Glofly's Developer ID, hardened runtime on, and notarized by Apple, so it opens like
+# any App Store-free Mac app and macOS remembers its permissions (notifications, Screen Recording,
+# the Keychain item that keeps you signed in) from one version to the next. The certificate and the
+# notary key come from repository secrets (see .github/workflows/mac-build.yml). Without them the
+# Action falls back to the old ad-hoc test build (it overrides identity/hardenedRuntime/notarize).
 mac:
   icon: build/icon.icns
   category: public.app-category.social-networking
   target:
     - target: dmg
       arch: universal
-  identity: '-'
-  # Hardened runtime and notarization come with the Apple Developer account. (Ad-hoc signing
-  # with the hardened runtime on would stop Glofly loading its own Electron framework.)
-  hardenedRuntime: false
+    - target: zip # what Mac auto-updates download (electron-updater can't install from a .dmg)
+      arch: universal
+  # identity: found automatically from the certificate in CSC_LINK (Developer ID Application).
+  hardenedRuntime: true
   gatekeeperAssess: false
-  notarize: false
+  # Notarized with an App Store Connect API key: APPLE_API_KEY (path to the .p8), APPLE_API_KEY_ID,
+  # APPLE_API_ISSUER. electron-builder staples the ticket to the app.
+  notarize: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   # Universal build: the keyboard hook's prebuilt darwin-x64 and darwin-arm64 files sit side by side
@@ -66,6 +70,8 @@ mac:
     NSMicrophoneUsageDescription: Glofly uses your microphone for voice and video calls.
 dmg:
   artifactName: Glofly-${version}-mac.${ext}
+zip:
+  artifactName: Glofly-${version}-mac.${ext}
 linux:
   target:
     - AppImage
@@ -75,7 +81,8 @@ appImage:
   artifactName: Glofly-${version}.${ext}
 npmRebuild: false
 # Auto-updates: a release uploads Glofly-<version>-setup.exe, its .blockmap and latest.yml
-# to the public glofly-updates bucket. (The app reads the same address from .env.production.)
+# to the public glofly-updates bucket (Mac: the Mac build Action uploads Glofly-<version>-mac.zip,
+# its .blockmap and latest-mac.yml). (The app reads the same address from .env.production.)
 publish:
   provider: generic
   url: https://glofly-updates.s3.us-east-2.amazonaws.com

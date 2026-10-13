@@ -10,7 +10,7 @@ import { useSession, onSignOut } from '@/state/session'
 import { setCall, useStore } from '@/state/store'
 import { firstName } from '@/lib/format'
 import { confirm, inform } from '@/ui/dialogs'
-import { playSound, startLoop } from '@/push/sounds'
+import { playSound, setCallAudioMode, startLoop } from '@/push/sounds'
 import { usePhonePrefs } from '@/state/prefs'
 import { setupWebRTC, startCallAudio, stopCallAudio } from './media'
 import { APP_SETTINGS } from '@/lib/config'
@@ -111,6 +111,7 @@ function refreshTiles() {
 
 async function connect(join: { token: string; url: string; call: Call }, video: boolean) {
   setupWebRTC()
+  setCallAudioMode(true)
   await startCallAudio(video)
   const r = new Room({ adaptiveStream: true, dynacast: true, audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
   room = r
@@ -182,6 +183,7 @@ function cleanup(message?: string) {
   keepConnected('call', false)
   const had = !!useCall.getState().call
   useCall.setState({ call: null, connecting: false, tiles: [], micOn: true, cameraOn: false, frontCamera: true })
+  setCallAudioMode(false)
   if (had && usePhonePrefs.getState().sounds) playSound('ended', 0.8)
   if (message) toast(message)
 }
@@ -200,6 +202,7 @@ async function enter(request: () => ReturnType<typeof api.startCall>, video: boo
   setCall(r.data.call, null)
   useCall.setState({ call: r.data.call })
   router.push('/call')
+  setCallAudioMode(true) // before the jingle, so it doesn't take the audio session from the call
   if (outgoing && r.data.call.status === 'ringing' && usePhonePrefs.getState().sounds) stopOutgoing = startLoop('outgoing')
   try {
     await connect(r.data, video)
@@ -283,19 +286,33 @@ export async function setCamera(on: boolean) {
   refreshTiles()
 }
 
+/** The other camera's device id on a phone (react-native-webrtc labels them "front" / "environment"). */
+async function cameraFor(front: boolean): Promise<string | undefined> {
+  try {
+    const devices = (await navigator.mediaDevices.enumerateDevices()) as (MediaDeviceInfo & { facing?: string })[]
+    const cams = devices.filter((d) => d.kind === 'videoinput')
+    const want = front ? 'front' : 'environment'
+    return (cams.find((d) => d.facing === want) ?? cams.find((d) => (front ? /front/i : /back|rear/i).test(d.label)))?.deviceId
+  } catch {
+    return undefined
+  }
+}
+
 export async function flipCamera() {
   const front = !useCall.getState().frontCamera
-  useCall.setState({ frontCamera: front })
   const pub = room?.localParticipant.getTrackPublication(Track.Source.Camera)
   const track = pub?.track as LocalVideoTrack | undefined
-  if (!track) return
+  if (!track) return void useCall.setState({ frontCamera: front })
   try {
-    // Phones switch cameras on the same track; browsers restart it with the other camera.
-    const mst = track.mediaStreamTrack as MediaStreamTrack & { _switchCamera?: () => void }
-    if (typeof mst._switchCamera === 'function') mst._switchCamera()
-    else await track.restartTrack({ facingMode: front ? 'user' : 'environment' })
+    // Restart the camera track with the other camera (by its device id on phones, which is what
+    // actually switches it; the old in-place _switchCamera did nothing on newer WebRTC, so only
+    // the picture's mirroring flipped). The mirror follows only once the switch worked.
+    const deviceId = Platform.OS === 'web' ? undefined : await cameraFor(front)
+    await track.restartTrack(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: front ? 'user' : 'environment' })
+    useCall.setState({ frontCamera: front })
+    refreshTiles()
   } catch {
-    /* only one camera */
+    /* only one camera: stay as it was */
   }
 }
 

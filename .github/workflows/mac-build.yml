@@ -13,9 +13,16 @@
 # (Settings → Secrets and variables → Actions) holding the glofly-release IAM user's access key:
 # RELEASE_AWS_ACCESS_KEY_ID and RELEASE_AWS_SECRET_ACCESS_KEY. Without them the step is skipped.
 #
-# Not signed by Apple or notarized yet (no Apple Developer account): it's "ad-hoc" signed so
-# Apple Silicon Macs will run it at all, and testers open it once with System Settings →
-# Privacy & Security → Open Anyway. Auto-updates are off on Mac for now.
+# Signing (Oct 12): with these repository secrets the app is signed with Glofly's Developer ID,
+# notarized by Apple and set to update itself (a .zip + latest-mac.yml go up with the .dmg):
+#   MAC_CERTIFICATE_P12       the "Developer ID Application" certificate + key as a .p12, base64
+#   MAC_CERTIFICATE_PASSWORD  the .p12's password
+#   APPLE_API_KEY_P8          the App Store Connect API key (.p8 file contents) used to notarize
+#   APPLE_API_KEY_ID          that key's Key ID
+#   APPLE_API_ISSUER          the Issuer ID shown above the keys list
+# Without them it falls back to the old "ad-hoc" test build (opened once with System Settings →
+# Privacy & Security → Open Anyway; permissions and saved sign-in don't survive new versions;
+# no auto-updates), with a warning.
 #
 # Mac minutes count 10× against a private repo's free Actions minutes (a build takes ~10 min),
 # so it doesn't run on every push.
@@ -33,7 +40,10 @@ on:
     tags: ['v*']
     # Also when this file changes on dev, so a change to the build gets tried right away.
     branches: [dev]
-    paths: ['.github/workflows/mac-build.yml']
+    paths:
+      - '.github/workflows/mac-build.yml'
+      - 'apps/desktop/electron-builder.yml'
+      - 'apps/desktop/build/entitlements.mac.plist'
 
 permissions:
   contents: read
@@ -45,7 +55,7 @@ concurrency:
 jobs:
   dmg:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60 # notarizing can take a while
     steps:
       - uses: actions/checkout@v4
 
@@ -65,15 +75,66 @@ jobs:
           test ! -e apps/desktop/.env.local
           grep -q '^MAIN_VITE_SERVER_URL=https://api.glofly.app$' apps/desktop/.env.production
 
+      - name: Signing set up?
+        id: signing
+        env:
+          P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          if [ -n "$P12" ] && [ -n "$P8" ] && [ -n "$KEY_ID" ] && [ -n "$ISSUER" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Signing with the Developer ID and notarizing."
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Mac signing secrets aren't all set, so this is an unsigned (ad-hoc) test build without auto-updates. See the top of mac-build.yml."
+          fi
+
       - name: Typecheck and build
+        env:
+          # Only signed copies look for updates (macOS refuses to install unsigned ones).
+          MAIN_VITE_MAC_AUTO_UPDATE: ${{ steps.signing.outputs.signed }}
         run: npm run build -w apps/desktop
 
       - name: Confirm the live server address is baked in
         run: grep -q 'https://api.glofly.app' apps/desktop/out/main/index.js
 
-      - name: Package the universal .dmg
+      - name: Package, sign and notarize (signed build)
+        if: steps.signing.outputs.signed == 'true'
         working-directory: apps/desktop
-        run: npx electron-builder --mac --universal --publish never
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          export APPLE_API_KEY="$RUNNER_TEMP/notary-key.p8"
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY"
+          chmod 600 "$APPLE_API_KEY"
+          npx electron-builder --mac --universal --publish never
+          rm -f "$APPLE_API_KEY"
+
+      - name: Package the universal .dmg (unsigned test build)
+        if: steps.signing.outputs.signed != 'true'
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: >-
+          npx electron-builder --mac --universal --publish never
+          -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false
+
+      - name: Check the Developer ID signature and notarization
+        if: steps.signing.outputs.signed == 'true'
+        working-directory: apps/desktop/dist
+        run: |
+          codesign -dvv mac-universal/Glofly.app 2>&1 | tee sig.txt
+          grep -q 'Authority=Developer ID Application' sig.txt
+          grep -q 'flags=.*runtime' sig.txt
+          xcrun stapler validate mac-universal/Glofly.app
+          spctl --assess --type execute --verbose=4 mac-universal/Glofly.app
+          ls Glofly-*-mac.zip Glofly-*-mac.zip.blockmap latest-mac.yml
 
       - name: Check the app (both chips, signature, permission prompts)
         working-directory: apps/desktop/dist/mac-universal
@@ -98,7 +159,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Glofly-${{ steps.version.outputs.version }}-mac
-          path: apps/desktop/dist/Glofly-*-mac.dmg
+          path: |
+            apps/desktop/dist/Glofly-*-mac.dmg
+            apps/desktop/dist/Glofly-*-mac.zip
+            apps/desktop/dist/latest-mac.yml
           if-no-files-found: error
           compression-level: 0 # a .dmg is already compressed
           retention-days: 30
@@ -110,6 +174,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-2
           VERSION: ${{ steps.version.outputs.version }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
         run: |
           if [ -z "$AWS_ACCESS_KEY_ID" ]; then
             echo "::warning::No RELEASE_AWS_* secrets, so the .dmg wasn't put on glofly.app (it's still in Artifacts)."
@@ -120,6 +185,20 @@ jobs:
           # This version's file, then the always-newest name the website links to.
           aws s3 cp "$dmg" "s3://glofly-updates/mac/Glofly-$VERSION-mac.dmg" $type
           aws s3 cp "$dmg" "s3://glofly-updates/Glofly-Mac.dmg" $type --cache-control no-cache
+          # Auto-update files, signed builds only (an unsigned update would fail to install).
+          # latest-mac.yml last: nobody hears "new version" before the .zip is there.
+          if [ "$SIGNED" = true ]; then
+            d=apps/desktop/dist
+            aws s3 cp "$d/Glofly-$VERSION-mac.zip" "s3://glofly-updates/Glofly-$VERSION-mac.zip" --content-type application/zip --only-show-errors
+            aws s3 cp "$d/Glofly-$VERSION-mac.zip.blockmap" "s3://glofly-updates/Glofly-$VERSION-mac.zip.blockmap" --content-type application/octet-stream --only-show-errors
+            aws s3 cp "$d/latest-mac.yml" "s3://glofly-updates/latest-mac.yml" --content-type text/yaml --cache-control no-cache --only-show-errors
+            ucode=$(curl -s -o /dev/null -w '%{http_code}' "https://glofly-updates.s3.us-east-2.amazonaws.com/latest-mac.yml")
+            echo "Update file check: HTTP $ucode"
+            if [ "$ucode" != 200 ]; then
+              echo "::error::latest-mac.yml isn't publicly readable (HTTP $ucode). Add latest-mac.yml and Glofly-*-mac.zip* to the glofly-updates bucket policy's public-read statement."
+              exit 1
+            fi
+          fi
           code=$(curl -s -o /dev/null -w '%{http_code}' -I "https://glofly-updates.s3.us-east-2.amazonaws.com/Glofly-Mac.dmg")
           echo "Public check: HTTP $code"
           if [ "$code" != 200 ]; then

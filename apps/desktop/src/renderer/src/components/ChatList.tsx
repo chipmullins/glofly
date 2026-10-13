@@ -18,6 +18,8 @@ import ContextMenu, { MenuItem } from './ContextMenu'
 import MuteMenuItems from './MuteMenu'
 import { isClosed, isMuted, mutedLabel } from '../lib/mentions'
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   BellOffIcon,
   ChatIcon,
   CloseIcon,
@@ -67,6 +69,8 @@ type ChatListProps = {
   onMute: (conversation: ConversationSummary, duration: MuteDuration | null) => void
   /** Hides a chat from the sidebar (history kept) until a new message arrives */
   onCloseChat: (conversation: ConversationSummary) => void
+  /** Saves a new order for the pinned chats (every pinned chat's id, top first) */
+  onReorderPins: (ids: string[]) => void
   onNewMessage: () => void
   onNewGroup: () => void
   /** Opens message search across all chats with this text */
@@ -89,6 +93,16 @@ function lastMessagePreview(c: ConversationSummary, me: PublicUser): string {
   return who + text
 }
 
+/** A pinned chat row's drag-to-reorder state and handlers. */
+type PinDrag = {
+  dragging: boolean
+  drop: 'above' | 'below' | null
+  onDragStart: (e: React.DragEvent) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: (e: React.DragEvent) => void
+  onDragEnd: () => void
+}
+
 /** One chat in the sidebar (from the design: avatar with status, name, status or last message). */
 function DmRow({
   c,
@@ -99,7 +113,8 @@ function DmRow({
   typingIds,
   onOpen,
   onMenu,
-  onCloseChat
+  onCloseChat,
+  drag
 }: {
   c: ConversationSummary
   me: PublicUser
@@ -112,6 +127,8 @@ function DmRow({
   onMenu: (x: number, y: number) => void
   /** Closes it in the sidebar (unpinned chats only); null hides the X */
   onCloseChat: (() => void) | null
+  /** Pinned chats: dragging to change their order */
+  drag?: PinDrag
 }): React.JSX.Element {
   // Like the design: friends show their status; otherwise the last message (groups always).
   // A call going on shows instead: "In call · 4 of 6" (GroupCall.dc.html).
@@ -142,7 +159,21 @@ function DmRow({
   const ring = active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'
   const muted = isMuted(c, now)
   return (
-    <div className={onCloseChat ? 'dm-row-wrap dm-row-wrap--closable' : 'dm-row-wrap'}>
+    <div
+      className={[
+        'dm-row-wrap',
+        onCloseChat ? 'dm-row-wrap--closable' : '',
+        drag?.dragging ? 'dm-row-wrap--dragging' : '',
+        drag?.drop ? `dm-row-wrap--drop-${drag.drop}` : ''
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      draggable={drag ? true : undefined}
+      onDragStart={drag?.onDragStart}
+      onDragOver={drag?.onDragOver}
+      onDrop={drag?.onDrop}
+      onDragEnd={drag?.onDragEnd}
+    >
       <button
         type="button"
         className={['dm-row', active ? 'dm-row--active' : '', muted ? 'dm-row--muted' : '']
@@ -250,12 +281,15 @@ function RowMenu({
   onLeaveGroup,
   onMute,
   onCloseChat,
+  onMove,
   onClose
 }: {
   conversation: ConversationSummary
   x: number
   y: number
   onCloseChat: () => void
+  /** Pinned chats: move up (-1) or down (+1) among the pins; null where it can't move that way */
+  onMove: { up: (() => void) | null; down: (() => void) | null } | null
   onTogglePin: () => void
   onViewProfile: () => void
   onGroupSettings: () => void
@@ -269,6 +303,26 @@ function RowMenu({
       <MenuItem icon={<PinIcon size={18} />} onClose={onClose} onClick={onTogglePin}>
         {pinned ? 'Unpin chat' : 'Pin chat'}
       </MenuItem>
+      {onMove && (onMove.up || onMove.down) && (
+        <>
+          <MenuItem
+            icon={<ArrowUpIcon size={18} />}
+            disabled={!onMove.up}
+            onClose={onClose}
+            onClick={() => onMove.up?.()}
+          >
+            Move up
+          </MenuItem>
+          <MenuItem
+            icon={<ArrowDownIcon size={18} />}
+            disabled={!onMove.down}
+            onClose={onClose}
+            onClick={() => onMove.down?.()}
+          >
+            Move down
+          </MenuItem>
+        </>
+      )}
       <MuteMenuItems conversation={conversation} onMute={onMute} onClose={onClose} />
       {conversation.kind === 'dm' ? (
         <MenuItem icon={<ProfileIcon size={18} />} onClose={onClose} onClick={onViewProfile}>
@@ -314,20 +368,71 @@ export default function ChatList({
   onLeaveGroup,
   onMute,
   onCloseChat,
+  onReorderPins,
   onNewMessage,
   onNewGroup,
   onSearchMessages
 }: ChatListProps): React.JSX.Element {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  // Dragging a pinned chat: which one, and where it would land (the line above or below a row).
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [drop, setDrop] = useState<{ id: string; where: 'above' | 'below' } | null>(null)
   const typing = useTypingByChat(me.id)
   const menuFor = conversations.find((c) => c.id === menu?.id) ?? null
 
-  // Pinned chats in the order they were pinned; everything else by latest activity.
+  // Pinned chats in your order (drag to change it; saved as the order they were pinned in);
+  // everything else by latest activity.
   const pinned = conversations
     .filter((c) => c.pinnedAt)
     .sort((a, b) => (a.pinnedAt ?? '').localeCompare(b.pinnedAt ?? ''))
   // Closed chats stay out of the list until something new arrives (or they're opened again).
   const others = conversations.filter((c) => !c.pinnedAt && (c.id === openChatId || !isClosed(c)))
+
+  /** Moves one pinned chat to a new place and saves the whole order. */
+  function movePin(id: string, to: number): void {
+    const ids = pinned.map((c) => c.id).filter((x) => x !== id)
+    ids.splice(Math.max(0, Math.min(to, ids.length)), 0, id)
+    if (ids.join() !== pinned.map((c) => c.id).join()) onReorderPins(ids)
+  }
+
+  function dropPin(targetId: string, where: 'above' | 'below'): void {
+    if (!dragId || dragId === targetId) return
+    const ids = pinned.map((c) => c.id).filter((x) => x !== dragId)
+    const at = ids.indexOf(targetId)
+    if (at < 0) return
+    movePin(dragId, where === 'above' ? at : at + 1)
+  }
+
+  const pinDrag = (c: ConversationSummary): PinDrag | undefined =>
+    pinned.length < 2
+      ? undefined
+      : {
+          dragging: dragId === c.id,
+          drop: drop?.id === c.id && dragId !== c.id ? drop.where : null,
+          onDragStart: (e) => {
+            setDragId(c.id)
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', c.id)
+          },
+          onDragOver: (e) => {
+            if (!dragId) return // something else being dragged (a file, another list)
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            const rect = e.currentTarget.getBoundingClientRect()
+            const where = e.clientY < rect.top + rect.height / 2 ? 'above' : 'below'
+            if (drop?.id !== c.id || drop.where !== where) setDrop({ id: c.id, where })
+          },
+          onDrop: (e) => {
+            e.preventDefault()
+            if (drop) dropPin(drop.id, drop.where)
+            setDragId(null)
+            setDrop(null)
+          },
+          onDragEnd: () => {
+            setDragId(null)
+            setDrop(null)
+          }
+        }
 
   const row = (c: ConversationSummary): React.ReactNode => (
     <DmRow
@@ -341,6 +446,7 @@ export default function ChatList({
       onOpen={() => onOpen(c.id)}
       onMenu={(x, y) => setMenu({ id: c.id, x, y })}
       onCloseChat={c.pinnedAt ? null : () => onCloseChat(c)}
+      drag={c.pinnedAt ? pinDrag(c) : undefined}
     />
   )
 
@@ -517,6 +623,17 @@ export default function ChatList({
           onLeaveGroup={() => onLeaveGroup(menuFor)}
           onMute={(duration) => onMute(menuFor, duration)}
           onCloseChat={() => onCloseChat(menuFor)}
+          onMove={
+            menuFor.pinnedAt && pinned.length > 1
+              ? (() => {
+                  const i = pinned.findIndex((c) => c.id === menuFor.id)
+                  return {
+                    up: i > 0 ? () => movePin(menuFor.id, i - 1) : null,
+                    down: i >= 0 && i < pinned.length - 1 ? () => movePin(menuFor.id, i + 1) : null
+                  }
+                })()
+              : null
+          }
           onClose={() => setMenu(null)}
         />
       )}

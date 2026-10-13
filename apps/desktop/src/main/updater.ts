@@ -57,9 +57,13 @@ export function checkNow(): 'checking' | 'unavailable' {
 
 export function startAutoUpdates(): void {
   const url = updatesUrl()
-  // Mac test builds aren't signed by Apple, and macOS only installs signed updates, so Mac
-  // copies don't check for now (testers download the new .dmg instead).
-  if (!app.isPackaged || !url || process.platform === 'darwin') return
+  // Mac: macOS only installs an update signed by the same developer as the running copy, so
+  // only builds signed with Glofly's Developer ID check (the Mac build Action sets
+  // MAIN_VITE_MAC_AUTO_UPDATE=true when it signs). Older ad-hoc test builds never check; their
+  // testers download the first signed .dmg by hand once, and it updates itself from then on.
+  // The Mac copy reads latest-mac.yml and downloads Glofly-<version>-mac.zip from the same place.
+  const macSigned = import.meta.env.MAIN_VITE_MAC_AUTO_UPDATE === 'true'
+  if (!app.isPackaged || !url || (process.platform === 'darwin' && !macSigned)) return
 
   autoUpdater.setFeedURL({ provider: 'generic', url })
   autoUpdater.autoDownload = true

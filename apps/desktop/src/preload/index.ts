@@ -123,6 +123,7 @@ const glofly: GloflyApi = {
     pin: (conversationId: string, pinned: boolean) =>
       ipcRenderer.invoke('conversations:pin', conversationId, pinned),
     orderGroups: (ids: string[]) => ipcRenderer.invoke('conversations:orderGroups', ids),
+    orderPins: (ids: string[]) => ipcRenderer.invoke('conversations:orderPins', ids),
     mute: (conversationId: string, duration: MuteDuration | null) =>
       ipcRenderer.invoke('conversations:mute', conversationId, duration),
     close: (conversationId: string, closed: boolean) =>

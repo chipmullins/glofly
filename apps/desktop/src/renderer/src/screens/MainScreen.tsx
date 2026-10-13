@@ -843,6 +843,28 @@ export default function MainScreen({
     else setNotice(result.message)
   }
 
+  /** Saves a new order for the pinned chats (shown right away; put back if the server says no). */
+  async function reorderPins(ids: string[]): Promise<void> {
+    const before = conversations
+    // Same as the server: the pins get new pinned times in this order, from the earliest one.
+    const times = conversations
+      .filter((c) => c.pinnedAt && ids.includes(c.id))
+      .map((c) => Date.parse(c.pinnedAt!))
+    if (times.length === 0) return
+    const base = Math.min(...times)
+    setConversations((list) =>
+      list.map((c) => {
+        const i = ids.indexOf(c.id)
+        return c.pinnedAt && i >= 0 ? { ...c, pinnedAt: new Date(base + i).toISOString() } : c
+      })
+    )
+    const result = await window.glofly.conversations.orderPins(ids)
+    if (result.ok) return
+    setConversations(before)
+    if (result.error === 'unauthorized') onSessionExpired()
+    else setNotice(result.message)
+  }
+
   /** Saves a new order for the Groups page (shown right away; put back if the server says no). */
   async function reorderGroups(ids: string[]): Promise<void> {
     const before = conversations
@@ -1278,6 +1300,7 @@ export default function MainScreen({
             onLeaveGroup={setLeaving}
             onMute={(c, d) => void muteChat(c, d)}
             onCloseChat={(c) => void closeChat(c)}
+            onReorderPins={(ids) => void reorderPins(ids)}
             onNewMessage={() => {
               setOpenChatId(null)
               setPage('friends')

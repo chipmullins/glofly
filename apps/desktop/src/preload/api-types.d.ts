@@ -357,6 +357,8 @@ export type GloflyApi = {
     pin: (conversationId: string, pinned: boolean) => Promise<ApiResult<null>>
     /** Your order for the Groups page (saved on your account). */
     orderGroups: (ids: string[]) => Promise<ApiResult<null>>
+    /** Saves my order for the pinned chats (every pinned chat's id, top first). */
+    orderPins: (ids: string[]) => Promise<ApiResult<null>>
     /** Mutes a chat for a while or until turned back on; null unmutes. */
     mute: (
       conversationId: string,

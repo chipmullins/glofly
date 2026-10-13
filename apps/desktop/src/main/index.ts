@@ -35,6 +35,7 @@ import {
   markRead,
   pinConversation,
   orderGroups,
+  orderPins,
   muteConversation,
   closeConversation,
   openDm,
@@ -713,6 +714,15 @@ function registerIpcHandlers(): void {
     ids.length <= 1000 &&
     ids.every(isUserId)
       ? orderGroups(ids)
+      : invalid
+  )
+  ipcMain.handle('conversations:orderPins', (event, ids: unknown) =>
+    fromApp(event) &&
+    Array.isArray(ids) &&
+    ids.length > 0 &&
+    ids.length <= 50 &&
+    ids.every(isUserId)
+      ? orderPins(ids)
       : invalid
   )
   ipcMain.handle('conversations:mute', (event, id: unknown, duration: unknown) =>
