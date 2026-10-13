@@ -5,7 +5,7 @@ import * as DocumentPicker from 'expo-document-picker'
 import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, fileTypeLabel, formatSize, type Attachment } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { pickChatPhotos } from '@/lib/photos'
-import { chooseFrom, inform } from '@/ui/dialogs'
+import { afterOverlaysClose, chooseFrom, inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { useTheme } from '@/ui/theme'
@@ -109,6 +109,7 @@ export async function attachMenu(uploads: Uploads) {
     if (photos === 'denied') return void inform('Camera not allowed', `Allow Glofly to use the camera in ${APP_SETTINGS}.`)
     if (photos) uploads.add(photos.map((p) => ({ uri: p.uri, name: p.name, kind: 'image', size: p.size })))
   } else if (pick === 'file') {
+    await afterOverlaysClose()
     const r = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true })
     if (r.canceled) return
     uploads.add(r.assets.map((a) => ({ uri: a.uri, name: a.name, kind: a.mimeType?.startsWith('image/') ? 'image' : 'file', size: a.size ?? null })))

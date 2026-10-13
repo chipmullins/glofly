@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, View } from 'react-native'
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { create } from 'zustand'
 import { Icon, type IconName } from './icons'
@@ -38,7 +38,24 @@ function push(o: Overlay) {
   useOverlays.setState((s) => ({ stack: [...s.stack, o] }))
 }
 function pop() {
+  lastClosedAt = Date.now()
   useOverlays.setState((s) => ({ stack: s.stack.slice(0, -1) }))
+}
+
+// When a dialog or sheet closed (for afterOverlaysClose).
+let lastClosedAt = 0
+const IOS_DISMISS_MS = 450
+
+/**
+ * Waits until a sheet or dialog that just closed has finished sliding away. iPhone only: iOS can't
+ * show its own screens (the photo library, the Files picker) while one of ours is still on its way
+ * out; it silently shows nothing. That's why "Choose a photo" did nothing on iPhone while "Take a
+ * photo" worked (the camera asks for permission first, which gave the sheet time to close).
+ */
+export async function afterOverlaysClose(): Promise<void> {
+  if (Platform.OS !== 'ios') return
+  const wait = IOS_DISMISS_MS - (Date.now() - lastClosedAt)
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait))
 }
 
 export function confirm(options: ConfirmOptions): Promise<boolean> {

@@ -2,15 +2,35 @@ import { Platform } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import type { Upload } from '@/api/http'
+import { afterOverlaysClose, inform } from '@/ui/dialogs'
 
 // Picking photos: profile and group photos (square, cropped by Android's own cropper), and
 // photos to send in a chat (up to 10, any shape).
 
 export type Picked = Upload & { name: string; size: number | null; width: number | null; height: number | null }
 
+// iPhone: hand over JPEGs rather than HEIC (the server and other people's phones can show them).
+const iosCompatible: ImagePicker.ImagePickerOptions =
+  Platform.OS === 'ios' ? { preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible } : {}
+
+function pickFailed(e: unknown): null {
+  console.warn('[photos] picking failed', e)
+  void inform("Couldn't open that photo", 'Try again, or pick a different photo.')
+  return null
+}
+
 /** A square photo for a profile or group (or null if they cancelled). Saved as a 512 px JPEG. */
 export async function pickSquarePhoto(source: 'library' | 'camera' = 'library'): Promise<Upload | 'denied' | null> {
-  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.92 }
+  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.92, ...iosCompatible }
+  await afterOverlaysClose()
+  try {
+    return await squarePhoto(source, options)
+  } catch (e) {
+    return pickFailed(e)
+  }
+}
+
+async function squarePhoto(source: 'library' | 'camera', options: ImagePicker.ImagePickerOptions): Promise<Upload | 'denied' | null> {
   let result: ImagePicker.ImagePickerResult
   if (source === 'camera') {
     const perm = await ImagePicker.requestCameraPermissionsAsync()
@@ -31,6 +51,15 @@ export async function pickSquarePhoto(source: 'library' | 'camera' = 'library'):
 
 /** Photos to send (or null if they cancelled). */
 export async function pickChatPhotos(source: 'library' | 'camera', limit: number): Promise<Picked[] | 'denied' | null> {
+  await afterOverlaysClose()
+  try {
+    return await chatPhotos(source, limit)
+  } catch (e) {
+    return pickFailed(e)
+  }
+}
+
+async function chatPhotos(source: 'library' | 'camera', limit: number): Promise<Picked[] | 'denied' | null> {
   let result: ImagePicker.ImagePickerResult
   if (source === 'camera') {
     const perm = await ImagePicker.requestCameraPermissionsAsync()
@@ -43,15 +72,24 @@ export async function pickChatPhotos(source: 'library' | 'camera', limit: number
       selectionLimit: limit,
       quality: 0.9,
       orderedSelection: true,
+      ...iosCompatible,
     })
   }
   if (result.canceled) return null
   return result.assets.map((a, i) => ({
     uri: a.uri,
     type: a.mimeType ?? 'image/jpeg',
-    name: a.fileName ?? `Photo ${i + 1}.${(a.mimeType ?? 'image/jpeg').split('/')[1] ?? 'jpg'}`,
+    name: photoName(a.fileName, a.mimeType, i),
     size: a.fileSize ?? null,
     width: a.width ?? null,
     height: a.height ?? null,
   }))
+}
+
+/** The photo's name, with .jpg when iOS turned a HEIC photo into a JPEG for us. */
+function photoName(fileName: string | null | undefined, mimeType: string | undefined, i: number): string {
+  const type = mimeType ?? 'image/jpeg'
+  if (!fileName) return `Photo ${i + 1}.${type === 'image/jpeg' ? 'jpg' : (type.split('/')[1] ?? 'jpg')}`
+  if (type === 'image/jpeg' && /\.(heic|heif)$/i.test(fileName)) return fileName.replace(/\.(heic|heif)$/i, '.jpg')
+  return fileName
 }

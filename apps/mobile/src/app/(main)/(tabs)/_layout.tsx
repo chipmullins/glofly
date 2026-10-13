@@ -16,8 +16,8 @@ export default function TabsLayout() {
       tabBar={(props) => <TabBar {...props} />}
     >
       <Tabs.Screen name="chats" options={{ title: 'Chats' }} />
-      <Tabs.Screen name="friends" options={{ title: 'Friends' }} />
       <Tabs.Screen name="groups" options={{ title: 'Groups' }} />
+      <Tabs.Screen name="friends" options={{ title: 'Friends' }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
     </Tabs>
   )
