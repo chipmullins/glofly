@@ -3,183 +3,82 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="icon" href="/icon.png">
-<title>Glofly</title>
-<meta name="description" content="Glofly is a messenger for you and your friends: chats, group chats, voice and video calls, and screen sharing.">
+<title>Glofly · Say it. Send it.</title>
+<meta name="description" content="Glofly is a free messenger for you and your friends: chats, group chats, voice and video calls and screen sharing. No ads, no feeds, no algorithms. Invite your friends and you're connected the moment they join.">
+<meta name="theme-color" content="#1b1036">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://glofly.app/">
+<meta property="og:title" content="Glofly · Say it. Send it.">
+<meta property="og:description" content="A free messenger for you and your friends. Chats, groups, voice and video calls. No ads, no feeds.">
+<meta property="og:image" content="https://glofly.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="icon" href="/icon.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
+<link rel="stylesheet" href="/site.css">
 <style>
-  /* Layout: off-white page, red Glofly accent. Hero = headline left, a live-looking Glofly window right,
-     with the firefly flying in and hovering between them. Then three feature rows, the maker, a footer. */
-  :root {
-    color-scheme: light;
-    --page: #fffcf9;          /* off-white page */
-    --sand: #f7f0e9;          /* Glofly's sidebar / quiet fills */
-    --line: #eaddd1;
-    --ink: #24170f;
-    --muted: #6b5547;
-    --red: #e0193a;           /* Glofly Red */
-    --red-deep: #c0122f;
-    --red-tint: #fce8eb;
-    --red-rgb: 224, 25, 58;
-    --night: #1c1210;         /* the login screen's night sky */
-    --glow: #ffb21a;          /* the firefly's light */
-    --white: #ffffff;
-    --font-display: 'Outfit', 'Segoe UI', system-ui, sans-serif;
-    --font-body: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
-  }
-
-  * { box-sizing: border-box; }
-  html { background: var(--page); }
-  body {
-    margin: 0;
-    background: var(--page);
-    color: var(--ink);
-    font: 400 17px/1.6 var(--font-body);
-    -webkit-font-smoothing: antialiased;
-  }
-  a { color: var(--red-deep); }
-  a:focus-visible, button:focus-visible { outline: 3px solid rgba(var(--red-rgb), 0.45); outline-offset: 3px; border-radius: 10px; }
-
-  .wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding-inline: 24px; }
-  @media (max-width: 480px) { .wrap { padding-inline: 16px; } }
-
-  /* ---------- Top bar ---------- */
-  .top { padding-block: 22px; }
-  .top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
-  .brand-mark {
-    width: 36px; height: 36px; border-radius: 10px; background: var(--red);
-    display: grid; place-items: center; box-shadow: 0 6px 16px -6px rgba(var(--red-rgb), 0.6);
-  }
-  .brand-mark svg { width: 26px; height: 26px; }
-  .brand-name { font: 700 22px/1 var(--font-display); letter-spacing: -0.01em; }
-  .top-link {
-    font: 600 15px/1 var(--font-display); color: var(--ink); text-decoration: none;
-    padding: 10px 16px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--white);
-  }
-  .top-link:hover { border-color: var(--red); color: var(--red-deep); }
-
-  /* Download menu in the top bar (no scripts on this site: a <details> opens and closes it) */
-  .dl { position: relative; }
-  .dl > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; user-select: none; }
-  .dl > summary::-webkit-details-marker { display: none; }
-  .dl > summary svg { width: 12px; height: 12px; transition: transform 0.15s ease; }
-  .dl[open] > summary { border-color: var(--red); color: var(--red-deep); }
-  .dl[open] > summary svg { transform: rotate(180deg); }
-  .dl-menu {
-    position: absolute; right: 0; top: calc(100% + 10px); z-index: 10; width: 268px;
-    padding: 8px; border-radius: 16px; background: var(--white); border: 1px solid var(--line);
-    box-shadow: 0 24px 48px -20px rgba(36, 23, 15, 0.35), 0 6px 14px -8px rgba(36, 23, 15, 0.18);
-    animation: dl-in 0.14s ease-out;
-  }
-  @keyframes dl-in { from { opacity: 0; transform: translateY(-4px); } }
-  @media (prefers-reduced-motion: reduce) { .dl-menu { animation: none; } .dl > summary svg { transition: none; } }
-  .dl-item {
-    display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 11px;
-    text-decoration: none; color: var(--ink);
-  }
-  .dl-item:hover, .dl-item:focus-visible { background: var(--red-tint); }
-  .dl-ic { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--sand); color: var(--ink); }
-  .dl-item:hover .dl-ic { background: var(--red); color: var(--white); }
-  .dl-ic svg { width: 18px; height: 18px; }
-  .dl-item b { display: block; font: 600 15px/1.2 var(--font-display); }
-  .dl-item small { display: block; font-size: 13px; line-height: 1.3; color: var(--muted); }
-  .tag {
-    display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px; vertical-align: 1px;
-    font: 700 10px/1.4 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--red-deep); background: var(--red-tint);
-  }
-  .dl-item:hover .tag { background: var(--white); }
+  /* Home page only. Layout: night-sky hero (headline left, the app right, the firefly flying in),
+     then What's new, Why Glofly, a peek at calls and phones, Invite your friends, the maker and
+     Constellations, and one last call to download. */
 
   /* ---------- Hero ---------- */
-  .hero { position: relative; padding-block: 40px 80px; overflow: hidden; }
-  .hero .wrap { display: grid; grid-template-columns: 1.02fr 1fr; gap: 56px; align-items: center; }
-  @media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; gap: 48px; } }
-
+  .hero { padding-block: 34px 120px; }
+  .hero-grid { display: grid; grid-template-columns: 1fr 1.08fr; gap: 48px; align-items: center; }
+  @media (max-width: 960px) { .hero-grid { grid-template-columns: 1fr; gap: 44px; } .hero { padding-block: 24px 80px; } }
   .hero-copy { position: relative; z-index: 2; min-width: 0; }
-  .eyebrow {
-    display: inline-flex; align-items: center; gap: 8px;
-    font: 600 13px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--red-deep); background: var(--red-tint); padding: 8px 12px; border-radius: 999px;
-  }
-  .eyebrow::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 4px rgba(var(--red-rgb), 0.18); }
   h1 {
-    margin: 22px 0 18px;
-    font: 800 clamp(48px, 7.2vw, 86px)/0.95 var(--font-display);
-    letter-spacing: -0.035em;
-    text-wrap: balance;
+    margin: 22px 0 20px;
+    font: 800 clamp(52px, 7.6vw, 96px)/0.92 var(--font-display);
+    letter-spacing: -0.04em;
   }
-  h1 .say, h1 .send { display: block; }
-  h1 .glofly { display: block; color: var(--red); position: relative; }
-  .lede { max-width: 30em; margin: 0 0 30px; font-size: 19px; color: var(--muted); }
+  h1 span { display: block; }
+  h1 .glofly {
+    background: linear-gradient(100deg, var(--glow-pale) 10%, var(--glow) 45%, var(--glow-hot) 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 28px rgba(var(--glow-rgb), 0.45));
+  }
+  .lede { max-width: 31em; margin: 0 0 30px; font-size: 19px; color: var(--sky-muted); }
+  .lede b { color: var(--sky-ink); font-weight: 600; }
+  .hero .btn { font-size: 17px; padding: 15px 22px; }
+  .soon-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 
-  .cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; }
-  .download {
-    display: inline-flex; align-items: center; gap: 12px;
-    padding: 16px 26px; border-radius: 14px; text-decoration: none;
-    background: var(--red); color: var(--white);
-    font: 700 18px/1 var(--font-display);
-    box-shadow: 0 14px 30px -12px rgba(var(--red-rgb), 0.75), inset 0 -2px 0 rgba(0,0,0,0.12);
-    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-  }
-  .download:hover { background: var(--red-deep); transform: translateY(-1px); box-shadow: 0 18px 34px -12px rgba(var(--red-rgb), 0.8); }
-  .download svg { width: 22px; height: 22px; flex: none; }
-  .download.alt {
-    background: var(--white); color: var(--ink); border: 1.5px solid var(--line);
-    padding: 14.5px 24px; box-shadow: 0 10px 24px -16px rgba(36, 23, 15, 0.4);
-  }
-  .download.alt:hover { background: var(--white); border-color: var(--red); color: var(--red-deep); box-shadow: 0 14px 28px -16px rgba(36, 23, 15, 0.45); }
-  .downloads { display: flex; flex-wrap: wrap; gap: 12px; }
-  .meta { font-size: 14px; color: var(--muted); line-height: 1.45; }
-  .meta strong { color: var(--ink); font-weight: 600; }
-  .soon {
-    display: inline-flex; align-items: center; gap: 8px; margin: 18px 0 0;
-    font: 600 14px/1 var(--font-display); color: var(--ink);
-    background: var(--sand); border: 1px solid var(--line); padding: 9px 14px 9px 11px; border-radius: 999px;
-  }
-  .soon svg { width: 17px; height: 17px; flex: none; color: var(--red); }
+  /* the app in the hero: built at 940×640 and shrunk; it runs off the right edge on wide screens */
+  .window { position: relative; z-index: 1; min-width: 0; height: 540px; }
+  .window .app { position: absolute; left: 0; top: 0; width: 940px; height: 640px; zoom: 0.84; }
+  @media (max-width: 1180px) { .window .app { zoom: 0.74; } .window { height: 476px; } }
+  @media (max-width: 960px) { .window .app { zoom: 0.66; } .window { height: 424px; } }
+  @media (max-width: 680px) { .window .app { zoom: 0.44; } .window { height: 284px; } }
+  @media (max-width: 420px) { .window .app { zoom: 0.38; } .window { height: 244px; } }
 
-  /* ---------- The firefly ---------- */
-  .flyer-track {
-    position: absolute; z-index: 3; left: 0; top: 0; width: 100%; height: 100%;
-    pointer-events: none;
-  }
+  /* ---------- The firefly flying in ---------- */
+  .flyer-track { position: absolute; z-index: 3; inset: 0; pointer-events: none; }
   .flyer {
-    position: absolute; width: 132px; height: 99px;
-    /* resting spot: between the headline and the window */
-    left: calc(50% - 40px); top: 64px;
+    position: absolute; width: 124px; height: 93px;
+    left: calc(50% - 70px); top: 172px;
     offset-path: path('M -520 520 C -260 600, -120 120, 0 0');
-    offset-rotate: 0deg;
-    offset-distance: 100%;
+    offset-rotate: 0deg; offset-distance: 100%;
     animation: fly-in 2.4s cubic-bezier(.45,.05,.3,1) 0.2s both;
   }
-  @media (max-width: 900px) { .flyer { left: auto; right: 4%; top: 24px; width: 104px; height: 78px; } }
-  @keyframes fly-in {
-    from { offset-distance: 0%; }
-    to   { offset-distance: 100%; }
-  }
+  @media (max-width: 960px) { .flyer { left: auto; right: 4%; top: 200px; width: 92px; height: 69px; } }
+  @keyframes fly-in { from { offset-distance: 0%; } to { offset-distance: 100%; } }
   .flyer-bob { width: 100%; height: 100%; animation: bob 3.2s ease-in-out 2.6s infinite; }
-  @keyframes bob {
-    0%, 100% { transform: translate(0, 0) rotate(-2deg); }
-    50%      { transform: translate(-6px, -12px) rotate(3deg); }
-  }
-  .flyer svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 18px rgba(255, 178, 26, 0.55)); animation: glow 1.1s ease-in-out infinite alternate; }
+  @keyframes bob { 0%, 100% { transform: translate(0, 0) rotate(-2deg); } 50% { transform: translate(-6px, -12px) rotate(3deg); } }
+  .flyer svg { width: 100%; height: 100%; overflow: visible; animation: glow 1.1s ease-in-out infinite alternate; }
   @keyframes glow {
-    from { filter: drop-shadow(0 0 10px rgba(255, 178, 26, 0.35)); }
-    to   { filter: drop-shadow(0 0 26px rgba(255, 150, 16, 0.75)); }
+    from { filter: drop-shadow(0 0 12px rgba(255, 178, 26, 0.45)); }
+    to   { filter: drop-shadow(0 0 30px rgba(255, 150, 16, 0.9)); }
   }
   .wa { transform-box: fill-box; transform-origin: 97% 80%; animation: flap-a 0.13s ease-in-out infinite alternate; }
   .wb { transform-box: fill-box; transform-origin: 3% 3%; animation: flap-b 0.13s ease-in-out infinite alternate; }
   @keyframes flap-a { from { transform: rotate(9deg); } to { transform: rotate(-18deg) scale(0.92, 0.85); } }
   @keyframes flap-b { from { transform: rotate(-9deg); } to { transform: rotate(18deg) scale(0.85, 0.92); } }
-
-  /* sparks left behind along the flight */
   .spark {
     position: absolute; width: 8px; height: 8px; border-radius: 50%;
     background: var(--glow); box-shadow: 0 0 12px 3px rgba(255, 178, 26, 0.6);
-    left: calc(50% - 40px + 50px); top: 114px;
+    left: calc(50% - 70px + 46px); top: 218px;
     offset-path: path('M -520 520 C -260 600, -120 120, 0 0');
     offset-distance: 100%; opacity: 0;
     animation: spark 2.4s cubic-bezier(.45,.05,.3,1) both;
@@ -188,226 +87,193 @@
   .spark:nth-of-type(3) { animation-delay: 0.44s; }
   .spark:nth-of-type(4) { animation-delay: 0.56s; width: 5px; height: 5px; }
   .spark:nth-of-type(5) { animation-delay: 0.68s; width: 4px; height: 4px; }
-  @keyframes spark {
-    0% { offset-distance: 0%; opacity: 0; }
-    15% { opacity: 1; }
-    80% { opacity: 0.7; }
-    100% { offset-distance: 92%; opacity: 0; }
-  }
-  @media (max-width: 900px) { .spark { display: none; } }
-
+  @keyframes spark { 0% { offset-distance: 0%; opacity: 0; } 15% { opacity: 1; } 80% { opacity: 0.7; } 100% { offset-distance: 92%; opacity: 0; } }
+  @media (max-width: 960px) { .spark { display: none; } }
   @media (prefers-reduced-motion: reduce) {
     .flyer, .spark, .flyer-bob, .flyer svg, .wa, .wb { animation: none !important; }
     .spark { display: none; }
   }
 
-  /* ---------- A Glofly window (the real desktop layout) ----------
-     Built at the app's own size (sidebar 300px, 73px chat header, 40px avatars, the app's own
-     colors with the Glofly Red accent) and shrunk with zoom, so it reads like a real screenshot.
-     The window runs past the right edge of the page on wide screens, like a peek into the app. */
-  .window {
-    --a-accent: #e0193a; --a-accent-soft: #fad3da; --a-accent-tint: #fce8eb; --a-link: #c0122f;
-    --a-bg: #ffffff; --a-sidebar: #f7f0e9; --a-surface: #ffffff; --a-panel: #f7f0e9; --a-hover: #efe3d8;
-    --a-line: #eaddd1; --a-line-soft: #efe4da; --a-ink: #24170f; --a-icon: #4a372b; --a-muted: #6b5547;
-    --a-faint: #8f7868; --a-good: #2e9e5b; --a-warn: #e2a00f; --a-night: #1c1210; --a-call-muted: #d9c2b1;
-    position: relative; z-index: 1; min-width: 0; height: 520px;
+  /* ---------- What's new in 0.3.0 (overlaps the bottom of the sky) ---------- */
+  .new { position: relative; z-index: 4; margin-top: -64px; }
+  .new-card {
+    display: grid; grid-template-columns: auto repeat(4, 1fr); gap: 0;
+    background: var(--white); border: 1px solid var(--line); border-radius: 22px;
+    box-shadow: 0 30px 60px -36px rgba(27, 16, 54, 0.45);
   }
-  .app {
-    position: absolute; left: 0; top: 0; width: 940px; height: 640px; zoom: 0.8;
-    display: flex; flex-direction: column;
-    background: var(--a-bg); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
-    box-shadow: 0 50px 90px -40px rgba(36, 23, 15, 0.4), 0 12px 28px -14px rgba(36, 23, 15, 0.2);
-    font: 400 15px/1.45 var(--font-body); color: var(--a-ink); text-align: left;
+  .new-label { padding: 24px 26px; display: flex; flex-direction: column; justify-content: center; border-right: 1px solid var(--line); }
+  .new-label b { font: 800 26px/1 var(--font-display); letter-spacing: -0.02em; }
+  .new-label span { margin-top: 6px; font: 700 12px/1 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--link); }
+  .new-item { min-width: 0; padding: 22px 22px; display: flex; gap: 14px; align-items: flex-start; }
+  .new-item + .new-item { border-left: 1px solid var(--line); }
+  .new-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-tint); color: var(--link); }
+  .new-ic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .new-item h3 { margin: 0 0 3px; font: 700 16px/1.25 var(--font-display); }
+  .new-item p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+  @media (max-width: 1060px) {
+    .new-card { grid-template-columns: repeat(2, 1fr); }
+    .new-label { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; align-items: baseline; gap: 12px; padding: 20px 22px; }
+    .new-item:nth-of-type(3) { border-left: 0; }
+    .new-item:nth-of-type(n+3) { border-top: 1px solid var(--line); }
   }
-  @media (max-width: 1180px) { .app { zoom: 0.72; } .window { height: 470px; } }
-  @media (max-width: 900px) { .app { zoom: 0.62; } .window { height: 400px; } }
-  @media (max-width: 600px) { .app { zoom: 0.4; } .window { height: 260px; } }
-  .app svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-
-  /* Windows title bar */
-  .a-titlebar { flex: none; height: 34px; display: flex; align-items: center; gap: 10px; padding-left: 12px; background: var(--a-sidebar); border-bottom: 1px solid var(--a-line); font: 400 12px/1 'Segoe UI', var(--font-body); color: var(--a-ink); }
-  .a-titlebar img { width: 16px; height: 16px; }
-  .a-titlebar .grow { flex: 1; }
-  .a-winbtn { width: 46px; height: 34px; display: grid; place-items: center; color: var(--a-ink); }
-  .a-winbtn svg { width: 11px; height: 11px; stroke-width: 1.2; }
-  .a-body { flex: 1; min-height: 0; display: flex; }
-
-  /* Sidebar */
-  .a-side { width: 300px; flex: none; background: var(--a-sidebar); border-right: 1px solid var(--a-line); padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
-  .a-top { display: flex; align-items: center; gap: 10px; }
-  .a-logo { width: 44px; height: 42px; flex: none; display: grid; place-items: center; }
-  .a-logo img { width: 40px; height: auto; }
-  .a-search { flex: 1; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px; background: var(--a-surface); border: 1.5px solid var(--a-line); border-radius: 12px; color: var(--a-faint); font-size: 14px; }
-  .a-search svg { width: 17px; height: 17px; color: var(--a-muted); }
-  .a-profile { display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--a-surface); border: 1px solid var(--a-line); border-radius: 14px; }
-  .a-profile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .a-profile-name { font-weight: 700; font-size: 15px; }
-  .a-profile-sub { font-size: 13px; color: var(--a-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .a-gear { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--a-icon); }
-  .a-gear svg { width: 19px; height: 19px; }
-  .a-nav { display: flex; flex-direction: column; gap: 2px; }
-  .a-nav-item { display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 14px; border-radius: 10px; font-weight: 700; font-size: 15px; }
-  .a-nav-item svg { width: 20px; height: 20px; color: var(--a-icon); }
-  .a-badge { margin-left: auto; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--a-link); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
-  .a-callstrip { margin: -4px 0 0; padding: 9px 9px 9px 12px; border-radius: 14px; background: var(--a-night); color: #fff; display: flex; align-items: center; gap: 10px; }
-  .a-callstrip .glow { width: 9px; height: 9px; border-radius: 50%; background: #ffb347; box-shadow: 0 0 0 4px rgba(255, 165, 74, 0.25); flex: none; margin-left: 2px; }
-  .a-callstrip .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
-  .a-callstrip strong { font-size: 14px; }
-  .a-callstrip span { font-size: 12px; color: var(--a-call-muted); font-variant-numeric: tabular-nums; }
-  .a-callbtn { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #3a2a22; color: #fff; }
-  .a-callbtn.hang { background: #d33a2c; }
-  .a-callbtn svg { width: 16px; height: 16px; }
-  .a-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--a-muted); }
-  .a-head span { display: inline-flex; align-items: center; gap: 6px; }
-  .a-head svg { width: 13px; height: 13px; }
-  .a-head .plus { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: var(--a-icon); }
-  .a-head .plus svg { width: 16px; height: 16px; }
-  .a-list { display: flex; flex-direction: column; gap: 2px; margin-top: -8px; }
-  .a-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px; }
-  .a-row.on { background: var(--a-accent-soft); }
-  .a-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
-  .a-row-name { font-weight: 500; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .a-row-name.strong { font-weight: 700; }
-  .a-row-sub { font-size: 13px; color: var(--a-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .a-row-sub.typing { color: var(--a-link); font-weight: 600; }
-  .a-row-sub.call { color: #1f6b3f; font-weight: 600; }
-  .a-unread { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--a-link); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
-
-  /* Avatars: initials in the app's palette, status dot ringed in the row's color */
-  .a-av { position: relative; flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font: 600 15px/1 var(--font-display); }
-  .a-av.lg { width: 44px; height: 44px; font-size: 16px; }
-  .a-av.c1 { background: #FBDCC4; color: #8A3005; } .a-av.c2 { background: #D7E5F5; color: #1E4E8C; }
-  .a-av.c3 { background: #DDEBD9; color: #2F6B3A; } .a-av.c4 { background: #EADCF5; color: #5B3A8C; }
-  .a-av.c5 { background: #F5DCDC; color: #8C2F2F; } .a-av.c6 { background: #F3E7C5; color: #6E5310; }
-  .a-av.me { background: var(--a-accent); color: #fff; }
-  .a-av .st { position: absolute; right: -2px; bottom: -2px; width: 14px; height: 14px; border-radius: 50%; border: 3px solid var(--ring, var(--a-sidebar)); background: var(--a-good); }
-  .a-av .st.away { background: var(--a-warn); }
-  .a-av .st.off { background: var(--a-sidebar); box-shadow: inset 0 0 0 2px var(--a-faint); }
-  .a-group { position: relative; flex: none; width: 40px; height: 40px; }
-  .a-group .a-av { position: absolute; width: 27px; height: 27px; font-size: 11px; border: 2px solid var(--ring, var(--a-sidebar)); }
-  .a-group .a-av:first-child { left: 0; top: 0; } .a-group .a-av:last-child { right: 0; bottom: 0; }
-  .a-group.lg { width: 44px; height: 44px; } .a-group.lg .a-av { width: 30px; height: 30px; font-size: 12px; }
-
-  /* Chat */
-  .a-chat { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--a-bg); }
-  .a-chat-head { display: flex; align-items: center; gap: 14px; padding: 14px 24px; min-height: 73px; border-bottom: 1px solid var(--a-line-soft); --ring: var(--a-bg); }
-  .a-chat-names { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
-  .a-chat-name { font: 600 18px/1.25 var(--font-display); }
-  .a-chat-status { font-size: 14px; color: var(--a-muted); }
-  .a-hbtns { display: flex; gap: 8px; }
-  .a-hbtn { width: 44px; height: 44px; border-radius: 12px; background: var(--a-panel); color: var(--a-icon); display: grid; place-items: center; }
-  .a-hbtn svg { width: 20px; height: 20px; }
-  .a-hbtn.live { background: var(--a-accent); color: #fff; }
-  .a-msgs { flex: 1; min-height: 0; overflow: hidden; padding: 16px 24px 4px; display: flex; flex-direction: column; justify-content: flex-end; --ring: var(--a-bg); }
-  .a-day { display: flex; align-items: center; gap: 14px; margin: 4px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--a-muted); }
-  .a-day::before, .a-day::after { content: ''; flex: 1; height: 1px; background: var(--a-line-soft); }
-  .a-msg { display: flex; gap: 14px; padding: 8px 12px 2px; border-radius: 10px; }
-  .a-msg.mention { background: rgba(224, 25, 58, 0.06); box-shadow: inset 3px 0 0 var(--a-accent); }
-  .a-msg-main { flex: 1; min-width: 0; }
-  .a-msg-meta { display: flex; align-items: baseline; gap: 8px; }
-  .a-author { font-weight: 700; font-size: 15px; }
-  .a-time { font-size: 12px; color: var(--a-muted); }
-  .a-text { margin: 0; font-size: 15px; line-height: 1.5; }
-  .a-text + .a-text { margin-top: 2px; }
-  .a-at { color: var(--a-link); background: var(--a-accent-tint); border-radius: 5px; padding: 0 3px; font-weight: 600; }
-  .a-reacts { display: flex; gap: 6px; margin: 5px 0 2px; }
-  .a-react { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; border: 1.5px solid var(--a-line); border-radius: 999px; background: var(--a-surface); font-size: 13px; font-weight: 700; color: var(--a-muted); }
-  .a-react.mine { border-color: var(--a-accent); background: var(--a-accent-tint); color: var(--a-link); }
-  .a-reply { display: flex; align-items: center; gap: 6px; margin: 2px 0 4px; font-size: 13px; color: var(--a-muted); }
-  .a-reply::before { content: ''; width: 18px; height: 10px; border: 2px solid var(--a-line); border-right: 0; border-bottom: 0; border-radius: 8px 0 0 0; margin-top: 6px; }
-  .a-reply b { color: var(--a-ink); font-weight: 600; }
-  .a-photo { margin-top: 6px; width: 250px; height: 150px; border-radius: 12px; overflow: hidden; background: linear-gradient(160deg, #2c1c3d 0%, #6b2f4f 45%, #f47a1f 100%); position: relative; }
-  .a-photo::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: linear-gradient(180deg, transparent, rgba(20, 10, 8, 0.75)); }
-  .a-photo i { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #ffd27a; box-shadow: 0 0 10px 3px rgba(255, 178, 26, 0.7); }
-  .a-receipt { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 22px; padding: 2px 12px 0; font-size: 12px; color: var(--a-muted); }
-  .a-receipt svg { width: 16px; height: 16px; color: var(--a-good); }
-  .a-typing { display: flex; align-items: center; gap: 8px; height: 22px; padding-left: 16px; font-size: 13px; color: var(--a-muted); }
-  .a-dots { display: inline-flex; gap: 3px; }
-  .a-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--a-faint); animation: a-bob 1.2s infinite ease-in-out; }
-  .a-dots i:nth-child(2) { animation-delay: 0.15s; } .a-dots i:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes a-bob { 0%, 60%, 100% { transform: none; opacity: 0.5; } 30% { transform: translateY(-3px); opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .a-dots i { animation: none; } }
-  .a-composer-area { padding: 0 24px 20px; }
-  .a-composer { display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--a-panel); border: 1.5px solid var(--a-line); border-radius: 16px; }
-  .a-cbtn { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--a-icon); }
-  .a-cbtn svg { width: 21px; height: 21px; }
-  .a-cbtn.round { background: var(--a-surface); }
-  .a-input { flex: 1; color: var(--a-faint); font-size: 15px; padding: 0 6px; }
-
-  /* ---------- Features ---------- */
-  .features { padding-block: 24px 88px; }
-  .features h2, .maker h2 {
-    margin: 0 0 12px; font: 800 clamp(32px, 4.4vw, 46px)/1.05 var(--font-display); letter-spacing: -0.025em; text-wrap: balance;
+  @media (max-width: 600px) {
+    .new-card { grid-template-columns: 1fr; }
+    .new-item + .new-item { border-left: 0; border-top: 1px solid var(--line); }
   }
-  .section-lede { margin: 0 0 40px; color: var(--muted); max-width: 34em; }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
-  .feature { min-width: 0; padding: 26px; border-radius: 18px; background: var(--white); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
-  .feature .ic { width: 44px; height: 44px; border-radius: 12px; background: var(--red-tint); display: grid; place-items: center; }
-  .feature .ic svg { width: 22px; height: 22px; stroke: var(--red-deep); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .feature h3 { margin: 6px 0 0; font: 700 21px/1.2 var(--font-display); letter-spacing: -0.01em; }
-  .feature p { margin: 0; color: var(--muted); font-size: 16px; }
-  .feature .fact { margin-top: auto; padding-top: 8px; font: 600 13px/1.3 var(--font-display); color: var(--red-deep); letter-spacing: 0.02em; }
 
-  /* ---------- The maker ---------- */
-  .maker { padding-block: 0 96px; }
-  .maker-card {
-    display: grid; grid-template-columns: auto 1fr; gap: 32px; align-items: center;
-    padding: 34px; border-radius: 22px; background: var(--night); color: var(--white);
-    position: relative; overflow: hidden;
+  /* ---------- Why Glofly ---------- */
+  .why-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 56px; align-items: start; margin-top: 8px; }
+  @media (max-width: 960px) { .why-grid { grid-template-columns: 1fr; gap: 36px; } }
+  .why-intro { min-width: 0; position: sticky; top: 24px; }
+  @media (max-width: 960px) { .why-intro { position: static; } }
+  .nope { margin: 30px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .nope li {
+    display: flex; align-items: center; gap: 14px;
+    font: 700 22px/1.2 var(--font-display); letter-spacing: -0.01em;
   }
-  .maker-card::after {
-    content: ''; position: absolute; right: -80px; top: -80px; width: 280px; height: 280px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(255, 178, 26, 0.35), rgba(255, 178, 26, 0) 65%);
-    pointer-events: none;
+  .nope li s { text-decoration-thickness: 3px; text-decoration-color: var(--accent); color: var(--muted); }
+  .nope li::before {
+    content: ''; flex: none; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent-tint) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b8430a' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M7 7l10 10M17 7 7 17'/%3E%3C/svg%3E") center / 14px no-repeat;
   }
-  @media (max-width: 600px) { .maker-card { grid-template-columns: 1fr; padding: 26px; gap: 20px; } }
-  .photo {
-    width: 128px; height: 128px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--red), #ff7a3d);
-    object-fit: cover; display: block;
-    box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.08), 0 0 40px rgba(255, 178, 26, 0.35);
-    position: relative; z-index: 1;
-  }
-  .maker-copy { min-width: 0; position: relative; z-index: 1; }
-  .maker-copy .eyebrow { background: rgba(255, 255, 255, 0.08); color: #ffcf7a; }
-  .maker-copy .eyebrow::before { background: var(--glow); box-shadow: 0 0 0 4px rgba(255, 178, 26, 0.2); }
-  .maker-copy h2 { margin-top: 14px; color: var(--white); }
-  .maker-copy p { margin: 0; color: #d9c7b8; max-width: 36em; }
+  .nope-foot { margin: 18px 0 0; font-size: 15px; color: var(--muted); }
+  .reasons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  @media (max-width: 640px) { .reasons { grid-template-columns: 1fr; } }
+  .reason { min-width: 0; padding: 24px; border-radius: 20px; background: var(--white); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .reason.hot { grid-column: 1 / -1; background: linear-gradient(135deg, #2a1a52, #1b1036 70%); border-color: transparent; color: var(--sky-ink); display: grid; grid-template-columns: 1fr auto; gap: 8px 28px; align-items: center; }
+  @media (max-width: 640px) { .reason.hot { grid-template-columns: 1fr; } }
+  .reason .ic { width: 44px; height: 44px; border-radius: 13px; background: var(--accent-tint); display: grid; place-items: center; color: var(--link); }
+  .reason .ic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .reason h3 { margin: 6px 0 0; font: 700 21px/1.2 var(--font-display); letter-spacing: -0.01em; }
+  .reason p { margin: 0; font-size: 16px; color: var(--muted); }
+  .reason.hot h3 { margin: 0; font-size: 24px; }
+  .reason.hot p { color: var(--sky-muted); }
+  .reason .fact { margin-top: auto; padding-top: 6px; font: 600 13px/1.3 var(--font-display); color: var(--link); letter-spacing: 0.02em; }
+  .playing { display: flex; align-items: center; gap: 12px; padding: 12px 16px 12px 12px; border-radius: 16px; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--night-line); }
+  .playing .a-av { --ring: #241747; }
+  .playing b { display: block; font-size: 15px; }
+  .playing small { display: block; font-size: 13px; color: #6fd39a; font-weight: 600; }
+  .playing .app { background: none; box-shadow: none; flex-direction: row; align-items: center; gap: 12px; color: inherit; }
 
-  /* ---------- Footer ---------- */
-  footer { border-top: 1px solid var(--line); padding-block: 28px 40px; font-size: 14px; color: var(--muted); }
-  footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: space-between; }
-  footer p { margin: 0; }
+  /* ---------- Peek: calls + phone ---------- */
+  .peek { background: var(--sand); }
+  .peek-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 40px; margin-bottom: 44px; }
+  .peek-head .btn { flex: none; }
+  .peek-stage { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 36px; align-items: end; }
+  @media (max-width: 960px) { .peek-stage { grid-template-columns: 1fr; justify-items: center; } }
+  .call-shot { position: relative; width: 100%; height: 470px; min-width: 0; }
+  .call-shot .app { position: absolute; inset: 0 auto auto 0; width: 1000px; height: 620px; zoom: 0.76; }
+  @media (max-width: 1180px) { .call-shot .app { zoom: 0.64; } .call-shot { height: 397px; } }
+  @media (max-width: 760px) { .call-shot .app { zoom: 0.4; } .call-shot { height: 248px; } }
+  @media (max-width: 460px) { .call-shot .app { zoom: 0.32; } .call-shot { height: 198px; } }
+  .peek .phone { zoom: 0.86; }
+  @media (max-width: 960px) { .peek .phone { zoom: 0.8; } }
+  .caption { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+
+  /* ---------- Invite your friends ---------- */
+  .invite-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+  @media (max-width: 960px) { .invite-grid { grid-template-columns: 1fr; gap: 44px; } }
+  .steps { margin: 34px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 22px; counter-reset: step; }
+  .steps li { position: relative; padding-left: 62px; counter-increment: step; }
+  .steps li::before {
+    content: counter(step); position: absolute; left: 0; top: -2px; width: 44px; height: 44px; border-radius: 50%;
+    display: grid; place-items: center; font: 800 18px/1 var(--font-display); color: var(--on-accent);
+    background: linear-gradient(180deg, var(--glow-pale), var(--glow)); box-shadow: 0 8px 20px -8px rgba(var(--glow-rgb), 0.9);
+  }
+  .steps li:not(:last-child)::after { content: ''; position: absolute; left: 21px; top: 48px; bottom: -20px; width: 2px; background: repeating-linear-gradient(180deg, var(--line) 0 5px, transparent 5px 10px); }
+  .steps h3 { margin: 0 0 4px; font: 700 20px/1.25 var(--font-display); }
+  .steps p { margin: 0; color: var(--muted); font-size: 16px; }
+  .steps code { font: 600 14px/1 var(--font-body); color: var(--link); background: var(--accent-tint); padding: 3px 7px; border-radius: 6px; }
+  .invite-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+  .invite-facts span { font: 600 13px/1 var(--font-display); color: var(--muted); padding: 9px 12px; border-radius: 999px; background: var(--white); border: 1px solid var(--line); }
+  .invite-shot { position: relative; min-width: 0; }
+  .invite-shot .app { position: absolute; left: 0; top: 0; width: 690px; height: 640px; zoom: 0.74; }
+  .invite-shot { height: 474px; }
+  @media (max-width: 1180px) { .invite-shot .app { zoom: 0.6; } .invite-shot { height: 384px; } }
+  @media (max-width: 960px) { .invite-shot .app { zoom: 0.8; } .invite-shot { height: 512px; } }
+  @media (max-width: 600px) { .invite-shot .app { zoom: 0.53; } .invite-shot { height: 339px; } }
+  @media (max-width: 400px) { .invite-shot .app { zoom: 0.47; } .invite-shot { height: 301px; } }
+  .invite-shot .a-toast { right: 20px; bottom: 20px; }
+
+  /* ---------- About: the maker + Constellations ---------- */
+  .about-card { border-radius: 30px; display: grid; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 900px) { .about-card { grid-template-columns: 1fr; } }
+  .maker { padding: 44px; display: flex; flex-direction: column; gap: 18px; border-right: 1px solid var(--night-line); }
+  @media (max-width: 900px) { .maker { border-right: 0; border-bottom: 1px solid var(--night-line); } }
+  @media (max-width: 520px) { .maker { padding: 28px 22px; } }
+  .maker-top { display: flex; align-items: center; gap: 20px; }
+  .photo { width: 104px; height: 104px; border-radius: 50%; object-fit: cover; display: block; flex: none; box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08), 0 0 40px rgba(var(--glow-rgb), 0.4); }
+  .maker h2 { margin: 6px 0 0; font: 800 clamp(30px, 3.6vw, 40px)/1.05 var(--font-display); letter-spacing: -0.025em; }
+  .maker p { margin: 0; color: var(--sky-muted); max-width: 34em; }
+  .maker p b { color: var(--sky-ink); font-weight: 600; }
+  .signoff { font: 600 15px/1.4 var(--font-display); color: var(--glow-pale); }
+  .const { position: relative; padding: 44px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+  @media (max-width: 520px) { .const { padding: 28px 22px; } }
+  .const-badge { display: inline-flex; align-self: flex-start; align-items: center; gap: 8px; padding: 7px 12px 7px 9px; border-radius: 999px; background: rgba(181, 124, 255, 0.14); border: 1px solid rgba(181, 124, 255, 0.4); font: 700 12px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--violet-pale); }
+  .const-badge svg { width: 18px; height: 18px; }
+  .const h3 { margin: 0; font: 800 clamp(30px, 3.6vw, 40px)/1.05 var(--font-display); letter-spacing: -0.025em; }
+  .const h3 em { font-style: normal; background: linear-gradient(100deg, var(--violet-pale), var(--glow-pale)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .const p { margin: 0; color: var(--sky-muted); }
+  .const ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
+  @media (max-width: 420px) { .const ul { grid-template-columns: 1fr; } }
+  .const li { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--sky-ink); }
+  .const li::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--glow-pale); box-shadow: 0 0 8px 2px rgba(var(--glow-rgb), 0.6); }
+  /* a little constellation drawn behind the text */
+  .map { position: absolute; right: -30px; top: -20px; width: 300px; height: 220px; opacity: 0.55; pointer-events: none; }
+  .map line { stroke: var(--violet-pale); stroke-width: 1; stroke-dasharray: 3 5; }
+  .map circle { fill: #fff; }
+  .map circle.b { fill: var(--glow-pale); filter: drop-shadow(0 0 4px var(--glow)); }
+
+  /* ---------- Last call ---------- */
+  .last { text-align: center; padding-block: 96px 104px; border-radius: 48px 48px 0 0; margin-top: 96px; }
+  .last h2 { margin: 0 auto 16px; max-width: 14em; font: 800 clamp(38px, 5.6vw, 66px)/1 var(--font-display); letter-spacing: -0.035em; text-wrap: balance; }
+  .last p.lede-2 { margin: 0 auto 32px; }
+  .last .btns { justify-content: center; }
+  .last .meta { margin-top: 18px; }
+  @media (max-width: 600px) { .last { border-radius: 28px 28px 0 0; padding-block: 72px 80px; margin-top: 72px; } }
+  .after-last { background: var(--page); color: var(--sky-muted); }
+  .after-last footer { background: var(--night-deep); color: var(--sky-muted); border-top: 1px solid var(--night-line); }
+  .after-last footer a { color: var(--glow-pale); }
+  .after-last footer .foot-brand { color: var(--sky-ink); }
 </style>
 </head>
 <body>
 
-<header class="top">
-  <div class="wrap">
-    <a class="brand" href="#">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="160 240 760 600"><use href="#firefly-shape"></use></svg>
-      </span>
-      <span class="brand-name">Glofly</span>
-    </a>
-    <details class="dl">
-      <summary class="top-link">Download <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
-      <div class="dl-menu">
-        <a class="dl-item" href="/download">
-          <span class="dl-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.3H3zm0 13.6 7.4 1.2v-7.2H3zm8.4 1.4L21 21.6v-8.8h-9.6zm0-16.4v7.5H21V2.4z"/></svg></span>
-          <span><b>Windows</b><small>Windows 10 and 11</small></span>
-        </a>
-        <a class="dl-item" href="/download/mac">
-          <span class="dl-ic"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20"/><path d="M10 19l.6-1.4h2.8L14 19"/></svg></span>
-          <span><b>macOS <span class="tag">Beta</span></b><small>Apple Silicon and Intel</small></span>
-        </a>
-      </div>
-    </details>
-  </div>
-</header>
+<div class="sky curve">
+  <div class="fireflies" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
 
-<main>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="/" aria-label="Glofly home">
+        <img src="/logo.svg" alt="" width="40" height="40">
+        <span class="brand-name">Glofly</span>
+      </a>
+      <nav class="nav" aria-label="Site">
+        <a href="#why">Why Glofly</a>
+        <a href="/features">Screenshots</a>
+        <a href="#invite">Invite friends</a>
+        <a href="#about">About</a>
+      </nav>
+      <details class="dl">
+        <summary>Download <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+        <div class="dl-menu">
+          <a class="dl-item" href="/download">
+            <span class="dl-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.3H3zm0 13.6 7.4 1.2v-7.2H3zm8.4 1.4L21 21.6v-8.8h-9.6zm0-16.4v7.5H21V2.4z"/></svg></span>
+            <span><b>Windows</b><small>Windows 10 and 11</small></span>
+          </a>
+          <a class="dl-item" href="/download/mac">
+            <span class="dl-ic"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20"/><path d="M10 19l.6-1.4h2.8L14 19"/></svg></span>
+            <span><b>macOS <span class="tag">Beta</span></b><small>Apple Silicon and Intel</small></span>
+          </a>
+          <div class="dl-item off">
+            <span class="dl-ic"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></span>
+            <span><b>iPhone and Android <span class="tag">Soon</span></b><small>In testing with friends now</small></span>
+          </div>
+        </div>
+      </details>
+    </div>
+  </header>
+
   <section class="hero">
     <div class="flyer-track" aria-hidden="true">
       <span class="spark"></span><span class="spark"></span><span class="spark"></span><span class="spark"></span><span class="spark"></span>
@@ -415,20 +281,20 @@
         <div class="flyer-bob">
           <svg viewBox="120 220 800 600">
             <defs>
-              <linearGradient id="g-body" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#FFC21A"/><stop offset="1" stop-color="#F5A800"/></linearGradient>
+              <linearGradient id="g-body" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#FFD24A"/><stop offset="1" stop-color="#FFB000"/></linearGradient>
               <linearGradient id="g-bubble" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD21F"/><stop offset="0.55" stop-color="#FF9A10"/><stop offset="1" stop-color="#FF6A00"/></linearGradient>
             </defs>
-            <path d="M520 352 C524 332 520 316 506 304" fill="none" stroke="#F5B000" stroke-width="20" stroke-linecap="round"/>
-            <circle cx="505" cy="301" r="13" fill="#F5B000"/>
-            <path d="M596 398 C616 380 640 374 662 382" fill="none" stroke="#F5B000" stroke-width="20" stroke-linecap="round"/>
-            <circle cx="664" cy="382" r="13" fill="#F5B000"/>
+            <path d="M520 352 C524 332 520 316 506 304" fill="none" stroke="#FFB000" stroke-width="20" stroke-linecap="round"/>
+            <circle cx="505" cy="301" r="13" fill="#FFB000"/>
+            <path d="M596 398 C616 380 640 374 662 382" fill="none" stroke="#FFB000" stroke-width="20" stroke-linecap="round"/>
+            <circle cx="664" cy="382" r="13" fill="#FFB000"/>
             <ellipse cx="455" cy="528" rx="78" ry="52" transform="rotate(-38 455 528)" fill="url(#g-body)"/>
             <circle cx="540" cy="428" r="74" fill="url(#g-body)"/>
-            <g class="wa" fill="none" stroke="#FF7A12" stroke-width="22" stroke-linejoin="round">
+            <g class="wa" fill="none" stroke="#FFA030" stroke-width="24" stroke-linejoin="round">
               <path d="M490 490 C420 380 268 222 182 238 C124 250 136 330 200 382 C280 444 400 470 490 490 Z"/>
               <path d="M490 490 C400 456 262 432 192 456 C142 474 150 536 222 546 C302 556 410 520 490 490 Z"/>
             </g>
-            <g class="wb" fill="none" stroke="#FF7A12" stroke-width="22" stroke-linejoin="round">
+            <g class="wb" fill="none" stroke="#FFA030" stroke-width="24" stroke-linejoin="round">
               <path d="M490 490 C620 500 800 520 860 580 C905 626 870 690 780 680 C680 668 572 560 490 490 Z"/>
               <path d="M490 490 C500 600 540 705 598 768 C632 804 694 796 676 736 C658 672 566 566 490 490 Z"/>
             </g>
@@ -439,31 +305,31 @@
       </div>
     </div>
 
-    <div class="wrap">
+    <div class="wrap hero-grid">
       <div class="hero-copy">
-        <span class="eyebrow">Now in early testing</span>
-        <h1><span class="say">Say it.</span><span class="send">Send it.</span><span class="glofly">Glofly.</span></h1>
-        <p class="lede">A messenger for you and your friends. Chat one-on-one or in groups, share photos and files, and jump on a voice or video call with a single click.</p>
-        <div class="cta-row">
-          <div class="downloads">
-            <a class="download" href="/download">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.3H3zm0 13.6 7.4 1.2v-7.2H3zm8.4 1.4L21 21.6v-8.8h-9.6zm0-16.4v7.5H21V2.4z"/></svg>
-              Download for Windows
-            </a>
-            <a class="download alt" href="/download/mac">
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20"/><path d="M10 19l.6-1.4h2.8L14 19"/></svg>
-              Download for Mac
-            </a>
-          </div>
-          <p class="meta"><strong>Free</strong> · Windows 10 and 11 · macOS 12 or newer<br>Updates install themselves · <a href="/mac">Installing on a Mac</a></p>
+        <a class="pill" href="#invite"><b>New</b> Glofly 0.3.0: invite your friends</a>
+        <h1><span>Say it.</span><span>Send it.</span><span class="glofly">Glofly.</span></h1>
+        <p class="lede">The messenger for <b>you and your friends</b>, nobody else. Chat one-on-one or in groups, share photos and voice messages, and jump on a voice or video call with one click. No ads, no feeds, just your people.</p>
+        <div class="btns">
+          <a class="btn glow" href="/download">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.3H3zm0 13.6 7.4 1.2v-7.2H3zm8.4 1.4L21 21.6v-8.8h-9.6zm0-16.4v7.5H21V2.4z"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn ghost" href="/download/mac">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20"/><path d="M10 19l.6-1.4h2.8L14 19"/></svg>
+            Download for Mac
+          </a>
         </div>
-        <p class="soon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Android and iOS apps coming soon!</p>
+        <p class="meta"><strong>Free</strong> · Windows 10 and 11 · macOS 12 or newer · Updates install themselves · <a href="/mac">Installing on a Mac</a></p>
+        <div class="soon-row">
+          <span class="pill quiet"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>iPhone and Android apps coming soon</span>
+        </div>
       </div>
 
-      <div class="window" aria-label="The Glofly desktop app: a group chat with a call going on">
-        <div class="app">
+      <div class="window" role="img" aria-label="The Glofly desktop app: a group chat with a call going on, and a notification that Sam joined Glofly from your invite">
+        <div class="app" aria-hidden="true">
           <div class="a-titlebar">
-            <img src="/firefly.png" alt="">
+            <img src="/logo.svg" alt="">
             <span>Glofly</span>
             <span class="grow"></span>
             <span class="a-winbtn"><svg viewBox="0 0 12 12"><path d="M1 6h10"/></svg></span>
@@ -473,11 +339,10 @@
           <div class="a-body">
             <aside class="a-side">
               <div class="a-top">
-                <div class="a-logo"><img src="/firefly.png" alt=""></div>
+                <div class="a-logo"><img src="/logo.svg" alt=""></div>
                 <div class="a-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Find a friend or chat</div>
               </div>
-
-              <div class="a-profile" style="--ring: var(--a-surface)">
+              <div class="a-profile">
                 <span class="a-av me">RC<i class="st"></i></span>
                 <div class="a-profile-text">
                   <span class="a-profile-name">Riley Carter</span>
@@ -485,31 +350,27 @@
                 </div>
                 <span class="a-gear"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span>
               </div>
-
               <nav class="a-nav">
                 <div class="a-nav-item"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>Friends<span class="a-badge">2</span></div>
                 <div class="a-nav-item"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>Groups</div>
               </nav>
-
               <div class="a-callstrip">
                 <span class="glow"></span>
                 <span class="txt"><strong>Friday Squad</strong><span>In call · 3 of 5 · 12:48</span></span>
                 <span class="a-callbtn"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg></span>
                 <span class="a-callbtn hang"><svg viewBox="0 0 24 24"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.4 2.1L8 9.8"/><path d="m22 2-20 20"/></svg></span>
               </div>
-
               <div class="a-head"><span><svg viewBox="0 0 24 24"><path d="M12 17v5M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>Pinned</span></div>
               <div class="a-list">
-                <div class="a-row on" style="--ring: var(--a-accent-soft)">
+                <div class="a-row on">
                   <span class="a-group"><span class="a-av c2">MP</span><span class="a-av c3">JR</span></span>
                   <span class="a-row-text"><span class="a-row-name strong">Friday Squad</span><span class="a-row-sub call">In call · 3 of 5</span></span>
                 </div>
                 <div class="a-row">
-                  <span class="a-av c2">MP<i class="st"></i></span>
-                  <span class="a-row-text"><span class="a-row-name">Maya Patel</span><span class="a-row-sub">Online</span></span>
+                  <span class="a-av c2">MP<i class="mob"></i></span>
+                  <span class="a-row-text"><span class="a-row-name">Maya Patel</span><span class="a-row-sub">Active on mobile</span></span>
                 </div>
               </div>
-
               <div class="a-head"><span>Chats</span><span class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></div>
               <div class="a-list">
                 <div class="a-row">
@@ -520,10 +381,6 @@
                 <div class="a-row">
                   <span class="a-av c4">DL<i class="st away"></i></span>
                   <span class="a-row-text"><span class="a-row-name">Dee Lawson</span><span class="a-row-sub typing">typing…</span></span>
-                </div>
-                <div class="a-row">
-                  <span class="a-av c6">SO<i class="st off"></i></span>
-                  <span class="a-row-text"><span class="a-row-name">Sam Okafor</span><span class="a-row-sub">You: lol same</span></span>
                 </div>
               </div>
             </aside>
@@ -536,10 +393,8 @@
                   <span class="a-hbtn live"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></span>
                   <span class="a-hbtn"><svg viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
                   <span class="a-hbtn"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
-                  <span class="a-hbtn"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span>
                 </span>
               </header>
-
               <div class="a-msgs">
                 <div class="a-day">Today</div>
                 <div class="a-msg">
@@ -576,7 +431,6 @@
                 <div class="a-receipt"><svg viewBox="0 0 24 24"><path d="M18 6 7 17l-5-5M22 10l-7.5 7.5L13 16"/></svg>Seen by 4</div>
                 <div class="a-typing"><span class="a-dots"><i></i><i></i><i></i></span>Maya is typing…</div>
               </div>
-
               <div class="a-composer-area">
                 <div class="a-composer">
                   <span class="a-cbtn round"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
@@ -587,74 +441,330 @@
               </div>
             </section>
           </div>
+          <div class="a-toast" style="bottom: 96px; right: 120px">
+            <span class="a-av c6">SO<i class="st"></i></span>
+            <span class="a-toast-text"><b>Sam joined Glofly from your invite</b><span>You're friends now. Say hi!</span></span>
+            <span class="x"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<main>
+  <section class="new" aria-labelledby="new-title">
+    <div class="wrap">
+      <div class="new-card">
+        <div class="new-label"><b id="new-title">New in 0.3.0</b><span>Out now</span></div>
+        <div class="new-item">
+          <span class="new-ic"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg></span>
+          <div><h3>Invite your friends</h3><p>Send an invite by email. When they join, you're friends instantly.</p></div>
+        </div>
+        <div class="new-item">
+          <span class="new-ic"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span>
+          <div><h3>Know when they're on</h3><p>Ring the bell on a friend's profile to hear when they come online.</p></div>
+        </div>
+        <div class="new-item">
+          <span class="new-ic"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></span>
+          <div><h3>Active on mobile</h3><p>A little phone shows who's chatting from their phone right now.</p></div>
+        </div>
+        <div class="new-item">
+          <span class="new-ic"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+          <div><h3>A sound for friends</h3><p>Pick the chime that plays when a friend comes online.</p></div>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="features">
-    <div class="wrap">
-      <h2>Everything your group chat needs</h2>
-      <p class="section-lede">Glofly keeps up with your friends in real time, on every computer you're signed in on.</p>
-      <div class="grid">
-        <article class="feature">
-          <span class="ic"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-          <h3>Chats and group chats</h3>
-          <p>Replies, reactions, edits, read receipts and typing dots. Pin the chats you care about and find anything with Ctrl+K (⌘K on a Mac).</p>
-          <span class="fact">Groups of up to 25 friends</span>
+  <section class="section" id="why" aria-labelledby="why-title">
+    <div class="wrap why-grid">
+      <div class="why-intro">
+        <span class="kicker">Why Glofly</span>
+        <h2 class="big" id="why-title">A messenger that's only about your friends.</h2>
+        <p class="lede-2">Most apps want your attention. Glofly just wants you to reach the people you care about, quickly, and then get out of the way.</p>
+        <ul class="nope" aria-label="What you won't find in Glofly">
+          <li><s>Ads</s></li>
+          <li><s>Feeds to scroll</s></li>
+          <li><s>Algorithms deciding what you see</s></li>
+          <li><s>Selling or sharing your info</s></li>
+        </ul>
+        <p class="nope-foot">That's a promise in our <a href="/privacy">Privacy Policy</a>, not a slogan.</p>
+      </div>
+
+      <div class="reasons">
+        <article class="reason hot">
+          <div>
+            <h3>Made for gaming nights</h3>
+            <p>Glofly shows friends what you're playing, and push to talk works even while your game is in front. Hop in a voice call, share your screen, and keep chatting in the same window.</p>
+          </div>
+          <div class="playing" aria-hidden="true">
+            <div class="app"><span class="a-av c3">JR<i class="st"></i></span></div>
+            <span><b>Jacob Reyes</b><small>Playing Guild Wars 2</small></span>
+          </div>
         </article>
-        <article class="feature">
+        <article class="reason">
           <span class="ic"><svg viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
-          <h3>Voice, video and screen share</h3>
-          <p>Call a friend or ring the whole group. Share your screen or a single window, and join or leave a group call whenever you like.</p>
-          <span class="fact">One click from any chat</span>
+          <h3>Calls in one click</h3>
+          <p>Voice or video with one friend or the whole group. Join and leave whenever you like, and share your screen or a single window.</p>
+          <span class="fact">Group calls built in</span>
         </article>
-        <article class="feature">
-          <span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
-          <h3>Photos, files and emoji</h3>
-          <p>Drag in photos or paste a screenshot. Location data is stripped from every photo, and risky file types are blocked.</p>
-          <span class="fact">Files up to 25 MB</span>
+        <article class="reason">
+          <span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <h3>Privacy you control</h3>
+          <p>Turn off read receipts, go Invisible, choose who can send you friend requests. Location data is stripped from every photo you send.</p>
+          <span class="fact">Security comes first</span>
+        </article>
+        <article class="reason">
+          <span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg></span>
+          <h3>Make it yours</h3>
+          <p>Light or dark, four accent colors, and your own sounds for messages, calls and friends coming online. Glofly feels warm because you set it up that way.</p>
+          <span class="fact">Firefly, Red, Lagoon, Violet</span>
+        </article>
+        <article class="reason">
+          <span class="ic"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M6 18h6"/><rect x="17" y="8" width="5" height="12" rx="1.2"/></svg></span>
+          <h3>On every screen</h3>
+          <p>Windows and Mac today, with iPhone and Android in testing. Your chats are on every device you sign in on, and updates install themselves.</p>
+          <span class="fact">Free on every device</span>
         </article>
       </div>
     </div>
   </section>
 
-  <section class="maker">
+  <section class="section peek on-page" aria-labelledby="peek-title">
     <div class="wrap">
-      <div class="maker-card">
-        <img class="photo" src="/chip.jpg" alt="Chip Mullins" width="128" height="128">
-        <div class="maker-copy">
-          <span class="eyebrow">Created by</span>
-          <h2>Chip Mullins</h2>
-          <p>Glofly started as a simple idea: a messenger that feels warm, quick and a little bit magical. It's built and run by one person, and every tester's feedback shapes what comes next.</p>
+      <div class="peek-head">
+        <div>
+          <span class="kicker">See it in action</span>
+          <h2 class="big" id="peek-title">Pull up a chair. The call's already going.</h2>
+          <p class="lede-2">Group video with a screen share on the desktop, and the same chats in your pocket.</p>
+        </div>
+        <a class="btn solid" href="/features">See all the screenshots
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      </div>
+
+      <div class="peek-stage">
+        <div class="call-shot" role="img" aria-label="A Glofly group video call: Jacob shares his screen while Maya and Dee are on camera">
+          <div class="app" aria-hidden="true">
+            <div class="a-titlebar">
+              <img src="/logo.svg" alt=""><span>Glofly</span><span class="grow"></span>
+              <span class="a-winbtn"><svg viewBox="0 0 12 12"><path d="M1 6h10"/></svg></span>
+              <span class="a-winbtn"><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9"/></svg></span>
+              <span class="a-winbtn"><svg viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></svg></span>
+            </div>
+            <div class="a-body">
+              <section class="a-call">
+                <div class="a-call-top">
+                  <span class="a-group lg" style="--ring: var(--a-night)"><span class="a-av c2">MP</span><span class="a-av c3">JR</span></span>
+                  <span><b>Friday Squad</b><br><span>4 in call · 38:12</span></span>
+                  <span class="grow"></span>
+                  <span class="a-live">Jacob is sharing</span>
+                </div>
+                <div class="a-stage">
+                  <div class="a-share">
+                    <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;display:block;stroke:none" aria-hidden="true">
+                      <defs>
+                        <linearGradient id="sk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2b52"/><stop offset=".6" stop-color="#d9703a"/><stop offset="1" stop-color="#f2b25c"/></linearGradient>
+                        <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d3c2a"/><stop offset="1" stop-color="#151d14"/></linearGradient>
+                      </defs>
+                      <rect width="640" height="360" fill="url(#sk)"/>
+                      <circle cx="430" cy="210" r="46" fill="#ffd27a" opacity=".9"/>
+                      <path d="M0 250 L90 190 L170 236 L260 168 L350 228 L440 180 L540 238 L640 196 V360 H0 Z" fill="#3b3145"/>
+                      <path d="M0 290 L120 240 L230 286 L330 252 L470 300 L640 262 V360 H0 Z" fill="url(#hl)"/>
+                      <path d="M300 300 l10 -46 l10 46 z M318 300 l8 -34 l8 34 z" fill="#0d130c"/>
+                      <rect x="20" y="20" width="150" height="34" rx="6" fill="rgba(0,0,0,.45)"/>
+                      <rect x="30" y="30" width="70" height="6" rx="3" fill="#fff" opacity=".85"/>
+                      <rect x="30" y="41" width="110" height="5" rx="2.5" fill="#6fd39a"/>
+                      <rect x="560" y="20" width="60" height="60" rx="30" fill="rgba(0,0,0,.4)"/>
+                      <path d="M590 30 l6 22 h-12 z" fill="#ffd27a"/>
+                      <rect x="200" y="322" width="240" height="22" rx="6" fill="rgba(0,0,0,.5)"/>
+                      <rect x="210" y="329" width="34" height="8" rx="2" fill="#ffb347"/><rect x="252" y="329" width="34" height="8" rx="2" fill="#7aa7ff"/><rect x="294" y="329" width="34" height="8" rx="2" fill="#6fd39a"/><rect x="336" y="329" width="34" height="8" rx="2" fill="#e9d5c4"/><rect x="378" y="329" width="52" height="8" rx="2" fill="#e9d5c4" opacity=".5"/>
+                    </svg>
+                    <span class="a-tag">Jacob's screen</span>
+                  </div>
+                  <div class="a-tiles">
+                    <div class="a-tile talk">
+                      <svg class="face" viewBox="0 0 220 140" preserveAspectRatio="xMidYMid slice" style="stroke:none" aria-hidden="true"><rect width="220" height="140" fill="#3a4a6b"/><rect y="90" width="220" height="50" fill="#2b354d"/><circle cx="110" cy="62" r="26" fill="#d9a07a"/><path d="M84 58 q26 -40 52 0 q-4 -22 -26 -24 q-22 2 -26 24z" fill="#2a1a12"/><path d="M60 140 q50 -66 100 0z" fill="#e0543a"/></svg>
+                      <span class="a-tag">Maya</span>
+                    </div>
+                    <div class="a-tile">
+                      <svg class="face" viewBox="0 0 220 140" preserveAspectRatio="xMidYMid slice" style="stroke:none" aria-hidden="true"><rect width="220" height="140" fill="#4a3b2e"/><rect x="150" y="20" width="50" height="60" rx="4" fill="#5c4a3a"/><circle cx="104" cy="64" r="25" fill="#8a5a3c"/><path d="M78 60 q26 -36 52 0 q0 -26 -26 -26 q-26 0 -26 26z" fill="#141010"/><path d="M56 140 q48 -64 96 0z" fill="#2e9e5b"/></svg>
+                      <span class="a-tag"><svg viewBox="0 0 24 24"><path d="m2 2 20 20M18.9 13A7 7 0 0 0 19 11v-1M5 10v1a7 7 0 0 0 11.6 5.3M12 18v4M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 5.1 2.1"/></svg>Dee</span>
+                    </div>
+                    <div class="a-tile">
+                      <span class="a-av me lg" style="width:64px;height:64px;font-size:22px">RC</span>
+                      <span class="a-tag">You</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="a-ctrls">
+                  <span class="a-ctrl"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg></span>
+                  <span class="a-ctrl"><svg viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
+                  <span class="a-ctrl"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+                  <span class="a-ctrl"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></span>
+                  <span class="a-ctrl hang"><svg viewBox="0 0 24 24"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.4 2.1L8 9.8"/><path d="m22 2-20 20"/></svg></span>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone" role="img" aria-label="Glofly on an iPhone: the chat list, with a banner saying Maya is online">
+          <span class="island" aria-hidden="true"></span>
+          <div class="app" aria-hidden="true">
+            <div class="m-status"><span>9:41</span><span class="ic"><i style="width:16px;height:9px"></i><i style="width:22px;height:11px;border-radius:3px"></i></span></div>
+            <div class="m-banner">
+              <span class="a-av c2" style="width:34px;height:34px;font-size:13px">MP<i class="st"></i></span>
+              <span class="a-toast-text"><b>Maya is online</b><span>Tap to say hi</span></span>
+            </div>
+            <div class="m-head"><h6>Chats</h6><span class="round"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/></svg></span></div>
+            <div class="m-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</div>
+            <div class="m-list">
+              <div class="a-row"><span class="a-group"><span class="a-av c2">MP</span><span class="a-av c3">JR</span></span><span class="a-row-text"><span class="a-row-name strong">Friday Squad</span><span class="a-row-sub call">In call · 4</span></span><span class="a-row-time">now</span></div>
+              <div class="a-row"><span class="a-av c2">MP<i class="st"></i></span><span class="a-row-text"><span class="a-row-name strong">Maya Patel</span><span class="a-row-sub">sending the pics now 📸</span></span><span class="a-unread">2</span></div>
+              <div class="a-row"><span class="a-av c3">JR<i class="st"></i></span><span class="a-row-text"><span class="a-row-name">Jacob Reyes</span><span class="a-row-sub">Playing Guild Wars 2</span></span><span class="a-row-time">7:41</span></div>
+              <div class="a-row"><span class="a-av c4">DL<i class="mob"></i></span><span class="a-row-text"><span class="a-row-name">Dee Lawson</span><span class="a-row-sub">Active on mobile</span></span><span class="a-row-time">7:46</span></div>
+              <div class="a-row"><span class="a-av c6">SO<i class="st"></i></span><span class="a-row-text"><span class="a-row-name">Sam Okafor</span><span class="a-row-sub">You: welcome to Glofly!!</span></span><span class="a-row-time">7:52</span></div>
+              <div class="a-row"><span class="a-av c5">AK<i class="st off"></i></span><span class="a-row-text"><span class="a-row-name">Ava Kim</span><span class="a-row-sub">Last seen 2h ago</span></span><span class="a-row-time">Mon</span></div>
+            </div>
+            <div class="m-tabs">
+              <span class="on"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chats</span>
+              <span><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><circle cx="5" cy="10" r="2.4"/><circle cx="19" cy="10" r="2.4"/><path d="M6.5 20c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/></svg>Groups</span>
+              <span><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>Friends</span>
+              <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Settings</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">Pictures of the real app, built from its own colors and layout. Phone apps are in testing now.</p>
+    </div>
+  </section>
+
+  <section class="section" id="invite" aria-labelledby="invite-title">
+    <div class="wrap invite-grid">
+      <div>
+        <span class="kicker">New in 0.3.0</span>
+        <h2 class="big" id="invite-title">Glofly is better with your friends. Bring them along.</h2>
+        <p class="lede-2">Send an invite straight from the app. No codes to copy, no searching for usernames. They join, and you're already friends.</p>
+        <ol class="steps">
+          <li><h3>Download Glofly and sign in</h3><p>It's free on Windows and Mac.</p></li>
+          <li><h3>Open Add friend and type their email</h3><p>Press <code>Send invite</code>. They get an email from you with a link to join.</p></li>
+          <li><h3>They join, you're friends</h3><p>The moment they make their account, you're connected and Glofly lets you know.</p></li>
+        </ol>
+        <div class="invite-facts"><span>Invites last 14 days</span><span>Up to 10 a day</span><span>Sent with your name on it</span></div>
+      </div>
+
+      <div class="invite-shot on-page" role="img" aria-label="Glofly's Add friend window, with an invite being sent by email">
+        <div class="app" aria-hidden="true">
+          <div class="a-titlebar">
+            <img src="/logo.svg" alt=""><span>Glofly</span><span class="grow"></span>
+            <span class="a-winbtn"><svg viewBox="0 0 12 12"><path d="M1 6h10"/></svg></span>
+            <span class="a-winbtn"><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9"/></svg></span>
+            <span class="a-winbtn"><svg viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></svg></span>
+          </div>
+          <div class="a-body">
+            <div class="a-main">
+              <div class="a-page-head">
+                <h4>Friends</h4>
+                <div class="a-tabs"><span class="on">Online</span><span>All</span><span>Requests</span></div>
+                <span class="grow"></span>
+                <span class="a-add"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Add friend</span>
+              </div>
+              <div class="a-friends">
+                <div class="a-row"><span class="a-av c2">MP<i class="mob"></i></span><span class="a-row-text"><span class="a-row-name strong">Maya Patel</span><span class="a-row-sub">Active on mobile</span></span></div>
+                <div class="a-row"><span class="a-av c3">JR<i class="st"></i></span><span class="a-row-text"><span class="a-row-name strong">Jacob Reyes</span><span class="a-row-sub">Playing Guild Wars 2</span></span></div>
+                <div class="a-row"><span class="a-av c4">DL<i class="st away"></i></span><span class="a-row-text"><span class="a-row-name strong">Dee Lawson</span><span class="a-row-sub">Away</span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="a-scrim">
+            <div class="a-dialog">
+              <h5>Add friend</h5>
+              <p>Search by username, or invite someone who isn't on Glofly yet.</p>
+              <div class="a-field"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="color:var(--a-faint)">Search usernames</span></div>
+              <div class="a-divider">Invite a friend</div>
+              <div class="a-invite-row">
+                <div class="a-field focus"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>sam.okafor@gmail.com<span class="caret"></span></div>
+                <span class="a-send"><svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>Send invite</span>
+              </div>
+              <div class="a-sent"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Invite sent to ava.kim@outlook.com</div>
+              <div class="a-small">They'll get an email from you with a link to join Glofly.</div>
+            </div>
+          </div>
+          <div class="a-toast">
+            <span class="a-av c5">AK<i class="st"></i></span>
+            <span class="a-toast-text"><b>Ava joined Glofly from your invite</b><span>You're friends now</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="about" aria-labelledby="maker-title">
+    <div class="wrap">
+      <div class="sky about-card">
+        <div class="fireflies" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="maker">
+          <div class="maker-top">
+            <img class="photo" src="/chip.jpg" alt="Chip Mullins" width="104" height="104">
+            <div>
+              <span class="kicker">Created by</span>
+              <h2 id="maker-title">Chip Mullins</h2>
+            </div>
+          </div>
+          <p>Glofly started as a simple idea: a messenger that feels <b>warm, quick and a little bit magical</b>. It's built and run by one person, and every tester's feedback shapes what comes next.</p>
+          <p>If something's missing or broken, tell me at <a href="mailto:support@glofly.app" style="color:var(--glow-pale)">support@glofly.app</a>. I read every message.</p>
+          <span class="signoff">Thanks for flying with us. ✨</span>
+        </div>
+        <div class="const">
+          <svg class="map" viewBox="0 0 300 220" aria-hidden="true">
+            <line x1="40" y1="160" x2="110" y2="110"/><line x1="110" y1="110" x2="170" y2="130"/><line x1="170" y1="130" x2="230" y2="60"/><line x1="170" y1="130" x2="250" y2="170"/><line x1="230" y1="60" x2="280" y2="90"/>
+            <circle cx="40" cy="160" r="2.5"/><circle class="b" cx="110" cy="110" r="4"/><circle cx="170" cy="130" r="3"/><circle class="b" cx="230" cy="60" r="4.5"/><circle cx="250" cy="170" r="2.5"/><circle cx="280" cy="90" r="2"/>
+          </svg>
+          <span class="const-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><path d="M12 12c0-4 3-6.5 6.5-5.5M12 12c0 4-3 6.5-6.5 5.5M12 12c4 0 6.5 3 5.5 6.5M12 12c-4 0-6.5-3-5.5-6.5"/></svg>Coming in Glofly 2.0</span>
+          <h3>Meet <em>Constellations</em></h3>
+          <p>Your own corner of the night sky for the communities you're part of: a gaming crew, a club, a class. Make one, invite people, and give everyone a place to hang out together.</p>
+          <ul>
+            <li>Nebulas for every topic</li>
+            <li>Voice rooms to drop into</li>
+            <li>Roles for your members</li>
+            <li>Group video and screen share</li>
+          </ul>
+          <p style="font-size:15px">Download Glofly now and you'll get Constellations the day it lands. Updates install themselves.</p>
         </div>
       </div>
     </div>
   </section>
 </main>
 
-<footer>
-  <div class="wrap">
-    <p>© 2026 Glofly · Created by Chip Mullins</p>
-    <p><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="mailto:support@glofly.app">support@glofly.app</a></p>
-    <p>Emoji graphics by <a href="https://github.com/jdecked/twemoji">Twemoji</a>, licensed CC-BY 4.0</p>
-  </div>
-</footer>
+<div class="after-last">
+  <section class="sky last" aria-labelledby="last-title">
+    <div class="fireflies" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="wrap">
+      <h2 id="last-title">Your friends are one invite away.</h2>
+      <p class="lede-2">Download Glofly, send a few invites, and start the group chat tonight.</p>
+      <div class="btns">
+        <a class="btn glow" href="/download">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.3H3zm0 13.6 7.4 1.2v-7.2H3zm8.4 1.4L21 21.6v-8.8h-9.6zm0-16.4v7.5H21V2.4z"/></svg>
+          Download for Windows
+        </a>
+        <a class="btn ghost" href="/download/mac">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20"/><path d="M10 19l.6-1.4h2.8L14 19"/></svg>
+          Download for Mac
+        </a>
+      </div>
+      <p class="meta"><strong>Free</strong> · No ads · iPhone and Android coming soon</p>
+    </div>
+  </section>
 
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <g id="firefly-shape">
-      <path d="M520 352 C524 332 520 316 506 304" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round"/>
-      <path d="M596 398 C616 380 640 374 662 382" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round"/>
-      <ellipse cx="455" cy="528" rx="78" ry="52" transform="rotate(-38 455 528)" fill="#fff"/>
-      <circle cx="540" cy="428" r="74" fill="#fff"/>
-      <g fill="none" stroke="#fff" stroke-width="26" stroke-linejoin="round">
-        <path d="M490 490 C420 380 268 222 182 238 C124 250 136 330 200 382 C280 444 400 470 490 490 Z"/>
-        <path d="M490 490 C620 500 800 520 860 580 C905 626 870 690 780 680 C680 668 572 560 490 490 Z"/>
-      </g>
-      <rect x="282" y="588" width="216" height="154" rx="50" fill="#FFC21A"/>
-    </g>
-  </defs>
-</svg>
+  <footer>
+    <div class="wrap">
+      <span class="foot-brand"><img src="/logo.svg" alt="">Glofly</span>
+      <p>© 2026 Glofly · Created by Chip Mullins</p>
+      <p><a href="/features">Screenshots</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="mailto:support@glofly.app">support@glofly.app</a></p>
+      <p>Emoji graphics by <a href="https://github.com/jdecked/twemoji">Twemoji</a>, CC-BY 4.0</p>
+    </div>
+  </footer>
+</div>
 </body>
 </html>

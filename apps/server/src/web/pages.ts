@@ -60,46 +60,60 @@ function page(res: Response, { title, body }: { title: string; body: string }): 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} · Glofly</title>
 <style>
-  :root { color-scheme: light; --page:#f7f0e9; --card:#fff; --line:#eaddd1; --ink:#24170f; --muted:#6b5547; --red:#e0193a; --red-deep:#c0122f; --red-tint:#fce8eb; --ok:#1f8a4c; --ok-tint:#e6f5ec; }
+  /* Same look as glofly.app: a twilight sky across the top (like the app icon), the card on top of it. */
+  :root { color-scheme: light; --page:#fffaf5; --card:#fff; --line:#eaddd1; --ink:#24170f; --muted:#6b5547; --accent:#f47a1f; --accent-deep:#e2650f; --on-accent:#2a1406; --link:#b8430a; --tint:#fde9d7; --error:#a1241a; --error-bg:#fdecea; --ok:#1f8a4c; --ok-tint:#e6f5ec; --night-top:#33215f; --night:#1b1036; --sky-ink:#fbf5ff; --glow:#ffb347; --glow-pale:#ffd27a; }
   * { box-sizing: border-box; }
-  body { margin:0; min-height:100vh; display:grid; place-items:center; padding:32px 16px; background:var(--page); color:var(--ink); font:400 16px/1.6 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; }
-  main { width:100%; max-width:440px; }
-  .brand { display:flex; align-items:center; gap:10px; margin:0 0 18px 4px; font-weight:700; font-size:22px; color:var(--ink); text-decoration:none; }
-  .brand img { width:36px; height:36px; border-radius:10px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:30px 28px 26px; box-shadow:0 18px 40px -28px rgba(36,23,15,.35); }
-  h1 { margin:0 0 12px; font-size:24px; line-height:1.25; }
+  body { margin:0; min-height:100vh; display:flex; justify-content:center; padding:28px 16px 48px; color:var(--ink); font:400 16px/1.6 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    background:
+      radial-gradient(3px 3px at 14% 40px, rgba(255,210,122,.9), transparent 70%),
+      radial-gradient(2px 2px at 82% 70px, rgba(255,210,122,.8), transparent 70%),
+      radial-gradient(1.5px 1.5px at 30% 120px, #fff, transparent 70%),
+      radial-gradient(1.5px 1.5px at 64% 30px, #fff, transparent 70%),
+      radial-gradient(1px 1px at 92% 180px, #fff, transparent 70%),
+      radial-gradient(1px 1px at 6% 200px, #fff, transparent 70%),
+      linear-gradient(180deg, var(--night-top) 0, var(--night) 260px, var(--page) 260px) no-repeat; }
+  main { width:100%; max-width:460px; }
+  .brand { display:flex; align-items:center; gap:11px; margin:0 0 22px 4px; font-weight:700; font-size:23px; color:var(--sky-ink); text-decoration:none; }
+  .brand img { width:40px; height:40px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:32px 30px 28px; box-shadow:0 30px 60px -30px rgba(27,16,54,.55); }
+  h1 { margin:0 0 12px; font-size:25px; line-height:1.25; letter-spacing:-.01em; }
   p { margin:0 0 14px; }
   .muted { color:var(--muted); font-size:14px; }
   label { display:block; margin:16px 0 6px; font-weight:600; font-size:14px; }
   input[type=password], input[type=text] { width:100%; padding:12px 14px; border:1.5px solid var(--line); border-radius:12px; font:inherit; color:var(--ink); background:#fff; }
-  input[type=password]:focus, input[type=text]:focus { outline:none; border-color:var(--red); box-shadow:0 0 0 3px rgba(224,25,58,.18); }
-  button { margin-top:22px; width:100%; padding:14px 18px; border:0; border-radius:12px; background:var(--red); color:#fff; font-family:inherit; font-size:16px; font-weight:600; line-height:1; cursor:pointer; }
-  button:hover { background:var(--red-deep); }
-  button:focus-visible { outline:3px solid rgba(224,25,58,.45); outline-offset:3px; }
-  .error { margin:16px 0 0; padding:10px 12px; border-radius:10px; background:var(--red-tint); color:var(--red-deep); font-size:14px; }
-  .done { display:inline-grid; place-items:center; width:44px; height:44px; margin-bottom:12px; border-radius:50%; background:var(--ok-tint); color:var(--ok); font-size:24px; font-weight:700; }
+  input[type=password]:focus, input[type=text]:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(244,122,31,.2); }
+  button { margin-top:22px; width:100%; padding:15px 18px; border:0; border-radius:12px; background:linear-gradient(180deg, var(--glow-pale), var(--glow) 55%, #ff8a1f); color:var(--on-accent); font-family:inherit; font-size:16px; font-weight:700; line-height:1; cursor:pointer; box-shadow:0 12px 26px -12px rgba(255,138,31,.8); }
+  button:hover { filter:brightness(1.04); }
+  button:focus-visible { outline:3px solid rgba(244,122,31,.45); outline-offset:3px; }
+  .error { margin:16px 0 0; padding:10px 12px; border-radius:10px; background:var(--error-bg); color:var(--error); font-size:14px; }
+  .done { display:inline-grid; place-items:center; width:48px; height:48px; margin-bottom:12px; border-radius:50%; background:var(--ok-tint); color:var(--ok); font-size:24px; font-weight:700; }
   .address { font-weight:600; word-break:break-all; }
   select { width:100%; min-height:48px; padding:0 10px; border:1.5px solid var(--line); border-radius:12px; font:inherit; color:var(--ink); background:#fff; }
-  select:focus { outline:none; border-color:var(--red); box-shadow:0 0 0 3px rgba(224,25,58,.18); }
+  select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(244,122,31,.2); }
   fieldset { margin:16px 0 0; padding:0; border:0; }
   legend { padding:0; margin-bottom:6px; font-weight:600; font-size:14px; }
   .dob { display:grid; grid-template-columns:1.4fr 1fr 1.1fr; gap:10px; }
   .check { display:flex; align-items:flex-start; gap:10px; margin:18px 0 0; font-weight:400; font-size:14px; line-height:1.45; cursor:pointer; }
-  .check input { width:18px; height:18px; margin:1px 0 0; accent-color:var(--red); flex-shrink:0; }
-  .check a, .muted a { color:var(--red-deep); }
-  .person { display:flex; align-items:center; gap:12px; margin:4px 0 6px; padding:12px 14px; border-radius:12px; background:var(--page); }
-  .initials { width:44px; height:44px; flex-shrink:0; border-radius:50%; display:grid; place-items:center; background:#c2410c; color:#fff; font-weight:600; }
+  .check input { width:18px; height:18px; margin:1px 0 0; accent-color:var(--accent); flex-shrink:0; }
+  .check a, .muted a, p a { color:var(--link); }
+  .person { display:flex; align-items:center; gap:14px; margin:4px 0 6px; padding:14px 16px; border-radius:16px; background:linear-gradient(135deg, #2a1a52, var(--night)); color:var(--sky-ink); }
+  .initials { width:48px; height:48px; flex-shrink:0; border-radius:50%; display:grid; place-items:center; background:var(--glow); color:var(--on-accent); font-weight:700; box-shadow:0 0 0 3px rgba(255,179,71,.25), 0 0 22px rgba(255,166,60,.55); }
   .person-text { display:flex; flex-direction:column; min-width:0; line-height:1.35; font-size:14px; }
-  .person-text strong { font-size:15px; }
-  .person-text span { color:var(--muted); overflow-wrap:anywhere; }
+  .person-text strong { font-size:16px; }
+  .person-text span { color:#cbbde6; overflow-wrap:anywhere; }
+  .perks { display:grid; gap:6px; margin:16px 0 0; padding:0; list-style:none; font-size:14px; color:var(--muted); }
+  .perks li::before { content:'✦'; color:var(--glow); margin-right:8px; }
   .hint { margin:6px 0 0; color:var(--muted); font-size:13px; }
-  .download { display:block; margin-top:20px; padding:14px 18px; border-radius:12px; background:var(--red); color:#fff; font-weight:600; text-align:center; text-decoration:none; }
-  .download:hover { background:var(--red-deep); }
+  .downloads { display:grid; gap:10px; margin-top:20px; }
+  .download { display:block; padding:14px 18px; border-radius:12px; background:linear-gradient(180deg, var(--glow-pale), var(--glow) 55%, #ff8a1f); color:var(--on-accent); font-weight:700; text-align:center; text-decoration:none; box-shadow:0 12px 26px -12px rgba(255,138,31,.8); }
+  .download.alt { background:#fff; color:var(--ink); border:1.5px solid var(--line); box-shadow:none; }
+  .download:hover { filter:brightness(1.04); }
+  .download.alt:hover { border-color:var(--accent); }
 </style>
 </head>
 <body>
 <main>
-  <a class="brand" href="https://glofly.app"><img src="/icon.png" alt="">Glofly</a>
+  <a class="brand" href="https://glofly.app"><img src="/logo.svg" alt="">Glofly</a>
   <div class="card">
 ${body}
   </div>
@@ -381,6 +395,7 @@ function joinForm(res: Response, token: string, invite: InviteWithInviter, error
   <span class="initials" aria-hidden="true">${esc(initialsOf(invite.inviterName))}</span>
   <span class="person-text"><strong>${esc(invite.inviterName)} <span>@${esc(invite.inviterUsername)}</span></strong><span>invited you. You'll be friends as soon as you join.</span></span>
 </div>
+<ul class="perks"><li>Chats, group chats, voice and video calls</li><li>Free, with no ads and no feeds</li></ul>
 <form method="post" action="/join">
   <input type="hidden" name="t" value="${esc(token)}">
   <p class="muted" style="margin:14px 0 0">Your email: <span class="address">${esc(invite.email)}</span></p>
@@ -478,7 +493,10 @@ webRouter.post("/join", submitLimiter, formBody, async (req, res) => {
     body: `<div class="done" aria-hidden="true">✓</div>
 <h1>Welcome to Glofly!</h1>
 <p>Your account is ready, and you and ${esc(invite.inviterName)} are friends. Download Glofly and log in as <span class="address">@${esc(result.username)}</span> with the password you just chose.</p>
-<a class="download" href="/download">Download Glofly for Windows</a>
-<p class="muted" style="margin:14px 0 0">On a Mac? <a href="/mac">Get Glofly for Mac</a>. Already have Glofly? Just open it and log in.</p>`,
+<div class="downloads">
+  <a class="download" href="/download">Download for Windows</a>
+  <a class="download alt" href="/download/mac">Download for Mac</a>
+</div>
+<p class="muted" style="margin:14px 0 0">iPhone and Android apps are coming soon. Already have Glofly? Just open it and log in. New to Mac installs? <a href="/mac">Here's how</a>.</p>`,
   });
 });
