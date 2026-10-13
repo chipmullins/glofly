@@ -19,7 +19,8 @@ on:
       - 'apps/mobile/modules/glofly-native/**'
       - 'apps/mobile/app.config.ts'
       - 'apps/mobile/package.json'
-      - 'package-lock.json'
+      # Not package-lock.json: every desktop release bumps the version in it, which set these
+      # off for nothing. Phone dependency changes also change apps/mobile/package.json.
       - '.github/workflows/ios-build.yml'
 
 permissions:
