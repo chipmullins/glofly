@@ -201,63 +201,138 @@
     .spark { display: none; }
   }
 
-  /* ---------- A Glofly window ---------- */
+  /* ---------- A Glofly window (the real desktop layout) ----------
+     Built at the app's own size (sidebar 300px, 73px chat header, 40px avatars, the app's own
+     colors with the Glofly Red accent) and shrunk with zoom, so it reads like a real screenshot.
+     The window runs past the right edge of the page on wide screens, like a peek into the app. */
   .window {
-    position: relative; z-index: 1; min-width: 0;
-    background: var(--white); border: 1px solid var(--line); border-radius: 18px;
-    box-shadow: 0 40px 80px -40px rgba(36, 23, 15, 0.35), 0 10px 24px -14px rgba(36, 23, 15, 0.18);
-    overflow: hidden;
-    transform: rotate(1.2deg);
+    --a-accent: #e0193a; --a-accent-soft: #fad3da; --a-accent-tint: #fce8eb; --a-link: #c0122f;
+    --a-bg: #ffffff; --a-sidebar: #f7f0e9; --a-surface: #ffffff; --a-panel: #f7f0e9; --a-hover: #efe3d8;
+    --a-line: #eaddd1; --a-line-soft: #efe4da; --a-ink: #24170f; --a-icon: #4a372b; --a-muted: #6b5547;
+    --a-faint: #8f7868; --a-good: #2e9e5b; --a-warn: #e2a00f; --a-night: #1c1210; --a-call-muted: #d9c2b1;
+    position: relative; z-index: 1; min-width: 0; height: 520px;
   }
-  @media (max-width: 900px) { .window { transform: none; } }
-  .win-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--sand); border-bottom: 1px solid var(--line); }
-  .win-bar .title { font: 600 13px/1 var(--font-display); color: var(--muted); margin-right: auto; }
-  .win-btn { width: 10px; height: 2px; background: var(--muted); opacity: 0.6; }
-  .win-btn.box { height: 9px; width: 9px; background: none; border: 1.5px solid var(--muted); }
-  .win-body { display: grid; grid-template-columns: 168px 1fr; min-height: 380px; }
-  @media (max-width: 520px) { .win-body { grid-template-columns: 1fr; } .side { display: none; } }
+  .app {
+    position: absolute; left: 0; top: 0; width: 940px; height: 640px; zoom: 0.8;
+    display: flex; flex-direction: column;
+    background: var(--a-bg); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    box-shadow: 0 50px 90px -40px rgba(36, 23, 15, 0.4), 0 12px 28px -14px rgba(36, 23, 15, 0.2);
+    font: 400 15px/1.45 var(--font-body); color: var(--a-ink); text-align: left;
+  }
+  @media (max-width: 1180px) { .app { zoom: 0.72; } .window { height: 470px; } }
+  @media (max-width: 900px) { .app { zoom: 0.62; } .window { height: 400px; } }
+  @media (max-width: 600px) { .app { zoom: 0.4; } .window { height: 260px; } }
+  .app svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-  .side { background: var(--sand); border-right: 1px solid var(--line); padding: 12px 10px; display: flex; flex-direction: column; gap: 4px; }
-  .side-label { font: 600 11px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 6px; }
-  .chat-row { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 10px; font-size: 13px; }
-  .chat-row.on { background: var(--red-tint); }
-  .chat-row .who { font-weight: 600; line-height: 1.2; }
-  .chat-row .peek { color: var(--muted); font-size: 12px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .chat-row > div { min-width: 0; }
-  .av {
-    flex: none; width: 30px; height: 30px; border-radius: 50%;
-    display: grid; place-items: center; color: var(--white);
-    font: 700 12px/1 var(--font-display); position: relative;
-  }
-  .av.maya { background: #7b5cd6; } .av.jacob { background: #2e8fb8; } .av.sq { background: var(--red); } .av.dee { background: #2e9e5b; }
-  .av .dot { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: #2e9e5b; border: 2px solid var(--sand); }
-  .call-strip {
-    margin-top: auto; background: var(--night); color: var(--white); border-radius: 12px; padding: 10px;
-    font-size: 12px; display: grid; gap: 2px;
-  }
-  .call-strip b { font: 600 12px/1.2 var(--font-display); }
-  .call-strip span { color: #ffcf7a; font-variant-numeric: tabular-nums; }
+  /* Windows title bar */
+  .a-titlebar { flex: none; height: 34px; display: flex; align-items: center; gap: 10px; padding-left: 12px; background: var(--a-sidebar); border-bottom: 1px solid var(--a-line); font: 400 12px/1 'Segoe UI', var(--font-body); color: var(--a-ink); }
+  .a-titlebar img { width: 16px; height: 16px; }
+  .a-titlebar .grow { flex: 1; }
+  .a-winbtn { width: 46px; height: 34px; display: grid; place-items: center; color: var(--a-ink); }
+  .a-winbtn svg { width: 11px; height: 11px; stroke-width: 1.2; }
+  .a-body { flex: 1; min-height: 0; display: flex; }
 
-  .chat { display: flex; flex-direction: column; min-width: 0; }
-  .chat-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-  .chat-head .name { font: 700 15px/1.1 var(--font-display); }
-  .chat-head .sub { font-size: 12px; color: var(--muted); }
-  .chat-head .icons { margin-left: auto; display: flex; gap: 8px; }
-  .chat-head .icons i { width: 28px; height: 28px; border-radius: 8px; background: var(--sand); display: grid; place-items: center; }
-  .chat-head .icons svg { width: 15px; height: 15px; stroke: var(--ink); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .msgs { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
-  .msg { max-width: 78%; padding: 9px 13px; border-radius: 16px; line-height: 1.4; }
-  .msg.them { background: var(--sand); border-bottom-left-radius: 6px; align-self: flex-start; }
-  .msg.me { background: var(--red); color: var(--white); border-bottom-right-radius: 6px; align-self: flex-end; }
-  .msg .from { display: block; font: 600 11px/1.3 var(--font-display); color: var(--muted); margin-bottom: 2px; }
-  .react { align-self: flex-start; margin: -4px 0 0 8px; font-size: 12px; background: var(--white); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
-  .seen { align-self: flex-end; font-size: 11px; color: var(--muted); margin-top: -2px; }
-  .typing { align-self: flex-start; display: flex; gap: 4px; padding: 10px 12px; background: var(--sand); border-radius: 14px; }
-  .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: 0.5; animation: dot 1s ease-in-out infinite; }
-  .typing i:nth-child(2) { animation-delay: 0.2s; } .typing i:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes dot { 50% { opacity: 1; transform: translateY(-2px); } }
-  @media (prefers-reduced-motion: reduce) { .typing i { animation: none; } }
-  .composer { margin: 0 14px 14px; padding: 11px 14px; border-radius: 12px; background: var(--sand); color: var(--muted); font-size: 13px; }
+  /* Sidebar */
+  .a-side { width: 300px; flex: none; background: var(--a-sidebar); border-right: 1px solid var(--a-line); padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .a-top { display: flex; align-items: center; gap: 10px; }
+  .a-logo { width: 44px; height: 42px; flex: none; display: grid; place-items: center; }
+  .a-logo img { width: 40px; height: auto; }
+  .a-search { flex: 1; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px; background: var(--a-surface); border: 1.5px solid var(--a-line); border-radius: 12px; color: var(--a-faint); font-size: 14px; }
+  .a-search svg { width: 17px; height: 17px; color: var(--a-muted); }
+  .a-profile { display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--a-surface); border: 1px solid var(--a-line); border-radius: 14px; }
+  .a-profile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .a-profile-name { font-weight: 700; font-size: 15px; }
+  .a-profile-sub { font-size: 13px; color: var(--a-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .a-gear { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--a-icon); }
+  .a-gear svg { width: 19px; height: 19px; }
+  .a-nav { display: flex; flex-direction: column; gap: 2px; }
+  .a-nav-item { display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 14px; border-radius: 10px; font-weight: 700; font-size: 15px; }
+  .a-nav-item svg { width: 20px; height: 20px; color: var(--a-icon); }
+  .a-badge { margin-left: auto; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--a-link); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .a-callstrip { margin: -4px 0 0; padding: 9px 9px 9px 12px; border-radius: 14px; background: var(--a-night); color: #fff; display: flex; align-items: center; gap: 10px; }
+  .a-callstrip .glow { width: 9px; height: 9px; border-radius: 50%; background: #ffb347; box-shadow: 0 0 0 4px rgba(255, 165, 74, 0.25); flex: none; margin-left: 2px; }
+  .a-callstrip .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+  .a-callstrip strong { font-size: 14px; }
+  .a-callstrip span { font-size: 12px; color: var(--a-call-muted); font-variant-numeric: tabular-nums; }
+  .a-callbtn { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #3a2a22; color: #fff; }
+  .a-callbtn.hang { background: #d33a2c; }
+  .a-callbtn svg { width: 16px; height: 16px; }
+  .a-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--a-muted); }
+  .a-head span { display: inline-flex; align-items: center; gap: 6px; }
+  .a-head svg { width: 13px; height: 13px; }
+  .a-head .plus { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: var(--a-icon); }
+  .a-head .plus svg { width: 16px; height: 16px; }
+  .a-list { display: flex; flex-direction: column; gap: 2px; margin-top: -8px; }
+  .a-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px; }
+  .a-row.on { background: var(--a-accent-soft); }
+  .a-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+  .a-row-name { font-weight: 500; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .a-row-name.strong { font-weight: 700; }
+  .a-row-sub { font-size: 13px; color: var(--a-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .a-row-sub.typing { color: var(--a-link); font-weight: 600; }
+  .a-row-sub.call { color: #1f6b3f; font-weight: 600; }
+  .a-unread { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--a-link); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+
+  /* Avatars: initials in the app's palette, status dot ringed in the row's color */
+  .a-av { position: relative; flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font: 600 15px/1 var(--font-display); }
+  .a-av.lg { width: 44px; height: 44px; font-size: 16px; }
+  .a-av.c1 { background: #FBDCC4; color: #8A3005; } .a-av.c2 { background: #D7E5F5; color: #1E4E8C; }
+  .a-av.c3 { background: #DDEBD9; color: #2F6B3A; } .a-av.c4 { background: #EADCF5; color: #5B3A8C; }
+  .a-av.c5 { background: #F5DCDC; color: #8C2F2F; } .a-av.c6 { background: #F3E7C5; color: #6E5310; }
+  .a-av.me { background: var(--a-accent); color: #fff; }
+  .a-av .st { position: absolute; right: -2px; bottom: -2px; width: 14px; height: 14px; border-radius: 50%; border: 3px solid var(--ring, var(--a-sidebar)); background: var(--a-good); }
+  .a-av .st.away { background: var(--a-warn); }
+  .a-av .st.off { background: var(--a-sidebar); box-shadow: inset 0 0 0 2px var(--a-faint); }
+  .a-group { position: relative; flex: none; width: 40px; height: 40px; }
+  .a-group .a-av { position: absolute; width: 27px; height: 27px; font-size: 11px; border: 2px solid var(--ring, var(--a-sidebar)); }
+  .a-group .a-av:first-child { left: 0; top: 0; } .a-group .a-av:last-child { right: 0; bottom: 0; }
+  .a-group.lg { width: 44px; height: 44px; } .a-group.lg .a-av { width: 30px; height: 30px; font-size: 12px; }
+
+  /* Chat */
+  .a-chat { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--a-bg); }
+  .a-chat-head { display: flex; align-items: center; gap: 14px; padding: 14px 24px; min-height: 73px; border-bottom: 1px solid var(--a-line-soft); --ring: var(--a-bg); }
+  .a-chat-names { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+  .a-chat-name { font: 600 18px/1.25 var(--font-display); }
+  .a-chat-status { font-size: 14px; color: var(--a-muted); }
+  .a-hbtns { display: flex; gap: 8px; }
+  .a-hbtn { width: 44px; height: 44px; border-radius: 12px; background: var(--a-panel); color: var(--a-icon); display: grid; place-items: center; }
+  .a-hbtn svg { width: 20px; height: 20px; }
+  .a-hbtn.live { background: var(--a-accent); color: #fff; }
+  .a-msgs { flex: 1; min-height: 0; overflow: hidden; padding: 16px 24px 4px; display: flex; flex-direction: column; justify-content: flex-end; --ring: var(--a-bg); }
+  .a-day { display: flex; align-items: center; gap: 14px; margin: 4px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--a-muted); }
+  .a-day::before, .a-day::after { content: ''; flex: 1; height: 1px; background: var(--a-line-soft); }
+  .a-msg { display: flex; gap: 14px; padding: 8px 12px 2px; border-radius: 10px; }
+  .a-msg.mention { background: rgba(224, 25, 58, 0.06); box-shadow: inset 3px 0 0 var(--a-accent); }
+  .a-msg-main { flex: 1; min-width: 0; }
+  .a-msg-meta { display: flex; align-items: baseline; gap: 8px; }
+  .a-author { font-weight: 700; font-size: 15px; }
+  .a-time { font-size: 12px; color: var(--a-muted); }
+  .a-text { margin: 0; font-size: 15px; line-height: 1.5; }
+  .a-text + .a-text { margin-top: 2px; }
+  .a-at { color: var(--a-link); background: var(--a-accent-tint); border-radius: 5px; padding: 0 3px; font-weight: 600; }
+  .a-reacts { display: flex; gap: 6px; margin: 5px 0 2px; }
+  .a-react { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; border: 1.5px solid var(--a-line); border-radius: 999px; background: var(--a-surface); font-size: 13px; font-weight: 700; color: var(--a-muted); }
+  .a-react.mine { border-color: var(--a-accent); background: var(--a-accent-tint); color: var(--a-link); }
+  .a-reply { display: flex; align-items: center; gap: 6px; margin: 2px 0 4px; font-size: 13px; color: var(--a-muted); }
+  .a-reply::before { content: ''; width: 18px; height: 10px; border: 2px solid var(--a-line); border-right: 0; border-bottom: 0; border-radius: 8px 0 0 0; margin-top: 6px; }
+  .a-reply b { color: var(--a-ink); font-weight: 600; }
+  .a-photo { margin-top: 6px; width: 250px; height: 150px; border-radius: 12px; overflow: hidden; background: linear-gradient(160deg, #2c1c3d 0%, #6b2f4f 45%, #f47a1f 100%); position: relative; }
+  .a-photo::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: linear-gradient(180deg, transparent, rgba(20, 10, 8, 0.75)); }
+  .a-photo i { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #ffd27a; box-shadow: 0 0 10px 3px rgba(255, 178, 26, 0.7); }
+  .a-receipt { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 22px; padding: 2px 12px 0; font-size: 12px; color: var(--a-muted); }
+  .a-receipt svg { width: 16px; height: 16px; color: var(--a-good); }
+  .a-typing { display: flex; align-items: center; gap: 8px; height: 22px; padding-left: 16px; font-size: 13px; color: var(--a-muted); }
+  .a-dots { display: inline-flex; gap: 3px; }
+  .a-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--a-faint); animation: a-bob 1.2s infinite ease-in-out; }
+  .a-dots i:nth-child(2) { animation-delay: 0.15s; } .a-dots i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes a-bob { 0%, 60%, 100% { transform: none; opacity: 0.5; } 30% { transform: translateY(-3px); opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .a-dots i { animation: none; } }
+  .a-composer-area { padding: 0 24px 20px; }
+  .a-composer { display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--a-panel); border: 1.5px solid var(--a-line); border-radius: 16px; }
+  .a-cbtn { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--a-icon); }
+  .a-cbtn svg { width: 21px; height: 21px; }
+  .a-cbtn.round { background: var(--a-surface); }
+  .a-input { flex: 1; color: var(--a-faint); font-size: 15px; padding: 0 6px; }
 
   /* ---------- Features ---------- */
   .features { padding-block: 24px 88px; }
@@ -380,41 +455,137 @@
               Download for Mac
             </a>
           </div>
-          <p class="meta"><strong>Free</strong> · Windows 10 and 11 · macOS 12 or newer<br>The Mac version is an early test build · <a href="/mac">How to open it</a></p>
+          <p class="meta"><strong>Free</strong> · Windows 10 and 11 · macOS 12 or newer<br>Updates install themselves · <a href="/mac">Installing on a Mac</a></p>
         </div>
         <p class="soon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Android and iOS apps coming soon!</p>
       </div>
 
-      <div class="window" aria-label="A Glofly chat window">
-        <div class="win-bar"><span class="title">Glofly</span><i class="win-btn"></i><i class="win-btn box"></i><i class="win-btn" style="transform: rotate(45deg); width: 11px"></i></div>
-        <div class="win-body">
-          <aside class="side">
-            <span class="side-label">Pinned</span>
-            <div class="chat-row on"><span class="av sq">FS</span><div><div class="who">Friday Squad</div><div class="peek">You: calling you all now</div></div></div>
-            <span class="side-label">Chats</span>
-            <div class="chat-row"><span class="av maya">MP<i class="dot"></i></span><div><div class="who">Maya Patel</div><div class="peek">see you at 8!</div></div></div>
-            <div class="chat-row"><span class="av jacob">JR<i class="dot"></i></span><div><div class="who">Jacob Reyes</div><div class="peek">Photo</div></div></div>
-            <div class="chat-row"><span class="av dee">DL</span><div><div class="who">Dee Lawson</div><div class="peek">lol same</div></div></div>
-            <div class="call-strip"><b>Friday Squad</b>In call · 3 of 5 <span>12:48</span></div>
-          </aside>
-          <div class="chat">
-            <div class="chat-head">
-              <span class="av sq">FS</span>
-              <div><div class="name">Friday Squad</div><div class="sub">5 members · 3 online</div></div>
-              <div class="icons">
-                <i><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></i>
-                <i><svg viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></i>
+      <div class="window" aria-label="The Glofly desktop app: a group chat with a call going on">
+        <div class="app">
+          <div class="a-titlebar">
+            <img src="/firefly.png" alt="">
+            <span>Glofly</span>
+            <span class="grow"></span>
+            <span class="a-winbtn"><svg viewBox="0 0 12 12"><path d="M1 6h10"/></svg></span>
+            <span class="a-winbtn"><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9"/></svg></span>
+            <span class="a-winbtn"><svg viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></svg></span>
+          </div>
+          <div class="a-body">
+            <aside class="a-side">
+              <div class="a-top">
+                <div class="a-logo"><img src="/firefly.png" alt=""></div>
+                <div class="a-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Find a friend or chat</div>
               </div>
-            </div>
-            <div class="msgs">
-              <div class="msg them"><span class="from">Jacob</span>who's gaming tonight?</div>
-              <div class="msg them"><span class="from">Maya</span>me!! I'm ordering pizza too lol</div>
-              <div class="react">🍕 3</div>
-              <div class="msg me">i'm playing Guild Wars 2, obviously. calling you all now</div>
-              <div class="seen">Seen by 4</div>
-              <div class="typing" aria-label="Someone is typing"><i></i><i></i><i></i></div>
-            </div>
-            <div class="composer">Message Friday Squad</div>
+
+              <div class="a-profile" style="--ring: var(--a-surface)">
+                <span class="a-av me">RC<i class="st"></i></span>
+                <div class="a-profile-text">
+                  <span class="a-profile-name">Riley Carter</span>
+                  <span class="a-profile-sub">@riley · Raiding tonight ⚔️</span>
+                </div>
+                <span class="a-gear"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span>
+              </div>
+
+              <nav class="a-nav">
+                <div class="a-nav-item"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>Friends<span class="a-badge">2</span></div>
+                <div class="a-nav-item"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>Groups</div>
+              </nav>
+
+              <div class="a-callstrip">
+                <span class="glow"></span>
+                <span class="txt"><strong>Friday Squad</strong><span>In call · 3 of 5 · 12:48</span></span>
+                <span class="a-callbtn"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg></span>
+                <span class="a-callbtn hang"><svg viewBox="0 0 24 24"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.4 2.1L8 9.8"/><path d="m22 2-20 20"/></svg></span>
+              </div>
+
+              <div class="a-head"><span><svg viewBox="0 0 24 24"><path d="M12 17v5M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>Pinned</span></div>
+              <div class="a-list">
+                <div class="a-row on" style="--ring: var(--a-accent-soft)">
+                  <span class="a-group"><span class="a-av c2">MP</span><span class="a-av c3">JR</span></span>
+                  <span class="a-row-text"><span class="a-row-name strong">Friday Squad</span><span class="a-row-sub call">In call · 3 of 5</span></span>
+                </div>
+                <div class="a-row">
+                  <span class="a-av c2">MP<i class="st"></i></span>
+                  <span class="a-row-text"><span class="a-row-name">Maya Patel</span><span class="a-row-sub">Online</span></span>
+                </div>
+              </div>
+
+              <div class="a-head"><span>Chats</span><span class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></div>
+              <div class="a-list">
+                <div class="a-row">
+                  <span class="a-av c3">JR<i class="st"></i></span>
+                  <span class="a-row-text"><span class="a-row-name strong">Jacob Reyes</span><span class="a-row-sub">Playing Guild Wars 2</span></span>
+                  <span class="a-unread">3</span>
+                </div>
+                <div class="a-row">
+                  <span class="a-av c4">DL<i class="st away"></i></span>
+                  <span class="a-row-text"><span class="a-row-name">Dee Lawson</span><span class="a-row-sub typing">typing…</span></span>
+                </div>
+                <div class="a-row">
+                  <span class="a-av c6">SO<i class="st off"></i></span>
+                  <span class="a-row-text"><span class="a-row-name">Sam Okafor</span><span class="a-row-sub">You: lol same</span></span>
+                </div>
+              </div>
+            </aside>
+
+            <section class="a-chat">
+              <header class="a-chat-head">
+                <span class="a-group lg"><span class="a-av c2">MP</span><span class="a-av c3">JR</span></span>
+                <span class="a-chat-names"><span class="a-chat-name">Friday Squad</span><span class="a-chat-status">5 members · 3 online</span></span>
+                <span class="a-hbtns">
+                  <span class="a-hbtn live"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></span>
+                  <span class="a-hbtn"><svg viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
+                  <span class="a-hbtn"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+                  <span class="a-hbtn"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span>
+                </span>
+              </header>
+
+              <div class="a-msgs">
+                <div class="a-day">Today</div>
+                <div class="a-msg">
+                  <span class="a-av c3">JR</span>
+                  <div class="a-msg-main">
+                    <div class="a-msg-meta"><span class="a-author">Jacob Reyes</span><span class="a-time">7:41 PM</span></div>
+                    <p class="a-text">who's on tonight? 🎮</p>
+                  </div>
+                </div>
+                <div class="a-msg">
+                  <span class="a-av c2">MP</span>
+                  <div class="a-msg-main">
+                    <div class="a-msg-meta"><span class="a-author">Maya Patel</span><span class="a-time">7:43 PM</span></div>
+                    <p class="a-text">me!! ordering pizza first lol</p>
+                    <div class="a-photo"><i style="left: 22%; top: 30%"></i><i style="left: 58%; top: 18%"></i><i style="left: 74%; top: 44%"></i><i style="left: 40%; top: 52%"></i></div>
+                    <div class="a-reacts"><span class="a-react mine">🍕 3</span><span class="a-react">🔥 2</span></div>
+                  </div>
+                </div>
+                <div class="a-msg mention">
+                  <span class="a-av c4">DL</span>
+                  <div class="a-msg-main">
+                    <div class="a-msg-meta"><span class="a-author">Dee Lawson</span><span class="a-time">7:46 PM</span></div>
+                    <p class="a-text"><span class="a-at">@Riley</span> you starting the call or what</p>
+                  </div>
+                </div>
+                <div class="a-msg">
+                  <span class="a-av me">RC</span>
+                  <div class="a-msg-main">
+                    <div class="a-msg-meta"><span class="a-author">Riley Carter</span><span class="a-time">7:47 PM</span></div>
+                    <div class="a-reply">Replying to <b>Dee</b></div>
+                    <p class="a-text">calling you all now 📞</p>
+                  </div>
+                </div>
+                <div class="a-receipt"><svg viewBox="0 0 24 24"><path d="M18 6 7 17l-5-5M22 10l-7.5 7.5L13 16"/></svg>Seen by 4</div>
+                <div class="a-typing"><span class="a-dots"><i></i><i></i><i></i></span>Maya is typing…</div>
+              </div>
+
+              <div class="a-composer-area">
+                <div class="a-composer">
+                  <span class="a-cbtn round"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                  <span class="a-input">Message Friday Squad</span>
+                  <span class="a-cbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></span>
+                  <span class="a-cbtn"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg></span>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </div>

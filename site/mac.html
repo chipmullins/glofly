@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="/icon.png">
 <title>Glofly for Mac</title>
-<meta name="description" content="How to install the early test build of Glofly on a Mac.">
+<meta name="description" content="Download Glofly for Mac: one app for Apple Silicon and Intel, signed by Apple and updating itself.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,600&display=swap">
@@ -55,8 +55,16 @@
     display: grid; place-items: center; background: var(--red-tint); color: var(--red-deep); font: 700 15px/1 var(--font-display);
   }
   li b { font-weight: 600; }
+  .perms { list-style: none; margin: 0 0 32px; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 600px) { .perms { grid-template-columns: 1fr; } }
+  .perms li { padding: 16px 18px; counter-increment: none; font-size: 15px; color: var(--muted); }
+  .perms li::before { content: none; }
+  .perms h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font: 600 16px/1.2 var(--font-display); color: var(--ink); }
+  .perms h3 svg { width: 20px; height: 20px; flex: none; color: var(--red); }
+  .section-text { margin: -6px 0 16px; color: var(--muted); }
   .note { padding: 18px 20px; border-radius: 16px; background: var(--sand); font-size: 15px; color: var(--muted); }
   .note p { margin: 0 0 8px; } .note p:last-child { margin: 0; }
+  .note h3 { margin: 0 0 6px; font: 600 17px/1.2 var(--font-display); color: var(--ink); }
   code { display: block; margin: 8px 0; overflow-x: auto; white-space: nowrap; font-size: 13px; background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--ink); }
   footer { border-top: 1px solid var(--line); padding-block: 28px 40px; font-size: 14px; color: var(--muted); }
   footer p { margin: 0; }
@@ -71,28 +79,38 @@
 
 <main>
   <div class="wrap">
-    <span class="eyebrow">Early test build</span>
+    <span class="eyebrow">Beta</span>
     <h1>Glofly for Mac</h1>
-    <p class="lede">One download for every Mac, Apple Silicon or Intel. It's an early test version, so macOS asks you to confirm it the first time you open it.</p>
+    <p class="lede">One download for every Mac, Apple Silicon or Intel. Signed and checked by Apple, so it opens like any other app, and it keeps itself up to date.</p>
 
     <a class="download" href="/download/mac">
       <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20"/><path d="M10 19l.6-1.4h2.8L14 19"/></svg>
       Download for Mac
     </a>
-    <p class="meta">macOS 12 or newer · Updates aren't automatic on Mac yet, so download again for a newer version.</p>
+    <p class="meta">Free · macOS 12 or newer · Updates install themselves</p>
 
-    <h2>Opening it the first time</h2>
+    <h2>Installing</h2>
     <ol>
       <li>Open the downloaded <b>Glofly .dmg</b> and drag <b>Glofly</b> into <b>Applications</b>.</li>
-      <li>Open Glofly from Applications. macOS says it can't check it for malicious software. Click <b>Done</b>.</li>
-      <li>Open <b>System Settings → Privacy &amp; Security</b>, scroll down to the message about Glofly, and click <b>Open Anyway</b>.</li>
-      <li>Click <b>Open Anyway</b> again and enter your Mac password. From now on Glofly opens like any other app.</li>
-      <li>For calls, allow the microphone and camera when macOS asks. To share your screen, turn Glofly on in <b>Privacy &amp; Security → Screen &amp; System Audio Recording</b>, then quit and reopen Glofly.</li>
+      <li>Open Glofly from Applications. macOS checks that it's from the internet and asks if you're sure. Click <b>Open</b>. You only see this once.</li>
+      <li>Sign in, or create an account. You're in.</li>
     </ol>
 
+    <h2>What Glofly asks to use</h2>
+    <p class="section-text">macOS asks before an app can use these. Each one is only needed for the feature it's for, and you can change them anytime in <b>System Settings → Privacy &amp; Security</b>.</p>
+    <ul class="perms">
+      <li><h3><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>Notifications</h3>Click <b>Allow</b> the first time a message arrives so you see new messages and calls when Glofly is in the background.</li>
+      <li><h3><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg>Microphone and camera</h3>Asked the first time you join a call or turn on your camera, and for voice messages.</li>
+      <li><h3><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Screen sharing</h3>Turn Glofly on under <b>Screen &amp; System Audio Recording</b> the first time you share, then quit and reopen Glofly.</li>
+      <li><h3><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>Push to talk</h3>Optional. Turn Glofly on under <b>Accessibility</b> so your push-to-talk key works while you're in another app.</li>
+    </ul>
+
+    <h2>Updates</h2>
+    <p class="section-text">Glofly checks for new versions in the background and downloads them for you. When one is ready you'll see <b>Restart to update</b>, or it installs the next time you quit Glofly.</p>
+
     <div class="note">
-      <p><b>Why the extra step?</b> Glofly isn't registered with Apple yet. That comes before the Mac version is finished.</p>
-      <p>If macOS says Glofly "is damaged and can't be opened", open Terminal, run this, then open Glofly again:<code>xattr -dr com.apple.quarantine /Applications/Glofly.app</code></p>
+      <h3>Had the earlier test version?</h3>
+      <p>Download Glofly from this page once and drag it into Applications, choosing <b>Replace</b>. Because this version is signed differently, macOS asks for notifications and the other permissions again, and you'll sign in once more. After that it updates itself.</p>
       <p>Stuck? Email <a href="mailto:support@glofly.app">support@glofly.app</a>.</p>
     </div>
   </div>
