@@ -33,6 +33,8 @@ type Native = {
   /** iPhone only: call sounds that leave the call's audio session alone (CallTones.swift). */
   playCallTone?(name: string, repeating: boolean, volume: number): boolean
   stopCallTone?(): void
+  /** iPhone only: iOS's shared audio session right now (call diagnostics). */
+  audioSessionInfo?(): Record<string, string>
 }
 
 const native = requireOptionalNativeModule<Native>('GloflyNative')
@@ -150,3 +152,11 @@ export const stopOngoingCall = () => native?.stopOngoingCall()
 export const playCallTone = (name: string, repeating: boolean, volume: number): boolean =>
   native?.playCallTone ? native.playCallTone(name, repeating, volume) : false
 export const stopCallTone = () => native?.stopCallTone?.()
+/** Call diagnostics: iOS's audio session (category, mode, route…). Empty where there's none / older builds. */
+export const audioSessionInfo = (): Record<string, string> => {
+  try {
+    return native?.audioSessionInfo?.() ?? {}
+  } catch {
+    return {}
+  }
+}

@@ -1,3 +1,4 @@
+import AVFoundation
 import ExpoModulesCore
 import FirebaseMessaging
 import UIKit
@@ -140,6 +141,34 @@ public class GloflyNativeModule: Module {
     }
     Function("stopCallTone") {
       CallTones.shared.stop()
+    }
+
+    // Call diagnostics (long-press the call's title): what iOS's one shared audio session is doing.
+    Function("audioSessionInfo") { () -> [String: String] in
+      let s = AVAudioSession.sharedInstance()
+      let route = s.currentRoute
+      let ports = { (list: [AVAudioSessionPortDescription]) -> String in
+        list.isEmpty ? "none" : list.map { "\($0.portType.rawValue) (\($0.portName))" }.joined(separator: ", ")
+      }
+      var mic = "unknown"
+      switch s.recordPermission {
+      case .granted: mic = "granted"
+      case .denied: mic = "denied"
+      case .undetermined: mic = "not asked"
+      @unknown default: break
+      }
+      return [
+        "category": s.category.rawValue.replacingOccurrences(of: "AVAudioSessionCategory", with: ""),
+        "mode": s.mode.rawValue.replacingOccurrences(of: "AVAudioSessionMode", with: ""),
+        "options": String(s.categoryOptions.rawValue),
+        "inputs": ports(route.inputs),
+        "outputs": ports(route.outputs),
+        "input available": String(s.isInputAvailable),
+        "other audio playing": String(s.isOtherAudioPlaying),
+        "volume": String(format: "%.2f", s.outputVolume),
+        "sample rate": String(format: "%.0f", s.sampleRate),
+        "mic permission": mic,
+      ]
     }
 
     // ---- Voice messages (AAC in .m4a: iPhones can't record Opus) ----

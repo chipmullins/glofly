@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, BackHandler, Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
 import { router } from 'expo-router'
+import * as Clipboard from 'expo-clipboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { chatTitle, type PublicUser } from '@glofly/shared'
 import type { VideoTrack } from 'livekit-client'
-import { useCall, hangUp, setMic, setCamera, flipCamera, ringPeople, type Tile } from '@/calls/controller'
+import { useCall, hangUp, setMic, setCamera, flipCamera, ringPeople, callDiagnostics, type Tile } from '@/calls/controller'
 import { CallVideo, audioRoutes, selectAudioRoute, type AudioRoute } from '@/calls/media'
 import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
@@ -40,6 +41,7 @@ export default function CallScreen() {
   const [pinned, setPinned] = useState<string | null>(null)
   const [route, setRoute] = useState<AudioRoute | null>(null)
   const [adding, setAdding] = useState(false)
+  const [diagOpen, setDiagOpen] = useState(false)
   const landscape = width > height
 
   useEffect(() => {
@@ -170,14 +172,15 @@ export default function CallScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel="Back to chat, call keeps going" onPress={leaveScreen} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="chevronDown" size={26} color="#FFFFFF" />
           </Pressable>
-          <View style={{ flex: 1, alignItems: 'center' }}>
+          {/* Long-press the title: call diagnostics (for tracking down audio/camera problems). */}
+          <Pressable onLongPress={() => setDiagOpen(true)} delayLongPress={600} style={{ flex: 1, alignItems: 'center' }}>
             <Text size={17} weight="bold" numberOfLines={1} style={{ color: '#FFF' }}>
               {title}
             </Text>
             <Text size={13} style={{ color: callColors.muted }}>
               {status}
             </Text>
-          </View>
+          </Pressable>
           {isGroup ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Add people to call" onPress={() => setAdding(true)} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="addPerson" size={22} color="#FFFFFF" />
@@ -213,6 +216,8 @@ export default function CallScreen() {
           </Pressable>
         </View>
       </View>
+
+      {diagOpen ? <CallDiagnostics onClose={() => setDiagOpen(false)} /> : null}
 
       {adding && call ? (
         <AddToCall
@@ -425,6 +430,45 @@ function AddToCall({ exclude, inChat, onDone }: { exclude: string[]; inChat: str
         <View style={{ padding: 16 }}>
           <Button label={picked.length ? `Ring ${picked.length}` : 'Pick people in the group'} disabled={!picked.length} onPress={() => onDone(picked)} />
         </View>
+      </View>
+    </BottomSheet>
+  )
+}
+
+/** Call diagnostics: live call/audio state and a log of the call, refreshed every second. */
+function CallDiagnostics({ onClose }: { onClose: () => void }) {
+  useNow(1000)
+  const { rows, log } = callDiagnostics()
+  const text = [...rows.map(([k, v]) => `${k}: ${v}`), '', ...log].join('\n')
+  return (
+    <BottomSheet onClose={onClose}>
+      <View style={{ height: 520 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 8 }}>
+          <Text display size={20} style={{ flex: 1 }}>
+            Call diagnostics
+          </Text>
+          <Button label="Copy" onPress={() => void Clipboard.setStringAsync(text)} />
+        </View>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}>
+          {rows.map(([k, v], i) => (
+            <View key={`${k}-${i}`} style={{ flexDirection: 'row', gap: 10, paddingVertical: 3 }}>
+              <Text size={12} weight="bold" style={{ width: 130 }}>
+                {k}
+              </Text>
+              <Text size={12} style={{ flex: 1 }}>
+                {v}
+              </Text>
+            </View>
+          ))}
+          <Text size={12} weight="bold" style={{ marginTop: 14, marginBottom: 4 }}>
+            Log
+          </Text>
+          {log.map((l, i) => (
+            <Text key={i} size={12}>
+              {l}
+            </Text>
+          ))}
+        </ScrollView>
       </View>
     </BottomSheet>
   )

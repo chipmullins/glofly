@@ -1,7 +1,7 @@
 import { PermissionsAndroid, Platform } from 'react-native'
 import { router } from 'expo-router'
 import { create } from 'zustand'
-import { Room, RoomEvent, Track, type LocalVideoTrack, type Participant, type RemoteTrack, type VideoTrack } from 'livekit-client'
+import { Room, RoomEvent, Track, createLocalAudioTrack, type LocalAudioTrack, type LocalVideoTrack, type Participant, type RemoteTrack, type RemoteTrackPublication, type VideoTrack } from 'livekit-client'
 import { RING_MS, chatTitle, type Call, type PublicUser } from '@glofly/shared'
 import * as Native from 'glofly-native'
 import * as api from '@/api/glofly'
@@ -12,7 +12,7 @@ import { firstName } from '@/lib/format'
 import { confirm, inform } from '@/ui/dialogs'
 import { playSound, startLoop } from '@/push/sounds'
 import { usePhonePrefs } from '@/state/prefs'
-import { setupWebRTC, startCallAudio, stopCallAudio } from './media'
+import { audioEngineInfo, setupWebRTC, startCallAudio, stopCallAudio } from './media'
 import { APP_SETTINGS } from '@/lib/config'
 
 // Calls: starting, answering and leaving, the LiveKit room, ringing in the app, and the
@@ -58,6 +58,53 @@ let stopOutgoing: (() => void) | null = null
 let ringTimer: ReturnType<typeof setTimeout> | null = null
 let rejoinedOnce = false
 const audioEls = new Map<string, HTMLMediaElement>()
+
+// ---- Call diagnostics (long-press the call's title) ----
+// A short log of what the call did, so one test call on a phone without a Mac shows where audio
+// (or the camera) stops working.
+
+const diagLog: string[] = []
+let diagStart = Date.now()
+export function diag(line: string) {
+  const t = ((Date.now() - diagStart) / 1000).toFixed(1)
+  diagLog.push(`${t}s ${line}`)
+  if (diagLog.length > 60) diagLog.shift()
+}
+const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+/** Everything the diagnostics panel shows, as label → value rows plus the log. */
+export function callDiagnostics(): { rows: [string, string][]; log: string[] } {
+  const rows: [string, string][] = []
+  const r = room
+  rows.push(['room', r ? r.state : 'none'])
+  if (r) {
+    const lp = r.localParticipant
+    const mic = lp.getTrackPublication(Track.Source.Microphone)
+    rows.push(['my mic', mic ? `published, ${mic.isMuted ? 'muted' : 'on'}${mic.track?.mediaStreamTrack ? `, track ${mic.track.mediaStreamTrack.readyState}${mic.track.mediaStreamTrack.enabled ? '' : ' (disabled)'}` : ', no track'}` : 'not published'])
+    rows.push(['my speaking', String(lp.isSpeaking)])
+    const cam = lp.getTrackPublication(Track.Source.Camera)
+    if (cam?.track) {
+      const st = (cam.track.mediaStreamTrack as MediaStreamTrack & { getSettings?: () => Record<string, unknown> }).getSettings?.() ?? {}
+      rows.push(['my camera', `${String(st.facingMode ?? '?')} ${String(st.width ?? '?')}×${String(st.height ?? '?')}`])
+    }
+    for (const p of r.remoteParticipants.values()) {
+      const name = peopleName(p.identity)
+      const pubs = [...p.audioTrackPublications.values()] as RemoteTrackPublication[]
+      if (!pubs.length) rows.push([`${name} audio`, 'nothing published'])
+      for (const pub of pubs) {
+        const mst = pub.track?.mediaStreamTrack
+        rows.push([
+          `${name} audio`,
+          `${pub.isSubscribed ? 'subscribed' : 'NOT subscribed'}, ${pub.isMuted ? 'muted' : 'unmuted'}, ${pub.isEnabled ? 'enabled' : 'DISABLED'}${mst ? `, track ${mst.readyState}${mst.enabled ? '' : ' (off)'}${mst.muted ? ' (no data)' : ''}` : ', no track'}`,
+        ])
+      }
+      rows.push([`${name} speaking`, String(p.isSpeaking)])
+    }
+  }
+  for (const [k, v] of Object.entries(audioEngineInfo())) rows.push([k, v])
+  for (const [k, v] of Object.entries(Native.audioSessionInfo())) rows.push([`session ${k}`, v])
+  return { rows, log: [...diagLog] }
+}
 
 const me = () => useSession.getState().user?.id ?? ''
 const peopleName = (id: string) => {
@@ -110,8 +157,25 @@ function refreshTiles() {
 }
 
 async function connect(join: { token: string; url: string; call: Call }, video: boolean) {
+  diagStart = Date.now()
+  diagLog.length = 0
+  diag(`connect (${video ? 'video' : 'voice'})`)
   setupWebRTC()
   await startCallAudio(video)
+  diag('audio policy set')
+  // iPhone: the mic is opened before joining, so the call's audio engine starts with the mic and
+  // the speaker together. Joining first meant the other person's voice started the engine in
+  // "listen only", and turning the mic on a moment later restarted it (and their voice went
+  // silent after a second).
+  let mic: LocalAudioTrack | null = null
+  if (Platform.OS === 'ios') {
+    try {
+      mic = await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true, autoGainControl: true })
+      diag('mic opened')
+    } catch (e) {
+      diag(`mic failed: ${errText(e)}`)
+    }
+  }
   const r = new Room({ adaptiveStream: true, dynacast: true, audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
   room = r
   r.on(RoomEvent.ParticipantConnected, (p) => {
@@ -131,6 +195,16 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
   for (const ev of [RoomEvent.TrackSubscribed, RoomEvent.TrackUnsubscribed, RoomEvent.TrackMuted, RoomEvent.TrackUnmuted, RoomEvent.LocalTrackPublished, RoomEvent.LocalTrackUnpublished, RoomEvent.ActiveSpeakersChanged]) {
     r.on(ev, () => refreshTiles())
   }
+  r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub, p) => diag(`subscribed ${peopleName(p.identity)} ${track.kind}`))
+  r.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, p) => diag(`unsubscribed ${peopleName(p.identity)} ${track.kind}`))
+  r.on(RoomEvent.TrackSubscriptionFailed, (_sid, p, reason) => diag(`subscribe FAILED ${peopleName(p.identity)} ${String(reason ?? '')}`))
+  r.on(RoomEvent.TrackMuted, (pub, p) => diag(`${p === r.localParticipant ? 'me' : peopleName(p.identity)} muted ${pub.kind}`))
+  r.on(RoomEvent.TrackUnmuted, (pub, p) => diag(`${p === r.localParticipant ? 'me' : peopleName(p.identity)} unmuted ${pub.kind}`))
+  r.on(RoomEvent.LocalTrackPublished, (pub) => diag(`published my ${pub.source}`))
+  r.on(RoomEvent.MediaDevicesError, (e) => diag(`device error: ${errText(e)}`))
+  r.on(RoomEvent.AudioPlaybackStatusChanged, (ok: boolean) => diag(`audio playback allowed: ${ok}`))
+  r.on(RoomEvent.Reconnecting, () => diag('reconnecting'))
+  r.on(RoomEvent.Reconnected, () => diag('reconnected'))
   if (Platform.OS === 'web') {
     // Browsers need an <audio> element per voice (phones play them by themselves).
     r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
@@ -155,13 +229,29 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
       })()
     } else cleanup('The call dropped.')
   })
-  await r.connect(join.url, join.token, { autoSubscribe: true })
-  await r.localParticipant.setMicrophoneEnabled(true).catch(() => {
+  try {
+    await r.connect(join.url, join.token, { autoSubscribe: true })
+  } catch (e) {
+    diag(`join failed: ${errText(e)}`)
+    mic?.stop()
+    throw e
+  }
+  diag('joined the room')
+  const micOn = mic
+    ? r.localParticipant.publishTrack(mic).then(() => undefined)
+    : r.localParticipant.setMicrophoneEnabled(true).then(() => undefined)
+  await micOn.catch((e) => {
+    diag(`mic publish failed: ${errText(e)}`)
+    mic?.stop()
     useCall.setState({ micOn: false })
     // iPhone asks for the microphone the first time; if it was refused, say where to allow it.
     if (Platform.OS === 'ios') void inform("Glofly can't use your microphone", 'Allow it in Settings → Glofly → Microphone.')
   })
-  if (video) await r.localParticipant.setCameraEnabled(true, { facingMode: 'user' }).catch(() => useCall.setState({ cameraOn: false }))
+  if (video)
+    await r.localParticipant.setCameraEnabled(true, { facingMode: 'user' }).catch((e) => {
+      diag(`camera failed: ${errText(e)}`)
+      useCall.setState({ cameraOn: false })
+    })
   refreshTiles()
   Native.startOngoingCall(join.call.id, join.call.conversationId, title(join.call), video)
   if (video) Native.keepScreenOn(true)
@@ -310,16 +400,24 @@ export async function flipCamera() {
   const pub = room?.localParticipant.getTrackPublication(Track.Source.Camera)
   const track = pub?.track as LocalVideoTrack | undefined
   if (!track) return void useCall.setState({ frontCamera: front })
+  const facingMode = front ? 'user' : 'environment'
   try {
-    // Restart the camera track with the other camera (by its device id on phones, which is what
-    // actually switches it; the old in-place _switchCamera did nothing on newer WebRTC, so only
-    // the picture's mirroring flipped). The mirror follows only once the switch worked.
+    // Restart the camera track with the other camera (the old in-place _switchCamera did nothing:
+    // iPhone's applyConstraints only changes size and frame rate). Phones: by the camera's device id
+    // AND which way it faces. With only the id, iPhone's WebRTC kept thinking it was on the front
+    // camera; with only facingMode, LiveKit fills in deviceId "default", which iPhone has no camera
+    // for. The mirror follows only once the switch worked.
     const deviceId = Platform.OS === 'web' ? undefined : await cameraFor(front)
-    await track.restartTrack(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: front ? 'user' : 'environment' })
+    diag(`flip to ${facingMode}: device ${deviceId ?? 'not found'}`)
+    if (Platform.OS !== 'web' && !deviceId) throw new Error(`no ${front ? 'front' : 'back'} camera found`)
+    await track.restartTrack(deviceId ? { deviceId: { exact: deviceId }, facingMode } : { facingMode })
+    const st = (track.mediaStreamTrack as MediaStreamTrack & { getSettings?: () => Record<string, unknown> }).getSettings?.()
+    diag(`flip done, camera now ${String(st?.facingMode ?? '?')}`)
     useCall.setState({ frontCamera: front })
     refreshTiles()
-  } catch {
-    /* only one camera: stay as it was */
+  } catch (e) {
+    diag(`flip failed: ${errText(e)}`)
+    toast("Couldn't switch cameras.")
   }
 }
 

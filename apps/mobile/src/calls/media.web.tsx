@@ -7,6 +7,9 @@ import type { VideoTrack } from 'livekit-client'
 export function setupWebRTC() {}
 export async function startCallAudio(_video: boolean): Promise<void> {}
 export async function stopCallAudio(): Promise<void> {}
+export function audioEngineInfo(): Record<string, string> {
+  return {}
+}
 export type AudioRoute = 'speaker' | 'earpiece' | 'headset' | 'bluetooth'
 export async function audioRoutes(): Promise<AudioRoute[]> {
   return ['speaker']
