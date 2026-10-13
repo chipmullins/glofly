@@ -134,6 +134,14 @@ public class GloflyNativeModule: Module {
     Function("startOngoingCall") { (_: String, _: String, _: String, _: Bool) in }
     Function("stopOngoingCall") {}
 
+    // Call sounds that don't disturb the call's audio session (see CallTones.swift).
+    Function("playCallTone") { (name: String, repeating: Bool, volume: Double) -> Bool in
+      CallTones.shared.play(name, repeat: repeating, volume: Float(volume))
+    }
+    Function("stopCallTone") {
+      CallTones.shared.stop()
+    }
+
     // ---- Voice messages (AAC in .m4a: iPhones can't record Opus) ----
 
     AsyncFunction("startVoice") { (promise: Promise) in

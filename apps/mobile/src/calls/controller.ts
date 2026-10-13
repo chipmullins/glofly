@@ -10,7 +10,7 @@ import { useSession, onSignOut } from '@/state/session'
 import { setCall, useStore } from '@/state/store'
 import { firstName } from '@/lib/format'
 import { confirm, inform } from '@/ui/dialogs'
-import { playSound, setCallAudioMode, startLoop } from '@/push/sounds'
+import { playSound, startLoop } from '@/push/sounds'
 import { usePhonePrefs } from '@/state/prefs'
 import { setupWebRTC, startCallAudio, stopCallAudio } from './media'
 import { APP_SETTINGS } from '@/lib/config'
@@ -111,7 +111,6 @@ function refreshTiles() {
 
 async function connect(join: { token: string; url: string; call: Call }, video: boolean) {
   setupWebRTC()
-  setCallAudioMode(true)
   await startCallAudio(video)
   const r = new Room({ adaptiveStream: true, dynacast: true, audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
   room = r
@@ -183,7 +182,6 @@ function cleanup(message?: string) {
   keepConnected('call', false)
   const had = !!useCall.getState().call
   useCall.setState({ call: null, connecting: false, tiles: [], micOn: true, cameraOn: false, frontCamera: true })
-  setCallAudioMode(false)
   if (had && usePhonePrefs.getState().sounds) playSound('ended', 0.8)
   if (message) toast(message)
 }
@@ -202,8 +200,6 @@ async function enter(request: () => ReturnType<typeof api.startCall>, video: boo
   setCall(r.data.call, null)
   useCall.setState({ call: r.data.call })
   router.push('/call')
-  setCallAudioMode(true) // before the jingle, so it doesn't take the audio session from the call
-  if (outgoing && r.data.call.status === 'ringing' && usePhonePrefs.getState().sounds) stopOutgoing = startLoop('outgoing')
   try {
     await connect(r.data, video)
   } catch {
@@ -212,6 +208,17 @@ async function enter(request: () => ReturnType<typeof api.startCall>, video: boo
     return
   } finally {
     useCall.setState({ connecting: false })
+  }
+  // The outgoing jingle starts once the call's own audio is running (not while it's starting up),
+  // and only if nobody has picked up in the meantime.
+  if (
+    outgoing &&
+    r.data.call.status === 'ringing' &&
+    usePhonePrefs.getState().sounds &&
+    useCall.getState().call?.id === r.data.call.id &&
+    !room?.remoteParticipants.size
+  ) {
+    stopOutgoing = startLoop('outgoing')
   }
 }
 

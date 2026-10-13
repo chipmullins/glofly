@@ -1,6 +1,7 @@
 import { Platform } from 'react-native'
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio'
 import * as Haptics from 'expo-haptics'
+import * as Native from 'glofly-native'
 
 // Glofly's sounds inside the app (the same files as the desktop app): the message chime, the
 // call sounds, and the looping ringtone / outgoing jingle.
@@ -20,29 +21,20 @@ export type SoundName = keyof typeof FILES
 
 const players = new Map<SoundName, AudioPlayer>()
 let modeSet = false
-let inCall = false
 
-// iPhone has one audio session for the whole app. Outside calls the sounds use a playback-only
-// mode; during a call they must use the call's own mode (play + record), or playing the outgoing
-// jingle / "connected" chime switches the session away from the call and both sides hear nothing.
-function applyMode() {
-  modeSet = true
-  const mode = inCall
-    ? { playsInSilentMode: true, allowsRecording: true, interruptionMode: 'mixWithOthers' as const }
-    : { playsInSilentMode: false, allowsRecording: false, interruptionMode: 'mixWithOthers' as const }
-  void setAudioModeAsync(mode).catch(() => {})
-}
-
-/** Call starting (before the outgoing jingle) or ended. Only changes anything on iPhone. */
-export function setCallAudioMode(on: boolean): void {
-  if (Platform.OS !== 'ios' || inCall === on) return
-  inCall = on
-  applyMode()
-}
+// iPhone: call sounds play natively (glofly-native's CallTones), never through expo-audio. iPhone
+// has one audio session for the whole app; expo-audio switching it while a call starts took the
+// microphone and speaker away from the call (no audio when an iPhone called out). The message
+// chime too, since a message can arrive mid-call.
+const NATIVE_ON_IPHONE: ReadonlySet<SoundName> = new Set(['message', 'ringtone', 'outgoing', 'connected', 'ended', 'noAnswer', 'joined', 'left'])
+const iphoneTone = (name: SoundName) => Platform.OS === 'ios' && NATIVE_ON_IPHONE.has(name)
 
 function player(name: SoundName): AudioPlayer | null {
   try {
-    if (!modeSet) applyMode()
+    if (!modeSet) {
+      modeSet = true
+      void setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {})
+    }
     let p = players.get(name)
     if (!p) {
       p = createAudioPlayer(FILES[name])
@@ -55,6 +47,7 @@ function player(name: SoundName): AudioPlayer | null {
 }
 
 export function playSound(name: SoundName, volume = 1): void {
+  if (iphoneTone(name) && Native.playCallTone(name, false, volume)) return
   const p = player(name)
   if (!p) return
   try {
@@ -68,6 +61,7 @@ export function playSound(name: SoundName, volume = 1): void {
 
 /** Plays a sound on repeat until the returned stop function is called. */
 export function startLoop(name: SoundName): () => void {
+  if (iphoneTone(name) && Native.playCallTone(name, true, 1)) return () => Native.stopCallTone()
   const p = player(name)
   if (!p) return () => {}
   try {

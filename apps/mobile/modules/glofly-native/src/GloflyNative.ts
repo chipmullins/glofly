@@ -30,6 +30,9 @@ type Native = {
   voiceLevel(): number
   stopVoice(): Promise<{ uri: string; durationMs: number; mime: string; size: number } | null>
   cancelVoice(): void
+  /** iPhone only: call sounds that leave the call's audio session alone (CallTones.swift). */
+  playCallTone?(name: string, repeating: boolean, volume: number): boolean
+  stopCallTone?(): void
 }
 
 const native = requireOptionalNativeModule<Native>('GloflyNative')
@@ -143,3 +146,7 @@ export const showOverLockScreen = (on: boolean) => native?.showOverLockScreen(on
 export const keepScreenOn = (on: boolean) => native?.keepScreenOn(on)
 export const startOngoingCall = (callId: string, conversationId: string, title: string, video: boolean) => native?.startOngoingCall(callId, conversationId, title, video)
 export const stopOngoingCall = () => native?.stopOngoingCall()
+/** iPhone: plays a call sound natively. False when this build can't (then use expo-audio). */
+export const playCallTone = (name: string, repeating: boolean, volume: number): boolean =>
+  native?.playCallTone ? native.playCallTone(name, repeating, volume) : false
+export const stopCallTone = () => native?.stopCallTone?.()

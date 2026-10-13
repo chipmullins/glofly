@@ -16,6 +16,7 @@ import { restoreSession, useSession } from '@/state/session'
 import { prefs } from '@/lib/storage'
 import { loadPhonePrefs } from '@/state/prefs'
 import { setupWebRTC } from '@/calls/media'
+import { lockPortrait } from '@/lib/orientation'
 
 // LiveKit needs WebRTC's globals before anything uses it.
 setupWebRTC()
@@ -35,6 +36,7 @@ export default function RootLayout() {
   const { c, dark } = useTheme()
 
   useEffect(() => {
+    lockPortrait() // only the call screen turns sideways
     void prefs.get<ThemeChoice>('theme', 'system').then((t) => useThemeChoice.getState().set(t))
     void loadPhonePrefs()
     void restoreSession()

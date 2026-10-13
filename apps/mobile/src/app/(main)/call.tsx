@@ -10,6 +10,7 @@ import { CallVideo, audioRoutes, selectAudioRoute, type AudioRoute } from '@/cal
 import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
 import { timer } from '@/lib/format'
+import { allowRotation, lockPortrait } from '@/lib/orientation'
 import { useNow } from '@/lib/hooks'
 import { Avatar } from '@/ui/Avatar'
 import { BottomSheet, chooseFrom } from '@/ui/dialogs'
@@ -21,6 +22,8 @@ import { call as callColors } from '@/ui/theme'
 // The call screen, from the design: 1-on-1 video fills the screen with your camera on top (drag
 // it to any corner), voice calls show their photo with firefly glow rings, groups are a grid
 // (tap someone to pin them), and a shared screen shows big with everyone below it.
+// This is the one screen that turns sideways: landscape gets tiles in a row and a floating control
+// bar, and turning the phone also makes your camera send a wide picture.
 
 const ROUTE_LABEL: Record<AudioRoute, string> = { speaker: 'Speaker', earpiece: 'Phone', headset: 'Headphones', bluetooth: 'Bluetooth' }
 const ROUTE_ICON: Record<AudioRoute, IconName> = { speaker: 'speaker', earpiece: 'earpiece', headset: 'speaker', bluetooth: 'bluetooth' }
@@ -37,6 +40,12 @@ export default function CallScreen() {
   const [pinned, setPinned] = useState<string | null>(null)
   const [route, setRoute] = useState<AudioRoute | null>(null)
   const [adding, setAdding] = useState(false)
+  const landscape = width > height
+
+  useEffect(() => {
+    allowRotation()
+    return () => lockPortrait()
+  }, [])
 
   const leaveScreen = () => (router.canGoBack() ? router.back() : router.replace('/chats'))
 
@@ -86,6 +95,12 @@ export default function CallScreen() {
     setRoute(pick as AudioRoute)
   }
 
+  // Room taken by the title bar and controls (landscape: slimmer bar, floating controls).
+  const barH = landscape ? 48 : 60
+  const topSpace = insets.top + (landscape ? barH + 4 : 64)
+  const bottomSpace = landscape ? 84 + insets.bottom : 140 + insets.bottom
+  const sidePad = { paddingLeft: insets.left, paddingRight: insets.right }
+
   const oneOnOneVideo = !isGroup && !screenTile && others[0]?.camera
   const voiceOnly = !isGroup && !screenTile && !others[0]?.camera
 
@@ -94,7 +109,7 @@ export default function CallScreen() {
       {/* Main area */}
       <View style={{ flex: 1 }}>
         {screenTile ? (
-          <View style={{ flex: 1, paddingTop: insets.top + 60 }}>
+          <View style={{ flex: 1, paddingTop: landscape ? topSpace : insets.top + 60, paddingBottom: landscape ? bottomSpace - 8 : 0, ...sidePad }}>
             <View style={{ flex: 1, backgroundColor: '#000' }} accessibilityLabel={`${personOf(screenTile.userId).displayName}'s shared screen`}>
               <CallVideo track={screenTile.screen!} contain style={{ flex: 1 }} />
               <View style={{ position: 'absolute', left: 12, bottom: 12, paddingHorizontal: 12, height: 30, borderRadius: 15, backgroundColor: 'rgba(28,18,16,0.6)', justifyContent: 'center' }}>
@@ -103,30 +118,34 @@ export default function CallScreen() {
                 </Text>
               </View>
             </View>
-            <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={{ padding: 10, gap: 8 }}>
-              {s.tiles.map((t) => (
-                <TileView key={t.userId} tile={t} person={personOf(t.userId)} w={120} h={90} />
-              ))}
-            </ScrollView>
-            <Text size={12} style={{ color: callColors.faint, textAlign: 'center', paddingBottom: 6 }}>
-              Turn your phone sideways to see it bigger
-            </Text>
+            {landscape ? null : (
+              <>
+                <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={{ padding: 10, gap: 8 }}>
+                  {s.tiles.map((t) => (
+                    <TileView key={t.userId} tile={t} person={personOf(t.userId)} w={120} h={90} fill />
+                  ))}
+                </ScrollView>
+                <Text size={12} style={{ color: callColors.faint, textAlign: 'center', paddingBottom: 6 }}>
+                  Turn your phone sideways to see it bigger
+                </Text>
+              </>
+            )}
           </View>
         ) : oneOnOneVideo ? (
           <View style={{ flex: 1 }}>
             {/* Whole picture, never cropped: a computer's wide camera on an upright phone would otherwise be
                 a zoomed-in slice of the middle (faces cut off when someone sits off to the side). */}
             <CallVideo track={others[0].camera!} contain style={{ position: 'absolute', top: 0, left: 0, width, height }} zOrder={0} />
-            <View style={{ position: 'absolute', left: 16, bottom: 140 + insets.bottom }}>{others[0].speaking ? <TalkingTag name={personOf(others[0].userId).displayName} /> : null}</View>
+            <View style={{ position: 'absolute', left: 16 + insets.left, bottom: bottomSpace }}>{others[0].speaking ? <TalkingTag name={personOf(others[0].userId).displayName} /> : null}</View>
           </View>
         ) : !answered && s.cameraOn && self?.camera ? (
           <View style={{ flex: 1 }}>
             <CallVideo track={self.camera} mirror={s.frontCamera} style={{ position: 'absolute', top: 0, left: 0, width, height }} />
             <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(18,13,11,0.35)' }} />
-            <VoiceStage person={chat?.kind === 'dm' ? chat.partner : personOf(meId)} speaking={false} ringing />
+            <VoiceStage person={chat?.kind === 'dm' ? chat.partner : personOf(meId)} speaking={false} ringing compact={landscape} />
           </View>
         ) : voiceOnly ? (
-          <VoiceStage person={others[0] ? personOf(others[0].userId) : chat?.kind === 'dm' ? chat.partner : personOf(meId)} speaking={!!others[0]?.speaking} ringing={!answered} />
+          <VoiceStage person={others[0] ? personOf(others[0].userId) : chat?.kind === 'dm' ? chat.partner : personOf(meId)} speaking={!!others[0]?.speaking} ringing={!answered} compact={landscape} />
         ) : (
           <Grid
             tiles={s.tiles}
@@ -134,18 +153,20 @@ export default function CallScreen() {
             personOf={personOf}
             pinned={pinned}
             onPin={(id) => setPinned((p) => (p === id ? null : id))}
-            top={insets.top + 64}
-            bottom={140 + insets.bottom}
+            top={topSpace}
+            bottom={bottomSpace}
+            left={insets.left}
+            right={insets.right}
           />
         )}
       </View>
 
       {/* Your camera on top in 1-on-1 video */}
-      {oneOnOneVideo && self?.camera ? <SelfPip track={self.camera} mirror={s.frontCamera} top={insets.top + 70} bottom={150 + insets.bottom} /> : null}
+      {oneOnOneVideo && self?.camera ? <SelfPip track={self.camera} mirror={s.frontCamera} top={topSpace + 6} bottom={bottomSpace + 10} landscape={landscape} /> : null}
 
       {/* Title bar */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: insets.top, backgroundColor: oneOnOneVideo ? 'rgba(18,13,11,0.45)' : 'transparent' }}>
-        <View style={{ height: 60, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, gap: 4 }}>
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: insets.top, ...sidePad, backgroundColor: oneOnOneVideo || (landscape && screenTile) ? 'rgba(18,13,11,0.45)' : 'transparent' }}>
+        <View style={{ height: barH, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, gap: 4 }}>
           <Pressable accessibilityRole="button" accessibilityLabel="Back to chat, call keeps going" onPress={leaveScreen} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="chevronDown" size={26} color="#FFFFFF" />
           </Pressable>
@@ -168,9 +189,16 @@ export default function CallScreen() {
       </View>
 
       {/* Controls */}
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, paddingBottom: insets.bottom + 18, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#2A1C17' }}>
-        <View style={{ alignSelf: 'center', width: 32, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.35)', marginBottom: 14 }} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <View
+        style={
+          landscape
+            ? // Sideways: a floating bar in the middle, so the video gets the height
+              { position: 'absolute', bottom: insets.bottom + 10, alignSelf: 'center', padding: 8, borderRadius: 28, backgroundColor: 'rgba(42,28,23,0.92)' }
+            : { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, paddingBottom: insets.bottom + 18, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#2A1C17' }
+        }
+      >
+        {landscape ? null : <View style={{ alignSelf: 'center', width: 32, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.35)', marginBottom: 14 }} />}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: landscape ? 14 : 0 }}>
           <CtrlButton icon={s.cameraOn ? 'video' : 'videoOff'} label={s.cameraOn ? 'Turn camera off' : 'Turn camera on'} on={s.cameraOn} onPress={() => void setCamera(!s.cameraOn)} />
           <CtrlButton icon={s.micOn ? 'mic' : 'micOff'} label={s.micOn ? 'Mute microphone' : 'Unmute microphone'} on={!s.micOn} onPress={() => void setMic(!s.micOn)} />
           {s.cameraOn ? <CtrlButton icon="flip" label="Switch camera" onPress={() => void flipCamera()} /> : <CtrlButton icon={route ? ROUTE_ICON[route] : 'speaker'} label={`Audio: ${route ? ROUTE_LABEL[route] : 'choose where it plays'}`} onPress={() => void pickRoute()} />}
@@ -225,7 +253,9 @@ function TalkingTag({ name }: { name: string }) {
   )
 }
 
-function VoiceStage({ person, speaking, ringing }: { person: PublicUser; speaking: boolean; ringing: boolean }) {
+function VoiceStage({ person, speaking, ringing, compact }: { person: PublicUser; speaking: boolean; ringing: boolean; compact?: boolean }) {
+  // Sideways there's little height: a smaller photo and rings.
+  const k = compact ? 0.62 : 1
   const pulse = useRef(new Animated.Value(0)).current
   useEffect(() => {
     const loop = Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 1800, useNativeDriver: true }))
@@ -247,22 +277,22 @@ function VoiceStage({ person, speaking, ringing }: { person: PublicUser; speakin
     />
   )
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, paddingBottom: 120 }}>
-      <View style={{ alignItems: 'center', justifyContent: 'center', width: 260, height: 260 }}>
-        {ring(0, 200)}
-        {ring(0.15, 240)}
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: compact ? 8 : 24, paddingBottom: compact ? 70 : 120, paddingTop: compact ? 30 : 0 }}>
+      <View style={{ alignItems: 'center', justifyContent: 'center', width: 260 * k, height: 260 * k }}>
+        {ring(0, 200 * k)}
+        {ring(0.15, 240 * k)}
         <View style={{ borderRadius: 90, boxShadow: speaking ? '0 0 0 4px #FFA54A, 0 0 32px rgba(255,165,74,0.6)' : '0 0 40px rgba(255,179,71,0.25)' }}>
-          <Avatar user={person} size={160} />
+          <Avatar user={person} size={160 * k} />
         </View>
       </View>
-      <Text display size={28} style={{ color: '#FFF' }}>
+      <Text display size={compact ? 22 : 28} style={{ color: '#FFF' }}>
         {person.displayName}
       </Text>
     </View>
   )
 }
 
-function TileView({ tile, person, w, h, ringing, onPress }: { tile: Tile | null; person: PublicUser; w: number; h: number; ringing?: boolean; onPress?: () => void }) {
+function TileView({ tile, person, w, h, ringing, onPress, fill }: { tile: Tile | null; person: PublicUser; w: number; h: number; ringing?: boolean; onPress?: () => void; fill?: boolean }) {
   const talking = tile?.speaking
   return (
     <Pressable
@@ -272,7 +302,9 @@ function TileView({ tile, person, w, h, ringing, onPress }: { tile: Tile | null;
       style={{ width: w, height: h, borderRadius: 16, overflow: 'hidden', backgroundColor: callColors.tile, alignItems: 'center', justifyContent: 'center', borderWidth: talking ? 3 : 0, borderColor: '#FFA54A' }}
     >
       {tile?.camera ? (
-        <CallVideo track={tile.camera} mirror={tile.local} contain style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} />
+        // fill: the video covers the tile (edges trimmed) like FaceTime, instead of a narrow strip with
+        // bars beside it. A pinned (big) tile shows the whole picture.
+        <CallVideo track={tile.camera} mirror={tile.local} contain={!fill} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} />
       ) : (
         <View style={{ opacity: ringing ? 0.85 : 1, borderRadius: 60, boxShadow: ringing ? '0 0 24px rgba(255,179,71,0.6)' : undefined }}>
           <Avatar user={person} size={Math.min(w, h) * 0.42} />
@@ -289,44 +321,71 @@ function TileView({ tile, person, w, h, ringing, onPress }: { tile: Tile | null;
   )
 }
 
-function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom }: { tiles: Tile[]; ringing: string[]; personOf: (id: string) => PublicUser; pinned: string | null; onPin: (id: string) => void; top: number; bottom: number }) {
-  const { width, height } = useWindowDimensions()
+function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom, left = 0, right = 0 }: { tiles: Tile[]; ringing: string[]; personOf: (id: string) => PublicUser; pinned: string | null; onPin: (id: string) => void; top: number; bottom: number; left?: number; right?: number }) {
+  const { width: screenW, height } = useWindowDimensions()
+  const width = screenW - left - right
+  const landscape = screenW > height
   const all = useMemo(() => [...tiles.map((t) => ({ id: t.userId, tile: t as Tile | null, ringing: false })), ...ringing.filter((id) => !tiles.some((t) => t.userId === id)).map((id) => ({ id, tile: null, ringing: true }))], [tiles, ringing])
   const available = height - top - bottom
   const pin = pinned ? all.find((x) => x.id === pinned) : null
   if (pin) {
     const rest = all.filter((x) => x.id !== pin.id)
+    // Pinned: the whole picture big, everyone else small beside it (sideways) or below it (upright).
+    const stripW = landscape ? 150 : width - 20
     return (
-      <View style={{ position: 'absolute', top, left: 0, right: 0, bottom, padding: 10, gap: 10 }}>
-        <TileView tile={pin.tile} person={personOf(pin.id)} w={width - 20} h={available - 130} ringing={pin.ringing} onPress={() => onPin(pin.id)} />
-        <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
+      <View style={{ position: 'absolute', top, left, right, bottom, padding: 10, gap: 10, flexDirection: landscape ? 'row' : 'column' }}>
+        <TileView tile={pin.tile} person={personOf(pin.id)} w={landscape ? width - 20 - 10 - stripW : width - 20} h={landscape ? available - 20 : available - 130} ringing={pin.ringing} onPress={() => onPin(pin.id)} />
+        <ScrollView horizontal={!landscape} contentContainerStyle={{ gap: 8 }}>
           {rest.map((x) => (
-            <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={130} h={100} ringing={x.ringing} onPress={() => onPin(x.id)} />
+            <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={landscape ? stripW : 130} h={100} ringing={x.ringing} onPress={() => onPin(x.id)} fill />
           ))}
         </ScrollView>
       </View>
     )
   }
-  const cols = all.length <= 4 ? 2 : 3
-  const rows = Math.ceil(all.length / cols)
-  const w = (width - 20 - (cols - 1) * 8) / cols
-  const h = Math.min(w * 1.3, (available - 20 - (Math.min(rows, 3) - 1) * 8) / Math.min(rows, 3))
+  // Pick the number of columns that makes the tiles biggest for this screen shape: upright, 3
+  // people are 2 + 1; sideways they're 3 in a row. Past ~9 people the tiles scroll.
+  const n = Math.max(all.length, 1)
+  const gap = 8
+  const innerW = width - 20
+  const innerH = available - 20
+  let best = { cols: 1, w: innerW, h: innerH, score: -1 }
+  for (let cols = 1; cols <= Math.min(n, 4); cols++) {
+    const rows = Math.ceil(n / cols)
+    const w = (innerW - (cols - 1) * gap) / cols
+    const h = (innerH - (rows - 1) * gap) / rows
+    const score = Math.min(w, h) // the tile's short side: how big a face can be
+    if (score > best.score) best = { cols, w, h, score }
+  }
+  let { w, h } = best
+  if (best.score < 110) {
+    // Too many people for one screen: fixed-size tiles that scroll.
+    const cols = landscape ? 4 : 3
+    w = (innerW - (cols - 1) * gap) / cols
+    h = landscape ? w * 0.75 : w * 1.3
+  }
   return (
-    <ScrollView style={{ position: 'absolute', top, left: 0, right: 0, bottom }} contentContainerStyle={{ padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', minHeight: available, alignContent: 'center' }}>
+    <ScrollView style={{ position: 'absolute', top, left, right, bottom }} contentContainerStyle={{ padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap, justifyContent: 'center', minHeight: available, alignContent: 'center' }}>
       {all.map((x) => (
-        <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={all.length === 1 ? width - 20 : w} h={all.length === 1 ? available - 20 : h} ringing={x.ringing} onPress={() => onPin(x.id)} />
+        <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={w} h={h} ringing={x.ringing} onPress={() => onPin(x.id)} fill />
       ))}
     </ScrollView>
   )
 }
 
 /** Your camera on top: drag it, and it snaps to the nearest corner. */
-function SelfPip({ track, mirror, top, bottom }: { track: VideoTrack; mirror: boolean; top: number; bottom: number }) {
+function SelfPip({ track, mirror, top, bottom, landscape }: { track: VideoTrack; mirror: boolean; top: number; bottom: number; landscape: boolean }) {
   const { width, height } = useWindowDimensions()
-  // A phone camera's own shape (9:16), shown whole, so nothing of your face is cut off.
-  const W = 108
-  const H = 192
+  // A phone camera's own shape (9:16, or 16:9 with the phone sideways), shown whole, so nothing
+  // of your face is cut off.
+  const W = landscape ? 192 : 108
+  const H = landscape ? 108 : 192
   const pos = useRef(new Animated.ValueXY({ x: width - W - 14, y: top })).current
+  useEffect(() => {
+    // Turned the phone: back to the top-right corner of the new screen.
+    pos.setValue({ x: width - W - 14, y: top })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width, height])
   const start = useRef({ x: 0, y: 0 })
   const gesture = Gesture.Pan()
     .runOnJS(true)

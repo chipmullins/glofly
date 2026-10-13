@@ -25,7 +25,9 @@ const config: ExpoConfig = {
   slug: 'glofly',
   scheme: 'glofly',
   version: '1.0.0',
-  orientation: 'portrait',
+  // Rotation is allowed so the call screen can go landscape; every other screen locks itself upright
+  // (expo-screen-orientation: starts locked, src/app/_layout.tsx keeps it locked, call.tsx unlocks).
+  orientation: 'default',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
   backgroundColor: '#1E1916',
@@ -90,6 +92,7 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-secure-store',
     'expo-localization',
+    ['expo-screen-orientation', { initialOrientation: 'PORTRAIT_UP' }],
     [
       'expo-splash-screen',
       {
