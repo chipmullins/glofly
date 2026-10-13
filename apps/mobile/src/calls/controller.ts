@@ -258,6 +258,8 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
 }
 
 function cleanup(message?: string) {
+  const ending = useCall.getState().call
+  if (ending) Native.endCallKitCall(ending.id) // iPhone: iOS's call screen ends too
   const r = room
   room = null
   rejoinedOnce = false
@@ -335,12 +337,14 @@ export async function joinCallIn(conversationId: string, video: boolean): Promis
   await enter(() => api.joinCall(call.id), video, false)
 }
 
-export async function answer(video: boolean): Promise<void> {
+export async function answer(video: boolean, fromCallKit = false): Promise<void> {
   const inc = useCall.getState().incoming
   if (!inc) return
   stopRinging()
   useCall.setState({ incoming: null })
   Native.cancelCallNotification(inc.call.id)
+  // iPhone: answered on Glofly's own card while the lock-screen call was also ringing: stop that.
+  if (!fromCallKit) Native.callKitAnsweredInApp(inc.call.id)
   Native.showOverLockScreen(false)
   await enter(() => api.answerCall(inc.call.id), video, false)
 }
@@ -352,6 +356,7 @@ export async function decline(withMessage?: string): Promise<void> {
   useCall.setState({ incoming: null })
   Native.cancelCallNotification(inc.call.id)
   Native.showOverLockScreen(false)
+  Native.endCallKitCall(inc.call.id)
   if (withMessage) await api.sendMessage(inc.call.conversationId, withMessage)
   await api.declineCall(inc.call.id)
 }
@@ -468,6 +473,7 @@ function onCallUpdated(call: Call, caller: PublicUser | null) {
     stopRinging()
     useCall.setState({ incoming: null })
     Native.cancelCallNotification(call.id)
+    Native.endCallKitCall(call.id)
   } else if (!s.call && ringingForMe(call)) showIncoming(call, caller)
 
   // The call you're in.
@@ -498,6 +504,27 @@ export function startCalls() {
   Native.onNativeEvent('hangUp', () => {
     if (useCall.getState().call) cleanup()
   })
+  // iPhone lock-screen calls (CallKit): answered there (now, or before the app had started).
+  const takeAnswer = () => {
+    const a = Native.takeCallKitAnswer()
+    if (a) void openIncomingFromLink(a.callId, true, a.video === '1', true)
+  }
+  Native.onNativeEvent('callAnswer', takeAnswer)
+  takeAnswer()
+  // Hung up on iOS's call screen.
+  Native.onNativeEvent('callEnd', ({ callId }) => {
+    if (useCall.getState().call?.id === callId) void hangUp()
+  })
+  // Declined on the lock screen (the native side already told the server).
+  Native.onNativeEvent('callDeclined', ({ callId }) => {
+    if (useCall.getState().incoming?.call.id !== callId) return
+    stopRinging()
+    useCall.setState({ incoming: null })
+  })
+  // Muted / unmuted on iOS's call screen.
+  Native.onNativeEvent('callMute', ({ muted }) => {
+    if (useCall.getState().call) void setMic(muted !== '1')
+  })
   // Calls found when the app opens or reconnects (refreshCalls) can be ringing for you too.
   useStore.subscribe((st, prev) => {
     if (st.calls === prev.calls) return
@@ -511,19 +538,20 @@ export function startCalls() {
 }
 
 /** From a notification link (glofly://incoming/<callId>): show the incoming card, or answer. */
-export async function openIncomingFromLink(callId: string, answerNow: boolean, video: boolean) {
+export async function openIncomingFromLink(callId: string, answerNow: boolean, video: boolean, fromCallKit = false) {
   const r = await api.activeCalls()
   const found = r.ok ? r.data.find((a) => a.call.id === callId) : undefined
   Native.cancelCallNotification(callId)
   if (!found || !ringingForMe(found.call)) {
     Native.showOverLockScreen(false)
+    if (fromCallKit) Native.endCallKitCall(callId) // it stopped ringing meanwhile
     if (found?.call.conversationId) router.replace({ pathname: '/chat/[id]', params: { id: found.call.conversationId } })
     else void inform('That call is over')
     return
   }
   setCall(found.call, null)
   showIncoming(found.call, null)
-  if (answerNow) await answer(video)
+  if (answerNow) await answer(video, fromCallKit)
 }
 
 export async function confirmLeaveIfInCall(): Promise<boolean> {

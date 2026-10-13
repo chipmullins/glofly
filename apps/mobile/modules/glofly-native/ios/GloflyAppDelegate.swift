@@ -21,6 +21,8 @@ public class GloflyAppDelegate: ExpoAppDelegateSubscriber, MessagingDelegate {
       Messaging.messaging().delegate = self
     }
     GloflyNotifications.shared.install()
+    // Lock-screen calls: register for VoIP pushes (one may be what just launched the app).
+    GloflyCallKit.shared.start()
     return true
   }
 

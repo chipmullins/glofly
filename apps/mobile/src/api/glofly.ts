@@ -142,5 +142,7 @@ export const noticeSeen = async (id: string) => none(await request('POST', `/not
 
 // ---- Push notifications ----
 
-export const registerPush = async (token: string, preview: boolean) => none(await request('PUT', '/devices/push', { token, platform: PLATFORM, preview }))
+/** voipToken: iPhone lock-screen calls (left out when there isn't one yet: the server keeps what it has). */
+export const registerPush = async (token: string, preview: boolean, voipToken?: string) =>
+  none(await request('PUT', '/devices/push', { token, platform: PLATFORM, preview, ...(voipToken ? { voipToken } : {}) }))
 export const unregisterPush = async () => none(await request('DELETE', '/devices/push'))

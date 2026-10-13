@@ -22,6 +22,7 @@ import { sweepEmailTokens } from "./email/tokens";
 import { controlRouter } from "./admin";
 import { devicesRouter } from "./push/devices";
 import { pushKind } from "./push/fcm";
+import { voipKind } from "./push/apns";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
 const app = express();
@@ -92,6 +93,11 @@ connectRedis()
         pushKind === "off"
           ? "Push notifications are off: set FCM_SERVICE_ACCOUNT_FILE to turn them on."
           : `Push notifications: ${pushKind}`,
+      );
+      console.log(
+        voipKind === "off"
+          ? "iPhone lock-screen calls are off: set APNS_KEY_FILE, APNS_KEY_ID and APNS_TEAM_ID to turn them on."
+          : `iPhone lock-screen calls: ${voipKind}`,
       );
     });
     // Calls nobody answered become missed; calls someone dropped out of are ended.

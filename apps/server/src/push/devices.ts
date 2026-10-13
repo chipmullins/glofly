@@ -7,7 +7,7 @@ import { pushDevices } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 
 // Phones register for push notifications here, after signing in:
-//   PUT /devices/push    { token, platform: "android" | "ios", preview? }   (again whenever the token or setting changes)
+//   PUT /devices/push    { token, platform: "android" | "ios", preview?, voipToken? }   (again whenever the token or setting changes)
 //   DELETE /devices/push                                                    (notifications turned off on this phone)
 // The registration belongs to this session, so signing out removes it.
 
@@ -30,6 +30,14 @@ const registration = z.object({
   token: z.string().trim().min(10).max(4096),
   platform: z.enum(["android", "ios"]),
   preview: z.boolean().default(true),
+  // iPhone lock-screen calls (CallKit): Apple's VoIP push token, "<hex>" or "sandbox:<hex>" for
+  // development builds. Left out = unchanged (older apps); null = remove.
+  voipToken: z
+    .string()
+    .trim()
+    .regex(/^(sandbox:)?[0-9a-f]{32,200}$/i)
+    .nullable()
+    .optional(),
 });
 
 devicesRouter.put("/push", limiter, async (req, res) => {
@@ -38,7 +46,8 @@ devicesRouter.put("/push", limiter, async (req, res) => {
     res.status(400).json({ error: "invalid", message: "That isn't a push registration Glofly understands." });
     return;
   }
-  const { token, platform, preview } = parsed.data;
+  const { token, platform, preview, voipToken } = parsed.data;
+  const voip = platform === "ios" && voipToken !== undefined ? { voipToken } : {};
   const sessionId = sessionOf(res);
   const userId = userOf(res);
   await db.transaction(async (tx) => {
@@ -46,11 +55,18 @@ devicesRouter.put("/push", limiter, async (req, res) => {
     await tx.delete(pushDevices).where(and(eq(pushDevices.token, token), ne(pushDevices.sessionId, sessionId)));
     await tx
       .insert(pushDevices)
-      .values({ sessionId, userId, platform, token, preview })
+      .values({ sessionId, userId, platform, token, preview, ...voip })
       .onConflictDoUpdate({
         target: pushDevices.sessionId,
-        set: { token, platform, preview, updatedAt: new Date() },
+        set: { token, platform, preview, ...voip, updatedAt: new Date() },
       });
+    // A VoIP token belongs to one phone too.
+    if (voip.voipToken) {
+      await tx
+        .update(pushDevices)
+        .set({ voipToken: null })
+        .where(and(eq(pushDevices.voipToken, voip.voipToken), ne(pushDevices.sessionId, sessionId)));
+    }
   });
   res.status(204).end();
 });

@@ -178,7 +178,10 @@ final class GloflyNotifications: NSObject, UNUserNotificationCenterDelegate {
     case "clear":
       if let id = info["conversationId"] as? String { Self.removeChat(id) }
     case "call_stop", "call_missed":
-      if let id = info["callId"] as? String { Self.removeCall(id) }
+      if let id = info["callId"] as? String {
+        Self.removeCall(id)
+        GloflyCallKit.shared.endCall(id, reason: info["type"] as? String == "call_missed" ? .unanswered : .remoteEnded)
+      }
     default:
       break
     }

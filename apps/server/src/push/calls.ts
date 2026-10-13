@@ -6,6 +6,7 @@ import { conversationMembers, conversations, pushDevices, users } from "../db/sc
 import { liveSessions } from "../realtime";
 import { pushConfigured, sendPush, type PushData } from "./fcm";
 import { forgetTokens } from "./devices";
+import { sendVoip, voipConfigured } from "./apns";
 
 // Calls on phones. A phone that isn't showing Glofly has no live connection, so it learns about
 // calls from pushes, which the app shows even while it's closed (the incoming-call screen on the
@@ -40,6 +41,7 @@ async function devicesOf(userIds: string[]) {
       token: pushDevices.token,
       sessionId: pushDevices.sessionId,
       platform: pushDevices.platform,
+      voipToken: pushDevices.voipToken,
       status: users.statusPreference,
     })
     .from(pushDevices)
@@ -69,9 +71,14 @@ async function chatTitles(conversationId: string, readerIds: string[]): Promise<
   return out;
 }
 
-async function send(list: { token: string; data: PushData; ttl: number; platform: string }[]) {
-  const results = await Promise.all(list.map((p) => sendPush(p.token, p.data, p.ttl, p.platform)));
-  await forgetTokens(list.filter((_, i) => results[i] === "gone").map((p) => p.token));
+type Outgoing = { token: string; data: PushData; ttl: number; platform: string; voip?: string };
+
+async function send(list: Outgoing[]) {
+  // iPhones with a VoIP token ring through Apple directly (CallKit, lock screen); the rest via Firebase.
+  const results = await Promise.all(list.map((p) => (p.voip ? sendVoip(p.voip, p.data, p.ttl) : sendPush(p.token, p.data, p.ttl, p.platform))));
+  await forgetTokens(list.filter((p, i) => !p.voip && results[i] === "gone").map((p) => p.token));
+  const deadVoip = list.filter((p, i) => p.voip && results[i] === "gone").map((p) => p.voip!);
+  if (deadVoip.length) await db.update(pushDevices).set({ voipToken: null }).where(inArray(pushDevices.voipToken, deadVoip));
 }
 
 export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<void> {
@@ -96,7 +103,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
   if (!devices.length) return;
   const live = await liveSessions(everyone);
   const titles = await chatTitles(call.conversationId, everyone);
-  const out: { token: string; data: PushData; ttl: number; platform: string }[] = [];
+  const out: Outgoing[] = [];
   const callerNameOf = async (userId: string) => (caller ? await nameFor(userId, caller.id, caller.displayName) : "Someone");
   const base = {
     callId: call.id,
@@ -114,6 +121,9 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
       out.push({
         token: d.token,
         platform: d.platform,
+        // iPhone with lock-screen calls: a VoIP push (never in Do not disturb: iOS would ring anyway,
+        // since every VoIP push must show a call; those get the silent notification instead).
+        voip: d.platform === "ios" && d.voipToken && voipConfigured && d.status !== "dnd" ? d.voipToken : undefined,
         ttl: Math.max(1, Math.ceil((new Date(until).getTime() - Date.now()) / 1000)),
         data: {
           type: "call_ring",

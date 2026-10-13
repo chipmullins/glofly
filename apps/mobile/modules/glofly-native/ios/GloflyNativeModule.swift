@@ -6,7 +6,7 @@ import UserNotifications
 
 /// Glofly's own iPhone code, called from src/GloflyNative.ts. Mirrors the Android module; things
 /// only Android has (the call foreground service, lock-screen flags, full-screen call settings)
-/// are safe no-ops here. Lock-screen ringing (CallKit) comes in round two.
+/// are safe no-ops here. Lock-screen ringing is CallKit.swift.
 public class GloflyNativeModule: Module {
   private static weak var current: GloflyNativeModule?
   private var notificationsOn = false
@@ -18,7 +18,7 @@ public class GloflyNativeModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("GloflyNative")
-    Events("pushToken", "callRing", "hangUp")
+    Events("pushToken", "callRing", "hangUp", "voipToken", "callAnswer", "callEnd", "callDeclined", "callMute")
 
     OnCreate {
       GloflyNativeModule.current = self
@@ -134,6 +134,21 @@ public class GloflyNativeModule: Module {
     // call going with the screen locked, and iOS shows its own green call indicator.
     Function("startOngoingCall") { (_: String, _: String, _: String, _: Bool) in }
     Function("stopOngoingCall") {}
+
+    // ---- Lock-screen calls (CallKit.swift) ----
+
+    Function("voipToken") { () -> String? in
+      GloflyCallKit.shared.voipToken
+    }
+    Function("takeCallKitAnswer") { () -> [String: String]? in
+      GloflyCallKit.shared.takePendingAnswer()
+    }
+    Function("endCallKitCall") { (callId: String) in
+      GloflyCallKit.shared.endCall(callId)
+    }
+    Function("callKitAnsweredInApp") { (callId: String) in
+      GloflyCallKit.shared.answeredInApp(callId)
+    }
 
     // Call sounds that don't disturb the call's audio session (see CallTones.swift).
     Function("playCallTone") { (name: String, repeating: Bool, volume: Double) -> Bool in

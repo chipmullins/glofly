@@ -44,7 +44,9 @@ async function register(): Promise<void> {
   }
   const token = await Native.getPushToken()
   if (!token) return
-  const r = await api.registerPush(token, p.preview)
+  // iPhone: Apple's VoIP token too, so calls ring on the lock screen (CallKit).
+  const voip = Platform.OS === 'ios' ? Native.voipToken() : null
+  const r = await api.registerPush(token, p.preview, voip ?? undefined)
   if (r.ok) registeredToken = token
 }
 
@@ -57,6 +59,7 @@ export function startPush(): void {
   const link = Native.takeLaunchLink()
   if (link) setTimeout(() => void Linking.openURL(link), 300)
   Native.onNativeEvent('pushToken', () => void register())
+  Native.onNativeEvent('voipToken', () => void register())
   onPhonePrefsChange(() => void register())
   useSession.subscribe((s, prev) => {
     if (s.status === 'signedIn' && (prev.status !== 'signedIn' || s.token !== prev.token || s.user?.avatarVersion !== prev.user?.avatarVersion)) void register()

@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
   s.name           = 'GloflyNative'
   s.version        = '1.0.0'
-  s.summary        = "Glofly's own iPhone code: push notifications, notification actions, voice recording"
+  s.summary        = "Glofly's own iPhone code: push notifications, notification actions, voice recording, lock-screen calls"
   s.description    = s.summary
   s.license        = 'UNLICENSED'
   s.author         = 'Glofly'
@@ -14,6 +14,9 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   # Push notifications go through Firebase Cloud Messaging (it hands them to Apple), like Android.
   s.dependency 'FirebaseMessaging'
+
+  # Lock-screen calls (CallKit.swift): the call screen and Apple's VoIP pushes.
+  s.frameworks = 'CallKit', 'PushKit'
 
   s.source_files = '*.swift'
   # Notification sounds must sit in the app itself (`resources` copies them there).

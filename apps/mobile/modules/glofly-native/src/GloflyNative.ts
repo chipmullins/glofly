@@ -33,6 +33,14 @@ type Native = {
   /** iPhone only: call sounds that leave the call's audio session alone (CallTones.swift). */
   playCallTone?(name: string, repeating: boolean, volume: number): boolean
   stopCallTone?(): void
+  /** iPhone only: Apple's VoIP push token for lock-screen calls ("sandbox:" in front on dev builds). */
+  voipToken?(): string | null
+  /** iPhone only: a call answered on the lock screen, waiting for the app (cleared by taking it). */
+  takeCallKitAnswer?(): { callId: string; video: string } | null
+  /** iPhone only: ends the lock-screen call for this call (it ended or stopped ringing). */
+  endCallKitCall?(callId: string): void
+  /** iPhone only: answered on Glofly's own Incoming card, so the lock-screen ringing stops. */
+  callKitAnsweredInApp?(callId: string): void
   /** iPhone only: iOS's shared audio session right now (call diagnostics). */
   audioSessionInfo?(): Record<string, string>
 }
@@ -135,7 +143,7 @@ export const cancelCallNotification = (id: string) => native?.cancelCallNotifica
 /** iPhone: a glofly:// link from a notification tapped while the app was starting (once). */
 export const takeLaunchLink = (): string | null => native?.takeLaunchLink?.() ?? null
 
-export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp'
+export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp' | 'voipToken' | 'callAnswer' | 'callEnd' | 'callDeclined' | 'callMute'
 export function onNativeEvent(event: NativeEvent, fn: (body: Record<string, string>) => void): () => void {
   if (!native) return () => {}
   const sub = native.addListener(event, fn)
@@ -152,6 +160,13 @@ export const stopOngoingCall = () => native?.stopOngoingCall()
 export const playCallTone = (name: string, repeating: boolean, volume: number): boolean =>
   native?.playCallTone ? native.playCallTone(name, repeating, volume) : false
 export const stopCallTone = () => native?.stopCallTone?.()
+// ---- Lock-screen calls (iPhone CallKit; no-ops elsewhere) ----
+
+export const voipToken = (): string | null => native?.voipToken?.() ?? null
+export const takeCallKitAnswer = (): { callId: string; video: string } | null => native?.takeCallKitAnswer?.() ?? null
+export const endCallKitCall = (callId: string) => native?.endCallKitCall?.(callId)
+export const callKitAnsweredInApp = (callId: string) => native?.callKitAnsweredInApp?.(callId)
+
 /** Call diagnostics: iOS's audio session (category, mode, route…). Empty where there's none / older builds. */
 export const audioSessionInfo = (): Record<string, string> => {
   try {

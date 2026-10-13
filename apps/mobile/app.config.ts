@@ -72,8 +72,8 @@ const config: ExpoConfig = {
       NSPhotoLibraryUsageDescription: 'Glofly lets you pick photos to send and for your profile.',
       NSPhotoLibraryAddUsageDescription: 'Glofly saves photos from chats when you ask it to.',
       // audio: a call keeps going with the screen locked. remote-notification: silent pushes that
-      // clear notifications read elsewhere. (voip comes with CallKit in round two.)
-      UIBackgroundModes: ['audio', 'remote-notification'],
+      // clear notifications read elsewhere. voip: calls ring on the lock screen (CallKit + PushKit).
+      UIBackgroundModes: ['audio', 'remote-notification', 'voip'],
       // Glofly hands Apple's device token to Firebase itself (modules/glofly-native/ios).
       FirebaseAppDelegateProxyEnabled: false,
       ITSAppUsesNonExemptEncryption: false,
