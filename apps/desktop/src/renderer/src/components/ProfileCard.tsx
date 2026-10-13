@@ -370,12 +370,22 @@ function NicknameRow({
       )}
       <div className="profile-nickname-buttons">
         {nickname && (
-          <button type="button" className="small-button small-button--quiet" disabled={busy} onClick={() => void save(null)}>
+          <button
+            type="button"
+            className="small-button small-button--quiet"
+            disabled={busy}
+            onClick={() => void save(null)}
+          >
             Remove nickname
           </button>
         )}
         <span style={{ flex: 1 }} />
-        <button type="button" className="small-button small-button--quiet" disabled={busy} onClick={() => setEditing(false)}>
+        <button
+          type="button"
+          className="small-button small-button--quiet"
+          disabled={busy}
+          onClick={() => setEditing(false)}
+        >
           Cancel
         </button>
         <button type="submit" className="small-button small-button--primary" disabled={busy}>
