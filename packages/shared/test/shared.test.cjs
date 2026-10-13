@@ -76,3 +76,16 @@ test('phone sounds', () => {
   assert.equal(new Set(all.map((x) => x.native)).size, all.length)
   assert.equal(new Set(all.map((x) => x.id)).size, all.length)
 })
+
+test('active on mobile (0.3.0)', () => {
+  const base = { statusText: null, lastSeenAt: null, activity: null }
+  assert.equal(s.onMobile({ ...base, status: 'online', mobile: true }), true)
+  assert.equal(s.onMobile({ ...base, status: 'offline', mobile: true }), false)
+  assert.equal(s.onMobile({ ...base, status: 'online' }), false) // older servers send no flag
+  assert.equal(s.mobileLabel({ ...base, status: 'online', mobile: true }), 'Active on mobile')
+  assert.equal(s.mobileLabel({ ...base, status: 'dnd', mobile: true }), 'Do not disturb · on mobile')
+  assert.equal(s.presenceLine({ ...base, status: 'online', mobile: true }), 'Active on mobile')
+  assert.equal(s.presenceLine({ ...base, status: 'online', mobile: true, statusText: 'Brb' }), 'Brb')
+  assert.equal(s.presenceHeader({ ...base, status: 'online', mobile: true, statusText: 'Brb' }), 'Active on mobile · Brb')
+  assert.equal(s.presenceHeader({ ...base, status: 'online' }), 'Online')
+})

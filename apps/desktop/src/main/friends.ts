@@ -35,3 +35,12 @@ export const blockUser = (id: string): Promise<ApiResult<null>> =>
   empty(request('POST', `/blocks/${id}`))
 export const unblockUser = (id: string): Promise<ApiResult<null>> =>
   empty(request('DELETE', `/blocks/${id}`))
+
+/** "Notify me when they come online" (0.3.0 servers). */
+export async function setOnlineAlert(id: string, on: boolean): Promise<ApiResult<{ on: boolean }>> {
+  return request<{ on: boolean }>('PUT', `/friends/${id}/online-alert`, { on })
+}
+
+/** "Invite your friends": emails them a link to join Glofly (0.3.0 servers). */
+export const inviteByEmail = (email: string): Promise<ApiResult<null>> =>
+  empty(request('POST', '/friends/invite', { email }))

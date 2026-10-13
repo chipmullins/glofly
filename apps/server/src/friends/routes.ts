@@ -11,6 +11,9 @@ import { announcePresence, presenceOf } from "../presence";
 import { blockedEitherWay, pair, pairIs } from "./rules";
 import { STATUS_TEXT_MAX } from "@glofly/shared";
 import { inBackground, notifyFriendRequest } from "../push/notify";
+import { alertTargetsOf, clearOnlineAlerts, setOnlineAlert } from "./online-alerts";
+import { FRIEND_INVITES_PER_DAY, sendFriendInvite } from "./invites";
+import { emailSchema } from "../auth/validation";
 
 // Everything here needs a signed-in user.
 export const usersRouter = Router();
@@ -108,6 +111,7 @@ const settingsSchema = z
     showLastSeen: z.boolean(),
     showTyping: z.boolean(),
     friendRequests: z.enum(["everyone", "nobody"]),
+    onlineAlerts: z.boolean(),
   })
   .partial()
   .strict();
@@ -119,6 +123,7 @@ async function mySettings(userId: string) {
       showLastSeen: users.showLastSeen,
       showTyping: users.showTyping,
       friendRequests: users.friendRequests,
+      onlineAlerts: users.onlineAlerts,
     })
     .from(users)
     .where(eq(users.id, userId));
@@ -264,12 +269,14 @@ friendsRouter.get("/", async (_req, res) => {
   });
   const friendRows = rows.filter((r) => r.status === "accepted");
   const presence = await presenceOf(friendRows.map((r) => r.id));
+  const alerts = new Set(await alertTargetsOf(myId));
   const offline = { status: "offline", statusText: null, lastSeenAt: null, activity: null };
   res.json({
     friends: friendRows.map((r) => ({
       ...strip(r),
       since: r.acceptedAt ?? r.createdAt,
       presence: presence.get(r.id) ?? offline,
+      onlineAlert: alerts.has(r.id),
     })),
     incoming: rows
       .filter((r) => r.status === "pending" && r.requesterId !== myId)
@@ -401,8 +408,56 @@ friendsRouter.delete("/:userId", async (req, res) => {
       .where(and(pairIs(me(res).id, them.data), eq(friendships.status, "accepted")));
     friendsChanged(me(res).id, them.data);
     await endCallsBetween(me(res).id, them.data); // only friends can call each other
+    await clearOnlineAlerts(me(res).id, them.data);
   }
   res.status(204).end();
+});
+
+// POST /friends/invite  { email } — "Invite your friends" (0.3.0): emails them a link to join.
+// Always says "Invite sent" for an address that already has an account (see friends/invites.ts).
+const inviteLimiter = perUser(24 * 60 * 60 * 1000, FRIEND_INVITES_PER_DAY * 2, "You've sent a lot of invites today. Try again tomorrow.");
+friendsRouter.post("/invite", inviteLimiter, async (req, res) => {
+  const parsed = z.object({ email: emailSchema }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: parsed.error.issues[0]?.message ?? "Enter a valid email address." });
+    return;
+  }
+  const result = await sendFriendInvite(me(res), parsed.data.email);
+  if (result.ok) {
+    res.json({ sent: true });
+    return;
+  }
+  const errors = {
+    own_email: [400, "That's your own email address."],
+    too_many: [429, `You can send up to ${FRIEND_INVITES_PER_DAY} invites a day. Try again tomorrow.`],
+    already_invited: [409, "You already invited them. The link in that email still works."],
+    send_failed: [502, "Couldn't send the email right now. Try again in a few minutes."],
+  } as const;
+  const [status, message] = errors[result.reason];
+  res.status(status).json({ error: result.reason, message });
+});
+
+// PUT /friends/:userId/online-alert  { on } — "Notify me when they come online" (0.3.0).
+friendsRouter.put("/:userId/online-alert", searchLimiter, async (req, res) => {
+  const them = userIdParam.safeParse(req.params.userId);
+  const body = z.object({ on: z.boolean() }).safeParse(req.body);
+  const myId = me(res).id;
+  if (!them.success || !body.success || them.data === myId) {
+    res.status(400).json({ error: "invalid" });
+    return;
+  }
+  const [friends] = await db
+    .select({ low: friendships.userLow })
+    .from(friendships)
+    .where(and(pairIs(myId, them.data), eq(friendships.status, "accepted")))
+    .limit(1);
+  if (body.data.on && !friends) {
+    res.status(403).json({ error: "not_friends", message: "You can only get alerts for your friends." });
+    return;
+  }
+  await setOnlineAlert(myId, them.data, body.data.on);
+  emitToUser(myId, "friends:changed", {}); // your other devices show the bell too
+  res.json({ on: body.data.on });
 });
 
 // POST /blocks/:userId — block someone. Also removes any friendship or request between you.
@@ -430,6 +485,7 @@ export async function blockPerson(myId: string, themId: string): Promise<void> {
   });
   friendsChanged(myId, themId);
   await endCallsBetween(myId, themId);
+  await clearOnlineAlerts(myId, themId);
 }
 
 // DELETE /blocks/:userId — unblock.

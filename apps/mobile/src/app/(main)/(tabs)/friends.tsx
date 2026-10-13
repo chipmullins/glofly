@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Pressable, SectionList, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { presenceLine, type FriendEntry } from '@glofly/shared'
+import { onMobile, presenceLine, type FriendEntry } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { useStore } from '@/state/store'
 import { refreshFriends } from '@/state/sync'
@@ -159,7 +159,7 @@ export default function Friends() {
               android_ripple={{ color: c.line }}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 16 }}
             >
-              <Avatar user={f} size={48} status={item.kind === 'friend' ? (p?.status ?? 'offline') : null} />
+              <Avatar user={f} size={48} status={item.kind === 'friend' ? (p?.status ?? 'offline') : null} mobile={onMobile(p ?? undefined)} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text size={16} weight="bold" numberOfLines={1}>
                   {f.displayName}

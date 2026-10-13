@@ -6,7 +6,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable'
 import { router } from 'expo-router'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { chatTitle, dotFor, findChats, type ChatResult, type ConversationSummary } from '@glofly/shared'
+import { chatTitle, dotFor, findChats, onMobile, type ChatResult, type ConversationSummary } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { patchConversation, useStore } from '@/state/store'
 import { useSession } from '@/state/session'
@@ -206,7 +206,7 @@ function ResultRow({ result, onOpen }: { result: ChatResult; onOpen: () => void 
   }
   return (
     <Pressable accessibilityRole="button" onPress={open} android_ripple={{ color: c.line }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9, paddingHorizontal: 16 }}>
-      {result.kind === 'group' ? <ChatAvatar chat={result.conversation} size={48} /> : <Avatar user={result.user} size={48} status={presence?.status ?? null} />}
+      {result.kind === 'group' ? <ChatAvatar chat={result.conversation} size={48} /> : <Avatar user={result.user} size={48} status={presence?.status ?? null} mobile={onMobile(presence ?? undefined)} />}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text size={16} weight="bold" numberOfLines={1}>
           {result.kind === 'group' ? chatTitle(result.conversation) : result.user.displayName}

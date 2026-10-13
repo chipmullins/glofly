@@ -47,7 +47,10 @@ const glofly: GloflyApi = {
     removeRequest: (userId: string) => ipcRenderer.invoke('friends:remove-request', userId),
     remove: (userId: string) => ipcRenderer.invoke('friends:remove', userId),
     block: (userId: string) => ipcRenderer.invoke('friends:block', userId),
-    unblock: (userId: string) => ipcRenderer.invoke('friends:unblock', userId)
+    unblock: (userId: string) => ipcRenderer.invoke('friends:unblock', userId),
+    setOnlineAlert: (userId: string, on: boolean) =>
+      ipcRenderer.invoke('friends:set-online-alert', userId, on),
+    invite: (email: string) => ipcRenderer.invoke('friends:invite', email)
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

@@ -37,6 +37,14 @@ class GloflyMessagingService : FirebaseMessagingService() {
       }
       "clear" -> d["conversationId"]?.let { Notifier.cancelChat(context, it) }
       "friend_request" -> Notifier.showFriendRequest(context, d["userId"].orEmpty(), d["senderName"] ?: "Someone", d["senderAvatar"]?.ifEmpty { null })
+      "friend_online", "friend_joined" -> Notifier.showFriendAlert(
+        context,
+        d["userId"].orEmpty(),
+        d["senderName"] ?: "Someone",
+        d["senderAvatar"]?.ifEmpty { null },
+        d["text"] ?: if (d["type"] == "friend_online") "is online" else "joined Glofly",
+        online = d["type"] == "friend_online",
+      )
       "call_ring" -> {
         val callId = d["callId"] ?: return
         val until = d["ringingUntil"]?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: (System.currentTimeMillis() + 23_000)

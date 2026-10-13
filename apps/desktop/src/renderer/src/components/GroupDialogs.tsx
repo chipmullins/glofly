@@ -7,7 +7,7 @@ import type {
   PublicUser
 } from '../../../preload/api-types'
 import { chatTitle, GROUP_MAX, GROUP_NAME_MAX, memberCountLabel } from '../lib/groups'
-import { presenceLine } from '../lib/presence'
+import { onMobile, presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
 import GroupAvatar from './GroupAvatar'
 import PhotoCropper from './PhotoCropper'
@@ -232,6 +232,7 @@ export function GroupPeopleDialog({
                     name={f.displayName}
                     avatarVersion={f.avatarVersion}
                     status={p?.status ?? 'offline'}
+                    mobile={onMobile(p ?? undefined)}
                     ring={on ? 'var(--glo-accent-soft)' : 'var(--glo-surface)'}
                   />
                   <span className="person-text">

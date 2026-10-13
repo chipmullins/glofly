@@ -5,6 +5,8 @@ import { phoneMessageSound, phoneRingtone } from '@glofly/shared'
 import { usePhonePrefs, setPhonePref } from '@/state/prefs'
 import { notificationStatus, openNotificationSettings, fullScreenCallsAllowed, openFullScreenCallSettings, requestNotifications, type PermissionState } from '@/push/permissions'
 import { refreshPush } from '@/push'
+import * as api from '@/api/glofly'
+import { inform } from '@/ui/dialogs'
 import { Notice, SectionLabel, Text } from '@/ui/kit'
 import { Screen } from '@/ui/Screen'
 import { SettingsRow } from '@/ui/SettingsRow'
@@ -18,6 +20,19 @@ export default function NotificationSettings() {
   const p = usePhonePrefs()
   const [perm, setPerm] = useState<PermissionState>('unknown')
   const [fullScreen, setFullScreen] = useState<boolean | null>(null)
+  // "Friends coming online" lives on the server (every device), 0.3.0 servers only.
+  const [onlineAlerts, setOnlineAlerts] = useState<boolean | undefined>(undefined)
+  useEffect(() => {
+    void api.getPrivacy().then((r) => r.ok && setOnlineAlerts(r.data.onlineAlerts))
+  }, [])
+  async function changeOnlineAlerts(on: boolean) {
+    setOnlineAlerts(on)
+    const r = await api.setPrivacy({ onlineAlerts: on })
+    if (!r.ok) {
+      setOnlineAlerts(!on)
+      void inform("Couldn't change that", r.message)
+    }
+  }
 
   useEffect(() => {
     const check = () => {
@@ -53,6 +68,16 @@ export default function NotificationSettings() {
       <SettingsRow label="Notifications on this phone" detail="Messages, friend requests and calls" toggle={{ value: p.notifications, onChange: (v) => void setPhonePref('notifications', v) }} />
       <SettingsRow label="Show message preview" detail='Off: "New message" instead of the text' toggle={{ value: p.preview, onChange: (v) => void setPhonePref('preview', v) }} disabled={!p.notifications} />
       {perm === 'denied' ? <SettingsRow label={`Open ${OS} notification settings`} onPress={() => void openNotificationSettings()} /> : null}
+      {onlineAlerts !== undefined ? (
+        <>
+          <SectionLabel>Friends</SectionLabel>
+          <SettingsRow
+            label="Friends coming online"
+            detail="Pick who with the bell on their profile (everyone's off until you do). On every device."
+            toggle={{ value: onlineAlerts, onChange: (v) => void changeOnlineAlerts(v) }}
+          />
+        </>
+      ) : null}
       <SectionLabel>Sounds</SectionLabel>
       <SettingsRow label="Sounds in Glofly" detail="Message sound while the app is open" toggle={{ value: p.sounds, onChange: (v) => void setPhonePref('sounds', v) }} />
       <SettingsRow label="Vibrate" toggle={{ value: p.vibrate, onChange: (v) => void setPhonePref('vibrate', v) }} />

@@ -5,10 +5,16 @@ import { confirmEmail, resetPassword } from "../account/email";
 import { findToken, looksLikeToken } from "../email/tokens";
 import { birthdaySchema } from "../auth/validation";
 import { acceptInvite, findInvite, inviterName, type Invite } from "../admin/invites";
+import { displayNameSchema, usernameSchema } from "../auth/validation";
+import { getSignupMode } from "../admin/signups";
+import { acceptFriendInvite, findFriendInvite, FRIEND_INVITE_DAYS, type FriendInvite } from "../friends/invites";
+import { DISPLAY_NAME_MAX, USERNAME_MAX } from "@glofly/shared";
 
-// The two pages people open from Glofly's emails:
+// The pages people open from Glofly's emails:
 //   /reset?t=…    choose a new password (Forgot password)
 //   /confirm?t=…  confirm an email address (after sign-up, or a new address)
+//   /welcome?t=…  finish an account made in Glofly Control
+//   /join?t=…     make an account from a friend's invite (0.3.0, "Invite your friends")
 //
 // They live at https://glofly.app/reset and /confirm: Caddy hands just those two paths
 // from the website to this server. Plain HTML forms, no scripts at all. Opening a link
@@ -65,8 +71,8 @@ function page(res: Response, { title, body }: { title: string; body: string }): 
   p { margin:0 0 14px; }
   .muted { color:var(--muted); font-size:14px; }
   label { display:block; margin:16px 0 6px; font-weight:600; font-size:14px; }
-  input[type=password] { width:100%; padding:12px 14px; border:1.5px solid var(--line); border-radius:12px; font:inherit; color:var(--ink); background:#fff; }
-  input[type=password]:focus { outline:none; border-color:var(--red); box-shadow:0 0 0 3px rgba(224,25,58,.18); }
+  input[type=password], input[type=text] { width:100%; padding:12px 14px; border:1.5px solid var(--line); border-radius:12px; font:inherit; color:var(--ink); background:#fff; }
+  input[type=password]:focus, input[type=text]:focus { outline:none; border-color:var(--red); box-shadow:0 0 0 3px rgba(224,25,58,.18); }
   button { margin-top:22px; width:100%; padding:14px 18px; border:0; border-radius:12px; background:var(--red); color:#fff; font-family:inherit; font-size:16px; font-weight:600; line-height:1; cursor:pointer; }
   button:hover { background:var(--red-deep); }
   button:focus-visible { outline:3px solid rgba(224,25,58,.45); outline-offset:3px; }
@@ -336,5 +342,143 @@ webRouter.post("/welcome", submitLimiter, formBody, async (req, res) => {
 <p>Your Glofly account is ready. Download Glofly and log in as <span class="address">@${esc(result.username)}</span> with the password you just chose.</p>
 <a class="download" href="/download">Download Glofly for Windows</a>
 <p class="muted" style="margin:14px 0 0">Already have Glofly? Just open it and log in.</p>`,
+  });
+});
+
+// ───────────── Join from a friend's invite (0.3.0) ─────────────
+
+const joinExpired = (res: Response): void =>
+  page(res.status(410), {
+    title: "This invite has expired",
+    body: `<h1>This invite doesn't work any more</h1>
+<p>It may have expired (invites work for ${FRIEND_INVITE_DAYS} days), or an account was already made with it.</p>
+<p class="muted">Already made your account? Just log in to Glofly. Otherwise, ask your friend to invite you again.</p>`,
+  });
+
+const signupsClosed = (res: Response): void =>
+  page(res.status(403), {
+    title: "Sign-ups are closed",
+    body: `<h1>Glofly isn't taking new sign-ups right now</h1>
+<p>Sorry! Your invite will keep working until it expires, so try again a little later.</p>`,
+  });
+
+type JoinValues = WelcomeValues & { displayName?: string; username?: string };
+type InviteWithInviter = FriendInvite & { inviterName: string; inviterUsername: string };
+
+function joinForm(res: Response, token: string, invite: InviteWithInviter, error?: string, values: JoinValues = {}): void {
+  const thisYear = new Date().getUTCFullYear();
+  const option = (value: string, label: string, selected?: string) =>
+    `<option value="${esc(value)}"${selected === value ? " selected" : ""}>${esc(label)}</option>`;
+  const months = MONTHS.map((m, i) => option(String(i + 1), m, values.month)).join("");
+  const days = Array.from({ length: 31 }, (_, i) => option(String(i + 1), String(i + 1), values.day)).join("");
+  const years = Array.from({ length: thisYear - 1900 + 1 }, (_, i) => String(thisYear - i))
+    .map((y) => option(y, y, values.year))
+    .join("");
+  page(res, {
+    title: `${invite.inviterName} invited you to Glofly`,
+    body: `<h1>Join Glofly</h1>
+<div class="person">
+  <span class="initials" aria-hidden="true">${esc(initialsOf(invite.inviterName))}</span>
+  <span class="person-text"><strong>${esc(invite.inviterName)} <span>@${esc(invite.inviterUsername)}</span></strong><span>invited you. You'll be friends as soon as you join.</span></span>
+</div>
+<form method="post" action="/join">
+  <input type="hidden" name="t" value="${esc(token)}">
+  <p class="muted" style="margin:14px 0 0">Your email: <span class="address">${esc(invite.email)}</span></p>
+  <label for="displayName">Display name</label>
+  <input id="displayName" name="displayName" type="text" autocomplete="name" maxlength="${DISPLAY_NAME_MAX}" value="${esc(values.displayName ?? "")}" aria-describedby="name-hint" required autofocus>
+  <p class="hint" id="name-hint">What friends see. You can change it any time.</p>
+  <label for="username">Username</label>
+  <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="${USERNAME_MAX}" value="${esc(values.username ?? "")}" aria-describedby="username-hint" required>
+  <p class="hint" id="username-hint">How people find you, like @${esc(invite.inviterUsername)}. Letters, numbers, dots and underscores.</p>
+  <label for="password">Choose a password</label>
+  <input id="password" name="password" type="password" autocomplete="new-password" maxlength="${PASSWORD_MAX}" aria-describedby="password-hint" required>
+  <p class="hint" id="password-hint">At least 8 characters, with a letter and a number.</p>
+  <label for="confirm">Type it again</label>
+  <input id="confirm" name="confirm" type="password" autocomplete="new-password" maxlength="${PASSWORD_MAX}" required>
+  <fieldset>
+    <legend>Your birthday</legend>
+    <div class="dob">
+      <select name="month" aria-label="Month" required><option value="">Month</option>${months}</select>
+      <select name="day" aria-label="Day" required><option value="">Day</option>${days}</select>
+      <select name="year" aria-label="Year" required><option value="">Year</option>${years}</select>
+    </div>
+    <p class="hint">Only used to check you're 13 or older. Never shown to anyone.</p>
+  </fieldset>
+  <label class="check"><input type="checkbox" name="terms" value="yes"${values.terms ? " checked" : ""} required>
+    <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a></span></label>
+  ${error ? `<p class="error" role="alert">${esc(error)}</p>` : ""}
+  <button type="submit">Join Glofly</button>
+</form>
+<p class="muted" style="margin:16px 0 0">Already have Glofly? Log in and add @${esc(invite.inviterUsername)} as a friend instead.</p>`,
+  });
+}
+
+webRouter.get("/join", openLimiter, async (req, res) => {
+  const token = tokenFrom(req.query.t);
+  const invite = token ? await findFriendInvite(token) : null;
+  if (!token || !invite) return joinExpired(res);
+  if ((await getSignupMode()) === "closed") return signupsClosed(res);
+  joinForm(res, token, invite);
+});
+
+webRouter.post("/join", submitLimiter, formBody, async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const token = tokenFrom(body.t);
+  const invite = token ? await findFriendInvite(token) : null;
+  if (!token || !invite) return joinExpired(res);
+  if ((await getSignupMode()) === "closed") return signupsClosed(res);
+
+  const text = (key: string): string => (typeof body[key] === "string" ? (body[key] as string) : "");
+  const values: JoinValues = {
+    displayName: text("displayName"),
+    username: text("username"),
+    month: text("month"),
+    day: text("day"),
+    year: text("year"),
+    terms: text("terms") === "yes",
+  };
+  const again = (error: string) => joinForm(res.status(400), token, invite, error, values);
+
+  const name = displayNameSchema.safeParse(values.displayName);
+  if (!name.success) return again(name.error.issues[0].message);
+  const username = usernameSchema.safeParse(values.username);
+  if (!username.success) return again(username.error.issues[0].message);
+  const password = text("password");
+  const rules = passwordSchema.safeParse(password);
+  if (!rules.success) return again(rules.error.issues[0].message);
+  if (password !== text("confirm")) return again("Those two passwords don't match.");
+  const [m, d, y] = [values.month, values.day, values.year].map((v) => Number(v));
+  if (!m || !d || !y) return again("Enter your birthday.");
+  const birthday = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const age = birthdaySchema.safeParse(birthday);
+  if (!age.success) return again(age.error.issues[0].message);
+  if (!values.terms) return again("Please agree to the Terms of Service and Privacy Policy.");
+
+  const result = await acceptFriendInvite(invite, {
+    displayName: name.data,
+    username: username.data,
+    password,
+    birthday: age.data,
+  });
+  if (!result.ok) {
+    if (result.reason === "taken") {
+      if (result.fields.email) {
+        return page(res.status(409), {
+          title: "You already have an account",
+          body: `<h1>This email already has a Glofly account</h1>
+<p>Just log in to Glofly and add <span class="address">@${esc(invite.inviterUsername)}</span> as a friend.</p>`,
+        });
+      }
+      return again(result.fields.username ?? "That username is taken.");
+    }
+    return joinExpired(res);
+  }
+  page(res, {
+    title: "Welcome to Glofly",
+    body: `<div class="done" aria-hidden="true">✓</div>
+<h1>Welcome to Glofly!</h1>
+<p>Your account is ready, and you and ${esc(invite.inviterName)} are friends. Download Glofly and log in as <span class="address">@${esc(result.username)}</span> with the password you just chose.</p>
+<a class="download" href="/download">Download Glofly for Windows</a>
+<p class="muted" style="margin:14px 0 0">On a Mac? <a href="/mac">Get Glofly for Mac</a>. Already have Glofly? Just open it and log in.</p>`,
   });
 });

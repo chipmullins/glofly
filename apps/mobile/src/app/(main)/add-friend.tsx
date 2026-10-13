@@ -5,11 +5,12 @@ import * as api from '@/api/glofly'
 import { refreshFriends } from '@/state/sync'
 import { openDmWith } from '@/lib/chatActions'
 import { Avatar } from '@/ui/Avatar'
-import { Field, Notice, Spinner, Text } from '@/ui/kit'
+import { Button, Field, Notice, Spinner, Text } from '@/ui/kit'
 import { Screen } from '@/ui/Screen'
 import { useTheme } from '@/ui/theme'
 
-// Add friend: search by username or name, then send a request.
+// Add friend: search by username or name, then send a request. Below: "Invite your friends"
+// (0.3.0) emails someone a link to join Glofly; joining from it makes you friends right away.
 
 export default function AddFriend() {
   const { c } = useTheme()
@@ -101,6 +102,62 @@ export default function AddFriend() {
           )}
         </View>
       ))}
+      <InviteFriends />
     </Screen>
+  )
+}
+
+/**
+ * "Invite your friends": Glofly emails them an invite from you. An address that already has an
+ * account gets a different email; this always just says "Invite sent" (nobody learns who's on Glofly).
+ */
+function InviteFriends() {
+  const { c } = useTheme()
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<{ tone: 'good' | 'danger'; text: string } | null>(null)
+
+  async function send() {
+    const address = email.trim()
+    if (!address || busy) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return setNote({ tone: 'danger', text: 'Enter a valid email address.' })
+    setBusy(true)
+    setNote(null)
+    const r = await api.inviteFriend(address)
+    setBusy(false)
+    if (!r.ok) return setNote({ tone: 'danger', text: r.message })
+    setNote({ tone: 'good', text: `Invite sent to ${address}.` })
+    setEmail('')
+  }
+
+  return (
+    <View style={{ marginTop: 10, padding: 16, gap: 12, borderRadius: 20, backgroundColor: c.surface }}>
+      <View style={{ gap: 2 }}>
+        <Text display size={18}>
+          Invite your friends
+        </Text>
+        <Text size={14} tone="muted" style={{ lineHeight: 19 }}>
+          Not on Glofly yet? We'll email them an invite from you. When they join, you're friends.
+        </Text>
+      </View>
+      <Field
+        label="Their email"
+        value={email}
+        onChangeText={(t) => {
+          setEmail(t)
+          setNote(null)
+        }}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        autoComplete="email"
+        maxLength={320}
+        placeholder="friend@example.com"
+        returnKeyType="send"
+        onSubmitEditing={() => void send()}
+      />
+      {note ? <Notice tone={note.tone}>{note.text}</Notice> : null}
+      <Button label="Send invite" icon="send" busy={busy} disabled={!email.trim()} onPress={() => void send()} compact />
+    </View>
   )
 }

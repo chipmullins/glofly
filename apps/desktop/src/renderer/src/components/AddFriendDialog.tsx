@@ -255,8 +255,82 @@ export default function AddFriendDialog({
           ))}
         </ul>
 
+        <InviteFriends onSessionExpired={onSessionExpired} />
+
         <p className="dialog-foot">Blocked users never appear in search.</p>
       </div>
     </div>
+  )
+}
+
+/**
+ * "Invite your friends" (0.3.0): Glofly emails them a link to join, saying who invited them.
+ * Joining from it makes you friends straight away. An address that already has an account gets
+ * a different email, and this always just says "Invite sent" (nobody learns who's on Glofly).
+ */
+function InviteFriends({ onSessionExpired }: { onSessionExpired: () => void }): React.JSX.Element {
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function send(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    const address = email.trim()
+    if (!address || busy) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      setNote({ ok: false, text: 'Enter a valid email address.' })
+      return
+    }
+    setBusy(true)
+    setNote(null)
+    const result = await window.glofly.friends.invite(address)
+    setBusy(false)
+    if (result.ok) {
+      setNote({ ok: true, text: `Invite sent to ${address}.` })
+      setEmail('')
+    } else if (result.error === 'unauthorized') onSessionExpired()
+    else setNote({ ok: false, text: result.message })
+  }
+
+  return (
+    <form className="invite-friends" onSubmit={send}>
+      <div className="invite-friends-text">
+        <h2>Invite your friends</h2>
+        <p>
+          Not on Glofly yet? We&apos;ll email them an invite from you. When they join, you&apos;re
+          friends.
+        </p>
+      </div>
+      <div className="invite-friends-row">
+        <input
+          type="email"
+          aria-label="Friend's email address"
+          placeholder="friend@example.com"
+          maxLength={320}
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value)
+            setNote(null)
+          }}
+        />
+        <button
+          type="submit"
+          className="small-button small-button--primary"
+          disabled={busy || !email.trim()}
+        >
+          {busy ? 'Sending…' : 'Send invite'}
+        </button>
+      </div>
+      {note && (
+        <p
+          className={
+            note.ok ? 'invite-friends-note invite-friends-note--ok' : 'invite-friends-note'
+          }
+          role={note.ok ? 'status' : 'alert'}
+        >
+          {note.text}
+        </p>
+      )}
+    </form>
   )
 }

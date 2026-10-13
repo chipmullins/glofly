@@ -154,6 +154,15 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
     const call = cleanCall(p?.call)
     if (call) forward({ type: 'call:updated', call, caller: cleanUser(p?.caller) })
   })
+  // 0.3.0: a friend you asked about came online / someone joined from your invite.
+  socket.on('friend:online', (p) => {
+    const user = cleanUser(p?.user)
+    if (user) forward({ type: 'friend:online', user })
+  })
+  socket.on('friend:joined', (p) => {
+    const user = cleanUser(p?.user)
+    if (user) forward({ type: 'friend:joined', user })
+  })
   socket.on('presence', (p) => {
     const statuses = ['online', 'away', 'dnd', 'offline']
     if (typeof p?.userId !== 'string' || !statuses.includes(p?.status)) return
@@ -163,7 +172,8 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
       status: p.status,
       statusText: typeof p.statusText === 'string' ? p.statusText : null,
       lastSeenAt: typeof p.lastSeenAt === 'string' ? p.lastSeenAt : null,
-      activity: cleanActivity(p.activity)
+      activity: cleanActivity(p.activity),
+      mobile: p.mobile === true
     })
   })
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { FlatList, Pressable, TextInput, View } from 'react-native'
-import type { FriendEntry } from '@glofly/shared'
+import { onMobile, type FriendEntry } from '@glofly/shared'
 import { useStore } from '@/state/store'
 import { Avatar } from './Avatar'
 import { Icon } from './icons'
@@ -62,7 +62,7 @@ export function FriendPicker({
             android_ripple={{ color: c.line }}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 16 }}
           >
-            <Avatar user={f} size={44} status={(presence[f.id] ?? f.presence)?.status ?? null} />
+            <Avatar user={f} size={44} status={(presence[f.id] ?? f.presence)?.status ?? null} mobile={onMobile(presence[f.id] ?? f.presence)} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text size={16} weight="bold" numberOfLines={1}>
                 {f.displayName}

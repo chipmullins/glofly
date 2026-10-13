@@ -3,6 +3,8 @@ import { STATUS_LABEL } from '../lib/presence'
 
 type StatusDotProps = {
   status: PresenceStatus
+  /** "Active on mobile": a small phone in the status color instead of the dot. */
+  mobile?: boolean
   /** Color of the ring around the dot: the background behind the avatar. */
   ring?: string
   size?: number
@@ -15,8 +17,25 @@ type StatusDotProps = {
 export default function StatusDot({
   status,
   ring = 'var(--glo-surface)',
-  size = 12
+  size = 12,
+  mobile = false
 }: StatusDotProps): React.JSX.Element {
+  if (mobile && status !== 'offline') {
+    const label = status === 'online' ? 'Active on mobile' : `${STATUS_LABEL[status]} · on mobile`
+    return (
+      <span
+        className={`status-phone status-phone--${status}`}
+        style={{
+          width: Math.round(size * 0.78),
+          height: Math.round(size * 1.18),
+          ['--ring' as string]: ring
+        }}
+        role="img"
+        aria-label={label}
+        title={label}
+      />
+    )
+  }
   return (
     <span
       className={`status-dot status-dot--${status}`}

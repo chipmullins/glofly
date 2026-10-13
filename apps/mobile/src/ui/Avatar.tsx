@@ -23,7 +23,7 @@ export const groupPhotoSource = (chatId: string, version: string) => ({
   cacheKey: `group-${chatId}-${version}`,
 })
 
-export function Avatar({ user, size = 40, status, ring }: { user: Person; size?: number; status?: PresenceStatus | null; ring?: string }) {
+export function Avatar({ user, size = 40, status, ring, mobile }: { user: Person; size?: number; status?: PresenceStatus | null; ring?: string; mobile?: boolean }) {
   const { c } = useTheme()
   const [bg, fg] = colorsFor(user.id)
   return (
@@ -40,14 +40,24 @@ export function Avatar({ user, size = 40, status, ring }: { user: Person; size?:
           <Text style={{ color: fg, fontFamily: font.display, fontSize: Math.round(size * 0.36) }}>{initials(user.displayName)}</Text>
         </View>
       )}
-      {status ? <StatusDot status={status} size={Math.max(10, Math.round(size * 0.3))} ring={ring ?? c.bg} style={{ position: 'absolute', right: -1, bottom: -1 }} /> : null}
+      {status ? <StatusDot status={status} mobile={mobile} size={Math.max(10, Math.round(size * 0.3))} ring={ring ?? c.bg} style={{ position: 'absolute', right: -1, bottom: -1 }} /> : null}
     </View>
   )
 }
 
-export function StatusDot({ status, size = 12, ring, style }: { status: PresenceStatus; size?: number; ring?: string; style?: object }) {
+export function StatusDot({ status, size = 12, ring, style, mobile }: { status: PresenceStatus; size?: number; ring?: string; style?: object; mobile?: boolean }) {
   const { c } = useTheme()
   const color = status === 'online' ? c.online : status === 'away' ? c.away : status === 'dnd' ? c.dnd : c.faint
+  if (mobile && status !== 'offline') {
+    // "Active on mobile": a small phone in the status color (0.3.0).
+    const w = Math.round(size * 0.78)
+    const h = Math.round(size * 1.18)
+    return (
+      <View style={[{ width: w, height: h, borderRadius: 3, backgroundColor: color, outlineWidth: 2, outlineColor: ring ?? c.bg }, style, { bottom: -2 }]}>
+        <View style={{ position: 'absolute', left: w * 0.18, right: w * 0.18, top: h * 0.14, bottom: h * 0.26, borderRadius: 1, backgroundColor: ring ?? c.bg }} />
+      </View>
+    )
+  }
   return (
     <View
       style={[
@@ -120,7 +130,7 @@ export function GroupAvatar({ chat, size = 48, ring }: { chat: Extract<Conversat
 }
 
 /** Any chat's avatar: the person (with their status dot) or the group. */
-export function ChatAvatar({ chat, size = 52, status, ring }: { chat: ConversationSummary; size?: number; status?: PresenceStatus | null; ring?: string }) {
+export function ChatAvatar({ chat, size = 52, status, ring, mobile }: { chat: ConversationSummary; size?: number; status?: PresenceStatus | null; ring?: string; mobile?: boolean }) {
   if (chat.kind === 'group') return <GroupAvatar chat={chat} size={size} ring={ring} />
-  return <Avatar user={chat.partner} size={size} status={status} ring={ring} />
+  return <Avatar user={chat.partner} size={size} status={status} ring={ring} mobile={mobile} />
 }

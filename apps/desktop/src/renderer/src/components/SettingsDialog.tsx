@@ -145,6 +145,7 @@ export function Segmented<T extends string>({
 type SoundKey =
   | 'message'
   | 'friendRequest'
+  | 'friendOnline'
   | 'login'
   | 'logout'
   | 'ringtone'
@@ -159,6 +160,12 @@ type SoundKey =
 const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' | 'call' }[] = [
   { key: 'message', label: 'Message sound', kind: 'alert' },
   { key: 'friendRequest', label: 'Friend request sound', kind: 'alert' },
+  {
+    key: 'friendOnline',
+    label: 'Friend online sound',
+    desc: 'Plays when a friend you turned on alerts for comes online.',
+    kind: 'alert'
+  },
   {
     key: 'login',
     label: 'Login sound',
@@ -807,6 +814,22 @@ export default function SettingsDialog({
                         <span className="toggle toggle--loading" aria-hidden="true" />
                       )}
                     </div>
+                    {settings?.onlineAlerts !== undefined && (
+                      <div className="settings-row">
+                        <div className="settings-row-text">
+                          <span className="settings-row-label">Friends coming online</span>
+                          <span className="settings-row-desc">
+                            Tell me when a friend comes online. Pick who with the bell on their
+                            profile; nobody is picked until you do.
+                          </span>
+                        </div>
+                        <Toggle
+                          on={settings.onlineAlerts}
+                          label="Friends coming online"
+                          onChange={(on) => void change('onlineAlerts', on)}
+                        />
+                      </div>
+                    )}
                     <div className="settings-row">
                       <div className="settings-row-text">
                         <span className="settings-row-label">Notification sounds</span>

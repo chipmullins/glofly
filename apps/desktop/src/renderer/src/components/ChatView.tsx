@@ -11,7 +11,7 @@ import type {
 } from '../../../preload/api-types'
 import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
 import GroupAvatar from './GroupAvatar'
-import { presenceHeader } from '../lib/presence'
+import { onMobile, presenceHeader } from '../lib/presence'
 import { clockTime, continuesGroup, dayLabel, isSameDay } from '../lib/time'
 import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
@@ -1037,6 +1037,7 @@ export default function ChatView({
             name={partner.displayName}
             avatarVersion={partner.avatarVersion}
             status={partnerPresence?.status}
+            mobile={onMobile(partnerPresence ?? undefined)}
             ring="var(--glo-bg)"
           />
         ) : (

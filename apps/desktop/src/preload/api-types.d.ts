@@ -160,6 +160,8 @@ export type SoundSettings = {
   callVolume: number
   message: AlertSound
   friendRequest: AlertSound
+  /** A friend you asked about comes online (0.3.0; older saved settings don't have it) */
+  friendOnline?: AlertSound
   login: AlertSound
   /** You log out */
   logout: AlertSound
@@ -240,6 +242,10 @@ export type GloflyApi = {
     remove: (userId: string) => Promise<ApiResult<null>>
     block: (userId: string) => Promise<ApiResult<null>>
     unblock: (userId: string) => Promise<ApiResult<null>>
+    /** "Notify me when they come online" for a friend (0.3.0) */
+    setOnlineAlert: (userId: string, on: boolean) => Promise<ApiResult<{ on: boolean }>>
+    /** "Invite your friends": emails them a link to join Glofly (0.3.0) */
+    invite: (email: string) => Promise<ApiResult<null>>
   }
   settings: {
     get: () => Promise<ApiResult<PrivacySettings>>

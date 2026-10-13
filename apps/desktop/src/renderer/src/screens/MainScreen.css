@@ -1307,3 +1307,31 @@
 .dm-row-wrap--closable:focus-within .dm-badges {
   visibility: hidden;
 }
+
+/* "Active on mobile": a small phone in the status color, ringed like the dot (0.3.0). */
+.status-phone {
+  --ring: var(--glo-surface);
+  position: absolute;
+  right: -1px;
+  bottom: -2px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--ring);
+  background: var(--glo-good);
+}
+.status-phone::before {
+  /* the screen */
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 14%;
+  bottom: 26%;
+  border-radius: 1px;
+  background: var(--ring);
+}
+.status-phone--away {
+  background: var(--glo-warn);
+}
+.status-phone--dnd {
+  background: var(--glo-danger);
+}

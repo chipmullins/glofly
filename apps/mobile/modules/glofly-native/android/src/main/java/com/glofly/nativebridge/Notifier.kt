@@ -29,6 +29,8 @@ import kotlin.math.abs
 object Notifier {
   const val CH_MESSAGES = "glofly_messages"
   const val CH_FRIENDS = "glofly_friends"
+  /** "Maya is online" (0.3.0): its own channel so it can be turned off in Android's settings. */
+  const val CH_ONLINE = "glofly_online"
   const val CH_CALLS = "glofly_calls_ring"
   const val CH_CALLS_SILENT = "glofly_calls_silent"
   const val CH_MISSED = "glofly_missed_calls"
@@ -85,6 +87,12 @@ object Notifier {
     )
     nm.createNotificationChannel(
       NotificationChannel(CH_FRIENDS, "Friend requests", NotificationManager.IMPORTANCE_DEFAULT).apply {
+        setSound(raw(context, "glofly_message"), notifAttrs)
+      },
+    )
+    nm.createNotificationChannel(
+      NotificationChannel(CH_ONLINE, "Friends coming online", NotificationManager.IMPORTANCE_DEFAULT).apply {
+        description = "When a friend you turned on alerts for comes online"
         setSound(raw(context, "glofly_message"), notifAttrs)
       },
     )
@@ -255,6 +263,29 @@ object Notifier {
       .setAutoCancel(true)
       .setContentIntent(openLink(context, "glofly://friends", FRIENDS_ID))
     notify(context, FRIENDS_ID, b)
+  }
+
+  /**
+   * 0.3.0: "Maya is online" (online = true) or "Maya joined Glofly from your invite". One per
+   * person, replaced by the next; tapping opens their profile.
+   */
+  fun showFriendAlert(context: Context, userId: String, name: String, avatar: String?, text: String, online: Boolean) {
+    ensureChannels(context)
+    val c = PushStore.config(context)
+    val bmp = if (c != null && !avatar.isNullOrEmpty()) round(Http.bitmap(c, "/avatars/$userId/$avatar")) else null
+    val id = 4_000_000 + (userId.hashCode() and 0xFFFFF) + (if (online) 0 else 0x100000)
+    val b = NotificationCompat.Builder(context, if (online) CH_ONLINE else CH_FRIENDS)
+      .setSmallIcon(R.drawable.glofly_notification)
+      .setColor(ACCENT)
+      .setLargeIcon(bmp ?: initialsBitmap(userId, name))
+      .setContentTitle(name)
+      .setContentText(text)
+      .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+      .setAutoCancel(true)
+      // "is online" is old news after a while.
+      .apply { if (online) setTimeoutAfter(30 * 60 * 1000L) }
+      .setContentIntent(openLink(context, if (userId.isNotEmpty()) "glofly://profile/$userId" else "glofly://friends", id))
+    notify(context, id, b)
   }
 
   /** Ringing: full screen on the lock screen, a heads-up card otherwise, until it times out. */

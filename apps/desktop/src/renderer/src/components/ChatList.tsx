@@ -10,7 +10,7 @@ import type { ChatResult } from '../lib/chatSearch'
 import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
 import { useTypingByChat } from '../lib/typingWatch'
 import { joinedCount, useCalls } from '../calls/callState'
-import { playing, presenceLine } from '../lib/presence'
+import { onMobile, playing, presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
 import EmojiText from './EmojiText'
 import GroupAvatar from './GroupAvatar'
@@ -195,6 +195,7 @@ function DmRow({
             avatarVersion={c.partner.avatarVersion}
             size={40}
             status={presence?.status}
+            mobile={onMobile(presence ?? undefined)}
             ring={ring}
           />
         ) : (
@@ -519,6 +520,7 @@ export default function ChatList({
                     avatarVersion={r.user.avatarVersion}
                     size={40}
                     status={p?.status}
+                    mobile={onMobile(p ?? undefined)}
                     ring={i === highlighted ? 'var(--glo-hover)' : 'var(--glo-sidebar)'}
                   />
                   <span className="dm-text">

@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "./db";
-import { friendships, users } from "./db/schema";
+import { friendships, sessions, users } from "./db/schema";
 import { redis } from "./redis";
 
 // Who's online, away, busy or offline.
@@ -18,6 +18,11 @@ export type Presence = {
   lastSeenAt: string | null;
   /** What they're playing right now, if they share it (null while offline or invisible). */
   activity: Activity | null;
+  /**
+   * "Active on mobile": they're only on a phone right now, or closed Glofly on their phone a few
+   * minutes ago (0.3.0; older apps ignore it).
+   */
+  mobile: boolean;
 };
 
 const DEVICE_TTL_MS = 90_000;
@@ -30,18 +35,30 @@ const NOT_OFFLINE = "presence:not-offline"; // people currently shown as online/
 const activityKey = (userId: string, deviceId: string) => `presence:activity:${userId}:${deviceId}`;
 const activityDevicesKey = (userId: string) => `presence:activity-devices:${userId}`;
 const ACTIVITY_TTL_S = 90;
+// Which connected devices are phones (their ids are also in devicesKey).
+const phonesKey = (userId: string) => `presence:phones:${userId}`;
+// Phones close their live connection as soon as Glofly leaves the screen (pushes take over), so
+// instead of dropping straight to offline they stay "Active on mobile" for a while. The value is
+// the phone's session, so signing out ends it.
+const mobileGraceKey = (userId: string) => `presence:mobile-grace:${userId}`;
+export const MOBILE_GRACE_MS = 12 * 60_000;
 const ACTIVITY_NAME_MAX = 64;
 
+/** Devices heard from in the last 90 seconds (stale ones are cleared by the sweep). */
 async function liveCount(key: string): Promise<number> {
-  const now = Date.now();
-  await redis.zRemRangeByScore(key, 0, now - DEVICE_TTL_MS);
-  return redis.zCard(key);
+  return redis.zCount(key, Date.now() - DEVICE_TTL_MS, "+inf");
 }
 
-export async function deviceConnected(userId: string, deviceId: string): Promise<void> {
+async function liveDevices(userId: string): Promise<string[]> {
+  return redis.zRangeByScore(devicesKey(userId), Date.now() - DEVICE_TTL_MS, "+inf");
+}
+
+export async function deviceConnected(userId: string, deviceId: string, isPhone = false): Promise<void> {
   const now = Date.now();
   await redis.zAdd(devicesKey(userId), { score: now, value: deviceId });
   await redis.zAdd(activeKey(userId), { score: now, value: deviceId }); // new devices start active
+  if (isPhone) await redis.sAdd(phonesKey(userId), deviceId);
+  await redis.del(mobileGraceKey(userId)); // they're back on a device
 }
 
 /** Called every 30 seconds for each connected device. */
@@ -58,8 +75,14 @@ export async function deviceIdle(userId: string, deviceId: string, idle: boolean
   else await redis.zAdd(activeKey(userId), { score: Date.now(), value: deviceId });
 }
 
-export async function deviceDisconnected(userId: string, deviceId: string): Promise<void> {
+/**
+ * `phoneSessionId`: a phone that left Glofly by itself (not signed out or kicked by the server),
+ * so its person stays "Active on mobile" for MOBILE_GRACE_MS.
+ */
+export async function deviceDisconnected(userId: string, deviceId: string, phoneSessionId?: string): Promise<void> {
   await redis.zRem(devicesKey(userId), deviceId);
+  await redis.sRem(phonesKey(userId), deviceId);
+  if (phoneSessionId) await redis.set(mobileGraceKey(userId), phoneSessionId, { PX: MOBILE_GRACE_MS });
   await redis.del(activityKey(userId, deviceId));
   await redis.sRem(activityDevicesKey(userId), deviceId);
   await redis.zRem(activeKey(userId), deviceId);
@@ -142,8 +165,14 @@ export async function presenceOf(userIds: string[]): Promise<Map<string, Presenc
     .where(inArray(users.id, userIds));
 
   for (const row of rows) {
-    const connected = (await liveCount(devicesKey(row.id))) > 0;
-    const active = connected && (await liveCount(activeKey(row.id))) > 0;
+    const devices = await liveDevices(row.id);
+    const live = devices.length > 0;
+    // A phone that closed Glofly a few minutes ago (and is still signed in) counts as here.
+    const grace = !live && (await inMobileGrace(row.id));
+    const connected = live || grace;
+    const active = grace || (live && (await liveCount(activeKey(row.id))) > 0);
+    const phones = live ? await redis.sMembers(phonesKey(row.id)) : [];
+    const mobile = grace || (live && devices.every((d) => phones.includes(d)));
     let status: Status;
     if (!connected || row.statusPreference === "invisible") status = "offline";
     else if (row.statusPreference === "dnd") status = "dnd";
@@ -162,9 +191,24 @@ export async function presenceOf(userIds: string[]): Promise<Map<string, Presenc
           : null,
       // Invisible looks offline, so it never shows a game either.
       activity: status === "offline" ? null : await activityOf(row.id),
+      mobile: status !== "offline" && mobile,
     });
   }
   return result;
+}
+
+/** Whether a phone closed Glofly within MOBILE_GRACE_MS and is still signed in. */
+async function inMobileGrace(userId: string): Promise<boolean> {
+  const sessionId = await redis.get(mobileGraceKey(userId));
+  if (!sessionId) return false;
+  const [session] = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)))
+    .limit(1);
+  if (session) return true;
+  await redis.del(mobileGraceKey(userId)); // signed out
+  return false;
 }
 
 export async function friendIdsOf(userId: string): Promise<string[]> {
@@ -181,6 +225,13 @@ export async function friendIdsOf(userId: string): Promise<string[]> {
 }
 
 type Emit = (userId: string, event: string, payload: unknown) => void;
+
+/** Told about every status change (friends/online-alerts.ts), set up by realtime.ts. */
+type StatusHook = (userId: string, before: Status | null, after: Status, emit: Emit) => Promise<void>;
+let statusHook: StatusHook | null = null;
+export function onStatusChange(hook: StatusHook): void {
+  statusHook = hook;
+}
 
 /**
  * Works out what friends should see for this person, and tells them if it changed.
@@ -200,6 +251,11 @@ export async function announcePresence(userId: string, emit: Emit, force = false
   const payload = { userId, ...presence };
   emit(userId, "presence", payload); // your other devices
   for (const friendId of await friendIdsOf(userId)) emit(friendId, "presence", payload);
+
+  const before = previous ? (JSON.parse(previous) as Presence).status : null;
+  if (statusHook && before !== presence.status) {
+    await statusHook(userId, before, presence.status, emit).catch((err) => console.error("Status hook failed:", err));
+  }
 }
 
 /**
@@ -208,10 +264,17 @@ export async function announcePresence(userId: string, emit: Emit, force = false
  */
 export async function sweepStalePresence(emit: Emit): Promise<void> {
   for (const userId of await redis.sMembers(NOT_OFFLINE)) {
-    if ((await liveCount(devicesKey(userId))) === 0) {
-      // Their devices vanished without disconnecting; record when we last heard from them.
-      await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
+    const stale = await redis.zRangeByScore(devicesKey(userId), 0, Date.now() - DEVICE_TTL_MS);
+    if (stale.length) {
+      await redis.zRem(devicesKey(userId), stale);
+      await redis.zRem(activeKey(userId), stale);
+      await redis.sRem(phonesKey(userId), stale);
+      if ((await liveCount(devicesKey(userId))) === 0) {
+        // Their devices vanished without disconnecting; record when we last heard from them.
+        await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
+      }
     }
+    // Also ends "Active on mobile" once its few minutes are up.
     await announcePresence(userId, emit);
   }
 }

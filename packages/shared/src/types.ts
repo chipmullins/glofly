@@ -95,6 +95,11 @@ export type Presence = {
   lastSeenAt: string | null
   /** What they're playing ("Guild Wars 2", since an ISO date), if they share it */
   activity?: Activity | null
+  /**
+   * "Active on mobile" (0.3.0 servers): only on a phone right now, or closed Glofly on their phone
+   * a few minutes ago. Missing on older servers = false.
+   */
+  mobile?: boolean
 }
 
 export type Activity = { name: string; since: string }
@@ -104,7 +109,12 @@ export type MyStatusChoice = 'online' | 'away' | 'dnd' | 'invisible'
 export type MyStatus = { status: MyStatusChoice; statusText: string | null }
 
 /** `since` is when you became friends, the request was sent, or you blocked them (ISO date). */
-export type FriendEntry = PublicUser & { since: string; presence?: Presence }
+export type FriendEntry = PublicUser & {
+  since: string
+  presence?: Presence
+  /** "Notify me when they come online" is on for them (0.3.0 servers; missing = off) */
+  onlineAlert?: boolean
+}
 export type FriendLists = {
   friends: FriendEntry[]
   incoming: FriendEntry[]
@@ -292,6 +302,8 @@ export type PrivacySettings = {
   showTyping: boolean
   /** Who can send me friend requests */
   friendRequests: 'everyone' | 'nobody'
+  /** "Friends coming online" master switch (0.3.0 servers; missing = on) */
+  onlineAlerts?: boolean
 }
 
 /** Settings → Account: private details only you see. */
@@ -337,6 +349,10 @@ export type ServerEvent =
   | { type: 'typing'; conversationId: string; userId: string }
   | { type: 'friends:changed' }
   | ({ type: 'presence'; userId: string } & Presence)
+  /** Someone you asked about came online ("Notify me when they come online", 0.3.0) */
+  | { type: 'friend:online'; user: PublicUser }
+  /** Someone joined Glofly from your invite and is now your friend (0.3.0) */
+  | { type: 'friend:joined'; user: PublicUser }
   | { type: 'conversation:read'; conversationId: string; userId: string; readAt: string }
   | { type: 'conversations:changed' }
   | { type: 'profile:changed'; userId: string }

@@ -123,6 +123,11 @@ export function apnsFor(data: PushData, ttlSeconds: number, sounds: DeviceSounds
     aps.alert = { title: data.title || "Glofly", body: data.text || "sent you a friend request" };
     aps["thread-id"] = "friends";
     aps.sound = messageSound;
+  } else if (data.type === "friend_online" || data.type === "friend_joined") {
+    // 0.3.0: "Maya is online" / "Maya joined Glofly from your invite".
+    aps.alert = { title: data.title || "Glofly", body: data.text || "" };
+    aps["thread-id"] = data.type === "friend_online" ? "online" : "friends";
+    aps.sound = messageSound;
   } else if (data.type === "call_ring") {
     const kind = data.video === "1" ? "video" : "voice";
     aps.alert = {

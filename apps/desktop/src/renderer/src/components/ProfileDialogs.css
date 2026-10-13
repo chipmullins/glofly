@@ -360,6 +360,15 @@
 .profile-call:hover {
   background: var(--glo-hover);
 }
+/* The bell: "Notify me when they come online" is on (0.3.0). */
+.profile-call--on {
+  background: var(--glo-accent-soft);
+  color: var(--glo-accent);
+}
+.profile-call--on:hover {
+  background: var(--glo-accent-soft);
+  filter: brightness(0.97);
+}
 .profile-loading {
   margin: 0;
   color: var(--glo-muted);

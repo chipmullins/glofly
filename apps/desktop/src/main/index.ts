@@ -139,7 +139,9 @@ import {
   removeRequest,
   searchUsers,
   sendRequest,
-  unblockUser
+  unblockUser,
+  setOnlineAlert,
+  inviteByEmail
 } from './friends'
 import type {
   VoiceInfo,
@@ -425,11 +427,21 @@ function registerIpcHandlers(): void {
       fromApp(event) && isUserId(userId) ? action(userId) : invalid
     )
   }
+  ipcMain.handle('friends:set-online-alert', (event, userId: unknown, on: unknown) =>
+    fromApp(event) && isUserId(userId) && typeof on === 'boolean'
+      ? setOnlineAlert(userId, on)
+      : invalid
+  )
+  ipcMain.handle('friends:invite', (event, email: unknown) =>
+    fromApp(event) && typeof email === 'string' && email.length > 0 && email.length <= 320
+      ? inviteByEmail(email)
+      : invalid
+  )
 
   // Privacy settings: only known settings with allowed values get through.
   ipcMain.handle('settings:get', (event) => (fromApp(event) ? getSettings() : invalid))
   ipcMain.handle('settings:set', (event, changes: unknown) => {
-    const onOff = ['readReceipts', 'showLastSeen', 'showTyping']
+    const onOff = ['readReceipts', 'showLastSeen', 'showTyping', 'onlineAlerts']
     const allowed = (k: string, v: unknown): boolean =>
       onOff.includes(k)
         ? typeof v === 'boolean'

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { NICKNAME_MAX, STATUS_LABEL, activityLine, playing, type Profile } from '@glofly/shared'
+import { NICKNAME_MAX, STATUS_LABEL, activityLine, mobileLabel, onMobile, playing, type Profile } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
@@ -14,7 +14,7 @@ import { startCallWith } from '@/calls/controller'
 import { Avatar } from '@/ui/Avatar'
 import { inform } from '@/ui/dialogs'
 import { Icon, type IconName } from '@/ui/icons'
-import { Button, Field, IconButton, Spinner, Text } from '@/ui/kit'
+import { Button, Field, IconButton, Spinner, Switch, Text } from '@/ui/kit'
 import { openReport } from '@/ui/sheets'
 import { useTheme } from '@/ui/theme'
 
@@ -31,6 +31,7 @@ export default function ProfileCard() {
   const live = useStore((s) => s.presence[id])
   const friends = useStore((s) => s.friends)
   const isFriend = friends.friends.some((f) => f.id === id)
+  const onlineAlert = friends.friends.find((f) => f.id === id)?.onlineAlert
   const incoming = friends.incoming.some((f) => f.id === id)
   const outgoing = friends.outgoing.some((f) => f.id === id)
   const blocked = friends.blocked.some((f) => f.id === id)
@@ -63,6 +64,18 @@ export default function ProfileCard() {
   const first = profile?.displayName.split(/\s+/)[0] ?? ''
   const isMe = id === meId
 
+  // The bell: "Notify me when they come online" (0.3.0 servers send onlineAlert).
+  async function toggleOnlineAlert(on: boolean) {
+    const flip = (value: boolean) =>
+      useStore.setState((s) => ({ friends: { ...s.friends, friends: s.friends.friends.map((f) => (f.id === id ? { ...f, onlineAlert: value } : f)) } }))
+    flip(on)
+    const r = await api.setOnlineAlert(id, on)
+    if (!r.ok) {
+      flip(!on)
+      void inform("Couldn't change that", r.message)
+    }
+  }
+
   async function request(fn: () => Promise<{ ok: boolean; message?: string }>, fail: string) {
     const r = await fn()
     if (!r.ok) void inform(fail, r.message)
@@ -90,7 +103,7 @@ export default function ProfileCard() {
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 24, gap: 14 }}>
             <View style={{ height: 96, backgroundColor: c.accentSoft, marginHorizontal: -20, marginBottom: -14 }} />
             <View style={{ marginTop: -52, borderRadius: 60, borderWidth: 5, borderColor: c.sheet, alignSelf: 'flex-start' }}>
-              <Avatar user={profile} size={96} status={isFriend || isMe ? (presence?.status ?? 'offline') : null} ring={c.sheet} />
+              <Avatar user={profile} size={96} status={isFriend || isMe ? (presence?.status ?? 'offline') : null} mobile={onMobile(presence ?? undefined)} ring={c.sheet} />
             </View>
             <View style={{ gap: 2 }}>
               <Text display size={26} accessibilityRole="header">
@@ -125,7 +138,7 @@ export default function ProfileCard() {
               <View style={{ gap: 6 }}>
                 <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, height: 32, borderRadius: 16, backgroundColor: presence.status === 'online' ? c.onlineSoft : c.surface }}>
                   <Text size={14} weight="medium" style={{ color: presence.status === 'online' ? c.onlineText : c.ink2 }}>
-                    {presence.status === 'offline' ? (presence.lastSeenAt ? `Last seen ${longDate(presence.lastSeenAt)}` : 'Offline') : STATUS_LABEL[presence.status]}
+                    {presence.status === 'offline' ? (presence.lastSeenAt ? `Last seen ${longDate(presence.lastSeenAt)}` : 'Offline') : (mobileLabel(presence) ?? STATUS_LABEL[presence.status])}
                     {presence.statusText && presence.status !== 'offline' ? ` · ${presence.statusText}` : ''}
                   </Text>
                 </View>
@@ -147,6 +160,20 @@ export default function ProfileCard() {
                 })}
                 {action('phone', 'Voice', () => void startCallWith(id, false))}
                 {action('video', 'Video', () => void startCallWith(id, true))}
+              </View>
+            ) : null}
+            {!isMe && isFriend && onlineAlert !== undefined ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16, backgroundColor: c.surface }}>
+                <Icon name={onlineAlert ? 'bell' : 'bellOff'} size={20} color={onlineAlert ? c.accentText : c.ink2} />
+                <View style={{ flex: 1 }}>
+                  <Text size={15} weight="medium">
+                    Notify me when {first || 'they'} comes online
+                  </Text>
+                  <Text size={13} tone="muted">
+                    At most once every 30 minutes.
+                  </Text>
+                </View>
+                <Switch value={onlineAlert} onChange={(on) => void toggleOnlineAlert(on)} label={`Notify me when ${first || 'they'} comes online`} />
               </View>
             ) : null}
             {!isMe && !isFriend && !blocked ? (

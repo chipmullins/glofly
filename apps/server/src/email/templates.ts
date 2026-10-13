@@ -208,3 +208,42 @@ export const inviteEmail = (
       "Weren't expecting this? You can ignore this email. The account stays unused and goes away after 7 days.",
     ],
   });
+
+/** "Invite your friends" (0.3.0): a Glofly user invited someone by email. */
+export const friendInviteEmail = (
+  to: string,
+  inviter: { displayName: string; username: string },
+  url: string,
+  days: number,
+): Email =>
+  render({
+    to,
+    subject: `${inviter.displayName} invited you to Glofly`,
+    heading: `${inviter.displayName} invited you to Glofly`,
+    paragraphs: [
+      "Hi there,",
+      `${inviter.displayName} (@${inviter.username}) wants to chat with you on Glofly, an instant messenger for chats, group chats and calls with friends.`,
+      `Make your account from this link and you and ${inviter.displayName} will be friends straight away. It only takes a minute.`,
+    ],
+    button: { label: "Join Glofly", url },
+    footnotes: [
+      `This link works for ${days} days.`,
+      "Don't know them, or not interested? Just ignore this email. We won't email you again unless someone else invites you.",
+    ],
+  });
+
+/** Someone tried to invite an email that already has a Glofly account (they're never told that). */
+export const friendInviteExistingEmail = (
+  user: Person,
+  inviter: { displayName: string; username: string },
+): Email =>
+  render({
+    to: user.email,
+    subject: `${inviter.displayName} wants to be friends on Glofly`,
+    heading: `${inviter.displayName} wants to be friends`,
+    paragraphs: [
+      `Hi ${user.displayName},`,
+      `${inviter.displayName} invited you to Glofly. You already have an account, so to be friends, open Glofly, choose Add friend and search for @${inviter.username}.`,
+    ],
+    footnotes: ["Don't know them? Just ignore this email. They haven't been told you have an account."],
+  });

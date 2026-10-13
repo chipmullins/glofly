@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { Presence, Profile, PublicUser } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import { shortDate } from '../lib/names'
-import { playedFor, playing, STATUS_LABEL } from '../lib/presence'
+import { mobileLabel, onMobile, playedFor, playing, STATUS_LABEL } from '../lib/presence'
 import Avatar from './Avatar'
 import {
+  BellIcon,
+  BellOffIcon,
   BlockIcon,
   FlagIcon,
   CalendarIcon,
@@ -75,6 +77,9 @@ type ProfileCardProps = {
   onBlock: () => void
   /** Report this person to the Glofly team */
   onReport?: () => void
+  /** "Notify me when they come online": on or off (undefined: not a friend, or an older server) */
+  onlineAlert?: boolean
+  onOnlineAlert?: (on: boolean) => void
   onClose: () => void
   onSessionExpired: () => void
 }
@@ -89,6 +94,8 @@ export default function ProfileCard({
   onRemove,
   onBlock,
   onReport,
+  onlineAlert,
+  onOnlineAlert,
   onClose,
   onSessionExpired
 }: ProfileCardProps): React.JSX.Element {
@@ -169,13 +176,14 @@ export default function ProfileCard({
               avatarVersion={shown.avatarVersion}
               size={156}
               status={presence?.status}
+              mobile={onMobile(presence ?? undefined)}
               ring="var(--glo-surface)"
               className="profile-photo"
             />
 
             {presence && (
               <div className={`status-pill status-pill--${presence.status}`}>
-                {STATUS_LABEL[presence.status]}
+                {mobileLabel(presence) ?? STATUS_LABEL[presence.status]}
               </div>
             )}
 
@@ -283,6 +291,22 @@ export default function ProfileCard({
                       <VideoIcon size={20} />
                     </button>
                   </>
+                )}
+                {onlineAlert !== undefined && onOnlineAlert && (
+                  <button
+                    type="button"
+                    className={onlineAlert ? 'profile-call profile-call--on' : 'profile-call'}
+                    aria-pressed={onlineAlert}
+                    aria-label={`Notify me when ${shown.displayName} comes online`}
+                    title={
+                      onlineAlert
+                        ? 'You’ll be notified when they come online (click to stop)'
+                        : 'Notify me when they come online'
+                    }
+                    onClick={() => onOnlineAlert(!onlineAlert)}
+                  >
+                    {onlineAlert ? <BellIcon size={19} /> : <BellOffIcon size={19} />}
+                  </button>
                 )}
               </div>
             )}

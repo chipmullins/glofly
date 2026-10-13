@@ -66,6 +66,7 @@ import pttSparkUpFile from '../assets/sounds/ptt-spark-up.ogg'
 export type SoundName =
   | 'message' // a message arrives
   | 'friendRequest' // someone sends you a friend request
+  | 'friendOnline' // a friend you asked about comes online
   | 'login' // the firefly takeoff finishes
   | 'logout' // you log out
   | 'callConnected' // you're in a call with someone
@@ -143,6 +144,7 @@ let settings: SoundSettings = {
   callVolume: 100,
   message: 'chime',
   friendRequest: 'chime',
+  friendOnline: 'dewdrop',
   login: 'hello',
   logout: 'goodnight',
   callConnected: 'glowOn',

@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Pressable, View } from 'react-native'
-import type { ConversationSummary, Presence } from '@glofly/shared'
+import { onMobile, type ConversationSummary, type Presence } from '@glofly/shared'
 import { ChatAvatar } from './Avatar'
 import { Icon } from './icons'
 import { Badge, Text } from './kit'
@@ -60,7 +60,7 @@ export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typ
       android_ripple={{ color: c.line }}
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9, paddingHorizontal: 16, backgroundColor: pressed ? c.surface : 'transparent' })}
     >
-      <ChatAvatar chat={chat} size={54} status={chat.kind === 'dm' ? (presence?.status ?? null) : null} />
+      <ChatAvatar chat={chat} size={54} status={chat.kind === 'dm' ? (presence?.status ?? null) : null} mobile={onMobile(presence ?? undefined)} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
           <Text numberOfLines={1} size={16} weight="bold" style={{ flex: 1, fontWeight: bold ? '700' : '600' }}>

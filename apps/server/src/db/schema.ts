@@ -78,6 +78,9 @@ export const users = pgTable(
     showLastSeen: boolean("show_last_seen").notNull().default(true),
     showTyping: boolean("show_typing").notNull().default(true),
     friendRequests: friendRequestsFrom("friend_requests").notNull().default("everyone"),
+    // Settings → Notifications → "Friends coming online" (0.3.0): the master switch for the
+    // per-person alerts in online_alerts. On by default; nobody is followed until you pick them.
+    onlineAlerts: boolean("online_alerts").notNull().default(true),
 
     // Set when someone deletes their account: the moment it's permanently removed.
     // Until then the account is hidden, and logging in again offers to restore it.
@@ -687,4 +690,41 @@ export const nicknames = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.ownerId, t.targetId] })],
+);
+
+// "Notify me when they come online" (0.3.0): the owner gets a notification when the target goes
+// from offline to online. Off by default; set per person on their profile.
+export const onlineAlerts = pgTable(
+  "online_alerts",
+  {
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    targetId: uuid("target_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.ownerId, t.targetId] }), index("online_alerts_target_idx").on(t.targetId)],
+);
+
+// "Invite your friends" (0.3.0): someone emailed a friend a link to join Glofly. Signing up from
+// the link (glofly.app/join) makes the two of you friends straight away, even when sign-ups are
+// invite-only. The link's token is only stored hashed.
+export const friendInvites = pgTable(
+  "friend_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    inviterId: uuid("inviter_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // As typed (matched case-insensitively).
+    email: text("email").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedBy: uuid("accepted_by").references(() => users.id, { onDelete: "set null" }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  },
+  (t) => [index("friend_invites_inviter_idx").on(t.inviterId), index("friend_invites_email_idx").on(sql`lower(${t.email})`)],
 );

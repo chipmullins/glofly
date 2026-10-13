@@ -8,6 +8,7 @@ import { startUpdates } from '@/lib/updates'
 import { CallOverlay, WithCallStrip } from '@/calls/CallOverlay'
 import { CallPip } from '@/calls/CallPip'
 import { TeamNotice } from '@/ui/TeamNotice'
+import { FriendAlert } from '@/ui/FriendAlert'
 
 // Everything after signing in: the live connection, push notifications and calls start here.
 
@@ -30,6 +31,7 @@ export default function MainLayout() {
         </Stack>
       </WithCallStrip>
       <CallOverlay />
+      <FriendAlert />
       <TeamNotice />
       {/* Last, so the floating call window covers everything. */}
       <CallPip />

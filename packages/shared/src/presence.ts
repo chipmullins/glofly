@@ -61,7 +61,7 @@ export function presenceLine(p: Presence | undefined, now = Date.now()): string 
     return p.lastSeenAt ? `Last seen ${timeAgo(p.lastSeenAt, now)}` : 'Offline'
   const game = playing(p)
   if (game) return `Playing ${game.name}`
-  return p.statusText || STATUS_LABEL[p.status]
+  return p.statusText || (onMobile(p) && p.status === 'online' ? 'Active on mobile' : STATUS_LABEL[p.status])
 }
 
 /** Chat header version from the design: "Online · Grinding ranked tonight" (or "· Playing …"). */
@@ -69,10 +69,20 @@ export function presenceHeader(p: Presence | undefined, now = Date.now()): strin
   if (!p) return ''
   if (p.status === 'offline') return presenceLine(p, now)
   const game = playing(p)
-  if (game) return `${STATUS_LABEL[p.status]} · ${activityLine(game, now)}`
-  return p.statusText ? `${STATUS_LABEL[p.status]} · ${p.statusText}` : STATUS_LABEL[p.status]
+  const label = mobileLabel(p) ?? STATUS_LABEL[p.status]
+  if (game) return `${label} · ${activityLine(game, now)}`
+  return p.statusText ? `${label} · ${p.statusText}` : label
 }
 
 /** Your own choice mapped to the dot friends see (Invisible looks offline). */
 export const dotFor = (choice: MyStatusChoice): PresenceStatus =>
   choice === 'invisible' ? 'offline' : choice
+
+/** "Active on mobile": shown with a small phone instead of (or next to) the status dot. */
+export const onMobile = (p: Presence | undefined): boolean => !!p && p.status !== 'offline' && p.mobile === true
+
+/** Profile card line: "Active on mobile" (or "Away · on mobile", "Do not disturb · on mobile"). */
+export function mobileLabel(p: Presence | undefined): string | null {
+  if (!onMobile(p)) return null
+  return p!.status === 'online' ? 'Active on mobile' : `${STATUS_LABEL[p!.status]} · on mobile`
+}

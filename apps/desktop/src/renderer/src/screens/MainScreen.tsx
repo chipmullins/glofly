@@ -35,7 +35,14 @@ import {
 } from '../components/icons'
 import { shortDate } from '../lib/names'
 import { playSound, setQuiet } from '../lib/sounds'
-import { activityLine, dotFor, playing, presenceLine, STATUS_LABEL } from '../lib/presence'
+import {
+  activityLine,
+  dotFor,
+  onMobile,
+  playing,
+  presenceLine,
+  STATUS_LABEL
+} from '../lib/presence'
 import StatusDot from '../components/StatusDot'
 import StatusMenu from '../components/StatusMenu'
 import SettingsDialog, { type SettingsPage } from '../components/SettingsDialog'
@@ -219,6 +226,7 @@ function FriendRow({
         name={person.displayName}
         avatarVersion={person.avatarVersion}
         status={person.presence?.status ?? 'offline'}
+        mobile={onMobile(person.presence ?? undefined)}
         ring={open ? 'var(--glo-subtle)' : 'var(--glo-bg)'}
       />
       <div className="friend-text">
@@ -625,7 +633,7 @@ export default function MainScreen({
           break
         }
         case 'presence': {
-          const { userId, status, statusText, lastSeenAt, activity } = event
+          const { userId, status, statusText, lastSeenAt, activity, mobile } = event
           if (userId === user.id) {
             // Your own status changed (maybe from another device): refresh what you picked.
             window.glofly.status.get().then((result) => {
@@ -634,7 +642,13 @@ export default function MainScreen({
           } else {
             setPresence((map) => ({
               ...map,
-              [userId]: { status, statusText, lastSeenAt, activity: activity ?? null }
+              [userId]: {
+                status,
+                statusText,
+                lastSeenAt,
+                activity: activity ?? null,
+                mobile: mobile === true
+              }
             }))
           }
           break
@@ -668,6 +682,43 @@ export default function MainScreen({
         case 'friends:changed':
           void refresh()
           break
+        case 'friend:online': {
+          // "Notify me when they come online" (the server already skipped Do not disturb).
+          const who = event.user
+          playSound('friendOnline')
+          setToast(`${who.displayName} is online`)
+          if (shouldNotify()) {
+            void notify(
+              {
+                key: `online:${who.id}`,
+                conversationId: null,
+                title: who.displayName,
+                body: 'is online'
+              },
+              who
+            )
+          }
+          break
+        }
+        case 'friend:joined': {
+          // Someone joined Glofly from your invite: you're friends now.
+          const who = event.user
+          playSound('friendRequest')
+          setToast(`${who.displayName} joined Glofly from your invite. You're friends now!`)
+          if (shouldNotify()) {
+            void notify(
+              {
+                key: `joined:${who.id}`,
+                conversationId: null,
+                title: who.displayName,
+                body: 'joined Glofly from your invite. You’re friends now!'
+              },
+              who
+            )
+          }
+          void refresh()
+          break
+        }
         case 'connection':
           setConnected(event.connected)
           if (event.connected) {
@@ -993,6 +1044,26 @@ export default function MainScreen({
 
   const incomingCount = lists?.incoming.length ?? 0
   const isFriendId = (id: string): boolean => (lists?.friends ?? []).some((f) => f.id === id)
+
+  /** The bell on a friend's profile: "Notify me when they come online" (0.3.0). */
+  async function toggleOnlineAlert(id: string, on: boolean): Promise<void> {
+    const flip = (value: boolean): void =>
+      setLists((l) =>
+        l
+          ? {
+              ...l,
+              friends: l.friends.map((f) => (f.id === id ? { ...f, onlineAlert: value } : f))
+            }
+          : l
+      )
+    flip(on) // right away
+    const result = await window.glofly.friends.setOnlineAlert(id, on)
+    if (!result.ok) {
+      flip(!on)
+      if (result.error === 'unauthorized') onSessionExpired()
+      else setToast(result.message)
+    }
+  }
   const friends = (lists?.friends ?? [])
     .map((p) => ({ ...p, presence: presence[p.id] ?? p.presence }))
     .filter((p) => matches(p, search))
@@ -1558,6 +1629,8 @@ export default function MainScreen({
               setViewing(null)
               setReporting({ person: viewing, message: null })
             }}
+            onlineAlert={lists?.friends.find((f) => f.id === viewing.id)?.onlineAlert}
+            onOnlineAlert={(on) => void toggleOnlineAlert(viewing.id, on)}
             onClose={() => setViewing(null)}
             onSessionExpired={onSessionExpired}
           />

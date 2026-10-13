@@ -28,7 +28,8 @@ const googleServiceInfo =
 // builds. Development builds load from the computer instead.
 const EXPO_PROJECT_ID = '3aa33fd8-907f-4f50-b1a8-db37c96e107b'
 const updateChannel = variant === 'production' ? 'production' : 'preview'
-const RUNTIME_VERSION = '2026-10-13'
+// 2026-10-13.2: Glofly 0.3.0 ("is online" / "joined from your invite" notifications in glofly-native).
+const RUNTIME_VERSION = '2026-10-13.2'
 
 const config: ExpoConfig = {
   name: 'Glofly',

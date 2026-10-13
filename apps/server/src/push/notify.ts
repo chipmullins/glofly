@@ -188,3 +188,78 @@ export async function notifyFriendRequest(
 export function inBackground(task: Promise<unknown>): void {
   task.catch((err) => console.error("Push failed", err));
 }
+
+/** "Maya is online" (0.3.0), to the phones of someone who asked for it that aren't open right now. */
+export async function notifyFriendOnline(
+  toUserId: string,
+  who: { id: string; displayName: string; avatarVersion: string | null },
+): Promise<void> {
+  if (!pushConfigured) return;
+  const devices = await db
+    .select({
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
+    })
+    .from(pushDevices)
+    .where(eq(pushDevices.userId, toUserId));
+  if (!devices.length) return;
+  const live = (await liveSessions([toUserId])).get(toUserId);
+  const nicks = await nicknamesFor(toUserId).catch(() => undefined);
+  const name = nicks?.get(who.id) ?? who.displayName;
+  await deliver(
+    devices
+      .filter((d) => !live?.has(d.sessionId))
+      .map((device) => ({
+        device,
+        // Stale after a while: "is online" from an hour ago isn't news.
+        ttl: 15 * 60,
+        data: {
+          type: "friend_online",
+          userId: who.id,
+          senderName: name,
+          senderAvatar: who.avatarVersion ?? "",
+          title: name,
+          text: "is online",
+        },
+      })),
+  );
+}
+
+/** "Maya joined Glofly from your invite" (0.3.0): you're friends now. */
+export async function notifyFriendJoined(
+  toUserId: string,
+  who: { id: string; displayName: string; avatarVersion: string | null },
+): Promise<void> {
+  if (!pushConfigured) return;
+  const devices = await db
+    .select({
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
+      status: users.statusPreference,
+    })
+    .from(pushDevices)
+    .innerJoin(users, eq(users.id, pushDevices.userId))
+    .where(eq(pushDevices.userId, toUserId));
+  const live = (await liveSessions([toUserId])).get(toUserId);
+  await deliver(
+    devices
+      .filter((d) => d.status !== "dnd" && !live?.has(d.sessionId))
+      .map((device) => ({
+        device,
+        data: {
+          type: "friend_joined",
+          userId: who.id,
+          senderName: who.displayName,
+          senderAvatar: who.avatarVersion ?? "",
+          title: who.displayName,
+          text: "joined Glofly from your invite. You're friends now!",
+        },
+      })),
+  );
+}

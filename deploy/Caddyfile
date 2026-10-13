@@ -26,9 +26,9 @@
 	encode zstd gzip
 
 	# The pages people open from Glofly's emails (choose a new password, confirm an email,
-	# finish setting up an account made in Glofly Control) come from the Glofly server,
-	# with its own security headers.
-	@account path /reset /confirm /welcome
+	# finish setting up an account made in Glofly Control, join from a friend's invite) come
+	# from the Glofly server, with its own security headers.
+	@account path /reset /confirm /welcome /join
 	handle @account {
 		reverse_proxy server:4000
 	}

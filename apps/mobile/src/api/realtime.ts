@@ -106,7 +106,7 @@ function connect() {
   s.on('typing', (p: { conversationId?: string; userId?: string }) => {
     if (typeof p?.conversationId === 'string' && typeof p?.userId === 'string') setTyping(p.conversationId, p.userId, Date.now() + 6000)
   })
-  s.on('presence', (p: { userId?: string; status?: string; statusText?: string | null; lastSeenAt?: string | null; activity?: unknown }) => {
+  s.on('presence', (p: { userId?: string; status?: string; statusText?: string | null; lastSeenAt?: string | null; activity?: unknown; mobile?: unknown }) => {
     if (typeof p?.userId !== 'string' || !['online', 'away', 'dnd', 'offline'].includes(String(p.status))) return
     const a = p.activity as { name?: unknown; since?: unknown } | null
     setPresence(p.userId, {
@@ -114,6 +114,7 @@ function connect() {
       statusText: typeof p.statusText === 'string' ? p.statusText : null,
       lastSeenAt: typeof p.lastSeenAt === 'string' ? p.lastSeenAt : null,
       activity: a && typeof a.name === 'string' && typeof a.since === 'string' ? { name: a.name, since: a.since } : null,
+      mobile: p.mobile === true,
     })
     if (p.userId === useSession.getState().user?.id) emit('presence:me', p)
   })
@@ -126,6 +127,16 @@ function connect() {
     } else {
       const c = useStore.getState().conversations[p.conversationId]
       if (c?.kind === 'dm') patchConversation(p.conversationId, { partnerReadAt: p.readAt })
+    }
+  })
+  // 0.3.0: a friend you asked about came online / someone joined from your invite.
+  s.on('friend:online', (p: { user?: PublicUser }) => {
+    if (typeof p?.user?.id === 'string' && typeof p.user.displayName === 'string') emit('friend:online', p.user)
+  })
+  s.on('friend:joined', (p: { user?: PublicUser }) => {
+    if (typeof p?.user?.id === 'string' && typeof p.user.displayName === 'string') {
+      emit('friend:joined', p.user)
+      void refreshFriends()
     }
   })
   s.on('friends:changed', () => {

@@ -503,3 +503,61 @@
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+/* ---------- Invite your friends (Add friend, 0.3.0) ---------- */
+
+.invite-friends {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--glo-panel);
+}
+.invite-friends-text h2 {
+  margin: 0 0 2px;
+  font-family: var(--glo-font-display);
+  font-size: 16px;
+  color: var(--glo-ink);
+}
+.invite-friends-text p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.invite-friends-row {
+  display: flex;
+  gap: 8px;
+}
+.invite-friends-row input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 2px solid var(--glo-line-strong);
+  border-radius: 10px;
+  background: var(--glo-surface);
+  font: inherit;
+  font-size: 14px;
+  color: var(--glo-ink);
+}
+.invite-friends-row input::placeholder {
+  color: var(--glo-faint);
+}
+.invite-friends-row input:focus {
+  outline: none;
+  border-color: var(--glo-orange);
+  box-shadow: 0 0 0 4px rgba(var(--glo-accent-rgb), 0.18);
+}
+.invite-friends-row .small-button {
+  height: 40px;
+  flex: none;
+}
+.invite-friends-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--glo-danger);
+}
+.invite-friends-note--ok {
+  color: var(--glo-good);
+}

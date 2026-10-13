@@ -16,7 +16,9 @@ import {
   cleanActivityName,
   setDeviceActivity,
   sweepStalePresence,
+  onStatusChange,
 } from "./presence";
+import { onPresenceChange } from "./friends/online-alerts";
 
 /** Runs a background task, logging (not crashing) if it fails. */
 function safely(task: () => Promise<unknown>): void {
@@ -65,6 +67,8 @@ export function startRealtime(httpServer: HttpServer): void {
   });
 
   startPresenceHeartbeat(io);
+  // "Notify me when they come online".
+  onStatusChange(onPresenceChange);
 
   io.on("connection", (socket) => {
     const me = socket.data.user as { id: string; displayName: string };
@@ -73,7 +77,7 @@ export function startRealtime(httpServer: HttpServer): void {
 
     // Presence: this device is here.
     safely(async () => {
-      await deviceConnected(me.id, socket.id);
+      await deviceConnected(me.id, socket.id, socket.data.platform !== "desktop");
       await announcePresence(me.id, emitToUser);
     });
 
@@ -104,9 +108,12 @@ export function startRealtime(httpServer: HttpServer): void {
       });
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", (reason) => {
+      // A phone leaving Glofly (or losing signal) stays "Active on mobile" for a few minutes;
+      // not when the server hung up on it (signed out, update required).
+      const phoneLeft = socket.data.platform !== "desktop" && reason !== "server namespace disconnect";
       safely(async () => {
-        await deviceDisconnected(me.id, socket.id);
+        await deviceDisconnected(me.id, socket.id, phoneLeft ? (socket.data.sessionId as string) : undefined);
         // Wait a moment before telling friends, so a quick reconnect doesn't flicker "offline".
         setTimeout(() => safely(() => announcePresence(me.id, emitToUser)), 5000);
       });

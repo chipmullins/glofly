@@ -12,6 +12,7 @@ import {
   isSameDay,
   memberCountLabel,
   mentionsMe,
+  onMobile,
   presenceHeader,
   type Message,
 } from '@glofly/shared'
@@ -255,7 +256,7 @@ export default function ChatScreen() {
             onPress={() => (chat.kind === 'dm' ? router.push({ pathname: '/profile/[id]', params: { id: chat.partner.id } }) : router.push({ pathname: '/group/[id]', params: { id } }))}
             style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}
           >
-            <ChatAvatar chat={chat} size={40} status={presence?.status ?? null} ring={c.barBg} />
+            <ChatAvatar chat={chat} size={40} status={presence?.status ?? null} mobile={onMobile(presence ?? undefined)} ring={c.barBg} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text display size={18} numberOfLines={1} style={{ flexShrink: 1 }}>

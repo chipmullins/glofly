@@ -15,6 +15,8 @@ type AvatarProps = {
   size?: number
   /** Shows a status dot when given. */
   status?: PresenceStatus
+  /** "Active on mobile": the dot becomes a small phone. */
+  mobile?: boolean
   /** Background behind the avatar, used as the ring around the dot. */
   ring?: string
   /** Your own avatar: orange, like the design. */
@@ -55,6 +57,7 @@ export default function Avatar({
   avatarVersion,
   size = 44,
   status,
+  mobile,
   ring,
   mine,
   className
@@ -73,7 +76,7 @@ export default function Avatar({
       }}
     >
       <AvatarFace id={id} name={name} avatarVersion={avatarVersion} />
-      {status && <StatusDot status={status} ring={ring} size={dotSize(size)} />}
+      {status && <StatusDot status={status} mobile={mobile} ring={ring} size={dotSize(size)} />}
     </span>
   )
 }

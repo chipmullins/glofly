@@ -54,6 +54,10 @@ export const removeFriendRequest = async (id: string) => none(await request('DEL
 export const removeFriend = async (id: string) => none(await request('DELETE', `/friends/${id}`))
 export const blockUser = async (id: string) => none(await request('POST', `/blocks/${id}`))
 export const unblockUser = async (id: string) => none(await request('DELETE', `/blocks/${id}`))
+/** "Notify me when they come online" (0.3.0). */
+export const setOnlineAlert = (id: string, on: boolean) => request<{ on: boolean }>('PUT', `/friends/${id}/online-alert`, { on })
+/** "Invite your friends": emails them a link to join Glofly (0.3.0). */
+export const inviteFriend = async (email: string) => none(await request('POST', '/friends/invite', { email }))
 
 // ---- Chats ----
 

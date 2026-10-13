@@ -119,6 +119,9 @@ final class GloflyNotifications: NSObject, UNUserNotificationCenterDelegate {
       return conversationId.isEmpty ? nil : "glofly://chat/\(conversationId)"
     case "friend_request":
       return "glofly://friends"
+    case "friend_online", "friend_joined":
+      let userId = (info["userId"] as? String) ?? ""
+      return userId.isEmpty ? "glofly://friends" : "glofly://profile/\(userId)"
     case "call_ring":
       guard let callId = info["callId"] as? String else { return nil }
       return "glofly://incoming/\(callId)?chat=\(conversationId)&video=\((info["video"] as? String) ?? "0")"

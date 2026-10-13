@@ -39,6 +39,7 @@ const saved: Saved = {
     callVolume: 100,
     message: 'chime',
     friendRequest: 'chime',
+    friendOnline: 'dewdrop',
     login: 'hello',
     logout: 'goodnight',
     callConnected: 'glowOn',
@@ -126,6 +127,7 @@ function soundSettingOk(key: string, value: unknown): boolean {
       return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100
     case 'message':
     case 'friendRequest':
+    case 'friendOnline':
     case 'login':
     case 'logout':
     case 'callConnected':
