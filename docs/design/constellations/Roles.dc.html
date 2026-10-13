@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Night Owls settings · Roles</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=Outfit:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#b8430a}a:hover{color:#8a3005}
+button{font:inherit}
+</style>
+</helmet>
+<div style="height: 800px; display: flex; align-items: center; justify-content: center; padding: 40px; box-sizing: border-box; font-family: 'DM Sans', system-ui, sans-serif; color: #24170f; background: rgba(60,44,34,.55)">
+  <div role="dialog" aria-modal="true" aria-labelledby="set-title" style="width: 100%; max-width: 1040px; height: 680px; display: flex; border-radius: 20px; background: #ffffff; overflow: hidden; box-shadow: 0 24px 60px rgba(36,23,15,.35)">
+
+    <nav aria-label="Constellation settings" style="width: 240px; flex: none; background: #f7f0e9; padding: 24px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 0 10px 16px">
+        <span style="width: 36px; height: 36px; border-radius: 11px; background: #1c1210; display: flex; align-items: center; justify-content: center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffb347" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 7l6 3 3 7 5-4"></path><circle cx="5" cy="7" r="1.6" fill="#ffb347"></circle><circle cx="11" cy="10" r="1.3" fill="#ffb347"></circle><circle cx="14" cy="17" r="1.6" fill="#ffb347"></circle><circle cx="19" cy="13" r="1.3" fill="#ffb347"></circle></svg>
+        </span>
+        <span style="font-family: Outfit, sans-serif; font-weight: 600; font-size: 18px">Night Owls</span>
+      </div>
+      <a href="#" style="height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; color: #4a372b; text-decoration: none; font-weight: 500">Overview</a>
+      <a href="#" style="height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; color: #4a372b; text-decoration: none; font-weight: 500">Nebulas &amp; categories</a>
+      <a href="#" aria-current="page" style="height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; background: #fbdcc4; color: #24170f; text-decoration: none; font-weight: 700">Roles</a>
+      <a href="#" style="height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; color: #4a372b; text-decoration: none; font-weight: 500">Members</a>
+      <a href="#" style="height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; color: #4a372b; text-decoration: none; font-weight: 500">Invites</a>
+      <a href="#" style="height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; color: #4a372b; text-decoration: none; font-weight: 500">Moderation</a>
+      <span style="flex: 1"></span>
+      <a href="#" style="height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; color: #b42318; text-decoration: none; font-weight: 600">Delete constellation</a>
+    </nav>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <header style="display: flex; align-items: center; gap: 12px; padding: 24px 28px 12px">
+        <h1 id="set-title" style="margin: 0; font-family: Outfit, sans-serif; font-weight: 600; font-size: 26px; flex: 1">Roles</h1>
+        <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: #f47a1f; color: #2a1406; font-weight: 700; cursor: pointer">Create role</button>
+        <a href="Constellation.dc.html" aria-label="Close settings" style="width: 40px; height: 40px; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: #4a372b">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+        </a>
+      </header>
+      <p style="margin: 0 28px 16px; font-size: 14px; color: #6b5547">People get everything their highest role allows. Only roles below yours can be changed.</p>
+
+      <div style="flex: 1; min-height: 0; display: flex; gap: 20px; padding: 0 28px 24px">
+        <ul aria-label="Roles, highest first" style="list-style: none; margin: 0; padding: 0; width: 260px; flex: none; display: flex; flex-direction: column; gap: 6px">
+          <li style="display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid #eaddd1"><span style="width: 14px; height: 14px; border-radius: 7px; background: #e2650f"></span><span style="flex: 1; font-weight: 700">Owner</span><span style="font-size: 13px; color: #6b5547">1</span></li>
+          <li style="display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid #eaddd1"><span style="width: 14px; height: 14px; border-radius: 7px; background: #1789ad"></span><span style="flex: 1; font-weight: 700">Admin</span><span style="font-size: 13px; color: #6b5547">2</span></li>
+          <li style="display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; border: 2px solid #f47a1f; background: #fde9d7"><span style="width: 14px; height: 14px; border-radius: 7px; background: #8b3fd9"></span><span style="flex: 1; font-weight: 700">Moderator</span><span style="font-size: 13px; color: #6b5547">1</span></li>
+          <li style="display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid #eaddd1"><span style="width: 14px; height: 14px; border-radius: 7px; background: #2e9e5b"></span><span style="flex: 1; font-weight: 700">Raid crew</span><span style="font-size: 13px; color: #6b5547">6</span></li>
+          <li style="display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid #eaddd1"><span style="width: 14px; height: 14px; border-radius: 7px; background: #b4a296"></span><span style="flex: 1; font-weight: 700">Member</span><span style="font-size: 13px; color: #6b5547">31</span></li>
+        </ul>
+
+        <section aria-labelledby="role-name" style="flex: 1; min-width: 0; padding: 20px; border-radius: 16px; background: #fbf5ef; display: flex; flex-direction: column; gap: 14px; overflow: hidden">
+          <div style="display: flex; gap: 14px; align-items: flex-end">
+            <label style="flex: 1; display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: #6b5547">Role name
+              <input id="role-name" type="text" value="Moderator" style="height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid #dcc8b8; background: #ffffff; font: inherit; font-size: 15px; color: #24170f">
+            </label>
+            <div role="radiogroup" aria-label="Role color" style="display: flex; gap: 8px; padding-bottom: 8px">
+              <button type="button" role="radio" aria-checked="true" aria-label="Violet" style="width: 26px; height: 26px; border-radius: 13px; border: 0; background: #8b3fd9; box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #8b3fd9; cursor: pointer"></button>
+              <button type="button" role="radio" aria-checked="false" aria-label="Lagoon" style="width: 26px; height: 26px; border-radius: 13px; border: 0; background: #1789ad; cursor: pointer"></button>
+              <button type="button" role="radio" aria-checked="false" aria-label="Green" style="width: 26px; height: 26px; border-radius: 13px; border: 0; background: #2e9e5b; cursor: pointer"></button>
+              <button type="button" role="radio" aria-checked="false" aria-label="Red" style="width: 26px; height: 26px; border-radius: 13px; border: 0; background: #e0193a; cursor: pointer"></button>
+            </div>
+          </div>
+
+          <h2 style="margin: 4px 0 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #6b5547">What Moderators can do</h2>
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <label style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #efe4da"><span style="flex: 1"><span style="display: block; font-weight: 600">Delete messages</span><span style="display: block; font-size: 13px; color: #6b5547">Anyone's, in every nebula</span></span><input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #f47a1f"></label>
+            <label style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #efe4da"><span style="flex: 1"><span style="display: block; font-weight: 600">Time out and kick members</span><span style="display: block; font-size: 13px; color: #6b5547">Members only, never Admins or the Owner</span></span><input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #f47a1f"></label>
+            <label style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #efe4da"><span style="flex: 1"><span style="display: block; font-weight: 600">Mute people in voice nebulas</span></span><input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #f47a1f"></label>
+            <label style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #efe4da"><span style="flex: 1"><span style="display: block; font-weight: 600">Manage nebulas and categories</span><span style="display: block; font-size: 13px; color: #6b5547">Create, rename, reorder, delete</span></span><input type="checkbox" style="width: 20px; height: 20px; accent-color: #f47a1f"></label>
+            <label style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #efe4da"><span style="flex: 1"><span style="display: block; font-weight: 600">Invite people</span></span><input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #f47a1f"></label>
+            <label style="display: flex; align-items: center; gap: 12px; padding: 10px 0"><span style="flex: 1"><span style="display: block; font-weight: 600">Manage roles below this one</span></span><input type="checkbox" style="width: 20px; height: 20px; accent-color: #f47a1f"></label>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

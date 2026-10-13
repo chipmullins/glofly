@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Into Constellations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=Outfit:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#b8430a}a:hover{color:#8a3005}
+button{font:inherit}
+.home{position:absolute;inset:0;display:flex;transform-origin:150px 250px}
+.home.out{animation:homeOut 800ms cubic-bezier(.5,0,.75,0) forwards}
+.home.gone{display:none}
+@keyframes homeOut{to{transform:translateX(-30%) scale(.94);opacity:0;filter:blur(3px)}}
+.night{position:absolute;inset:0;background:#120c0a;clip-path:circle(0px at 150px 250px);pointer-events:none;overflow:hidden}
+.night.on{animation:nightIn 950ms cubic-bezier(.22,.7,.2,1) forwards;pointer-events:auto}
+.night.done{clip-path:none;pointer-events:auto}
+@keyframes nightIn{from{clip-path:circle(0px at 150px 250px)}to{clip-path:circle(1700px at 150px 250px)}}
+.star{position:absolute;border-radius:50%;background:#f5ede6;opacity:0}
+.star.gold{background:#ffb347;box-shadow:0 0 8px 2px rgba(255,165,74,.45)}
+.night.on .star{animation:warp 1100ms ease-out forwards}
+.night.done .star,.night.leave .star{opacity:.8;animation:twinkle 2.8s ease-in-out infinite}
+@keyframes warp{0%{opacity:0;transform:translateX(220px) scaleX(1)}35%{opacity:1;transform:translateX(60px) scaleX(10)}100%{opacity:.85;transform:translateX(0) scaleX(1)}}
+@keyframes twinkle{0%,100%{opacity:.3}50%{opacity:1}}
+.content{animation:fadeUp 650ms ease-out both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+/* Glofly fireflies: wings flap, the light (the chat-bubble tail) pulses */
+.ff{display:block;overflow:visible}
+.ff .wl,.ff .wr{transform-box:view-box;transform-origin:140px 92px}
+.ff .wl{animation:flapL var(--flap,170ms) ease-in-out infinite alternate}
+.ff .wr{animation:flapR var(--flap,170ms) ease-in-out infinite alternate}
+@keyframes flapL{from{transform:rotate(0) scale(1)}to{transform:rotate(-16deg) scale(.84)}}
+@keyframes flapR{from{transform:rotate(0) scale(1)}to{transform:rotate(16deg) scale(.84)}}
+.ff .light{animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{0%,100%{filter:drop-shadow(0 0 4px rgba(255,179,71,.55)) brightness(1)}50%{filter:drop-shadow(0 0 16px rgba(255,200,90,1)) brightness(1.35)}}
+.swarm{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.fly{position:absolute;left:calc(100% + 20px);animation:flyLeft 1100ms cubic-bezier(.45,.1,.75,.95) both}
+.fly .drift{animation:driftUp 1100ms ease-in-out both}
+.fly .drift.down{animation-name:driftDown}
+.fly .drift.flat{animation-name:driftFlat}
+.fly .bob{animation:bob 420ms ease-in-out infinite alternate}
+.fly .face{transform:scaleX(-1)}
+@keyframes flyLeft{0%{left:calc(100% + 20px);opacity:0}8%{opacity:1}86%{opacity:1}100%{left:-300px;opacity:0}}
+@keyframes driftUp{from{transform:translateY(40px) rotate(-6deg)}to{transform:translateY(-80px) rotate(4deg)}}
+@keyframes driftDown{from{transform:translateY(-40px) rotate(4deg)}to{transform:translateY(80px) rotate(-6deg)}}
+@keyframes driftFlat{from{transform:translateY(10px)}to{transform:translateY(-20px)}}
+@keyframes bob{from{transform:translateY(-6px)}to{transform:translateY(6px)}}
+.night.leave{clip-path:none;animation:nightLeave 900ms cubic-bezier(.5,0,.75,0) 250ms forwards}
+@keyframes nightLeave{to{transform:translateX(30%) scale(.94);opacity:0;filter:blur(3px)}}
+.home.in{animation:homeIn 950ms cubic-bezier(.2,.7,.2,1) 350ms both}
+@keyframes homeIn{from{transform:translateX(-30%) scale(.94);opacity:0;filter:blur(3px)}to{transform:none;opacity:1;filter:none}}
+/* Small fireflies circling in the night sky */
+.wander{position:absolute;width:0;height:0;will-change:transform}
+.wander .ffbox{position:absolute;left:0;top:0;transform:translate(-50%,-50%)}
+/* Orange stars pulse and glow (durations differ so they never pulse together) */
+.night.done .star.gold,.night.leave .star.gold{animation:goldPulse 3.2s ease-in-out infinite}
+.night.done .star.gold:nth-child(3n),.night.leave .star.gold:nth-child(3n){animation-duration:4s}
+.night.done .star.gold:nth-child(4n),.night.leave .star.gold:nth-child(4n){animation-duration:2.7s}
+.night.done .star.gold:nth-child(5n),.night.leave .star.gold:nth-child(5n){animation-duration:4.6s}
+@keyframes goldPulse{0%,100%{opacity:.42;box-shadow:0 0 3px 1px rgba(255,165,74,.25);transform:scale(1)}50%{opacity:.92;box-shadow:0 0 11px 4px rgba(255,165,74,.65);transform:scale(1.3)}}
+@media (prefers-reduced-motion: reduce){.swarm{display:none}.night.done .star.gold,.night.leave .star.gold{animation:none;opacity:.9}.night.leave{animation:none;opacity:0}.home.in{animation:none}.ff .wl,.ff .wr,.ff .light{animation:none}}
+@media (prefers-reduced-motion: reduce){.home.out{animation:none;display:none}.night.on{animation:none;clip-path:none}.night.on .star,.night.done .star{animation:none;opacity:.8}.content{animation:none}}
+</style>
+</helmet>
+<div style="position: relative; height: 800px; overflow: hidden; font-family: 'DM Sans', system-ui, sans-serif; color: #24170f; background: #ffffff">
+
+  <div class="{{homeClass}}">
+    <aside aria-label="Sidebar" style="width: 300px; flex: none; background: #f7f0e9; border-right: 1px solid #eaddd1; padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+      <div style="height: 40px; border-radius: 12px; background: #ffffff; border: 1px solid #dcc8b8; display: flex; align-items: center; padding: 0 12px; color: #8f7868; font-size: 14px">Search</div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 14px; background: #ffffff">
+        <span style="width: 40px; height: 40px; border-radius: 20px; background: #f47a1f; color: #2a1406; font-weight: 700; display: flex; align-items: center; justify-content: center">RC</span>
+        <span><span style="display: block; font-weight: 700; font-size: 15px">Riley Carter</span><span style="display: block; font-size: 13px; color: #6b5547">Online</span></span>
+      </div>
+      <nav aria-label="Main" style="display: flex; flex-direction: column; gap: 2px">
+        <span style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; color: #4a372b; font-weight: 500">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"></path><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.9.7 3.1 2.4 3.5 5.2"></path></svg>Friends</span>
+        <span style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; color: #4a372b; font-weight: 500">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"></circle><circle cx="5" cy="10" r="2.4"></circle><circle cx="19" cy="10" r="2.4"></circle><path d="M6.5 20c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"></path></svg>Groups</span>
+        <button type="button" onClick="{{go}}" style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: #1c1210; color: #ffffff; font-weight: 600; text-align: left; cursor: pointer; box-shadow: 0 0 0 1px #3a2a22, 0 0 16px rgba(255,165,74,.35)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffb347" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1.8" fill="#ffb347" stroke="none"></circle><path d="M12 12c0-4 3-6.5 6.5-5.5"></path><path d="M12 12c0 4-3 6.5-6.5 5.5"></path><path d="M12 12c4 0 6.5 3 5.5 6.5"></path><path d="M12 12c-4 0-6.5-3-5.5-6.5"></path></svg>
+          Constellations
+          <span style="margin-left: auto; font-size: 12px; color: #ffb347">Click me</span>
+        </button>
+      </nav>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="margin: 4px 12px 2px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #6b5547">Chats</div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: #ffffff"><span style="width: 40px; height: 40px; border-radius: 20px; background: #8b3fd9; color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center">MP</span><span style="font-weight: 700">Maya Patel</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px"><span style="width: 40px; height: 40px; border-radius: 20px; background: #2e9e5b; color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center">JB</span><span style="font-weight: 600">Jacob Brooks</span></div>
+      </div>
+    </aside>
+    <main style="flex: 1; display: flex; flex-direction: column">
+      <div style="height: 64px; border-bottom: 1px solid #eaddd1; display: flex; align-items: center; padding: 0 20px; font-weight: 700">Maya Patel</div>
+      <div style="flex: 1; padding: 24px 32px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px">
+        <div style="align-self: flex-start; padding: 10px 14px; border-radius: 18px 18px 18px 6px; background: #f7f0e9">Hit Constellations, the gang's in Campfire</div>
+      </div>
+    </main>
+  </div>
+
+  <div class="{{nightClass}}" aria-hidden="{{nightHidden}}">
+    <sc-for list="{{stars}}" as="s" hint-placeholder-count="0">
+      <span class="{{s.cls}}" style="left: {{s.x}}%; top: {{s.y}}%; width: {{s.size}}px; height: {{s.size}}px; animation-delay: {{s.delay}}ms"></span>
+    </sc-for>
+
+    <sc-if value="{{inSpace}}" hint-placeholder-val="{{ false }}">
+      <sc-for list="{{orbiters}}" as="f" hint-placeholder-count="0">
+        <div class="wander" ref="{{f.ref}}" style="left: {{f.x}}%; top: {{f.y}}%">
+          <div class="ffbox">
+          <svg class="ff" viewBox="0 0 256 190" width="{{f.w}}" height="{{f.h}}" aria-hidden="true" style="--flap: {{f.flap}}ms">
+            <g class="wl"><ellipse cx="80" cy="62" rx="66" ry="24" transform="rotate(22 80 62)" fill="none" stroke="#f7841f" stroke-width="10"></ellipse><ellipse cx="118" cy="128" rx="19" ry="42" transform="rotate(-25 118 128)" fill="none" stroke="#f7841f" stroke-width="10"></ellipse></g>
+            <g class="wr"><ellipse cx="184" cy="120" rx="64" ry="22" transform="rotate(32 184 120)" fill="none" stroke="#f7841f" stroke-width="10"></ellipse><ellipse cx="160" cy="72" rx="16" ry="30" transform="rotate(40 160 72)" fill="none" stroke="#f7841f" stroke-width="10"></ellipse></g>
+            <path d="M136 24 L128 6 M150 24 L162 9" stroke="#fbbf24" stroke-width="7" stroke-linecap="round" fill="none"></path>
+            <circle cx="143" cy="38" r="17" fill="#fbbf24"></circle>
+            <ellipse cx="151" cy="74" rx="29" ry="27" fill="#f9a825"></ellipse>
+            <g class="light"><rect x="34" y="112" width="80" height="54" rx="23" fill="#ff9a2e"></rect><path d="M46 158 L36 184 L70 164 Z" fill="#ff9a2e"></path></g>
+          </svg>
+          </div>
+        </div>
+      </sc-for>
+    </sc-if>
+
+    <sc-if value="{{inSpace}}" hint-placeholder-val="{{ false }}">
+      <div class="content" style="position: absolute; inset: 0; padding: 18px 32px; display: flex; flex-direction: column; gap: 24px; color: #f5ede6">
+        <div style="display: flex; align-items: center; gap: 16px">
+          <button type="button" onClick="{{goHome}}" style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px 0 6px; border-radius: 22px; background: #2a1c17; border: 1px solid #4a372b; color: #f5ede6; font-weight: 600; font-size: 14px; cursor: pointer; box-shadow: 0 0 18px rgba(255,165,74,.22)">
+            <span style="width: 34px; height: 34px; border-radius: 17px; background: #1c1210; display: flex; align-items: center; justify-content: center">
+              <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><ellipse cx="12" cy="11" rx="5.5" ry="3.2" transform="rotate(-28 12 11)" fill="#e9d5c4" opacity=".55"></ellipse><ellipse cx="20" cy="11" rx="5.5" ry="3.2" transform="rotate(28 20 11)" fill="#e9d5c4" opacity=".55"></ellipse><ellipse cx="16" cy="15" rx="3" ry="5" fill="#4a372b"></ellipse><circle cx="16" cy="22" r="5" fill="#ffb347" opacity=".35"></circle><circle cx="16" cy="21.5" r="3.2" fill="#ffb347"></circle></svg>
+            </span>
+            Back to Glofly
+          </button>
+          <span style="flex: 1"></span>
+          <div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px 0 4px; border-radius: 22px; background: #1c1210; border: 1px solid #3a2a22">
+            <span style="width: 36px; height: 36px; border-radius: 18px; background: #f47a1f; color: #2a1406; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center">RC</span>
+            <span style="font-weight: 700; font-size: 14px">Riley Carter</span>
+          </div>
+        </div>
+        <h1 style="margin: 0; font-family: Outfit, sans-serif; font-weight: 600; font-size: 38px">Your constellations</h1>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px">
+          <a href="Dashboard.dc.html" style="height: 220px; border-radius: 20px; background: #1c1210; border: 1px solid #3a2a22; padding: 18px; box-sizing: border-box; color: #f5ede6; text-decoration: none; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px"><span style="font-family: Outfit, sans-serif; font-weight: 600; font-size: 21px">Night Owls</span><span style="font-size: 14px; color: #d9c2b1">3 in Campfire · 41 members</span></a>
+          <a href="Dashboard.dc.html" style="height: 220px; border-radius: 20px; background: #1c1210; border: 1px solid #3a2a22; padding: 18px; box-sizing: border-box; color: #f5ede6; text-decoration: none; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px"><span style="font-family: Outfit, sans-serif; font-weight: 600; font-size: 21px">Lexington Climbing</span><span style="font-size: 14px; color: #d9c2b1">12 members</span></a>
+          <a href="Dashboard.dc.html" style="height: 220px; border-radius: 20px; background: #1c1210; border: 1px solid #3a2a22; padding: 18px; box-sizing: border-box; color: #f5ede6; text-decoration: none; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px"><span style="font-family: Outfit, sans-serif; font-weight: 600; font-size: 21px">Study Hall</span><span style="font-size: 14px; color: #d9c2b1">27 members</span></a>
+        </div>
+        <span style="flex: 1"></span>
+        <button type="button" onClick="{{replay}}" style="align-self: flex-end; height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #574a41; background: transparent; color: #f5ede6; font-weight: 600; cursor: pointer">Replay: into Constellations</button>
+      </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{returning}}" hint-placeholder-val="{{ false }}">
+    <div class="swarm" aria-hidden="true">
+      <sc-for list="{{swarm}}" as="f" hint-placeholder-count="0">
+        <div class="fly" style="top: {{f.y}}%; animation-delay: {{f.delay}}ms; animation-duration: {{f.dur}}ms">
+          <div class="{{f.drift}}" style="animation-delay: {{f.delay}}ms; animation-duration: {{f.dur}}ms">
+          <div class="bob" style="animation-delay: {{f.bob}}ms">
+          <div class="face">
+          <svg class="ff" viewBox="0 0 256 190" width="{{f.w}}" height="{{f.h}}" aria-hidden="true" style="--flap: {{f.flap}}ms">
+            <g class="wl"><ellipse cx="80" cy="62" rx="66" ry="24" transform="rotate(22 80 62)" fill="none" stroke="#f7841f" stroke-width="10"></ellipse><ellipse cx="118" cy="128" rx="19" ry="42" transform="rotate(-25 118 128)" fill="none" stroke="#f7841f" stroke-width="10"></ellipse></g>
+            <g class="wr"><ellipse cx="184" cy="120" rx="64" ry="22" transform="rotate(32 184 120)" fill="none" stroke="#f7841f" stroke-width="10"></ellipse><ellipse cx="160" cy="72" rx="16" ry="30" transform="rotate(40 160 72)" fill="none" stroke="#f7841f" stroke-width="10"></ellipse></g>
+            <path d="M136 24 L128 6 M150 24 L162 9" stroke="#fbbf24" stroke-width="7" stroke-linecap="round" fill="none"></path>
+            <circle cx="143" cy="38" r="17" fill="#fbbf24"></circle>
+            <ellipse cx="151" cy="74" rx="29" ry="27" fill="#f9a825"></ellipse>
+            <g class="light"><rect x="34" y="112" width="80" height="54" rx="23" fill="#ff9a2e"></rect><path d="M46 158 L36 184 L70 164 Z" fill="#ff9a2e"></path></g>
+          </svg>
+          </div>
+          </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { phase: 'home' };
+    let seed = 7;
+    const rnd = () => {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    };
+    this.stars = Array.from({ length: 112 }, (_, i) => {
+      const gold = i % 6 === 0;
+      return {
+        x: Math.round(rnd() * 1000) / 10,
+        y: Math.round(rnd() * 1000) / 10,
+        size: gold ? (rnd() < 0.4 ? 4 : 3) : rnd() < 0.12 ? 2.5 : rnd() < 0.5 ? 2 : 1.5,
+        delay: Math.round(rnd() * 380),
+        cls: gold ? 'star gold' : 'star',
+      };
+    });
+    // The swarm that carries you home: Glofly fireflies of many sizes.
+    // Spread out: each one gets its own lane (shuffled), start time and up/down drift, and the
+    // big (near) ones fly faster than the small (far) ones, so they never bunch up.
+    const lanes = Array.from({ length: 30 }, (_, i) => i).sort(() => rnd() - 0.5);
+    const drifts = ['drift', 'drift down', 'drift flat'];
+    this.swarm = lanes.map((lane, i) => {
+      const w = Math.round(22 + rnd() * rnd() * 110);
+      return {
+        w,
+        h: Math.round((w * 190) / 256),
+        y: Math.round(2 + (lane / 30) * 88 + rnd() * 2),
+        delay: Math.round((i / 30) * 600 + rnd() * 60),
+        dur: Math.round(1250 - w * 3 + rnd() * 150),
+        drift: drifts[i % 3],
+        bob: Math.round(rnd() * 400),
+        flap: Math.round(110 + rnd() * 120),
+      };
+    });
+    // A few small ones wandering the night sky on lazy, never-repeating paths: each is a sum of
+    // slow sine waves with its own speeds, and it turns to face the way it's flying.
+    this.els = [];
+    this.orbiters = [
+      { x: 76, y: 24, w: 18 },
+      { x: 20, y: 70, w: 14 },
+      { x: 56, y: 84, w: 16 },
+      { x: 38, y: 32, w: 12 },
+      { x: 88, y: 56, w: 15 },
+    ].map((o, i) => ({
+      ...o,
+      h: Math.round((o.w * 190) / 256),
+      flap: 130 + i * 15,
+      ref: (el) => (this.els[i] = el),
+      wx: [70 + rnd() * 90, 20 + rnd() * 30],
+      wy: [45 + rnd() * 55, 12 + rnd() * 25],
+      fx: [0.16 + rnd() * 0.18, 0.3 + rnd() * 0.2],
+      fy: [0.14 + rnd() * 0.18, 0.28 + rnd() * 0.2],
+      px: [rnd() * 6.28, rnd() * 6.28],
+      py: [rnd() * 6.28, rnd() * 6.28],
+    }));
+  }
+  componentDidMount() {
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) return;
+    const t0 = performance.now();
+    let last = t0;
+    const step = (now) => {
+      const t = (now - t0) / 1000;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      this.orbiters.forEach((o, i) => {
+        const el = this.els[i];
+        if (!el) return;
+        const x = o.wx[0] * Math.sin(t * o.fx[0] + o.px[0]) + o.wx[1] * Math.sin(t * o.fx[1] + o.px[1]);
+        const y = o.wy[0] * Math.sin(t * o.fy[0] + o.py[0]) + o.wy[1] * Math.sin(t * o.fy[1] + o.py[1]);
+        const vx = o.wx[0] * o.fx[0] * Math.cos(t * o.fx[0] + o.px[0]) + o.wx[1] * o.fx[1] * Math.cos(t * o.fx[1] + o.px[1]);
+        const vy = o.wy[0] * o.fy[0] * Math.cos(t * o.fy[0] + o.py[0]) + o.wy[1] * o.fy[1] * Math.cos(t * o.fy[1] + o.py[1]);
+        // The logo points up and to the right (about -35°): turn it toward the flight direction,
+        // mirrored when flying left, tilted at most 35° so it never flies upside down.
+        // Turn smoothly: always rotate toward the flight direction along the shortest way round,
+        // easing a little each frame, so a turnaround is one smooth swing (no mirroring, no snap).
+        // The logo itself points up and to the right (about -35°), hence the +35.
+        const heading = (Math.atan2(vy, vx) * 180) / Math.PI + 35;
+        if (o.rot === undefined) o.rot = heading;
+        const diff = ((heading - o.rot + 540) % 360) - 180;
+        o.rot += diff * Math.min(1, dt * 2.5);
+        el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${o.rot.toFixed(1)}deg)`;
+      });
+      this.raf = requestAnimationFrame(step);
+    };
+    this.raf = requestAnimationFrame(step);
+  }
+  componentWillUnmount() {
+    clearTimeout(this.timer);
+    cancelAnimationFrame(this.raf);
+  }
+  start() {
+    clearTimeout(this.timer);
+    this.setState({ phase: 'sweep' });
+    this.timer = setTimeout(() => this.setState({ phase: 'space' }), 1050);
+  }
+  back() {
+    clearTimeout(this.timer);
+    this.setState({ phase: 'return' });
+    this.timer = setTimeout(() => this.setState({ phase: 'home' }), 2100);
+  }
+  renderVals() {
+    const phase = this.state.phase;
+    return {
+      homeClass: phase === 'home' ? 'home' : phase === 'sweep' ? 'home out' : phase === 'return' ? 'home in' : 'home gone',
+      nightClass: phase === 'home' ? 'night' : phase === 'sweep' ? 'night on' : phase === 'return' ? 'night leave' : 'night done',
+      nightHidden: phase === 'home' ? 'true' : 'false',
+      inSpace: phase === 'space' || phase === 'return',
+      returning: phase === 'return',
+      stars: this.stars,
+      swarm: this.swarm,
+      orbiters: this.orbiters,
+      goHome: () => this.back(),
+      go: () => this.start(),
+      reset: () => {
+        clearTimeout(this.timer);
+        this.setState({ phase: 'home' });
+      },
+      replay: () => {
+        clearTimeout(this.timer);
+        this.setState({ phase: 'home' });
+        this.timer = setTimeout(() => this.start(), 400);
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>
