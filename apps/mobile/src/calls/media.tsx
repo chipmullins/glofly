@@ -1,15 +1,19 @@
+import { useMemo } from 'react'
 import { Platform, type ViewStyle } from 'react-native'
 import {
   AndroidAudioTypePresets,
   AudioDeviceModule,
   AudioSession,
+  VideoTrack as LKVideoTrack,
   VideoView,
+  type VideoTrackProps,
   registerGlobals,
   setupIOSAudioManagement,
   type AppleAudioCategoryOption,
   type AppleAudioConfiguration,
 } from '@livekit/react-native'
 import type { VideoTrack } from 'livekit-client'
+import * as Native from 'glofly-native'
 
 // LiveKit on phones: WebRTC comes from @livekit/react-native-webrtc, audio routing from
 // LiveKit's AudioSession. (media.web.tsx is the browser preview's version.)
@@ -22,9 +26,10 @@ export function setupWebRTC() {
 }
 
 /**
- * Starts the call audio session. Android: every call starts on the speaker (Bluetooth or
- * headphones first when connected); the Audio button switches to the earpiece. iPhone: voice calls
- * start on the earpiece, video calls on the speaker.
+ * Starts the call audio session. Every call starts on the speaker (Bluetooth or headphones first
+ * when connected); the Audio button switches to the earpiece. iPhone voice calls used to start on
+ * the earpiece; since Oct 13 they start on the speaker too (CallSpeaker.swift keeps the output off
+ * the earpiece without touching the policy below, so the Audio button can still pick "Phone").
  *
  * iPhone: LiveKit v3 runs iOS's audio session by itself, following the call's audio engine
  * (registerGlobals sets that up). Glofly used to also switch the session on by hand
@@ -48,6 +53,9 @@ export async function startCallAudio(video: boolean): Promise<void> {
       deactivateOnStop: true,
     })
     await AudioDeviceModule.setRecordingAlwaysPreparedMode(true).catch(() => {})
+    // Builds before Oct 13 don't have CallSpeaker: video still starts on the speaker (the policy's
+    // defaultToSpeaker) and voice on the earpiece, as before.
+    Native.keepCallOnSpeaker(true)
     return
   }
   await AudioSession.configureAudio({
@@ -63,6 +71,7 @@ export async function startCallAudio(video: boolean): Promise<void> {
 export async function stopCallAudio(): Promise<void> {
   if (Platform.OS === 'ios') {
     // LiveKit lets the session go once the engine stops (deactivateOnStop).
+    Native.stopCallSpeaker()
     await AudioDeviceModule.setRecordingAlwaysPreparedMode(false).catch(() => {})
     return
   }
@@ -105,13 +114,50 @@ export async function audioRoutes(): Promise<AudioRoute[]> {
 
 export async function selectAudioRoute(route: AudioRoute): Promise<void> {
   if (Platform.OS === 'ios') {
-    if (route === 'bluetooth' || route === 'headset') await AudioSession.showAudioRoutePicker().catch(() => {})
-    else await AudioSession.selectAudioOutput(route === 'speaker' ? 'force_speaker' : 'default').catch(() => {})
+    if (route === 'bluetooth' || route === 'headset') {
+      // iOS's own picker; if they pick the iPhone itself there, iOS decides speaker vs earpiece.
+      Native.keepCallOnSpeaker(false)
+      await AudioSession.showAudioRoutePicker().catch(() => {})
+    } else if (!Native.keepCallOnSpeaker(route === 'speaker')) {
+      await AudioSession.selectAudioOutput(route === 'speaker' ? 'force_speaker' : 'default').catch(() => {})
+    }
     return
   }
   await AudioSession.selectAudioOutput(route).catch(() => {})
 }
 
-export function CallVideo({ track, style, mirror, contain, zOrder }: { track: VideoTrack; style?: ViewStyle; mirror?: boolean; contain?: boolean; zOrder?: number }) {
+/** Where the call is playing right now (iPhone builds from Oct 13; null when unknown). */
+export function currentAudioRoute(): AudioRoute | null {
+  if (Platform.OS !== 'ios') return null
+  const r = Native.callAudioRoute()
+  if (r === 'speaker' || r === 'earpiece' || r === 'headset' || r === 'bluetooth') return r
+  if (r === 'car' || r === 'airplay') return 'bluetooth'
+  return null
+}
+
+/**
+ * `pip` (iPhone): this video goes into iOS's floating window when you leave Glofly mid-call
+ * (`shape` is its rough width:height). Only one view on screen should have it. Android's floating
+ * window is the whole app (CallPip.tsx), so `pip` does nothing there.
+ */
+export function CallVideo({ track, style, mirror, contain, zOrder, pip, shape }: { track: VideoTrack; style?: ViewStyle; mirror?: boolean; contain?: boolean; zOrder?: number; pip?: boolean; shape?: [number, number] }) {
+  const usePip = !!pip && Platform.OS === 'ios'
+  // LiveKit's newer VideoTrack view is the one with picture-in-picture. It reads only the
+  // publication's track and id from the reference, so a small stand-in is enough.
+  const trackRef = useMemo(() => ({ publication: { track, trackSid: track.sid } }) as unknown as VideoTrackProps['trackRef'], [track])
+  if (usePip) {
+    const w = shape?.[0] ?? 9
+    const h = shape?.[1] ?? 16
+    return (
+      <LKVideoTrack
+        trackRef={trackRef}
+        style={style}
+        mirror={mirror}
+        objectFit={contain ? 'contain' : 'cover'}
+        zOrder={zOrder}
+        iosPIP={{ enabled: true, startAutomatically: true, preferredSize: { width: w, height: h } }}
+      />
+    )
+  }
   return <VideoView videoTrack={track} style={style} mirror={mirror} objectFit={contain ? 'contain' : 'cover'} zOrder={zOrder} />
 }

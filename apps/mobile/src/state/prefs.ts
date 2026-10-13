@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { DEFAULT_PHONE_MESSAGE_SOUND, DEFAULT_PHONE_RINGTONE } from '@glofly/shared'
 import { prefs } from '@/lib/storage'
 
 // This phone's settings (Settings → Notifications & sounds), kept on the phone like the desktop
@@ -9,9 +10,12 @@ export type PhonePrefs = {
   preview: boolean
   sounds: boolean
   vibrate: boolean
+  /** Picked message sound and ringtone (@glofly/shared PHONE_MESSAGE_SOUNDS / PHONE_RINGTONES ids). */
+  messageSound: string
+  ringtone: string
 }
 
-const defaults: PhonePrefs = { notifications: true, preview: true, sounds: true, vibrate: true }
+const defaults: PhonePrefs = { notifications: true, preview: true, sounds: true, vibrate: true, messageSound: DEFAULT_PHONE_MESSAGE_SOUND, ringtone: DEFAULT_PHONE_RINGTONE }
 
 export const usePhonePrefs = create<PhonePrefs & { loaded: boolean }>(() => ({ ...defaults, loaded: false }))
 

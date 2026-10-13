@@ -62,11 +62,15 @@ export function callLine(call: Call | undefined, meId: string): { text: string; 
   return { text: total > 2 ? `In call · ${joined} of ${total}` : 'In call', joined: mine }
 }
 
-/** The Chats list: pinned ones, then the rest (closed chats left out). */
+/**
+ * The Chats list: pinned ones, then the rest (closed chats left out). Pinned chats go oldest pin
+ * first, like the desktop app; dragging them to reorder re-times the pins (PUT /pins/order), so
+ * the order you set shows the same on every app. (Before Oct 13 phones showed newest pin first.)
+ */
 export function chatSections(all: ConversationSummary[]) {
   const pinned = all
     .filter((c) => c.pinnedAt)
-    .sort((a, b) => (b.pinnedAt ?? '').localeCompare(a.pinnedAt ?? ''))
+    .sort((a, b) => (a.pinnedAt ?? '').localeCompare(b.pinnedAt ?? ''))
   const chats = all.filter((c) => !c.pinnedAt && !isClosed(c)).sort((a, b) => b.activityAt.localeCompare(a.activityAt))
   return { pinned, chats }
 }
@@ -82,3 +86,11 @@ export function unreadTotal(all: ConversationSummary[]): number {
 }
 
 export { chatTitle, isMuted }
+
+/** New pinned times for this order (what the server does too), so the list moves right away. */
+export function pinTimesFor(ids: string[], all: ConversationSummary[]): Record<string, string> {
+  const times = ids.map((id) => all.find((c) => c.id === id)?.pinnedAt).filter((t): t is string => !!t)
+  if (!times.length) return {}
+  const base = Math.min(...times.map((t) => Date.parse(t)))
+  return Object.fromEntries(ids.map((id, i) => [id, new Date(base + i).toISOString()]))
+}

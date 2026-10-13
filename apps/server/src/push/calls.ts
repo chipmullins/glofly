@@ -4,7 +4,7 @@ import { listNames } from "@glofly/shared";
 import { db } from "../db";
 import { conversationMembers, conversations, pushDevices, users } from "../db/schema";
 import { liveSessions } from "../realtime";
-import { pushConfigured, sendPush, type PushData } from "./fcm";
+import { pushConfigured, sendPush, type DeviceSounds, type PushData } from "./fcm";
 import { forgetTokens } from "./devices";
 import { sendVoip, voipConfigured } from "./apns";
 
@@ -42,6 +42,8 @@ async function devicesOf(userIds: string[]) {
       sessionId: pushDevices.sessionId,
       platform: pushDevices.platform,
       voipToken: pushDevices.voipToken,
+      messageSound: pushDevices.messageSound,
+      ringtone: pushDevices.ringtone,
       status: users.statusPreference,
     })
     .from(pushDevices)
@@ -71,11 +73,11 @@ async function chatTitles(conversationId: string, readerIds: string[]): Promise<
   return out;
 }
 
-type Outgoing = { token: string; data: PushData; ttl: number; platform: string; voip?: string };
+type Outgoing = { token: string; data: PushData; ttl: number; platform: string; voip?: string; sounds?: DeviceSounds };
 
 async function send(list: Outgoing[]) {
   // iPhones with a VoIP token ring through Apple directly (CallKit, lock screen); the rest via Firebase.
-  const results = await Promise.all(list.map((p) => (p.voip ? sendVoip(p.voip, p.data, p.ttl) : sendPush(p.token, p.data, p.ttl, p.platform))));
+  const results = await Promise.all(list.map((p) => (p.voip ? sendVoip(p.voip, p.data, p.ttl) : sendPush(p.token, p.data, p.ttl, p.platform, p.sounds))));
   await forgetTokens(list.filter((p, i) => !p.voip && results[i] === "gone").map((p) => p.token));
   const deadVoip = list.filter((p, i) => p.voip && results[i] === "gone").map((p) => p.voip!);
   if (deadVoip.length) await db.update(pushDevices).set({ voipToken: null }).where(inArray(pushDevices.voipToken, deadVoip));
@@ -121,6 +123,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
       out.push({
         token: d.token,
         platform: d.platform,
+        sounds: { messageSound: d.messageSound, ringtone: d.ringtone },
         // iPhone with lock-screen calls: a VoIP push (never in Do not disturb: iOS would ring anyway,
         // since every VoIP push must show a call; those get the silent notification instead).
         voip: d.platform === "ios" && d.voipToken && voipConfigured && d.status !== "dnd" ? d.voipToken : undefined,
@@ -142,6 +145,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
       out.push({
         token: d.token,
         platform: d.platform,
+        sounds: { messageSound: d.messageSound, ringtone: d.ringtone },
         ttl: 24 * 60 * 60,
         data: {
           type: "call_missed",

@@ -20,11 +20,33 @@ const googleServices = process.env.GOOGLE_SERVICES_JSON ?? (existsSync(join(__di
 const googleServiceInfo =
   process.env.GOOGLE_SERVICE_INFO_PLIST ?? (existsSync(join(__dirname, 'GoogleService-Info.plist')) ? './GoogleService-Info.plist' : undefined)
 
+// Over-the-air updates (expo-updates, Oct 13): JavaScript-only changes reach installed phones
+// without a new build (`npm run update:preview` / `update:production` in apps/mobile, see
+// scripts/update.mjs). A build only takes updates with its own RUNTIME_VERSION. **Bump it whenever
+// native code changes** (modules/glofly-native, a native package added or updated, plugins, or
+// native settings below) and make new builds: an update for newer native code would crash older
+// builds. Development builds load from the computer instead.
+const EXPO_PROJECT_ID = '3aa33fd8-907f-4f50-b1a8-db37c96e107b'
+const updateChannel = variant === 'production' ? 'production' : 'preview'
+const RUNTIME_VERSION = '2026-10-13'
+
 const config: ExpoConfig = {
   name: 'Glofly',
   slug: 'glofly',
   scheme: 'glofly',
   version: '1.0.0',
+  runtimeVersion: RUNTIME_VERSION,
+  updates: {
+    url: `https://u.expo.dev/${EXPO_PROJECT_ID}`,
+    enabled: !isDev,
+    // Checked at launch without waiting for it: a downloaded update is used from the next launch
+    // (src/lib/updates.ts also applies it when you leave the app, so it lands within minutes).
+    checkAutomatically: 'ON_LOAD',
+    fallbackToCacheTimeout: 0,
+    // Builds made outside EAS (the GitHub Android check) still know their channel; EAS builds set
+    // it from eas.json (the same names).
+    requestHeaders: { 'expo-channel-name': updateChannel },
+  },
   // Rotation is allowed so the call screen can go landscape; every other screen locks itself upright
   // (expo-screen-orientation: starts locked, src/app/_layout.tsx keeps it locked, call.tsx unlocks).
   orientation: 'default',
@@ -90,6 +112,7 @@ const config: ExpoConfig = {
   web: { output: 'single', favicon: './assets/firefly.png' },
   plugins: [
     'expo-router',
+    'expo-updates',
     'expo-secure-store',
     'expo-localization',
     ['expo-screen-orientation', { initialOrientation: 'PORTRAIT_UP' }],
@@ -129,6 +152,8 @@ const config: ExpoConfig = {
     ],
     ['expo-media-library', { savePhotosPermission: 'Glofly saves photos from chats when you ask it to.', granularPermissions: ['photo'] }],
     '@livekit/react-native-expo-plugin',
+    // Calls shrink into a floating window when you leave Glofly (Android; iPhone needs nothing extra).
+    './plugins/with-picture-in-picture.js',
     [
       '@config-plugins/react-native-webrtc',
       {
@@ -141,7 +166,7 @@ const config: ExpoConfig = {
   extra: {
     variant,
     // The Expo project (@chipmullins/glofly), from `eas init` (Oct 12).
-    eas: { projectId: '3aa33fd8-907f-4f50-b1a8-db37c96e107b' },
+    eas: { projectId: EXPO_PROJECT_ID },
   },
 }
 

@@ -19,7 +19,8 @@ import * as api from '@/api/glofly'
 import { isAppActive, sendTyping } from '@/api/realtime'
 import { useStore, putMessage } from '@/state/store'
 import { useSession } from '@/state/session'
-import { loadLatest, loadOlder, markChatRead, updateMessage } from '@/state/sync'
+import { loadLatest, loadOlder, loadUntil, markChatRead, updateMessage } from '@/state/sync'
+import { SearchPanel } from '@/chat/SearchPanel'
 import { chatMenu } from '@/lib/chatActions'
 import { firstName } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
@@ -57,6 +58,9 @@ export default function ChatScreen() {
   const [editing, setEditing] = useState<Message | null>(null)
   const [actionsFor, setActionsFor] = useState<Message | null>(null)
   const [highlight, setHighlight] = useState<string | null>(null)
+  const [searching, setSearching] = useState(false)
+  /** A message to scroll to once it's in the list (after loading older pages). */
+  const [pendingJump, setPendingJump] = useState<string | null>(null)
   const [viewer, setViewer] = useState<ViewerState | null>(null)
   const composer = useRef<ComposerHandle>(null)
   const list = useRef<FlatList<RowInfo>>(null)
@@ -199,13 +203,29 @@ export default function ChatScreen() {
     }
   }
 
-  function jumpTo(messageId: string) {
-    const index = rows.findIndex((r) => r.message.id === messageId)
-    if (index < 0) return void inform('That message is further back', 'Scroll up to find it.')
+  function scrollTo(index: number, messageId: string) {
     list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true })
     setHighlight(messageId)
-    setTimeout(() => setHighlight(null), 1600)
+    setTimeout(() => setHighlight((h) => (h === messageId ? null : h)), 2000)
   }
+
+  /** Scrolls to a message (a reply's original, a search result), loading older ones if needed. */
+  async function jumpTo(messageId: string) {
+    const index = rows.findIndex((r) => r.message.id === messageId)
+    if (index >= 0) return scrollTo(index, messageId)
+    const found = await loadUntil(id, messageId)
+    if (!found) return void inform("Couldn't find that message", 'It may have been deleted.')
+    setPendingJump(messageId) // scrolled once the list has re-rendered with it
+  }
+  useEffect(() => {
+    if (!pendingJump) return
+    const index = rows.findIndex((r) => r.message.id === pendingJump)
+    if (index < 0) return
+    setPendingJump(null)
+    // Let the list lay out the newly loaded rows first.
+    setTimeout(() => scrollTo(index, pendingJump), 120)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, pendingJump])
 
   if (!chat) {
     return (
@@ -264,6 +284,7 @@ export default function ChatScreen() {
               </>
             )
           ) : null}
+          <IconButton name="search" label="Search this chat" box={40} size={22} onPress={() => setSearching(true)} />
           <IconButton name="more" label="More options" box={40} onPress={() => void chatMenu(chat, { inChat: true })} />
         </View>
       </View>
@@ -307,7 +328,7 @@ export default function ChatScreen() {
             highlight={highlight === item.message.id}
             onLongPress={(m) => !isLocal(m) && setActionsFor(m)}
             onReact={(m, e) => void react(m, e)}
-            onQuotePress={jumpTo}
+            onQuotePress={(mid) => void jumpTo(mid)}
             onRetry={async (m) => {
               const pick = await chooseFrom([
                 { key: 'retry', label: 'Try again', icon: 'refresh' },
@@ -399,6 +420,18 @@ export default function ChatScreen() {
         </BottomSheet>
       ) : null}
       {viewer ? <PhotoViewer state={viewer} onClose={() => setViewer(null)} /> : null}
+      {searching ? (
+        <SearchPanel
+          chatId={id}
+          meId={meId}
+          people={people}
+          onClose={() => setSearching(false)}
+          onPick={(mid) => {
+            setSearching(false)
+            void jumpTo(mid)
+          }}
+        />
+      ) : null}
     </KeyboardAvoidingView>
   )
 }

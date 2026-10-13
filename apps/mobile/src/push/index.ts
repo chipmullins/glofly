@@ -1,6 +1,6 @@
 import { Linking, Platform } from 'react-native'
 import * as Native from 'glofly-native'
-import { isMuted, mentionsMe, type Message } from '@glofly/shared'
+import { isMuted, mentionsMe, phoneMessageSound, phoneRingtone, type Message } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { onLive, isAppActive } from '@/api/realtime'
 import { APP_VERSION, PLATFORM, SERVER_URL } from '@/lib/config'
@@ -17,7 +17,17 @@ import { playSound, vibrate } from './sounds'
 
 let registeredToken: string | null = null
 
+/** The picked sounds, for the native side (notification channels, CallKit, in-app tones on iPhone). */
+function applySounds(): { messageSound: string; ringtone: string } {
+  const p = usePhonePrefs.getState()
+  const message = phoneMessageSound(p.messageSound)
+  const ring = phoneRingtone(p.ringtone)
+  Native.setSounds(message.native, ring.native)
+  return { messageSound: message.id, ringtone: ring.id }
+}
+
 async function register(): Promise<void> {
+  const sounds = applySounds()
   const { status, token: session, user } = useSession.getState()
   if (status !== 'signedIn' || !session || !user) return
   const p = usePhonePrefs.getState()
@@ -51,7 +61,8 @@ async function register(): Promise<void> {
   if (!token) return
   // iPhone: Apple's VoIP token too, so calls ring on the lock screen (CallKit).
   const voip = Platform.OS === 'ios' ? Native.voipToken() : null
-  const r = await api.registerPush(token, p.preview, voip ?? undefined)
+  // The picked sounds too: iPhone notifications name the sound file (Android's are made on the phone).
+  const r = await api.registerPush(token, p.preview, voip ?? undefined, sounds)
   if (r.ok) registeredToken = token
 }
 

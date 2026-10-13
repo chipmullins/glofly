@@ -1,5 +1,6 @@
 import { createSign } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { phoneMessageSound, phoneRingtone } from "@glofly/shared";
 import { redis } from "../redis";
 
 // Sends push messages to phones through Firebase Cloud Messaging (the HTTP v1 API).
@@ -94,7 +95,13 @@ async function countFailure() {
 }
 
 /** The APNs part of a push for an iPhone, built from the same data the Android app gets. */
-export function apnsFor(data: PushData, ttlSeconds: number): Record<string, unknown> {
+/** The sounds picked on a phone (push_devices; null = defaults). */
+export type DeviceSounds = { messageSound?: string | null; ringtone?: string | null };
+
+export function apnsFor(data: PushData, ttlSeconds: number, sounds: DeviceSounds = {}): Record<string, unknown> {
+  // The .caf files are in the iPhone app (modules/glofly-native/ios/sounds); unknown ids get the defaults.
+  const messageSound = `${phoneMessageSound(sounds.messageSound).native}.caf`;
+  const ringSound = `${phoneRingtone(sounds.ringtone).native}.caf`;
   const expiration = String(Math.floor(Date.now() / 1000) + Math.max(0, Math.round(ttlSeconds)));
   // Clearing a notification (read elsewhere, call answered or over): a silent background push the
   // app handles if iOS wakes it (best effort; iOS can delay or skip these).
@@ -111,11 +118,11 @@ export function apnsFor(data: PushData, ttlSeconds: number): Record<string, unkn
     aps.alert = { title: data.title || data.senderName || "Glofly", body: data.text || "New message" };
     aps["thread-id"] = data.conversationId;
     aps.category = "GLOFLY_MESSAGE";
-    aps.sound = "glofly_message.caf";
+    aps.sound = messageSound;
   } else if (data.type === "friend_request") {
     aps.alert = { title: data.title || "Glofly", body: data.text || "sent you a friend request" };
     aps["thread-id"] = "friends";
-    aps.sound = "glofly_message.caf";
+    aps.sound = messageSound;
   } else if (data.type === "call_ring") {
     const kind = data.video === "1" ? "video" : "voice";
     aps.alert = {
@@ -124,13 +131,13 @@ export function apnsFor(data: PushData, ttlSeconds: number): Record<string, unkn
     };
     aps["interruption-level"] = "time-sensitive";
     aps.category = "GLOFLY_CALL";
-    if (data.dnd !== "1") aps.sound = "glofly_ringtone.caf";
+    if (data.dnd !== "1") aps.sound = ringSound;
     // The missed-call notification later replaces this one.
     headers["apns-collapse-id"] = data.callId;
   } else if (data.type === "call_missed") {
     aps.alert = { title: data.title || "Missed call", body: data.text || "Missed call" };
     aps["thread-id"] = data.conversationId;
-    aps.sound = "glofly_message.caf";
+    aps.sound = messageSound;
     headers["apns-collapse-id"] = data.callId;
   } else {
     aps.alert = { title: data.title || "Glofly", body: data.text || "" };
@@ -147,6 +154,7 @@ export async function sendPush(
   data: PushData,
   ttlSeconds = 24 * 60 * 60,
   platform: string = "android",
+  sounds: DeviceSounds = {},
 ): Promise<PushResult> {
   if (!account) return "failed";
   try {
@@ -159,7 +167,7 @@ export async function sendPush(
           data,
           // High priority wakes the phone right away; everything Glofly sends is shown or acted on.
           ...(platform === "ios"
-            ? { apns: apnsFor(data, ttlSeconds) }
+            ? { apns: apnsFor(data, ttlSeconds, sounds) }
             : { android: { priority: "high", ttl: `${Math.max(0, Math.round(ttlSeconds))}s` } }),
         },
       }),

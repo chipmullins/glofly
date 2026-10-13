@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
-import { FlatList, TextInput, View } from 'react-native'
+import { TextInput, View } from 'react-native'
+// Gesture-handler's scroll view: a group being dragged stops the list scrolling under it.
+import { ScrollView } from 'react-native-gesture-handler'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { chatTitle, groupMatches, isMuted, memberCountLabel, mutedLabel, sortGroups, type GroupSummary } from '@glofly/shared'
@@ -15,6 +17,7 @@ import { chooseFrom, inform, type SheetItem } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Text, webNoOutline } from '@/ui/kit'
 import { Fab } from '@/ui/Fab'
+import { ReorderList, reorderActive } from '@/ui/Reorder'
 import { font, useTheme } from '@/ui/theme'
 
 export default function Groups() {
@@ -34,15 +37,23 @@ export default function Groups() {
 
   const onlineCount = (g: GroupSummary) => g.members.filter((m) => presence[m.id] && presence[m.id].status !== 'offline').length + 1
 
+  async function saveOrder(ids: string[]) {
+    const before = Object.fromEntries(groups.map((x) => [x.id, x.groupPosition]))
+    ids.forEach((id, index) => patchConversation(id, { groupPosition: index }))
+    const r = await api.orderGroups(ids)
+    if (!r.ok) {
+      for (const [id, pos] of Object.entries(before)) patchConversation(id, { groupPosition: pos })
+      void inform("Couldn't move it", r.message)
+    }
+  }
+
   async function move(g: GroupSummary, by: -1 | 1) {
     const ids = groups.map((x) => x.id)
     const i = ids.indexOf(g.id)
     const j = i + by
     if (j < 0 || j >= ids.length) return
     ;[ids[i], ids[j]] = [ids[j], ids[i]]
-    ids.forEach((id, index) => patchConversation(id, { groupPosition: index }))
-    const r = await api.orderGroups(ids)
-    if (!r.ok) void inform("Couldn't move it", r.message)
+    await saveOrder(ids)
   }
 
   async function menu(g: GroupSummary) {
@@ -86,12 +97,8 @@ export default function Groups() {
           />
         </View>
       </View>
-      <FlatList
-        data={shown}
-        keyExtractor={(g) => g.id}
-        contentContainerStyle={{ paddingTop: 6, paddingBottom: 96 }}
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
+      <ScrollView contentContainerStyle={{ paddingTop: 6, paddingBottom: 96 }} keyboardShouldPersistTaps="handled">
+        {shown.length === 0 ? (
           <View style={{ padding: 32, alignItems: 'center', gap: 8 }}>
             <Icon name="groups" size={40} color={c.faint} />
             <Text display size={20}>
@@ -103,22 +110,32 @@ export default function Groups() {
               </Text>
             ) : null}
           </View>
-        }
-        renderItem={({ item: g }) => (
-          <ChatRow
-            chat={g}
-            meId={meId}
-            nameOf={nameOf}
-            typing={typing[g.id]}
-            call={calls[g.id]}
-            now={now}
-            subtitle={`${memberCountLabel(g.memberCount)} · ${onlineCount(g)} online`}
-            onPress={() => void openChat(g.id)}
-            onLongPress={() => void menu(g)}
-            onJoin={() => void joinCallIn(g.id, false)}
-          />
-        )}
-      />
+        ) : null}
+        {/* Hold a group and drag it to reorder (not while searching); hold and let go for its menu. */}
+        <ReorderList
+          items={shown}
+          keyOf={(g) => g.id}
+          enabled={!query.trim()}
+          onReorder={(ids) => void saveOrder(ids)}
+          onHold={(g) => void menu(g)}
+          renderItem={(g) => (
+            <View style={{ backgroundColor: c.bg }}>
+              <ChatRow
+                chat={g}
+                meId={meId}
+                nameOf={nameOf}
+                typing={typing[g.id]}
+                call={calls[g.id]}
+                now={now}
+                subtitle={`${memberCountLabel(g.memberCount)} · ${onlineCount(g)} online`}
+                onPress={() => void openChat(g.id)}
+                onLongPress={() => !reorderActive() && void menu(g)}
+                onJoin={() => void joinCallIn(g.id, false)}
+              />
+            </View>
+          )}
+        />
+      </ScrollView>
       <Fab label="Create group" icon="addPerson" onPress={() => router.push('/new-group')} />
     </View>
   )

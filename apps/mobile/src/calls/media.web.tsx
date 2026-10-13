@@ -15,8 +15,11 @@ export async function audioRoutes(): Promise<AudioRoute[]> {
   return ['speaker']
 }
 export async function selectAudioRoute(_route: AudioRoute): Promise<void> {}
+export function currentAudioRoute(): AudioRoute | null {
+  return null
+}
 
-export function CallVideo({ track, style, mirror, contain }: { track: VideoTrack; style?: ViewStyle; mirror?: boolean; contain?: boolean; zOrder?: number }) {
+export function CallVideo({ track, style, mirror, contain }: { track: VideoTrack; style?: ViewStyle; mirror?: boolean; contain?: boolean; zOrder?: number; pip?: boolean; shape?: [number, number] }) {
   const ref = useRef<HTMLVideoElement>(null)
   useEffect(() => {
     const el = ref.current

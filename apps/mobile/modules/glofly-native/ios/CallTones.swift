@@ -29,7 +29,9 @@ final class CallTones {
 
   /// Plays a call sound; `repeat` keeps it going until `stop()`. False if the sound is unknown.
   func play(_ name: String, repeat repeating: Bool, volume: Float) -> Bool {
-    guard let file = CallTones.files[name],
+    // The message sound and ringtone are the ones picked in Settings (ToneChoices).
+    let picked = name == "message" ? ToneChoices.message() : name == "ringtone" ? ToneChoices.ringtone() : nil
+    guard let file = picked ?? CallTones.files[name],
           let url = Bundle.main.url(forResource: file, withExtension: "caf"),
           let player = try? AVAudioPlayer(contentsOf: url)
     else { return false }
@@ -50,5 +52,31 @@ final class CallTones {
   func stop() {
     loop?.stop()
     loop = nil
+  }
+}
+
+/// The message sound and ringtone picked in Settings → Notifications & sounds (Oct 13), as .caf
+/// names in the app. A phone setting, kept in UserDefaults (it survives signing out). Names that
+/// aren't in this build fall back to the originals.
+enum ToneChoices {
+  private static let defaults = UserDefaults.standard
+
+  private static func valid(_ name: String?, _ fallback: String) -> String {
+    guard let name, Bundle.main.url(forResource: name, withExtension: "caf") != nil else { return fallback }
+    return name
+  }
+
+  static func message() -> String { valid(defaults.string(forKey: "glofly.sound.message"), "glofly_message") }
+  static func ringtone() -> String { valid(defaults.string(forKey: "glofly.sound.ringtone"), "glofly_ringtone") }
+
+  /// For CallKit's ringtoneSound (nil = iOS's own ringtone, if even the default is missing).
+  static func ringtoneFile() -> String? {
+    let name = ringtone()
+    return Bundle.main.url(forResource: name, withExtension: "caf") != nil ? name + ".caf" : nil
+  }
+
+  static func save(message: String, ringtone: String) {
+    defaults.set(message, forKey: "glofly.sound.message")
+    defaults.set(ringtone, forKey: "glofly.sound.ringtone")
   }
 }

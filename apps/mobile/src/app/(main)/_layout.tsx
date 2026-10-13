@@ -4,7 +4,9 @@ import { useTheme } from '@/ui/theme'
 import { startRealtime } from '@/api/realtime'
 import { startPush } from '@/push'
 import { startCalls } from '@/calls/controller'
+import { startUpdates } from '@/lib/updates'
 import { CallOverlay, WithCallStrip } from '@/calls/CallOverlay'
+import { CallPip } from '@/calls/CallPip'
 import { TeamNotice } from '@/ui/TeamNotice'
 
 // Everything after signing in: the live connection, push notifications and calls start here.
@@ -15,6 +17,7 @@ export default function MainLayout() {
     startRealtime()
     startPush()
     startCalls()
+    startUpdates()
   }, [])
   return (
     <>
@@ -28,6 +31,8 @@ export default function MainLayout() {
       </WithCallStrip>
       <CallOverlay />
       <TeamNotice />
+      {/* Last, so the floating call window covers everything. */}
+      <CallPip />
     </>
   )
 }

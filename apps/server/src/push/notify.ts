@@ -18,11 +18,13 @@ import { forgetTokens } from "./devices";
 // - "Show message preview" off on a phone: "New message" instead of the text.
 // - Reading a chat on any device clears its notification on your other phones.
 
-type Device = { token: string; sessionId: string; preview: boolean; platform: string };
+type Device = { token: string; sessionId: string; preview: boolean; platform: string; messageSound?: string | null; ringtone?: string | null };
 
 /** Sends to every device given, forgetting tokens Firebase says are gone. */
 async function deliver(list: { device: Device; data: PushData; ttl?: number }[]): Promise<void> {
-  const results = await Promise.all(list.map((p) => sendPush(p.device.token, p.data, p.ttl, p.device.platform)));
+  const results = await Promise.all(
+    list.map((p) => sendPush(p.device.token, p.data, p.ttl, p.device.platform, { messageSound: p.device.messageSound, ringtone: p.device.ringtone })),
+  );
   await forgetTokens(list.filter((_, i) => results[i] === "gone").map((p) => p.device.token));
 }
 
@@ -58,6 +60,7 @@ export async function notifyMessage(
       sessionId: pushDevices.sessionId,
       preview: pushDevices.preview,
       platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
       status: users.statusPreference,
       mutedUntil: conversationMembers.mutedUntil,
     })
@@ -157,6 +160,7 @@ export async function notifyFriendRequest(
       sessionId: pushDevices.sessionId,
       preview: pushDevices.preview,
       platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
       status: users.statusPreference,
     })
     .from(pushDevices)

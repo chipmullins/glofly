@@ -43,7 +43,7 @@ class GloflyNativeModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("GloflyNative")
-    Events("pushToken", "callRing", "hangUp")
+    Events("pushToken", "callRing", "hangUp", "pipChanged")
 
     OnCreate {
       instance = WeakReference(this@GloflyNativeModule)
@@ -155,6 +155,35 @@ class GloflyNativeModule : Module() {
 
     Function("stopOngoingCall") {
       OngoingCallService.stop(context.applicationContext)
+    }
+
+    // ---- Sounds picked in Settings (res/raw names): notification channels follow them ----
+
+    Function("setSounds") { message: String, ringtone: String ->
+      Notifier.setSounds(context.applicationContext, message, ringtone)
+    }
+
+    // ---- Picture-in-picture during calls (Pip.kt) ----
+
+    Function("pipSupported") {
+      val activity = appContext.currentActivity ?: return@Function false
+      Pip.supported(activity)
+    }
+    Function("setPipCall") { on: Boolean, width: Int, height: Int ->
+      val activity = appContext.currentActivity ?: return@Function
+      Pip.set(activity, on, width, height)
+    }
+    Function("enterPip") {
+      val activity = appContext.currentActivity ?: return@Function false
+      if (!Pip.supported(activity)) return@Function false
+      activity.runOnUiThread { Pip.enter(activity) }
+      true
+    }
+    Function("isInPip") {
+      Pip.isIn(appContext.currentActivity)
+    }
+    OnUserLeavesActivity {
+      appContext.currentActivity?.let { Pip.onUserLeave(it) }
     }
 
     // ---- Voice messages ----

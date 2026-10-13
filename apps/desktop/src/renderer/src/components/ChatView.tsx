@@ -1315,7 +1315,8 @@ export default function ChatView({
                         avatarVersion={me.avatarVersion}
                       />
                     </span>
-                  ) : sender && isGroup ? (
+                  ) : sender ? (
+                    // Anyone else's photo opens their profile card (DMs too since Oct 13, like the phone app).
                     <button
                       type="button"
                       className="message-face"
@@ -1330,12 +1331,7 @@ export default function ChatView({
                       />
                     </button>
                   ) : (
-                    <Avatar
-                      id={m.senderId}
-                      name={sender?.displayName ?? '?'}
-                      avatarVersion={sender?.avatarVersion}
-                      size={40}
-                    />
+                    <Avatar id={m.senderId} name="?" avatarVersion={null} size={40} />
                   )
                 }
                 time={clockTime(m.createdAt)}

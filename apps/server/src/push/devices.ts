@@ -5,9 +5,10 @@ import { z } from "zod";
 import { db } from "../db";
 import { pushDevices } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
+import { isPhoneMessageSound, isPhoneRingtone } from "@glofly/shared";
 
 // Phones register for push notifications here, after signing in:
-//   PUT /devices/push    { token, platform: "android" | "ios", preview?, voipToken? }   (again whenever the token or setting changes)
+//   PUT /devices/push    { token, platform: "android" | "ios", preview?, voipToken?, messageSound?, ringtone? }   (again whenever the token or a setting changes)
 //   DELETE /devices/push                                                    (notifications turned off on this phone)
 // The registration belongs to this session, so signing out removes it.
 
@@ -38,6 +39,10 @@ const registration = z.object({
     .regex(/^(sandbox:)?[0-9a-f]{32,200}$/i)
     .nullable()
     .optional(),
+  // The sounds picked on this phone (Oct 13; iPhone notifications name them). Left out = unchanged
+  // (older apps). A name this server doesn't know is stored as the default (null).
+  messageSound: z.string().max(40).optional(),
+  ringtone: z.string().max(40).optional(),
 });
 
 devicesRouter.put("/push", limiter, async (req, res) => {
@@ -46,8 +51,12 @@ devicesRouter.put("/push", limiter, async (req, res) => {
     res.status(400).json({ error: "invalid", message: "That isn't a push registration Glofly understands." });
     return;
   }
-  const { token, platform, preview, voipToken } = parsed.data;
+  const { token, platform, preview, voipToken, messageSound, ringtone } = parsed.data;
   const voip = platform === "ios" && voipToken !== undefined ? { voipToken } : {};
+  const sounds = {
+    ...(messageSound !== undefined ? { messageSound: isPhoneMessageSound(messageSound) ? messageSound : null } : {}),
+    ...(ringtone !== undefined ? { ringtone: isPhoneRingtone(ringtone) ? ringtone : null } : {}),
+  };
   const sessionId = sessionOf(res);
   const userId = userOf(res);
   await db.transaction(async (tx) => {
@@ -55,10 +64,10 @@ devicesRouter.put("/push", limiter, async (req, res) => {
     await tx.delete(pushDevices).where(and(eq(pushDevices.token, token), ne(pushDevices.sessionId, sessionId)));
     await tx
       .insert(pushDevices)
-      .values({ sessionId, userId, platform, token, preview, ...voip })
+      .values({ sessionId, userId, platform, token, preview, ...voip, ...sounds })
       .onConflictDoUpdate({
         target: pushDevices.sessionId,
-        set: { token, platform, preview, ...voip, updatedAt: new Date() },
+        set: { token, platform, preview, ...voip, ...sounds, updatedAt: new Date() },
       });
     // A VoIP token belongs to one phone too.
     if (voip.voipToken) {

@@ -41,12 +41,17 @@ final class GloflyCallKit: NSObject, CXProviderDelegate, PKPushRegistryDelegate 
     config.maximumCallsPerCallGroup = 1
     config.supportedHandleTypes = [.generic]
     config.includesCallsInRecents = true
-    if Bundle.main.url(forResource: "glofly_ringtone", withExtension: "caf") != nil {
-      config.ringtoneSound = "glofly_ringtone.caf"
-    }
+    config.ringtoneSound = ToneChoices.ringtoneFile()
     provider = CXProvider(configuration: config)
     super.init()
     provider.setDelegate(self, queue: nil)
+  }
+
+  /// The ringtone was changed in Settings: lock-screen calls ring with it from now on.
+  func refreshRingtone() {
+    let config = provider.configuration
+    config.ringtoneSound = ToneChoices.ringtoneFile()
+    provider.configuration = config
   }
 
   /// At app launch (a VoIP push can be what launched it).

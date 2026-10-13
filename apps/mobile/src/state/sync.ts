@@ -90,6 +90,30 @@ export async function loadOlder(id: string): Promise<void> {
   setChatMessages(id, { list: [...r.data.messages.filter((m) => !seen.has(m.id)), ...chatMessages(id).list], hasMore: r.data.hasMore, loading: false })
 }
 
+/**
+ * Loads older messages until this one is in the chat (for search results and replies further
+ * back). True once it's there. Gives up after ~2,000 messages.
+ */
+export async function loadUntil(id: string, messageId: string): Promise<boolean> {
+  for (let i = 0; i < 40; i++) {
+    const current = chatMessages(id)
+    if (current.list.some((m) => m.id === messageId)) return true
+    if (!current.list.length) {
+      await loadLatest(id)
+      continue
+    }
+    if (!current.hasMore) return false
+    if (current.loading) {
+      await new Promise((r) => setTimeout(r, 150))
+      continue
+    }
+    const before = current.list.length
+    await loadOlder(id)
+    if (chatMessages(id).list.length === before && !chatMessages(id).loading) return chatMessages(id).list.some((m) => m.id === messageId)
+  }
+  return chatMessages(id).list.some((m) => m.id === messageId)
+}
+
 /** A new message (live, or one this phone just sent): into its chat and the chats list. */
 export function receiveMessage(m: Message, opts: { appActive: boolean }): { counts: boolean } {
   putMessage(m)

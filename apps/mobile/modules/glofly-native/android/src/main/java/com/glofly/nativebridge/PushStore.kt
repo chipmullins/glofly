@@ -109,4 +109,14 @@ object PushStore {
 
   fun title(context: Context, conversationId: String): Pair<String, Boolean> =
     Pair(prefs(context).getString("title:$conversationId", "") ?: "", prefs(context).getBoolean("group:$conversationId", false))
+
+  // ---- Chosen sounds (Settings → Notifications & sounds). A phone setting: kept when you sign out. ----
+
+  private fun soundPrefs(context: Context) = context.getSharedPreferences("glofly_sounds", Context.MODE_PRIVATE)
+
+  /** res/raw names: "glofly_message" / "glofly_ringtone" are the defaults the app shipped with. */
+  fun messageSound(context: Context): String = soundPrefs(context).getString("message", "glofly_message") ?: "glofly_message"
+  fun ringtone(context: Context): String = soundPrefs(context).getString("ringtone", "glofly_ringtone") ?: "glofly_ringtone"
+  fun saveSounds(context: Context, message: String, ringtone: String) =
+    soundPrefs(context).edit().putString("message", message).putString("ringtone", ringtone).apply()
 }

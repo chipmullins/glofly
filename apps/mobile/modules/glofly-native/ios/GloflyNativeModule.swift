@@ -18,7 +18,7 @@ public class GloflyNativeModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("GloflyNative")
-    Events("pushToken", "callRing", "hangUp", "voipToken", "callAnswer", "callEnd", "callDeclined", "callMute")
+    Events("pushToken", "callRing", "hangUp", "voipToken", "callAnswer", "callEnd", "callDeclined", "callMute", "pipChanged")
 
     OnCreate {
       GloflyNativeModule.current = self
@@ -126,6 +126,12 @@ public class GloflyNativeModule: Module {
 
     Function("showOverLockScreen") { (_: Bool) in }
 
+    // Android only: on iPhone, picture-in-picture comes from LiveKit's video view (iosPIP).
+    Function("pipSupported") { () -> Bool in false }
+    Function("setPipCall") { (_: Bool, _: Int, _: Int) in }
+    Function("enterPip") { () -> Bool in false }
+    Function("isInPip") { () -> Bool in false }
+
     Function("keepScreenOn") { (on: Bool) in
       DispatchQueue.main.async { UIApplication.shared.isIdleTimerDisabled = on }
     }
@@ -150,12 +156,30 @@ public class GloflyNativeModule: Module {
       GloflyCallKit.shared.answeredInApp(callId)
     }
 
+    // Sounds picked in Settings (message sound, ringtone): in-app tones and lock-screen ringing.
+    // iPhone notifications name the sound too; the app tells the server (PUT /devices/push).
+    Function("setSounds") { (message: String, ringtone: String) in
+      ToneChoices.save(message: message, ringtone: ringtone)
+      DispatchQueue.main.async { GloflyCallKit.shared.refreshRingtone() }
+    }
+
     // Call sounds that don't disturb the call's audio session (see CallTones.swift).
     Function("playCallTone") { (name: String, repeating: Bool, volume: Double) -> Bool in
       CallTones.shared.play(name, repeat: repeating, volume: Float(volume))
     }
     Function("stopCallTone") {
       CallTones.shared.stop()
+    }
+
+    // Calls start on the speaker; the Audio menu turns this off for the earpiece (CallSpeaker.swift).
+    Function("keepCallOnSpeaker") { (on: Bool) in
+      DispatchQueue.main.async { CallSpeaker.shared.keep(on) }
+    }
+    Function("stopCallSpeaker") {
+      DispatchQueue.main.async { CallSpeaker.shared.stop() }
+    }
+    Function("callAudioRoute") { () -> String in
+      CallSpeaker.currentRoute()
     }
 
     // Call diagnostics (long-press the call's title): what iOS's one shared audio session is doing.

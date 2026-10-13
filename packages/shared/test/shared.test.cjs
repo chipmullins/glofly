@@ -62,3 +62,17 @@ test('muting and closed chats', () => {
   assert.equal(s.isClosed({ closedAt: '2026-10-10T00:00:00Z', lastMessage: { createdAt: '2026-10-09T00:00:00Z' } }), true)
   assert.equal(s.isClosed({ closedAt: '2026-10-10T00:00:00Z', lastMessage: { createdAt: '2026-10-11T00:00:00Z' } }), false)
 })
+
+test('phone sounds', () => {
+  // Defaults keep the file names phones shipped with (older builds and the server agree on them).
+  assert.equal(s.phoneMessageSound(null).native, 'glofly_message')
+  assert.equal(s.phoneRingtone(undefined).native, 'glofly_ringtone')
+  assert.equal(s.phoneRingtone('nope').id, s.DEFAULT_PHONE_RINGTONE)
+  assert.equal(s.isPhoneMessageSound('dewdrop'), true)
+  assert.equal(s.isPhoneRingtone('dewdrop'), false)
+  // Android res/raw and iPhone bundle names: lowercase letters, digits and underscores, all different.
+  const all = [...s.PHONE_MESSAGE_SOUNDS, ...s.PHONE_RINGTONES]
+  for (const x of all) assert.match(x.native, /^[a-z][a-z0-9_]*$/)
+  assert.equal(new Set(all.map((x) => x.native)).size, all.length)
+  assert.equal(new Set(all.map((x) => x.id)).size, all.length)
+})

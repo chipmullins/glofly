@@ -7,7 +7,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { chatTitle, type PublicUser } from '@glofly/shared'
 import type { VideoTrack } from 'livekit-client'
 import { useCall, hangUp, setMic, setCamera, flipCamera, ringPeople, callDiagnostics, type Tile } from '@/calls/controller'
-import { CallVideo, audioRoutes, selectAudioRoute, type AudioRoute } from '@/calls/media'
+import { featured } from '@/calls/CallPip'
+import { CallVideo, audioRoutes, currentAudioRoute, selectAudioRoute, type AudioRoute } from '@/calls/media'
 import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
 import { timer } from '@/lib/format'
@@ -43,6 +44,18 @@ export default function CallScreen() {
   const [adding, setAdding] = useState(false)
   const [diagOpen, setDiagOpen] = useState(false)
   const landscape = width > height
+
+  // iPhone: show where the call is really playing (it starts on the speaker; plugging in
+  // headphones or Bluetooth moves it there).
+  useEffect(() => {
+    const read = () => {
+      const r = currentAudioRoute()
+      if (r) setRoute(r)
+    }
+    read()
+    const t = setInterval(read, 1500)
+    return () => clearInterval(t)
+  }, [])
 
   useEffect(() => {
     allowRotation()
@@ -113,7 +126,7 @@ export default function CallScreen() {
         {screenTile ? (
           <View style={{ flex: 1, paddingTop: landscape ? topSpace : insets.top + 60, paddingBottom: landscape ? bottomSpace - 8 : 0, ...sidePad }}>
             <View style={{ flex: 1, backgroundColor: '#000' }} accessibilityLabel={`${personOf(screenTile.userId).displayName}'s shared screen`}>
-              <CallVideo track={screenTile.screen!} contain style={{ flex: 1 }} />
+              <CallVideo track={screenTile.screen!} contain style={{ flex: 1 }} pip={!screenTile.local} shape={[16, 9]} />
               <View style={{ position: 'absolute', left: 12, bottom: 12, paddingHorizontal: 12, height: 30, borderRadius: 15, backgroundColor: 'rgba(28,18,16,0.6)', justifyContent: 'center' }}>
                 <Text size={13} weight="bold" style={{ color: '#FFF' }}>
                   {screenTile.local ? 'You are sharing your screen' : `${personOf(screenTile.userId).displayName.split(' ')[0]} is sharing their screen`}
@@ -137,7 +150,7 @@ export default function CallScreen() {
           <View style={{ flex: 1 }}>
             {/* Whole picture, never cropped: a computer's wide camera on an upright phone would otherwise be
                 a zoomed-in slice of the middle (faces cut off when someone sits off to the side). */}
-            <CallVideo track={others[0].camera!} contain style={{ position: 'absolute', top: 0, left: 0, width, height }} zOrder={0} />
+            <CallVideo track={others[0].camera!} contain style={{ position: 'absolute', top: 0, left: 0, width, height }} zOrder={0} pip />
             <View style={{ position: 'absolute', left: 16 + insets.left, bottom: bottomSpace }}>{others[0].speaking ? <TalkingTag name={personOf(others[0].userId).displayName} /> : null}</View>
           </View>
         ) : !answered && s.cameraOn && self?.camera ? (
@@ -159,6 +172,7 @@ export default function CallScreen() {
             bottom={bottomSpace}
             left={insets.left}
             right={insets.right}
+            pipId={pinned && s.tiles.some((t) => t.userId === pinned && !t.local && t.camera) ? pinned : featured(s.tiles).video === 'camera' ? featured(s.tiles).tile?.userId : null}
           />
         )}
       </View>
@@ -297,7 +311,7 @@ function VoiceStage({ person, speaking, ringing, compact }: { person: PublicUser
   )
 }
 
-function TileView({ tile, person, w, h, ringing, onPress, fill }: { tile: Tile | null; person: PublicUser; w: number; h: number; ringing?: boolean; onPress?: () => void; fill?: boolean }) {
+function TileView({ tile, person, w, h, ringing, onPress, fill, pip }: { tile: Tile | null; person: PublicUser; w: number; h: number; ringing?: boolean; onPress?: () => void; fill?: boolean; pip?: boolean }) {
   const talking = tile?.speaking
   return (
     <Pressable
@@ -309,7 +323,7 @@ function TileView({ tile, person, w, h, ringing, onPress, fill }: { tile: Tile |
       {tile?.camera ? (
         // fill: the video covers the tile (edges trimmed) like FaceTime, instead of a narrow strip with
         // bars beside it. A pinned (big) tile shows the whole picture.
-        <CallVideo track={tile.camera} mirror={tile.local} contain={!fill} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} />
+        <CallVideo track={tile.camera} mirror={tile.local} contain={!fill} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} pip={pip && !tile.local} />
       ) : (
         <View style={{ opacity: ringing ? 0.85 : 1, borderRadius: 60, boxShadow: ringing ? '0 0 24px rgba(255,179,71,0.6)' : undefined }}>
           <Avatar user={person} size={Math.min(w, h) * 0.42} />
@@ -326,7 +340,7 @@ function TileView({ tile, person, w, h, ringing, onPress, fill }: { tile: Tile |
   )
 }
 
-function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom, left = 0, right = 0 }: { tiles: Tile[]; ringing: string[]; personOf: (id: string) => PublicUser; pinned: string | null; onPin: (id: string) => void; top: number; bottom: number; left?: number; right?: number }) {
+function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom, left = 0, right = 0, pipId }: { tiles: Tile[]; ringing: string[]; personOf: (id: string) => PublicUser; pinned: string | null; onPin: (id: string) => void; top: number; bottom: number; left?: number; right?: number; pipId?: string | null }) {
   const { width: screenW, height } = useWindowDimensions()
   const width = screenW - left - right
   const landscape = screenW > height
@@ -339,10 +353,10 @@ function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom, left = 0, 
     const stripW = landscape ? 150 : width - 20
     return (
       <View style={{ position: 'absolute', top, left, right, bottom, padding: 10, gap: 10, flexDirection: landscape ? 'row' : 'column' }}>
-        <TileView tile={pin.tile} person={personOf(pin.id)} w={landscape ? width - 20 - 10 - stripW : width - 20} h={landscape ? available - 20 : available - 130} ringing={pin.ringing} onPress={() => onPin(pin.id)} />
+        <TileView tile={pin.tile} person={personOf(pin.id)} w={landscape ? width - 20 - 10 - stripW : width - 20} h={landscape ? available - 20 : available - 130} ringing={pin.ringing} onPress={() => onPin(pin.id)} pip={pin.id === pipId} />
         <ScrollView horizontal={!landscape} contentContainerStyle={{ gap: 8 }}>
           {rest.map((x) => (
-            <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={landscape ? stripW : 130} h={100} ringing={x.ringing} onPress={() => onPin(x.id)} fill />
+            <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={landscape ? stripW : 130} h={100} ringing={x.ringing} onPress={() => onPin(x.id)} fill pip={x.id === pipId} />
           ))}
         </ScrollView>
       </View>
@@ -372,7 +386,7 @@ function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom, left = 0, 
   return (
     <ScrollView style={{ position: 'absolute', top, left, right, bottom }} contentContainerStyle={{ padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap, justifyContent: 'center', minHeight: available, alignContent: 'center' }}>
       {all.map((x) => (
-        <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={w} h={h} ringing={x.ringing} onPress={() => onPin(x.id)} fill />
+        <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={w} h={h} ringing={x.ringing} onPress={() => onPin(x.id)} fill pip={x.id === pipId} />
       ))}
     </ScrollView>
   )

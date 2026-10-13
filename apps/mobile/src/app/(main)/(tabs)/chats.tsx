@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react'
-import { Animated, FlatList, Pressable, RefreshControl, TextInput, View } from 'react-native'
+import { Animated, Pressable, RefreshControl, TextInput, View } from 'react-native'
+// Gesture-handler's list: a row being dragged (pinned chats) stops the list scrolling under it.
+import { FlatList } from 'react-native-gesture-handler'
 import Swipeable from 'react-native-gesture-handler/Swipeable'
 import { router } from 'expo-router'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { chatTitle, dotFor, findChats, type ChatResult, type ConversationSummary } from '@glofly/shared'
-import { useStore } from '@/state/store'
+import * as api from '@/api/glofly'
+import { patchConversation, useStore } from '@/state/store'
 import { useSession } from '@/state/session'
 import { refreshAll } from '@/state/sync'
-import { chatSections, makeNameOf } from '@/lib/chats'
+import { chatSections, makeNameOf, pinTimesFor } from '@/lib/chats'
 import { chatMenu, closeChat, openChat, openDmWith } from '@/lib/chatActions'
 import { statusMenu } from '@/lib/status'
 import { useNow } from '@/lib/hooks'
@@ -18,6 +21,8 @@ import { ChatRow } from '@/ui/ChatRow'
 import { Banners } from '@/ui/Banners'
 import { Icon } from '@/ui/icons'
 import { SectionLabel, Spinner, Text, webNoOutline } from '@/ui/kit'
+import { ReorderList, reorderActive } from '@/ui/Reorder'
+import { inform } from '@/ui/dialogs'
 import { Fab } from '@/ui/Fab'
 import { font, useTheme } from '@/ui/theme'
 
@@ -80,14 +85,39 @@ export default function Chats() {
 
   const items: Item[] = useMemo(() => {
     if (query.trim()) return findChats(query, all, friends).map((r) => ({ type: 'result', key: r.kind === 'group' ? r.conversation.id : r.user.id, result: r }))
+    // Pinned chats are drawn above the list (ListHeaderComponent) so they can be dragged.
     const { pinned, chats } = chatSections(all)
     return [
-      ...(pinned.length ? [{ type: 'label' as const, key: 'l-pinned', label: 'Pinned' }] : []),
-      ...pinned.map((chat) => ({ type: 'chat' as const, key: chat.id, chat })),
       ...(pinned.length && chats.length ? [{ type: 'label' as const, key: 'l-chats', label: 'Chats' }] : []),
       ...chats.map((chat) => ({ type: 'chat' as const, key: chat.id, chat })),
     ]
   }, [all, friends, query])
+  const pinned = useMemo(() => (query.trim() ? [] : chatSections(all).pinned), [all, query])
+
+  async function reorderPins(ids: string[]) {
+    const before = Object.fromEntries(pinned.map((p) => [p.id, p.pinnedAt]))
+    for (const [id, at] of Object.entries(pinTimesFor(ids, all))) patchConversation(id, { pinnedAt: at })
+    const r = await api.orderPins(ids)
+    if (!r.ok) {
+      for (const [id, at] of Object.entries(before)) patchConversation(id, { pinnedAt: at })
+      void inform("Couldn't move it", r.message)
+    }
+  }
+
+  const chatRow = (chat: ConversationSummary) => (
+    <ChatRow
+      chat={chat}
+      meId={meId}
+      nameOf={nameOf}
+      presence={chat.kind === 'dm' ? presence[chat.partner.id] : undefined}
+      typing={typing[chat.id]}
+      call={calls[chat.id]}
+      now={now}
+      onPress={() => void openChat(chat.id)}
+      onLongPress={() => !reorderActive() && void chatMenu(chat)}
+      onJoin={() => void joinCallIn(chat.id, false)}
+    />
+  )
 
   const loading = !connected && all.length === 0
 
@@ -119,7 +149,7 @@ export default function Chats() {
             <View style={{ padding: 40, alignItems: 'center' }}>
               <Spinner />
             </View>
-          ) : query ? (
+          ) : pinned.length ? null : query ? (
             <Text tone="muted" style={{ textAlign: 'center', padding: 32 }}>
               No friends or chats match “{query.trim()}”.
             </Text>
@@ -135,26 +165,27 @@ export default function Chats() {
             </View>
           )
         }
+        ListHeaderComponent={
+          pinned.length ? (
+            <View>
+              <SectionLabel>Pinned</SectionLabel>
+              {/* Hold a pinned chat and drag it to reorder; hold and let go for its menu. */}
+              <ReorderList
+                items={pinned}
+                keyOf={(x) => x.id}
+                renderItem={(chat) => <View style={{ backgroundColor: c.bg }}>{chatRow(chat)}</View>}
+                onReorder={(ids) => void reorderPins(ids)}
+                onHold={(chat) => void chatMenu(chat)}
+              />
+            </View>
+          ) : null
+        }
         renderItem={({ item }) => {
           if (item.type === 'label') return <SectionLabel>{item.label}</SectionLabel>
           if (item.type === 'chat') {
             const chat = item.chat
-            const row = (
-              <ChatRow
-                chat={chat}
-                meId={meId}
-                nameOf={nameOf}
-                presence={chat.kind === 'dm' ? presence[chat.partner.id] : undefined}
-                typing={typing[chat.id]}
-                call={calls[chat.id]}
-                now={now}
-                onPress={() => void openChat(chat.id)}
-                onLongPress={() => void chatMenu(chat)}
-                onJoin={() => void joinCallIn(chat.id, false)}
-              />
-            )
             // Swipe left to close a chat (pinned chats stay put: unpin first, like the menu).
-            return chat.pinnedAt ? row : <SwipeToClose onClose={() => void closeChat(chat)}>{row}</SwipeToClose>
+            return chat.pinnedAt ? chatRow(chat) : <SwipeToClose onClose={() => void closeChat(chat)}>{chatRow(chat)}</SwipeToClose>
           }
           return <ResultRow result={item.result} onOpen={() => setQuery('')} />
         }}

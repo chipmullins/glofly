@@ -43,6 +43,18 @@ type Native = {
   callKitAnsweredInApp?(callId: string): void
   /** iPhone only: iOS's shared audio session right now (call diagnostics). */
   audioSessionInfo?(): Record<string, string>
+  /** iPhone only: keep the call on the speaker unless headphones / Bluetooth are in use (CallSpeaker.swift). */
+  keepCallOnSpeaker?(on: boolean): void
+  stopCallSpeaker?(): void
+  /** iPhone only: where the call plays now: speaker | earpiece | headset | bluetooth | car | airplay | other | none. */
+  callAudioRoute?(): string
+  /** The picked message sound and ringtone (native names, see @glofly/shared PHONE_*). Builds from Oct 13. */
+  setSounds?(message: string, ringtone: string): void
+  /** Android only (iPhone uses LiveKit's video view): picture-in-picture during calls (Pip.kt). */
+  pipSupported?(): boolean
+  setPipCall?(on: boolean, width: number, height: number): void
+  enterPip?(): boolean
+  isInPip?(): boolean
 }
 
 const native = requireOptionalNativeModule<Native>('GloflyNative')
@@ -143,7 +155,7 @@ export const cancelCallNotification = (id: string) => native?.cancelCallNotifica
 /** iPhone: a glofly:// link from a notification tapped while the app was starting (once). */
 export const takeLaunchLink = (): string | null => native?.takeLaunchLink?.() ?? null
 
-export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp' | 'voipToken' | 'callAnswer' | 'callEnd' | 'callDeclined' | 'callMute'
+export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp' | 'voipToken' | 'callAnswer' | 'callEnd' | 'callDeclined' | 'callMute' | 'pipChanged'
 export function onNativeEvent(event: NativeEvent, fn: (body: Record<string, string>) => void): () => void {
   if (!native) return () => {}
   const sub = native.addListener(event, fn)
@@ -167,6 +179,15 @@ export const takeCallKitAnswer = (): { callId: string; video: string } | null =>
 export const endCallKitCall = (callId: string) => native?.endCallKitCall?.(callId)
 export const callKitAnsweredInApp = (callId: string) => native?.callKitAnsweredInApp?.(callId)
 
+/** iPhone: keep calls on the speaker (false = let the earpiece be used). False when this build can't. */
+export const keepCallOnSpeaker = (on: boolean): boolean => {
+  if (!native?.keepCallOnSpeaker) return false
+  native.keepCallOnSpeaker(on)
+  return true
+}
+export const stopCallSpeaker = () => native?.stopCallSpeaker?.()
+export const callAudioRoute = (): string | null => native?.callAudioRoute?.() ?? null
+
 /** Call diagnostics: iOS's audio session (category, mode, route…). Empty where there's none / older builds. */
 export const audioSessionInfo = (): Record<string, string> => {
   try {
@@ -174,4 +195,21 @@ export const audioSessionInfo = (): Record<string, string> => {
   } catch {
     return {}
   }
+}
+
+// ---- Picture-in-picture (Android; iPhone's comes from LiveKit's video view) ----
+
+export const pipSupported = (): boolean => native?.pipSupported?.() ?? false
+/** While a call is going: leaving Glofly shrinks it into a floating window. */
+export const setPipCall = (on: boolean, width = 9, height = 16) => native?.setPipCall?.(on, Math.round(width), Math.round(height))
+export const enterPip = (): boolean => native?.enterPip?.() ?? false
+export const isInPip = (): boolean => native?.isInPip?.() ?? false
+
+// ---- Chosen sounds ----
+
+/** Tells the native side which message sound and ringtone were picked (native file names). False on older builds. */
+export const setSounds = (message: string, ringtone: string): boolean => {
+  if (!native?.setSounds) return false
+  native.setSounds(message, ringtone)
+  return true
 }

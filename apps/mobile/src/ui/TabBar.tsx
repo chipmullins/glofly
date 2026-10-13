@@ -10,7 +10,8 @@ import { unreadTotal } from '@/lib/chats'
 
 type BottomTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0]
 
-// The bottom navigation bar from the design: Chats · Groups · Friends · Settings.
+// The bottom navigation bar from the design: Chats · Friends · Groups · Settings
+// (Friends moved before Groups, Oct 13; the order itself comes from the screens in (tabs)/_layout.tsx).
 
 const TABS: Record<string, { label: string; icon: IconName }> = {
   chats: { label: 'Chats', icon: 'chatsLine' },

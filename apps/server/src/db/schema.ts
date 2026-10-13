@@ -159,6 +159,10 @@ export const pushDevices = pgTable(
     // iPhone only: Apple's VoIP push address (PushKit), so a call rings on the lock screen like a
     // phone call (CallKit). Sent straight to Apple, not through Firebase. Null = none / Android.
     voipToken: text("voip_token"),
+    // The message sound and ringtone picked on this phone (@glofly/shared PHONE_* ids), for iPhone
+    // notifications, which name their sound file. Null = the defaults (older apps). Oct 13.
+    messageSound: text("message_sound"),
+    ringtone: text("ringtone"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

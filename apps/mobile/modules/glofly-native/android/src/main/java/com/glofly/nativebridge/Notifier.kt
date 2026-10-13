@@ -45,15 +45,41 @@ object Notifier {
   private fun raw(context: Context, name: String): Uri =
     Uri.parse("${ContentResolver.SCHEME_ANDROID_RESOURCE}://${context.packageName}/raw/$name")
 
+  /** A res/raw sound that's really in this build (else the default). */
+  private fun rawOr(context: Context, name: String, fallback: String): String =
+    if (context.resources.getIdentifier(name, "raw", context.packageName) != 0) name else fallback
+
+  // Chosen sounds (Oct 13). Android fixes a channel's sound when it's made, so each sound choice
+  // gets its own channel: the defaults keep the original ids, others add "__<sound>". The old one is
+  // deleted when you pick another, so Android's settings show one "Messages" and one "Incoming calls".
+  private fun messageSoundName(context: Context) = rawOr(context, PushStore.messageSound(context), "glofly_message")
+  private fun ringtoneName(context: Context) = rawOr(context, PushStore.ringtone(context), "glofly_ringtone")
+  fun messageChannel(context: Context): String = messageSoundName(context).let { if (it == "glofly_message") CH_MESSAGES else "${CH_MESSAGES}__$it" }
+  fun callChannel(context: Context): String = ringtoneName(context).let { if (it == "glofly_ringtone") CH_CALLS else "${CH_CALLS}__$it" }
+
+  /** Settings picked new sounds: save them and switch the channels over. */
+  fun setSounds(context: Context, message: String, ringtone: String) {
+    PushStore.saveSounds(context, message, ringtone)
+    ensureChannels(context)
+  }
+
   fun ensureChannels(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     val notifAttrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
     val ringAttrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+    val messages = messageChannel(context)
+    val calls = callChannel(context)
+    // Channels for sounds no longer picked go (one "Messages", one "Incoming calls" in Android's settings).
+    for (ch in nm.notificationChannels) {
+      val id = ch.id
+      if ((id == CH_MESSAGES || id.startsWith("${CH_MESSAGES}__")) && id != messages) nm.deleteNotificationChannel(id)
+      if ((id == CH_CALLS || id.startsWith("${CH_CALLS}__")) && id != calls) nm.deleteNotificationChannel(id)
+    }
     nm.createNotificationChannel(
-      NotificationChannel(CH_MESSAGES, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
+      NotificationChannel(messages, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
         description = "New messages in your chats and groups"
-        setSound(raw(context, "glofly_message"), notifAttrs)
+        setSound(raw(context, messageSoundName(context)), notifAttrs)
         enableVibration(true)
       },
     )
@@ -63,9 +89,9 @@ object Notifier {
       },
     )
     nm.createNotificationChannel(
-      NotificationChannel(CH_CALLS, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
+      NotificationChannel(calls, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
         description = "Rings when someone calls you"
-        setSound(raw(context, "glofly_ringtone"), ringAttrs)
+        setSound(raw(context, ringtoneName(context)), ringAttrs)
         enableVibration(true)
         vibrationPattern = longArrayOf(0, 900, 700, 900, 700)
         lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
@@ -174,7 +200,7 @@ object Notifier {
       style.addMessage(NotificationCompat.MessagingStyle.Message(l.text, l.at, person))
     }
     val id = chatId(conversationId)
-    val builder = NotificationCompat.Builder(context, CH_MESSAGES)
+    val builder = NotificationCompat.Builder(context, messageChannel(context))
       .setSmallIcon(R.drawable.glofly_notification)
       .setColor(ACCENT)
       .setStyle(style)
@@ -254,7 +280,7 @@ object Notifier {
     val decline = action(context, ActionReceiver.DECLINE, mapOf("callId" to callId, "conversationId" to conversationId), id + 2)
     val kind = if (video) "video call" else "voice call"
     val text = if (chatTitle.isNotEmpty()) "Group $kind · $chatTitle" else "Incoming $kind"
-    val builder = NotificationCompat.Builder(context, if (silent) CH_CALLS_SILENT else CH_CALLS)
+    val builder = NotificationCompat.Builder(context, if (silent) CH_CALLS_SILENT else callChannel(context))
       .setSmallIcon(R.drawable.glofly_notification)
       .setColor(ACCENT)
       .setContentTitle(callerName)

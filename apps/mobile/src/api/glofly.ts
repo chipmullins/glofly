@@ -9,6 +9,7 @@ import type {
   FriendLists,
   Message,
   MessagePage,
+  MessageSearchPage,
   MuteDuration,
   MyStatus,
   PrivacySettings,
@@ -75,11 +76,16 @@ export const muteChat = async (id: string, duration: MuteDuration | null) =>
     (d) => d?.mutedUntil ?? null,
   )
 export const orderGroups = async (ids: string[]) => none(await request('PUT', '/conversations/groups/order', { ids }))
+/** My order for the pinned chats (oldest pin shows first; the server re-times the pins). */
+export const orderPins = async (ids: string[]) => none(await request('PUT', '/conversations/pins/order', { ids }))
 export const markRead = async (id: string) => none(await request('POST', `/conversations/${id}/read`))
 
 // ---- Messages ----
 
 export const loadMessages = (id: string, before?: string) => request<MessagePage>('GET', `/conversations/${id}/messages${before ? `?before=${before}` : ''}`)
+/** Messages containing these words (newest first), in one chat or all; `before` = the last result you have. */
+export const searchMessages = (q: string, chat?: string, before?: string) =>
+  request<MessageSearchPage>('GET', `/conversations/messages/search?q=${enc(q)}${chat ? `&chat=${chat}` : ''}${before ? `&before=${before}` : ''}`)
 export const sendMessage = async (id: string, body: string, replyToId?: string, attachmentIds?: string[]) =>
   map(
     await request<{ message: Message }>('POST', `/conversations/${id}/messages`, {
@@ -143,6 +149,6 @@ export const noticeSeen = async (id: string) => none(await request('POST', `/not
 // ---- Push notifications ----
 
 /** voipToken: iPhone lock-screen calls (left out when there isn't one yet: the server keeps what it has). */
-export const registerPush = async (token: string, preview: boolean, voipToken?: string) =>
-  none(await request('PUT', '/devices/push', { token, platform: PLATFORM, preview, ...(voipToken ? { voipToken } : {}) }))
+export const registerPush = async (token: string, preview: boolean, voipToken?: string, sounds?: { messageSound: string; ringtone: string }) =>
+  none(await request('PUT', '/devices/push', { token, platform: PLATFORM, preview, ...(voipToken ? { voipToken } : {}), ...(sounds ?? {}) }))
 export const unregisterPush = async () => none(await request('DELETE', '/devices/push'))

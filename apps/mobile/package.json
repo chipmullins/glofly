@@ -39,6 +39,7 @@
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "expo-updates": "~57.0.25",
     "livekit-client": "^2.22.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -64,7 +65,9 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "update:preview": "node scripts/update.mjs preview",
+    "update:production": "node scripts/update.mjs production"
   },
   "private": true
 }
