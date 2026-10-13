@@ -23,3 +23,6 @@
 - Native code can't be compiled in Claude's sandbox. Check it by pushing to a `ci/<name>` branch: the
   "Android build" Action (`.github/workflows/android-build.yml`) builds the APK there (also on `dev`).
   Delete the branch afterwards (Claude's GitHub access can't delete branches; ask Chip).
+- Glofly 2.0 (planned, not built): project doc `glofly-2.0-plans.md`. Constellations' screens and
+  animations are approved as-is: build them exactly from `docs/design/constellations/` (the
+  mockup source) and the exact spec in that doc.
