@@ -48,6 +48,9 @@ nsis:
 mac:
   icon: build/icon.icns
   category: public.app-category.social-networking
+  # Names the .zip (and the .dmg, which also sets it below): Glofly-<version>-mac.zip / .dmg.
+  # electron-builder has no top-level "zip:" section.
+  artifactName: Glofly-${version}-mac.${ext}
   target:
     - target: dmg
       arch: universal
@@ -69,8 +72,6 @@ mac:
     NSCameraUsageDescription: Glofly uses your camera for video calls.
     NSMicrophoneUsageDescription: Glofly uses your microphone for voice and video calls.
 dmg:
-  artifactName: Glofly-${version}-mac.${ext}
-zip:
   artifactName: Glofly-${version}-mac.${ext}
 linux:
   target:
