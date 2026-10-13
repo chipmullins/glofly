@@ -8,7 +8,7 @@ import { useFonts } from 'expo-font'
 import { DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-google-fonts/dm-sans'
 import { Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit'
 import * as SystemUI from 'expo-system-ui'
-import { useTheme, useThemeChoice, type ThemeChoice } from '@/ui/theme'
+import { useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
 import { DialogHost } from '@/ui/dialogs'
 import { SheetHost } from '@/ui/sheets'
 import { UpdateRequired } from '@/ui/UpdateRequired'
@@ -38,6 +38,7 @@ export default function RootLayout() {
   useEffect(() => {
     lockPortrait() // only the call screen turns sideways
     void prefs.get<ThemeChoice>('theme', 'system').then((t) => useThemeChoice.getState().set(t))
+    void prefs.get<AccentChoice>('accent', 'orange').then((a) => useThemeChoice.getState().setAccent(a))
     void loadPhonePrefs()
     void restoreSession()
   }, [])

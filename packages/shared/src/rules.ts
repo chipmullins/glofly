@@ -123,3 +123,17 @@ export const VOICE_PEAKS_MAX = 64
 
 /** How long a call rings (matches the ringtone). */
 export const RING_MS = 23_000
+
+/** Nicknames you give someone (only you see them): same length as display names. */
+export const NICKNAME_MAX = DISPLAY_NAME_MAX
+
+/** Tidies a nickname (trimmed, inner spaces squeezed). Empty means "remove the nickname". */
+export function cleanNickname(name: string): string {
+  return name.replace(/\s+/g, ' ').trim()
+}
+
+export function nicknameProblem(name: string): string | null {
+  if (name.length > NICKNAME_MAX) return `Nicknames can be at most ${NICKNAME_MAX} characters.`
+  if (CONTROL_CHARS.test(name)) return "Nicknames can't contain hidden characters."
+  return null
+}

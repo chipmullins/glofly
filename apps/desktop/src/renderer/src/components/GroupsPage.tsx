@@ -227,7 +227,7 @@ export default function GroupsPage({
         </span>
         <button type="button" className="primary-button add-friend" onClick={onNewGroup}>
           <GroupIcon size={18} />
-          New group
+          Create group
         </button>
       </header>
 
@@ -258,7 +258,7 @@ export default function GroupsPage({
             <p>Start a group with two or more friends and it&apos;ll show up here.</p>
             <button type="button" className="primary-button" onClick={onNewGroup}>
               <GroupIcon size={18} />
-              New group
+              Create group
             </button>
           </div>
         ) : shown.length === 0 ? (

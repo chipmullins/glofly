@@ -109,16 +109,66 @@ export const call = {
 
 export type ThemeChoice = 'system' | 'light' | 'dark'
 
-export const useThemeChoice = create<{ choice: ThemeChoice; set: (c: ThemeChoice) => void }>((set) => ({
+/** Accent colors, the same four as the desktop app (Settings → Appearance → Accent color). */
+export type AccentChoice = 'orange' | 'red' | 'lagoon' | 'violet'
+
+export const ACCENTS: { key: AccentChoice; label: string; swatch: string }[] = [
+  { key: 'orange', label: 'Glow Orange', swatch: '#F47A1F' },
+  { key: 'red', label: 'Glofly Red', swatch: '#E0193A' },
+  { key: 'lagoon', label: 'Glofly Lagoon', swatch: '#1789AD' },
+  { key: 'violet', label: 'Glofly Violet', swatch: '#8B3FD9' },
+]
+
+/** The accent parts of a theme (values from the desktop's main.css data-accent blocks). */
+type AccentParts = Pick<Colors, 'accent' | 'accentInk' | 'accentText' | 'accentSoft' | 'focus' | 'glow' | 'me' | 'meInk' | 'chipMine' | 'mentionWash'>
+function accentParts(accent: string, onAccent: string, link: string, soft: string, chipMine: string, rgb: string, isDark: boolean): AccentParts {
+  return {
+    accent,
+    accentInk: onAccent,
+    accentText: link,
+    accentSoft: soft,
+    focus: `rgba(${rgb},${isDark ? 0.22 : 0.18})`,
+    glow: `rgba(${rgb},0.35)`,
+    me: accent,
+    meInk: onAccent,
+    chipMine,
+    mentionWash: `rgba(${rgb},${isDark ? 0.14 : 0.1})`,
+  }
+}
+const accentColors: Record<Exclude<AccentChoice, 'orange'>, { light: AccentParts; dark: AccentParts }> = {
+  red: {
+    light: accentParts('#E0193A', '#FFFFFF', '#C0122F', '#FAD3DA', '#FCE8EB', '224,25,58', false),
+    dark: accentParts('#F0485F', '#2A0A10', '#FF8A9B', '#4A1C24', '#4A1C24', '240,72,95', true),
+  },
+  lagoon: {
+    light: accentParts('#1789AD', '#FFFFFF', '#0F6F8F', '#CFE8F1', '#E8F4F9', '23,137,173', false),
+    dark: accentParts('#4CC3E6', '#062029', '#8AD8EF', '#173944', '#173944', '76,195,230', true),
+  },
+  violet: {
+    light: accentParts('#8B3FD9', '#FFFFFF', '#7230B8', '#EBDCFA', '#F5EEFD', '139,63,217', false),
+    dark: accentParts('#B57CFF', '#1D0A33', '#CFA8FF', '#3A2552', '#3A2552', '181,124,255', true),
+  },
+}
+const themed: Record<string, Colors> = {}
+function colorsFor(isDark: boolean, accent: AccentChoice): Colors {
+  if (accent === 'orange') return isDark ? dark : light
+  const key = `${accent}-${isDark ? 'd' : 'l'}`
+  return (themed[key] ??= { ...(isDark ? dark : light), ...accentColors[accent][isDark ? 'dark' : 'light'] })
+}
+
+export const useThemeChoice = create<{ choice: ThemeChoice; accent: AccentChoice; set: (c: ThemeChoice) => void; setAccent: (a: AccentChoice) => void }>((set) => ({
   choice: 'system',
+  accent: 'orange',
   set: (choice) => set({ choice }),
+  setAccent: (accent) => set({ accent: ACCENTS.some((a) => a.key === accent) ? accent : 'orange' }),
 }))
 
 export function useTheme(): { c: Colors; dark: boolean } {
   const system = useColorScheme()
   const choice = useThemeChoice((s) => s.choice)
+  const accent = useThemeChoice((s) => s.accent)
   const isDark = choice === 'system' ? system === 'dark' : choice === 'dark'
-  return { c: isDark ? dark : light, dark: isDark }
+  return { c: colorsFor(isDark, accent), dark: isDark }
 }
 
 export const themes = { light, dark }

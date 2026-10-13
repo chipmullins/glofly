@@ -156,6 +156,9 @@ export const pushDevices = pgTable(
     token: text("token").notNull().unique(),
     // "Show message preview" on this phone: off sends "New message" without the text.
     preview: boolean("preview").notNull().default(true),
+    // iPhone only: Apple's VoIP push address (PushKit), so a call rings on the lock screen like a
+    // phone call (CallKit). Sent straight to Apple, not through Firebase. Null = none / Android.
+    voipToken: text("voip_token"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -664,3 +667,20 @@ export const announcements = pgTable("announcements", {
   // Ended early in Control, or replaced by a newer one.
   endedAt: timestamp("ended_at", { withTimezone: true }),
 });
+
+// Nicknames (Oct 2026): a name someone gave another person, only they see it. The server swaps it
+// in for the person's display name in everything it sends that someone (see profile/nicknames.ts).
+export const nicknames = pgTable(
+  "nicknames",
+  {
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    targetId: uuid("target_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nickname: text("nickname").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.ownerId, t.targetId] })],
+);

@@ -292,6 +292,11 @@ export type GloflyApi = {
     /** Uploads a new profile photo (up to 8 MB). The server crops it and removes hidden photo data. */
     setPhoto: (data: ArrayBuffer, type: PhotoType) => Promise<ApiResult<{ avatarVersion: string }>>
     removePhoto: () => Promise<ApiResult<{ avatarVersion: null }>>
+    /** Your own name for someone, only you see it (null removes it). */
+    setNickname: (
+      userId: string,
+      nickname: string | null
+    ) => Promise<ApiResult<{ userId: string; nickname: string | null }>>
   }
   conversations: {
     list: () => Promise<ApiResult<ConversationSummary[]>>

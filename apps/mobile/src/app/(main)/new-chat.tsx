@@ -24,7 +24,7 @@ export default function NewChat() {
               <Icon name="groups" size={22} color={c.accentText} />
             </View>
             <Text size={16} weight="bold">
-              New group
+              Create group
             </Text>
           </Pressable>
         }

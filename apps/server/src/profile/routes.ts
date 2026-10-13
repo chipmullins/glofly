@@ -21,7 +21,8 @@ avatarsRouter.use(requireAuth);
 type Me = { id: string; username: string; displayName: string };
 const me = (res: Response): Me => res.locals.user as Me;
 
-import { BIO_MAX } from "@glofly/shared";
+import { BIO_MAX, cleanNickname, nicknameProblem } from "@glofly/shared";
+import { setNickname } from "./nicknames";
 const AVATAR_UPLOAD_MAX = "8mb";
 
 const uploadLimiter = rateLimit({
@@ -222,6 +223,41 @@ profileRouter.get("/:id/profile", async (req, res) => {
     return;
   }
   res.json(profile);
+});
+
+// PUT /users/:id/nickname {nickname: string | null} — your own name for someone; only you see it
+// (profile/nicknames.ts puts it into everything the server sends you). Null or "" removes it.
+profileRouter.put("/:id/nickname", async (req, res) => {
+  const id = z.uuid().safeParse(req.params.id);
+  const body = z.object({ nickname: z.string().max(200).nullable() }).safeParse(req.body);
+  if (!id.success || id.data === me(res).id) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (!body.success) {
+    res.status(400).json({ error: "invalid", message: "Send a nickname, or null to remove it." });
+    return;
+  }
+  if ((await blockedEitherWay(me(res).id, id.data)) || (await deletionPending(id.data))) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, id.data));
+  if (!target) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const nickname = cleanNickname(body.data.nickname ?? "");
+  const problem = nickname ? nicknameProblem(nickname) : null;
+  if (problem) {
+    res.status(400).json({ error: "invalid", message: problem });
+    return;
+  }
+  await setNickname(me(res).id, id.data, nickname || null);
+  // Your devices fetch fresh lists so the new name shows everywhere. profile:changed is what every
+  // app (old ones too) already does that for when someone renames themselves.
+  emitToUser(me(res).id, "profile:changed", { userId: id.data });
+  res.json({ userId: id.data, nickname: nickname || null });
 });
 
 // GET /avatars/:userId/:version — a profile photo. The version in the address changes with

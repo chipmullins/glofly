@@ -162,6 +162,13 @@
       "when": 1791693277244,
       "tag": "0022_push_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791862538630,
+      "tag": "0023_nicknames_voip",
+      "breakpoints": true
     }
   ]
 }

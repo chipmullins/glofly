@@ -86,7 +86,9 @@ const glofly: GloflyApi = {
     update: (changes: ProfileChanges) => ipcRenderer.invoke('profile:update', changes),
     setPhoto: (data: ArrayBuffer, type: PhotoType) =>
       ipcRenderer.invoke('profile:set-photo', data, type),
-    removePhoto: () => ipcRenderer.invoke('profile:remove-photo')
+    removePhoto: () => ipcRenderer.invoke('profile:remove-photo'),
+    setNickname: (userId: string, nickname: string | null) =>
+      ipcRenderer.invoke('profile:set-nickname', userId, nickname)
   },
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),

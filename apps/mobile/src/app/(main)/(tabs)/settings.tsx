@@ -12,7 +12,7 @@ import { Avatar } from '@/ui/Avatar'
 import { chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { SectionLabel, Text } from '@/ui/kit'
 import { SettingsRow } from '@/ui/SettingsRow'
-import { useTheme, useThemeChoice, type ThemeChoice } from '@/ui/theme'
+import { ACCENTS, useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
 
 const THEMES: { key: ThemeChoice; label: string }[] = [
   { key: 'system', label: 'Match system' },
@@ -26,6 +26,7 @@ export default function Settings() {
   const user = useSession((s) => s.user)
   const myStatus = useStore((s) => s.myStatus)
   const theme = useThemeChoice((s) => s.choice)
+  const accent = useThemeChoice((s) => s.accent)
   const [privacy, setPrivacy] = useState<PrivacySettings | null>(null)
 
   useEffect(() => {
@@ -49,6 +50,13 @@ export default function Settings() {
     if (!pick) return
     useThemeChoice.getState().set(pick as ThemeChoice)
     void prefs.set('theme', pick)
+  }
+
+  async function pickAccent() {
+    const pick = await chooseFrom(ACCENTS.map((a) => ({ key: a.key, label: a.label, checked: a.key === accent, swatch: a.swatch })), 'Accent color')
+    if (!pick) return
+    useThemeChoice.getState().setAccent(pick as AccentChoice)
+    void prefs.set('accent', pick)
   }
 
   async function friendRequests() {
@@ -90,6 +98,7 @@ export default function Settings() {
 
       <SectionLabel>Appearance</SectionLabel>
       <SettingsRow icon="palette" label="Theme" value={THEMES.find((t) => t.key === theme)?.label} onPress={() => void pickTheme()} />
+      <SettingsRow icon="palette" label="Accent color" value={ACCENTS.find((a) => a.key === accent)?.label} onPress={() => void pickAccent()} />
 
       <SectionLabel>Notifications & sounds</SectionLabel>
       <SettingsRow icon="bell" label="Notifications" detail="Messages, friend requests and calls" onPress={() => router.push('/settings/notifications')} />

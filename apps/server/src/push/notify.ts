@@ -1,3 +1,4 @@
+import { nicknamesFor } from "../profile/nicknames";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { attachmentSummary, listNames, type Attachment } from "@glofly/shared";
 import { db } from "../db";
@@ -96,11 +97,15 @@ export async function notifyMessage(
       if (!blocked.has(d.userId)) blocked.set(d.userId, await blockedEitherWay(d.userId, message.senderId));
       if (blocked.get(d.userId)) continue;
     }
+    // Their nicknames for people, if any (only they see them).
+    const nicks = await nicknamesFor(d.userId).catch(() => undefined);
+    const nameOf = (p: { id: string; displayName: string }) => nicks?.get(p.id) ?? p.displayName;
+    const senderName = nameOf(sender);
     // A group without a name is called after the others in it (everyone but the reader).
     const groupTitle =
       chat.kind === "group"
         ? chat.name ||
-          listNames(people.filter((p) => p.id !== d.userId).map((p) => firstName(p.displayName, p.username)))
+          listNames(people.filter((p) => p.id !== d.userId).map((p) => firstName(nameOf(p), p.username)))
         : "";
     out.push({
       device: d,
@@ -112,9 +117,9 @@ export async function notifyMessage(
         chatTitle: groupTitle,
         groupPhoto: chat.kind === "group" ? (chat.photoVersion ?? "") : "",
         senderId: sender.id,
-        senderName: sender.displayName,
+        senderName,
         senderAvatar: sender.avatarVersion ?? "",
-        title: chat.kind === "group" ? `${sender.displayName} · ${groupTitle}` : sender.displayName,
+        title: chat.kind === "group" ? `${senderName} · ${groupTitle}` : senderName,
         text: d.preview ? text : "New message",
         preview: d.preview ? "1" : "0",
         mention: mention ? "1" : "0",

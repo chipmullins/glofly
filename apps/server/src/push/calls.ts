@@ -1,3 +1,4 @@
+import { nameFor } from "../profile/nicknames";
 import { eq, inArray } from "drizzle-orm";
 import { listNames } from "@glofly/shared";
 import { db } from "../db";
@@ -96,7 +97,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
   const live = await liveSessions(everyone);
   const titles = await chatTitles(call.conversationId, everyone);
   const out: { token: string; data: PushData; ttl: number; platform: string }[] = [];
-  const callerName = caller?.displayName ?? "Someone";
+  const callerNameOf = async (userId: string) => (caller ? await nameFor(userId, caller.id, caller.displayName) : "Someone");
   const base = {
     callId: call.id,
     conversationId: call.conversationId,
@@ -105,6 +106,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
 
   for (const d of devices) {
     const title = titles.get(d.userId) ?? "";
+    const callerName = await callerNameOf(d.userId); // their nickname for the caller, if any
     if (started.includes(d.userId)) {
       // A phone with Glofly open shows the incoming call from its live connection instead.
       if (live.get(d.userId)?.has(d.sessionId)) continue;

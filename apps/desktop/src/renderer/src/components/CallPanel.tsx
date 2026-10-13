@@ -1556,9 +1556,11 @@ export function CallStrip({
 }): React.JSX.Element | null {
   const calls = useCalls()
   const { current, elsewhere, room } = calls
+  const floatHidden = useFloatHidden()
 
   if (current && current.conversationId !== openChatId) {
     const micOn = room?.localParticipant.isMicrophoneEnabled ?? true
+    const callKey = current.call?.id ?? current.conversationId
     const status =
       current.phase === 'connected' && current.call?.answeredAt ? (
         <CallTimer since={current.call.answeredAt} />
@@ -1593,6 +1595,17 @@ export function CallStrip({
         >
           {micOn ? <MicIcon size={18} /> : <MicOffIcon size={18} />}
         </button>
+        {floatHidden === callKey && (
+          <button
+            type="button"
+            className="call-strip-button"
+            aria-label="Show the floating video"
+            title="Show video"
+            onClick={() => setFloatHidden(null)}
+          >
+            <VideoIcon size={18} />
+          </button>
+        )}
         <button
           type="button"
           className="call-strip-button call-strip-button--hangup"
@@ -1639,11 +1652,33 @@ function loadFloatPos(): { x: number; y: number } | null {
   }
 }
 
+// The floating video's × hides it. It comes back when you open the call's chat (and leave it
+// again), or from the sidebar strip's "Show video" button. (It used to stay hidden until the next
+// call, with no way back.) Shared between CallFloat and CallStrip.
+let floatHiddenFor: string | null = null
+const floatListeners = new Set<() => void>()
+function setFloatHidden(key: string | null): void {
+  if (floatHiddenFor === key) return
+  floatHiddenFor = key
+  floatListeners.forEach((f) => f())
+}
+function useFloatHidden(): string | null {
+  const [, force] = useState(0)
+  useEffect(() => {
+    const f = (): void => force((n) => n + 1)
+    floatListeners.add(f)
+    return () => {
+      floatListeners.delete(f)
+    }
+  }, [])
+  return floatHiddenFor
+}
+
 /**
  * While you're in a call but looking at another chat: a small floating video you can drag
  * anywhere in the window. Shows a shared screen first, then whoever's talking, then anyone with
  * their camera on (or their photo). Click it to go back to the call; mute, camera and hang up
- * are on it; × hides it until the next call (the sidebar strip stays).
+ * are on it; × hides it until you go back to the call (or press the strip's Show video).
  */
 export function CallFloat({
   openChatId,
@@ -1654,7 +1689,7 @@ export function CallFloat({
 }): React.JSX.Element | null {
   const calls = useCalls()
   const { current, room } = calls
-  const [hiddenFor, setHiddenFor] = useState<string | null>(null)
+  const hiddenFor = useFloatHidden()
   const [pos, setPos] = useState<{ x: number; y: number } | null>(loadFloatPos)
   const boxRef = useRef<HTMLDivElement>(null)
   const drag = useRef<{
@@ -1680,6 +1715,12 @@ export function CallFloat({
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  // Back in the call's chat: the floating video shows again next time you leave it.
+  const callChatOpen = !!current && current.conversationId === openChatId
+  useEffect(() => {
+    if (callChatOpen) setFloatHidden(null)
+  }, [callChatOpen])
 
   if (!current || current.conversationId === openChatId) return null
   const callKey = current.call?.id ?? current.conversationId
@@ -1809,7 +1850,7 @@ export function CallFloat({
           className="call-float-hide"
           aria-label="Hide the floating video"
           title="Hide (the call keeps going)"
-          onClick={() => setHiddenFor(callKey)}
+          onClick={() => setFloatHidden(callKey)}
         >
           <CloseIcon size={14} />
         </button>

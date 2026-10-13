@@ -2,6 +2,7 @@ import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "./db";
+import { cachedNicknames, nicknamesFor, withNicknames } from "./profile/nicknames";
 import { conversationMembers, conversations, users } from "./db/schema";
 import { findSession } from "./auth/sessions";
 import { appVersionFrom, compareVersions, platformFrom, tooOld, updateRequiredBody, type AppPlatform } from "./app-version";
@@ -49,6 +50,8 @@ export function startRealtime(httpServer: HttpServer): void {
       // Phones say which app they are (desktop apps don't: missing = desktop).
       const platform = platformFrom(socket.handshake.auth?.platform ?? found.session.platform);
       if (await tooOld(version, platform)) return next(new Error("update_required"));
+      // Their nicknames, so live events carry them (profile/nicknames.ts). Best effort.
+      await nicknamesFor(found.user.id).catch(() => undefined);
       socket.data.platform = platform;
       socket.data.user = found.user;
       socket.data.sessionId = found.session.id;
@@ -182,7 +185,8 @@ function startPresenceHeartbeat(server: Server): void {
 
 /** Sends an event to every device the person is signed in on. */
 export function emitToUser(userId: string, event: string, payload: unknown): void {
-  io?.to(userRoom(userId)).emit(event, payload);
+  // Their nicknames for people go in (loaded when their live connection opened).
+  io?.to(userRoom(userId)).emit(event, withNicknames(payload, userId, cachedNicknames(userId)));
 }
 
 /**

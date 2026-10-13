@@ -577,8 +577,8 @@ export default function ChatList({
           <button
             type="button"
             className="icon-button icon-button--small"
-            aria-label="New group chat"
-            title="New group chat"
+            aria-label="Create group"
+            title="Create group"
             onClick={onNewGroup}
           >
             <GroupIcon size={17} />

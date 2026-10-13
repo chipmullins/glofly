@@ -27,7 +27,7 @@ export default function NewGroup() {
   }
 
   return (
-    <Screen title="New group" scroll={false}>
+    <Screen title="Create group" scroll={false}>
       <View style={{ flex: 1 }}>
         <FriendPicker
           selected={picked}

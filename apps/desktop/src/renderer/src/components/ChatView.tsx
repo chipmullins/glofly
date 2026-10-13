@@ -1105,6 +1105,42 @@ export default function ChatView({
               </button>
             </>
           }
+          {/* Order (Chip, Oct 12): voice, video, profile, pin, search, then mute. */}
+          {partner ? (
+            <button
+              type="button"
+              className="chat-header-button"
+              aria-label={`View ${partner.displayName}'s profile`}
+              title="Profile"
+              onClick={() => onViewProfile(partner)}
+            >
+              <ProfileIcon size={20} strokeWidth={1.9} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="chat-header-button"
+              aria-label="Group settings"
+              title="Group settings"
+              onClick={onGroupSettings}
+            >
+              <GroupIcon size={21} />
+            </button>
+          )}
+          <button
+            type="button"
+            className={
+              conversation.pinnedAt
+                ? 'chat-header-button chat-header-button--on'
+                : 'chat-header-button'
+            }
+            aria-label={conversation.pinnedAt ? 'Unpin this chat' : 'Pin this chat'}
+            aria-pressed={!!conversation.pinnedAt}
+            title={conversation.pinnedAt ? 'Unpin' : 'Pin to the top'}
+            onClick={onTogglePin}
+          >
+            <PinIcon size={19} />
+          </button>
           <button
             type="button"
             className="chat-header-button"
@@ -1173,41 +1209,6 @@ export default function ChatView({
               </div>
             )}
           </div>
-          <button
-            type="button"
-            className={
-              conversation.pinnedAt
-                ? 'chat-header-button chat-header-button--on'
-                : 'chat-header-button'
-            }
-            aria-label={conversation.pinnedAt ? 'Unpin this chat' : 'Pin this chat'}
-            aria-pressed={!!conversation.pinnedAt}
-            title={conversation.pinnedAt ? 'Unpin' : 'Pin to the top'}
-            onClick={onTogglePin}
-          >
-            <PinIcon size={19} />
-          </button>
-          {partner ? (
-            <button
-              type="button"
-              className="chat-header-button"
-              aria-label={`View ${partner.displayName}'s profile`}
-              title="Profile"
-              onClick={() => onViewProfile(partner)}
-            >
-              <ProfileIcon size={20} strokeWidth={1.9} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="chat-header-button"
-              aria-label="Group settings"
-              title="Group settings"
-              onClick={onGroupSettings}
-            >
-              <GroupIcon size={21} />
-            </button>
-          )}
         </div>
       </header>
 

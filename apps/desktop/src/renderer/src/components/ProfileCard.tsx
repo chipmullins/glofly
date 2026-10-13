@@ -11,6 +11,7 @@ import {
   ChatIcon,
   CloseIcon,
   GameIcon,
+  PencilIcon,
   PhoneIcon,
   RemoveFriendIcon,
   VideoIcon
@@ -18,6 +19,7 @@ import {
 import './dialogs.css'
 import './ProfileDialogs.css'
 import EmojiText from './EmojiText'
+import { NICKNAME_MAX } from '@glofly/shared/rules'
 
 type Fly = { left: string; top: number; size: 'big' | 'small'; rotate: number }
 type Spark = 'a' | 'b'
@@ -211,8 +213,16 @@ export default function ProfileCard({
           <div className="profile-main">
             <div className="profile-names">
               <h2>{shown.displayName}</h2>
-              <span>@{shown.username}</span>
+              <span>
+                @{shown.username}
+                {shown.realName && <> · their name is {shown.realName}</>}
+              </span>
             </div>
+            <NicknameRow
+              userId={person.id}
+              nickname={shown.realName ? shown.displayName : null}
+              placeholder={shown.realName ?? shown.displayName}
+            />
 
             {game && (
               <div className="profile-playing">
@@ -280,5 +290,98 @@ export default function ProfileCard({
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * Your own name for someone (Oct 2026): only you see it, everywhere in Glofly. The server swaps it
+ * in for their display name; their own name stays on the card ("their name is …").
+ */
+function NicknameRow({
+  userId,
+  nickname,
+  placeholder
+}: {
+  userId: string
+  nickname: string | null
+  placeholder: string
+}): React.JSX.Element {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(nickname ?? '')
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  const save = async (next: string | null): Promise<void> => {
+    setBusy(true)
+    setProblem(null)
+    const result = await window.glofly.profile.setNickname(userId, next)
+    setBusy(false)
+    if (result.ok) setEditing(false)
+    else setProblem(result.message)
+    // The card and every list reload by themselves (the server sends profile:changed).
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="profile-nickname-button"
+        onClick={() => {
+          setValue(nickname ?? '')
+          setEditing(true)
+        }}
+      >
+        <PencilIcon size={14} strokeWidth={2} />
+        {nickname ? 'Change nickname' : 'Give them a nickname'}
+      </button>
+    )
+  }
+  return (
+    <form
+      className="profile-nickname-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void save(value.trim() || null)
+      }}
+    >
+      <label className="profile-nickname-label" htmlFor="profile-nickname">
+        Nickname · only you see it
+      </label>
+      <input
+        id="profile-nickname"
+        className="ep-input"
+        value={value}
+        maxLength={NICKNAME_MAX}
+        placeholder={placeholder}
+        autoFocus
+        disabled={busy}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation()
+            setEditing(false)
+          }
+        }}
+      />
+      {problem && (
+        <p className="dialog-message" role="alert">
+          {problem}
+        </p>
+      )}
+      <div className="profile-nickname-buttons">
+        {nickname && (
+          <button type="button" className="small-button small-button--quiet" disabled={busy} onClick={() => void save(null)}>
+            Remove nickname
+          </button>
+        )}
+        <span style={{ flex: 1 }} />
+        <button type="button" className="small-button small-button--quiet" disabled={busy} onClick={() => setEditing(false)}>
+          Cancel
+        </button>
+        <button type="submit" className="small-button small-button--primary" disabled={busy}>
+          Save
+        </button>
+      </div>
+    </form>
   )
 }

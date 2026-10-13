@@ -1,3 +1,4 @@
+import { nicknamesFor, withNicknames } from "../profile/nicknames";
 import { createHash, randomBytes } from "node:crypto";
 import type { RequestHandler } from "express";
 import { and, eq, gt, lt } from "drizzle-orm";
@@ -114,5 +115,15 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   res.locals.user = found.user;
   res.locals.sessionToken = token;
   res.locals.sessionId = found.session.id;
+  // Nicknames this person gave others go into everything sent back to them (profile/nicknames.ts).
+  try {
+    const nicks = await nicknamesFor(found.user.id);
+    if (nicks.size) {
+      const send = res.json.bind(res);
+      res.json = (body?: unknown) => send(withNicknames(body, found.user.id, nicks));
+    }
+  } catch (err) {
+    console.error("Couldn't load nicknames:", err); // names show as people set them; fine
+  }
   next();
 };

@@ -24,6 +24,8 @@ export type SheetItem = {
   danger?: boolean
   detail?: string
   checked?: boolean
+  /** A round color dot instead of an icon (accent color picker). */
+  swatch?: string
 }
 
 type Overlay =
@@ -127,6 +129,7 @@ function SheetView({ o }: { o: Extract<Overlay, { kind: 'sheet' }> }) {
             android_ripple={{ color: c.line }}
             style={{ minHeight: 52, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 18 }}
           >
+            {item.swatch ? <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: item.swatch }} /> : null}
             {item.icon ? <Icon name={item.icon} size={22} color={item.danger ? c.danger : c.ink2} /> : null}
             <View style={{ flex: 1, paddingVertical: 10 }}>
               <Text size={16} tone={item.danger ? 'danger' : 'ink'} weight={item.danger ? 'medium' : 'regular'}>

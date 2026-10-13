@@ -17,3 +17,10 @@ export const setPhoto = (
 
 export const removePhoto = (): Promise<ApiResult<{ avatarVersion: null }>> =>
   request('DELETE', '/users/me/avatar')
+
+/** Your own name for someone (only you see it). Null removes it. */
+export const setNickname = (
+  userId: string,
+  nickname: string | null
+): Promise<ApiResult<{ userId: string; nickname: string | null }>> =>
+  request('PUT', `/users/${userId}/nickname`, { nickname })

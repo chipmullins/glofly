@@ -57,6 +57,11 @@ export type PublicUser = {
   displayName: string
   /** Changes with every new profile photo. Null means no photo (initials instead). */
   avatarVersion: string | null
+  /**
+   * Only when you gave this person a nickname (Oct 2026): their own display name. displayName then
+   * holds your nickname (the server swaps it in for you alone). Older apps ignore it.
+   */
+  realName?: string
 }
 
 /**

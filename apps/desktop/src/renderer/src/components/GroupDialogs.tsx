@@ -125,7 +125,7 @@ export function GroupPeopleDialog({
     else setMessage(result.message)
   }
 
-  const title = group ? `Add people to ${chatTitle(group)}` : 'New group chat'
+  const title = group ? `Add people to ${chatTitle(group)}` : 'Create group'
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div

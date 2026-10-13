@@ -123,7 +123,7 @@ import {
   openMacPrivacySettings,
   setUpMacMenu
 } from './mac'
-import { getMyProfile, getProfile, removePhoto, setPhoto, updateProfile } from './profile'
+import { getMyProfile, getProfile, removePhoto, setNickname, setPhoto, updateProfile } from './profile'
 import {
   acceptRequest,
   blockUser,
@@ -524,6 +524,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle('profile:get-mine', (event) => (fromApp(event) ? getMyProfile() : invalid))
   ipcMain.handle('profile:get', (event, userId: unknown) =>
     fromApp(event) && isUserId(userId) ? getProfile(userId) : invalid
+  )
+  ipcMain.handle('profile:set-nickname', (event, userId: unknown, nickname: unknown) =>
+    fromApp(event) && isUserId(userId) && (nickname === null || (typeof nickname === 'string' && nickname.length <= 200))
+      ? setNickname(userId, nickname)
+      : invalid
   )
   ipcMain.handle('profile:update', (event, changes: unknown) =>
     fromApp(event) && isProfileChanges(changes) ? updateProfile(changes) : invalid

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { FlatList, Pressable, RefreshControl, TextInput, View } from 'react-native'
+import { Animated, FlatList, Pressable, RefreshControl, TextInput, View } from 'react-native'
+import Swipeable from 'react-native-gesture-handler/Swipeable'
 import { router } from 'expo-router'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -8,7 +9,7 @@ import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
 import { refreshAll } from '@/state/sync'
 import { chatSections, makeNameOf } from '@/lib/chats'
-import { chatMenu, openChat, openDmWith } from '@/lib/chatActions'
+import { chatMenu, closeChat, openChat, openDmWith } from '@/lib/chatActions'
 import { statusMenu } from '@/lib/status'
 import { useNow } from '@/lib/hooks'
 import { joinCallIn } from '@/calls/controller'
@@ -138,7 +139,7 @@ export default function Chats() {
           if (item.type === 'label') return <SectionLabel>{item.label}</SectionLabel>
           if (item.type === 'chat') {
             const chat = item.chat
-            return (
+            const row = (
               <ChatRow
                 chat={chat}
                 meId={meId}
@@ -152,6 +153,8 @@ export default function Chats() {
                 onJoin={() => void joinCallIn(chat.id, false)}
               />
             )
+            // Swipe left to close a chat (pinned chats stay put: unpin first, like the menu).
+            return chat.pinnedAt ? row : <SwipeToClose onClose={() => void closeChat(chat)}>{row}</SwipeToClose>
           }
           return <ResultRow result={item.result} onOpen={() => setQuery('')} />
         }}
@@ -182,5 +185,37 @@ function ResultRow({ result, onOpen }: { result: ChatResult; onOpen: () => void 
         </Text>
       </View>
     </Pressable>
+  )
+}
+
+/** A chat row you can swipe left to close (hidden until a new message; nothing is deleted). */
+function SwipeToClose({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  const { c } = useTheme()
+  return (
+    <Swipeable
+      friction={1.5}
+      rightThreshold={72}
+      overshootRight={false}
+      onSwipeableOpen={(direction) => {
+        if (direction === 'right') onClose()
+      }}
+      renderRightActions={(progress) => {
+        const opacity = progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.8, 1], extrapolate: 'clamp' })
+        return (
+          <Animated.View style={{ width: 96, opacity, alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface2 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close chat" onPress={onClose} style={{ alignItems: 'center', justifyContent: 'center', gap: 4, width: 96, height: '100%' }}>
+              <Icon name="close" size={22} color={c.ink2} />
+              <Text size={12} weight="bold" tone="ink2">
+                Close
+              </Text>
+            </Pressable>
+          </Animated.View>
+        )
+      }}
+      containerStyle={{ backgroundColor: c.surface2 }}
+      childrenContainerStyle={{ backgroundColor: c.bg }}
+    >
+      {children}
+    </Swipeable>
   )
 }

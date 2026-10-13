@@ -34,6 +34,8 @@ const enc = encodeURIComponent
 export const getMyProfile = () => request<Profile>('GET', '/users/me/profile')
 export const getProfile = (userId: string) => request<Profile>('GET', `/users/${userId}/profile`)
 export const updateProfile = (changes: ProfileChanges) => request<Profile>('PATCH', '/users/me/profile', changes)
+/** Your own name for someone, only you see it (null removes it). */
+export const setNickname = (userId: string, nickname: string | null) => request<{ userId: string; nickname: string | null }>('PUT', `/users/${userId}/nickname`, { nickname })
 export const setAvatar = (file: Upload) => upload<{ avatarVersion: string }>('PUT', '/users/me/avatar', file)
 export const removeAvatar = () => request<{ avatarVersion: null }>('DELETE', '/users/me/avatar')
 export const getMyStatus = () => request<MyStatus>('GET', '/users/me/status')

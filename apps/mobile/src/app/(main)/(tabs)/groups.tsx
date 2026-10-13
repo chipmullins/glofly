@@ -119,7 +119,7 @@ export default function Groups() {
           />
         )}
       />
-      <Fab label="New group" icon="addPerson" onPress={() => router.push('/new-group')} />
+      <Fab label="Create group" icon="addPerson" onPress={() => router.push('/new-group')} />
     </View>
   )
 }

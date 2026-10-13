@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { STATUS_LABEL, activityLine, playing, type Profile } from '@glofly/shared'
+import { NICKNAME_MAX, STATUS_LABEL, activityLine, playing, type Profile } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
@@ -14,7 +14,7 @@ import { startCallWith } from '@/calls/controller'
 import { Avatar } from '@/ui/Avatar'
 import { inform } from '@/ui/dialogs'
 import { Icon, type IconName } from '@/ui/icons'
-import { Button, IconButton, Spinner, Text } from '@/ui/kit'
+import { Button, Field, IconButton, Spinner, Text } from '@/ui/kit'
 import { openReport } from '@/ui/sheets'
 import { useTheme } from '@/ui/theme'
 
@@ -35,12 +35,27 @@ export default function ProfileCard() {
   const outgoing = friends.outgoing.some((f) => f.id === id)
   const blocked = friends.blocked.some((f) => f.id === id)
 
-  useEffect(() => {
-    void api.getProfile(id).then((r) => {
+  const [nickEdit, setNickEdit] = useState<string | null>(null) // the nickname being typed, or null
+  const [nickBusy, setNickBusy] = useState(false)
+  const load = () =>
+    api.getProfile(id).then((r) => {
       if (r.ok) setProfile(r.data)
       else setGone(true)
     })
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isFriend])
+
+  // Nicknames: only you see them; the server puts them everywhere for you (lists refresh by themselves).
+  async function saveNickname(next: string | null) {
+    setNickBusy(true)
+    const r = await api.setNickname(id, next)
+    setNickBusy(false)
+    if (!r.ok) return void inform("Couldn't save the nickname", r.message)
+    setNickEdit(null)
+    void load()
+  }
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/chats'))
   const presence = live ?? profile?.presence ?? null
@@ -83,8 +98,29 @@ export default function ProfileCard() {
               </Text>
               <Text size={15} tone="muted">
                 @{profile.username}
+                {profile.realName ? ` · their name is ${profile.realName}` : ''}
               </Text>
             </View>
+            {!isMe && nickEdit !== null ? (
+              <View style={{ gap: 10, padding: 14, borderRadius: 16, backgroundColor: c.surface }}>
+                <Field
+                  label="Nickname · only you see it"
+                  value={nickEdit}
+                  onChangeText={setNickEdit}
+                  maxLength={NICKNAME_MAX}
+                  placeholder={profile.realName ?? profile.displayName}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={() => void saveNickname(nickEdit.trim() || null)}
+                  accessibilityLabel="Nickname"
+                />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {profile.realName ? <Button label="Remove" kind="secondary" compact disabled={nickBusy} onPress={() => void saveNickname(null)} style={{ flex: 1 }} /> : null}
+                  <Button label="Cancel" kind="secondary" compact disabled={nickBusy} onPress={() => setNickEdit(null)} style={{ flex: 1 }} />
+                  <Button label="Save" compact busy={nickBusy} onPress={() => void saveNickname(nickEdit.trim() || null)} style={{ flex: 1 }} />
+                </View>
+              </View>
+            ) : null}
             {presence && (isFriend || isMe) ? (
               <View style={{ gap: 6 }}>
                 <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, height: 32, borderRadius: 16, backgroundColor: presence.status === 'online' ? c.onlineSoft : c.surface }}>
@@ -144,6 +180,9 @@ export default function ProfileCard() {
               <Button label="Edit profile" kind="secondary" compact icon="pencil" onPress={() => router.replace('/edit-profile')} />
             ) : (
               <View style={{ gap: 4, marginTop: 4 }}>
+                {nickEdit === null && !blocked ? (
+                  <LinkRow icon="pencil" label={profile.realName ? 'Change nickname' : 'Give them a nickname'} onPress={() => setNickEdit(profile.realName ? profile.displayName : '')} />
+                ) : null}
                 {isFriend ? <LinkRow icon="close" label="Remove friend" onPress={() => void removeFriend(profile)} /> : null}
                 {blocked ? (
                   <LinkRow icon="block" label={`Unblock ${first}`} onPress={() => void request(() => api.unblockUser(id), "Couldn't unblock")} />
