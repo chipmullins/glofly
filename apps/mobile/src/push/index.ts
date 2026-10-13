@@ -8,7 +8,7 @@ import { prefs } from '@/lib/storage'
 import { onSignOut, useSession } from '@/state/session'
 import { usePhonePrefs, onPhonePrefsChange } from '@/state/prefs'
 import { useStore } from '@/state/store'
-import { requestNotifications } from './permissions'
+import { notificationStatus, requestNotifications } from './permissions'
 import { playSound, vibrate } from './sounds'
 
 // Push notifications on this phone: the Firebase token goes to the server (tied to this
@@ -36,9 +36,14 @@ async function register(): Promise<void> {
     registeredToken = null
     return
   }
-  // Ask once after signing in (Android 13+ shows its own prompt).
+  // Ask once after signing in (Android 13+ shows its own prompt). iPhone: also whenever iOS says it
+  // was never asked. "Asked" is saved in the Keychain, which outlives the app: after a reinstall
+  // (or a TestFlight build replacing an ad hoc one) iOS forgets the answer but the flag stayed, so
+  // Glofly never asked again, got no push address, and notifications (and lock-screen calls)
+  // silently stopped. iOS only ever shows its prompt once per install, so asking is harmless.
   const asked = await prefs.get<boolean>('askedNotifications', false)
-  if (!asked) {
+  const neverAsked = Platform.OS === 'ios' && (await notificationStatus()) === 'unknown'
+  if (!asked || neverAsked) {
     await prefs.set('askedNotifications', true)
     await requestNotifications()
   }
@@ -48,6 +53,11 @@ async function register(): Promise<void> {
   const voip = Platform.OS === 'ios' ? Native.voipToken() : null
   const r = await api.registerPush(token, p.preview, voip ?? undefined)
   if (r.ok) registeredToken = token
+}
+
+/** Registers this phone again now (after notifications were just allowed). */
+export function refreshPush(): void {
+  void register()
 }
 
 let started = false

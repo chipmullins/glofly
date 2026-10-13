@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { AppState, Platform, View } from 'react-native'
 import { usePhonePrefs, setPhonePref } from '@/state/prefs'
-import { notificationStatus, openNotificationSettings, fullScreenCallsAllowed, openFullScreenCallSettings, type PermissionState } from '@/push/permissions'
+import { notificationStatus, openNotificationSettings, fullScreenCallsAllowed, openFullScreenCallSettings, requestNotifications, type PermissionState } from '@/push/permissions'
+import { refreshPush } from '@/push'
 import { Notice, SectionLabel, Text } from '@/ui/kit'
 import { Screen } from '@/ui/Screen'
 import { SettingsRow } from '@/ui/SettingsRow'
@@ -31,6 +32,19 @@ export default function NotificationSettings() {
       {perm === 'denied' ? (
         <View style={{ padding: 16 }}>
           <Notice tone="info">{`${OS} has notifications turned off for Glofly. Turn them on in ${ios ? 'Settings → Glofly → Notifications' : 'Android Settings'} to get messages and calls.`}</Notice>
+        </View>
+      ) : null}
+      {ios && perm === 'unknown' ? (
+        <View style={{ padding: 16, gap: 10 }}>
+          <Notice tone="info">Glofly hasn't been allowed to send notifications on this iPhone yet.</Notice>
+          <SettingsRow
+            label="Allow notifications"
+            onPress={async () => {
+              await requestNotifications()
+              setPerm(await notificationStatus())
+              void refreshPush()
+            }}
+          />
         </View>
       ) : null}
       <SectionLabel>This phone</SectionLabel>
