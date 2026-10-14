@@ -86,14 +86,17 @@ export function isRealDate(value: string): boolean {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d
 }
 
-/** What's wrong with a birthday (YYYY-MM-DD), or null if it's fine. */
-export function birthdayProblem(birthday: string, today = new Date()): string | null {
+/**
+ * What's wrong with a birthday (YYYY-MM-DD), or null if it's fine. `minimumAge` is 0 only for a
+ * restricted (family) account set up in Glofly Control with a parent's consent.
+ */
+export function birthdayProblem(birthday: string, today = new Date(), minimumAge = MINIMUM_AGE): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return 'Enter your birthday.'
   if (!isRealDate(birthday)) return "That date doesn't exist."
   if (Number(birthday.slice(0, 4)) < 1900) return 'Check the year you were born.'
   const age = ageOn(birthday, today)
   if (age < 0) return "Your birthday can't be in the future."
-  if (age < MINIMUM_AGE) return `You need to be at least ${MINIMUM_AGE} to use Glofly.`
+  if (age < minimumAge) return `You need to be at least ${minimumAge} to use Glofly.`
   return null
 }
 

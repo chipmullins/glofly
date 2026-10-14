@@ -16,6 +16,7 @@ import {
 } from "./email";
 import { connectedSessionIds, disconnectSession, disconnectSessions, emitToUser } from "../realtime";
 import { scheduleDeletion } from "./deletion";
+import { isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
 
 // Settings → Account: email (confirm, change), where you're signed in, change password, delete account.
 export const accountRouter = Router();
@@ -64,10 +65,12 @@ accountRouter.get("/", async (_req, res) => {
       email: users.email,
       emailVerifiedAt: users.emailVerifiedAt,
       createdAt: users.createdAt,
+      restricted: users.restricted,
     })
     .from(users)
     .where(eq(users.id, myId));
   res.json({
+    ...(row.restricted ? { restricted: true } : {}),
     username: row.username,
     email: row.email,
     emailVerified: !!row.emailVerifiedAt,
@@ -106,6 +109,10 @@ const changeEmailSchema = z.object({
 // Sends a confirm link to the new address. The email only changes once that link is used;
 // until then the old one keeps working (and gets a heads-up).
 accountRouter.post("/email", passwordCheckLimiter, async (req, res) => {
+  if (await isRestricted(me(res).id)) {
+    res.status(403).json(MANAGED_BY_FAMILY);
+    return;
+  }
   const parsed = changeEmailSchema.safeParse(req.body);
   if (!parsed.success) {
     const field = String(parsed.error.issues[0].path[0] ?? "newEmail");
@@ -209,6 +216,10 @@ accountRouter.post("/password", passwordCheckLimiter, async (req, res) => {
 // Hides the account and signs out everywhere. It's removed for good after 30 days,
 // unless they log in again and choose to restore it.
 accountRouter.post("/delete", passwordCheckLimiter, async (req, res) => {
+  if (await isRestricted(me(res).id)) {
+    res.status(403).json(MANAGED_BY_FAMILY);
+    return;
+  }
   const parsed = z.object({ password: z.string().min(1).max(PASSWORD_MAX) }).safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid", fields: { password: "Enter your password." } });

@@ -7,6 +7,7 @@ import { AuditLog } from './screens/AuditLog'
 import { CreateAccount } from './screens/CreateAccount'
 import { Reports } from './screens/Reports'
 import { Announcements } from './screens/Announcements'
+import { Server } from './screens/Server'
 import { api } from './lib/api'
 import { Sidebar, type Page } from './components/Sidebar'
 import { Toast } from './components/common'
@@ -24,12 +25,16 @@ export default function App(): JSX.Element {
   const [toast, setToast] = useState<{ message: string; bad?: boolean } | null>(null)
   const [refresh, setRefresh] = useState(0)
   const [openReports, setOpenReports] = useState(0)
+  // Glofly is paused (Server → Pause Glofly): a banner on every page and "Paused" in the sidebar.
+  const [paused, setPaused] = useState(false)
 
   // The sidebar's open-reports count: on sign-in, then every minute.
   useEffect(() => {
     if (!session) return
     const check = (): void => {
       void api.reports('open').then((r) => r.ok && setOpenReports(r.data.counts.open))
+      // Older servers don't have this (404): just never paused.
+      void api.server().then((r) => r.ok && setPaused(r.data.pause.paused))
     }
     check()
     const timer = setInterval(check, 60_000)
@@ -94,6 +99,7 @@ export default function App(): JSX.Element {
         admin={session.admin}
         expiresAt={session.expiresAt}
         openReports={openReports}
+        paused={paused}
         onSignOut={() => {
           void window.control.signIn.signOut().then(() => {
             setSession(null)
@@ -102,6 +108,14 @@ export default function App(): JSX.Element {
         }}
       />
       <main className="page" key={page}>
+        {paused && page !== 'server' && (
+          <div className="paused-banner" role="status">
+            <strong>Glofly is paused.</strong> Nobody can use it until you unpause it.
+            <button type="button" className="link-btn" onClick={() => setPage('server')}>
+              Go to Server
+            </button>
+          </div>
+        )}
         {page === 'dashboard' && (
           <Dashboard
             onCreate={() => setCreating(true)}
@@ -131,6 +145,7 @@ export default function App(): JSX.Element {
           />
         )}
         {page === 'announcements' && <Announcements toast={showToast} />}
+        {page === 'server' && <Server toast={showToast} onPauseChange={setPaused} />}
         {page === 'audit' && (
           <AuditLog toast={showToast} onOpenAccount={(id) => openAccounts('', id)} />
         )}

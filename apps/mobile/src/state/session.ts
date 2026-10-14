@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { SignedInUser, UpdateRequired } from '@glofly/shared'
+import type { Paused, SignedInUser, UpdateRequired } from '@glofly/shared'
 import { secure } from '@/lib/storage'
 
 // Who's signed in on this phone. The token lives in the Keystore when "Keep me signed in" is on,
@@ -13,10 +13,13 @@ type SessionState = {
   user: SignedInUser | null
   /** The server needs a newer Glofly: the update screen covers everything. */
   updateRequired: UpdateRequired | null
+  /** 0.4.0: Glofly is paused (Glofly Control → Server): "Glofly is paused" covers everything. */
+  paused: Paused | null
   /** Shown once on the login screen after being signed out by the server (e.g. password changed). */
   signedOutNote: string | null
   setUser: (user: SignedInUser) => void
   setUpdateRequired: (u: UpdateRequired | null) => void
+  setPaused: (p: Paused | null) => void
 }
 
 const TOKEN_KEY = 'session.token'
@@ -27,6 +30,7 @@ export const useSession = create<SessionState>((set) => ({
   token: null,
   user: null,
   updateRequired: null,
+  paused: null,
   signedOutNote: null,
   setUser: (user) => {
     set({ user })
@@ -35,6 +39,7 @@ export const useSession = create<SessionState>((set) => ({
     })
   },
   setUpdateRequired: (updateRequired) => set({ updateRequired }),
+  setPaused: (paused) => set({ paused }),
 }))
 
 /** At start: a saved sign-in, if there is one. Checked against the server later (401 → signed out). */

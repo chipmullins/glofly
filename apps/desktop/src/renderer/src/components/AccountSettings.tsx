@@ -337,21 +337,30 @@ export default function AccountSettings({
         </form>
       </section>
 
-      <section className="settings-section">
-        <h2 className="acct-danger-title">Danger zone</h2>
-        <div className="acct-danger">
-          <div className="settings-row-text">
-            <span className="settings-row-label">Delete account</span>
-            <span className="settings-row-desc">
-              Permanently removes your profile, friends and messages. You’ll have 30 days to change
-              your mind.
-            </span>
+      {details?.restricted ? (
+        <section className="settings-section">
+          <p className="settings-row-desc">
+            Your account is managed by your family, so they take care of changing your email or
+            deleting the account.
+          </p>
+        </section>
+      ) : (
+        <section className="settings-section">
+          <h2 className="acct-danger-title">Danger zone</h2>
+          <div className="acct-danger">
+            <div className="settings-row-text">
+              <span className="settings-row-label">Delete account</span>
+              <span className="settings-row-desc">
+                Permanently removes your profile, friends and messages. You’ll have 30 days to
+                change your mind.
+              </span>
+            </div>
+            <button type="button" className="acct-delete-button" onClick={() => setDeleting(true)}>
+              Delete account
+            </button>
           </div>
-          <button type="button" className="acct-delete-button" onClick={() => setDeleting(true)}>
-            Delete account
-          </button>
-        </div>
-      </section>
+        </section>
+      )}
 
       {deleting && (
         <DeleteAccountDialog

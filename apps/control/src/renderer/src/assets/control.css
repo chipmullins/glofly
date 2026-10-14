@@ -1651,3 +1651,229 @@ table.table {
   font-size: 13px;
   white-space: nowrap;
 }
+
+/* ───────────── Server (0.4.0): Pause Glofly, Restart server ───────────── */
+
+.server-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.server-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.server-card--paused {
+  border-color: var(--c-bad-line);
+  box-shadow: 0 0 0 3px var(--c-bad-bg);
+}
+
+.server-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.server-card-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--c-purple-tint);
+  color: var(--c-purple);
+  flex-shrink: 0;
+}
+
+.server-card--paused .server-card-icon {
+  background: var(--c-bad-bg);
+  color: var(--c-bad);
+}
+
+.server-card-titles {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.server-card-titles h2 {
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.server-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.server-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--c-quiet);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.server-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.server-card code,
+.notice code {
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(36, 23, 15, 0.07);
+}
+
+/* An on/off switch (role="switch"). */
+.switch {
+  position: relative;
+  width: 52px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--c-field-line);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+
+.switch[aria-checked='true'] {
+  background: var(--c-purple);
+}
+
+.switch--danger[aria-checked='true'] {
+  background: var(--c-danger);
+}
+
+.switch[aria-checked='true'] .switch-knob {
+  transform: translateX(22px);
+}
+
+.switch:focus-visible {
+  outline: 3px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+.switch:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* Across the top of every page while Glofly is paused. */
+.paused-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--c-danger);
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.paused-banner .link-btn {
+  margin-left: auto;
+  color: #ffffff;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.nav-item .nav-count--paused {
+  background: var(--c-danger);
+  color: #ffffff;
+}
+
+/* Accounts → Family (restricted accounts). */
+.family {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--c-head);
+  border: 1px solid var(--c-card-line);
+}
+
+.family-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.family-head .text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.family-head strong {
+  font-size: 14px;
+}
+
+.family-friend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.family-friend .text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.family-friend .handle {
+  color: var(--c-muted);
+  font-size: 13px;
+}

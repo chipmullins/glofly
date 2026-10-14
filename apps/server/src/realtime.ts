@@ -19,6 +19,7 @@ import {
   onStatusChange,
 } from "./presence";
 import { onPresenceChange } from "./friends/online-alerts";
+import { getPause, isPaused, pausedBody } from "./admin/pause";
 
 /** Runs a background task, logging (not crashing) if it fails. */
 function safely(task: () => Promise<unknown>): void {
@@ -38,6 +39,15 @@ export function startRealtime(httpServer: HttpServer): void {
     // website gets permission to connect from a browser.
     cors: { origin: false },
     maxHttpBufferSize: 16 * 1024, // events are small; reject anything big
+    // "Pause Glofly" (admin/pause.ts): new connections are refused before they're even set up.
+    // The apps see a plain connection error and keep retrying on their own (every ~10 s), so
+    // older apps come back by themselves once Glofly is unpaused.
+    allowRequest: (_req, callback) => {
+      isPaused().then(
+        (paused) => callback(paused ? "paused" : null, !paused),
+        () => callback(null, true),
+      );
+    },
   });
 
   // Every connection must present a valid session token, same as the API.
@@ -111,7 +121,9 @@ export function startRealtime(httpServer: HttpServer): void {
     socket.on("disconnect", (reason) => {
       // A phone leaving Glofly (or losing signal) stays "Active on mobile" for a few minutes;
       // not when the server hung up on it (signed out, update required).
-      const phoneLeft = socket.data.platform !== "desktop" && reason !== "server namespace disconnect";
+      // Nor when Glofly was paused (everyone was hung up on at once).
+      const phoneLeft =
+        socket.data.platform !== "desktop" && reason !== "server namespace disconnect" && !pausing;
       safely(async () => {
         await deviceDisconnected(me.id, socket.id, phoneLeft ? (socket.data.sessionId as string) : undefined);
         // Wait a moment before telling friends, so a quick reconnect doesn't flicker "offline".
@@ -175,6 +187,31 @@ export function startRealtime(httpServer: HttpServer): void {
       }
     });
   });
+}
+
+// True while Glofly is paused (set by pauseConnections, cleared by resumeConnections).
+let pausing = false;
+
+/**
+ * "Pause Glofly": every app is told (0.4.0+ shows "Glofly is paused"), then its connection is
+ * closed. Not a sign-out: the apps see the connection drop and keep trying to reconnect, which
+ * the server refuses until the pause ends. Returns how many devices were connected.
+ */
+export async function pauseConnections(): Promise<number> {
+  pausing = true;
+  if (!io) return 0;
+  const body = pausedBody(await getPause());
+  const sockets = await io.fetchSockets();
+  for (const socket of sockets) socket.emit("server:paused", body);
+  // Closing the connection itself (not socket.disconnect) waits for the message above to go out,
+  // and looks like lost Wi-Fi to the app (it retries) rather than a sign-out.
+  for (const socket of io.of("/").sockets.values()) socket.conn.close();
+  return sockets.length;
+}
+
+/** The pause is over: phones leaving Glofly count as "Active on mobile" again. */
+export function resumeConnections(): void {
+  pausing = false;
 }
 
 /** Every 30 seconds: refresh each connected device, then catch anyone who vanished. */

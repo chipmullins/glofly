@@ -24,6 +24,8 @@ export function CreateAccount({
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [addFriend, setAddFriend] = useState(true)
+  // 0.4.0: a family account (restricted): for a child, with a parent's OK.
+  const [restricted, setRestricted] = useState(false)
   const [note, setNote] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -91,6 +93,7 @@ export function CreateAccount({
       username: clean,
       displayName: displayName.trim(),
       addFriend,
+      ...(restricted ? { restricted: true } : {}),
       note: note.trim()
     })
     setBusy(false)
@@ -190,6 +193,22 @@ export function CreateAccount({
             onChange={(e) => setAddFriend(e.target.checked)}
           />
           Add me (@{admin.username}) as their friend
+        </label>
+
+        <label className="check" style={{ alignItems: 'flex-start', paddingTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={restricted}
+            style={{ marginTop: 1 }}
+            onChange={(e) => setRestricted(e.target.checked)}
+          />
+          <span>
+            Family account (restricted)
+            <span className="hint" style={{ display: 'block' }}>
+              For a child, only with a parent’s OK. Only you add their friends (in Accounts), and
+              the welcome page doesn’t ask them to be 13 or older.
+            </span>
+          </span>
         </label>
 
         <NoteField

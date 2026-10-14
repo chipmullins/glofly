@@ -197,7 +197,15 @@ const ALLOWED: [string, RegExp][] = [
   ['POST', new RegExp(`^/admin/announcements$`)],
   ['POST', new RegExp(`^/admin/announcements/${ID}/end$`)],
   ['GET', new RegExp(`^/admin/app-version${QUERY}$`)],
-  ['PUT', new RegExp(`^/admin/app-version$`)]
+  ['PUT', new RegExp(`^/admin/app-version$`)],
+  // 0.4.0: Server (Pause Glofly, Restart server) and restricted (family) accounts
+  ['GET', new RegExp(`^/admin/server$`)],
+  ['PUT', new RegExp(`^/admin/server/pause$`)],
+  ['POST', new RegExp(`^/admin/server/restart$`)],
+  ['GET', new RegExp(`^/admin/accounts/${ID}/family$`)],
+  ['PUT', new RegExp(`^/admin/accounts/${ID}/restricted$`)],
+  ['POST', new RegExp(`^/admin/accounts/${ID}/friends$`)],
+  ['POST', new RegExp(`^/admin/accounts/${ID}/friends/${ID}/remove$`)]
 ]
 
 export function isAllowedCall(method: unknown, path: unknown): boolean {

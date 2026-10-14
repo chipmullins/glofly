@@ -55,3 +55,41 @@ export async function canMessage(a: string, b: string): Promise<boolean> {
     (await areFriends(a, b)) && !(await blockedEitherWay(a, b)) && !(await deletionPending(a, b))
   );
 }
+
+// ───────────── Restricted (family-managed) accounts, 0.4.0 ─────────────
+
+/** Is this a restricted account (Control → Accounts → Restricted)? */
+export async function isRestricted(userId: string): Promise<boolean> {
+  const [row] = await db.select({ restricted: users.restricted }).from(users).where(eq(users.id, userId));
+  return row?.restricted === true;
+}
+
+/** Which of these people have restricted accounts. */
+export async function restrictedAmong(userIds: string[]): Promise<string[]> {
+  if (!userIds.length) return [];
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(inArray(users.id, userIds), eq(users.restricted, true)));
+  return rows.map((r) => r.id);
+}
+
+/**
+ * A restricted account can only be in a group where everyone else is their friend. True if a
+ * group of exactly these people would break that.
+ */
+export async function groupBreaksRestriction(memberIds: string[]): Promise<boolean> {
+  const members = [...new Set(memberIds)];
+  for (const kid of await restrictedAmong(members)) {
+    for (const other of members) {
+      if (other !== kid && !(await areFriends(kid, other))) return true;
+    }
+  }
+  return false;
+}
+
+/** What a restricted account sees when trying something only their family can do. */
+export const MANAGED_BY_FAMILY = {
+  error: "restricted",
+  message: "Your account is managed by your family, so they take care of this for you.",
+} as const;

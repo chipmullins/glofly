@@ -15,7 +15,7 @@ import {
   stopRefreshing,
   updateMessage,
 } from '@/state/sync'
-import { noteUpdateRequired } from './http'
+import { notePaused, noteUpdateRequired } from './http'
 import { refreshMe } from './auth'
 import { refreshAccount } from '@/state/account'
 
@@ -91,6 +91,11 @@ function connect() {
     disconnect()
     noteUpdateRequired(body)
   })
+  // Glofly Control → Pause Glofly. The server closes the connection right after this.
+  s.on('server:paused', (body) => {
+    disconnect()
+    notePaused(503, body)
+  })
 
   s.on('message:new', (p: { message?: Message; people?: PublicUser[] }) => {
     if (!p?.message?.id) return
@@ -154,6 +159,7 @@ function connect() {
   })
   s.on('account:changed', () => {
     void refreshAccount()
+    void refreshMe() // 0.4.0: "Restricted" turned on or off in Glofly Control
     emit('account:changed', null)
   })
   s.on('call:updated', (p: { call?: Call; caller?: PublicUser | null }) => {
@@ -195,7 +201,8 @@ export function startRealtime() {
   started = true
   const sync = () => {
     const signedIn = useSession.getState().status === 'signedIn'
-    if (!signedIn) return disconnect()
+    // While Glofly is paused nothing connects; ui/Paused.tsx checks back and this runs again.
+    if (!signedIn || useSession.getState().paused) return disconnect()
     if (appState === 'active') {
       if (backgroundTimer) clearTimeout(backgroundTimer)
       backgroundTimer = null
@@ -217,6 +224,9 @@ export function startRealtime() {
   useSession.subscribe((s, prev) => {
     if (s.status !== prev.status || s.token !== prev.token) {
       disconnect()
+      sync()
+    } else if (!s.paused && prev.paused) {
+      // The pause is over: load everything again and reconnect.
       sync()
     }
   })

@@ -36,7 +36,7 @@ import {
   type Variant,
 } from "./attachments";
 import { requireAuth } from "../auth/sessions";
-import { blockedEitherWay, canMessage, deletionPending, pair } from "../friends/rules";
+import { blockedEitherWay, canMessage, deletionPending, groupBreaksRestriction, pair } from "../friends/rules";
 import { emitToUser } from "../realtime";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
@@ -822,6 +822,8 @@ async function addable(myId: string, userIds: string[]): Promise<boolean> {
 class GroupFull extends Error {}
 
 const NOT_FRIENDS = "You can only add your friends to a group.";
+// Restricted (family-managed) accounts are only ever in groups with their own friends.
+const RESTRICTED_GROUP = "Someone here can only be in groups where everyone is their friend.";
 const groupFull = (n = GROUP_MAX) => `Groups can have up to ${n} people.`;
 
 // POST /conversations/group  { name?, userIds } — start a group with at least two friends.
@@ -843,6 +845,10 @@ conversationsRouter.post("/group", groupLimiter, async (req, res) => {
   }
   if ((await deletionPending(myId)) || !(await addable(myId, userIds))) {
     res.status(403).json({ error: "forbidden", message: NOT_FRIENDS });
+    return;
+  }
+  if (await groupBreaksRestriction([myId, ...userIds])) {
+    res.status(403).json({ error: "restricted", message: RESTRICTED_GROUP });
     return;
   }
   const { conversationId, row } = await db.transaction(async (tx) => {
@@ -1024,6 +1030,10 @@ conversationsRouter.post("/:id/members", groupLimiter, async (req, res) => {
     res.status(403).json({ error: "forbidden", message: NOT_FRIENDS });
     return;
   }
+  if (await groupBreaksRestriction([...chat.memberIds, ...userIds])) {
+    res.status(403).json({ error: "restricted", message: RESTRICTED_GROUP });
+    return;
+  }
   let result: { row: MessageRow; memberIds: string[] };
   try {
     result = await db.transaction(async (tx) => {
@@ -1058,6 +1068,71 @@ conversationsRouter.post("/:id/members", groupLimiter, async (req, res) => {
   res.json({ conversation: summary });
 });
 
+/**
+ * Takes someone out of a group: they left (actor = themselves) or were removed. The last one out
+ * removes the group. Also used by Glofly Control (restricted accounts, admin/family.ts).
+ */
+export async function removeGroupMember(chatId: string, userId: string, actorId: string): Promise<void> {
+  const outcome = await db.transaction(async (tx) => {
+    await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, chatId)).for("update");
+    const removed = await tx
+      .delete(conversationMembers)
+      .where(and(eq(conversationMembers.conversationId, chatId), eq(conversationMembers.userId, userId)))
+      .returning({ userId: conversationMembers.userId });
+    if (!removed.length) return { kind: "gone" as const };
+    // Their unsent uploads for this group go too.
+    const unsent = await tx
+      .delete(attachments)
+      .where(
+        and(
+          eq(attachments.conversationId, chatId),
+          eq(attachments.uploaderId, userId),
+          isNull(attachments.messageId),
+        ),
+      )
+      .returning({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind });
+    const rest = await tx
+      .select({ userId: conversationMembers.userId })
+      .from(conversationMembers)
+      .where(eq(conversationMembers.conversationId, chatId))
+      .orderBy(conversationMembers.joinedAt);
+    if (!rest.length) {
+      // The last person left: the group and everything in it is removed.
+      const files = await tx
+        .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
+        .from(attachments)
+        .where(eq(attachments.conversationId, chatId));
+      const [gone] = await tx
+        .delete(conversations)
+        .where(eq(conversations.id, chatId))
+        .returning({ photoVersion: conversations.photoVersion });
+      return { kind: "empty" as const, files: [...unsent, ...files], photo: gone?.photoVersion ?? null };
+    }
+    const [group] = await tx
+      .select({ createdBy: conversations.createdBy })
+      .from(conversations)
+      .where(eq(conversations.id, chatId));
+    if (group.createdBy === userId || group.createdBy === null) {
+      await tx.update(conversations).set({ createdBy: rest[0].userId }).where(eq(conversations.id, chatId));
+    }
+    const row = await postEvent(
+      tx,
+      chatId,
+      actorId,
+      actorId === userId ? { type: "left" } : { type: "removed", userId: userId },
+    );
+    return { kind: "posted" as const, row, files: unsent, memberIds: rest.map((m) => m.userId) };
+  });
+
+  if (outcome.kind !== "gone") await removeFiles(outcome.files);
+  if (outcome.kind === "empty" && outcome.photo) await removeGroupPhoto(chatId, outcome.photo);
+  // Someone who leaves (or is removed) drops out of the group's call straight away.
+  if (outcome.kind !== "gone") await removeFromChatCall(chatId, userId);
+  if (outcome.kind === "posted") await announce(outcome.row, outcome.memberIds);
+  // The person who left (or was removed) sees the group disappear on all their devices.
+  emitToUser(userId, "conversations:changed", {});
+}
+
 // DELETE /conversations/:id/members/:userId — leave (yourself) or remove someone (creator only).
 conversationsRouter.delete("/:id/members/:userId", groupLimiter, async (req, res) => {
   const myId = me(res).id;
@@ -1073,64 +1148,7 @@ conversationsRouter.delete("/:id/members/:userId", groupLimiter, async (req, res
     return;
   }
 
-  const outcome = await db.transaction(async (tx) => {
-    await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, chat.id)).for("update");
-    const removed = await tx
-      .delete(conversationMembers)
-      .where(and(eq(conversationMembers.conversationId, chat.id), eq(conversationMembers.userId, target.data)))
-      .returning({ userId: conversationMembers.userId });
-    if (!removed.length) return { kind: "gone" as const };
-    // Their unsent uploads for this group go too.
-    const unsent = await tx
-      .delete(attachments)
-      .where(
-        and(
-          eq(attachments.conversationId, chat.id),
-          eq(attachments.uploaderId, target.data),
-          isNull(attachments.messageId),
-        ),
-      )
-      .returning({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind });
-    const rest = await tx
-      .select({ userId: conversationMembers.userId })
-      .from(conversationMembers)
-      .where(eq(conversationMembers.conversationId, chat.id))
-      .orderBy(conversationMembers.joinedAt);
-    if (!rest.length) {
-      // The last person left: the group and everything in it is removed.
-      const files = await tx
-        .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
-        .from(attachments)
-        .where(eq(attachments.conversationId, chat.id));
-      const [gone] = await tx
-        .delete(conversations)
-        .where(eq(conversations.id, chat.id))
-        .returning({ photoVersion: conversations.photoVersion });
-      return { kind: "empty" as const, files: [...unsent, ...files], photo: gone?.photoVersion ?? null };
-    }
-    const [group] = await tx
-      .select({ createdBy: conversations.createdBy })
-      .from(conversations)
-      .where(eq(conversations.id, chat.id));
-    if (group.createdBy === target.data || group.createdBy === null) {
-      await tx.update(conversations).set({ createdBy: rest[0].userId }).where(eq(conversations.id, chat.id));
-    }
-    const row = await postEvent(
-      tx,
-      chat.id,
-      myId,
-      leaving ? { type: "left" } : { type: "removed", userId: target.data },
-    );
-    return { kind: "posted" as const, row, files: unsent, memberIds: rest.map((m) => m.userId) };
-  });
-
-  if (outcome.kind !== "gone") await removeFiles(outcome.files);
-  if (outcome.kind === "empty" && outcome.photo) await removeGroupPhoto(chat.id, outcome.photo);
-  // Someone who leaves (or is removed) drops out of the group's call straight away.
-  if (outcome.kind !== "gone") await removeFromChatCall(chat.id, target.data);
-  if (outcome.kind === "posted") await announce(outcome.row, outcome.memberIds);
-  // The person who left (or was removed) sees the group disappear on all their devices.
-  emitToUser(target.data, "conversations:changed", {});
+  await removeGroupMember(chat.id, target.data, myId);
   res.status(204).end();
 });
 

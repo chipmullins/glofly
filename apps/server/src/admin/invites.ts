@@ -67,6 +67,8 @@ export async function createInvite(input: {
   displayName: string;
   addFriend: boolean;
   invitedBy: string;
+  /** 0.4.0: a restricted (family-managed) account, set up with a parent's consent. */
+  restricted?: boolean;
 }): Promise<CreateResult> {
   const fields: Record<string, string> = {};
   if (await usernameTaken(input.username)) fields.username = "That username is taken.";
@@ -83,6 +85,7 @@ export async function createInvite(input: {
       tokenHash: hash(token),
       invitedBy: input.invitedBy,
       addFriend: input.addFriend,
+      restricted: input.restricted ?? false,
       expiresAt: new Date(Date.now() + INVITE_DAYS * DAY),
     })
     .returning();
@@ -185,6 +188,7 @@ export async function acceptInvite(
           termsAcceptedAt: now,
           // They opened the link we emailed, so the address is theirs.
           emailVerifiedAt: now,
+          restricted: invite.restricted,
         })
         .returning({ id: users.id, username: users.username });
       await tx.update(accountInvites).set({ acceptedUserId: user.id }).where(eq(accountInvites.id, invite.id));

@@ -498,3 +498,13 @@ export async function sweepCalls(): Promise<void> {
     if (!ongoing.some((c) => key.startsWith(c.id))) missingSince.delete(key);
   }
 }
+
+/** "Pause Glofly": every ringing or ongoing call ends. Returns how many there were. */
+export async function endAllCalls(): Promise<number> {
+  const rows = await db.select({ id: calls.id }).from(calls).where(inArray(calls.status, ACTIVE));
+  let ended = 0;
+  for (const r of rows) {
+    if (await closeCall(r.id, "hang_up").catch((err) => console.error("Couldn't end a call:", err))) ended++;
+  }
+  return ended;
+}

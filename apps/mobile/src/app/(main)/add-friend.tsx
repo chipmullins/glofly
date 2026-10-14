@@ -8,6 +8,7 @@ import { Avatar } from '@/ui/Avatar'
 import { Button, Field, Notice, Spinner, Text } from '@/ui/kit'
 import { Screen } from '@/ui/Screen'
 import { useTheme } from '@/ui/theme'
+import { useSession } from '@/state/session'
 
 // Add friend: search by username or name, then send a request. Below: "Invite your friends"
 // (0.3.0) emails someone a link to join Glofly; joining from it makes you friends right away.
@@ -19,6 +20,7 @@ export default function AddFriend() {
   const [loading, setLoading] = useState(false)
   const [note, setNote] = useState<{ tone: 'good' | 'danger'; text: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const restricted = useSession((s) => s.user?.restricted === true)
 
   useEffect(() => {
     const q = query.trim().replace(/^@/, '')
@@ -44,6 +46,15 @@ export default function AddFriend() {
     setNote({ tone: 'good', text: r.data.status === 'accepted' ? `You and ${u.displayName} are now friends.` : `Friend request sent to ${u.displayName}.` })
     setResults((list) => list?.map((x) => (x.id === u.id ? { ...x, relationship: r.data.status === 'accepted' ? 'friends' : 'outgoing' } : x)) ?? null)
     void refreshFriends()
+  }
+
+  // A restricted (family-managed) account: their family adds friends (Glofly Control).
+  if (restricted) {
+    return (
+      <Screen title="Add friend" contentStyle={{ padding: 16, gap: 14 }}>
+        <Notice tone="info">Your account is managed by your family, so they add your friends for you.</Notice>
+      </Screen>
+    )
   }
 
   return (

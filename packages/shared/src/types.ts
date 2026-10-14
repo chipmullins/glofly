@@ -7,6 +7,11 @@ export type SignedInUser = {
   displayName: string
   /** Changes with every new profile photo. Null means no photo (initials instead). */
   avatarVersion: string | null
+  /**
+   * 0.4.0: a restricted (family-managed) account. Friends are added by the family (in Glofly
+   * Control), so the apps hide Add friend and Invite your friends. Missing = not restricted.
+   */
+  restricted?: boolean
 }
 
 export type LoginRequest = {
@@ -133,6 +138,8 @@ export type ApiError =
   | 'server_error'
   /** This version of Glofly is too old for the server: the app shows "Please update Glofly" */
   | 'update_required'
+  /** 0.4.0: Glofly is paused (Glofly Control → Server): the app shows "Glofly is paused" */
+  | 'paused'
 export type ApiResult<T> =
   | { ok: true; data: T }
   | {
@@ -315,6 +322,8 @@ export type AccountDetails = {
   emailVerified?: boolean
   /** A new address waiting for its confirm link to be clicked, if any. */
   pendingEmail?: string | null
+  /** 0.4.0: a family-managed account (can't change its email or delete itself). */
+  restricted?: boolean
 }
 
 /** Settings → Account → Where you're signed in. */
@@ -361,10 +370,35 @@ export type ServerEvent =
   | { type: 'call:updated'; call: Call; caller: PublicUser | null }
   /** This version is too old for the server: show "Please update Glofly". */
   | ({ type: 'app:update-required' } & UpdateRequired)
+  /** 0.4.0: Glofly is paused (Glofly Control → Server → Pause Glofly) */
+  | ({ type: 'app:paused' } & Paused)
+  /** 0.4.0: the pause is over */
+  | { type: 'app:resumed' }
   /** A message from the Glofly team (a warning) */
   | { type: 'notice:new'; notice: TeamNotice }
   /** The announcement banner changed (null: none showing now) */
   | { type: 'announcement'; announcement: Announcement | null }
+
+/** 0.4.0: Glofly is paused (Glofly Control → Server → Pause Glofly). Nobody can use it until then. */
+export type Paused = {
+  /** What the admin wrote, e.g. "Glofly is paused for maintenance. Back soon." */
+  message: string
+  /** When the pause started (ISO), if known */
+  since: string | null
+}
+
+/** Reads the server's 503 "paused" answer (or the live connection's notice). Null if it isn't one. */
+export function pausedFrom(body: unknown): Paused | null {
+  const b = body as { error?: unknown; message?: unknown; since?: unknown } | null
+  if (!b || b.error !== 'paused') return null
+  return {
+    message:
+      typeof b.message === 'string' && b.message.trim() && b.message.length <= 300
+        ? b.message
+        : 'Glofly is paused for maintenance. Back soon.',
+    since: typeof b.since === 'string' && b.since.length <= 40 ? b.since : null
+  }
+}
 
 /** The server needs a newer Glofly (Control → minimum app version). */
 export type UpdateRequired = {

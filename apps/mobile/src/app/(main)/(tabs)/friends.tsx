@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { onMobile, presenceLine, type FriendEntry } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { useStore } from '@/state/store'
+import { useSession } from '@/state/session'
 import { refreshFriends } from '@/state/sync'
 import { openDmWith } from '@/lib/chatActions'
 import { friendMenu } from '@/lib/friendActions'
@@ -20,6 +21,7 @@ type Row = { kind: 'friend' | 'incoming' | 'outgoing' | 'blocked'; entry: Friend
 
 export default function Friends() {
   const { c } = useTheme()
+  const restricted = useSession((s) => s.user?.restricted === true)
   const insets = useSafeAreaInsets()
   const lists = useStore((s) => s.friends)
   const presence = useStore((s) => s.presence)
@@ -79,7 +81,16 @@ export default function Friends() {
           <Text display size={28} style={{ flex: 1, marginLeft: 4 }} accessibilityRole="header">
             Friends
           </Text>
-          <IconButton name="addPerson" label="Add friend" onPress={() => router.push('/add-friend')} color={c.ink} />
+          {/* A restricted (family-managed) account: their family adds friends (Glofly Control). */}
+          {restricted ? (
+            <View style={{ paddingHorizontal: 12, height: 32, borderRadius: 16, backgroundColor: c.surface, justifyContent: 'center' }}>
+              <Text size={12} tone="muted" weight="medium">
+                Managed by your family
+              </Text>
+            </View>
+          ) : (
+            <IconButton name="addPerson" label="Add friend" onPress={() => router.push('/add-friend')} color={c.ink} />
+          )}
         </View>
         <View accessibilityRole="tablist" accessibilityLabel="Friends filter" style={{ flexDirection: 'row', gap: 8 }}>
           {chips.map((chip) => {
@@ -139,7 +150,7 @@ export default function Friends() {
             </Text>
             {filter !== 'blocked' && !lists.friends.length ? (
               <Text tone="muted" style={{ textAlign: 'center' }}>
-                Add friends by their username.
+                {restricted ? 'Your family adds your friends for you.' : 'Add friends by their username.'}
               </Text>
             ) : null}
           </View>

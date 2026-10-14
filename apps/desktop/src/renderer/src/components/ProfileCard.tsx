@@ -73,7 +73,8 @@ type ProfileCardProps = {
   onMessage: () => void
   /** Friends: start a voice or video call */
   onCall?: (video: boolean) => void
-  onRemove: () => void
+  /** Missing for a restricted (family-managed) account: their family removes friends. */
+  onRemove?: () => void
   onBlock: () => void
   /** Report this person to the Glofly team */
   onReport?: () => void
@@ -188,7 +189,7 @@ export default function ProfileCard({
             )}
 
             <div className="profile-actions">
-              {isFriend && (
+              {isFriend && onRemove && (
                 <button type="button" className="profile-action" onClick={onRemove}>
                   <RemoveFriendIcon size={15} strokeWidth={2} />
                   Remove

@@ -3,6 +3,7 @@ import type { PublicUser } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { openReport } from '@/ui/sheets'
+import { useSession } from '@/state/session'
 import { refreshConversations, refreshFriends } from '@/state/sync'
 import { openDmWith } from './chatActions'
 import { startCallWith } from '@/calls/controller'
@@ -48,7 +49,8 @@ export async function friendMenu(p: PublicUser) {
       { key: 'voice', label: 'Voice call', icon: 'phone' },
       { key: 'video', label: 'Video call', icon: 'video' },
       { key: 'profile', label: 'View profile', icon: 'user' },
-      { key: 'remove', label: 'Remove friend', icon: 'close', danger: true },
+      // A restricted (family-managed) account: their family removes friends.
+      ...(useSession.getState().user?.restricted ? [] : [{ key: 'remove', label: 'Remove friend', icon: 'close' as const, danger: true }]),
       { key: 'block', label: 'Block', icon: 'block', danger: true },
       { key: 'report', label: `Report @${p.username}`, icon: 'flag', danger: true },
     ],

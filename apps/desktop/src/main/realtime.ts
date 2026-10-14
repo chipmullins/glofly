@@ -9,7 +9,7 @@ import type {
   GloflyEvent,
   PublicUser
 } from '../preload/api-types'
-import { noteUpdateRequired } from './app-status'
+import { notePaused, noteUpdateRequired } from './app-status'
 
 // The live connection to the server lives here in the main process, like the
 // session token. Events are passed on to the window as plain data.
@@ -70,6 +70,11 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
   socket.on('app:update-required', (body) => {
     disconnectRealtime()
     noteUpdateRequired(body)
+  })
+  // Glofly Control → Pause Glofly. The server closes the connection right after this.
+  socket.on('server:paused', (body) => {
+    disconnectRealtime()
+    notePaused(body)
   })
   socket.on('notice:new', (p) => {
     const n = p?.notice

@@ -199,7 +199,8 @@ function FriendRow({
   onMessage: () => void
   onCall: (video: boolean) => void
   onViewProfile: () => void
-  onRemove: () => void
+  /** Missing for a restricted (family-managed) account: their family removes friends. */
+  onRemove?: () => void
   onBlock: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -316,18 +317,20 @@ function FriendRow({
               <BlockIcon />
               Block
             </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="menu-item menu-item--danger"
-              onClick={() => {
-                close()
-                onRemove()
-              }}
-            >
-              <RemoveFriendIcon />
-              Remove friend
-            </button>
+            {onRemove && (
+              <button
+                type="button"
+                role="menuitem"
+                className="menu-item menu-item--danger"
+                onClick={() => {
+                  close()
+                  onRemove()
+                }}
+              >
+                <RemoveFriendIcon />
+                Remove friend
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -469,6 +472,17 @@ export default function MainScreen({
     })
   }, [])
   const openChatRef = useRef<string | null>(null)
+  // 0.4.0: a restricted (family-managed) account: Glofly Control can turn it on or off any time
+  // (account:changed), so it's asked again then.
+  const [restricted, setRestricted] = useState(user.restricted === true)
+  useEffect(
+    () =>
+      window.glofly.onEvent((event) => {
+        if (event.type !== 'account:changed') return
+        void window.glofly.auth.me().then((me) => me && setRestricted(me.restricted === true))
+      }),
+    []
+  )
   const onUserChangeRef = useRef(onUserChange)
   useEffect(() => {
     onUserChangeRef.current = onUserChange
@@ -1073,7 +1087,8 @@ export default function MainScreen({
   const incoming = (lists?.incoming ?? []).filter((p) => matches(p, search))
   const outgoing = (lists?.outgoing ?? []).filter((p) => matches(p, search))
   const blocked = (lists?.blocked ?? []).filter((p) => matches(p, search))
-  const openAdd = (): void => setAdding(true)
+  // A restricted (family-managed) account doesn't add or remove friends: their family does.
+  const openAdd = restricted ? undefined : (): void => setAdding(true)
   const searching = search.trim().length > 0
 
   function renderTab(): React.ReactNode {
@@ -1085,7 +1100,7 @@ export default function MainScreen({
           key={p.id}
           person={p}
           now={now}
-          onRemove={() => setConfirm({ kind: 'remove', person: p })}
+          onRemove={restricted ? undefined : () => setConfirm({ kind: 'remove', person: p })}
           onBlock={() => setConfirm({ kind: 'block', person: p })}
           onMessage={() => void openChatWith(p.id)}
           onCall={(video) => void callFriend(p.id, video)}
@@ -1103,7 +1118,9 @@ export default function MainScreen({
             text={
               lists.friends.length
                 ? "When friends are online, away or busy, they'll show up here."
-                : "Add friends to see when they're around."
+                : restricted
+                  ? 'Friends your family adds will show up here when they’re around.'
+                  : "Add friends to see when they're around."
             }
             onAdd={lists.friends.length ? undefined : openAdd}
           />
@@ -1126,7 +1143,11 @@ export default function MainScreen({
         return (
           <EmptyState
             title="No friends yet"
-            text="Add friends by their username and they'll show up here."
+            text={
+              restricted
+                ? 'Your family adds your friends for you. They’ll show up here.'
+                : "Add friends by their username and they'll show up here."
+            }
             onAdd={openAdd}
           />
         )
@@ -1484,10 +1505,14 @@ export default function MainScreen({
                     </button>
                   ))}
                 </nav>
-                <button type="button" className="primary-button add-friend" onClick={openAdd}>
-                  <AddFriendIcon />
-                  Add friend
-                </button>
+                {openAdd ? (
+                  <button type="button" className="primary-button add-friend" onClick={openAdd}>
+                    <AddFriendIcon />
+                    Add friend
+                  </button>
+                ) : (
+                  <span className="family-managed">Friends are managed by your family</span>
+                )}
               </header>
 
               <div className="content-body">
@@ -1617,10 +1642,14 @@ export default function MainScreen({
                   }
                 : undefined
             }
-            onRemove={() => {
-              setViewing(null)
-              setConfirm({ kind: 'remove', person: viewing })
-            }}
+            onRemove={
+              restricted
+                ? undefined
+                : () => {
+                    setViewing(null)
+                    setConfirm({ kind: 'remove', person: viewing })
+                  }
+            }
             onBlock={() => {
               setViewing(null)
               setConfirm({ kind: 'block', person: viewing })

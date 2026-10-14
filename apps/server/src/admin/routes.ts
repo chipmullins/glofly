@@ -53,8 +53,8 @@ import { getSignupMode, newInviteCode, setSignupMode } from "./signups";
 
 export const adminRouter = Router();
 
-const admin = (res: Response): AdminLocals => res.locals.admin as AdminLocals;
-const ip = (res: Response): string => res.locals.adminIp as string;
+export const admin = (res: Response): AdminLocals => res.locals.admin as AdminLocals;
+export const ip = (res: Response): string => res.locals.adminIp as string;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isId = (value: unknown): value is string => typeof value === "string" && UUID.test(value);
@@ -62,7 +62,7 @@ const isId = (value: unknown): value is string => typeof value === "string" && U
 const escapeLike = (text: string): string => text.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 /** Body problems → 400 with a message per field (the note included). */
-function invalid(res: Response, error: z.ZodError): void {
+export function invalid(res: Response, error: z.ZodError): void {
   const fields = fieldErrors(error);
   res.status(400).json({ error: "invalid", fields, message: Object.values(fields)[0] });
 }
@@ -287,6 +287,7 @@ adminRouter.get("/accounts", async (req, res) => {
       lastSeenAt: users.lastSeenAt,
       suspendedAt: users.suspendedAt,
       deleteAfter: users.deleteAfter,
+      restricted: users.restricted,
       isAdmin: sql<boolean>`${admins.id} is not null`,
     })
     .from(users)
@@ -320,6 +321,7 @@ adminRouter.get("/accounts", async (req, res) => {
       createdAt: i.createdAt,
       sentAt: i.sentAt,
       expiresAt: i.expiresAt,
+      restricted: i.restricted,
       status: inviteStatus(i),
     })),
     accounts: rows.slice(0, LIMIT).map((u) => ({
@@ -331,6 +333,7 @@ adminRouter.get("/accounts", async (req, res) => {
       lastSeenAt: u.lastSeenAt,
       online: live.userIds.has(u.id),
       isAdmin: u.isAdmin,
+      restricted: u.restricted,
       status: accountStatus(u),
     })),
   });
@@ -355,6 +358,7 @@ adminRouter.get("/accounts/:id", async (req, res) => {
       suspendedAt: users.suspendedAt,
       suspendReason: users.suspendReason,
       deleteAfter: users.deleteAfter,
+      restricted: users.restricted,
       isAdmin: sql<boolean>`${admins.id} is not null`,
     })
     .from(users)
@@ -418,6 +422,7 @@ adminRouter.get("/accounts/:id", async (req, res) => {
       online: live.userIds.has(id),
       statusText: u.statusText,
       isAdmin: u.isAdmin,
+      restricted: u.restricted,
       status: accountStatus(u),
       suspendedAt: u.suspendedAt,
       suspendReason: u.suspendReason,
@@ -444,7 +449,7 @@ adminRouter.get("/username-available", async (req, res) => {
 });
 
 /** Loads the account an action is about, or answers 404. */
-async function target(res: Response, id: unknown) {
+export async function target(res: Response, id: unknown) {
   if (!isId(id)) {
     res.status(404).json({ error: "not_found", message: "That account doesn't exist any more." });
     return null;
@@ -731,6 +736,8 @@ adminRouter.post("/invites", async (req, res) => {
       username: usernameSchema,
       displayName: displayNameSchema,
       addFriend: z.boolean().default(true),
+      // 0.4.0: a restricted (family-managed) account, set up with a parent's consent.
+      restricted: z.boolean().default(false),
       note: noteSchema,
     })
     .safeParse(req.body);
@@ -749,7 +756,13 @@ adminRouter.post("/invites", async (req, res) => {
     adminId: admin(res).id,
     action: "Created an account",
     targetLabel: `@${input.username}`,
-    details: { inviteId: result.invite.id, email: input.email, displayName: input.displayName, addFriend: input.addFriend },
+    details: {
+      inviteId: result.invite.id,
+      email: input.email,
+      displayName: input.displayName,
+      addFriend: input.addFriend,
+      restricted: input.restricted,
+    },
     note: input.note,
     ip: ip(res),
   });

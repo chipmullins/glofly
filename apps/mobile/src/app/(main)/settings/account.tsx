@@ -74,7 +74,11 @@ export default function Account() {
         }
       />
       {account && !account.emailVerified ? <SettingsRow label="Resend confirm link" onPress={() => void resendConfirm()} /> : null}
-      {account?.pendingEmail ? <SettingsRow label="Cancel email change" onPress={() => void cancelEmailChange()} /> : <SettingsRow label="Change email" onPress={() => setSheet('email')} />}
+      {account?.restricted ? null : account?.pendingEmail ? (
+        <SettingsRow label="Cancel email change" onPress={() => void cancelEmailChange()} />
+      ) : (
+        <SettingsRow label="Change email" onPress={() => setSheet('email')} />
+      )}
       <SettingsRow icon="key" label="Change password" onPress={() => setSheet('password')} />
 
       <SectionLabel>Devices</SectionLabel>
@@ -92,7 +96,13 @@ export default function Account() {
 
       <SectionLabel>Danger zone</SectionLabel>
       <SettingsRow icon="logout" label="Log out" onPress={() => void logout()} />
-      <SettingsRow icon="trash" label="Delete account" detail="Hidden right away, removed for good after 30 days" danger onPress={() => setSheet('delete')} />
+      {account?.restricted ? (
+        <Text size={13} tone="muted" style={{ paddingHorizontal: 20, paddingVertical: 10 }}>
+          Your account is managed by your family, so they take care of changing your email or deleting the account.
+        </Text>
+      ) : (
+        <SettingsRow icon="trash" label="Delete account" detail="Hidden right away, removed for good after 30 days" danger onPress={() => setSheet('delete')} />
+      )}
 
       {sheet === 'email' ? <ChangeEmail onClose={() => setSheet(null)} /> : null}
       {sheet === 'password' ? <ChangePassword onClose={() => setSheet(null)} /> : null}

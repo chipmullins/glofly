@@ -1,4 +1,4 @@
-import { noteUpdateRequired } from './app-status'
+import { notePaused, noteUpdateRequired } from './app-status'
 import type {
   ForgotPasswordResult,
   SignupMode,
@@ -100,6 +100,9 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
   if (response.status === 426 && body?.error === 'update_required') {
     return { ok: false, reason: 'update_required', message: noteUpdateRequired(body).message }
   }
+  if (response.status === 503 && notePaused(body)) {
+    return { ok: false, reason: 'server_error', message: body?.message ?? 'Glofly is paused.' }
+  }
   if (
     response.status === 403 &&
     body?.error === 'deletion_scheduled' &&
@@ -160,6 +163,9 @@ export async function register(request: RegisterRequest): Promise<RegisterResult
 
   if (response.status === 426 && body?.error === 'update_required') {
     return { ok: false, fields: {}, message: noteUpdateRequired(body).message }
+  }
+  if (response.status === 503 && notePaused(body)) {
+    return { ok: false, fields: {}, message: body?.message ?? 'Glofly is paused.' }
   }
   if (response.status === 201 && body?.token && body.user) {
     sessionToken = body.token
@@ -263,6 +269,11 @@ export async function restore(): Promise<SignedInUser | null> {
   if (response.status === 426) {
     // Too old for the server: keep the saved session for after the update.
     noteUpdateRequired(await response.json().catch(() => null))
+    return null
+  }
+  if (response.status === 503) {
+    // Paused (Glofly Control): keep the saved session; the window reloads once it's back.
+    notePaused(await response.json().catch(() => null))
     return null
   }
 

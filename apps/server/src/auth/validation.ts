@@ -49,6 +49,11 @@ export const birthdaySchema = z
   .string({ error: "Enter your birthday." })
   .superRefine(rule((b) => birthdayProblem(b)));
 
+/** A restricted (family) account made in Control: any real birthday (a parent agreed). */
+export const familyBirthdaySchema = z
+  .string({ error: "Enter the birthday." })
+  .superRefine(rule((b) => birthdayProblem(b, new Date(), 0)));
+
 export const registerSchema = z.object({
   email: emailSchema,
   username: usernameSchema,

@@ -3,7 +3,7 @@ import { rateLimit } from "express-rate-limit";
 import { passwordSchema, PASSWORD_MAX } from "../auth/validation";
 import { confirmEmail, resetPassword } from "../account/email";
 import { findToken, looksLikeToken } from "../email/tokens";
-import { birthdaySchema } from "../auth/validation";
+import { birthdaySchema, familyBirthdaySchema } from "../auth/validation";
 import { acceptInvite, findInvite, inviterName, type Invite } from "../admin/invites";
 import { displayNameSchema, usernameSchema } from "../auth/validation";
 import { getSignupMode } from "../admin/signups";
@@ -120,6 +120,16 @@ ${body}
 </main>
 </body>
 </html>`);
+}
+
+/** "Pause Glofly" (admin/pause.ts): what these pages show while Glofly is paused. */
+export function pausedPage(res: Response, message: string): void {
+  page(res, {
+    title: "Glofly is paused",
+    body: `<h1>Glofly is paused</h1>
+<p>${esc(message)}</p>
+<p class="muted">Your link still works: open it again once Glofly is back.</p>`,
+  });
 }
 
 const expired = (res: Response, what: "reset" | "confirm"): void =>
@@ -275,6 +285,11 @@ async function welcomeForm(
     title: "Finish setting up your account",
     body: `<h1>You're invited to Glofly</h1>
 <p class="muted">${esc(inviter)} set up an account for you. Finish setting it up to start chatting.</p>
+${
+  invite.restricted
+    ? `<p class="muted"><strong>This is a family account.</strong> A parent or guardian should finish setting it up. Friends are added by your family, not by searching.</p>`
+    : ""
+}
 <div class="person">
   <span class="initials" aria-hidden="true">${esc(initialsOf(invite.displayName))}</span>
   <span class="person-text"><strong>${esc(invite.displayName)} <span>@${esc(invite.username)}</span></strong><span>${esc(invite.email)}</span></span>
@@ -293,7 +308,7 @@ async function welcomeForm(
       <select name="day" aria-label="Day" required><option value="">Day</option>${days}</select>
       <select name="year" aria-label="Year" required><option value="">Year</option>${years}</select>
     </div>
-    <p class="hint">Only used to check you're 13 or older. Never shown to anyone.</p>
+    <p class="hint">${invite.restricted ? "Never shown to anyone." : "Only used to check you're 13 or older. Never shown to anyone."}</p>
   </fieldset>
   <label class="check"><input type="checkbox" name="terms" value="yes"${values.terms ? " checked" : ""} required>
     <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a></span></label>
@@ -334,7 +349,8 @@ webRouter.post("/welcome", submitLimiter, formBody, async (req, res) => {
   const [m, d, y] = [values.month, values.day, values.year].map((v) => Number(v));
   if (!m || !d || !y) return again("Enter your birthday.");
   const birthday = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  const age = birthdaySchema.safeParse(birthday);
+  // A family account (restricted, made in Control with a parent's consent) can be under 13.
+  const age = (invite.restricted ? familyBirthdaySchema : birthdaySchema).safeParse(birthday);
   if (!age.success) return again(age.error.issues[0].message);
   if (!values.terms) return again("Please agree to the Terms of Service and Privacy Policy.");
 

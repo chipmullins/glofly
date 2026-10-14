@@ -92,6 +92,8 @@ export type AccountRow = {
   lastSeenAt: string | null
   online: boolean
   isAdmin: boolean
+  /** 0.4.0: a restricted (family-managed) account (missing from older servers) */
+  restricted?: boolean
   status: AccountStatus
 }
 
@@ -103,6 +105,8 @@ export type InviteRow = {
   createdAt: string
   sentAt: string
   expiresAt: string
+  /** 0.4.0: starts out restricted (a family account) */
+  restricted?: boolean
   status: InviteStatus
 }
 
@@ -128,6 +132,7 @@ export type AccountDetail = {
     online: boolean
     statusText: string | null
     isAdmin: boolean
+    restricted?: boolean
     status: AccountStatus
     suspendedAt: string | null
     suspendReason: string | null
@@ -253,6 +258,27 @@ export type AppVersionInfo = {
 
 type Done = { ok: true; message?: string }
 
+/** Control → Server (0.4.0). */
+export type PauseState = { paused: boolean; message: string; since: string | null }
+export type ServerInfo = {
+  pause: PauseState
+  defaultPauseMessage: string
+  startedAt: string
+  uptimeSec: number
+  /** Only the live server (Docker) can restart itself. */
+  canRestart: boolean
+  devicesConnected: number
+}
+
+/** A restricted account's friends (Accounts → Family). */
+export type FamilyFriend = {
+  id: string
+  username: string
+  displayName: string
+  avatarVersion: string | null
+  since: string | null
+}
+
 // ───────────── Calls ─────────────
 
 export const api = {
@@ -276,6 +302,7 @@ export const api = {
     username: string
     displayName: string
     addFriend: boolean
+    restricted?: boolean
     note: string
   }) => call<Done>('POST', '/admin/invites', body),
   inviteAction: (id: string, action: 'resend' | 'cancel', note: string) =>
@@ -329,6 +356,23 @@ export const api = {
       platform,
       note
     }),
+  server: () => call<ServerInfo>('GET', '/admin/server'),
+  setPause: (paused: boolean, message: string, note: string) =>
+    call<Done & { pause: PauseState }>('PUT', '/admin/server/pause', {
+      paused,
+      ...(message ? { message } : {}),
+      note
+    }),
+  restartServer: (note: string) =>
+    call<Done & { startedAt: string }>('POST', '/admin/server/restart', { note }),
+  family: (id: string) =>
+    call<{ restricted: boolean; friends: FamilyFriend[] }>('GET', `/admin/accounts/${id}/family`),
+  setRestricted: (id: string, restricted: boolean, note: string) =>
+    call<Done>('PUT', `/admin/accounts/${id}/restricted`, { restricted, note }),
+  addFamilyFriend: (id: string, username: string, note: string) =>
+    call<Done>('POST', `/admin/accounts/${id}/friends`, { username, note }),
+  removeFamilyFriend: (id: string, friendId: string, note: string) =>
+    call<Done>('POST', `/admin/accounts/${id}/friends/${friendId}/remove`, { note }),
   audit: (search: string, before?: string) =>
     call<{ entries: AuditEntry[]; hasMore: boolean }>(
       'GET',

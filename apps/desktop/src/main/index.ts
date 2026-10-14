@@ -110,7 +110,7 @@ import {
 } from './games'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isUserId } from './api'
-import { getUpdateRequired } from './app-status'
+import { checkPausedNow, configurePauseChecks, getPaused, getUpdateRequired } from './app-status'
 import { isReportRequest, listNotices, noticeSeen, sendReport } from './safety'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
 import { checkNow, restartToUpdate, startAutoUpdates, updateReady } from './updater'
@@ -151,8 +151,10 @@ import type {
   PrivacySettings,
   ProfileChanges,
   RegisterRequest,
+  SignedInUser,
   WindowTheme
 } from '../preload/api-types'
+import { request as apiRequest } from './api'
 
 // Colors for the minimize / maximize / close buttons, matching each screen and theme.
 const TITLE_BAR = {
@@ -862,6 +864,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle('updates:status', (event) => (fromApp(event) ? updateReady() : null))
   ipcMain.handle('updates:check-now', (event) => (fromApp(event) ? checkNow() : 'unavailable'))
   ipcMain.handle('app:update-required', (event) => (fromApp(event) ? getUpdateRequired() : null))
+  // "Glofly is paused" (0.4.0): is it, and "Try again" (asks the server now).
+  ipcMain.handle('app:paused', (event) => (fromApp(event) ? getPaused() : null))
+  ipcMain.handle('app:check-paused', (event) => (fromApp(event) ? checkPausedNow() : null))
   ipcMain.handle('reports:send', (event, report: unknown) =>
     fromApp(event) && isReportRequest(report) ? sendReport(report) : invalid
   )
@@ -885,6 +890,13 @@ function registerIpcHandlers(): void {
   ipcMain.handle('auth:restore', (event) => {
     if (!fromApp(event)) return null
     return thenGoLive(restore())
+  })
+
+  // Who am I now (0.4.0: after Control turns "Restricted" on or off). Null if it can't tell.
+  ipcMain.handle('auth:me', async (event) => {
+    if (!fromApp(event)) return null
+    const result = await apiRequest<{ user: SignedInUser }>('GET', '/auth/me')
+    return result.ok ? result.data.user : null
   })
 
   ipcMain.handle('auth:login', (event, request: unknown) => {
@@ -927,6 +939,7 @@ app.whenReady().then(() => {
   setUpMacMenu()
   setUpPermissions()
   loadAppSettings()
+  configurePauseChecks(API_URL)
   registerIpcHandlers()
   startIdleWatch()
   createWindow()

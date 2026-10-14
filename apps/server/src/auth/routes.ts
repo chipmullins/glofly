@@ -228,6 +228,7 @@ authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
       deleteAfter: users.deleteAfter,
       suspendedAt: users.suspendedAt,
       suspendReason: users.suspendReason,
+      restricted: users.restricted,
     })
     .from(users)
     .where(eq(lower(column), identifier.toLowerCase()))
@@ -286,6 +287,8 @@ authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
       username: user.username,
       displayName: user.displayName,
       avatarVersion: user.avatarVersion,
+      // 0.4.0: a family-managed account (the apps hide Add friend). Older apps ignore it.
+      ...(user.restricted ? { restricted: true } : {}),
     },
   });
 });
@@ -315,8 +318,11 @@ authRouter.post("/forgot-password", forgotLimiter, (req, res) => {
 });
 
 // GET /auth/me — who is this token signed in as?
-authRouter.get("/me", requireAuth, (_req, res) => {
-  res.json({ user: res.locals.user });
+authRouter.get("/me", requireAuth, async (_req, res) => {
+  const me = res.locals.user as { id: string };
+  const [row] = await db.select({ restricted: users.restricted }).from(users).where(eq(users.id, me.id));
+  // 0.4.0: a family-managed account (the apps hide Add friend). Older apps ignore it.
+  res.json({ user: { ...res.locals.user, ...(row?.restricted ? { restricted: true } : {}) } });
 });
 
 // POST /auth/logout — signs this device out.

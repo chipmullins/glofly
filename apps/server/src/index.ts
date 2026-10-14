@@ -16,7 +16,8 @@ import { sweepUnsentUploads } from "./messages/attachments";
 import { startRealtime } from "./realtime";
 import { connectRedis } from "./redis";
 import { storageKind } from "./storage";
-import { webRouter } from "./web/pages";
+import { pausedPage, webRouter } from "./web/pages";
+import { getPause, refuseWhilePaused } from "./admin/pause";
 import { emailKind } from "./email/send";
 import { sweepEmailTokens } from "./email/tokens";
 import { controlRouter } from "./admin";
@@ -44,6 +45,17 @@ app.get("/health", async (_req, res) => {
     res.status(503).json({ status: "error", app: "Glofly", database: "unreachable" });
   }
 });
+
+// Is Glofly paused? (Control → Server → Pause Glofly.) Apps showing "Glofly is paused" ask this
+// every 30 seconds; it's the one public question that's always answered.
+app.get("/status", async (_req, res) => {
+  const pause = await getPause();
+  res.set("Cache-Control", "no-store");
+  res.json(pause.paused ? { paused: true, message: pause.message, since: pause.since } : { paused: false });
+});
+
+// While paused, everything below answers 503 "paused" (except Control).
+app.use(refuseWhilePaused(pausedPage));
 
 app.use("/auth", authRouter);
 app.use("/account", accountRouter);

@@ -24,6 +24,8 @@ import { useTheme } from '@/ui/theme'
 export default function ProfileCard() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { c } = useTheme()
+  // A restricted (family-managed) account: their family removes friends.
+  const meRestricted = useSession((s) => s.user?.restricted === true)
   const insets = useSafeAreaInsets()
   const meId = useSession((s) => s.user?.id)
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -210,7 +212,7 @@ export default function ProfileCard() {
                 {nickEdit === null && !blocked ? (
                   <LinkRow icon="pencil" label={profile.realName ? 'Change nickname' : 'Give them a nickname'} onPress={() => setNickEdit(profile.realName ? profile.displayName : '')} />
                 ) : null}
-                {isFriend ? <LinkRow icon="close" label="Remove friend" onPress={() => void removeFriend(profile)} /> : null}
+                {isFriend && !meRestricted ? <LinkRow icon="close" label="Remove friend" onPress={() => void removeFriend(profile)} /> : null}
                 {blocked ? (
                   <LinkRow icon="block" label={`Unblock ${first}`} onPress={() => void request(() => api.unblockUser(id), "Couldn't unblock")} />
                 ) : (

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import { File } from 'expo-file-system'
-import { upgradeEvents, type ApiError, type ApiResult, type UpdateRequired } from '@glofly/shared'
+import { pausedFrom, upgradeEvents, type ApiError, type ApiResult, type UpdateRequired } from '@glofly/shared'
 import { SERVER_URL, VERSION_HEADERS } from '@/lib/config'
 import { endSessionLocally, useSession } from '@/state/session'
 
@@ -31,6 +31,16 @@ export function noteUpdateRequired(json: Partial<UpdateRequired> | null): Update
   return required
 }
 
+/** Glofly Control → Pause Glofly: the server answers 503 "paused". True if this was one. */
+export function notePaused(status: number, json: unknown): boolean {
+  if (status !== 503) return false
+  const paused = pausedFrom(json)
+  if (!paused) return false
+  const now = useSession.getState().paused
+  if (!now || now.message !== paused.message) useSession.getState().setPaused(paused)
+  return true
+}
+
 /** Turns a server answer into an ApiResult (shared by JSON requests and uploads). */
 export async function toResult<T>(status: number, json: Json | null, signedIn: boolean): Promise<ApiResult<T>> {
   if (status === 204) return { ok: true, data: null as T }
@@ -38,6 +48,9 @@ export async function toResult<T>(status: number, json: Json | null, signedIn: b
   if (status === 426 && json?.error === 'update_required') {
     const required = noteUpdateRequired(json as Partial<UpdateRequired>)
     return { ok: false, error: 'update_required', message: required.message }
+  }
+  if (notePaused(status, json)) {
+    return { ok: false, error: 'paused', message: typeof json?.message === 'string' ? json.message : 'Glofly is paused.' }
   }
   if (status === 401 && signedIn) {
     await endSessionLocally('You were signed out. Please log in again.')
@@ -101,6 +114,7 @@ export async function requestRaw(
     })
     const json = (await response.json().catch(() => null)) as Json | null
     if (response.status === 426 && json?.error === 'update_required') noteUpdateRequired(json as Partial<UpdateRequired>)
+    notePaused(response.status, json)
     return { status: response.status, json }
   } catch {
     return null

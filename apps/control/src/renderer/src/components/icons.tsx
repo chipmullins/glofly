@@ -38,7 +38,11 @@ export const ICONS = {
   lock: 'M7 11V7a5 5 0 0 1 10 0v4M5 11h14v10H5z',
   mail: 'M3 5h18v14H3zM3 7l9 6 9-6',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
-  refresh: 'M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5'
+  refresh: 'M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5',
+  server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
+  pause: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM10 9v6M14 9v6',
+  family:
+    'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 20a6 6 0 0 1 12 0M14.5 15.5A5 5 0 0 1 21 20'
 } as const
 
 /** The Glofly firefly on the Twilight tile, with Control's gold shield (same as its app icon). */

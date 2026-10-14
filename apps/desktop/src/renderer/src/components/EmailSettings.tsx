@@ -259,16 +259,19 @@ export default function EmailSettings({
                 Resend link
               </button>
             )}
-            <button
-              type="button"
-              className="small-button small-button--quiet"
-              onClick={() => {
-                setNote(null)
-                setChanging(true)
-              }}
-            >
-              Change email
-            </button>
+            {/* A restricted (family-managed) account's email is changed by their family. */}
+            {!details?.restricted && (
+              <button
+                type="button"
+                className="small-button small-button--quiet"
+                onClick={() => {
+                  setNote(null)
+                  setChanging(true)
+                }}
+              >
+                Change email
+              </button>
+            )}
           </div>
         )}
       </div>

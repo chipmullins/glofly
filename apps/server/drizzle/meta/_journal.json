@@ -183,6 +183,13 @@
       "when": 1791925121830,
       "tag": "0025_phase_0_3_0",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791958797818,
+      "tag": "0026_restricted_accounts",
+      "breakpoints": true
     }
   ]
 }

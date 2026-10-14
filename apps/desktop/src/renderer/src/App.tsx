@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { RegisterRequest, SignedInUser, UpdateRequired } from '../../preload/api-types'
+import type { Paused, RegisterRequest, SignedInUser, UpdateRequired } from '../../preload/api-types'
 import LoginScreen, { type LoginDetails, type LoginProblem } from './screens/LoginScreen'
 import RegisterScreen, { type RegisterPhoto } from './screens/RegisterScreen'
 import MainScreen from './screens/MainScreen'
 import FireflyTakeoff from './components/FireflyTakeoff'
 import UpdateRequiredScreen from './components/UpdateRequired'
+import PausedScreen from './components/Paused'
 import { playSound } from './lib/sounds'
 
 type AuthScreen = 'login' | 'register'
@@ -22,8 +23,11 @@ export default function App(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ name: 'starting' })
   // The server needs a newer Glofly (Control → minimum app version): covers everything.
   const [updateRequired, setUpdateRequired] = useState<UpdateRequired | null>(null)
+  // Glofly is paused (Glofly Control → Server): covers everything until it's back.
+  const [paused, setPaused] = useState<Paused | null>(null)
   useEffect(() => {
     void window.glofly.appStatus.updateRequired().then((info) => info && setUpdateRequired(info))
+    void window.glofly.appStatus.paused().then((info) => info && setPaused(info))
     return window.glofly.onEvent((event) => {
       if (event.type === 'app:update-required') {
         setUpdateRequired({
@@ -32,6 +36,9 @@ export default function App(): React.JSX.Element {
           downloadUrl: event.downloadUrl
         })
       }
+      if (event.type === 'app:paused') setPaused({ message: event.message, since: event.since })
+      // Back: start fresh (signs back in with the saved session and reconnects).
+      if (event.type === 'app:resumed') window.location.reload()
     })
   }, [])
 
@@ -129,6 +136,7 @@ export default function App(): React.JSX.Element {
   const showForm = (form: AuthScreen) => () => setScreen({ name: 'auth', form })
 
   if (updateRequired) return <UpdateRequiredScreen info={updateRequired} />
+  if (paused) return <PausedScreen info={paused} />
 
   switch (screen.name) {
     case 'starting':

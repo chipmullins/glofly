@@ -1,7 +1,7 @@
 import type { ApiError, ApiResult } from '../preload/api-types'
 import { API_URL, endSessionLocally, getSessionToken, VERSION_HEADER } from './auth'
 import { disconnectRealtime } from './realtime'
-import { noteUpdateRequired } from './app-status'
+import { notePaused, noteUpdateRequired } from './app-status'
 
 /** Calls the server as the signed-in user and turns the answer into an ApiResult. */
 export async function request<T>(
@@ -44,6 +44,11 @@ export async function request<T>(
   if (response.status === 426 && json?.error === 'update_required') {
     const required = noteUpdateRequired(json)
     return { ok: false, error: 'update_required', message: required.message }
+  }
+  // Glofly Control → Pause Glofly: the window shows "Glofly is paused".
+  if (response.status === 503 && notePaused(json)) {
+    disconnectRealtime()
+    return { ok: false, error: 'paused', message: json?.message ?? 'Glofly is paused.' }
   }
   if (response.status === 401) {
     disconnectRealtime()

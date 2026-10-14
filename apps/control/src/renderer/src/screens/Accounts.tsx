@@ -4,6 +4,7 @@ import {
   type AccountDetail,
   type AccountList,
   type AccountRow,
+  type FamilyFriend,
   type Filter,
   type InviteRow
 } from '../lib/api'
@@ -145,7 +146,17 @@ export function Accounts({
                 <Avatar id={item.row.id} name={item.row.displayName} invite />
                 <span className="text">
                   <span className="name">{item.row.displayName}</span>
-                  <span className="handle">@{item.row.username}</span>
+                  <span className="handle">
+                    @{item.row.username}
+                    {item.row.restricted && (
+                      <>
+                        {' '}
+                        <Chip tone="purple" small>
+                          Family
+                        </Chip>
+                      </>
+                    )}
+                  </span>
                 </span>
                 <span className="seen">
                   {item.row.status === 'pending'
@@ -166,7 +177,17 @@ export function Accounts({
                 <Avatar id={item.row.id} name={item.row.displayName} />
                 <span className="text">
                   <span className="name">{item.row.displayName}</span>
-                  <span className="handle">@{item.row.username}</span>
+                  <span className="handle">
+                    @{item.row.username}
+                    {item.row.restricted && (
+                      <>
+                        {' '}
+                        <Chip tone="purple" small>
+                          Family
+                        </Chip>
+                      </>
+                    )}
+                  </span>
                 </span>
                 <span className="seen">
                   {item.row.online
@@ -377,6 +398,14 @@ function AccountPanel({
                 </Chip>
               </>
             )}
+            {a.restricted && (
+              <>
+                {' '}
+                <Chip tone="purple" small>
+                  Family
+                </Chip>
+              </>
+            )}
           </span>
         </div>
       </div>
@@ -433,6 +462,8 @@ function AccountPanel({
           {bytes(a.storageBytes)} ({plural(a.fileCount, 'file')})
         </dd>
       </dl>
+
+      {!isMe && a.restricted !== undefined && <FamilySection account={a} onAction={setAction} />}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <span className="section-label">Devices</span>
@@ -595,6 +626,139 @@ function AccountPanel({
         />
       )}
     </aside>
+  )
+}
+
+// ───────────── Family (restricted accounts, 0.4.0) ─────────────
+
+function FamilySection({
+  account: a,
+  onAction
+}: {
+  account: AccountDetail['account']
+  onAction: (spec: ActionSpec) => void
+}): JSX.Element {
+  const [friends, setFriends] = useState<FamilyFriend[] | null>(null)
+  const restricted = a.restricted === true
+
+  useEffect(() => {
+    if (!restricted) return
+    let live = true
+    void api.family(a.id).then((r) => live && r.ok && setFriends(r.data.friends))
+    return () => {
+      live = false
+    }
+  }, [a.id, restricted])
+
+  const toggle = (): void =>
+    onAction(
+      restricted
+        ? {
+            title: `Make @${a.username} a regular account`,
+            intro:
+              'They can send and accept friend requests again, show up in search, invite friends, change their email and delete their account. Their friends stay.',
+            confirmLabel: 'Lift the restriction',
+            run: (_v, note) => api.setRestricted(a.id, false, note)
+          }
+        : {
+            title: `Restrict @${a.username}`,
+            intro: (
+              <>
+                For a child’s account. From now on <strong>only you add their friends</strong>, here
+                in Control. They can’t send or accept friend requests, don’t show up in search, can
+                only be in groups where everyone is their friend, and can’t change their email or
+                delete the account. Friend requests waiting now are cancelled, and they leave any
+                group with people who aren’t their friends.
+              </>
+            ),
+            confirmLabel: 'Restrict account',
+            notePlaceholder: 'e.g. "Family account, parent asked"',
+            run: (_v, note) => api.setRestricted(a.id, true, note)
+          }
+    )
+
+  return (
+    <div className="family" aria-label="Family">
+      <div className="family-head">
+        <Icon d={ICONS.family} size={20} strokeWidth={1.9} />
+        <span className="text">
+          <strong id={`family-${a.id}`}>Restricted (family account)</strong>
+          <span className="hint">
+            {restricted ? 'Only you manage their friends.' : 'Off: they manage their own friends.'}
+          </span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={restricted}
+          aria-labelledby={`family-${a.id}`}
+          className="switch"
+          onClick={toggle}
+        >
+          <span className="switch-knob" />
+        </button>
+      </div>
+      {restricted && (
+        <>
+          <span className="section-label">Their friends</span>
+          {!friends && <span className="loading">Loading…</span>}
+          {friends?.length === 0 && (
+            <span className="hint" style={{ fontSize: 14 }}>
+              No friends yet. Add the people they should be able to talk to.
+            </span>
+          )}
+          {friends?.map((f) => (
+            <div key={f.id} className="family-friend">
+              <Avatar id={f.id} name={f.displayName} />
+              <span className="text">
+                <span>{f.displayName}</span>
+                <span className="handle">@{f.username}</span>
+              </span>
+              <button
+                type="button"
+                className="btn btn--small btn--danger-soft"
+                onClick={() =>
+                  onAction({
+                    title: `Remove @${f.username}`,
+                    intro: `@${a.username} and @${f.username} stop being friends: they can’t message or call each other, and @${a.username} leaves any group they share with people who aren’t their friends.`,
+                    confirmLabel: 'Remove friend',
+                    danger: true,
+                    run: (_v, note) => api.removeFamilyFriend(a.id, f.id, note)
+                  })
+                }
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="btn btn--action"
+            onClick={() =>
+              onAction({
+                title: `Add a friend for @${a.username}`,
+                intro:
+                  'They become friends straight away, no request needed. Both of them see each other in Friends right away.',
+                confirmLabel: 'Add friend',
+                fields: [
+                  {
+                    name: 'username',
+                    label: 'Friend’s username',
+                    maxLength: 40,
+                    hint: 'Their Glofly username, e.g. chip'
+                  }
+                ],
+                notePlaceholder: 'e.g. "Cousin, parent OK’d"',
+                run: (v, note) => api.addFamilyFriend(a.id, v.username.replace(/^@/, ''), note)
+              })
+            }
+          >
+            <Icon d={ICONS.plus} size={16} strokeWidth={2.2} />
+            Add a friend for them
+          </button>
+        </>
+      )}
+    </div>
   )
 }
 

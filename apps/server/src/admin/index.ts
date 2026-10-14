@@ -4,6 +4,8 @@ import { adminConfigured } from "./secrets";
 import { adminAuthRouter, requireAdmin } from "./auth";
 import { adminRouter } from "./routes";
 import { moderationRouter } from "./moderation";
+import { familyRouter } from "./family";
+import { serverRouter } from "./server";
 
 // Everything under /admin: Glofly Control (the admin app). In order:
 //   1. only from the admin's network (ADMIN_IPS; Caddy checks this too on the live server)
@@ -26,4 +28,4 @@ controlRouter.use((_req, res, next) => {
   next();
 });
 controlRouter.use("/auth", adminAuthRouter);
-controlRouter.use(requireAdmin, adminRouter, moderationRouter);
+controlRouter.use(requireAdmin, adminRouter, moderationRouter, familyRouter, serverRouter);

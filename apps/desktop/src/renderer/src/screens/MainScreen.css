@@ -1335,3 +1335,15 @@
 .status-phone--dnd {
   background: var(--glo-danger);
 }
+
+/* 0.4.0: a restricted (family-managed) account, where Add friend would be. */
+.family-managed {
+  margin-left: auto;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--glo-subtle);
+  color: var(--glo-muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}

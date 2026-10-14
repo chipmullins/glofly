@@ -91,6 +91,12 @@ export const users = pgTable(
     suspendedAt: timestamp("suspended_at", { withTimezone: true }),
     suspendReason: text("suspend_reason"),
 
+    // A restricted (family-managed) account (Control → Accounts → Restricted, 0.4.0): for a
+    // child, managed by the admin. Can't send or accept friend requests (friends are added in
+    // Control), doesn't show up in search, can only be in groups with their own friends, and
+    // can't change their email or delete the account. Off for everyone else.
+    restricted: boolean("restricted").notNull().default(false),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -508,6 +514,9 @@ export const accountInvites = pgTable(
     invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
     // Make the inviter and the new account friends when they finish.
     addFriend: boolean("add_friend").notNull().default(true),
+    // 0.4.0: the account starts out restricted (family-managed): set up with a parent's consent,
+    // so the welcome page takes any real birthday (no 13+ check).
+    restricted: boolean("restricted").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

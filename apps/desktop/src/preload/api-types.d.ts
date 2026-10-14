@@ -38,7 +38,8 @@ import type {
   TeamNotice,
   UpdateRequired,
   UsernameCheck,
-  VoiceInfo
+  VoiceInfo,
+  Paused
 } from '@glofly/shared/types'
 
 /** A game you added yourself in Settings → Activity: its program (lowercase .exe) and name. */
@@ -227,6 +228,8 @@ export type GloflyApi = {
     signupMode: () => Promise<SignupMode | null>
     /** Signs back in with a saved "Keep me signed in" session. Null if there isn't a valid one. */
     restore: () => Promise<SignedInUser | null>
+    /** Who's signed in, asked again (0.4.0: picks up "Restricted" changes). Null if unknown. */
+    me: () => Promise<SignedInUser | null>
     logout: () => Promise<void>
     /** Emails a reset link if the username or email belongs to an account. */
     forgotPassword: (identifier: string) => Promise<ForgotPasswordResult>
@@ -454,6 +457,10 @@ export type GloflyApi = {
   /** Set when the server needs a newer Glofly (checked at startup). */
   appStatus: {
     updateRequired: () => Promise<UpdateRequired | null>
+    /** 0.4.0: Glofly is paused (Glofly Control), or null */
+    paused: () => Promise<Paused | null>
+    /** Asks the server right now; null once Glofly is back (the window then gets app:resumed) */
+    checkPaused: () => Promise<Paused | null>
   }
   /** New versions of Glofly (installed app only). */
   updates: {

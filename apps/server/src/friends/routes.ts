@@ -8,7 +8,7 @@ import { requireAuth } from "../auth/sessions";
 import { emitToUser } from "../realtime";
 import { endCallsBetween } from "../calls/service";
 import { announcePresence, presenceOf } from "../presence";
-import { blockedEitherWay, pair, pairIs } from "./rules";
+import { blockedEitherWay, isRestricted, MANAGED_BY_FAMILY, pair, pairIs } from "./rules";
 import { STATUS_TEXT_MAX } from "@glofly/shared";
 import { inBackground, notifyFriendRequest } from "../push/notify";
 import { alertTargetsOf, clearOnlineAlerts, setOnlineAlert } from "./online-alerts";
@@ -177,6 +177,11 @@ usersRouter.get("/search", searchLimiter, async (req, res) => {
     return;
   }
   const myId = me(res).id;
+  // A restricted account doesn't look people up: their family adds friends for them.
+  if (await isRestricted(myId)) {
+    res.json({ results: [] });
+    return;
+  }
   const term = likeSafe(q.data.toLowerCase());
 
   const found = await db
@@ -186,6 +191,7 @@ usersRouter.get("/search", searchLimiter, async (req, res) => {
       and(
         ne(users.id, myId),
         isNull(users.deleteAfter), // accounts being deleted are hidden
+        eq(users.restricted, false), // restricted (family-managed) accounts never show up
         or(
           ilike(users.username, `${term}%`),
           ilike(users.displayName, `${term}%`),
@@ -297,9 +303,18 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
     return;
   }
   const myId = me(res).id;
+  if (await isRestricted(myId)) {
+    res.status(403).json(MANAGED_BY_FAMILY);
+    return;
+  }
 
   const [found] = await db
-    .select({ ...publicUser, friendRequests: users.friendRequests, deleteAfter: users.deleteAfter })
+    .select({
+      ...publicUser,
+      friendRequests: users.friendRequests,
+      deleteAfter: users.deleteAfter,
+      restricted: users.restricted,
+    })
     .from(users)
     .where(sql`lower(${users.username}) = ${parsed.data.username.toLowerCase()}`)
     .limit(1);
@@ -323,6 +338,12 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
   const [existing] = await db.select().from(friendships).where(pairIs(myId, target.id)).limit(1);
   if (existing?.status === "accepted") {
     res.status(409).json({ error: "already_friends", message: "You're already friends." });
+    return;
+  }
+  // A restricted (family-managed) account looks like no account at all: only their family adds
+  // their friends (Glofly Control).
+  if (found.restricted) {
+    res.status(404).json({ error: "not_found", message: "No one has that username." });
     return;
   }
   if (existing && existing.requesterId === myId) {
@@ -367,6 +388,10 @@ friendsRouter.post("/requests/:userId/accept", async (req, res) => {
     return;
   }
   const myId = me(res).id;
+  if ((await isRestricted(myId)) || (await isRestricted(them.data))) {
+    res.status(403).json(MANAGED_BY_FAMILY);
+    return;
+  }
   const updated = await db
     .update(friendships)
     .set({ status: "accepted", acceptedAt: new Date() })
@@ -402,6 +427,11 @@ friendsRouter.delete("/requests/:userId", async (req, res) => {
 // DELETE /friends/:userId — remove a friend.
 friendsRouter.delete("/:userId", async (req, res) => {
   const them = userIdParam.safeParse(req.params.userId);
+  // Restricted accounts: friends are removed by their family (Control). Blocking still works.
+  if (them.success && (await isRestricted(me(res).id))) {
+    res.status(403).json(MANAGED_BY_FAMILY);
+    return;
+  }
   if (them.success) {
     await db
       .delete(friendships)
@@ -417,6 +447,10 @@ friendsRouter.delete("/:userId", async (req, res) => {
 // Always says "Invite sent" for an address that already has an account (see friends/invites.ts).
 const inviteLimiter = perUser(24 * 60 * 60 * 1000, FRIEND_INVITES_PER_DAY * 2, "You've sent a lot of invites today. Try again tomorrow.");
 friendsRouter.post("/invite", inviteLimiter, async (req, res) => {
+  if (await isRestricted(me(res).id)) {
+    res.status(403).json(MANAGED_BY_FAMILY);
+    return;
+  }
   const parsed = z.object({ email: emailSchema }).safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid", message: parsed.error.issues[0]?.message ?? "Enter a valid email address." });

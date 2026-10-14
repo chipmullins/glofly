@@ -13,6 +13,7 @@ import { DialogHost } from '@/ui/dialogs'
 import { PhotoCropperHost } from '@/ui/PhotoCropper'
 import { SheetHost } from '@/ui/sheets'
 import { UpdateRequired } from '@/ui/UpdateRequired'
+import { Paused } from '@/ui/Paused'
 import { restoreSession, useSession } from '@/state/session'
 import { prefs } from '@/lib/storage'
 import { loadPhonePrefs } from '@/state/prefs'
@@ -70,6 +71,7 @@ export default function RootLayout() {
         <SheetHost />
         <DialogHost />
         <PhotoCropperHost />
+        <Paused />
         <UpdateRequired />
       </SafeAreaProvider>
     </GestureHandlerRootView>

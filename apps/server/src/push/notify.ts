@@ -7,6 +7,7 @@ import { blockedEitherWay } from "../friends/rules";
 import { liveSessions } from "../realtime";
 import { pushConfigured, sendPush, type PushData } from "./fcm";
 import { forgetTokens } from "./devices";
+import { isPaused } from "../admin/pause";
 
 // What phones are told, and when. Every push is a data message the Glofly app turns into a
 // notification (see apps/mobile). The rules:
@@ -22,6 +23,8 @@ type Device = { token: string; sessionId: string; preview: boolean; platform: st
 
 /** Sends to every device given, forgetting tokens Firebase says are gone. */
 async function deliver(list: { device: Device; data: PushData; ttl?: number }[]): Promise<void> {
+  // "Pause Glofly": nothing goes out to phones while paused.
+  if (!list.length || (await isPaused())) return;
   const results = await Promise.all(
     list.map((p) => sendPush(p.device.token, p.data, p.ttl, p.device.platform, { messageSound: p.device.messageSound, ringtone: p.device.ringtone })),
   );

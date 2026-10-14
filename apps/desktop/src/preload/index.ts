@@ -36,6 +36,7 @@ const glofly: GloflyApi = {
     checkUsername: (username: string) => ipcRenderer.invoke('auth:check-username', username),
     signupMode: () => ipcRenderer.invoke('auth:signup-mode'),
     restore: () => ipcRenderer.invoke('auth:restore'),
+    me: () => ipcRenderer.invoke('auth:me'),
     logout: () => ipcRenderer.invoke('auth:logout'),
     forgotPassword: (identifier: string) => ipcRenderer.invoke('auth:forgot-password', identifier)
   },
@@ -196,7 +197,9 @@ const glofly: GloflyApi = {
     seen: (noticeId: string) => ipcRenderer.invoke('notices:seen', noticeId)
   },
   appStatus: {
-    updateRequired: () => ipcRenderer.invoke('app:update-required')
+    updateRequired: () => ipcRenderer.invoke('app:update-required'),
+    paused: () => ipcRenderer.invoke('app:paused'),
+    checkPaused: () => ipcRenderer.invoke('app:check-paused')
   },
   updates: {
     status: () => ipcRenderer.invoke('updates:status'),

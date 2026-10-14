@@ -3,7 +3,8 @@ import { Icon, ICONS, Logo } from './icons'
 import { initials } from '../lib/format'
 import type { AdminUser } from '../../../preload/types'
 
-export type Page = 'dashboard' | 'accounts' | 'signups' | 'reports' | 'announcements' | 'audit'
+export type Page =
+  'dashboard' | 'accounts' | 'signups' | 'reports' | 'announcements' | 'server' | 'audit'
 
 const ITEMS: {
   id: Page
@@ -15,6 +16,7 @@ const ITEMS: {
   { id: 'signups', label: 'Sign-ups', icon: ICONS.signups },
   { id: 'reports', label: 'Reports', icon: ICONS.reports },
   { id: 'announcements', label: 'Announcements', icon: ICONS.announcements },
+  { id: 'server', label: 'Server', icon: ICONS.server },
   { id: 'audit', label: 'Audit log', icon: ICONS.audit }
 ]
 
@@ -34,6 +36,7 @@ export function Sidebar({
   admin,
   expiresAt,
   openReports,
+  paused,
   onSignOut
 }: {
   page: Page
@@ -42,6 +45,8 @@ export function Sidebar({
   expiresAt: string
   /** Reports waiting for review (a count next to Reports) */
   openReports: number
+  /** Glofly is paused (Server → Pause Glofly): a red "Paused" next to Server */
+  paused: boolean
   onSignOut: () => void
 }): JSX.Element {
   const minutes = useMinutesLeft(expiresAt)
@@ -66,6 +71,9 @@ export function Sidebar({
           >
             <Icon d={item.icon} />
             <span className="label">{item.label}</span>
+            {item.id === 'server' && paused && (
+              <span className="nav-count nav-count--paused">Paused</span>
+            )}
             {item.id === 'reports' && openReports > 0 && (
               <span className="nav-count" aria-label={`${openReports} open`}>
                 {openReports > 99 ? '99+' : openReports}
