@@ -10,6 +10,7 @@ import { Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold } from '@expo-goog
 import * as SystemUI from 'expo-system-ui'
 import { useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
 import { DialogHost } from '@/ui/dialogs'
+import { PhotoCropperHost } from '@/ui/PhotoCropper'
 import { SheetHost } from '@/ui/sheets'
 import { UpdateRequired } from '@/ui/UpdateRequired'
 import { restoreSession, useSession } from '@/state/session'
@@ -68,6 +69,7 @@ export default function RootLayout() {
         </Stack>
         <SheetHost />
         <DialogHost />
+        <PhotoCropperHost />
         <UpdateRequired />
       </SafeAreaProvider>
     </GestureHandlerRootView>

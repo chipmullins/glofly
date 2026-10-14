@@ -3,8 +3,10 @@ import * as ImagePicker from 'expo-image-picker'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import type { Upload } from '@/api/http'
 import { afterOverlaysClose, inform } from '@/ui/dialogs'
+import { cropSquare } from '@/ui/PhotoCropper'
 
-// Picking photos: profile and group photos (square, cropped by Android's own cropper), and
+// Picking photos: profile and group photos (square: Android's own cropper, or Glofly's cropper on
+// iPhone), and
 // photos to send in a chat (up to 10, any shape).
 
 export type Picked = Upload & { name: string; size: number | null; width: number | null; height: number | null }
@@ -42,6 +44,20 @@ async function squarePhoto(source: 'library' | 'camera', options: ImagePicker.Im
     const perm = await ImagePicker.requestCameraPermissionsAsync()
     if (!perm.granted) return 'denied'
     result = await ImagePicker.launchCameraAsync(options)
+  } else if (IOS) {
+    // iPhone: the fast photo picker, then Glofly's own cropper. (Letting the picker crop makes iOS
+    // use its old picker, which took seconds to open: the "Choose a photo" wait.)
+    result = await ImagePicker.launchImageLibraryAsync({ ...options, allowsEditing: false })
+    if (result.canceled || !result.assets[0]) return null
+    const picked = result.assets[0]
+    if (picked.mimeType === 'image/gif') return { uri: picked.uri, type: 'image/gif' }
+    // Let the photo picker finish sliding away before the cropper appears.
+    await new Promise((r) => setTimeout(r, 350))
+    const rect = await cropSquare(picked.uri, picked.width, picked.height)
+    if (!rect) return null
+    const ref = await ImageManipulator.manipulate(picked.uri).crop(rect).resize({ width: 512, height: 512 }).renderAsync()
+    const saved = await ref.saveAsync({ format: SaveFormat.JPEG, compress: 0.9 })
+    return { uri: saved.uri, type: 'image/jpeg' }
   } else {
     result = await ImagePicker.launchImageLibraryAsync(options)
   }
