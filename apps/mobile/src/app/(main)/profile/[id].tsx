@@ -12,7 +12,7 @@ import { block, removeFriend } from '@/lib/friendActions'
 import { longDate } from '@/lib/format'
 import { startCallWith } from '@/calls/controller'
 import { Avatar } from '@/ui/Avatar'
-import { inform } from '@/ui/dialogs'
+import { SHEET_MAX_WIDTH, inform } from '@/ui/dialogs'
 import { Icon, type IconName } from '@/ui/icons'
 import { Button, Field, IconButton, Spinner, Switch, Text } from '@/ui/kit'
 import { openReport } from '@/ui/sheets'
@@ -96,7 +96,10 @@ export default function ProfileCard() {
   return (
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
       <Pressable accessibilityLabel="Close" onPress={close} style={{ position: 'absolute', inset: 0, backgroundColor: c.backdrop }} />
-      <View style={{ maxHeight: '92%', backgroundColor: c.sheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }} accessibilityViewIsModal>
+      <View
+        style={{ maxHeight: '92%', backgroundColor: c.sheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', width: '100%', maxWidth: SHEET_MAX_WIDTH, alignSelf: 'center' }}
+        accessibilityViewIsModal
+      >
         {!profile ? (
           <View style={{ padding: 40, paddingTop: 96, alignItems: 'center', paddingBottom: insets.bottom + 40 }}>
             {gone ? <Text tone="muted">This profile isn't available.</Text> : <Spinner />}

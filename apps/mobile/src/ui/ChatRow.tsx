@@ -8,6 +8,8 @@ import { useTheme } from './theme'
 import { callLine, chatTitle, isMuted, previewOf, typingLine, type NameOf } from '@/lib/chats'
 import { listTime } from '@/lib/format'
 import type { Call } from '@glofly/shared'
+import { useStore } from '@/state/store'
+import { useWide } from '@/lib/layout'
 
 // One row in the Chats or Groups list, from the design canvas.
 
@@ -28,6 +30,9 @@ type Props = {
 
 export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typing, call, subtitle, onPress, onLongPress, onJoin, now }: Props) {
   const { c } = useTheme()
+  // iPad (two panes): the chat open on the right is highlighted in the list.
+  const wide = useWide()
+  const open = useStore((s) => wide && s.viewing === chat.id)
   const title = chatTitle(chat)
   const muted = isMuted(chat, now)
   const unread = chat.unreadCount
@@ -58,7 +63,16 @@ export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typ
       onLongPress={onLongPress}
       delayLongPress={350}
       android_ripple={{ color: c.line }}
-      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9, paddingHorizontal: 16, backgroundColor: pressed ? c.surface : 'transparent' })}
+      accessibilityState={open ? { selected: true } : undefined}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 9,
+        paddingHorizontal: 16,
+        backgroundColor: open ? c.accentSoft : pressed ? c.surface : 'transparent',
+        ...(wide ? { marginHorizontal: 8, paddingHorizontal: 8, borderRadius: 14 } : {}),
+      })}
     >
       <ChatAvatar chat={chat} size={54} status={chat.kind === 'dm' ? (presence?.status ?? null) : null} mobile={onMobile(presence ?? undefined)} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>

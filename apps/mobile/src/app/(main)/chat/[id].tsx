@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { useWide } from '@/lib/layout'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Clipboard from 'expo-clipboard'
 import {
@@ -65,6 +66,7 @@ export default function ChatScreen() {
   const [viewer, setViewer] = useState<ViewerState | null>(null)
   const composer = useRef<ComposerHandle>(null)
   const list = useRef<FlatList<RowInfo>>(null)
+  const wide = useWide()
   const now = useNow(3000)
   const uploads = useUploads(id)
   const voice = useVoice(id)
@@ -249,7 +251,12 @@ export default function ChatScreen() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={{ backgroundColor: c.barBg, borderBottomWidth: 0.5, borderBottomColor: c.line, paddingTop: insets.top }}>
         <View style={{ height: 64, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, gap: 2 }}>
-          <IconButton name="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/chats'))} color={c.ink} size={24} />
+          {/* iPad (two panes): the chat list is right there on the left, so no back arrow. */}
+          {wide ? (
+            <View style={{ width: 12 }} />
+          ) : (
+            <IconButton name="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/chats'))} color={c.ink} size={24} />
+          )}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={isGroup ? `${title}, group settings` : `${title}, view profile`}

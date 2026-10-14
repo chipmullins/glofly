@@ -29,7 +29,8 @@ const googleServiceInfo =
 const EXPO_PROJECT_ID = '3aa33fd8-907f-4f50-b1a8-db37c96e107b'
 const updateChannel = variant === 'production' ? 'production' : 'preview'
 // 2026-10-13.2: Glofly 0.3.0 ("is online" / "joined from your invite" notifications in glofly-native).
-const RUNTIME_VERSION = '2026-10-13.2'
+// 2026-10-14.1: Glofly 0.4.0, the iPad version (ios.supportsTablet below is a native setting).
+const RUNTIME_VERSION = '2026-10-14.1'
 
 const config: ExpoConfig = {
   name: 'Glofly',
@@ -48,8 +49,10 @@ const config: ExpoConfig = {
     // it from eas.json (the same names).
     requestHeaders: { 'expo-channel-name': updateChannel },
   },
-  // Rotation is allowed so the call screen can go landscape; every other screen locks itself upright
-  // (expo-screen-orientation: starts locked, src/app/_layout.tsx keeps it locked, call.tsx unlocks).
+  // Rotation is allowed so the call screen can go landscape; on phones every other screen locks
+  // itself upright (expo-screen-orientation: starts locked, src/app/_layout.tsx keeps it locked,
+  // call.tsx unlocks). iPads turn any way everywhere (src/lib/orientation.ts), which Split View and
+  // Stage Manager also need.
   orientation: 'default',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
@@ -86,7 +89,9 @@ const config: ExpoConfig = {
   },
   ios: {
     bundleIdentifier: 'com.glofly.app',
-    supportsTablet: false,
+    // 0.4.0: the iPad version. Two panes on wide screens (src/lib/layout.ts), the phone layout when
+    // the window is narrow (Split View, Stage Manager).
+    supportsTablet: true,
     icon: './assets/icon-ios.png',
     ...(googleServiceInfo ? { googleServicesFile: googleServiceInfo } : {}),
     infoPlist: {

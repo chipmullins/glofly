@@ -5,10 +5,16 @@ import { chooseFrom, confirm, inform, type SheetItem } from '@/ui/dialogs'
 import { patchConversation, removeConversation, useStore } from '@/state/store'
 import { refreshConversations } from '@/state/sync'
 import { useSession } from '@/state/session'
+import { isWideNow } from '@/lib/layout'
 
 // The long-press menu for a chat (Chats list, Groups page, chat header ⋮), and what each does.
 
 export async function openChat(id: string) {
+  // iPad (two panes): the chat replaces whatever the right pane shows, rather than piling up.
+  if (isWideNow()) {
+    if (useStore.getState().viewing === id) return
+    if (router.canDismiss()) router.dismissAll()
+  }
   router.push({ pathname: '/chat/[id]', params: { id } })
 }
 

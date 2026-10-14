@@ -397,8 +397,10 @@ function SelfPip({ track, mirror, top, bottom, landscape }: { track: VideoTrack;
   const { width, height } = useWindowDimensions()
   // A phone camera's own shape (9:16, or 16:9 with the phone sideways), shown whole, so nothing
   // of your face is cut off.
-  const W = landscape ? 192 : 108
-  const H = landscape ? 108 : 192
+  // An iPad's screen is much bigger: a bigger self view, same shape.
+  const k = Math.min(width, height) >= 700 ? 1.6 : 1
+  const W = (landscape ? 192 : 108) * k
+  const H = (landscape ? 108 : 192) * k
   const pos = useRef(new Animated.ValueXY({ x: width - W - 14, y: top })).current
   useEffect(() => {
     // Turned the phone: back to the top-right corner of the new screen.

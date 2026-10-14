@@ -7,6 +7,7 @@ import { Text } from './kit'
 import { useTheme } from './theme'
 import { useStore } from '@/state/store'
 import { unreadTotal } from '@/lib/chats'
+import { usePaneTab, type PaneTab } from '@/lib/layout'
 
 type BottomTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0]
 
@@ -21,6 +22,34 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
 }
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
+  const setPaneTab = usePaneTab((s) => s.set)
+  const active = state.routes[state.index]?.name
+  return (
+    <TabButtons
+      names={state.routes.map((r) => r.name)}
+      active={active}
+      onSelect={(name) => {
+        const route = state.routes.find((r) => r.name === name)
+        if (!route) return
+        const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true })
+        if (name !== active && !event.defaultPrevented) {
+          navigation.navigate(name)
+          // Remembered for the iPad's two-pane layout (the window can widen any time).
+          if (name in TABS) setPaneTab(name as PaneTab)
+        }
+      }}
+    />
+  )
+}
+
+/** iPad: the same bar at the bottom of the left pane, switching what the pane shows. */
+export function PaneTabBar() {
+  const tab = usePaneTab((s) => s.tab)
+  const set = usePaneTab((s) => s.set)
+  return <TabButtons names={Object.keys(TABS)} active={tab} onSelect={(name) => set(name as PaneTab)} />
+}
+
+function TabButtons({ names, active, onSelect }: { names: string[]; active: string | undefined; onSelect: (name: string) => void }) {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const conversations = useStore((s) => s.conversations)
@@ -37,21 +66,18 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
       accessibilityRole="tablist"
       style={{ flexDirection: 'row', backgroundColor: c.navBg, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12) + 4 }}
     >
-      {state.routes.map((route, index) => {
-        const tab = TABS[route.name]
+      {names.map((name) => {
+        const tab = TABS[name]
         if (!tab) return null
-        const focused = state.index === index
-        const badge = badges[route.name] ?? 0
+        const focused = active === name
+        const badge = badges[name] ?? 0
         return (
           <Pressable
-            key={route.key}
+            key={name}
             accessibilityRole="tab"
             accessibilityState={{ selected: focused }}
             accessibilityLabel={badge ? `${tab.label}, ${badge} new` : tab.label}
-            onPress={() => {
-              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true })
-              if (!focused && !event.defaultPrevented) navigation.navigate(route.name)
-            }}
+            onPress={() => onSelect(name)}
             style={{ flex: 1, alignItems: 'center', gap: 4 }}
           >
             <View style={{ width: 64, height: 32, borderRadius: 16, backgroundColor: focused ? c.accentSoft : 'transparent', alignItems: 'center', justifyContent: 'center' }}>

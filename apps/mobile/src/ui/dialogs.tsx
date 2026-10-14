@@ -223,6 +223,9 @@ function SheetView({ o, visible, onDismiss }: { o: Extract<Overlay, { kind: 'she
 }
 
 /** A sheet that slides up from the bottom with a drag handle (used by menus and forms). */
+/** Bottom sheets never get wider than this (iPad). Phones are narrower, so nothing changes there. */
+export const SHEET_MAX_WIDTH = 560
+
 export function BottomSheet({ onClose, children, visible = true, onDismiss }: { onClose: () => void; children: ReactNode; visible?: boolean; onDismiss?: () => void }) {
   const { c } = useTheme()
   return (
@@ -230,7 +233,8 @@ export function BottomSheet({ onClose, children, visible = true, onDismiss }: { 
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable accessibilityLabel="Close" onPress={onClose} style={{ position: 'absolute', inset: 0, backgroundColor: c.backdrop }} />
         <View
-          style={{ backgroundColor: c.sheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 10 }}
+          // iPad (and other wide screens): a sheet stays a comfortable width, centered.
+          style={{ backgroundColor: c.sheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 10, width: '100%', maxWidth: SHEET_MAX_WIDTH, alignSelf: 'center' }}
         >
           <View style={{ alignSelf: 'center', width: 32, height: 4, borderRadius: 2, backgroundColor: c.faint, opacity: 0.6, marginBottom: 10 }} />
           {children}
