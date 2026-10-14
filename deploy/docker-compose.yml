@@ -39,7 +39,7 @@ services:
       options: { max-size: "20m", max-file: "5" }
 
   # Builds Glofly in a browser (apps/web) and copies it into the chat_site volume for Caddy,
-  # then stops (that's normal: "Exited (0)" in docker compose ps).
+  # then stops (that's normal: "Exited (0)" in docker compose ps -a).
   web:
     build:
       context: ..
