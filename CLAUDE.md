@@ -28,6 +28,14 @@
   Restricted (family) accounts are enforced in the server (friends/rules.ts `isRestricted`,
   `groupBreaksRestriction`): new ways to make friends, find people or join groups must check them.
   iPad: `src/lib/layout.ts` (`useWide`, two panes from 700 pt); pushed screens show in the right pane.
+- **Constellations branch:** Glofly 2.0 work goes on the `constellations` branch (made from `dev`
+  on Oct 14, 2026), never on `dev`, so bug fixes and releases keep going from `dev` untouched.
+  Bring fixes in with `git merge dev` on `constellations` now and then; it goes back into `dev`
+  only when Chip says 2.0 is ready. Releases (`npm run release`) only run from `dev`.
+  Migrations: a new one made on `constellations` gets renumbered after `dev`'s latest when merging
+  (drizzle-kit generate again). Drizzle only applies migrations newer than the last one applied, so
+  a PC database that ran a `constellations` migration can skip a `dev` one made earlier: tell Chip
+  to check (or use a separate database) when switching between the branches.
 - Glofly 2.0 (planned, not built): project doc `glofly-2.0-plans.md`. Constellations' screens and
   animations are approved as-is: build them exactly from `docs/design/constellations/` (the
   mockup source) and the exact spec in that doc.
