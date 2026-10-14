@@ -15,7 +15,7 @@ import { joinCallIn } from '@/calls/controller'
 import { ChatRow } from '@/ui/ChatRow'
 import { chooseFrom, inform, type SheetItem } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
-import { Text, webNoOutline } from '@/ui/kit'
+import { Spinner, Text, webNoOutline } from '@/ui/kit'
 import { Fab } from '@/ui/Fab'
 import { ReorderList, reorderActive } from '@/ui/Reorder'
 import { font, useTheme } from '@/ui/theme'
@@ -25,6 +25,7 @@ export default function Groups() {
   const insets = useSafeAreaInsets()
   const meId = useSession((s) => s.user?.id ?? '')
   const conversations = useStore((s) => s.conversations)
+  const synced = useStore((s) => s.synced.conversations)
   const people = useStore((s) => s.people)
   const presence = useStore((s) => s.presence)
   const typing = useStore((s) => s.typing)
@@ -98,7 +99,11 @@ export default function Groups() {
         </View>
       </View>
       <ScrollView contentContainerStyle={{ paddingTop: 6, paddingBottom: 96 }} keyboardShouldPersistTaps="handled">
-        {shown.length === 0 ? (
+        {shown.length === 0 && !synced && !query ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <Spinner />
+          </View>
+        ) : shown.length === 0 ? (
           <View style={{ padding: 32, alignItems: 'center', gap: 8 }}>
             <Icon name="groups" size={40} color={c.faint} />
             <Text display size={20}>

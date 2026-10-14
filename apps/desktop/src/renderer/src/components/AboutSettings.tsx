@@ -82,7 +82,7 @@ export default function AboutSettings({ version }: { version: string | null }): 
       <div className="about-hero">
         <img src={wordmarkImg} alt="Glofly" className="about-wordmark" draggable={false} />
         <span className="about-version">Version {version ?? '…'}</span>
-        <span className="settings-row-desc">Say it. Send it. Glofly.</span>
+        <span className="settings-row-desc">A brighter kind of together.</span>
       </div>
 
       <section className="settings-section">

@@ -5,6 +5,7 @@ import { and, eq, gt, lt } from "drizzle-orm";
 import { db } from "../db";
 import { sessions, users } from "../db/schema";
 import { appVersionFrom, platformFrom, refuseIfTooOld } from "../app-version";
+import { phoneActed } from "../presence";
 
 const DAY = 24 * 60 * 60 * 1000;
 const PERSISTENT_LIFETIME = 30 * DAY; // "Keep me signed in"
@@ -115,6 +116,10 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   res.locals.user = found.user;
   res.locals.sessionToken = token;
   res.locals.sessionId = found.session.id;
+  // A phone doing something (sending, replying from a notification) while Glofly isn't open on it.
+  if (platform && req.method !== "GET") {
+    await phoneActed(found.user.id, found.session.id).catch(() => undefined);
+  }
   // Nicknames this person gave others go into everything sent back to them (profile/nicknames.ts).
   try {
     const nicks = await nicknamesFor(found.user.id);

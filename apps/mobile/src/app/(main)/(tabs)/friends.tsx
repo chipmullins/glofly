@@ -12,7 +12,7 @@ import { startCallWith } from '@/calls/controller'
 import { Avatar } from '@/ui/Avatar'
 import { inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
-import { IconButton, SectionLabel, Text, webNoOutline } from '@/ui/kit'
+import { IconButton, SectionLabel, Spinner, Text, webNoOutline } from '@/ui/kit'
 import { font, useTheme } from '@/ui/theme'
 
 type Filter = 'online' | 'all' | 'pending' | 'blocked'
@@ -23,6 +23,7 @@ export default function Friends() {
   const insets = useSafeAreaInsets()
   const lists = useStore((s) => s.friends)
   const presence = useStore((s) => s.presence)
+  const synced = useStore((s) => s.synced.friends)
   const [filter, setFilter] = useState<Filter>('online')
   const [query, setQuery] = useState('')
 
@@ -126,6 +127,11 @@ export default function Friends() {
         stickySectionHeadersEnabled={false}
         renderSectionHeader={({ section }) => <SectionLabel>{section.title}</SectionLabel>}
         ListEmptyComponent={
+          !synced && !lists.friends.length && !query ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <Spinner />
+            </View>
+          ) : (
           <View style={{ padding: 32, alignItems: 'center', gap: 8 }}>
             <Icon name="friends" size={40} color={c.faint} />
             <Text display size={20}>
@@ -137,6 +143,7 @@ export default function Friends() {
               </Text>
             ) : null}
           </View>
+          )
         }
         renderItem={({ item }) => {
           const f = item.entry

@@ -38,10 +38,15 @@ const ACTIVITY_TTL_S = 90;
 // Which connected devices are phones (their ids are also in devicesKey).
 const phonesKey = (userId: string) => `presence:phones:${userId}`;
 // Phones close their live connection as soon as Glofly leaves the screen (pushes take over), so
-// instead of dropping straight to offline they stay "Active on mobile" for a while. The value is
-// the phone's session, so signing out ends it.
+// instead of dropping straight to offline they stay on mobile for a while, like Discord's phone
+// app: Online (with the little phone) for the first 10 minutes, then Away (still with the phone)
+// until 2 hours after they left, then offline with "Last seen" = when they left. Sending something
+// from the phone without opening Glofly (Reply from a notification) counts as being back.
+// The value is "<phone's session>|<when it left, ms>", so signing out ends it at once.
+// (0.3.0 stored just the session: read as "left just now".)
 const mobileGraceKey = (userId: string) => `presence:mobile-grace:${userId}`;
-export const MOBILE_GRACE_MS = 12 * 60_000;
+export const MOBILE_GRACE_MS = 2 * 60 * 60_000;
+export const MOBILE_ACTIVE_MS = 10 * 60_000;
 const ACTIVITY_NAME_MAX = 64;
 
 /** Devices heard from in the last 90 seconds (stale ones are cleared by the sweep). */
@@ -82,13 +87,27 @@ export async function deviceIdle(userId: string, deviceId: string, idle: boolean
 export async function deviceDisconnected(userId: string, deviceId: string, phoneSessionId?: string): Promise<void> {
   await redis.zRem(devicesKey(userId), deviceId);
   await redis.sRem(phonesKey(userId), deviceId);
-  if (phoneSessionId) await redis.set(mobileGraceKey(userId), phoneSessionId, { PX: MOBILE_GRACE_MS });
+  if (phoneSessionId) await startMobileGrace(userId, phoneSessionId);
   await redis.del(activityKey(userId, deviceId));
   await redis.sRem(activityDevicesKey(userId), deviceId);
   await redis.zRem(activeKey(userId), deviceId);
   if ((await liveCount(devicesKey(userId))) === 0) {
     await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
   }
+}
+
+async function startMobileGrace(userId: string, sessionId: string, leftAt = Date.now()): Promise<void> {
+  await redis.set(mobileGraceKey(userId), `${sessionId}|${leftAt}`, { PX: MOBILE_GRACE_MS });
+}
+
+/**
+ * The phone did something without opening Glofly (a Reply from a notification, marking a chat
+ * read): it counts as being here again, so its 10 minutes of Online start over. The 30-second
+ * sweep tells friends.
+ */
+export async function phoneActed(userId: string, sessionId: string): Promise<void> {
+  const raw = await redis.get(mobileGraceKey(userId));
+  if (raw && raw.split("|")[0] === sessionId) await startMobileGrace(userId, sessionId);
 }
 
 /**
@@ -168,9 +187,10 @@ export async function presenceOf(userIds: string[]): Promise<Map<string, Presenc
     const devices = await liveDevices(row.id);
     const live = devices.length > 0;
     // A phone that closed Glofly a few minutes ago (and is still signed in) counts as here.
-    const grace = !live && (await inMobileGrace(row.id));
+    const leftAt = live ? null : await mobileGraceSince(row.id);
+    const grace = leftAt !== null;
     const connected = live || grace;
-    const active = grace || (live && (await liveCount(activeKey(row.id))) > 0);
+    const active = (grace && Date.now() - leftAt < MOBILE_ACTIVE_MS) || (live && (await liveCount(activeKey(row.id))) > 0);
     const phones = live ? await redis.sMembers(phonesKey(row.id)) : [];
     const mobile = grace || (live && devices.every((d) => phones.includes(d)));
     let status: Status;
@@ -197,18 +217,27 @@ export async function presenceOf(userIds: string[]): Promise<Map<string, Presenc
   return result;
 }
 
-/** Whether a phone closed Glofly within MOBILE_GRACE_MS and is still signed in. */
-async function inMobileGrace(userId: string): Promise<boolean> {
-  const sessionId = await redis.get(mobileGraceKey(userId));
-  if (!sessionId) return false;
+/** When a phone that's still signed in closed Glofly (within MOBILE_GRACE_MS), or null. */
+async function mobileGraceSince(userId: string): Promise<number | null> {
+  const raw = await redis.get(mobileGraceKey(userId));
+  if (!raw) return null;
+  const [sessionId, at] = raw.split("|");
   const [session] = await db
     .select({ id: sessions.id })
     .from(sessions)
     .where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)))
     .limit(1);
-  if (session) return true;
-  await redis.del(mobileGraceKey(userId)); // signed out
-  return false;
+  if (!session) {
+    await redis.del(mobileGraceKey(userId)); // signed out
+    return null;
+  }
+  const leftAt = Number(at);
+  if (Number.isFinite(leftAt) && leftAt > 0) return leftAt;
+  // Written by 0.3.0 (just the session): count from now, and store it the new way.
+  const now = Date.now();
+  const ttl = await redis.pTTL(mobileGraceKey(userId));
+  await redis.set(mobileGraceKey(userId), `${sessionId}|${now}`, { PX: ttl > 0 ? Math.max(ttl, MOBILE_ACTIVE_MS) : MOBILE_ACTIVE_MS });
+  return now;
 }
 
 export async function friendIdsOf(userId: string): Promise<string[]> {
@@ -274,7 +303,7 @@ export async function sweepStalePresence(emit: Emit): Promise<void> {
         await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
       }
     }
-    // Also ends "Active on mobile" once its few minutes are up.
+    // Also moves phones from Online to Away, and ends "on mobile" once its time is up.
     await announcePresence(userId, emit);
   }
 }

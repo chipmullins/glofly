@@ -309,7 +309,15 @@ function setUpPermissions(): void {
         callback({})
         return
       }
-      void pickedScreen().then((source) => callback(source ? { video: source } : {}))
+      void pickedScreen()
+        .then((source) => {
+          if (!source) console.warn('[screen share] the picked screen or window was not found')
+          callback(source ? { video: source } : {})
+        })
+        .catch((err) => {
+          console.warn('[screen share] failed', err)
+          callback({})
+        })
     },
     { useSystemPicker: false }
   )

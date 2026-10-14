@@ -266,13 +266,13 @@ export default function LoginScreen({
 
         <div className="brand-hero">
           <h2>
-            A little hello.
+            Glow on.
             <br />
-            <span>A lot of connection.</span>
+            <span>Say hi.</span>
           </h2>
           <div className="bubbles">
-            <div className="bubble bubble--them">Hey! You on tonight?</div>
-            <div className="bubble bubble--me">Always. Calling you now.</div>
+            <div className="bubble bubble--them">Hey! We gaming tonight?</div>
+            <div className="bubble bubble--me">Duh! It&apos;s MMO time!</div>
             <div className="bubble--typing" aria-label="Typing">
               <span />
               <span />
@@ -281,7 +281,7 @@ export default function LoginScreen({
           </div>
         </div>
 
-        <div className="brand-tagline">Say it. Send it. Glofly.</div>
+        <div className="brand-tagline">A brighter kind of together.</div>
       </section>
 
       <section className="form-panel">

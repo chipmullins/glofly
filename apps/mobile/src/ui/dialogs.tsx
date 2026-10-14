@@ -28,33 +28,71 @@ export type SheetItem = {
   swatch?: string
 }
 
-type Overlay =
+type Overlay = (
   | { kind: 'confirm'; options: ConfirmOptions; resolve: (ok: boolean) => void }
   | { kind: 'sheet'; title?: string; header?: ReactNode; items: SheetItem[]; resolve: (key: string | null) => void }
+) & { id: number; closing?: boolean }
 
 const useOverlays = create<{ stack: Overlay[] }>(() => ({ stack: [] }))
+let nextId = 1
 
-function push(o: Overlay) {
-  useOverlays.setState((s) => ({ stack: [...s.stack, o] }))
+type NewOverlay = Overlay extends infer O ? (O extends Overlay ? Omit<O, 'id' | 'closing'> : never) : never
+
+function push(o: NewOverlay) {
+  useOverlays.setState((s) => ({ stack: [...s.stack, { ...o, id: nextId++ } as Overlay] }))
 }
+
+// iPhone: a closed dialog or sheet stays mounted (hidden) until iOS says its slide-away animation
+// has really finished (Modal's onDismiss), so afterOverlaysClose() knows exactly when it's gone.
+// Other platforms remove it right away.
 function pop() {
   lastClosedAt = Date.now()
-  useOverlays.setState((s) => ({ stack: s.stack.slice(0, -1) }))
+  if (Platform.OS !== 'ios') return useOverlays.setState((s) => ({ stack: s.stack.slice(0, -1) }))
+  useOverlays.setState((s) => {
+    const i = s.stack.map((o) => !o.closing).lastIndexOf(true)
+    if (i < 0) return s
+    const stack = s.stack.slice()
+    stack[i] = { ...stack[i], closing: true }
+    return { stack }
+  })
+  // Safety net: if iOS never reports the dismissal, forget the overlay after a second anyway.
+  const id = useOverlays.getState().stack.filter((o) => o.closing).at(-1)?.id
+  if (id !== undefined) setTimeout(() => dismissed(id), 1200)
 }
 
-// When a dialog or sheet closed (for afterOverlaysClose).
+function dismissed(id: number) {
+  const before = useOverlays.getState().stack
+  if (!before.some((o) => o.id === id)) return
+  useOverlays.setState((s) => ({ stack: s.stack.filter((o) => o.id !== id) }))
+  if (!useOverlays.getState().stack.some((o) => o.closing)) {
+    lastGoneAt = Date.now()
+    waiters.splice(0).forEach((w) => w())
+  }
+}
+
+// When a dialog or sheet closed / finished disappearing (for afterOverlaysClose).
 let lastClosedAt = 0
-const IOS_DISMISS_MS = 450
+let lastGoneAt = 0
+const waiters: (() => void)[] = []
+// A short breath after iOS reports a sheet gone, before presenting its own screen.
+const IOS_SETTLE_MS = 120
+// Sheets that aren't ours (BottomSheet inside a screen) don't report: wait this long instead.
+const IOS_DISMISS_MS = 550
 
 /**
  * Waits until a sheet or dialog that just closed has finished sliding away. iPhone only: iOS can't
  * show its own screens (the photo library, the Files picker) while one of ours is still on its way
- * out; it silently shows nothing. That's why "Choose a photo" did nothing on iPhone while "Take a
- * photo" worked (the camera asks for permission first, which gave the sheet time to close).
+ * out; it silently shows nothing. Our dialogs and sheets report the exact moment they're gone
+ * (Modal onDismiss); otherwise it waits a fixed time after the last close.
  */
 export async function afterOverlaysClose(): Promise<void> {
   if (Platform.OS !== 'ios') return
-  const wait = IOS_DISMISS_MS - (Date.now() - lastClosedAt)
+  if (useOverlays.getState().stack.some((o) => o.closing)) {
+    await new Promise<void>((r) => waiters.push(r))
+  }
+  const sinceGone = Date.now() - lastGoneAt
+  const sinceClosed = Date.now() - lastClosedAt
+  const wait = Math.max(IOS_SETTLE_MS - sinceGone, lastGoneAt >= lastClosedAt ? 0 : IOS_DISMISS_MS - sinceClosed)
   if (wait > 0) await new Promise((r) => setTimeout(r, wait))
 }
 
@@ -74,20 +112,37 @@ export function chooseFrom(items: SheetItem[], title?: string, header?: ReactNod
 
 export function DialogHost() {
   const stack = useOverlays((s) => s.stack)
-  const top = stack[stack.length - 1]
-  if (!top) return null
-  return top.kind === 'confirm' ? <ConfirmDialog o={top} /> : <SheetView o={top} />
+  const open = stack.filter((o) => !o.closing)
+  const top = open[open.length - 1]
+  // Closing ones stay mounted, hidden, until iOS reports them gone (see pop()).
+  const shown = stack.filter((o) => o.closing || o === top)
+  return (
+    <>
+      {shown.map((o) => {
+        const visible = !o.closing
+        const onDismiss = () => dismissed(o.id)
+        return o.kind === 'confirm' ? (
+          <ConfirmDialog key={o.id} o={o} visible={visible} onDismiss={onDismiss} />
+        ) : (
+          <SheetView key={o.id} o={o} visible={visible} onDismiss={onDismiss} />
+        )
+      })}
+    </>
+  )
 }
 
-function ConfirmDialog({ o }: { o: Extract<Overlay, { kind: 'confirm' }> }) {
+type Shown = { visible: boolean; onDismiss: () => void }
+
+function ConfirmDialog({ o, visible, onDismiss }: { o: Extract<Overlay, { kind: 'confirm' }> } & Shown) {
   const { c } = useTheme()
   const done = (ok: boolean) => {
+    if (o.closing) return
     pop()
     o.resolve(ok)
   }
   const { title, message, confirmLabel = 'OK', cancelLabel = 'Cancel', danger } = o.options
   return (
-    <Modal transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => done(false)}>
+    <Modal visible={visible} onDismiss={onDismiss} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => done(false)}>
       <Pressable accessibilityLabel="Close" onPress={() => cancelLabel !== null && done(false)} style={{ flex: 1, backgroundColor: c.backdrop, alignItems: 'center', justifyContent: 'center', padding: 28 }}>
         <Pressable accessibilityRole="alert" style={{ width: '100%', maxWidth: 360, backgroundColor: c.sheet, borderRadius: 28, padding: 24, gap: 14 }}>
           <Text display size={22}>
@@ -122,15 +177,16 @@ function ConfirmDialog({ o }: { o: Extract<Overlay, { kind: 'confirm' }> }) {
   )
 }
 
-function SheetView({ o }: { o: Extract<Overlay, { kind: 'sheet' }> }) {
+function SheetView({ o, visible, onDismiss }: { o: Extract<Overlay, { kind: 'sheet' }> } & Shown) {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const done = (key: string | null) => {
+    if (o.closing) return
     pop()
     o.resolve(key)
   }
   return (
-    <BottomSheet onClose={() => done(null)}>
+    <BottomSheet visible={visible} onDismiss={onDismiss} onClose={() => done(null)}>
       {o.header}
       {o.title ? (
         <Text size={13} weight="bold" tone="muted" style={{ paddingHorizontal: 24, paddingTop: 4, paddingBottom: 8, letterSpacing: 0.6, textTransform: 'uppercase' }}>
@@ -167,10 +223,10 @@ function SheetView({ o }: { o: Extract<Overlay, { kind: 'sheet' }> }) {
 }
 
 /** A sheet that slides up from the bottom with a drag handle (used by menus and forms). */
-export function BottomSheet({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+export function BottomSheet({ onClose, children, visible = true, onDismiss }: { onClose: () => void; children: ReactNode; visible?: boolean; onDismiss?: () => void }) {
   const { c } = useTheme()
   return (
-    <Modal transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} onDismiss={onDismiss} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable accessibilityLabel="Close" onPress={onClose} style={{ position: 'absolute', inset: 0, backgroundColor: c.backdrop }} />
         <View

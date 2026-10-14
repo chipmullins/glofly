@@ -23,6 +23,8 @@ export type ChatMessages = {
 
 type State = {
   connected: boolean
+  /** Loaded from the server at least once since signing in (so an empty list really means empty). */
+  synced: { conversations: boolean; friends: boolean }
   conversations: Record<string, ConversationSummary>
   /** Everyone we've seen (chat members, friends, message senders), by id. */
   people: Record<string, PublicUser>
@@ -43,6 +45,7 @@ type State = {
 
 const empty = (): State => ({
   connected: false,
+  synced: { conversations: false, friends: false },
   conversations: {},
   people: {},
   messages: {},

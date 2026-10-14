@@ -329,9 +329,9 @@ export default function RegisterScreen({
 
         <div className="brand-hero">
           <h2>
-            A little hello.
+            Glow on.
             <br />
-            <span>A lot of connection.</span>
+            <span>Say hi.</span>
           </h2>
           <ul className="features">
             <li>
@@ -394,7 +394,7 @@ export default function RegisterScreen({
           </ul>
         </div>
 
-        <div className="brand-tagline">Say it. Send it. Glofly.</div>
+        <div className="brand-tagline">A brighter kind of together.</div>
       </section>
 
       <section className="form-panel register-panel">

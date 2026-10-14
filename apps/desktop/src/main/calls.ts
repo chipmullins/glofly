@@ -60,11 +60,16 @@ export function leaveCall(callId: string): Promise<ApiResult<null>> {
 
 let chosen: { id: string; at: number } | null = null
 const CHOICE_GOOD_FOR_MS = 15_000
+// What the picker last showed, by id. The share is answered with that exact source rather than
+// a fresh listing: on a Mac a second listing (with no pictures) could come back without the
+// picked screen or window, and then the share failed with no message at all.
+let listed = new Map<string, DesktopCapturerSource>()
 
 async function sources(withPictures: boolean): Promise<DesktopCapturerSource[]> {
   return desktopCapturer.getSources({
     types: ['screen', 'window'],
-    thumbnailSize: withPictures ? { width: 320, height: 180 } : { width: 0, height: 0 },
+    // Never 0×0: a Mac doesn't always list everything without at least a small picture.
+    thumbnailSize: withPictures ? { width: 320, height: 180 } : { width: 16, height: 16 },
     fetchWindowIcons: withPictures
   })
 }
@@ -72,6 +77,7 @@ async function sources(withPictures: boolean): Promise<DesktopCapturerSource[]> 
 export async function screenSources(): Promise<ScreenSource[]> {
   try {
     const list = await sources(true)
+    listed = new Map(list.map((s) => [s.id, s]))
     return list
       .filter((s) => s.name !== 'Glofly' || s.id.startsWith('screen:')) // not Glofly itself
       .map((s) => ({
@@ -96,9 +102,12 @@ export async function pickedScreen(): Promise<DesktopCapturerSource | null> {
   const choice = chosen
   chosen = null
   if (!choice || Date.now() - choice.at > CHOICE_GOOD_FOR_MS) return null
+  const shown = listed.get(choice.id)
+  if (shown) return shown
   try {
     return (await sources(false)).find((s) => s.id === choice.id) ?? null
-  } catch {
+  } catch (err) {
+    console.warn('[screen share] listing failed', err)
     return null
   }
 }

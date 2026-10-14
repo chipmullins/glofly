@@ -12,6 +12,7 @@ import {
   refreshFriends,
   refreshNotices,
   setCall,
+  stopRefreshing,
   updateMessage,
 } from '@/state/sync'
 import { noteUpdateRequired } from './http'
@@ -66,7 +67,8 @@ function connect() {
 
   s.on('connect', () => {
     useStore.setState({ connected: true })
-    void refreshAll()
+    // Skipped if the app just loaded everything over plain requests (see sync()).
+    void refreshAll({ ifStale: true })
   })
   s.on('disconnect', (reason) => {
     useStore.setState({ connected: false })
@@ -197,8 +199,9 @@ export function startRealtime() {
     if (appState === 'active') {
       if (backgroundTimer) clearTimeout(backgroundTimer)
       backgroundTimer = null
+      // Load straight away, without waiting for the live connection to come up.
+      void refreshAll()
       if (!socket) connect()
-      else if (socket.connected) void refreshAll()
     } else if (!backgroundTimer && keepAliveReasons.size === 0) {
       // A moment's grace for quick app switches, then push notifications take over.
       backgroundTimer = setTimeout(() => {
@@ -219,6 +222,7 @@ export function startRealtime() {
   })
   onSignOut(() => {
     disconnect()
+    stopRefreshing()
     keepAliveReasons = new Set()
     resetStore()
   })

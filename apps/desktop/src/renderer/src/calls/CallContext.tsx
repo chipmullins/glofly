@@ -34,7 +34,12 @@ import {
   type PttState
 } from './callState'
 import '../components/CallPanel.css'
-import { privacySettingsPath } from '../lib/platform'
+import { isMac, privacySettingsPath } from '../lib/platform'
+
+// Mac: what to do when macOS won't let Glofly see the screen. Builds before Oct 12 had a different
+// signature, so an old "Glofly" switch in that list can look on while it no longer counts.
+const MAC_SCREEN_PROBLEM =
+  'In System Settings → Privacy & Security → Screen & System Audio Recording, remove Glofly with the – button, add it again with +, then quit and reopen Glofly.'
 
 // Everything about calls in one place: the call you're in (and its LiveKit room), a call ringing
 // for you, a call you're in on another device, and which chats have a call going on. It lives
@@ -582,7 +587,16 @@ export function CallProvider({
       try {
         await local.setScreenShareEnabled(true, { audio: false })
       } catch (err) {
-        if ((err as { name?: string })?.name !== 'AbortError') {
+        // Glofly's own picker has already been answered by now, so any failure here is real
+        // (an AbortError too: that's how Electron reports a share it couldn't start). It used to
+        // be skipped, which is why sharing on a Mac could do nothing at all with no message.
+        const e = err as { name?: string; message?: string }
+        console.warn('[screen share] could not start', e?.name, e?.message)
+        if (isMac && (await window.glofly.calls.screenAccess()) !== 'granted') {
+          problem(MAC_SCREEN_PROBLEM)
+        } else if (isMac) {
+          problem(`Couldn't share your screen. ${MAC_SCREEN_PROBLEM} (${e?.name ?? 'Error'})`)
+        } else {
           problem("Couldn't share your screen. Try again, or pick a different window.")
         }
       }

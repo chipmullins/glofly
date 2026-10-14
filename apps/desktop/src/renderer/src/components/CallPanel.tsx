@@ -659,7 +659,8 @@ export function ScreenPicker({
             <div className="screen-picker-permission" role="note">
               <p>
                 To share your screen, allow Glofly in System Settings → Privacy &amp; Security →
-                Screen &amp; System Audio Recording, then quit and reopen Glofly.
+                Screen &amp; System Audio Recording, then quit and reopen Glofly. Already on? Remove
+                Glofly with the – button, add it again with +, then quit and reopen Glofly.
               </p>
               <button
                 type="button"

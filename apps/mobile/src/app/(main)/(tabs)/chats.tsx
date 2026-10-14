@@ -76,7 +76,7 @@ export default function Chats() {
   const typing = useStore((s) => s.typing)
   const calls = useStore((s) => s.calls)
   const friends = useStore((s) => s.friends.friends)
-  const connected = useStore((s) => s.connected)
+  const synced = useStore((s) => s.synced.conversations)
   const [query, setQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const now = useNow(4000)
@@ -119,7 +119,7 @@ export default function Chats() {
     />
   )
 
-  const loading = !connected && all.length === 0
+  const loading = !synced && all.length === 0
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>

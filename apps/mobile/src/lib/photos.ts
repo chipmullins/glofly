@@ -9,9 +9,15 @@ import { afterOverlaysClose, inform } from '@/ui/dialogs'
 
 export type Picked = Upload & { name: string; size: number | null; width: number | null; height: number | null }
 
-// iPhone: hand over JPEGs rather than HEIC (the server and other people's phones can show them).
-const iosCompatible: ImagePicker.ImagePickerOptions =
-  Platform.OS === 'ios' ? { preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible } : {}
+// iPhone: hand over JPEGs rather than HEIC (the server and other people's phones can show them),
+// and take the photo as iOS gives it (quality 1). Any lower quality made the picker decode and
+// re-compress every full-size photo (12 to 48 megapixels) one after another before it returned:
+// that was the long wait after choosing photos. Android keeps 0.9 (it was never slow there).
+const IOS = Platform.OS === 'ios'
+const iosCompatible: ImagePicker.ImagePickerOptions = IOS
+  ? { preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible, shouldDownloadFromNetwork: true }
+  : {}
+const QUALITY = IOS ? 1 : 0.9
 
 function pickFailed(e: unknown): null {
   console.warn('[photos] picking failed', e)
@@ -21,7 +27,7 @@ function pickFailed(e: unknown): null {
 
 /** A square photo for a profile or group (or null if they cancelled). Saved as a 512 px JPEG. */
 export async function pickSquarePhoto(source: 'library' | 'camera' = 'library'): Promise<Upload | 'denied' | null> {
-  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.92, ...iosCompatible }
+  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: IOS ? 1 : 0.92, ...iosCompatible }
   await afterOverlaysClose()
   try {
     return await squarePhoto(source, options)
@@ -64,13 +70,13 @@ async function chatPhotos(source: 'library' | 'camera', limit: number): Promise<
   if (source === 'camera') {
     const perm = await ImagePicker.requestCameraPermissionsAsync()
     if (!perm.granted) return 'denied'
-    result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 })
+    result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 }) // a fresh camera photo: one quick encode
   } else {
     result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: limit > 1,
       selectionLimit: limit,
-      quality: 0.9,
+      quality: QUALITY,
       orderedSelection: true,
       ...iosCompatible,
     })

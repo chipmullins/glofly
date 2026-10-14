@@ -55,7 +55,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             style={{ flex: 1, alignItems: 'center', gap: 4 }}
           >
             <View style={{ width: 64, height: 32, borderRadius: 16, backgroundColor: focused ? c.accentSoft : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name={focused && route.name === 'chats' ? 'chats' : tab.icon} size={22} color={focused ? c.ink : c.muted} />
+              <Icon name={tab.icon} size={22} color={focused ? c.ink : c.muted} />
               {badge > 0 ? (
                 <View style={{ position: 'absolute', left: 38, top: -2, minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: c.dnd, alignItems: 'center', justifyContent: 'center' }}>
                   <Text size={11} weight="bold" style={{ color: '#FFFFFF' }}>

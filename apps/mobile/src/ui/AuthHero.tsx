@@ -131,20 +131,20 @@ export function LoginHeroContent() {
         </Text>
       </View>
       <Text display size={34} style={{ color: '#FFFFFF', lineHeight: 37, letterSpacing: -0.6 }} accessibilityRole="header">
-        A little hello.{'\n'}
+        Glow on.{'\n'}
         <Text display size={34} style={{ color: '#FFA54A' }}>
-          A lot of connection.
+          Say hi.
         </Text>
       </Text>
       <View style={{ gap: 8, maxWidth: 270 }}>
         <View style={{ alignSelf: 'flex-start', backgroundColor: '#33231C', paddingVertical: 9, paddingHorizontal: 13, borderRadius: 16, borderBottomLeftRadius: 5 }}>
           <Text size={14} style={{ color: '#F3E6DC' }}>
-            Hey! You on tonight?
+            Hey! We gaming tonight?
           </Text>
         </View>
         <View style={{ alignSelf: 'flex-end', backgroundColor: '#F47A1F', paddingVertical: 9, paddingHorizontal: 13, borderRadius: 16, borderBottomRightRadius: 5 }}>
           <Text size={14} weight="medium" style={{ color: '#2A1406' }}>
-            Always. Calling you now.
+            Duh! It's MMO time!
           </Text>
         </View>
       </View>

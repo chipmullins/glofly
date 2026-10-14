@@ -77,7 +77,7 @@ function render({ to, subject, heading, paragraphs, button, footnotes }: Layout)
         ${footnotes.map(small).join("\n        ")}
       </td></tr>
       <tr><td style="padding:18px 4px 0;font:400 12px/1.5 ${FONT};color:#6b5547;">
-        Say it. Send it. Glofly. · You're getting this because of your Glofly account. Questions? Reply to this email.<br>
+        A brighter kind of together. · You're getting this because of your Glofly account. Questions? Reply to this email.<br>
         <a href="https://glofly.app" style="color:#6b5547;">glofly.app</a> · <a href="https://glofly.app/privacy" style="color:#6b5547;">Privacy</a> · <a href="https://glofly.app/terms" style="color:#6b5547;">Terms</a>
       </td></tr>
     </table>
