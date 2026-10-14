@@ -24,6 +24,10 @@ const env = {
 }
 const args = ['eas', 'update', '--channel', channel, '--environment', channel, ...rest]
 if (!rest.includes('--message') && !rest.includes('-m')) args.push('--message', `Update ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`)
-console.log(`> npx ${args.join(' ')}`)
-const r = spawnSync('npx', args, { stdio: 'inherit', env, shell: process.platform === 'win32' })
+// Windows runs npx through cmd (shell: true), which splits on spaces: anything with a space
+// (the message) has to be quoted, or eas sees "Update", "2026-10-14" and "05:28" as three things.
+const win = process.platform === 'win32'
+const quoted = win ? args.map((a) => (/[\s"&|<>^]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a)) : args
+console.log(`> npx ${quoted.join(' ')}`)
+const r = spawnSync('npx', quoted, { stdio: 'inherit', env, shell: win })
 process.exit(r.status ?? 1)
