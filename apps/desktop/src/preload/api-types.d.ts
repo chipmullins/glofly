@@ -211,13 +211,37 @@ export type GloflyEvent =
   | { type: 'appearance'; accent: AccentChoice; dark: boolean }
   /** A Windows notification was clicked (Glofly is already brought to the front). */
   | { type: 'notification:click'; conversationId: string | null }
+  /** Web only: the browser's notification permission changed (asked from a click). */
+  | { type: 'notifications:permission'; permission: 'granted' | 'denied' | 'default' }
 
 /** Which screen is showing, so the window buttons can match its colors. */
 export type WindowTheme = 'login' | 'app'
 
+/** Glofly in a browser (chat.glofly.app, apps/web): what this browser can do. */
+export type WebInfo = {
+  /** The Glofly server, e.g. https://api.glofly.app (photos and voice messages load from it) */
+  apiUrl: string
+  /** An Apple device (Mac, iPad, iPhone): shortcuts use ⌘ */
+  apple: boolean
+  /** A touch screen without a mouse (iPad, tablets) */
+  touch: boolean
+  /** Screen sharing works in this browser (desktop browsers) */
+  screenShare: boolean
+  notifications: {
+    /** The browser's answer to "Allow notifications?" so far */
+    permission: () => 'granted' | 'denied' | 'default' | 'unsupported'
+    /** Asks (only from a click). Signs up for notifications with the tab closed if allowed. */
+    ask: () => Promise<'granted' | 'denied' | 'default' | 'unsupported'>
+    /** Notifications can arrive with every Glofly tab closed (service worker + push) */
+    pushSupported: boolean
+  }
+}
+
 export type GloflyApi = {
-  /** 'win32' on Windows, 'darwin' on Mac, 'linux' on Linux */
+  /** 'win32' on Windows, 'darwin' on Mac, 'linux' on Linux, 'web' in a browser */
   platform: string
+  /** Only in a browser (apps/web). */
+  web?: WebInfo
   auth: {
     login: (request: LoginRequest) => Promise<LoginResult>
     /** Creates an account and signs it in (kept signed in). */

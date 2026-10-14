@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Attachment } from '../../../preload/api-types'
 import { fileTypeLabel, formatSize, photoUrl, voiceUrl } from '../lib/attachments'
+import { isWeb } from '../lib/platform'
 import { playVoice, stopVoice, voiceTime } from '../lib/voice'
 import { ChevronIcon, CloseIcon, DownloadIcon, FileIcon, PhotoIcon } from './icons'
 import './Attachments.css'
@@ -81,7 +82,10 @@ function FileCard({
           {attachment.name}
         </span>
         <span className="file-card-meta">
-          {savedTo ? (
+          {savedTo && isWeb ? (
+            // A browser keeps its downloads itself (its Downloads list has "Show in folder").
+            'Downloaded'
+          ) : savedTo ? (
             <>
               Saved ·{' '}
               <button type="button" onClick={() => window.glofly.files.showInFolder(savedTo)}>
@@ -334,7 +338,11 @@ export function PhotoViewer({
             {photo.width && photo.height ? `${photo.width} × ${photo.height}` : ''}
           </span>
         </span>
-        {savedTo?.id === photo.id ? (
+        {savedTo?.id === photo.id && isWeb ? (
+          <span className="photo-viewer-button" role="status">
+            Downloaded
+          </span>
+        ) : savedTo?.id === photo.id ? (
           <button
             type="button"
             className="photo-viewer-button"

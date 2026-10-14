@@ -180,8 +180,8 @@ function DashboardBody({
   ]
 
   const maxPeople = Math.max(1, ...data.versions.map((v) => v.people))
-  // Each app (desktop, Android, iPhone) numbers its versions separately.
-  const platforms = (['desktop', 'android', 'ios'] as const)
+  // Each app (desktop, Android, iPhone, web) numbers its versions separately.
+  const platforms = (['desktop', 'android', 'ios', 'web'] as const)
     .map((platform) => {
       const rows = data.versions.filter((v) => (v.platform ?? 'desktop') === platform)
       const newest = rows.find((v) => v.version)?.version ?? null

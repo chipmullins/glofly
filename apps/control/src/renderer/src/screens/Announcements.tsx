@@ -25,7 +25,7 @@ export function Announcements({
   const [writing, setWriting] = useState(false)
   const [ending, setEnding] = useState<Announcement | null>(null)
   const [requiring, setRequiring] = useState(false)
-  // Desktop, Android and iPhone each have their own version numbers, so each has its own minimum.
+  // Desktop, Android, iPhone and web each have their own minimum (web numbers its versions like desktop).
   const [platform, setPlatform] = useState<AppPlatform>('desktop')
 
   const load = useCallback(() => {
@@ -148,7 +148,7 @@ export function Announcements({
               Desktop apps from 0.1.7 and older count as older than any minimum.
             </p>
             <div className="filters" role="group" aria-label="Which app" style={{ marginTop: 10 }}>
-              {(['desktop', 'android', 'ios'] as const).map((p) => (
+              {(['desktop', 'android', 'ios', 'web'] as const).map((p) => (
                 <button
                   key={p}
                   type="button"

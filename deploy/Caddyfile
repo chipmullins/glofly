@@ -52,6 +52,32 @@
 	}
 }
 
+# Glofly in a browser (apps/web, copied into the chat_site volume by the "web" service).
+# Plain files: the page signs in with the Glofly server at {$API_DOMAIN} (a cookie that page's
+# script can never read). The Content-Security-Policy only lets it load its own files and talk to
+# the Glofly server and LiveKit (calls).
+{$WEB_DOMAIN} {
+	encode zstd gzip
+	header {
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$API_DOMAIN}; font-src 'self'; media-src 'self' blob: mediastream: https://{$API_DOMAIN}; connect-src 'self' https://{$API_DOMAIN} wss://{$API_DOMAIN} wss://*.livekit.cloud https://*.livekit.cloud; worker-src 'self'; manifest-src 'self'; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		Strict-Transport-Security "max-age=31536000"
+		Cross-Origin-Opener-Policy same-origin
+		Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), fullscreen=(self), speaker-selection=(self), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()"
+		-Server
+	}
+	# Files with a fingerprint in their name never change; the page itself is always checked.
+	@fingerprinted path /assets/* /twemoji/*
+	header @fingerprinted Cache-Control "public, max-age=31536000, immutable"
+	@page path / /index.html /sw.js /version.json /manifest.webmanifest
+	header @page Cache-Control "no-cache"
+	root * /srv/chat
+	try_files {path} /index.html
+	file_server
+}
+
 www.{$SITE_DOMAIN} {
 	redir https://{$SITE_DOMAIN}{uri} permanent
 }

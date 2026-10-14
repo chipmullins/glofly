@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useCalls } from '../calls/callState'
+import { isWeb } from '../lib/platform'
 
 /**
  * "A new version of Glofly is ready · Restart" once an update has downloaded
@@ -38,10 +39,16 @@ export default function UpdateBar(): React.JSX.Element | null {
         type="button"
         className="update-bar-restart"
         disabled={inCall}
-        title={inCall ? 'You can restart once your call ends' : undefined}
+        title={inCall ? `You can ${isWeb ? 'reload' : 'restart'} once your call ends` : undefined}
         onClick={() => window.glofly.updates.restart()}
       >
-        {inCall ? 'Restart after your call' : 'Restart to update'}
+        {inCall
+          ? isWeb
+            ? 'Reload after your call'
+            : 'Restart after your call'
+          : isWeb
+            ? 'Reload'
+            : 'Restart to update'}
       </button>
       <button
         type="button"

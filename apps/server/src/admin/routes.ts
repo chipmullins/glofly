@@ -241,6 +241,7 @@ adminRouter.get("/dashboard", async (req, res) => {
       desktop: (await getMinVersion("desktop")).min,
       android: (await getMinVersion("android")).min,
       ios: (await getMinVersion("ios")).min,
+      web: (await getMinVersion("web")).min,
     },
     recentAccounts,
     recentActions,

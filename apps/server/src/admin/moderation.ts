@@ -7,7 +7,7 @@ import { fieldErrors } from "../auth/validation";
 import { emitToAll, emitToUser, dropOutdatedApps } from "../realtime";
 import { removeMessageForGood } from "../messages/routes";
 import { currentAnnouncement } from "../safety/routes";
-import { compareVersions, getMinVersion, isPlatform, isVersion, setMinVersion, type AppPlatform } from "../app-version";
+import { PLATFORMS, compareVersions, getMinVersion, isPlatform, isVersion, setMinVersion, type AppPlatform } from "../app-version";
 import { logAction, noteSchema } from "./audit";
 import type { AdminLocals } from "./auth";
 import { suspendAccount } from "./routes";
@@ -305,7 +305,7 @@ moderationRouter.get("/announcements", async (_req, res) => {
   const { min, message } = await getMinVersion();
   const minVersions = Object.fromEntries(
     await Promise.all(
-      (["desktop", "android", "ios"] as const).map(async (p) => {
+      PLATFORMS.map(async (p) => {
         const m = await getMinVersion(p);
         return [p, { version: m.min, message: m.message }] as const;
       }),
@@ -426,7 +426,7 @@ moderationRouter.put("/app-version", async (req, res) => {
         .refine(isVersion, "Use a version like 0.2.0.")
         .nullable(),
       message: z.string().trim().max(200, "Keep the message under 200 characters.").optional(),
-      platform: z.enum(["desktop", "android", "ios"]).default("desktop"),
+      platform: z.enum(["desktop", "android", "ios", "web"]).default("desktop"),
       note: noteSchema,
     })
     .safeParse(req.body);
@@ -446,7 +446,7 @@ moderationRouter.put("/app-version", async (req, res) => {
   const before = (await getMinVersion(platform)).min;
   await setMinVersion(version, parsed.data.message || null, platform);
   const dropped = version ? await dropOutdatedApps(version, platform) : 0;
-  const label = { desktop: "Desktop", android: "Android", ios: "iPhone" }[platform];
+  const label = { desktop: "Desktop", android: "Android", ios: "iPhone", web: "Web" }[platform];
   await logAction({
     adminId: admin(res).id,
     action: version ? "Set minimum app version" : "Removed minimum app version",

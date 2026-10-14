@@ -17,15 +17,22 @@ export function appVersionFrom(header: unknown): string | null {
   return typeof header === "string" && /^\d{1,3}\.\d{1,3}\.\d{1,4}$/.test(header) ? header : null;
 }
 
-export type AppPlatform = "desktop" | "android" | "ios";
-export const PLATFORMS: AppPlatform[] = ["desktop", "android", "ios"];
+// "web" (Oct 2026) is Glofly in a browser at chat.glofly.app. It numbers its versions like the
+// desktop app (it's built from the same screens) but has its own minimum, and it never counts as a
+// phone ("Active on mobile", push rules for phones that left Glofly).
+export type AppPlatform = "desktop" | "android" | "ios" | "web";
+export const PLATFORMS: AppPlatform[] = ["desktop", "android", "ios", "web"];
 
 /** Which app this is, from X-Glofly-Platform (or the live connection's auth). Missing = desktop. */
 export function platformFrom(value: unknown): AppPlatform {
-  return value === "android" || value === "ios" ? value : "desktop";
+  return value === "android" || value === "ios" || value === "web" ? value : "desktop";
 }
 
-export const isPlatform = (v: unknown): v is AppPlatform => v === "desktop" || v === "android" || v === "ios";
+export const isPlatform = (v: unknown): v is AppPlatform =>
+  v === "desktop" || v === "android" || v === "ios" || v === "web";
+
+/** The phone apps (not desktop, not a browser). */
+export const isPhonePlatform = (v: unknown): boolean => v === "android" || v === "ios";
 
 export const DOWNLOAD_URL = "https://glofly.app/download";
 
@@ -34,6 +41,8 @@ export const DOWNLOAD_URLS: Record<AppPlatform, string> = {
   desktop: DOWNLOAD_URL,
   android: "https://play.google.com/store/apps/details?id=com.glofly.app",
   ios: "https://glofly.app/download/ios",
+  // A browser updates by reloading the page.
+  web: process.env.WEB_ORIGIN?.trim() || "https://chat.glofly.app",
 };
 
 /** The settings key: desktop keeps the original "minVersion" (Control v2 wrote it). */

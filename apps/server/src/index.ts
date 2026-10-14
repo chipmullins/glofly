@@ -17,6 +17,7 @@ import { startRealtime } from "./realtime";
 import { connectRedis } from "./redis";
 import { storageKind } from "./storage";
 import { pausedPage, webRouter } from "./web/pages";
+import { WEB_ORIGIN, webCors } from "./web/session";
 import { getPause, refuseWhilePaused } from "./admin/pause";
 import { emailKind } from "./email/send";
 import { sweepEmailTokens } from "./email/tokens";
@@ -34,7 +35,12 @@ const PORT = Number(process.env.PORT) || 4000;
 // working without letting anyone fake their address. Off when developing.
 if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
 
-app.use(helmet()); // standard security headers; also hides that this is Express
+// Standard security headers; also hides that this is Express. Photos and voice messages may be
+// shown by other glofly.app pages (the web app at chat.glofly.app), never by other websites.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));
+// Glofly in a browser: CORS for chat.glofly.app only (off unless WEB_ORIGIN is set). Before the
+// pause gate, so the web app can read "Glofly is paused" too.
+app.use(webCors);
 app.use(express.json({ limit: "10kb" })); // rejects oversized request bodies
 
 app.get("/health", async (_req, res) => {
@@ -100,6 +106,7 @@ connectRedis()
   .then(() => {
     server.listen(PORT, () => {
       console.log(`Glofly server running at http://localhost:${PORT} (files: ${storageKind}; emails: ${emailKind})`);
+      console.log(WEB_ORIGIN ? `Glofly in a browser: ${WEB_ORIGIN}` : "Glofly in a browser is off: set WEB_ORIGIN to turn it on.");
       if (!livekitConfigured) console.log("Calls are off: add the LIVEKIT_ settings to .env to turn them on.");
       console.log(
         pushKind === "off"

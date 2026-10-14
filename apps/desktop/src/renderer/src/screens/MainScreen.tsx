@@ -65,10 +65,11 @@ import { badgeImage, clearNotification, notify, previewsOn, shouldNotify } from 
 import { CallProvider } from '../calls/CallContext'
 import UpdateBar from '../components/UpdateBar'
 import ConfirmEmailBar from '../components/ConfirmEmailBar'
+import { WebNotifyBar } from '../components/WebNotifications'
 import type { CallsValue } from '../calls/callState'
 import { CallFloat, CallStrip } from '../components/CallPanel'
-import { GameIcon, PhoneIcon, VideoIcon } from '../components/icons'
-import { isShortcutKey, shortcutLabel } from '../lib/platform'
+import { ChevronIcon, GameIcon, PhoneIcon, VideoIcon } from '../components/icons'
+import { isShortcutKey, isWeb, shortcutLabel } from '../lib/platform'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -418,6 +419,20 @@ export default function MainScreen({
   const [busy, setBusy] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [openChatId, setOpenChatId] = useState<string | null>(null)
+  // Narrow windows (an iPad held upright, Split View; only in a browser, since the desktop app's
+  // window is never that narrow): one pane at a time, the list or what's open, like the phone
+  // app. True while the list is showing. MainScreen.css does the rest.
+  const [narrowList, setNarrowList] = useState(true)
+  const openFromList = useCallback((id: string | null) => {
+    setOpenChatId(id)
+    setNarrowList(false)
+  }, [])
+  // A chat opened some other way (a notification, a new message to someone): show it.
+  const [shownChatId, setShownChatId] = useState(openChatId)
+  if (openChatId !== shownChatId) {
+    setShownChatId(openChatId)
+    if (openChatId) setNarrowList(false)
+  }
   const [connected, setConnected] = useState(true)
   const [presence, setPresence] = useState<Record<string, Presence>>({})
   const [myStatus, setMyStatus] = useState<MyStatus>({ status: 'online', statusText: null })
@@ -590,15 +605,14 @@ export default function MainScreen({
     )
   }, [])
 
-  // The unread count on the taskbar icon.
+  // The unread count on the taskbar icon. Muted chats only count their @mentions of you.
+  const unreadTotal = conversations.reduce(
+    (sum, c) => sum + (isMuted(c) ? (c.mentionCount ?? 0) : c.unreadCount),
+    0
+  )
   useEffect(() => {
-    // Muted chats only count their @mentions of you.
-    const total = conversations.reduce(
-      (sum, c) => sum + (isMuted(c) ? (c.mentionCount ?? 0) : c.unreadCount),
-      0
-    )
-    window.glofly.notifications.badge(total, total > 0 ? badgeImage(total) : null)
-  }, [conversations])
+    window.glofly.notifications.badge(unreadTotal, unreadTotal > 0 ? badgeImage(unreadTotal) : null)
+  }, [unreadTotal])
 
   // Live updates from the server.
   useEffect(() => {
@@ -1272,7 +1286,7 @@ export default function MainScreen({
       onSessionExpired={onSessionExpired}
       controlsRef={callControls}
     >
-      <div className="main main--enter">
+      <div className={narrowList ? 'main main--enter main--narrow-list' : 'main main--enter'}>
         <aside className="sidebar">
           <div className="sidebar-top">
             <div className="sidebar-logo" aria-hidden="true">
@@ -1346,7 +1360,7 @@ export default function MainScreen({
               className={!openChat && page === 'friends' ? 'nav-item nav-item--active' : 'nav-item'}
               aria-current={!openChat && page === 'friends' ? 'page' : undefined}
               onClick={() => {
-                setOpenChatId(null)
+                openFromList(null)
                 setPage('friends')
                 setFilter(incomingCount > 0 ? 'pending' : 'all')
               }}
@@ -1364,7 +1378,7 @@ export default function MainScreen({
               className={!openChat && page === 'groups' ? 'nav-item nav-item--active' : 'nav-item'}
               aria-current={!openChat && page === 'groups' ? 'page' : undefined}
               onClick={() => {
-                setOpenChatId(null)
+                openFromList(null)
                 setPage('groups')
               }}
             >
@@ -1384,7 +1398,7 @@ export default function MainScreen({
             query={chatQuery}
             results={chatResults}
             highlighted={highlighted}
-            onOpen={(id) => setOpenChatId(id)}
+            onOpen={openFromList}
             onOpenResult={openResult}
             onTogglePin={(c) => void togglePin(c)}
             onViewProfile={viewPerson}
@@ -1404,7 +1418,16 @@ export default function MainScreen({
         </aside>
 
         <main className="content">
+          {/* Narrow windows only (hidden otherwise): back to the list. */}
+          <button type="button" className="narrow-back" onClick={() => setNarrowList(true)}>
+            <ChevronIcon direction="left" size={20} />
+            Chats
+            {unreadTotal > 0 && (
+              <span className="badge">{unreadTotal > 99 ? '99+' : unreadTotal}</span>
+            )}
+          </button>
           <UpdateBar />
+          {isWeb && <WebNotifyBar />}
           <AnnouncementBar announcement={announcement} />
           <ConfirmEmailBar
             userId={user.id}
@@ -1468,7 +1491,7 @@ export default function MainScreen({
               conversations={conversations}
               presence={presence}
               notice={groupsNotice}
-              onOpen={(id) => setOpenChatId(id)}
+              onOpen={openFromList}
               onNewGroup={() => setGroupPicker({ groupId: null })}
               onTogglePin={(g) => void togglePin(g)}
               onGroupSettings={(g) => setSettingsFor(g.id)}

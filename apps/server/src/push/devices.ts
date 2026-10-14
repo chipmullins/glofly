@@ -6,10 +6,14 @@ import { db } from "../db";
 import { pushDevices } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { isPhoneMessageSound, isPhoneRingtone } from "@glofly/shared";
+import { webEnabled } from "../web/session";
+import { parseSubscription, vapidKeys } from "./web";
 
 // Phones register for push notifications here, after signing in:
 //   PUT /devices/push    { token, platform: "android" | "ios", preview?, voipToken?, messageSound?, ringtone? }   (again whenever the token or a setting changes)
 //   DELETE /devices/push                                                    (notifications turned off on this phone)
+// Glofly in a browser does the same with platform "web" and its push subscription as the token
+// (JSON from PushSubscription.toJSON()), after GET /devices/web-push-key for the server's key.
 // The registration belongs to this session, so signing out removes it.
 
 export const devicesRouter = Router();
@@ -29,7 +33,7 @@ const limiter = rateLimit({
 
 const registration = z.object({
   token: z.string().trim().min(10).max(4096),
-  platform: z.enum(["android", "ios"]),
+  platform: z.enum(["android", "ios", "web"]),
   preview: z.boolean().default(true),
   // iPhone lock-screen calls (CallKit): Apple's VoIP push token, "<hex>" or "sandbox:<hex>" for
   // development builds. Left out = unchanged (older apps); null = remove.
@@ -52,6 +56,13 @@ devicesRouter.put("/push", limiter, async (req, res) => {
     return;
   }
   const { token, platform, preview, voipToken, messageSound, ringtone } = parsed.data;
+  // A browser's subscription only from the web app (its cookie session), and only a real one:
+  // an address at a browser's push service with its keys (push/web.ts). Phones never send "web".
+  const web = platform === "web";
+  if (web !== (res.locals.viaCookie === true) || (web && (!webEnabled || !parseSubscription(token)))) {
+    res.status(400).json({ error: "invalid", message: "That isn't a push registration Glofly understands." });
+    return;
+  }
   const voip = platform === "ios" && voipToken !== undefined ? { voipToken } : {};
   const sounds = {
     ...(messageSound !== undefined ? { messageSound: isPhoneMessageSound(messageSound) ? messageSound : null } : {}),
@@ -78,6 +89,12 @@ devicesRouter.put("/push", limiter, async (req, res) => {
     }
   });
   res.status(204).end();
+});
+
+// GET /devices/web-push-key — the server's public key for web push (null: web push is off).
+devicesRouter.get("/web-push-key", async (_req, res) => {
+  const keys = webEnabled ? await vapidKeys() : null;
+  res.json({ publicKey: keys?.publicKey ?? null });
 });
 
 devicesRouter.delete("/push", async (_req, res) => {

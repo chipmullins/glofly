@@ -1,0 +1,458 @@
+import type {
+  AccountDetails,
+  ActiveCall,
+  Announcement,
+  ApiResult,
+  Attachment,
+  CallJoin,
+  ConversationSummary,
+  FriendLists,
+  GameState,
+  GloflyApi,
+  Message,
+  MessagePage,
+  MessageSearchPage,
+  MyStatus,
+  PrivacySettings,
+  Profile,
+  SearchResult,
+  SignedInDevice,
+  TeamNotice
+} from '../../../desktop/src/preload/api-types'
+import { endSession, nothing, onSessionEnded, request, setPauseHandler, unwrap } from './api'
+import * as auth from './auth'
+import { API_URL, isApple, isId, isTouch } from './config'
+import { emit, onEvent } from './events'
+import { checkPausedNow, getPaused, getUpdateRequired } from './appStatus'
+import { cleanAnnouncement, connectRealtime, disconnectRealtime, sendTyping } from './realtime'
+import { getAppSettings, initialAppearance, setAppSettings, startSettings } from './settings'
+import {
+  askPermission,
+  clearAllNotifications,
+  clearNotification,
+  permission,
+  pushSupported,
+  setBadge,
+  showNotification,
+  startServiceWorker,
+  stopPush,
+  syncPush,
+  watchNotificationSettings
+} from './notifications'
+import { startPtt, stopPtt } from './ptt'
+import { saveAttachment } from './files'
+import { checkNow, onUpdateReady, reload, startUpdateChecks, updateReady } from './updates'
+import { startIdleWatch } from './idle'
+import { startLongPress } from './touch'
+
+// window.glofly for a browser: the same functions the desktop app's preload bridge offers
+// (apps/desktop/src/preload/index.ts), done here with fetch, a WebSocket and browser APIs instead
+// of the Electron main process. The desktop screens can't tell the difference, except where
+// they ask (platform 'web', and the extra `web` section).
+
+const invalid = {
+  ok: false as const,
+  error: 'invalid' as const,
+  message: 'Something about that request was off.'
+}
+/** Only real ids reach a URL: anything else answers "invalid" without asking the server. */
+const badId = (...ids: unknown[]): Promise<typeof invalid> | null =>
+  ids.every((id) => id === undefined || isId(id)) ? null : Promise.resolve(invalid)
+
+/** The call address must be LiveKit's, never anything else the page might be sent to. */
+function checkedJoin(result: ApiResult<CallJoin>): ApiResult<CallJoin> {
+  if (!result.ok) return result
+  const { url, token } = result.data
+  const fine =
+    typeof token === 'string' &&
+    token.length < 4000 &&
+    typeof url === 'string' &&
+    (/^wss:\/\/[a-z0-9.-]+\.livekit\.cloud\/?$/i.test(url) ||
+      /^ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(url))
+  return fine
+    ? result
+    : { ok: false, error: 'server_error', message: "Calls aren't set up correctly on the server." }
+}
+
+// Opened from a notification with every tab closed (/?chat=<id>): that chat opens once the main
+// screen is up (the first time the live connection connects).
+let pendingChat: string | null = null
+{
+  const chat = new URLSearchParams(location.search).get('chat')
+  if (chat && isId(chat)) pendingChat = chat
+  if (location.search) history.replaceState(null, '', location.pathname)
+}
+
+/** Opens the live connection and push registration once signed in. */
+function goLive(): void {
+  connectRealtime(() => endSession())
+  void syncPush()
+  if (pendingChat) {
+    const stop = onEvent((event) => {
+      if (event.type !== 'connection' || !event.connected) return
+      stop()
+      const conversationId = pendingChat
+      pendingChat = null
+      setTimeout(() => emit({ type: 'notification:click', conversationId }), 300)
+    })
+  }
+}
+
+async function thenGoLive<T extends { ok: boolean }>(result: Promise<T>): Promise<T> {
+  const value = await result
+  if (value.ok) goLive()
+  return value
+}
+
+const NO_GAMES: GameState = {
+  supported: false,
+  enabled: false,
+  current: null,
+  detected: null,
+  custom: [],
+  hidden: [],
+  noticeShown: true
+}
+
+/** Screen sharing needs getDisplayMedia (desktop Chrome, Edge, Firefox, Safari; not iPad). */
+const screenShareSupported =
+  typeof navigator.mediaDevices?.getDisplayMedia === 'function' && !isTouch()
+
+export function createBridge(): GloflyApi {
+  startSettings()
+  watchNotificationSettings()
+  void startServiceWorker()
+  startUpdateChecks()
+  startIdleWatch()
+  startLongPress()
+  // The session ended (signed out, expired, signed out from another device): close everything.
+  onSessionEnded(() => {
+    disconnectRealtime()
+    void clearAllNotifications()
+    setBadge(0)
+  })
+  // Paused: the connection closes; the page reloads (and signs back in) once Glofly is back.
+  setPauseHandler(() => disconnectRealtime())
+
+  return {
+    platform: 'web',
+    web: {
+      apiUrl: API_URL,
+      apple: isApple,
+      touch: isTouch(),
+      screenShare: screenShareSupported,
+      notifications: {
+        permission,
+        ask: askPermission,
+        pushSupported: pushSupported()
+      }
+    },
+    auth: {
+      login: (r) => thenGoLive(auth.login(r)),
+      register: (r) => thenGoLive(auth.register(r)),
+      checkUsername: auth.checkUsername,
+      signupMode: auth.signupMode,
+      restore: async () => {
+        const user = await auth.restore()
+        if (user) goLive()
+        return user
+      },
+      me: auth.me,
+      logout: async () => {
+        disconnectRealtime()
+        await stopPush()
+        await clearAllNotifications()
+        setBadge(0)
+        await auth.logout()
+      },
+      forgotPassword: auth.forgotPassword
+    },
+    friends: {
+      list: () => request<FriendLists>('GET', '/friends'),
+      search: (query) =>
+        unwrap(
+          request<{ results: SearchResult[] }>(
+            'GET',
+            `/users/search?q=${encodeURIComponent(query)}`
+          ),
+          'results'
+        ),
+      sendRequest: async (username) => {
+        const r = await request<{ status: 'pending' | 'accepted' }>('POST', '/friends/requests', {
+          username
+        })
+        return r.ok ? { ok: true, data: { status: r.data.status } } : r
+      },
+      accept: (id) => badId(id) ?? nothing(request('POST', `/friends/requests/${id}/accept`)),
+      removeRequest: (id) => badId(id) ?? nothing(request('DELETE', `/friends/requests/${id}`)),
+      remove: (id) => badId(id) ?? nothing(request('DELETE', `/friends/${id}`)),
+      block: (id) => badId(id) ?? nothing(request('POST', `/blocks/${id}`)),
+      unblock: (id) => badId(id) ?? nothing(request('DELETE', `/blocks/${id}`)),
+      setOnlineAlert: (id, on) =>
+        badId(id) ?? request<{ on: boolean }>('PUT', `/friends/${id}/online-alert`, { on }),
+      invite: (email) => nothing(request('POST', '/friends/invite', { email }))
+    },
+    settings: {
+      get: () => request<PrivacySettings>('GET', '/users/me/settings'),
+      set: (changes) => request<PrivacySettings>('PATCH', '/users/me/settings', changes)
+    },
+    app: {
+      getSettings: async () => getAppSettings(),
+      setSettings: async (changes) => setAppSettings(changes),
+      openPrivacySettings: () => undefined,
+      initialAppearance: initialAppearance()
+    },
+    account: {
+      get: () => request<AccountDetails>('GET', '/account'),
+      changePassword: (currentPassword, newPassword, signOutOthers) =>
+        request('POST', '/account/password', { currentPassword, newPassword, signOutOthers }),
+      delete: async (password) => {
+        const r = await request<{ deleteAfter: string }>('POST', '/account/delete', { password })
+        if (r.ok) {
+          await stopPush()
+          endSession()
+        }
+        return r
+      },
+      resendVerification: () => request('POST', '/account/email/verify', {}),
+      changeEmail: (newEmail, password) =>
+        request('POST', '/account/email', { newEmail: newEmail.trim(), password }),
+      cancelEmailChange: () => request('DELETE', '/account/email/pending'),
+      sessions: () => request<{ sessions: SignedInDevice[] }>('GET', '/account/sessions'),
+      signOutDevice: (id) => badId(id) ?? request('DELETE', `/account/sessions/${id}`),
+      signOutOtherDevices: () => request('DELETE', '/account/sessions')
+    },
+    status: {
+      get: () => request<MyStatus>('GET', '/users/me/status'),
+      set: (changes) => request<MyStatus>('PATCH', '/users/me/status', changes)
+    },
+    profile: {
+      getMine: () => request<Profile>('GET', '/users/me/profile'),
+      get: (id) => badId(id) ?? request<Profile>('GET', `/users/${id}/profile`),
+      update: (changes) => request<Profile>('PATCH', '/users/me/profile', changes),
+      setPhoto: (data, type) => request('PUT', '/users/me/avatar', undefined, { data, type }),
+      removePhoto: () => request('DELETE', '/users/me/avatar'),
+      setNickname: (id, nickname) =>
+        badId(id) ?? request('PUT', `/users/${id}/nickname`, { nickname })
+    },
+    conversations: {
+      list: () =>
+        unwrap(
+          request<{ conversations: ConversationSummary[] }>('GET', '/conversations'),
+          'conversations'
+        ),
+      openDm: (userId) =>
+        badId(userId) ??
+        unwrap(
+          request<{ conversation: ConversationSummary }>('POST', '/conversations/dm', { userId }),
+          'conversation'
+        ),
+      createGroup: (userIds, name) =>
+        unwrap(
+          request<{ conversation: ConversationSummary }>('POST', '/conversations/group', {
+            userIds,
+            name
+          }),
+          'conversation'
+        ),
+      setGroupPhoto: (id, data, type) =>
+        badId(id) ?? request('PUT', `/conversations/${id}/photo`, undefined, { data, type }),
+      removeGroupPhoto: (id) => badId(id) ?? request('DELETE', `/conversations/${id}/photo`),
+      renameGroup: (id, name) =>
+        badId(id) ??
+        unwrap(
+          request<{ conversation: ConversationSummary }>('PATCH', `/conversations/${id}`, { name }),
+          'conversation'
+        ),
+      addMembers: (id, userIds) =>
+        badId(id) ??
+        unwrap(
+          request<{ conversation: ConversationSummary }>('POST', `/conversations/${id}/members`, {
+            userIds
+          }),
+          'conversation'
+        ),
+      removeMember: (id, userId) =>
+        badId(id, userId) ?? nothing(request('DELETE', `/conversations/${id}/members/${userId}`)),
+      messages: (id, before) =>
+        badId(id, before) ??
+        request<MessagePage>(
+          'GET',
+          `/conversations/${id}/messages${before ? `?before=${before}` : ''}`
+        ),
+      search: (query, chat, before) => {
+        const q = query.trim()
+        if (q.length < 2 || q.length > 100) return Promise.resolve(invalid)
+        const params = new URLSearchParams({ q })
+        if (chat) params.set('chat', chat)
+        if (before) params.set('before', before)
+        return (
+          badId(chat, before) ??
+          request<MessageSearchPage>('GET', `/conversations/messages/search?${params}`)
+        )
+      },
+      send: (id, body, replyToId, attachmentIds) =>
+        badId(id) ??
+        unwrap(
+          request<{ message: Message }>('POST', `/conversations/${id}/messages`, {
+            body,
+            replyToId,
+            ...(attachmentIds?.length ? { attachmentIds } : {})
+          }),
+          'message'
+        ),
+      upload: (id, data, name, voice) => {
+        if (!isId(id)) return Promise.resolve(invalid)
+        if (data.byteLength === 0)
+          return Promise.resolve({ ok: false, error: 'invalid', message: 'That file is empty.' })
+        if (data.byteLength > 25 * 1024 * 1024) {
+          return Promise.resolve({
+            ok: false,
+            error: 'invalid',
+            message: 'Files can be up to 25 MB.'
+          })
+        }
+        const voiceQuery = voice
+          ? `&voice=1&duration=${Math.round(voice.durationMs)}&peaks=${voice.peaks.join(',')}`
+          : ''
+        return unwrap(
+          request<{ attachment: Attachment }>(
+            'POST',
+            `/conversations/${id}/attachments?name=${encodeURIComponent(name)}${voiceQuery}`,
+            undefined,
+            { data, type: 'application/octet-stream' }
+          ),
+          'attachment'
+        )
+      },
+      removeUpload: (id, attachmentId) =>
+        badId(id, attachmentId) ??
+        nothing(request('DELETE', `/conversations/${id}/attachments/${attachmentId}`)),
+      edit: (id, messageId, body) =>
+        badId(id, messageId) ??
+        unwrap(
+          request<{ message: Message }>('PATCH', `/conversations/${id}/messages/${messageId}`, {
+            body
+          }),
+          'message'
+        ),
+      remove: (id, messageId) =>
+        badId(id, messageId) ??
+        unwrap(
+          request<{ message: Message }>('DELETE', `/conversations/${id}/messages/${messageId}`),
+          'message'
+        ),
+      react: (id, messageId, emoji, on) =>
+        badId(id, messageId) ??
+        unwrap(
+          request<{ message: Message }>(
+            on ? 'PUT' : 'DELETE',
+            `/conversations/${id}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`
+          ),
+          'message'
+        ),
+      markRead: (id) => badId(id) ?? nothing(request('POST', `/conversations/${id}/read`)),
+      pin: (id, pinned) =>
+        badId(id) ?? nothing(request(pinned ? 'PUT' : 'DELETE', `/conversations/${id}/pin`)),
+      orderGroups: (ids) => nothing(request('PUT', '/conversations/groups/order', { ids })),
+      orderPins: (ids) => nothing(request('PUT', '/conversations/pins/order', { ids })),
+      mute: async (id, duration) => {
+        if (!isId(id)) return invalid
+        const r = duration
+          ? await request<{ mutedUntil: string | null }>('PUT', `/conversations/${id}/mute`, {
+              duration
+            })
+          : await request<{ mutedUntil: string | null }>('DELETE', `/conversations/${id}/mute`)
+        return r.ok ? { ok: true, data: { mutedUntil: r.data.mutedUntil ?? null } } : r
+      },
+      close: (id, closed) =>
+        badId(id) ?? nothing(request(closed ? 'PUT' : 'DELETE', `/conversations/${id}/close`)),
+      typing: (id) => {
+        if (isId(id)) sendTyping(id)
+      }
+    },
+    files: {
+      save: saveAttachment,
+      showInFolder: () => undefined
+    },
+    calls: {
+      start: async (id, video) =>
+        badId(id) ??
+        checkedJoin(await request<CallJoin>('POST', '/calls', { conversationId: id, video })),
+      active: () => unwrap(request<{ calls: ActiveCall[] }>('GET', '/calls/active'), 'calls'),
+      answer: async (id) =>
+        badId(id) ?? checkedJoin(await request<CallJoin>('POST', `/calls/${id}/answer`)),
+      join: async (id) =>
+        badId(id) ?? checkedJoin(await request<CallJoin>('POST', `/calls/${id}/join`)),
+      ring: (id, userIds) => badId(id) ?? request<null>('POST', `/calls/${id}/ring`, { userIds }),
+      decline: (id) => badId(id) ?? request<null>('POST', `/calls/${id}/decline`),
+      leave: (id) => badId(id) ?? request<null>('POST', `/calls/${id}/leave`),
+      // The browser shows its own picker (getDisplayMedia), so there's no list to show here.
+      screenSources: async () => [],
+      chooseScreen: async () => true,
+      screenAccess: async () => 'granted'
+    },
+    ptt: {
+      start: async (choice) => startPtt(choice),
+      stop: stopPtt
+    },
+    notifications: {
+      show: (n) => void showNotification(n),
+      clear: (key) => void clearNotification(key),
+      badge: (count) => setBadge(count)
+    },
+    onEvent,
+    games: {
+      state: async () => NO_GAMES,
+      setEnabled: async () => NO_GAMES,
+      hide: async () => NO_GAMES,
+      add: async () => null,
+      remove: async () => NO_GAMES,
+      running: async () => [],
+      noticeShown: () => undefined,
+      onChange: () => () => undefined
+    },
+    reports: {
+      send: (report) => request('POST', '/reports', report)
+    },
+    notices: {
+      list: async () => {
+        const result = await request<{ notices: unknown[]; announcement: unknown }>(
+          'GET',
+          '/notices'
+        )
+        if (!result.ok) return result
+        const notices: TeamNotice[] = (
+          Array.isArray(result.data.notices) ? result.data.notices : []
+        )
+          .map((n) => n as Record<string, unknown>)
+          .filter((n) => typeof n.id === 'string' && typeof n.body === 'string')
+          .map((n) => ({
+            id: n.id as string,
+            kind: typeof n.kind === 'string' ? n.kind : 'warning',
+            body: (n.body as string).slice(0, 1000),
+            createdAt: String(n.createdAt)
+          }))
+        const announcement: Announcement | null = cleanAnnouncement(result.data.announcement)
+        return { ok: true, data: { notices, announcement } }
+      },
+      seen: (id) => badId(id) ?? nothing(request('POST', `/notices/${id}/seen`))
+    },
+    appStatus: {
+      updateRequired: async () => getUpdateRequired(),
+      paused: async () => getPaused(),
+      checkPaused: checkPausedNow
+    },
+    updates: {
+      status: async () => updateReady(),
+      onReady: onUpdateReady,
+      restart: reload,
+      checkNow
+    },
+    window: {
+      setTheme: () => undefined,
+      // A browser can't flash the taskbar: the call's notification and ringtone do that job.
+      attention: () => undefined
+    }
+  }
+}

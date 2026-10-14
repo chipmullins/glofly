@@ -45,7 +45,7 @@ import {
   VideoIcon,
   VideoOffIcon
 } from './icons'
-import { isMac } from '../lib/platform'
+import { isMac, isWeb, web } from '../lib/platform'
 import { cameraFit, type VideoFit } from '../lib/videoFit'
 import './CallPanel.css'
 
@@ -1365,16 +1365,26 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
             />
           )}
         </span>
-        <button
-          type="button"
-          className={sharing ? 'call-button call-button--sharing' : 'call-button'}
-          aria-label={sharing ? 'Stop sharing your screen' : 'Share your screen'}
-          title={sharing ? 'Stop sharing' : 'Share screen'}
-          disabled={!ready}
-          onClick={() => (sharing ? calls.stopSharing() : setPicking(true))}
-        >
-          {sharing ? <StopShareIcon size={22} /> : <ScreenShareIcon size={22} />}
-        </button>
+        {/* Browsers without screen sharing (iPad) don't get the button. In a browser, its own
+            picker opens instead of Glofly's. */}
+        {(!isWeb || web?.screenShare) && (
+          <button
+            type="button"
+            className={sharing ? 'call-button call-button--sharing' : 'call-button'}
+            aria-label={sharing ? 'Stop sharing your screen' : 'Share your screen'}
+            title={sharing ? 'Stop sharing' : 'Share screen'}
+            disabled={!ready}
+            onClick={() =>
+              sharing
+                ? calls.stopSharing()
+                : isWeb
+                  ? void calls.shareScreen('browser')
+                  : setPicking(true)
+            }
+          >
+            {sharing ? <StopShareIcon size={22} /> : <ScreenShareIcon size={22} />}
+          </button>
+        )}
         {group && (
           <button
             type="button"

@@ -5,7 +5,16 @@ import { db } from "./db";
 import { cachedNicknames, nicknamesFor, withNicknames } from "./profile/nicknames";
 import { conversationMembers, conversations, users } from "./db/schema";
 import { findSession } from "./auth/sessions";
-import { appVersionFrom, compareVersions, platformFrom, tooOld, updateRequiredBody, type AppPlatform } from "./app-version";
+import {
+  appVersionFrom,
+  compareVersions,
+  isPhonePlatform,
+  platformFrom,
+  tooOld,
+  updateRequiredBody,
+  type AppPlatform,
+} from "./app-version";
+import { cookieToken, fromWebOrigin } from "./web/session";
 import { blockedEitherWay, canMessage } from "./friends/rules";
 import {
   announcePresence,
@@ -35,8 +44,9 @@ const userRoom = (userId: string) => `user:${userId}`;
 
 export function startRealtime(httpServer: HttpServer): void {
   io = new Server(httpServer, {
-    // The desktop app connects from its main process, not a web page, so no
-    // website gets permission to connect from a browser.
+    // The desktop and phone apps don't connect from a web page. The web app (chat.glofly.app)
+    // connects with a WebSocket only (no CORS involved); its cookie is only accepted when the
+    // connection comes from that page (checked below), so no other website can use it.
     cors: { origin: false },
     maxHttpBufferSize: 16 * 1024, // events are small; reject anything big
     // "Pause Glofly" (admin/pause.ts): new connections are refused before they're even set up.
@@ -54,8 +64,16 @@ export function startRealtime(httpServer: HttpServer): void {
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
-      const found =
+      let found =
         typeof token === "string" && token.length <= 200 ? await findSession(token) : null;
+      // A web session's token only counts from its cookie (below), never sent as a token.
+      if (found?.session.platform === "web") found = null;
+      // The web app: its session cookie, only from its own page, and only for a web session.
+      if (!found && token === undefined && fromWebOrigin(socket.handshake.headers)) {
+        const cookie = cookieToken(socket.handshake.headers);
+        const session = cookie ? await findSession(cookie) : null;
+        if (session?.session.platform === "web") found = session;
+      }
       if (!found) return next(new Error("unauthorized"));
       // Newer apps say their version here; 0.1.8 only on requests (kept on the session).
       const version = appVersionFrom(socket.handshake.auth?.version) ?? found.session.appVersion;
@@ -87,7 +105,7 @@ export function startRealtime(httpServer: HttpServer): void {
 
     // Presence: this device is here.
     safely(async () => {
-      await deviceConnected(me.id, socket.id, socket.data.platform !== "desktop");
+      await deviceConnected(me.id, socket.id, isPhonePlatform(socket.data.platform));
       await announcePresence(me.id, emitToUser);
     });
 
@@ -123,7 +141,7 @@ export function startRealtime(httpServer: HttpServer): void {
       // not when the server hung up on it (signed out, update required).
       // Nor when Glofly was paused (everyone was hung up on at once).
       const phoneLeft =
-        socket.data.platform !== "desktop" && reason !== "server namespace disconnect" && !pausing;
+        isPhonePlatform(socket.data.platform) && reason !== "server namespace disconnect" && !pausing;
       safely(async () => {
         await deviceDisconnected(me.id, socket.id, phoneLeft ? (socket.data.sessionId as string) : undefined);
         // Wait a moment before telling friends, so a quick reconnect doesn't flicker "offline".

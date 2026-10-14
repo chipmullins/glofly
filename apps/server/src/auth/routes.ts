@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
@@ -7,7 +7,24 @@ import { users } from "../db/schema";
 import { hashPassword, verifyPassword } from "./passwords";
 import { cancelDeletion } from "../account/deletion";
 import { requestPasswordReset, sendVerification } from "../account/email";
-import { appVersionFrom, bearerToken, createSession, deleteSession, platformColumn, requireAuth } from "./sessions";
+import {
+  appVersionFrom,
+  createSession,
+  deleteSession,
+  platformColumn,
+  renewedExpiry,
+  requireAuth,
+  sessionFor,
+} from "./sessions";
+import {
+  clearSessionCookie,
+  cookieRequestAllowed,
+  csrfFor,
+  fromWebOrigin,
+  saysWeb,
+  setSessionCookie,
+  webEnabled,
+} from "../web/session";
 import {
   claimInviteCode,
   emailHeldByInvite,
@@ -68,6 +85,37 @@ const TAKEN = {
   email: "An account with this email already exists.",
 } as const;
 
+/**
+ * The web app (X-Glofly-Platform: web) signs in with a cookie instead of a token. Only from its
+ * own page, and only when the web app is on: anything else saying "web" is refused. Returns
+ * null for the apps, "web" for the web app, or false after answering 403.
+ */
+function webSignIn(req: Request, res: Response): "web" | null | false {
+  if (!saysWeb(req)) return null;
+  if (!webEnabled || !fromWebOrigin(req.headers)) {
+    res.status(403).json({ error: "forbidden", message: "Glofly in a browser only works at its own address." });
+    return false;
+  }
+  return "web";
+}
+
+/** The answer to a sign-in: the apps get the token; the browser gets it as a cookie it can't read. */
+function signedIn(
+  res: Response,
+  web: "web" | null,
+  session: { token: string; expiresAt: Date },
+  persistent: boolean,
+  user: Record<string, unknown>,
+  status = 200,
+) {
+  if (web) {
+    setSessionCookie(res, session.token, persistent, session.expiresAt);
+    res.status(status).json({ expiresAt: session.expiresAt.toISOString(), user, csrf: csrfFor(session.token) });
+    return;
+  }
+  res.status(status).json({ token: session.token, expiresAt: session.expiresAt.toISOString(), user });
+}
+
 // GET /auth/username-available?username=chipm
 // Powers the live "Available" check on the register screen.
 authRouter.get("/username-available", usernameCheckLimiter, async (req, res) => {
@@ -100,6 +148,8 @@ const BAD_INVITE_CODE = "That invite code doesn't work. Check it, or ask for a n
 // Body: { email, username, displayName, password, birthday: "YYYY-MM-DD", acceptTerms: true, deviceName? }
 // Returns a session token too, so the new account is signed in right away.
 authRouter.post("/register", requireCurrentApp, registerLimiter, async (req, res) => {
+  const web = webSignIn(req, res);
+  if (web === false) return;
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid", fields: fieldErrors(parsed.error) });
@@ -180,15 +230,11 @@ authRouter.post("/register", requireCurrentApp, registerLimiter, async (req, res
       true,
       input.deviceName ?? null,
       appVersionFrom(req.headers["x-glofly-version"]),
-      platformColumn(req.headers["x-glofly-platform"]),
+      web ?? platformColumn(req.headers["x-glofly-platform"]),
     );
     // "Confirm your email": sent in the background so signing up stays quick.
     sendVerification(user.id).catch((err) => console.error("Couldn't send the confirm email", err));
-    res.status(201).json({
-      token: session.token,
-      expiresAt: session.expiresAt.toISOString(),
-      user,
-    });
+    signedIn(res, web, session, true, user, 201);
   } catch (err) {
     // Two people grabbing the same name at the same instant: the database still catches it.
     const field = duplicateField(err);
@@ -210,6 +256,8 @@ const WRONG_DETAILS = "That username or password isn't right.";
 // POST /auth/login
 // Body: { identifier: username or email, password, keepSignedIn, deviceName? }
 authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
+  const web = webSignIn(req, res);
+  if (web === false) return;
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid", message: "Enter your username or email and password." });
@@ -277,19 +325,15 @@ authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
     keepSignedIn,
     deviceName ?? null,
     appVersionFrom(req.headers["x-glofly-version"]),
-      platformColumn(req.headers["x-glofly-platform"]),
+    web ?? platformColumn(req.headers["x-glofly-platform"]),
   );
-  res.json({
-    token: session.token,
-    expiresAt: session.expiresAt.toISOString(),
-    user: {
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName,
-      avatarVersion: user.avatarVersion,
-      // 0.4.0: a family-managed account (the apps hide Add friend). Older apps ignore it.
-      ...(user.restricted ? { restricted: true } : {}),
-    },
+  signedIn(res, web, session, keepSignedIn, {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    avatarVersion: user.avatarVersion,
+    // 0.4.0: a family-managed account (the apps hide Add friend). Older apps ignore it.
+    ...(user.restricted ? { restricted: true } : {}),
   });
 });
 
@@ -322,12 +366,26 @@ authRouter.get("/me", requireAuth, async (_req, res) => {
   const me = res.locals.user as { id: string };
   const [row] = await db.select({ restricted: users.restricted }).from(users).where(eq(users.id, me.id));
   // 0.4.0: a family-managed account (the apps hide Add friend). Older apps ignore it.
-  res.json({ user: { ...res.locals.user, ...(row?.restricted ? { restricted: true } : {}) } });
+  const user = { ...res.locals.user, ...(row?.restricted ? { restricted: true } : {}) };
+  // The web app: its CSRF value (it can't read the cookie), and the cookie renewed like the session.
+  if (res.locals.viaCookie) {
+    const token = res.locals.sessionToken as string;
+    if (res.locals.persistent) setSessionCookie(res, token, true, renewedExpiry());
+    res.set("Cache-Control", "no-store");
+    res.json({ user, csrf: csrfFor(token) });
+    return;
+  }
+  res.json({ user });
 });
 
 // POST /auth/logout — signs this device out.
 authRouter.post("/logout", async (req, res) => {
-  const token = bearerToken(req.headers.authorization);
+  const { token, viaCookie } = await sessionFor(req);
+  if (viaCookie) {
+    // The browser: from the web app's page only (with its CSRF value), and the cookie goes too.
+    if (!cookieRequestAllowed(req, res, token!)) return;
+    clearSessionCookie(res);
+  }
   if (token) await deleteSession(token);
   res.status(204).end();
 });

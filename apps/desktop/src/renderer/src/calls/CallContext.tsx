@@ -34,7 +34,7 @@ import {
   type PttState
 } from './callState'
 import '../components/CallPanel.css'
-import { isMac, privacySettingsPath } from '../lib/platform'
+import { isMac, isWeb, privacySettingsPath } from '../lib/platform'
 
 // Mac: what to do when macOS won't let Glofly see the screen. Builds before Oct 12 had a different
 // signature, so an old "Glofly" switch in that list can look on while it no longer counts.
@@ -583,6 +583,26 @@ export function CallProvider({
     async (sourceId: string) => {
       const local = roomRef.current?.localParticipant
       if (!local) return
+      // In a browser, the browser shows its own picker (a tab, a window or the whole screen),
+      // and can share that tab's sound or the computer's sound with it (Chrome and Edge).
+      if (isWeb) {
+        try {
+          await local.setScreenShareEnabled(true, {
+            audio: true,
+            systemAudio: 'include',
+            selfBrowserSurface: 'exclude',
+            surfaceSwitching: 'include'
+          })
+        } catch (err) {
+          const e = err as { name?: string }
+          // Cancelled in the browser's picker: nothing to say.
+          if (e?.name !== 'NotAllowedError' && e?.name !== 'AbortError') {
+            problem("Couldn't share your screen. Try again, or pick something else to share.")
+          }
+        }
+        bump()
+        return
+      }
       await window.glofly.calls.chooseScreen(sourceId)
       try {
         await local.setScreenShareEnabled(true, { audio: false })

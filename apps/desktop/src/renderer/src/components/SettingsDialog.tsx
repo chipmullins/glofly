@@ -22,7 +22,8 @@ import {
   type SoundFile
 } from '../lib/sounds'
 import { setNotificationSettings } from '../lib/notify'
-import { isMac } from '../lib/platform'
+import { isMac, isWeb } from '../lib/platform'
+import { BrowserNotificationsRow } from './WebNotifications'
 import './dialogs.css'
 import './SettingsDialog.css'
 
@@ -769,32 +770,42 @@ export default function SettingsDialog({
                   </div>
                 </section>
 
-                <section className="settings-section">
-                  <h2>Activity</h2>
-                  <ActivitySettings />
-                </section>
+                {/* "Playing …" needs the desktop app (a browser can't see other programs). */}
+                {!isWeb && (
+                  <section className="settings-section">
+                    <h2>Activity</h2>
+                    <ActivitySettings />
+                  </section>
+                )}
 
                 <section className="settings-section">
                   <h2>Notifications &amp; sounds</h2>
                   <div className="settings-card">
-                    <div className="settings-row">
-                      <div className="settings-row-text">
-                        <span className="settings-row-label">Desktop notifications</span>
-                        <span className="settings-row-desc">
-                          Show new messages and calls {isMac ? 'on your Mac' : 'in Windows'} when
-                          Glofly isn&apos;t in front.
-                        </span>
+                    {isWeb && appSettings ? (
+                      <BrowserNotificationsRow
+                        enabled={appSettings.notifications.enabled}
+                        onChange={(on) => void changeApp({ notifications: { enabled: on } })}
+                      />
+                    ) : (
+                      <div className="settings-row">
+                        <div className="settings-row-text">
+                          <span className="settings-row-label">Desktop notifications</span>
+                          <span className="settings-row-desc">
+                            Show new messages and calls {isMac ? 'on your Mac' : 'in Windows'} when
+                            Glofly isn&apos;t in front.
+                          </span>
+                        </div>
+                        {appSettings ? (
+                          <Toggle
+                            on={appSettings.notifications.enabled}
+                            label="Desktop notifications"
+                            onChange={(on) => void changeApp({ notifications: { enabled: on } })}
+                          />
+                        ) : (
+                          <span className="toggle toggle--loading" aria-hidden="true" />
+                        )}
                       </div>
-                      {appSettings ? (
-                        <Toggle
-                          on={appSettings.notifications.enabled}
-                          label="Desktop notifications"
-                          onChange={(on) => void changeApp({ notifications: { enabled: on } })}
-                        />
-                      ) : (
-                        <span className="toggle toggle--loading" aria-hidden="true" />
-                      )}
-                    </div>
+                    )}
                     <div className="settings-row">
                       <div className="settings-row-text">
                         <span className="settings-row-label">Show message preview</span>
@@ -901,46 +912,49 @@ export default function SettingsDialog({
                   </div>
                 </section>
 
-                <section className="settings-section">
-                  <h2>App</h2>
-                  <div className="settings-card">
-                    <div className="settings-row">
-                      <div className="settings-row-text">
-                        <span className="settings-row-label">{START_LABEL}</span>
-                        {appSettings && !appSettings.startupAvailable && (
-                          <span className="settings-row-desc">
-                            Works in the installed app (not while developing).
-                          </span>
+                {/* Starting with the computer and the tray belong to the desktop app. */}
+                {!isWeb && (
+                  <section className="settings-section">
+                    <h2>App</h2>
+                    <div className="settings-card">
+                      <div className="settings-row">
+                        <div className="settings-row-text">
+                          <span className="settings-row-label">{START_LABEL}</span>
+                          {appSettings && !appSettings.startupAvailable && (
+                            <span className="settings-row-desc">
+                              Works in the installed app (not while developing).
+                            </span>
+                          )}
+                        </div>
+                        {appSettings ? (
+                          <Toggle
+                            on={appSettings.openAtLogin}
+                            label={START_LABEL}
+                            disabled={!appSettings.startupAvailable}
+                            onChange={(on) => void changeApp({ openAtLogin: on })}
+                          />
+                        ) : (
+                          <span className="toggle toggle--loading" aria-hidden="true" />
                         )}
                       </div>
-                      {appSettings ? (
-                        <Toggle
-                          on={appSettings.openAtLogin}
-                          label={START_LABEL}
-                          disabled={!appSettings.startupAvailable}
-                          onChange={(on) => void changeApp({ openAtLogin: on })}
-                        />
-                      ) : (
-                        <span className="toggle toggle--loading" aria-hidden="true" />
-                      )}
-                    </div>
-                    <div className="settings-row">
-                      <div className="settings-row-text">
-                        <span className="settings-row-label">{TRAY_LABEL}</span>
-                        <span className="settings-row-desc">{TRAY_DESC}</span>
+                      <div className="settings-row">
+                        <div className="settings-row-text">
+                          <span className="settings-row-label">{TRAY_LABEL}</span>
+                          <span className="settings-row-desc">{TRAY_DESC}</span>
+                        </div>
+                        {appSettings ? (
+                          <Toggle
+                            on={appSettings.closeToTray}
+                            label={TRAY_LABEL}
+                            onChange={(on) => void changeApp({ closeToTray: on })}
+                          />
+                        ) : (
+                          <span className="toggle toggle--loading" aria-hidden="true" />
+                        )}
                       </div>
-                      {appSettings ? (
-                        <Toggle
-                          on={appSettings.closeToTray}
-                          label={TRAY_LABEL}
-                          onChange={(on) => void changeApp({ closeToTray: on })}
-                        />
-                      ) : (
-                        <span className="toggle toggle--loading" aria-hidden="true" />
-                      )}
                     </div>
-                  </div>
-                </section>
+                  </section>
+                )}
 
                 <section className="settings-card settings-logout">
                   <div className="settings-row-text">

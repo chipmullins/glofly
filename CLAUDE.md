@@ -5,7 +5,7 @@
 - Full reference: the Messenger project docs `glofly-dev-setup.md` (dev environment, features, API)
   and `glofly-going-live.md` (AWS setup, everyday workflow, releases), `glofly-control.md` (the admin
   app, v1 + v2), `glofly-mac.md`, `glofly-release-0.2.0.md`, `glofly-release-0.2.1.md` and
-  `glofly-release-0.2.2.md`, `glofly-release-0.3.0.md` and `glofly-release-0.4.0.md` (what each release added and how to ship it;
+  `glofly-release-0.2.2.md`, `glofly-release-0.3.0.md`, `glofly-release-0.4.0.md` and `glofly-web.md` (what each release added and how to ship it;
   they win over the older docs until folded in), `glofly-android.md` (the phone app; plan and costs in `glofly-android-plan.md`).
 - Server changes must keep working with the previous desktop app version (testers update at
   different times); database migrations only add.
@@ -28,6 +28,16 @@
   Restricted (family) accounts are enforced in the server (friends/rules.ts `isRestricted`,
   `groupBreaksRestriction`): new ways to make friends, find people or join groups must check them.
   iPad: `src/lib/layout.ts` (`useWide`, two panes from 700 pt); pushed screens show in the right pane.
+- Glofly in a browser (chat.glofly.app): `apps/web` is the desktop app's screens
+  (`apps/desktop/src/renderer`) built again with `src/bridge` as a browser `window.glofly` (fetch +
+  socket.io + browser APIs). A renderer change ships to the web too; browser-only differences go
+  behind `isWeb` / `web` from `lib/platform.ts`, and narrow/touch CSS goes in `apps/web/src/web.css`.
+  The web signs in with an httpOnly cookie (server `web/session.ts`): CORS, cookie and the live
+  connection only for `WEB_ORIGIN`, CSRF header on every change; a web session's token never works as
+  a Bearer token. Platform "web" counts like desktop (never a phone). Web push = push_devices rows
+  with platform "web" (`push/web.ts`, VAPID keys kept in server_settings). Deployed by the `web`
+  service in `deploy/docker-compose.yml` (`deploy/web.Dockerfile`) into the volume Caddy serves.
+  A new workspace needs a COPY line in both Dockerfiles. Project doc: `glofly-web.md`.
 - **Constellations branch:** Glofly 2.0 work goes on the `constellations` branch (made from `dev`
   on Oct 14, 2026), never on `dev`, so bug fixes and releases keep going from `dev` untouched.
   Bring fixes in with `git merge dev` on `constellations` now and then; it goes back into `dev`

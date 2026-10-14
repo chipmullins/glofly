@@ -9,7 +9,7 @@ import {
 } from '../lib/callPrefs'
 import { playPtt, PTT_SOUNDS, SOUND_FILES, type PttSound } from '../lib/sounds'
 import { Segmented, Toggle } from './SettingsDialog'
-import { isMac, privacySettingsPath } from '../lib/platform'
+import { isMac, isTouch, isWeb, privacySettingsPath } from '../lib/platform'
 
 // Settings → Voice & video: pick the microphone, speakers and camera for calls, check they
 // work, and choose how your voice is cleaned up. Saved on this computer. Changes made during
@@ -406,7 +406,7 @@ function PushToTalk({
 }: {
   prefs: CallPrefs
   onChange: (changes: Partial<CallPrefs>) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const [recording, setRecording] = useState(false)
   const [refused, setRefused] = useState(false)
 
@@ -454,6 +454,8 @@ function PushToTalk({
   }, [recording, onChange])
 
   const ptt = prefs.inputMode === 'ptt'
+  // A touch screen without a keyboard (an iPad in a browser) has no key to hold.
+  if (isTouch && !ptt) return null
   return (
     <section className="settings-section">
       <h2>Input mode</h2>
@@ -486,9 +488,11 @@ function PushToTalk({
                   ? refused
                     ? "That key can't be used. Try another key or a mouse side button."
                     : 'Press a key or a mouse side button… (Esc to cancel)'
-                  : isMac
-                    ? 'Works while other apps are in front, once Glofly is allowed under Privacy & Security → Accessibility.'
-                    : 'Works while games and other apps are in front. Games run as administrator need Glofly run as administrator too.'}
+                  : isWeb
+                    ? "Works while this Glofly tab is in front (browsers can't hear keys pressed in other apps)."
+                    : isMac
+                      ? 'Works while other apps are in front, once Glofly is allowed under Privacy & Security → Accessibility.'
+                      : 'Works while games and other apps are in front. Games run as administrator need Glofly run as administrator too.'}
               </span>
             </div>
             <div className="voice-inline">

@@ -545,7 +545,7 @@ export default function ChatView({
     const up = await window.glofly.conversations.upload(
       conversation.id,
       r.data,
-      'Voice message.webm',
+      r.type === 'audio/mp4' ? 'Voice message.m4a' : 'Voice message.webm',
       r.voice
     )
     if (!up.ok) return handleFailure(up.error, up.message)

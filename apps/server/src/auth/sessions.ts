@@ -4,11 +4,14 @@ import type { RequestHandler } from "express";
 import { and, eq, gt, lt } from "drizzle-orm";
 import { db } from "../db";
 import { sessions, users } from "../db/schema";
-import { appVersionFrom, platformFrom, refuseIfTooOld } from "../app-version";
+import { appVersionFrom, isPhonePlatform, platformFrom, refuseIfTooOld } from "../app-version";
+import { cookieRequestAllowed, cookieToken } from "../web/session";
 import { phoneActed } from "../presence";
 
 const DAY = 24 * 60 * 60 * 1000;
 const PERSISTENT_LIFETIME = 30 * DAY; // "Keep me signed in"
+/** When a "Keep me signed in" session used right now runs out (the web app's cookie follows it). */
+export const renewedExpiry = () => new Date(Date.now() + PERSISTENT_LIFETIME);
 const SHORT_LIFETIME = 1 * DAY;
 
 /** Only the hash is stored, so the database never holds a usable token. */
@@ -97,27 +100,50 @@ export function bearerToken(header: string | undefined): string | null {
   return token.length > 0 && token.length <= 200 ? token : null;
 }
 
+/**
+ * The session a request is signed in with: "Authorization: Bearer" (the apps) or, from the web
+ * app's page, the session cookie (web/session.ts). A cookie only counts for a web session.
+ */
+export async function sessionFor(req: Parameters<RequestHandler>[0]) {
+  const bearer = bearerToken(req.headers.authorization);
+  if (bearer) {
+    // A web session's token only ever lives in its cookie: as a Bearer token it doesn't count
+    // (that would skip the web app's origin and CSRF checks).
+    const found = await findSession(bearer);
+    return { token: bearer, viaCookie: false, found: found?.session.platform === "web" ? null : found };
+  }
+  const cookie = cookieToken(req.headers);
+  if (!cookie) return { token: null, viaCookie: false, found: null };
+  const found = await findSession(cookie);
+  if (found?.session.platform !== "web") return { token: null, viaCookie: false, found: null };
+  return { token: cookie, viaCookie: true, found };
+}
+
 /** Put this in front of any route that needs a signed-in user. */
 export const requireAuth: RequestHandler = async (req, res, next) => {
-  const token = bearerToken(req.headers.authorization);
-  const found = token ? await findSession(token) : null;
-  if (!found) {
+  const { token, viaCookie, found } = await sessionFor(req);
+  if (!found || !token) {
     res.status(401).json({ error: "unauthorized" });
     return;
   }
+  // The browser: only from the web app's page, with the CSRF value for anything but reading.
+  if (viaCookie && !cookieRequestAllowed(req, res, token)) return;
   // Too old for this server (Control → minimum app version): "Please update Glofly".
   if (await refuseIfTooOld(req, res)) return;
   // Which app version this device runs (Control → App versions in use).
   const version = appVersionFrom(req.headers["x-glofly-version"]);
-  const platform = platformColumn(req.headers["x-glofly-platform"]);
+  // A cookie session is always the web app, whatever the request says.
+  const platform = viaCookie ? "web" : platformColumn(req.headers["x-glofly-platform"]);
   if (version && (version !== found.session.appVersion || platform !== found.session.platform)) {
     await db.update(sessions).set({ appVersion: version, platform }).where(eq(sessions.id, found.session.id));
   }
   res.locals.user = found.user;
   res.locals.sessionToken = token;
   res.locals.sessionId = found.session.id;
+  res.locals.viaCookie = viaCookie;
+  res.locals.persistent = found.session.persistent;
   // A phone doing something (sending, replying from a notification) while Glofly isn't open on it.
-  if (platform && req.method !== "GET") {
+  if (isPhonePlatform(platform) && req.method !== "GET") {
     await phoneActed(found.user.id, found.session.id).catch(() => undefined);
   }
   // Nicknames this person gave others go into everything sent back to them (profile/nicknames.ts).

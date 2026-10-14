@@ -240,12 +240,13 @@ export type Announcement = {
 }
 
 /** Which Glofly app: each has its own version numbers and its own minimum. */
-export type AppPlatform = 'desktop' | 'android' | 'ios'
+export type AppPlatform = 'desktop' | 'android' | 'ios' | 'web'
 
 export const PLATFORM_LABEL: Record<AppPlatform, string> = {
   desktop: 'Desktop',
   android: 'Android',
-  ios: 'iPhone'
+  ios: 'iPhone',
+  web: 'Web'
 }
 
 export type AppVersionInfo = {

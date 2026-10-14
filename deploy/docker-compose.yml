@@ -1,7 +1,8 @@
 # The live Glofly server (one EC2 machine). Run from the deploy/ folder:
 #   docker compose up -d --build
 # Postgres is NOT here: it's Amazon RDS. Files are in S3. Only Caddy faces the internet.
-# Caddy also serves the website (site/ folder) at glofly.app.
+# Caddy also serves the website (site/ folder) at glofly.app, and Glofly in a browser
+# (apps/web, built by the "web" service below) at chat.glofly.app.
 services:
   server:
     build:
@@ -22,6 +23,11 @@ services:
       # Control → Server → Restart server: the server stops and Docker (restart: unless-stopped)
       # starts it again. This tells it that's safe here.
       GLOFLY_RESTARTS: docker
+      # Glofly in a browser: the only page allowed to sign in with a cookie, call the API from a
+      # browser (CORS) and open the live connection with that cookie. Emergency off switch: put
+      # WEB_ORIGIN= (nothing after the =) in .env and run docker compose up -d; the desktop and
+      # phone apps don't use any of it.
+      WEB_ORIGIN: ${WEB_ORIGIN-https://chat.glofly.app}
     volumes:
       # Files the server reads but that must never be in the repo (the Firebase key for push
       # notifications). Put them in deploy/secrets/ on the server (chmod 600).
@@ -31,6 +37,18 @@ services:
     logging:
       driver: json-file
       options: { max-size: "20m", max-file: "5" }
+
+  # Builds Glofly in a browser (apps/web) and copies it into the chat_site volume for Caddy,
+  # then stops (that's normal: "Exited (0)" in docker compose ps).
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        GLOFLY_API_URL: https://${API_DOMAIN}
+    restart: "no"
+    volumes:
+      - chat_site:/out
 
   redis:
     image: redis:8
@@ -48,15 +66,18 @@ services:
     environment:
       API_DOMAIN: ${API_DOMAIN}
       SITE_DOMAIN: ${SITE_DOMAIN:-glofly.app}
+      WEB_DOMAIN: ${WEB_DOMAIN:-chat.glofly.app}
       ADMIN_IPS: ${ADMIN_IPS:-127.0.0.1}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ../site:/srv/site:ro # the website
+      - chat_site:/srv/chat:ro # Glofly in a browser (filled by the web service)
       - caddy_data:/data # the https certificates: keep this volume
       - caddy_config:/config
     depends_on:
       - server
 
 volumes:
+  chat_site:
   caddy_data:
   caddy_config:

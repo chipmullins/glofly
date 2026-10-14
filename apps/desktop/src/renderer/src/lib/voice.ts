@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { VoiceInfo } from '../../../preload/api-types'
 import { audioCapture, getCallPrefs } from './callPrefs'
 import { toPeaks } from '@glofly/shared/voice'
+import { mediaFetchInit } from './platform'
 
 export const VOICE_MAX_MS = 5 * 60 * 1000
 const SAMPLE_MS = 50
@@ -112,9 +113,13 @@ export function useVoiceRecorder(
         }
         return
       }
+      // Opus in WebM (desktop, Chrome, Edge, Firefox); Safari records AAC in MP4, which the
+      // server takes too (it's what the iPhone app sends).
       const type = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
-        : 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/mp4'
       const recorder = new MediaRecorder(stream, { mimeType: type, audioBitsPerSecond: 32_000 })
       const context = new AudioContext()
       const analyser = context.createAnalyser()
@@ -153,10 +158,10 @@ export function useVoiceRecorder(
           callbacks.current.onError('That was too short to send. Hold the mic button to record.')
           return
         }
-        void new Blob(s.chunks, { type: 'audio/webm' }).arrayBuffer().then((data) =>
+        void new Blob(s.chunks, { type: type.split(';')[0] }).arrayBuffer().then((data) =>
           callbacks.current.onDone({
             data,
-            type: 'audio/webm',
+            type: type.split(';')[0],
             voice: { durationMs: Math.round(durationMs), peaks: toPeaks(s.levels) }
           })
         )
@@ -183,7 +188,7 @@ let playing: { url: string; source: AudioBufferSourceNode; stop: () => void } | 
 async function bufferFor(url: string): Promise<AudioBuffer> {
   const known = decoded.get(url)
   if (known) return known
-  const response = await fetch(url)
+  const response = await fetch(url, mediaFetchInit)
   if (!response.ok) throw new Error(`voice ${response.status}`)
   context ??= new AudioContext()
   const buffer = await context.decodeAudioData(await response.arrayBuffer())

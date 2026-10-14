@@ -9,6 +9,7 @@ import { colorsFor } from './avatarColors'
 import { initials } from './names'
 import { avatarUrl } from './media'
 import { isSilenced } from './sounds'
+import { isWeb } from './platform'
 
 let settings: NotificationSettings = { enabled: true, preview: true }
 
@@ -29,7 +30,9 @@ const FACE = 96
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image()
-    img.crossOrigin = 'anonymous' // so the photo can be drawn and read back
+    // So the photo can be drawn and read back. In a browser it comes from the Glofly server,
+    // which only shares it with the session cookie (and only with chat.glofly.app).
+    img.crossOrigin = isWeb ? 'use-credentials' : 'anonymous'
     img.onload = () => resolve(img)
     img.onerror = () => resolve(null)
     img.src = src

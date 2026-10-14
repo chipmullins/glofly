@@ -1,0 +1,109 @@
+/* Glofly in a browser: the few places the desktop screens need to differ. The desktop app's
+   window is never narrower than 1000px and has a mouse, so nothing here changes it (this file is
+   only part of the web app). */
+
+/* The page fills the screen, including on an iPad with Safari's bars coming and going. */
+html,
+body,
+#root {
+  height: 100dvh;
+  overscroll-behavior: none;
+}
+
+/* ---------- Narrow windows: one pane at a time (iPad held upright, Split View) ---------- */
+@media (max-width: 899px) {
+  .main .sidebar {
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+    border-right: none;
+  }
+  .main:not(.main--narrow-list) .sidebar {
+    display: none;
+  }
+  .main.main--narrow-list .content {
+    display: none;
+  }
+  .content > .narrow-back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    padding: 10px 14px;
+    border: none;
+    border-bottom: 1px solid var(--glo-line-soft);
+    background: var(--glo-bg);
+    color: var(--glo-link);
+    font: inherit;
+    font-weight: 600;
+    font-size: 15px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .content > .narrow-back .badge {
+    margin-left: 4px;
+  }
+  /* Settings and other big dialogs use the whole window. */
+  .dialog.settings {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+}
+
+/* Very narrow (Split View at a third): the login and sign-up pages drop their picture side. */
+@media (max-width: 640px) {
+  .login > .brand {
+    display: none;
+  }
+  .settings-nav {
+    min-width: 0;
+  }
+  /* The chat's name keeps room next to its buttons. */
+  .chat-header-actions {
+    gap: 2px;
+  }
+  .chat-header .chat-header-button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* ---------- Touch screens (iPad) ---------- */
+@media (hover: none) and (pointer: coarse) {
+  /* Safari zooms into any text box under 16px: keep them at 16 so it doesn't. */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+  /* A finger is bigger than a mouse pointer. */
+  .icon-button,
+  .call-button,
+  .msg-toolbar > button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  /* Long-press opens Glofly's menus (src/bridge/touch.ts) instead of Safari's text callout. */
+  .dm-row,
+  .nav-item,
+  .message,
+  .group-row,
+  .call-tile {
+    -webkit-touch-callout: none;
+  }
+  /* "Add reaction" is always there, since nothing hovers on a touch screen. */
+  .reaction--add {
+    opacity: 1;
+  }
+}
+
+/* A tapped message shows its actions (src/bridge/touch.ts). */
+.message--touched {
+  background: var(--glo-subtle);
+}
+.message--touched .msg-toolbar {
+  display: flex;
+}

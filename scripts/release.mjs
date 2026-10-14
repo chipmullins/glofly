@@ -65,6 +65,10 @@ if (!ok('git merge-base --is-ancestor origin/main HEAD')) {
 // Anything the live server runs (server code, deploy files, the website) changed since the last release?
 const serverChanged = !ok('git diff --quiet origin/main HEAD -- apps/server packages/shared deploy')
 const siteChanged = !ok('git diff --quiet origin/main HEAD -- site')
+// Glofly in a browser (chat.glofly.app) is built on the server from these.
+const webChanged = !ok(
+  'git diff --quiet origin/main HEAD -- apps/web apps/desktop/src/renderer apps/desktop/src/preload apps/desktop/vite-twemoji.ts'
+)
 
 const from = desktopVersion()
 run(`npm version ${bump} -w apps/desktop --no-git-tag-version --silent`)
@@ -72,7 +76,8 @@ const version = desktopVersion()
 console.log(green(`  Version ${from} → ${version}`))
 console.log(
   `  Server code changed since the last release: ${serverChanged ? yellow('yes') : 'no'}` +
-    (siteChanged ? `\n  Website changed: ${yellow('yes')}` : '')
+    (siteChanged ? `\n  Website changed: ${yellow('yes')}` : '') +
+    (webChanged ? `\n  Glofly in a browser changed: ${yellow('yes')}` : '')
 )
 const go = await ask(`\n  Release Glofly ${version}? (y/n) `)
 if (go !== 'y' && go !== 'yes') {
@@ -92,14 +97,16 @@ run(`git push --quiet origin v${version}`)
 console.log(green(`  main is now ${version} (tag v${version})`))
 
 // ---------------------------------------------------------------- 3. Server first
-if (serverChanged || siteChanged) {
-  step(serverChanged ? 'Update the server first' : 'Update the website')
+if (serverChanged || siteChanged || webChanged) {
+  // The server and the browser version are both rebuilt by `docker compose up -d --build`.
+  const rebuild = serverChanged || webChanged
+  step(serverChanged ? 'Update the server first' : webChanged ? 'Update the server (browser version)' : 'Update the website')
   console.log(`  In the AWS browser terminal (EC2 → glofly-server → Connect → Session Manager):
 
     sudo -iu ubuntu
     cd ~/glofly/deploy && git pull
-${serverChanged ? '    docker compose up -d --build\n    docker compose logs --tail 10 server\n' : ''}
-  ${serverChanged ? 'Check https://api.glofly.app/health says "connected".' : 'Refresh https://glofly.app to see the change.'}`)
+${rebuild ? '    docker compose up -d --build\n    docker compose logs --tail 10 server\n' : ''}
+  ${serverChanged ? 'Check https://api.glofly.app/health says "connected".' : webChanged ? 'Reload https://chat.glofly.app to see the change.' : 'Refresh https://glofly.app to see the change.'}`)
   await ask('\n  Press Enter once that\'s done (the app upload comes next) ')
 }
 

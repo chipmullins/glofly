@@ -1347,3 +1347,8 @@
   font-weight: 500;
   white-space: nowrap;
 }
+
+/* Back to the list: only on narrow windows, which only happen in a browser (apps/web/src/web.css). */
+.narrow-back {
+  display: none;
+}

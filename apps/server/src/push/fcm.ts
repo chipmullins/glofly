@@ -2,6 +2,8 @@ import { createSign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { phoneMessageSound, phoneRingtone } from "@glofly/shared";
 import { redis } from "../redis";
+import { webEnabled } from "../web/session";
+import { sendWebPush } from "./web";
 
 // Sends push messages to phones through Firebase Cloud Messaging (the HTTP v1 API).
 //
@@ -32,8 +34,11 @@ function loadAccount(): ServiceAccount | null {
 const account = loadAccount();
 const endpoint = (process.env.FCM_ENDPOINT?.trim() || "https://fcm.googleapis.com").replace(/\/$/, "");
 
-export const pushConfigured = account !== null;
-export const pushKind = account ? `Firebase (${account.project_id})` : "off";
+/** Phones (Firebase), or browsers (web push, on whenever Glofly in a browser is). */
+export const pushConfigured = account !== null || webEnabled;
+export const pushKind =
+  [account ? `Firebase (${account.project_id})` : null, webEnabled ? "web push" : null].filter(Boolean).join(" + ") ||
+  "off";
 
 // ── Access token: a signed JWT swapped for a Google access token, kept until shortly before it expires.
 
@@ -161,6 +166,12 @@ export async function sendPush(
   platform: string = "android",
   sounds: DeviceSounds = {},
 ): Promise<PushResult> {
+  // Glofly in a browser: its own push service (push/web.ts).
+  if (platform === "web") {
+    const result = await sendWebPush(token, data, ttlSeconds);
+    if (result === "failed") await countFailure();
+    return result;
+  }
   if (!account) return "failed";
   try {
     const res = await fetch(`${endpoint}/v1/projects/${account.project_id}/messages:send`, {

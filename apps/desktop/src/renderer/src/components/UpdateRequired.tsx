@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { UpdateRequired } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
+import { isWeb } from '../lib/platform'
 import '../screens/LoginScreen.css'
 import './Safety.css'
 
@@ -33,13 +34,24 @@ export default function UpdateRequiredScreen({
       <div className="titlebar-drag" aria-hidden="true" />
       <div className="update-required-card">
         <img src={fireflyImg} alt="" className="update-required-fly" draggable={false} />
-        <h1 id="update-required-title">Please update Glofly</h1>
+        <h1 id="update-required-title">
+          {isWeb ? 'Please reload Glofly' : 'Please update Glofly'}
+        </h1>
         <p>{info.message}</p>
         {info.minVersion && (
           <p className="update-required-version">You need version {info.minVersion} or newer.</p>
         )}
         <div className="update-required-actions">
-          {ready ? (
+          {isWeb ? (
+            // A browser gets the newest Glofly just by loading the page again.
+            <button
+              type="button"
+              className="login-submit"
+              onClick={() => window.glofly.updates.restart()}
+            >
+              Reload Glofly
+            </button>
+          ) : ready ? (
             <button
               type="button"
               className="login-submit"
@@ -58,7 +70,7 @@ export default function UpdateRequiredScreen({
             </a>
           )}
         </div>
-        {!ready && checking === 'checking' && (
+        {!isWeb && !ready && checking === 'checking' && (
           <p className="update-required-hint">
             Glofly is also downloading the update itself. This screen offers Restart when it&apos;s
             ready.
