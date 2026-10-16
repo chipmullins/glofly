@@ -8,6 +8,7 @@ import type {
   PublicUser
 } from '../../../desktop/src/preload/api-types'
 import { upgradeEvents } from '@glofly/shared/events'
+import { cleanWatchReaction, cleanWatchUpdate } from '@glofly/shared/watch'
 import { API_URL, VERSION } from './config'
 import { notePaused, noteUpdateRequired } from './appStatus'
 import { emit } from './events'
@@ -122,6 +123,15 @@ export function connectRealtime(onUnauthorized: () => void): void {
     if (typeof payload?.conversationId === 'string' && typeof payload?.userId === 'string') {
       forward({ type: 'typing', conversationId: payload.conversationId, userId: payload.userId })
     }
+  })
+  // 0.5.0 Watch Together: what a call is watching, and firefly reactions over the video.
+  socket.on('watch:updated', (p) => {
+    const update = cleanWatchUpdate(p)
+    if (update) forward({ type: 'watch:updated', ...update })
+  })
+  socket.on('watch:reaction', (p) => {
+    const reaction = cleanWatchReaction(p)
+    if (reaction) forward({ type: 'watch:reaction', ...reaction })
   })
   socket.on('friends:changed', () => forward({ type: 'friends:changed' }))
   socket.on('conversations:changed', () => forward({ type: 'conversations:changed' }))

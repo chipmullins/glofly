@@ -5,6 +5,7 @@ import { useTheme } from '@/ui/theme'
 import { startRealtime } from '@/api/realtime'
 import { startPush } from '@/push'
 import { startCalls } from '@/calls/controller'
+import { startWatch } from '@/calls/watch'
 import { startUpdates } from '@/lib/updates'
 import { CallOverlay, WithCallStrip } from '@/calls/CallOverlay'
 import { CallPip } from '@/calls/CallPip'
@@ -26,6 +27,7 @@ export default function MainLayout() {
     startRealtime()
     startPush()
     startCalls()
+    startWatch()
     startUpdates()
   }, [])
   return (

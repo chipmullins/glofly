@@ -20,6 +20,10 @@ import type {
   SignedInDevice,
   TeamNotice,
   VoiceInfo,
+  WatchControl,
+  WatchPreview,
+  WatchReaction,
+  WatchUpdate,
 } from '@glofly/shared'
 import { request, upload, type Upload } from './http'
 import { PLATFORM } from '@/lib/config'
@@ -134,6 +138,19 @@ export const joinCall = (callId: string) => request<CallJoin>('POST', `/calls/${
 export const ringMore = async (callId: string, userIds: string[]) => none(await request('POST', `/calls/${callId}/ring`, { userIds }))
 export const declineCall = async (callId: string) => none(await request('POST', `/calls/${callId}/decline`))
 export const leaveCall = async (callId: string) => none(await request('POST', `/calls/${callId}/leave`))
+
+// ---- Watch Together (0.5.0) ----
+
+export const watchGet = (callId: string) => request<WatchUpdate>('GET', `/calls/${callId}/watch`)
+export const watchPreview = (link: string) => request<WatchPreview>('GET', `/calls/watch/preview?link=${enc(link)}`)
+export const watchStart = (callId: string, link: string, control?: WatchControl) => request<WatchUpdate>('POST', `/calls/${callId}/watch`, { link, control })
+export const watchControl = (callId: string, action: 'play' | 'pause' | 'seek' | 'back' | 'forward', to?: number) =>
+  request<WatchUpdate>('POST', `/calls/${callId}/watch/control`, { action, to })
+export const watchSettings = (callId: string, control: WatchControl) => request<WatchUpdate>('POST', `/calls/${callId}/watch/settings`, { control })
+export const watchReport = async (callId: string, videoId: string, durationSec: number, title?: string) =>
+  none(await request('POST', `/calls/${callId}/watch/report`, { videoId, durationSec, title }))
+export const watchReact = async (callId: string, reaction: WatchReaction) => none(await request('POST', `/calls/${callId}/watch/react`, { reaction }))
+export const watchStop = (callId: string) => request<WatchUpdate>('DELETE', `/calls/${callId}/watch`)
 
 // ---- Account ----
 

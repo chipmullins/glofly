@@ -38,6 +38,10 @@ import type {
   TeamNotice,
   UpdateRequired,
   UsernameCheck,
+  WatchControl,
+  WatchPreview,
+  WatchReaction,
+  WatchUpdate,
   VoiceInfo,
   Paused
 } from '@glofly/shared/types'
@@ -202,6 +206,9 @@ export type AppSettings = {
 }
 
 /** Live updates: the server's, plus a few from this computer. */
+/** Watch Together: what the timeline buttons can ask for. */
+export type WatchControlAction = 'play' | 'pause' | 'seek' | 'back' | 'forward'
+
 export type GloflyEvent =
   | ServerEvent
   /** Push to talk: the chosen key went down or came up */
@@ -437,6 +444,36 @@ export type GloflyApi = {
      * Security → Screen & System Audio Recording). Always "granted" on Windows.
      */
     screenAccess: () => Promise<'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown'>
+  }
+  /** Watch Together (0.5.0): a YouTube video everyone in the call watches at the same moment. */
+  watch: {
+    /** The server's video player page, shown in a frame (null if refused). */
+    playerUrl: () => Promise<string | null>
+    /** What a call is watching (anyone in the chat may ask). */
+    get: (callId: string) => Promise<ApiResult<WatchUpdate>>
+    /** A YouTube link's title, channel and picture (the Start dialog). */
+    preview: (link: string) => Promise<ApiResult<WatchPreview>>
+    /** Starts (or changes) the video for everyone in the call. */
+    start: (callId: string, link: string, control?: WatchControl) => Promise<ApiResult<WatchUpdate>>
+    /** Play, pause, skip to `to` seconds, or ±10 s, for everyone. */
+    control: (
+      callId: string,
+      action: WatchControlAction,
+      to?: number
+    ) => Promise<ApiResult<WatchUpdate>>
+    /** Whoever picked the video: Everyone or Only me can control it. */
+    settings: (callId: string, control: WatchControl) => Promise<ApiResult<WatchUpdate>>
+    /** The player found out how long the video is. */
+    report: (
+      callId: string,
+      videoId: string,
+      durationSec: number,
+      title?: string
+    ) => Promise<ApiResult<null>>
+    /** A firefly reaction over the video, for everyone in the call. */
+    react: (callId: string, reaction: WatchReaction) => Promise<ApiResult<null>>
+    /** Stops watching, for everyone. */
+    stop: (callId: string) => Promise<ApiResult<WatchUpdate>>
   }
   ptt: {
     /**

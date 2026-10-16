@@ -15,6 +15,7 @@ import { emitToUser } from "../realtime";
 import { sendUpdated } from "../messages/routes";
 import { closeRoom, livekitConfigured, peopleInRoom, removeFromRoom } from "./livekit";
 import { syncCallPushes } from "../push/calls";
+import { forgetWatch, watcherLeft } from "./watch";
 
 // How a call goes:
 //
@@ -253,6 +254,7 @@ export async function closeCall(callId: string, reason: CloseReason, alsoTell: s
   if (!closed) return null;
   stopRinging(callId);
   forget(callId);
+  forgetWatch(callId); // Watch Together: nothing to watch once the call is over
   await refreshLine(closed);
   await announceCall(closed, alsoTell);
   // A missed call counts as unread for whoever missed it: their chat list refreshes the badge.
@@ -363,7 +365,10 @@ export async function leaveCall(callId: string, userId: string, alsoTell: string
   missingSince.delete(timerKey(callId, userId));
   const stillIn = (await participantsOf(callId)).filter(isIn);
   if (stillIn.length === 0) await closeCall(callId, "hang_up", alsoTell);
-  else await announceCall(row, alsoTell);
+  else {
+    await announceCall(row, alsoTell);
+    await watcherLeft(callId, userId); // only they could pause the video: now everyone can
+  }
 }
 
 /** Group calls: rings people in the group who aren't in the call (again). */
@@ -477,6 +482,7 @@ export async function sweepCalls(): Promise<void> {
           .set({ leftAt: new Date() })
           .where(and(eq(callParticipants.callId, row.id), eq(callParticipants.userId, p.userId)));
         changed = true;
+        await watcherLeft(row.id, p.userId);
       }
     }
     const stillIn = (await participantsOf(row.id)).filter(isIn).length;

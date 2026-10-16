@@ -308,6 +308,32 @@ const strokes: Record<string, (fill: string) => React.ReactNode> = {
     </>
   ),
   door: () => <Path d="M13 4h5a2 2 0 0 1 2 2v14M4 20h16M13 4v16L4 18V6zM10 12h.01" />,
+  // Watch Together (0.5.0)
+  watch: (fill) => (
+    <>
+      <Rect x="3" y="5" width="18" height="12" rx="2" />
+      <Path d="M8 21h8M12 17v4" />
+      <Path d="M10 8.6v4.8l4-2.4z" fill={fill} stroke="none" />
+    </>
+  ),
+  back10: () => (
+    <>
+      <Path d="M4 12a8 8 0 1 0 2.4-5.7" />
+      <Path d="M4 4v4h4" />
+    </>
+  ),
+  forward10: () => (
+    <>
+      <Path d="M20 12a8 8 0 1 1-2.4-5.7" />
+      <Path d="M20 4v4h-4" />
+    </>
+  ),
+  swapVideo: (fill) => (
+    <>
+      <Path d="M4 7h16M4 12h10M4 17h7" />
+      <Path d="M17 14l4 3-4 3z" fill={fill} />
+    </>
+  ),
   gamepad: () => (
     <>
       <Rect x="2" y="7" width="20" height="11" rx="5" />

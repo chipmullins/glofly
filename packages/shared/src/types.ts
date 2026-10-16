@@ -1,6 +1,18 @@
 // The shapes Glofly's server sends and accepts, shared by every Glofly app (desktop, mobile)
 // and the server. Moved here from apps/desktop/src/preload/api-types.d.ts (Oct 11, 2026).
 
+import type { WatchReactionEvent, WatchUpdate } from './watch'
+// Watch Together's shapes live in watch.ts; re-exported so `@glofly/shared/types` has them too.
+export type {
+  WatchAction,
+  WatchControl,
+  WatchPreview,
+  WatchReaction,
+  WatchReactionEvent,
+  WatchState,
+  WatchUpdate
+} from './watch'
+
 export type SignedInUser = {
   id: string
   username: string
@@ -215,6 +227,8 @@ export type ChatEvent =
     }
   /** 0.2.1: someone set (or removed) the group photo */
   | { type: 'photo'; removed: boolean }
+  /** 0.5.0: someone started watching a video together in the call (Watch Together) */
+  | { type: 'watch'; videoId: string; title: string }
 
 export type CallStatus = 'ringing' | 'ongoing' | 'ended' | 'missed' | 'declined'
 
@@ -368,6 +382,10 @@ export type ServerEvent =
   /** Your email was confirmed or changed (here or on another device): refetch account details. */
   | { type: 'account:changed' }
   | { type: 'call:updated'; call: Call; caller: PublicUser | null }
+  /** 0.5.0 Watch Together: the video a call is watching changed (play, pause, skip, stop…) */
+  | ({ type: 'watch:updated' } & WatchUpdate)
+  /** 0.5.0 Watch Together: someone sent a firefly reaction over the video */
+  | ({ type: 'watch:reaction' } & WatchReactionEvent)
   /** This version is too old for the server: show "Please update Glofly". */
   | ({ type: 'app:update-required' } & UpdateRequired)
   /** 0.4.0: Glofly is paused (Glofly Control → Server → Pause Glofly) */

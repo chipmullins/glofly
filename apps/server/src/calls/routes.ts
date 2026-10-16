@@ -3,7 +3,7 @@ import { rateLimit } from "express-rate-limit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { calls } from "../db/schema";
+import { calls, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { canMessage } from "../friends/rules";
 import { access, announce, canPost, GROUP_MAX, postEvent, type Access } from "../messages/routes";
@@ -22,6 +22,18 @@ import {
   startCall,
   type CallRow,
 } from "./service";
+import {
+  controlWatch,
+  previewVideo,
+  reactWatch,
+  reportWatch,
+  setWatchControl,
+  startWatch,
+  stopWatch,
+  watchUpdate,
+  type WatchProblem,
+} from "./watch";
+import { isWatchReaction, isYouTubeId, youTubeIdFrom, youTubeStartFrom } from "@glofly/shared";
 
 // Voice and video calls: 1-on-1 and group (up to 25 people).
 //
@@ -32,6 +44,16 @@ import {
 //   POST /calls/:id/ring        { userIds }                groups: ring people who aren't in it
 //   POST /calls/:id/decline
 //   POST /calls/:id/leave                                   hang up (or cancel while it rings)
+//
+// Watch Together (0.5.0, calls/watch.ts): a YouTube video everyone in the call watches together.
+//   GET    /calls/watch/preview?link=     what a YouTube link is (title, channel, picture)
+//   GET    /calls/:id/watch               what the call is watching → { callId, watch, serverNow }
+//   POST   /calls/:id/watch               { link, control? }  start (or change) the video
+//   POST   /calls/:id/watch/control       { action: play|pause|seek|back|forward, to? }
+//   POST   /calls/:id/watch/settings      { control: everyone|starter }  (whoever picked it)
+//   POST   /calls/:id/watch/report        { videoId, durationSec, title? }  a player says how long it is
+//   POST   /calls/:id/watch/react         { reaction }  a firefly over the video
+//   DELETE /calls/:id/watch               stop watching
 
 export const callsRouter = Router();
 callsRouter.use(requireAuth);
@@ -302,4 +324,229 @@ callsRouter.post("/:id/leave", actionLimiter, async (req, res) => {
   }
   await leaveCall(found.row.id, user.id);
   res.status(204).end();
+});
+
+// ---------------------------------------------------------------------------------------------
+// Watch Together (0.5.0). Everything but the preview needs you in the call (on any device).
+
+const watchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120, // dragging along the timeline sends a few
+  keyGenerator: (_req, res) => me(res).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "Slow down a little and try again." },
+});
+
+const reactLimiter = rateLimit({
+  windowMs: 10 * 1000,
+  limit: 25,
+  keyGenerator: (_req, res) => me(res).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "That's a lot of fireflies! Give it a second." },
+});
+
+const previewLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  keyGenerator: (_req, res) => me(res).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "Slow down a little and try again." },
+});
+
+/** "Jordan" (their display name's first word). */
+async function firstNameOf(userId: string): Promise<string> {
+  const [u] = await db.select({ displayName: users.displayName, username: users.username }).from(users).where(eq(users.id, userId));
+  return u ? u.displayName.trim().split(/\s+/)[0] || u.username : "Someone";
+}
+
+const isProblem = (x: unknown): x is WatchProblem =>
+  !!x && typeof x === "object" && "status" in x && "error" in x && typeof (x as WatchProblem).status === "number";
+
+function problem(res: Response, p: WatchProblem): void {
+  res.status(p.status).json({ error: p.error, message: p.message });
+}
+
+/** A call I'm in right now (on any device), still going on. Answers the request otherwise. */
+async function callImIn(req: { params: Record<string, unknown> }, res: Response) {
+  const user = me(res);
+  const found = await myCall(req.params.id, user.id);
+  if (!found) {
+    notFound(res);
+    return null;
+  }
+  if (!ACTIVE.includes(found.row.status)) {
+    callOver(res);
+    return null;
+  }
+  if (!(await isInCall(found.row.id, user.id))) {
+    res.status(403).json({ error: "forbidden", message: "Join the call first." });
+    return null;
+  }
+  return { ...found, user };
+}
+
+// GET /calls/watch/preview?link= — what a YouTube link is, for the Start dialog.
+callsRouter.get("/watch/preview", previewLimiter, async (req, res) => {
+  const link = typeof req.query.link === "string" ? req.query.link : "";
+  const videoId = youTubeIdFrom(link);
+  if (!videoId) {
+    res.status(400).json({ error: "invalid", message: "That doesn't look like a YouTube link." });
+    return;
+  }
+  const result = await previewVideo(videoId);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error, message: result.message });
+    return;
+  }
+  res.json(result.preview);
+});
+
+// GET /calls/:id/watch — what the call is watching (anyone in the chat may ask).
+callsRouter.get("/:id/watch", async (req, res) => {
+  const found = await myCall(req.params.id, me(res).id);
+  if (!found) {
+    notFound(res);
+    return;
+  }
+  res.set("Cache-Control", "no-store");
+  res.json(watchUpdate(found.row.id));
+});
+
+// POST /calls/:id/watch  { link, control? } — start watching a YouTube video together (or change it).
+callsRouter.post("/:id/watch", watchLimiter, async (req, res) => {
+  const parsed = z
+    .object({ link: z.string().min(1).max(500), control: z.enum(["everyone", "starter"]).optional() })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: "Paste a YouTube link." });
+    return;
+  }
+  const videoId = youTubeIdFrom(parsed.data.link);
+  if (!videoId) {
+    res.status(400).json({ error: "invalid", message: "That doesn't look like a YouTube link." });
+    return;
+  }
+  const found = await callImIn(req, res);
+  if (!found) return;
+  const preview = await previewVideo(videoId);
+  if (!preview.ok) {
+    res.status(preview.status).json({ error: preview.error, message: preview.message });
+    return;
+  }
+  const result = await startWatch(
+    found.row.id,
+    found.row.conversationId,
+    found.user.id,
+    {
+      videoId,
+      title: preview.preview.title,
+      channel: preview.preview.channel,
+      startSec: youTubeStartFrom(parsed.data.link),
+      control: parsed.data.control,
+    },
+    firstNameOf,
+  );
+  if (isProblem(result)) {
+    problem(res, result);
+    return;
+  }
+  // The first video gets a line in the chat ("Jordan started watching “…” together"). Older apps
+  // show it as a plain message from them (packages/shared/src/events.ts).
+  if (result.first) {
+    try {
+      const line = await db.transaction((tx) =>
+        postEvent(tx, found.row.conversationId, found.user.id, { type: "watch", videoId, title: result.state.title }),
+      );
+      await announce(line, found.chat.memberIds);
+    } catch (err) {
+      console.error("Couldn't post the Watch Together line:", err);
+    }
+  }
+  res.status(201).json(watchUpdate(found.row.id));
+});
+
+// POST /calls/:id/watch/control  { action, to? } — play, pause, skip, ±10 s for everyone.
+callsRouter.post("/:id/watch/control", watchLimiter, async (req, res) => {
+  const parsed = z
+    .object({
+      action: z.enum(["play", "pause", "seek", "back", "forward"]),
+      to: z.number().finite().min(0).max(48 * 3600).optional(),
+    })
+    .safeParse(req.body);
+  if (!parsed.success || (parsed.data.action === "seek" && parsed.data.to === undefined)) {
+    res.status(400).json({ error: "invalid", message: "That didn't work. Try again." });
+    return;
+  }
+  const found = await callImIn(req, res);
+  if (!found) return;
+  const result = await controlWatch(found.row.id, found.user.id, parsed.data.action, parsed.data.to, firstNameOf);
+  if (isProblem(result)) {
+    problem(res, result);
+    return;
+  }
+  res.json(watchUpdate(found.row.id));
+});
+
+// POST /calls/:id/watch/settings  { control } — whoever picked the video: Everyone or Only me.
+callsRouter.post("/:id/watch/settings", watchLimiter, async (req, res) => {
+  const parsed = z.object({ control: z.enum(["everyone", "starter"]) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: "Pick Everyone or Only me." });
+    return;
+  }
+  const found = await callImIn(req, res);
+  if (!found) return;
+  const result = await setWatchControl(found.row.id, found.user.id, parsed.data.control);
+  if (isProblem(result)) {
+    problem(res, result);
+    return;
+  }
+  res.json(watchUpdate(found.row.id));
+});
+
+// POST /calls/:id/watch/report  { videoId, durationSec, title? } — a player found out how long it is.
+callsRouter.post("/:id/watch/report", watchLimiter, async (req, res) => {
+  const parsed = z
+    .object({
+      videoId: z.string().refine(isYouTubeId),
+      durationSec: z.number().finite().positive().max(48 * 3600),
+      title: z.string().max(300).optional(),
+    })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid" });
+    return;
+  }
+  const found = await callImIn(req, res);
+  if (!found) return;
+  await reportWatch(found.row.id, parsed.data.videoId, parsed.data.durationSec, parsed.data.title);
+  res.status(204).end();
+});
+
+// POST /calls/:id/watch/react  { reaction } — a firefly floats over the video for everyone.
+callsRouter.post("/:id/watch/react", reactLimiter, async (req, res) => {
+  const reaction = (req.body as { reaction?: unknown } | undefined)?.reaction;
+  if (!isWatchReaction(reaction)) {
+    res.status(400).json({ error: "invalid" });
+    return;
+  }
+  const found = await callImIn(req, res);
+  if (!found) return;
+  await reactWatch(found.row.id, found.row.conversationId, found.user.id, reaction);
+  res.status(204).end();
+});
+
+// DELETE /calls/:id/watch — stop watching (for everyone).
+callsRouter.delete("/:id/watch", watchLimiter, async (req, res) => {
+  const found = await callImIn(req, res);
+  if (!found) return;
+  const result = await stopWatch(found.row.id, found.user.id, firstNameOf);
+  if (result) {
+    problem(res, result);
+    return;
+  }
+  res.json(watchUpdate(found.row.id));
 });

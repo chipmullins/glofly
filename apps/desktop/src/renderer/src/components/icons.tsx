@@ -543,3 +543,85 @@ export function MinimizeIcon(p: IconProps): React.JSX.Element {
     </Svg>
   )
 }
+
+// ---- Watch Together (0.5.0) ----
+
+/** A screen with a play mark: the Watch button. */
+export function WatchIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="5" width="18" height="12" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+      <path d="M10 8.6v4.8l4-2.4z" fill="currentColor" stroke="none" />
+    </Svg>
+  )
+}
+
+export function PlayIcon({ size = 20 }: IconProps): React.JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M8 5.2v13.6c0 .8.9 1.3 1.6.9l10.6-6.8c.6-.4.6-1.3 0-1.7L9.6 4.3C8.9 3.9 8 4.4 8 5.2z" />
+    </svg>
+  )
+}
+
+export function PauseIcon({ size = 20 }: IconProps): React.JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="6" y="5" width="4" height="14" rx="1.2" />
+      <rect x="14" y="5" width="4" height="14" rx="1.2" />
+    </svg>
+  )
+}
+
+/** Back 10 seconds (a circle arrow with 10 in it). */
+export function BackTenIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <path d="M4 12a8 8 0 1 0 2.4-5.7" />
+      <path d="M4 4v4h4" />
+      <text
+        x="12"
+        y="15.2"
+        textAnchor="middle"
+        fontSize="7.5"
+        fontWeight="700"
+        fill="currentColor"
+        stroke="none"
+      >
+        10
+      </text>
+    </Svg>
+  )
+}
+
+/** Forward 10 seconds. */
+export function ForwardTenIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+      <path d="M20 4v4h-4" />
+      <text
+        x="12"
+        y="15.2"
+        textAnchor="middle"
+        fontSize="7.5"
+        fontWeight="700"
+        fill="currentColor"
+        stroke="none"
+      >
+        10
+      </text>
+    </Svg>
+  )
+}
+
+/** Swap for another video. */
+export function SwapVideoIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <path d="M4 7h16M4 12h10M4 17h7" />
+      <path d="M17 14l4 3-4 3z" fill="currentColor" />
+    </Svg>
+  )
+}

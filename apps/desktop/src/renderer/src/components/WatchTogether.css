@@ -1,0 +1,794 @@
+/* Watch Together (0.5.0): the shared video in a call, its controls, firefly reactions, full
+   screen, and the Start dialog. Values from the "Glofly Watch Together" mockup. The call stays
+   dark in every theme; the dialog follows the theme. */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Layout in the call: the video (with its controls) and everyone beside it ---------- */
+
+.call-media--watch {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+}
+.call-media--watch > .watch {
+  flex: 1;
+  min-width: 0;
+}
+.call-media--watch > .call-beside {
+  --bw: clamp(180px, 19vw, 280px);
+  max-height: calc(var(--area-h) - 4px);
+  align-content: start;
+}
+
+.watch {
+  --video-w: min(100%, calc((var(--area-h) - 92px) * 16 / 9));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--glo-call-text);
+  container-type: inline-size;
+}
+/* The controls line up with the video */
+.watch > .watch-bar,
+.watch > .watch-note-row {
+  width: var(--video-w);
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+.watch-video {
+  position: relative;
+  /* 16:9, as big as the call allows with the controls below */
+  width: var(--video-w);
+  aspect-ratio: 16 / 9;
+  margin-inline: auto;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #000;
+  isolation: isolate;
+}
+.watch-player,
+.watch-player iframe,
+.watch-player-shield {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.watch-player-shield {
+  z-index: 1;
+}
+
+.watch-tag {
+  position: absolute;
+  z-index: 3;
+  top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 55%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.watch-tag > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.watch-tag--title {
+  left: 14px;
+}
+.watch-tag--by {
+  right: 14px;
+  font-weight: 500;
+}
+.watch-said {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(28, 18, 16, 0.78);
+  font-size: 13px;
+  white-space: nowrap;
+  animation: watch-said 3.5s ease forwards;
+  pointer-events: none;
+}
+@keyframes watch-said {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  8%,
+  85% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.watch-hint {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(28, 18, 16, 0.86);
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.watch-hint--button {
+  top: auto;
+  bottom: 18px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 179, 106, 0.6);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.watch-problem {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+  background: linear-gradient(180deg, #2b1d4f 0%, #3a2030 100%);
+  font-size: 14px;
+  color: var(--glo-call-muted);
+}
+.watch-problem strong {
+  font-size: 16px;
+  color: #ffffff;
+}
+
+/* ---------- The controls under the video ---------- */
+
+.watch-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--glo-call-tile);
+  min-width: 0;
+}
+.watch-bar button {
+  font: inherit;
+}
+.watch-play {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--glo-orange);
+  color: var(--glo-on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(var(--glo-accent-rgb), 0.45);
+}
+.watch-skip,
+.watch-full-button,
+.watch-volume-icon {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--glo-call-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.watch-skip:hover:not(:disabled),
+.watch-full-button:hover,
+.watch-volume-icon:hover {
+  background: var(--glo-call-button);
+}
+.watch-play:disabled,
+.watch-skip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.watch-time {
+  flex: none;
+  font-size: 13.5px;
+  color: var(--glo-call-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The time line and the volume: orange up to where it is */
+.watch-seek,
+.watch-volume input {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    to right,
+    var(--glo-orange) 0 var(--done, 0%),
+    var(--glo-call-line) var(--done, 0%) 100%
+  );
+  cursor: pointer;
+  margin: 0;
+}
+.watch-seek {
+  flex: 1;
+  min-width: 60px;
+}
+.watch-seek:disabled {
+  cursor: default;
+}
+.watch-seek::-webkit-slider-thumb,
+.watch-volume input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.watch-seek::-moz-range-thumb,
+.watch-volume input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 0;
+}
+.watch-seek:disabled::-webkit-slider-thumb {
+  display: none;
+}
+.watch-seek:focus-visible,
+.watch-volume input:focus-visible {
+  outline: 2px solid var(--glo-call-glow);
+  outline-offset: 4px;
+}
+
+.watch-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.watch-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.watch-pill--good {
+  background: #1f3a2a;
+  color: #6fd39a;
+}
+.watch-pill--wait {
+  background: #3a2c14;
+  color: #ffc86a;
+}
+.watch-pill--wait .watch-pill-dot {
+  animation: watch-blink 1s ease-in-out infinite alternate;
+}
+.watch-pill--quiet {
+  background: var(--glo-call-button);
+  color: var(--glo-call-muted);
+}
+@keyframes watch-blink {
+  to {
+    opacity: 0.3;
+  }
+}
+
+.watch-volume {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--glo-call-muted);
+}
+.watch-volume input {
+  width: 84px;
+}
+
+.watch-note-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+}
+.watch-note {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--glo-call-muted);
+}
+.watch-note-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: #ffa96a;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.watch-note-link:hover {
+  text-decoration: underline;
+}
+
+/* A narrow call: the time line gets its own row above the buttons. */
+@container (max-width: 700px) {
+  .watch-bar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .watch-time:first-of-type {
+    margin-left: auto;
+  }
+  .watch-seek {
+    order: -1;
+    flex-basis: 100%;
+    margin: 4px 0 2px;
+  }
+  .watch-volume-label,
+  .watch-pill-long {
+    display: none;
+  }
+  .watch-pill .watch-pill-short {
+    display: inline;
+  }
+  .watch-bar {
+    gap: 6px;
+  }
+  .watch-volume input {
+    width: 56px;
+  }
+}
+.watch-pill-short {
+  display: none;
+}
+@media (max-width: 1180px) {
+  .watch-volume-label {
+    display: none;
+  }
+  .watch-volume input {
+    width: 64px;
+  }
+}
+
+/* ---------- Firefly reactions ---------- */
+
+.watch-reactions {
+  display: inline-flex;
+  gap: 6px;
+  flex: none;
+}
+.watch-react {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #3a2618;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.watch-react:hover {
+  transform: translateY(-2px) scale(1.06);
+}
+.watch-react:active {
+  transform: scale(0.94);
+}
+.watch-firefly-glow {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffd27a;
+  color: #c4410c;
+  box-shadow: 0 0 14px 5px rgba(255, 166, 60, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.watch-react .watch-firefly-glow {
+  width: 20px;
+  height: 20px;
+  box-shadow: 0 0 10px 3px rgba(255, 166, 60, 0.5);
+}
+.watch-firefly-glow--fire {
+  color: #d1340c;
+}
+
+.watch-fireflies {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+.watch-firefly {
+  position: absolute;
+  bottom: 14%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  background: rgba(28, 18, 16, 0.6);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: watch-fly 3.3s cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+}
+.watch-firefly .watch-firefly-glow {
+  width: 26px;
+  height: 26px;
+  box-shadow: 0 0 18px 8px rgba(255, 166, 60, 0.6);
+  animation: watch-flicker 0.9s ease-in-out infinite alternate;
+}
+@keyframes watch-fly {
+  0% {
+    opacity: 0;
+    transform: translate(0, 20px) scale(0.6);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(calc(var(--drift) * 0.2), 0) scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--drift), -220px) scale(0.85);
+  }
+}
+@keyframes watch-flicker {
+  to {
+    box-shadow: 0 0 10px 4px rgba(255, 166, 60, 0.4);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .watch-firefly {
+    animation: watch-fade 3s ease forwards;
+  }
+  .watch-firefly .watch-firefly-glow,
+  .watch-pill--wait .watch-pill-dot {
+    animation: none;
+  }
+  @keyframes watch-fade {
+    0%,
+    80% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+}
+
+/* ---------- Full screen (just for you) ---------- */
+
+.watch--full {
+  background: #000;
+  gap: 0;
+}
+.watch--full .watch-video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+.watch-full-controls {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 60px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78), transparent);
+  transition: opacity 0.25s ease;
+}
+.watch-full-controls .watch-bar {
+  background: rgba(42, 28, 23, 0.88);
+  backdrop-filter: blur(8px);
+}
+.watch-full-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.watch-full-hint {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.watch--full .watch-tag,
+.watch--full .watch-talking {
+  transition: opacity 0.25s ease;
+}
+.watch--idle {
+  cursor: none;
+}
+.watch--idle .watch-full-controls,
+.watch--idle .watch-tag {
+  opacity: 0;
+  pointer-events: none;
+}
+.watch--full .watch-said {
+  bottom: 150px;
+}
+/* Who's talking, a small strip at the top (stays while the controls hide). */
+.watch-talking {
+  position: absolute;
+  z-index: 4;
+  top: 54px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none;
+}
+.watch-talking-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 999px;
+  background: rgba(28, 18, 16, 0.7);
+  box-shadow: 0 0 0 2px var(--glo-call-glow);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---------- The Start dialog ---------- */
+
+.watch-start {
+  max-width: 500px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.watch-start-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.watch-start-field input {
+  height: 48px;
+  padding: 0 14px;
+  border: 2px solid var(--glo-line-strong);
+  border-radius: 12px;
+  background: var(--glo-surface);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--glo-ink);
+}
+.watch-start-field input:focus {
+  outline: none;
+  border-color: var(--glo-orange);
+  box-shadow: 0 0 0 4px rgba(var(--glo-accent-rgb), 0.18);
+}
+.watch-start-hint {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.watch-start-preview {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--glo-subtle);
+  border: 1px solid var(--glo-line-soft);
+}
+.watch-start-thumb {
+  width: 128px;
+  height: 72px;
+  flex: none;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #2b1d4f 0%, #5a2f4a 55%, #e08a50 100%);
+  position: relative;
+}
+.watch-start-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.watch-start-thumb-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px;
+  border-radius: 50%;
+  background: #ffd27a;
+  box-shadow: 0 0 14px 6px rgba(255, 166, 60, 0.55);
+}
+.watch-start-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.watch-start-meta strong {
+  font-size: 15px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.watch-start-meta span {
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.watch-start-control {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.watch-start-control legend {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.watch-start-control > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.watch-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  font-size: 15px;
+  cursor: pointer;
+}
+.watch-choice input {
+  accent-color: var(--glo-orange);
+  margin: 0;
+}
+.watch-choice--on {
+  border: 2px solid var(--glo-orange);
+  background: rgba(var(--glo-accent-rgb), 0.12);
+  font-weight: 600;
+}
+
+/* The Watch button in the call's controls, lit while watching. */
+.call-button--watching {
+  background: var(--glo-orange) !important;
+  color: var(--glo-on-accent) !important;
+}
+/* "Watching together" in the call's title row. */
+.call-watching {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: #3a2618;
+  color: #ffb36a;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: none;
+}
+
+/* The chat line ("Jordan started watching … together"). */
+.chat-event--watch .chat-event-icon {
+  color: var(--glo-orange);
+}
+
+/* The whole call in full screen while watching: the video and its controls, everyone beside. */
+.call-panel--full .call-media--watch {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 72px 24px 110px;
+  align-items: center;
+}
+
+/* Narrow windows (the browser version on an iPad upright or a phone; the desktop app is never
+   this narrow): the people go in a row under the video, the controls wrap. */
+@media (max-width: 899px) {
+  .call-media--watch {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .call-media--watch > .call-beside,
+  .call-media--watch > .call-beside--column {
+    width: 100%;
+    max-height: none;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+  }
+  .call-media--watch > .call-beside > .call-tile {
+    flex: none;
+    width: 120px;
+    aspect-ratio: 16 / 9;
+  }
+  .watch {
+    --video-w: 100%;
+  }
+  .watch-note-row {
+    flex-wrap: wrap;
+  }
+  .watch-tag {
+    max-width: 46%;
+    font-size: 12px;
+  }
+}
+/* Fingers: bigger buttons. */
+@media (pointer: coarse) {
+  .watch-skip,
+  .watch-full-button,
+  .watch-volume-icon,
+  .watch-react {
+    width: 44px;
+    height: 44px;
+  }
+  .watch-play {
+    width: 50px;
+    height: 50px;
+  }
+}

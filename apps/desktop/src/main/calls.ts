@@ -1,6 +1,17 @@
 import { desktopCapturer, type DesktopCapturerSource } from 'electron'
-import type { ActiveCall, ApiResult, CallJoin, ScreenSource } from '../preload/api-types'
+import type {
+  ActiveCall,
+  ApiResult,
+  CallJoin,
+  ScreenSource,
+  WatchAction,
+  WatchControl,
+  WatchPreview,
+  WatchReaction,
+  WatchUpdate
+} from '../preload/api-types'
 import { request } from './api'
+import { API_URL } from './auth'
 
 // Calls. The server decides who may join which call and hands back a short-lived pass for the
 // call's LiveKit room; the window then connects to LiveKit itself for the audio and video.
@@ -51,6 +62,62 @@ export function declineCall(callId: string): Promise<ApiResult<null>> {
 
 export function leaveCall(callId: string): Promise<ApiResult<null>> {
   return request<null>('POST', `/calls/${callId}/leave`)
+}
+
+// ---------------------------------------------------------------------------------------
+// Watch Together (0.5.0): a YouTube video everyone in the call watches together. The window
+// shows it through the server's player page (/watch/player) and asks the server for every
+// play, pause and skip, so everyone stays in step.
+
+/** The server's video player page (the window shows it in a frame). */
+export const watchPlayerUrl = (): string => `${API_URL}/watch/player`
+
+export function watchGet(callId: string): Promise<ApiResult<WatchUpdate>> {
+  return request<WatchUpdate>('GET', `/calls/${callId}/watch`)
+}
+
+export function watchPreview(link: string): Promise<ApiResult<WatchPreview>> {
+  return request<WatchPreview>('GET', `/calls/watch/preview?link=${encodeURIComponent(link)}`)
+}
+
+export function watchStart(
+  callId: string,
+  link: string,
+  control?: WatchControl
+): Promise<ApiResult<WatchUpdate>> {
+  return request<WatchUpdate>('POST', `/calls/${callId}/watch`, { link, control })
+}
+
+export function watchControl(
+  callId: string,
+  action: Extract<WatchAction, 'play' | 'pause' | 'seek' | 'back' | 'forward'>,
+  to?: number
+): Promise<ApiResult<WatchUpdate>> {
+  return request<WatchUpdate>('POST', `/calls/${callId}/watch/control`, { action, to })
+}
+
+export function watchSettings(
+  callId: string,
+  control: WatchControl
+): Promise<ApiResult<WatchUpdate>> {
+  return request<WatchUpdate>('POST', `/calls/${callId}/watch/settings`, { control })
+}
+
+export function watchReport(
+  callId: string,
+  videoId: string,
+  durationSec: number,
+  title?: string
+): Promise<ApiResult<null>> {
+  return request<null>('POST', `/calls/${callId}/watch/report`, { videoId, durationSec, title })
+}
+
+export function watchReact(callId: string, reaction: WatchReaction): Promise<ApiResult<null>> {
+  return request<null>('POST', `/calls/${callId}/watch/react`, { reaction })
+}
+
+export function watchStop(callId: string): Promise<ApiResult<WatchUpdate>> {
+  return request<WatchUpdate>('DELETE', `/calls/${callId}/watch`)
 }
 
 // ---------------------------------------------------------------------------------------

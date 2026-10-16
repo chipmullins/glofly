@@ -38,6 +38,14 @@
   with platform "web" (`push/web.ts`, VAPID keys kept in server_settings). Deployed by the `web`
   service in `deploy/docker-compose.yml` (`deploy/web.Dockerfile`) into the volume Caddy serves.
   A new workspace needs a COPY line in both Dockerfiles. Project doc: `glofly-web.md`.
+- 0.5.0 Watch Together (project doc `glofly-watch-together.md`): state per call in memory on the
+  server (`calls/watch.ts`), routes under `/calls/:id/watch`, live events `watch:updated` /
+  `watch:reaction`. Every app shows YouTube through the server's own page `/watch/player`
+  (`calls/player.ts`: only our script on it, YouTube's documented postMessage protocol, no
+  YouTube script on our address), kept in step by `watchSyncStep` in packages/shared/src/watch.ts.
+  CSPs allow that one frame (desktop `index.html` gets the server address at build time, web
+  `vite.config.ts`, Caddy's chat block). Event types newer than 0.4.0 travel as `eventLine2`
+  (events.ts) so 0.2.1–0.4.0 apps show plain text instead of an empty line.
 - **Constellations branch:** Glofly 2.0 work goes on the `constellations` branch (made from `dev`
   on Oct 14, 2026), never on `dev`, so bug fixes and releases keep going from `dev` untouched.
   Bring fixes in with `git merge dev` on `constellations` now and then; it goes back into `dev`

@@ -37,7 +37,7 @@ import EmojiText from './EmojiText'
 import './ChatView.css'
 import { isShortcutKey, shortcutLabel } from '../lib/platform'
 import { useVoiceRecorder, voiceTime, VOICE_MAX_MS, type Recorded } from '../lib/voice'
-import { MicIcon } from './icons'
+import { MicIcon, WatchIcon } from './icons'
 import {
   isMuted,
   mentionQuery,
@@ -1277,6 +1277,26 @@ export default function ChatView({
                     <CallLineIcon missed={missed} />
                   </span>
                   <span>{eventText(m.event, m.senderId, me.id, nameOf)}</span>
+                  <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
+                </div>
+              </div>
+            )
+          }
+          // Watch Together started in the call (0.5.0): a line with the Watch icon.
+          if (m.event?.type === 'watch') {
+            return (
+              <div key={item.key}>
+                {divider}
+                <div
+                  className="chat-event chat-event--call chat-event--watch"
+                  data-message-id={m.id}
+                >
+                  <span className="chat-event-icon">
+                    <WatchIcon size={16} />
+                  </span>
+                  <span>
+                    <EmojiText text={eventText(m.event, m.senderId, me.id, nameOf)} />
+                  </span>
                   <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
                 </div>
               </div>

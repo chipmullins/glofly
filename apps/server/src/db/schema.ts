@@ -31,6 +31,9 @@ export type ChatEvent =
   // 0.2.1: someone set or removed the group photo. Older apps get it as a plain line of text
   // (see legacyEvent in messages/routes.ts).
   | { type: "photo"; removed: boolean }
+  // 0.5.0: someone started watching a video together in the call (calls/watch.ts). 0.2.1–0.4.0
+  // apps don't know it either, so it travels as `eventLine2` (packages/shared/src/events.ts).
+  | { type: "watch"; videoId: string; title: string }
   // A call. The line changes as the call goes: ringing → ongoing → ended (or missed / declined).
   | { type: "call"; callId: string; video: boolean; status: CallStatus; durationSec: number | null };
 

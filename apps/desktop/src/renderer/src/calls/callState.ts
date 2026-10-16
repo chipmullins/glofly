@@ -76,6 +76,8 @@ export type CallsValue = {
   /** Moves a call you're in on another device to this one. */
   moveHere: () => void
   clearProblem: () => void
+  /** Shows a short problem in the call panel (say, a Watch Together button that was refused). */
+  showProblem: (message: string) => void
 }
 
 export const CallsContext = createContext<CallsValue | null>(null)

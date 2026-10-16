@@ -28,19 +28,21 @@ function originOf(url: string): string {
 const wsOrigin = API_URL.replace(/^http/, 'ws')
 
 // The page's Content-Security-Policy (Caddy sends the same one as a header on the live site):
-// scripts only from this site, network only to the Glofly server and LiveKit, no frames, no
-// plugins, no <base>, no forms posting anywhere.
+// scripts only from this site, network only to the Glofly server and LiveKit, no frames but the
+// server's Watch Together player, no plugins, no <base>, no forms posting anywhere.
 export const CSP = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${API_URL}`,
+  // i.ytimg.com: the YouTube video's picture in the Watch together dialog (0.5.0)
+  `img-src 'self' data: blob: ${API_URL} https://i.ytimg.com`,
   "font-src 'self'",
   `media-src 'self' blob: mediastream: ${API_URL}`,
   `connect-src 'self' ${API_URL} ${wsOrigin} wss://*.livekit.cloud https://*.livekit.cloud`,
   "worker-src 'self'",
   "manifest-src 'self'",
-  "frame-src 'none'",
+  // Only the Glofly server's Watch Together player page (0.5.0)
+  `frame-src ${API_URL}`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'none'",

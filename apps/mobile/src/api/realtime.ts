@@ -1,6 +1,6 @@
 import { AppState, type AppStateStatus } from 'react-native'
 import { io, type Socket } from 'socket.io-client'
-import { upgradeEvents, type Call, type Message, type PublicUser } from '@glofly/shared'
+import { cleanWatchReaction, cleanWatchUpdate, upgradeEvents, type Call, type Message, type PublicUser } from '@glofly/shared'
 import { APP_VERSION, PLATFORM, SERVER_URL } from '@/lib/config'
 import { endSessionLocally, onSignOut, useSession } from '@/state/session'
 import { patchConversation, rememberPeople, resetStore, setPresence, setTyping, useStore } from '@/state/store'
@@ -166,6 +166,15 @@ function connect() {
     if (!p?.call?.id) return
     setCall(p.call, p.caller ?? null)
     emit('call:updated', p)
+  })
+  // 0.5.0 Watch Together: what a call is watching, and firefly reactions over the video.
+  s.on('watch:updated', (p) => {
+    const update = cleanWatchUpdate(p)
+    if (update) emit('watch:updated', update)
+  })
+  s.on('watch:reaction', (p) => {
+    const reaction = cleanWatchReaction(p)
+    if (reaction) emit('watch:reaction', reaction)
   })
   s.on('notice:new', () => void refreshNotices())
   s.on('announcement', () => void refreshNotices())

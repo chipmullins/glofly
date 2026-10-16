@@ -68,8 +68,18 @@ import {
   pickedScreen,
   ringPeople,
   screenSources,
-  startCall
+  startCall,
+  watchControl,
+  watchGet,
+  watchPlayerUrl,
+  watchPreview,
+  watchReact,
+  watchReport,
+  watchSettings,
+  watchStart,
+  watchStop
 } from './calls'
+import { isWatchReaction, isYouTubeId } from '@glofly/shared/watch'
 import {
   cancelEmailChange,
   changeEmail,
@@ -795,6 +805,60 @@ function registerIpcHandlers(): void {
   }
   ipcMain.handle('calls:ring', (event, id: unknown, userIds: unknown) =>
     fromApp(event) && isUserId(id) && isPeople(userIds) ? ringPeople(id, userIds) : invalid
+  )
+  // Watch Together (0.5.0). Only well-formed values reach the server.
+  const isWatchControl = (v: unknown): v is 'everyone' | 'starter' =>
+    v === 'everyone' || v === 'starter'
+  const isLink = (v: unknown): v is string =>
+    typeof v === 'string' && v.length > 0 && v.length <= 500
+  const isSeconds = (v: unknown): v is number =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 48 * 3600
+  ipcMain.handle('watch:player-url', (event) => (fromApp(event) ? watchPlayerUrl() : null))
+  ipcMain.handle('watch:get', (event, id: unknown) =>
+    fromApp(event) && isUserId(id) ? watchGet(id) : invalid
+  )
+  ipcMain.handle('watch:preview', (event, link: unknown) =>
+    fromApp(event) && isLink(link) ? watchPreview(link) : invalid
+  )
+  ipcMain.handle('watch:start', (event, id: unknown, link: unknown, control: unknown) =>
+    fromApp(event) &&
+    isUserId(id) &&
+    isLink(link) &&
+    (control === undefined || isWatchControl(control))
+      ? watchStart(id, link, control)
+      : invalid
+  )
+  ipcMain.handle('watch:control', (event, id: unknown, action: unknown, to: unknown) =>
+    fromApp(event) &&
+    isUserId(id) &&
+    (action === 'play' ||
+      action === 'pause' ||
+      action === 'seek' ||
+      action === 'back' ||
+      action === 'forward') &&
+    (to === undefined || isSeconds(to))
+      ? watchControl(id, action, to)
+      : invalid
+  )
+  ipcMain.handle('watch:settings', (event, id: unknown, control: unknown) =>
+    fromApp(event) && isUserId(id) && isWatchControl(control) ? watchSettings(id, control) : invalid
+  )
+  ipcMain.handle(
+    'watch:report',
+    (event, id: unknown, videoId: unknown, duration: unknown, title: unknown) =>
+      fromApp(event) &&
+      isUserId(id) &&
+      isYouTubeId(videoId) &&
+      isSeconds(duration) &&
+      (title === undefined || (typeof title === 'string' && title.length <= 300))
+        ? watchReport(id, videoId, duration, title)
+        : invalid
+  )
+  ipcMain.handle('watch:react', (event, id: unknown, reaction: unknown) =>
+    fromApp(event) && isUserId(id) && isWatchReaction(reaction) ? watchReact(id, reaction) : invalid
+  )
+  ipcMain.handle('watch:stop', (event, id: unknown) =>
+    fromApp(event) && isUserId(id) ? watchStop(id) : invalid
   )
   ipcMain.handle('calls:screen-sources', (event) => (fromApp(event) ? screenSources() : []))
   // Mac: is Screen Recording allowed, and opening System Settings at the right place.

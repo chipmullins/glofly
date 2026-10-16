@@ -16,6 +16,9 @@ import type {
   ReportRequest,
   ShowNotification,
   VoiceInfo,
+  WatchControl,
+  WatchControlAction,
+  WatchReaction,
   WindowTheme
 } from './api-types'
 
@@ -159,6 +162,22 @@ const glofly: GloflyApi = {
     screenSources: () => ipcRenderer.invoke('calls:screen-sources'),
     chooseScreen: (sourceId: string) => ipcRenderer.invoke('calls:choose-screen', sourceId),
     screenAccess: () => ipcRenderer.invoke('calls:screen-access')
+  },
+  watch: {
+    playerUrl: () => ipcRenderer.invoke('watch:player-url'),
+    get: (callId: string) => ipcRenderer.invoke('watch:get', callId),
+    preview: (link: string) => ipcRenderer.invoke('watch:preview', link),
+    start: (callId: string, link: string, control?: WatchControl) =>
+      ipcRenderer.invoke('watch:start', callId, link, control),
+    control: (callId: string, action: WatchControlAction, to?: number) =>
+      ipcRenderer.invoke('watch:control', callId, action, to),
+    settings: (callId: string, control: WatchControl) =>
+      ipcRenderer.invoke('watch:settings', callId, control),
+    report: (callId: string, videoId: string, durationSec: number, title?: string) =>
+      ipcRenderer.invoke('watch:report', callId, videoId, durationSec, title),
+    react: (callId: string, reaction: WatchReaction) =>
+      ipcRenderer.invoke('watch:react', callId, reaction),
+    stop: (callId: string) => ipcRenderer.invoke('watch:stop', callId)
   },
   ptt: {
     start: (choice: string) => ipcRenderer.invoke('ptt:start', choice),

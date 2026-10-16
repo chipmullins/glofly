@@ -46,6 +46,7 @@ import {
   GROUP_MAX,
   GROUP_NAME_MAX,
   legacyEventBody,
+  eventField,
   MAX_PINNED,
   MAX_REACTIONS_PER_PERSON,
   MESSAGE_MAX,
@@ -186,7 +187,9 @@ async function hydrate(rows: MessageRow[]) {
       event: legacy ? null : (r.event ?? null),
       // Event lines added after 0.2.0 (a group photo): 0.2.1+ apps show these as lines; older
       // apps don't know them, so for them it's a plain message ("changed the group photo").
-      ...(legacy ? { eventLine: r.event } : {}),
+      // Lines newer than 0.4.0 (Watch Together) go as `eventLine2`, so 0.2.1–0.4.0 apps show the
+      // plain message too instead of an empty line (packages/shared/src/events.ts).
+      ...(legacy ? { [eventField(r.event)]: r.event } : {}),
       // Group members this message @mentions.
       mentions: deleted ? [] : (r.mentions ?? []),
       replyTo: reply

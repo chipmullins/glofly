@@ -20,6 +20,9 @@ import { FriendPicker } from '@/ui/FriendPicker'
 import { Icon, type IconName } from '@/ui/icons'
 import { Button, Text } from '@/ui/kit'
 import { call as callColors } from '@/ui/theme'
+import { canControlWatch } from '@glofly/shared'
+import { useWatchStore } from '@/calls/watch'
+import { StartWatchSheet, WatchLandscape, WatchPortrait } from '@/calls/WatchMode'
 
 // The call screen, from the design: 1-on-1 video fills the screen with your camera on top (drag
 // it to any corner), voice calls show their photo with firefly glow rings, groups are a grid
@@ -43,6 +46,10 @@ export default function CallScreen() {
   const [route, setRoute] = useState<AudioRoute | null>(null)
   const [adding, setAdding] = useState(false)
   const [diagOpen, setDiagOpen] = useState(false)
+  /** Watch Together: the Start / Change video sheet, and full screen when sideways */
+  const [watchSheet, setWatchSheet] = useState<'start' | 'change' | null>(null)
+  const [watchFull, setWatchFull] = useState(true)
+  const watchState = useWatchStore((x) => (s.call && x.callId === s.call.id ? x.watch : null))
   const landscape = width > height
 
   // iPhone: show where the call is really playing (it starts on the speaker; plugging in
@@ -97,6 +104,10 @@ export default function CallScreen() {
         ? `${joinedCount} of ${call.members.length} joined · ${timer(call.answeredAt ?? call.createdAt, now)}`
         : timer(call.answeredAt ?? call.createdAt, now)
   const title = chat ? chatTitle(chat) : 'Call'
+  const meJoined = !!call?.members.some((m) => m.userId === meId && m.state === 'joined')
+  const watch = meJoined ? watchState : null
+  const canWatchControl = !!watch && canControlWatch(watch, meId)
+  const watchingFull = !!watch && landscape && watchFull
 
   async function pickRoute() {
     const routes = await audioRoutes()
@@ -123,7 +134,9 @@ export default function CallScreen() {
     <View style={{ flex: 1, backgroundColor: callColors.bg }}>
       {/* Main area */}
       <View style={{ flex: 1 }}>
-        {screenTile ? (
+        {watch && !landscape && call ? (
+          <WatchPortrait watch={watch} meId={meId} people={personOf} tiles={s.tiles} conversationId={call.conversationId} top={insets.top + 64} bottom={bottomSpace + 6} />
+        ) : screenTile ? (
           <View style={{ flex: 1, paddingTop: landscape ? topSpace : insets.top + 60, paddingBottom: landscape ? bottomSpace - 8 : 0, ...sidePad }}>
             <View style={{ flex: 1, backgroundColor: '#000' }} accessibilityLabel={`${personOf(screenTile.userId).displayName}'s shared screen`}>
               <CallVideo track={screenTile.screen!} contain style={{ flex: 1 }} pip={!screenTile.local} shape={[16, 9]} />
@@ -178,7 +191,7 @@ export default function CallScreen() {
       </View>
 
       {/* Your camera on top in 1-on-1 video */}
-      {oneOnOneVideo && self?.camera ? <SelfPip track={self.camera} mirror={s.frontCamera} top={topSpace + 6} bottom={bottomSpace + 10} landscape={landscape} /> : null}
+      {oneOnOneVideo && !watch && self?.camera ? <SelfPip track={self.camera} mirror={s.frontCamera} top={topSpace + 6} bottom={bottomSpace + 10} landscape={landscape} /> : null}
 
       {/* Title bar */}
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: insets.top, ...sidePad, backgroundColor: oneOnOneVideo || (landscape && screenTile) ? 'rgba(18,13,11,0.45)' : 'transparent' }}>
@@ -191,11 +204,15 @@ export default function CallScreen() {
             <Text size={17} weight="bold" numberOfLines={1} style={{ color: '#FFF' }}>
               {title}
             </Text>
-            <Text size={13} style={{ color: callColors.muted }}>
-              {status}
+            <Text size={13} weight={watch ? 'bold' : 'regular'} style={{ color: watch ? '#FFB36A' : callColors.muted }}>
+              {watch ? `Watching together · ${joinedCount}` : status}
             </Text>
           </Pressable>
-          {isGroup ? (
+          {canWatchControl ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Change video" onPress={() => setWatchSheet('change')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="swapVideo" size={22} color="#FFFFFF" />
+            </Pressable>
+          ) : isGroup ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Add people to call" onPress={() => setAdding(true)} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="addPerson" size={22} color="#FFFFFF" />
             </Pressable>
@@ -220,6 +237,20 @@ export default function CallScreen() {
           <CtrlButton icon={s.micOn ? 'mic' : 'micOff'} label={s.micOn ? 'Mute microphone' : 'Unmute microphone'} on={!s.micOn} onPress={() => void setMic(!s.micOn)} />
           {s.cameraOn ? <CtrlButton icon="flip" label="Switch camera" onPress={() => void flipCamera()} /> : <CtrlButton icon={route ? ROUTE_ICON[route] : 'speaker'} label={`Audio: ${route ? ROUTE_LABEL[route] : 'choose where it plays'}`} onPress={() => void pickRoute()} />}
           {s.cameraOn ? <CtrlButton icon={route ? ROUTE_ICON[route] : 'speaker'} label={`Audio: ${route ? ROUTE_LABEL[route] : 'choose where it plays'}`} onPress={() => void pickRoute()} /> : null}
+          {/* Watch Together: a YouTube video for everyone in the call (lit while watching). */}
+          {meJoined && answered ? (
+            <CtrlButton
+              icon="watch"
+              label={watch ? (landscape ? 'Watching together: full screen' : canWatchControl ? 'Watching together: change the video' : 'Watching together') : 'Watch a video together'}
+              lit={!!watch}
+              onPress={() => {
+                if (watch && landscape) setWatchFull(true)
+                else if (watch) {
+                  if (canWatchControl) setWatchSheet('change')
+                } else setWatchSheet('start')
+              }}
+            />
+          ) : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={isGroup ? 'Leave call' : 'Hang up'}
@@ -230,6 +261,11 @@ export default function CallScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Watch Together sideways: the video fills the screen (over everything else). */}
+      {watchingFull && watch ? <WatchLandscape watch={watch} meId={meId} people={personOf} tiles={s.tiles} onExit={() => setWatchFull(false)} /> : null}
+
+      {watchSheet ? <StartWatchSheet changing={watchSheet === 'change'} onClose={() => setWatchSheet(null)} /> : null}
 
       {diagOpen ? <CallDiagnostics onClose={() => setDiagOpen(false)} /> : null}
 
@@ -247,16 +283,19 @@ export default function CallScreen() {
   )
 }
 
-function CtrlButton({ icon, label, on, onPress }: { icon: IconName; label: string; on?: boolean; onPress: () => void }) {
+function CtrlButton({ icon, label, on, lit, onPress }: { icon: IconName; label: string; on?: boolean; lit?: boolean; onPress: () => void }) {
+  // on: switched off (muted, camera off) · lit: Watch Together is on (orange, like the design)
+  const bg = lit ? '#F47A1F' : on ? '#F3E6DC' : '#3A2A22'
+  const fg = lit ? '#2A1406' : on ? '#1C1210' : '#FFFFFF'
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ selected: !!on }}
+      accessibilityState={{ selected: !!on || !!lit }}
       onPress={onPress}
-      style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: on ? '#F3E6DC' : '#3A2A22', alignItems: 'center', justifyContent: 'center' }}
+      style={{ width: 52, height: 56, borderRadius: 18, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}
     >
-      <Icon name={icon} size={24} color={on ? '#1C1210' : '#FFFFFF'} />
+      <Icon name={icon} size={24} color={fg} />
     </Pressable>
   )
 }

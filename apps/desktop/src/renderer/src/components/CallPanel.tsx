@@ -42,9 +42,14 @@ import {
   SpeakerOffIcon,
   SpeakingIcon,
   StopShareIcon,
+  SwapVideoIcon,
   VideoIcon,
-  VideoOffIcon
+  VideoOffIcon,
+  WatchIcon
 } from './icons'
+import { useWatch } from '../calls/useWatch'
+import { StartWatchDialog, WatchStage } from './WatchTogether'
+import { canControlWatch } from '@glofly/shared/watch'
 import { isMac, isWeb, web } from '../lib/platform'
 import { cameraFit, type VideoFit } from '../lib/videoFit'
 import './CallPanel.css'
@@ -140,13 +145,17 @@ export type CallView = 'normal' | 'large' | 'full'
  * - grid: everyone in a grid (groups)
  * - pinned: one person big, everyone else in a column on the right (groups)
  * - screen: a shared screen big, in its own shape, with everyone beside it
+ * - watch: Watch Together's video (0.5.0) with its controls, everyone beside it
  */
-type Layout = 'frame' | 'side' | 'grid' | 'pinned' | 'screen'
+type Layout = 'frame' | 'side' | 'grid' | 'pinned' | 'screen' | 'watch'
 
 /** Height of the call area for every layout but the grid. */
 function areaHeight(layout: Layout, view: CallView): string {
-  if (view === 'full') return '100%'
-  const base = layout === 'frame' ? 'clamp(260px, 54vh, 560px)' : 'clamp(220px, 38vh, 420px)'
+  if (view === 'full') return layout === 'watch' ? 'calc(100vh - 180px)' : '100%'
+  const base =
+    layout === 'frame' || layout === 'watch'
+      ? 'clamp(300px, 56vh, 620px)'
+      : 'clamp(220px, 38vh, 420px)'
   if (view === 'normal') return base
   // Bigger: as tall as the window allows, leaving the chat header, a few messages and the
   // message box (full frame has its title and buttons on the video, so it needs less).
@@ -842,6 +851,13 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   const [windowHeight, setWindowHeight] = useState(() => window.innerHeight)
   /** A shared screen's shape, so its box fits it exactly */
   const [screenShape, setScreenShape] = useState({ w: 16, h: 9 })
+  /** Watch Together: the Start (or Change video) dialog */
+  const [watchDialog, setWatchDialog] = useState<'start' | 'change' | null>(null)
+  /** The server's video player page */
+  const [playerUrl, setPlayerUrl] = useState<string | null>(null)
+  useEffect(() => {
+    void window.glofly.watch.playerUrl().then(setPlayerUrl)
+  }, [])
   useEffect(() => {
     const onResize = (): void => setWindowHeight(window.innerHeight)
     window.addEventListener('resize', onResize)
@@ -895,6 +911,9 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   const cameraOn = local?.isCameraEnabled ?? false
   const sharing = local?.isScreenShareEnabled ?? false
   const waiting = !call || call.status === 'ringing'
+  const inCall = current?.phase === 'connected' || current?.phase === 'reconnecting'
+  const watchApi = useWatch(inCall && call ? call.id : null, calls.showProblem)
+  const watch = playerUrl ? watchApi.watch : null
 
   // Everyone else to show: in the room, joined (still connecting), or being rung.
   const others: TileInfo[] = []
@@ -974,6 +993,8 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   } else if (screenFill) {
     layout = 'frame'
     main = 'screen'
+  } else if (watch) {
+    layout = 'watch'
   } else if (pinnedTile) {
     layout = 'pinned'
   } else if (screen) {
@@ -988,7 +1009,7 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   const overlay = layout === 'frame' || full
   const autoHide = overlay && prefs.callControls === 'hover'
   const { idle, wake } = useAutoHide(autoHide, panelRef)
-  const hold = audioOpen || !!menuAt || picking || adding || keyboardIn
+  const hold = audioOpen || !!menuAt || picking || adding || keyboardIn || !!watchDialog
   const hidden = idle && !hold
 
   // The buttons come back for a moment when something changes: you're muted or unmuted (not by
@@ -1139,6 +1160,36 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         )}
       </>
     )
+  } else if (layout === 'watch' && watch && playerUrl) {
+    // Watch Together: the video and its controls, everyone beside it (a shared screen too).
+    const beside = tiles
+    const two = beside.length <= 2 && !screen
+    media = (
+      <>
+        <WatchStage
+          me={me}
+          people={current?.chat.people ?? []}
+          talking={tiles.filter((t) => t.speaking && !t.muted).map((t) => t.person)}
+          api={watchApi}
+          playerUrl={playerUrl}
+        />
+        <div className={two ? 'call-beside call-beside--column' : 'call-beside'}>
+          {beside.map((t) => tileEl(t, two ? 64 : 40, 'call-tile--small'))}
+          {screen && (
+            <button
+              type="button"
+              className="call-tile call-tile--small call-tile--screen-thumb"
+              aria-label={`Show ${screenLabel} big`}
+              title="Show the shared screen"
+              onClick={() => setFocus({ kind: 'screen' })}
+            >
+              <TrackVideo track={screen} fit="contain" />
+              <span className="call-tag">{screenLabel}</span>
+            </button>
+          )}
+        </div>
+      </>
+    )
   } else if (layout === 'side') {
     // Them on the left, you on the right
     media = [...others, mine].map((t) => tileEl(t, view === 'normal' ? 96 : 136))
@@ -1219,7 +1270,28 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
             )}
           </span>
         )}
+        {watch && (
+          <span className="call-watching">
+            <WatchIcon size={16} />
+            Watching together
+          </span>
+        )}
         <span className="call-head-actions">
+          {watch && layout === 'watch' && canControlWatch(watch, me.id) && (
+            <>
+              <button
+                type="button"
+                className="call-head-button"
+                onClick={() => setWatchDialog('change')}
+              >
+                <SwapVideoIcon size={16} />
+                Change video
+              </button>
+              <button type="button" className="call-head-button" onClick={watchApi.stop}>
+                Stop watching
+              </button>
+            </>
+          )}
           {duo && (layout === 'frame' || layout === 'side') && !targetTile && !targetScreen && (
             <span className="call-layout" role="radiogroup" aria-label="Call layout">
               <button
@@ -1365,6 +1437,29 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
             />
           )}
         </span>
+        {/* Watch Together: a YouTube video for everyone in the call (lit while watching). */}
+        {playerUrl && (
+          <button
+            type="button"
+            className={watch ? 'call-button call-button--watching' : 'call-button'}
+            aria-label={
+              watch
+                ? canControlWatch(watch, me.id)
+                  ? 'Watching together: change the video'
+                  : 'Watching together'
+                : 'Watch a video together'
+            }
+            aria-pressed={!!watch}
+            title={watch ? 'Watching together' : 'Watch together'}
+            disabled={!ready || !inCall || (!!watch && !canControlWatch(watch, me.id))}
+            onClick={() => {
+              if (watch && layout !== 'watch') setFocus(null)
+              else setWatchDialog(watch ? 'change' : 'start')
+            }}
+          >
+            <WatchIcon size={22} />
+          </button>
+        )}
         {/* Browsers without screen sharing (iPad) don't get the button. In a browser, its own
             picker opens instead of Glofly's. */}
         {(!isWeb || web?.screenShare) && (
@@ -1413,6 +1508,13 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       {menuAt && (
         <TileViewMenu at={menuAt} items={menuItemsFor(menuAt)} onClose={() => setMenuAt(null)} />
       )}
+      {watchDialog && (
+        <StartWatchDialog
+          changing={watchDialog === 'change'}
+          onStart={watchApi.start}
+          onClose={() => setWatchDialog(null)}
+        />
+      )}
       {picking && (
         <ScreenPicker
           onClose={() => setPicking(false)}
@@ -1451,6 +1553,18 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       return items
     }
     const id = at.person.id
+    // Browser version: the camera's real size, to check tablets and phones (0.5.0 camera fix).
+    const cam = id === me.id && isWeb ? videoOf(local, Track.Source.Camera) : null
+    if (cam) {
+      const { width, height } = cam.mediaStreamTrack.getSettings()
+      if (width && height) {
+        items.push({
+          label: `Your camera sends ${width}×${height}`,
+          icon: <VideoIcon size={18} />,
+          onClick: () => {}
+        })
+      }
+    }
     if (duo) {
       if (layout === 'side' && at.remote) {
         items.push({

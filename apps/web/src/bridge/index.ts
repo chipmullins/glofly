@@ -17,8 +17,11 @@ import type {
   Profile,
   SearchResult,
   SignedInDevice,
-  TeamNotice
+  TeamNotice,
+  WatchPreview,
+  WatchUpdate
 } from '../../../desktop/src/preload/api-types'
+import { isYouTubeId } from '@glofly/shared/watch'
 import { endSession, nothing, onSessionEnded, request, setPauseHandler, unwrap } from './api'
 import * as auth from './auth'
 import { API_URL, isApple, isId, isTouch } from './config'
@@ -391,6 +394,28 @@ export function createBridge(): GloflyApi {
       screenSources: async () => [],
       chooseScreen: async () => true,
       screenAccess: async () => 'granted'
+    },
+    watch: {
+      playerUrl: async () => `${API_URL}/watch/player`,
+      get: (id) => badId(id) ?? request<WatchUpdate>('GET', `/calls/${id}/watch`),
+      preview: (link) =>
+        typeof link === 'string' && link.length > 0 && link.length <= 500
+          ? request<WatchPreview>('GET', `/calls/watch/preview?link=${encodeURIComponent(link)}`)
+          : Promise.resolve(invalid),
+      start: (id, link, control) =>
+        badId(id) ?? request<WatchUpdate>('POST', `/calls/${id}/watch`, { link, control }),
+      control: (id, action, to) =>
+        badId(id) ?? request<WatchUpdate>('POST', `/calls/${id}/watch/control`, { action, to }),
+      settings: (id, control) =>
+        badId(id) ?? request<WatchUpdate>('POST', `/calls/${id}/watch/settings`, { control }),
+      report: (id, videoId, durationSec, title) =>
+        badId(id) ??
+        (isYouTubeId(videoId)
+          ? request<null>('POST', `/calls/${id}/watch/report`, { videoId, durationSec, title })
+          : Promise.resolve(invalid)),
+      react: (id, reaction) =>
+        badId(id) ?? request<null>('POST', `/calls/${id}/watch/react`, { reaction }),
+      stop: (id) => badId(id) ?? request<WatchUpdate>('DELETE', `/calls/${id}/watch`)
     },
     ptt: {
       start: async (choice) => startPtt(choice),

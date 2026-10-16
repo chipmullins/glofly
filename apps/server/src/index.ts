@@ -9,6 +9,7 @@ import { purgeDeletedAccounts } from "./account/deletion";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
 import { conversationsRouter } from "./messages/routes";
 import { callsRouter } from "./calls/routes";
+import { watchPageRouter } from "./calls/player";
 import { sweepCalls } from "./calls/service";
 import { livekitConfigured } from "./calls/livekit";
 import { avatarsRouter, profileRouter } from "./profile/routes";
@@ -72,6 +73,8 @@ app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
 app.use("/conversations", conversationsRouter);
 app.use("/calls", callsRouter);
+// Watch Together's video player page (the apps show the shared YouTube video through it).
+app.use("/watch", watchPageRouter);
 app.use("/reports", reportsRouter);
 app.use("/notices", noticesRouter);
 // Phones: where to send push notifications.

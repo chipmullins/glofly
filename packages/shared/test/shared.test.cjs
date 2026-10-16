@@ -89,3 +89,69 @@ test('active on mobile (0.3.0)', () => {
   assert.equal(s.presenceHeader({ ...base, status: 'online', mobile: true, statusText: 'Brb' }), 'Active on mobile · Brb')
   assert.equal(s.presenceHeader({ ...base, status: 'online' }), 'Online')
 })
+
+test('watch together: YouTube links, positions, event lines', () => {
+  const id = 'dQw4w9WgXcQ'
+  for (const link of [
+    id,
+    `https://www.youtube.com/watch?v=${id}&t=42s`,
+    `youtube.com/watch?feature=share&v=${id}`,
+    `https://youtu.be/${id}?si=abc`,
+    `https://m.youtube.com/shorts/${id}`,
+    `https://music.youtube.com/watch?v=${id}`,
+    `https://www.youtube-nocookie.com/embed/${id}`,
+    `https://www.youtube.com/live/${id}`
+  ]) assert.equal(s.youTubeIdFrom(link), id, link)
+  for (const bad of ['', 'https://vimeo.com/123', `https://evil.com/watch?v=${id}`, 'https://youtube.com/watch?v=short', 'javascript:alert(1)'])
+    assert.equal(s.youTubeIdFrom(bad), null, bad)
+  assert.equal(s.youTubeStartFrom(`https://youtu.be/${id}?t=90`), 90)
+  assert.equal(s.youTubeStartFrom(`https://www.youtube.com/watch?v=${id}&t=1m30s`), 90)
+  assert.equal(s.youTubeStartFrom(`https://www.youtube.com/watch?v=${id}`), 0)
+  const w = { playing: true, position: 10, at: 1000, durationSec: 30, control: 'starter', startedBy: 'a' }
+  assert.equal(s.watchPositionAt(w, 6000), 15)
+  assert.equal(s.watchPositionAt(w, 100000), 30)
+  assert.equal(s.watchPositionAt({ ...w, playing: false }, 100000), 10)
+  assert.equal(s.watchEnded(w, 100000), true)
+  assert.equal(s.canControlWatch(w, 'b'), false)
+  assert.equal(s.canControlWatch({ ...w, control: 'everyone' }, 'b'), true)
+  assert.equal(s.videoTime(3723), '1:02:03')
+  assert.equal(s.videoTime(65), '1:05')
+  const ev = { type: 'watch', videoId: id, title: 'Sunset' }
+  assert.equal(s.eventField(ev), 'eventLine2')
+  assert.equal(s.eventField({ type: 'photo', removed: false }), 'eventLine')
+  assert.equal(s.eventField({ type: 'left' }), 'event')
+  assert.match(s.legacyEventBody(ev), /started watching “Sunset” together/)
+  const msg = { event: null, body: 'x', eventLine2: ev }
+  s.upgradeEvents(msg)
+  assert.deepEqual(msg.event, ev)
+  assert.equal(msg.body, '')
+  assert.equal('eventLine2' in msg, false)
+})
+
+test('watch together: keeping a player in step', () => {
+  const w = { callId: 'c', videoId: 'dQw4w9WgXcQ', playing: true, position: 10, at: 0, durationSec: 100, control: 'everyone', startedBy: 'a' }
+  const mem = s.newSyncMemory()
+  // In step: nothing to do
+  let r = s.watchSyncStep(w, 5000, { state: 'playing', time: 15.3, duration: 100, muted: false }, mem, 10_000)
+  assert.deepEqual(r.commands, [])
+  assert.equal(r.status, 'sync')
+  // 3 seconds behind: jump (slightly ahead)
+  r = s.watchSyncStep(w, 5000, { state: 'playing', time: 12, duration: 100, muted: false }, mem, 20_000)
+  assert.equal(r.commands[0].cmd, 'seek')
+  assert.ok(Math.abs(r.commands[0].to - 15.4) < 0.01)
+  // …but not again right away
+  r = s.watchSyncStep(w, 5000, { state: 'playing', time: 12, duration: 100, muted: false }, mem, 21_000)
+  assert.deepEqual(r.commands, [])
+  // Paused for everyone: pause the player
+  r = s.watchSyncStep({ ...w, playing: false }, 5000, { state: 'playing', time: 10.2, duration: 100, muted: false }, mem, 30_000)
+  assert.deepEqual(r.commands, [{ cmd: 'pause' }])
+  assert.equal(r.status, 'paused')
+  // Should play but won't: play, and after three tries start muted
+  const m2 = s.newSyncMemory()
+  const stuck = { state: 'paused', time: 15, duration: 100, muted: false }
+  s.watchSyncStep(w, 5000, stuck, m2, 2_000)
+  s.watchSyncStep(w, 5000, stuck, m2, 4_000)
+  r = s.watchSyncStep(w, 5000, stuck, m2, 6_000)
+  assert.deepEqual(r.commands.map((c) => c.cmd), ['volume', 'play'])
+  assert.equal(r.status, 'blocked')
+})

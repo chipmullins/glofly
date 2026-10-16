@@ -6,7 +6,9 @@ import {
   Track,
   VideoPresets,
   type RemoteParticipant,
-  type RemoteTrack
+  type RemoteTrack,
+  type VideoCaptureOptions,
+  type VideoResolution
 } from 'livekit-client'
 import type {
   Call,
@@ -34,7 +36,7 @@ import {
   type PttState
 } from './callState'
 import '../components/CallPanel.css'
-import { isMac, isWeb, privacySettingsPath } from '../lib/platform'
+import { isMac, isTouch, isWeb, privacySettingsPath } from '../lib/platform'
 
 // Mac: what to do when macOS won't let Glofly see the screen. Builds before Oct 12 had a different
 // signature, so an old "Glofly" switch in that list can look on while it no longer counts.
@@ -68,10 +70,30 @@ function deviceProblem(err: unknown, device: 'microphone' | 'camera'): string {
   return `Couldn't start your ${device}.`
 }
 
-function cameraOptions(p: CallPrefs): {
-  deviceId?: string
-  resolution: typeof VideoPresets.h720.resolution
-} {
+/**
+ * The camera to ask for.
+ *
+ * Desktop app and desktop browsers: 1280×720 (laptop webcams are 16:9, so nothing is lost).
+ *
+ * Tablets and phones in a browser (0.5.0 fix): their front cameras are 4:3 and the browser turns
+ * the picture with the device. Asking for 16:9 made it cut most of the picture off when held
+ * sideways (and look better upright, the "backwards" effect on a Pixel Tablet). So there it asks
+ * only for about 1280 wide, in whatever shape the camera has, never cropped or stretched by the
+ * browser (resizeMode "none", Chrome), and the front camera unless one was picked in Settings.
+ * The tiles follow the picture's shape when the device turns (TrackVideo's resize → cameraFit).
+ */
+function cameraOptions(p: CallPrefs): VideoCaptureOptions {
+  if (isWeb && isTouch) {
+    return {
+      ...(p.cameraId ? { deviceId: p.cameraId } : { facingMode: 'user' }),
+      // Copied into the browser's camera request as-is: an ideal width, no height or shape.
+      resolution: {
+        width: { ideal: 1280 },
+        frameRate: 30,
+        resizeMode: 'none'
+      } as unknown as VideoResolution
+    }
+  }
   return {
     ...(p.cameraId ? { deviceId: p.cameraId } : {}),
     resolution: VideoPresets.h720.resolution
@@ -925,7 +947,8 @@ export function CallProvider({
     stopSharing,
     ring,
     moveHere,
-    clearProblem
+    clearProblem,
+    showProblem: problem
   }
   useEffect(() => {
     if (controlsRef) controlsRef.current = value

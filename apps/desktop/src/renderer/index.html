@@ -4,10 +4,12 @@
     <meta charset="UTF-8" />
     <title>Glofly</title>
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
-         connect-src: calls connect to LiveKit Cloud (audio/video). Change it if calls move elsewhere. -->
+         connect-src: calls connect to LiveKit Cloud (audio/video). Change it if calls move elsewhere.
+         frame-src: only the Glofly server's Watch Together player page (filled in at build time).
+         img-src i.ytimg.com: the YouTube video's picture in the Watch together dialog. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: glofly-media:; connect-src 'self' glofly-media: wss://*.livekit.cloud https://*.livekit.cloud; media-src 'self' blob: mediastream:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: glofly-media: https://i.ytimg.com; connect-src 'self' glofly-media: wss://*.livekit.cloud https://*.livekit.cloud; media-src 'self' blob: mediastream:; frame-src %GLOFLY_SERVER_ORIGIN%"
     />
   </head>
 
