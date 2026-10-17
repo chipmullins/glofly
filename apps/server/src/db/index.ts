@@ -2,11 +2,8 @@ import { readFileSync } from "node:fs";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
-import { branchDatabaseUrl } from "./branchDatabase";
 
-const branchUrl = branchDatabaseUrl();
-if (branchUrl) console.log("Using the Constellations test database (.env.constellations).");
-const connectionString = branchUrl ?? process.env.DATABASE_URL;
+const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("DATABASE_URL is missing. Add it to the .env file in the glofly folder.");
 }

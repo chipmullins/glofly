@@ -68,15 +68,9 @@
   Group calls can **ring only some members** (others see Join). Group calls end after **7 minutes
   with one person** (last-minute countdown with Stay); voice nebulas are excluded. Event types newer
   than 0.5.1 travel as `eventLine3` (events.ts) so 0.5.0/0.5.1 apps show plain text.
-- **Constellations branch:** Glofly 2.0 work goes on the `constellations` branch (made from `dev`
-  on Oct 14, 2026), never on `dev`, so bug fixes and releases keep going from `dev` untouched.
-  Bring fixes in with `git merge dev` on `constellations` now and then; it goes back into `dev`
-  only when Chip says 2.0 is ready. Releases (`npm run release`) only run from `dev`.
-  Migrations: a new one made on `constellations` gets renumbered after `dev`'s latest when merging
-  (drizzle-kit generate again). Drizzle only applies migrations newer than the last one applied, so
-  a PC database that ran a `constellations` migration can skip a `dev` one made earlier: tell Chip
-  to check (or use a separate database) when switching between the branches.
-- Glofly 2.0 Constellations + My games (built on `constellations`, Oct 17, 2026; project doc
+- **0.6.0 (Oct 17, 2026):** the `constellations` branch (Glofly 2.0 work) was merged into `dev` and
+  ships as 0.6.0; `dev` is the only working branch again. Migrations 0029–0031 came with it.
+- Constellations + My games (0.6.0, built Oct 17, 2026; project doc
   `glofly-2.0-constellations-built.md`, plan and approved spec in `glofly-2.0-plans.md`). Screens and
   animations are approved as-is: keep them exactly like `docs/design/constellations/` (and the DM
   Dock canvas). Server: `src/constellations/` (routes, perms, members, voice, views, activity),
@@ -89,7 +83,3 @@
   Desktop/web: `renderer/src/constellations/` (ConstellationsScreen = the night layer at z-index 45;
   `phase.ts` = the transition; DmDock = the bottom dock). Main process / web bridge only let
   `/constellations/…` and `/games/…` through `constellations:request`.
-- Separate test database on this branch: when the glofly folder has `.env.constellations`, its
-  DATABASE_URL wins (server `src/db/branchDatabase.ts`, also `drizzle.config.ts`), so this branch
-  uses `glofly_constellations` and `dev` keeps `glofly`. Remove `branchDatabase.ts` when 2.0 merges
-  into `dev`.
