@@ -83,3 +83,9 @@
   Desktop/web: `renderer/src/constellations/` (ConstellationsScreen = the night layer at z-index 45;
   `phase.ts` = the transition; DmDock = the bottom dock). Main process / web bridge only let
   `/constellations/…` and `/games/…` through `constellations:request`.
+- **0.7.0 (Oct 17, 2026): Constellations + My games on phones** (project doc `glofly-release-0.7.0.md`).
+  `apps/mobile/src/constellations/` (pieces) and `src/app/(main)/constellations/` (the night side: a
+  transparentModal stack over the tabs; `transition.tsx` = fly in / fly home), `(main)/games/[id]`.
+  Drawn from the approved "Glofly 2.0 Mobile" canvas; keep it matching. JS-only (no native code).
+  Server: `GET /constellations/chats/:conversationId`, `push_devices.features` (migration 0032):
+  nebula pushes only go to phones that registered with `features: ['constellations']`.
