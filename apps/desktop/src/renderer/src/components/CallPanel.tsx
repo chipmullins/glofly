@@ -1660,6 +1660,20 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         })
       }
     }
+    // Anyone else's camera: the size it actually arrives at here (to check tablets and phones).
+    if (id !== me.id) {
+      const theirs = videoOf(room?.remoteParticipants.get(id), Track.Source.Camera)
+      const el = theirs?.attachedElements.find(
+        (e): e is HTMLVideoElement => e instanceof HTMLVideoElement
+      )
+      if (el?.videoWidth && el.videoHeight) {
+        items.push({
+          label: `Their video arrives ${el.videoWidth}×${el.videoHeight}`,
+          icon: <VideoIcon size={18} />,
+          onClick: () => {}
+        })
+      }
+    }
     if (duo) {
       if (layout === 'side' && at.remote) {
         items.push({

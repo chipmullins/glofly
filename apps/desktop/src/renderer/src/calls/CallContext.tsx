@@ -87,11 +87,12 @@ function cameraOptions(p: CallPrefs): VideoCaptureOptions {
   if (isWeb && isTouch) {
     return {
       ...(p.cameraId ? { deviceId: p.cameraId } : { facingMode: 'user' }),
-      // Copied into the browser's camera request as-is: an ideal width, no height or shape.
+      // Copied into the browser's camera request as-is: an ideal width, no height or shape. No
+      // longer `resizeMode: 'none'` (Oct 17): the camera's raw frames came out of the Pixel
+      // Tablet padded and off-center; Chrome's normal path still keeps the camera's own shape.
       resolution: {
         width: { ideal: 1280 },
-        frameRate: 30,
-        resizeMode: 'none'
+        frameRate: 30
       } as unknown as VideoResolution
     }
   }
@@ -283,6 +284,11 @@ export function CallProvider({
       const next = new Room({
         adaptiveStream: true,
         dynacast: true,
+        // Tablets and phones in a browser send one full-size picture. Their camera isn't 16:9, so
+        // the smaller simulcast copies came out at odd sizes (like 288×180) that the tablet's
+        // video encoder pads with black: the PC (which watches a small copy in a tile) saw a small
+        // off-center strip. Calls are small, so one copy is plenty.
+        ...(isWeb && isTouch ? { publishDefaults: { simulcast: false } } : {}),
         audioCaptureDefaults: audioCapture(prefs),
         videoCaptureDefaults: cameraOptions(prefs),
         ...(prefs.speakerId ? { audioOutput: { deviceId: prefs.speakerId } } : {})
