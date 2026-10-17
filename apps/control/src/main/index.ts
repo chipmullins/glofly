@@ -138,7 +138,12 @@ function setUpIpc(): void {
       filters: [{ name: 'CSV (Excel, Google Sheets)', extensions: ['csv'] }]
     })
     if (choice.canceled || !choice.filePath) return { ok: true, saved: false }
-    await writeFile(choice.filePath, result.csv, 'utf8')
+    try {
+      await writeFile(choice.filePath, result.csv, 'utf8')
+    } catch {
+      // (A thrown error would leave the window's Export button stuck on "Exporting…".)
+      return { ok: false, message: "Couldn't save there. Try another folder." }
+    }
     return { ok: true, saved: true }
   })
   ipcMain.handle('control:copy', async (event, value: unknown) => {

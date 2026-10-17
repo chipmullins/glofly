@@ -450,7 +450,13 @@ export type MessagePage = { messages: Message[]; hasMore: boolean; people: Publi
 
 /** Live updates the server sends over the real-time connection (Socket.IO event name = type). */
 export type ServerEvent =
-  | { type: 'message:new'; message: Message; people?: PublicUser[] }
+  | {
+      type: 'message:new'
+      message: Message
+      people?: PublicUser[]
+      /** 2.0: it's in a constellation's nebula (not one of your Glofly chats) */
+      nebula?: boolean
+    }
   | { type: 'message:updated'; message: Message }
   | { type: 'typing'; conversationId: string; userId: string }
   | { type: 'friends:changed' }
@@ -485,6 +491,33 @@ export type ServerEvent =
   | { type: 'notice:new'; notice: TeamNotice }
   /** The announcement banner changed (null: none showing now) */
   | { type: 'announcement'; announcement: Announcement | null }
+  // ---- 2.0 Constellations and My games (only apps that say they know them get these) ----
+  /** My dashboard changed (joined, left, invited, renamed…): reload the cards */
+  | { type: 'constellations:changed' }
+  /** Something in this constellation changed (nebulas, roles, members, settings): reload it */
+  | { type: 'constellation:updated'; constellationId: string }
+  /** Someone posted in one of its nebulas */
+  | {
+      type: 'constellation:activity'
+      constellationId: string
+      nebulaId: string
+      conversationId: string
+      senderId: string
+      mentions: string[]
+      /** Should this ding and notify me (my setting for the nebula, mutes, @mentions)? */
+      alert?: 'message' | 'mention' | null
+      /** With an alert: what the notification shows */
+      nebulaName?: string
+      constellationName?: string
+      senderName?: string
+      preview?: string
+    }
+  /** Who's in one of its voice nebulas changed */
+  | { type: 'constellation:voice'; constellationId: string; voice: import('./constellations').VoiceNebulaState }
+  /** It's gone for me (deleted, I was kicked or banned, or it was taken down) */
+  | { type: 'constellation:removed'; constellationId: string; reason: 'kicked' | 'banned' | 'taken_down' | 'deleted' }
+  /** My games changed (on another device) */
+  | { type: 'games:changed' }
 
 /** 0.4.0: Glofly is paused (Glofly Control → Server → Pause Glofly). Nobody can use it until then. */
 export type Paused = {

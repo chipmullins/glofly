@@ -1,3 +1,4 @@
+import { AppState, Platform } from 'react-native'
 import { create } from 'zustand'
 import type { Paused, SignedInUser, UpdateRequired } from '@glofly/shared'
 import { secure } from '@/lib/storage'
@@ -43,16 +44,46 @@ export const useSession = create<SessionState>((set) => ({
 }))
 
 /** At start: a saved sign-in, if there is one. Checked against the server later (401 → signed out). */
+let restoreTries = 0
 export async function restoreSession(): Promise<void> {
-  const [token, rawUser] = await Promise.all([secure.get(TOKEN_KEY), secure.get(USER_KEY)])
+  const [t, u] = await Promise.all([secure.read(TOKEN_KEY), secure.read(USER_KEY)])
+  if ((t.failed || u.failed) && restoreTries++ < 10) {
+    // The Keychain is locked (iOS can start the app early, before the phone is unlocked). Don't
+    // treat that as "signed out": try again when Glofly comes to the screen.
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return
+      sub.remove()
+      void restoreSession()
+    })
+    if (AppState.currentState === 'active') {
+      sub.remove()
+      setTimeout(() => void restoreSession(), 300 * restoreTries)
+    }
+    return
+  }
+  const token = t.value
+  const rawUser = u.value
   let user: SignedInUser | null = null
   try {
     user = rawUser ? (JSON.parse(rawUser) as SignedInUser) : null
   } catch {
     user = null
   }
-  if (token && user) useSession.setState({ status: 'signedIn', token, user })
-  else useSession.setState({ status: 'signedOut' })
+  if (token && user) {
+    useSession.setState({ status: 'signedIn', token, user })
+    void upgradeKeychain(token, rawUser!)
+  } else useSession.setState({ status: 'signedOut' })
+}
+
+/** iPhone, once: re-save a sign-in from before Oct 17 so it's readable while the phone is locked. */
+const UPGRADED_KEY = 'session.keychainUpgraded'
+async function upgradeKeychain(token: string, rawUser: string): Promise<void> {
+  if (Platform.OS !== 'ios' || (await secure.get(UPGRADED_KEY))) return
+  // Signed out (or in again) meanwhile: nothing to re-save.
+  if (useSession.getState().token !== token) return
+  await secure.upgrade(TOKEN_KEY, token)
+  await secure.upgrade(USER_KEY, rawUser)
+  await secure.set(UPGRADED_KEY, '1')
 }
 
 export async function startSession(token: string, user: SignedInUser, keep: boolean): Promise<void> {

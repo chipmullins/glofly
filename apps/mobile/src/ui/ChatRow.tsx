@@ -24,9 +24,10 @@ type Props = {
   call?: Call
   /** Groups page: "4 members · 2 online" instead of the last message when nothing's newer. */
   subtitle?: string
-  onPress: () => void
-  onLongPress: () => void
-  onJoin?: () => void
+  /** Given the row's chat, so lists can pass the same function every time (keeps memo working). */
+  onPress: (chat: ConversationSummary) => void
+  onLongPress: (chat: ConversationSummary) => void
+  onJoin?: (chat: ConversationSummary) => void
   now: number
 }
 
@@ -64,8 +65,8 @@ export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typ
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint="Long press for more options"
-      onPress={onPress}
-      onLongPress={onLongPress}
+      onPress={() => onPress(chat)}
+      onLongPress={() => onLongPress(chat)}
       delayLongPress={350}
       android_ripple={{ color: c.line }}
       accessibilityState={open ? { selected: true } : undefined}
@@ -101,7 +102,7 @@ export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typ
                 {inCall.text}
               </Text>
               {onJoin && !inCall.joined ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={`Join the call in ${title}`} onPress={onJoin} hitSlop={6} style={{ height: 28, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.online, justifyContent: 'center' }}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Join the call in ${title}`} onPress={() => onJoin(chat)} hitSlop={6} style={{ height: 28, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.online, justifyContent: 'center' }}>
                   <Text size={13} weight="bold" style={{ color: '#FFFFFF' }}>
                     Join
                   </Text>

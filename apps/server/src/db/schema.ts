@@ -110,6 +110,9 @@ export const users = pgTable(
     hangUntil: timestamp("hang_until", { withTimezone: true }),
     // ...and which friends were told (null: every friend). 0.5.0, migration 0028.
     hangWith: jsonb("hang_with").$type<string[]>(),
+    // ---- 2.0 ----
+    // My games: who can see the games they've played ("everyone" / "friends" / "only_me").
+    myGamesVisibility: text("my_games_visibility").notNull().default("friends"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -265,7 +268,10 @@ export const blocks = pgTable(
   ],
 );
 
-export const conversationKind = pgEnum("conversation_kind", ["dm", "group"]);
+// "nebula" (2.0, Constellations): a nebula's messages. Its members are the constellation's members
+// (kept in step by constellations/sync.ts); it never shows in anyone's chat list, and older apps
+// never hear about it (messages/routes.ts `summaries`, realtime.ts `emitToUser` modern-only).
+export const conversationKind = pgEnum("conversation_kind", ["dm", "group", "nebula"]);
 
 // A chat: a direct message between two friends, or a group chat (up to 25 people).
 export const conversations = pgTable("conversations", {
@@ -308,6 +314,9 @@ export const conversationMembers = pgTable(
     // a message newer than this arrives, or they open it again. Null = not closed.
     closedAt: timestamp("closed_at", { withTimezone: true }),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    // Nebulas only (2.0): this person's notifications for it ("all" / "mentions" / "none").
+    // Null = their default for the constellation (constellation_members.notify).
+    notifyLevel: text("notify_level"),
   },
   (t) => [
     primaryKey({ columns: [t.conversationId, t.userId] }),
@@ -363,6 +372,10 @@ export const messages = pgTable(
     index("messages_lantern_idx")
       .on(t.conversationId, t.createdAt)
       .where(sql`${t.lantern} and ${t.deletedAt} is null`),
+    // Someone's own messages (Year in Glow), and removing an account's messages with it.
+    index("messages_sender_created_idx").on(t.senderId, t.createdAt),
+    // Replies to a message: deleting messages (a group, a nebula) clears the links to them.
+    index("messages_reply_to_idx").on(t.replyToId).where(sql`${t.replyToId} is not null`),
   ],
 );
 
@@ -494,6 +507,8 @@ export const attachments = pgTable(
   (t) => [
     index("attachments_message_idx").on(t.messageId),
     index("attachments_unsent_idx").on(t.uploaderId, t.createdAt),
+    // A chat's files (removing a group, a nebula or a constellation).
+    index("attachments_conversation_idx").on(t.conversationId),
   ],
 );
 
@@ -719,7 +734,13 @@ export type ReportSnapshot = {
   context: { id: string; senderId: string; body: string; createdAt: string; deleted: boolean; attachments: string[] }[];
   /** Names as they were (people can rename or delete their account) */
   people: { id: string; username: string; displayName: string }[];
-  chat: { kind: "dm" | "group"; name: string | null } | null;
+  chat: { kind: "dm" | "group"; name: string | null } | NebulaReportChat | null;
+};
+/** 2.0: a reported message in a constellation's nebula. */
+export type NebulaReportChat = {
+  kind: "nebula";
+  name: string;
+  constellation: { id: string; name: string };
 };
 
 // "Report" in Glofly: a message (from its menu) or a person (from their profile card).
@@ -842,4 +863,286 @@ export const friendInvites = pgTable(
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
   },
   (t) => [index("friend_invites_inviter_idx").on(t.inviterId), index("friend_invites_email_idx").on(sql`lower(${t.email})`)],
+);
+
+// ───────────── Constellations (Glofly 2.0) ─────────────
+//
+// A community: nebulas (text and voice rooms) under categories, members with roles. Everything
+// is permission-checked on the server (constellations/perms.ts). Older apps never see any of it.
+
+export const constellationVisibility = pgEnum("constellation_visibility", ["invite", "public", "approval"]);
+export const nebulaKind = pgEnum("nebula_kind", ["text", "voice"]);
+export const constellationRoleKind = pgEnum("constellation_role_kind", ["admin", "moderator", "member", "custom"]);
+
+export const constellations = pgTable(
+  "constellations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    description: text("description"),
+    // @glofly/shared ConstellationColor: the banner and the icon's color without a photo.
+    color: text("color").notNull().default("ember"),
+    // The icon photo's version (a new random one each upload). Null = initials.
+    iconVersion: text("icon_version"),
+    // The Owner: can do everything, the only one who can transfer ownership or delete it.
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    visibility: constellationVisibility("visibility").notNull().default("invite"),
+    // Directory: what kind of community (shared ConstellationType) and up to 5 genre tags.
+    type: text("type"),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    // Taken down in Glofly Control: hidden from everyone (members see it's gone). Kept for the
+    // record until the admin removes it for good. Null = normal.
+    takenDownAt: timestamp("taken_down_at", { withTimezone: true }),
+    takedownReason: text("takedown_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // The newest message in any of its nebulas (the dashboard's "Quiet since yesterday").
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("constellations_owner_idx").on(t.ownerId),
+    // The directory: public ones by name.
+    index("constellations_directory_idx").on(t.visibility, t.lastActivityAt).where(sql`${t.visibility} <> 'invite' and ${t.takenDownAt} is null`),
+    index("constellations_name_trgm_idx").using("gin", sql`${t.name} gin_trgm_ops`),
+    index("constellations_tags_idx").using("gin", t.tags),
+  ],
+);
+
+export const constellationRoles = pgTable(
+  "constellation_roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    // admin / moderator (the starting roles, which can be renamed or deleted), member (everyone's
+    // role: can't be deleted, always lowest) or custom.
+    kind: constellationRoleKind("kind").notNull().default("custom"),
+    name: text("name").notNull(),
+    // @glofly/shared RoleColor
+    color: text("color").notNull().default("gray"),
+    // Higher = more powerful. Member is 0.
+    position: integer("position").notNull(),
+    // @glofly/shared ConstellationPermission ids
+    permissions: text("permissions").array().notNull().default(sql`'{}'::text[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("constellation_roles_constellation_idx").on(t.constellationId)],
+);
+
+export const constellationMembers = pgTable(
+  "constellation_members",
+  {
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    // Timed out by a moderator until then: can read, can't post, react or talk in voice.
+    timedOutUntil: timestamp("timed_out_until", { withTimezone: true }),
+    // Their notifications for its nebulas: "all" / "mentions" / "none" (each nebula can differ).
+    notify: text("notify").notNull().default("all"),
+    // Where they dragged it on the dashboard / icon strip (null = never moved).
+    position: integer("position"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.constellationId, t.userId] }),
+    index("constellation_members_user_idx").on(t.userId),
+  ],
+);
+
+// Which roles each member has (besides Member, which everyone has).
+export const constellationMemberRoles = pgTable(
+  "constellation_member_roles",
+  {
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => constellationRoles.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.constellationId, t.userId, t.roleId] }),
+    index("constellation_member_roles_role_idx").on(t.roleId),
+  ],
+);
+
+export const constellationCategories = pgTable(
+  "constellation_categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    position: integer("position").notNull(),
+  },
+  (t) => [index("constellation_categories_constellation_idx").on(t.constellationId)],
+);
+
+// A constellation's channels. Each one has a conversation (kind "nebula") for its messages: text
+// nebulas are that chat; a voice nebula's conversation holds its voice room (a call) and its chat.
+export const nebulas = pgTable(
+  "nebulas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id").references(() => constellationCategories.id, { onDelete: "set null" }),
+    kind: nebulaKind("kind").notNull(),
+    name: text("name").notNull(),
+    topic: text("topic"),
+    position: integer("position").notNull(),
+    // Announcements: only people who can manage nebulas or delete messages can post.
+    readOnly: boolean("read_only").notNull().default(false),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .unique()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("nebulas_constellation_idx").on(t.constellationId)],
+);
+
+// Invite links (glofly.app/c/<code>).
+export const constellationLinks = pgTable(
+  "constellation_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    // Letters and numbers, matched exactly (case matters).
+    code: text("code").notNull().unique(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    maxUses: integer("max_uses"),
+    uses: integer("uses").notNull().default(0),
+    // Turned off by someone who can invite: stops working at once.
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("constellation_links_constellation_idx").on(t.constellationId)],
+);
+
+// A friend invited you (shown on your dashboard under Invites).
+export const constellationInvites = pgTable(
+  "constellation_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    inviterId: uuid("inviter_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    inviteeId: uuid("invitee_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // "Not now": hidden from their dashboard (a new invite later shows again).
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("constellation_invites_pair_idx").on(t.constellationId, t.inviteeId),
+    index("constellation_invites_invitee_idx").on(t.inviteeId),
+  ],
+);
+
+// "Public, approval needed": people who asked to join.
+export const constellationJoinRequests = pgTable(
+  "constellation_join_requests",
+  {
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.constellationId, t.userId] })],
+);
+
+export const constellationBans = pgTable(
+  "constellation_bans",
+  {
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    bannedBy: uuid("banned_by").references(() => users.id, { onDelete: "set null" }),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.constellationId, t.userId] })],
+);
+
+// Settings → Moderation: what moderators and admins did (kicks, bans, time-outs, deleted
+// messages, role changes). Only ever added to.
+export const constellationAuditLog = pgTable(
+  "constellation_audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+    action: text("action").notNull(),
+    targetUserId: uuid("target_user_id").references(() => users.id, { onDelete: "set null" }),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("constellation_audit_constellation_idx").on(t.constellationId, t.createdAt)],
+);
+
+// ───────────── My games (Glofly 2.0) ─────────────
+
+// The games someone has played (from the desktop's "Playing …"), with their total playtime. The
+// server adds time every minute while their presence says they're playing. Names are kept as the
+// app detected them; `game_key` (lower case, spaces squeezed) merges the same game's spellings.
+export const userGames = pgTable(
+  "user_games",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    gameKey: text("game_key").notNull(),
+    name: text("name").notNull(),
+    seconds: integer("seconds").notNull().default(0),
+    firstPlayedAt: timestamp("first_played_at", { withTimezone: true }).notNull().defaultNow(),
+    lastPlayedAt: timestamp("last_played_at", { withTimezone: true }).notNull().defaultNow(),
+    // Starred by them: pinned at the top of My games.
+    favorite: boolean("favorite").notNull().default(false),
+    // Hidden by them: never shown to anyone else (still counted).
+    hidden: boolean("hidden").notNull().default(false),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.gameKey] })],
+);
+
+// Glofly 2.0: nebulas someone pinned to the dock on Glofly home ("Pin to Glofly dock"), in their order.
+export const nebulaPins = pgTable(
+  "nebula_pins",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.nebulaId] })],
 );

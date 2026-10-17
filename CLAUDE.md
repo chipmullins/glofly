@@ -76,6 +76,20 @@
   (drizzle-kit generate again). Drizzle only applies migrations newer than the last one applied, so
   a PC database that ran a `constellations` migration can skip a `dev` one made earlier: tell Chip
   to check (or use a separate database) when switching between the branches.
-- Glofly 2.0 (planned, not built): project doc `glofly-2.0-plans.md`. Constellations' screens and
-  animations are approved as-is: build them exactly from `docs/design/constellations/` (the
-  mockup source) and the exact spec in that doc.
+- Glofly 2.0 Constellations + My games (built on `constellations`, Oct 17, 2026; project doc
+  `glofly-2.0-constellations-built.md`, plan and approved spec in `glofly-2.0-plans.md`). Screens and
+  animations are approved as-is: keep them exactly like `docs/design/constellations/` (and the DM
+  Dock canvas). Server: `src/constellations/` (routes, perms, members, voice, views, activity),
+  `src/games/`, `src/admin/constellations.ts`, migration 0029. A nebula is a conversation of kind
+  "nebula": hidden from summaries, search, chat partners and pushes, so 0.5.x apps never see them.
+  New live events only go to apps that send `auth.features: ['constellations']` (the `user2:<id>`
+  room, `emitToUser(..., modernOnly)`). Voice nebulas reuse the calls tables (no ringing, events only
+  to people in the room). Every action is checked on the server (`perms.ts`: rank = highest role's
+  position, Owner 1e9; you only act on people below you). Restricted (family) accounts are refused.
+  Desktop/web: `renderer/src/constellations/` (ConstellationsScreen = the night layer at z-index 45;
+  `phase.ts` = the transition; DmDock = the bottom dock). Main process / web bridge only let
+  `/constellations/…` and `/games/…` through `constellations:request`.
+- Separate test database on this branch: when the glofly folder has `.env.constellations`, its
+  DATABASE_URL wins (server `src/db/branchDatabase.ts`, also `drizzle.config.ts`), so this branch
+  uses `glofly_constellations` and `dev` keeps `glofly`. Remove `branchDatabase.ts` when 2.0 merges
+  into `dev`.

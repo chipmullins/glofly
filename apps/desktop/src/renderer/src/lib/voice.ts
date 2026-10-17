@@ -173,7 +173,14 @@ export function useVoiceRecorder(
   }, [finish])
 
   // Leaving the chat throws away a recording in progress.
-  useEffect(() => () => stopAll(false), [stopAll])
+  // (Also one still waiting for the microphone, so it never turns on after the chat is gone.)
+  useEffect(
+    () => () => {
+      wanted.current = 'cancel'
+      stopAll(false)
+    },
+    [stopAll]
+  )
 
   return { state, elapsedMs, live, start, finish, cancel }
 }

@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, or } from "drizzle-orm";
 import { db } from "../db";
-import { blocks, friendships, users } from "../db/schema";
+import { blocks, conversationMembers, conversations, friendships, users } from "../db/schema";
 
 /** Pairs are stored lower id first, so each pair of people has exactly one row. */
 export function pair(a: string, b: string): { userLow: string; userHigh: string } {
@@ -25,6 +25,15 @@ export async function blockedEitherWay(a: string, b: string): Promise<boolean> {
     )
     .limit(1);
   return rows.length > 0;
+}
+
+/** Everyone this person has blocked or been blocked by (2.0: typing in nebulas). */
+export async function blockedWith(userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ blockerId: blocks.blockerId, blockedId: blocks.blockedId })
+    .from(blocks)
+    .where(or(eq(blocks.blockerId, userId), eq(blocks.blockedId, userId)));
+  return new Set(rows.map((r) => (r.blockerId === userId ? r.blockedId : r.blockerId)));
 }
 
 export async function areFriends(a: string, b: string): Promise<boolean> {
@@ -54,6 +63,52 @@ export async function canMessage(a: string, b: string): Promise<boolean> {
   return (
     (await areFriends(a, b)) && !(await blockedEitherWay(a, b)) && !(await deletionPending(a, b))
   );
+}
+
+/**
+ * Which of these people I can message (canMessage for each), in three queries however many there
+ * are. Used by the chat list, so it doesn't cost three queries per DM.
+ */
+export async function messageableAmong(myId: string, userIds: string[]): Promise<Set<string>> {
+  const ids = [...new Set(userIds)].filter((id) => id !== myId);
+  if (!ids.length || (await deletionPending(myId))) return new Set();
+  const friendRows = await db
+    .select({ low: friendships.userLow, high: friendships.userHigh })
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.status, "accepted"),
+        or(
+          and(eq(friendships.userLow, myId), inArray(friendships.userHigh, ids)),
+          and(eq(friendships.userHigh, myId), inArray(friendships.userLow, ids)),
+        ),
+      ),
+    );
+  const friends = new Set(friendRows.map((r) => (r.low === myId ? r.high : r.low)));
+  if (!friends.size) return friends;
+  const blocked = await blockedWith(myId);
+  const leaving = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(inArray(users.id, [...friends]), isNotNull(users.deleteAfter)));
+  for (const r of leaving) friends.delete(r.id);
+  for (const id of blocked) friends.delete(id);
+  return friends;
+}
+
+/** Everyone I have a chat with (DMs and groups; not nebulas). */
+export async function chatPartnersOf(userId: string): Promise<string[]> {
+  // Not nebulas (2.0): being in the same constellation doesn't make someone a chat partner.
+  const mine = db
+    .select({ id: conversationMembers.conversationId })
+    .from(conversationMembers)
+    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
+    .where(and(eq(conversationMembers.userId, userId), ne(conversations.kind, "nebula")));
+  const rows = await db
+    .selectDistinct({ userId: conversationMembers.userId })
+    .from(conversationMembers)
+    .where(and(inArray(conversationMembers.conversationId, mine), ne(conversationMembers.userId, userId)));
+  return rows.map((r) => r.userId);
 }
 
 // ───────────── Restricted (family-managed) accounts, 0.4.0 ─────────────

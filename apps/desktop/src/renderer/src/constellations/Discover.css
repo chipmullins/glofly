@@ -1,0 +1,283 @@
+/* The Constellations dashboard's glowing cards and "Adventure to new constellations" (the Discover
+   board on the DM Dock canvas, approved Oct 17). Colors and sizes are the approved ones. */
+
+/* Your constellations: a warm border with a soft orange glow, brighter (and lifted) on hover. */
+.cx-dash .cx-card.cx-card--mine {
+  border-color: #4a372b;
+  box-shadow:
+    0 0 0 1px rgba(255, 165, 74, 0.18),
+    0 0 24px rgba(255, 165, 74, 0.14);
+}
+.cx-dash .cx-card.cx-card--mine:hover,
+.cx-dash .cx-card.cx-card--mine:focus-visible {
+  border-color: #7a5434;
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px rgba(255, 165, 74, 0.42),
+    0 0 34px rgba(255, 165, 74, 0.3);
+}
+.cx-dash .cx-card.cx-card--mine.cx-card--dragging {
+  transform: none;
+}
+
+/* ───────────── Adventure to new constellations ───────────── */
+.cx-adv {
+  margin-top: 6px;
+  padding-top: 22px;
+  border-top: 1px solid #2a1c17;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cx-adv-top {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+.cx-adv-titles {
+  flex: 1;
+  min-width: 0;
+}
+.cx-adv-head {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 22px;
+  color: #f5ede6;
+}
+.cx-adv-head svg {
+  flex: none;
+}
+.cx-adv-titles p {
+  margin: 4px 0 0 30px;
+  font-size: 14px;
+  color: #d9c2b1;
+}
+.cx-adv-browse {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #ffb347;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cx-adv-browse:hover {
+  color: #ffc596;
+}
+
+.cx-adv-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cx-adv-kind {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 17px;
+  border: 1px solid #4a372b;
+  background: #1c1210;
+  color: #e9d5c4;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+.cx-adv-kind:hover,
+.cx-adv-kind:focus-visible {
+  border-color: #7a5434;
+  box-shadow: 0 0 14px rgba(255, 165, 74, 0.2);
+}
+
+.cx-adv-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cx-adv-label {
+  margin-right: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b8a699;
+}
+.cx-adv-tag {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 14px;
+  background: #2a1c17;
+  border: 1px solid #3a2a22;
+  color: #e9d5c4;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cx-adv-tag:hover,
+.cx-adv-tag:focus-visible {
+  border-color: #574a41;
+  color: #f5ede6;
+}
+
+.cx-adv-cards {
+  margin-top: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.cx-adv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #1c1210;
+  border: 1px solid #3a2a22;
+  color: #f5ede6;
+}
+.cx-adv-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cx-adv-card-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--glo-font-display);
+  font-weight: 700;
+  font-size: 16px;
+}
+.cx-adv-card-text {
+  flex: 1;
+  min-width: 0;
+}
+.cx-adv-card-name {
+  display: block;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-adv-card-meta {
+  display: block;
+  font-size: 13px;
+  color: #d9c2b1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-adv-join,
+.cx-adv-ask {
+  flex: none;
+  height: 34px;
+  border-radius: 17px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.cx-adv-join {
+  padding: 0 16px;
+  border: 0;
+  background: #2e9e5b;
+  color: #ffffff;
+  font-weight: 700;
+}
+.cx-adv-join:hover:not(:disabled) {
+  background: #35b066;
+}
+.cx-adv-ask {
+  padding: 0 14px;
+  border: 1px solid #574a41;
+  background: transparent;
+  color: #f5ede6;
+  font-weight: 600;
+}
+.cx-adv-ask:hover:not(:disabled) {
+  border-color: #7a5434;
+}
+.cx-adv-join:disabled,
+.cx-adv-ask:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.cx-adv-asked {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b8a699;
+}
+.cx-adv-card-desc {
+  font-size: 13px;
+  color: #d9c2b1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cx-adv-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cx-adv-card-tag {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #2a1c17;
+  border: 1px solid #3a2a22;
+  color: #e9d5c4;
+}
+.cx-adv-card-hint {
+  margin-left: auto;
+  min-width: 0;
+  font-size: 12px;
+  color: #b8a699;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1100px) {
+  .cx-adv-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .cx-adv-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cx-dash .cx-card.cx-card--mine,
+  .cx-adv-kind {
+    transition: none;
+  }
+  .cx-dash .cx-card.cx-card--mine:hover,
+  .cx-dash .cx-card.cx-card--mine:focus-visible {
+    transform: none;
+  }
+}

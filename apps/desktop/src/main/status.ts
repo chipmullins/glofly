@@ -1,7 +1,7 @@
 import { powerMonitor } from 'electron'
 import type { ApiResult, MyStatus, PrivacySettings } from '../preload/api-types'
 import { request } from './api'
-import { setIdle } from './realtime'
+import { reconnectRealtime, setIdle } from './realtime'
 
 export const getMyStatus = (): Promise<ApiResult<MyStatus>> => request('GET', '/users/me/status')
 
@@ -25,5 +25,8 @@ export function startIdleWatch(): void {
   powerMonitor.on('lock-screen', () => setIdle(true))
   powerMonitor.on('suspend', () => setIdle(true))
   powerMonitor.on('unlock-screen', check)
-  powerMonitor.on('resume', check)
+  powerMonitor.on('resume', () => {
+    check()
+    reconnectRealtime()
+  })
 }

@@ -1,7 +1,8 @@
 import { createReadStream } from "node:fs";
 import { mkdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
-import { Readable } from "node:stream";
+import { Readable, type Writable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 // Where uploaded files (profile photos, and soon chat attachments) are kept.
@@ -143,3 +144,13 @@ export const storage: Storage = bucket
   ? new S3Storage(bucket)
   : new LocalDiskStorage(process.env.UPLOADS_DIR ?? "uploads");
 export const storageKind = bucket ? `S3 bucket ${bucket}` : "local uploads folder";
+
+/**
+ * Sends a stored file to the response. Unlike a bare `.pipe(res)`, a read error (S3 dropping the
+ * connection halfway) can't crash the server, and a download the app gave up on stops reading.
+ */
+export function sendStream(stream: Readable, res: Writable): void {
+  pipeline(stream, res).catch((err: { code?: string }) => {
+    if (err?.code !== "ERR_STREAM_PREMATURE_CLOSE") console.error("Couldn't send a file:", err);
+  });
+}

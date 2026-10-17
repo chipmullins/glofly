@@ -205,7 +205,11 @@ const ALLOWED: [string, RegExp][] = [
   ['GET', new RegExp(`^/admin/accounts/${ID}/family$`)],
   ['PUT', new RegExp(`^/admin/accounts/${ID}/restricted$`)],
   ['POST', new RegExp(`^/admin/accounts/${ID}/friends$`)],
-  ['POST', new RegExp(`^/admin/accounts/${ID}/friends/${ID}/remove$`)]
+  ['POST', new RegExp(`^/admin/accounts/${ID}/friends/${ID}/remove$`)],
+  // 2.0: Constellations (list, take down, restore, delete)
+  ['GET', new RegExp(`^/admin/constellations${QUERY}$`)],
+  ['GET', new RegExp(`^/admin/constellations/${ID}$`)],
+  ['POST', new RegExp(`^/admin/constellations/${ID}/(take-down|restore|delete)$`)]
 ]
 
 export function isAllowedCall(method: unknown, path: unknown): boolean {

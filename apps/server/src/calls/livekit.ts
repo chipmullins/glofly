@@ -34,6 +34,8 @@ export async function callToken(
   callId: string,
   user: { id: string; displayName: string },
   maxParticipants: number,
+  // 2.0: false while a moderator has muted them in a voice nebula (no microphone allowed).
+  microphone = true,
 ): Promise<string> {
   const token = new AccessToken(apiKey, apiSecret, {
     identity: user.id,
@@ -46,18 +48,23 @@ export async function callToken(
     canSubscribe: true,
     canPublish: true,
     // Microphone, camera and screen sharing only: no data messages, no changing their own name.
-    canPublishSources: [
-      TrackSource.MICROPHONE,
-      TrackSource.CAMERA,
-      TrackSource.SCREEN_SHARE,
-      TrackSource.SCREEN_SHARE_AUDIO,
-    ],
+    canPublishSources: callSources(microphone),
     canPublishData: false,
     canUpdateOwnMetadata: false,
   });
   // The room is created when the first person joins. It closes a minute after it empties.
   token.roomConfig = new RoomConfiguration({ maxParticipants, emptyTimeout: 60, departureTimeout: 20 });
   return token.toJwt();
+}
+
+/** What someone in a call may send. */
+function callSources(microphone: boolean): TrackSource[] {
+  return [
+    ...(microphone ? [TrackSource.MICROPHONE] : []),
+    TrackSource.CAMERA,
+    TrackSource.SCREEN_SHARE,
+    TrackSource.SCREEN_SHARE_AUDIO,
+  ];
 }
 
 let rooms: RoomServiceClient | null = null;
@@ -145,4 +152,30 @@ export async function broadcastToken(
   });
   token.roomConfig = new RoomConfiguration({ maxParticipants: 101, emptyTimeout: 60, departureTimeout: 20 });
   return token.toJwt();
+}
+
+/**
+ * 2.0 voice nebulas: a moderator mutes (or unmutes) someone. LiveKit takes away (or gives back) their
+ * permission to send microphone audio, which stops their microphone track at once. False if
+ * LiveKit couldn't be reached.
+ */
+export async function setMicrophoneAllowed(callId: string, userId: string, allowed: boolean): Promise<boolean> {
+  const service = roomService();
+  if (!service) return false;
+  try {
+    await service.updateParticipant(callId, userId, {
+      permission: {
+        canSubscribe: true,
+        canPublish: true,
+        canPublishData: false,
+        canUpdateMetadata: false,
+        canPublishSources: callSources(allowed),
+      },
+    });
+    return true;
+  } catch (err) {
+    if (err instanceof ServerError && (err.status === 404 || err.code === "not_found")) return true;
+    console.error("Couldn't change someone's microphone permission:", err instanceof Error ? err.message : err);
+    return false;
+  }
 }

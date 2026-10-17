@@ -2,15 +2,15 @@ import { randomUUID } from "node:crypto";
 import express, { Router, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { squarePhoto } from "./photo";
-import { and, eq, inArray, ne, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { conversationMembers, friendships, users } from "../db/schema";
+import { friendships, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { emitToUser } from "../realtime";
 import { presenceOf } from "../presence";
-import { storage } from "../storage";
-import { areFriends, blockedEitherWay, deletionPending, pairIs } from "../friends/rules";
+import { sendStream, storage } from "../storage";
+import { areFriends, blockedEitherWay, chatPartnersOf, deletionPending, pairIs } from "../friends/rules";
 import { DISPLAY_NAME_MAX } from "../auth/validation";
 
 export const profileRouter = Router();
@@ -59,19 +59,6 @@ export async function profileChanged(userId: string): Promise<void> {
   for (const id of [userId, ...(await peopleWhoSee(userId))]) {
     emitToUser(id, "profile:changed", { userId });
   }
-}
-
-/** People you've chatted with (a chat stays open even after an unfriend). */
-async function chatPartnersOf(userId: string): Promise<string[]> {
-  const myChats = db
-    .select({ id: conversationMembers.conversationId })
-    .from(conversationMembers)
-    .where(eq(conversationMembers.userId, userId));
-  const partners = await db
-    .selectDistinct({ userId: conversationMembers.userId })
-    .from(conversationMembers)
-    .where(and(inArray(conversationMembers.conversationId, myChats), ne(conversationMembers.userId, userId)));
-  return partners.map((p) => p.userId);
 }
 
 type Visibility = "basic" | "full" | "friend";
@@ -282,5 +269,5 @@ avatarsRouter.get("/:userId/:version", async (req, res) => {
   res.setHeader("Content-Type", "image/webp");
   res.setHeader("Content-Length", String(file.size));
   res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-  file.stream.pipe(res);
+  sendStream(file.stream, res);
 });

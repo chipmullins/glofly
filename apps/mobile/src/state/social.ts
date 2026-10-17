@@ -15,17 +15,19 @@ let asking: Promise<void> | null = null
 let generation = 0
 export function refreshSocial(): Promise<void> {
   if (!useSession.getState().token) return Promise.resolve()
+  if (asking) return asking
   const mine = generation
-  asking ??= api
+  const run: Promise<void> = api
     .social()
     .then((r) => {
       if (r.ok && mine === generation) useSocial.setState(r.data, true)
     })
     .catch(() => undefined)
     .finally(() => {
-      asking = null
+      if (asking === run) asking = null
     })
-  return asking
+  asking = run
+  return run
 }
 
 onLive((event) => {
@@ -39,5 +41,6 @@ setInterval(() => {
 }, 4 * 60 * 1000)
 onSignOut(() => {
   generation++
+  asking = null // the next account asks for its own
   useSocial.setState(EMPTY_SOCIAL, true)
 })

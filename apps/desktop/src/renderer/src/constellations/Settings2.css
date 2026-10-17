@@ -1,0 +1,790 @@
+/* Constellation settings (Roles.dc.html, approved Oct 13). The mockup's light surface, drawn with
+   the app's theme variables so dark mode works too (the mockup's colors are the light theme's:
+   #f7f0e9 sidebar, #fbdcc4 accent-soft, #fbf5ef subtle, #eaddd1 line, #dcc8b8 border, #6b5547
+   muted). Role colors come from inline styles. */
+
+.cx-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  box-sizing: border-box;
+  background: rgba(60, 44, 34, 0.55);
+  font-family: var(--glo-font-body);
+  color: var(--glo-ink);
+}
+.cx-settings {
+  width: 100%;
+  max-width: 1040px;
+  height: min(680px, calc(100vh - 80px));
+  display: flex;
+  border-radius: 20px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(36, 23, 15, 0.35);
+  outline: none;
+}
+
+/* The left menu */
+.cx-settings-nav {
+  width: 240px;
+  flex: none;
+  background: var(--glo-sidebar);
+  padding: 24px 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.cx-settings-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 16px;
+  min-width: 0;
+}
+.cx-settings-name > span:last-child {
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-settings-icon {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: var(--glo-font-display);
+  font-weight: 700;
+  font-size: 14px;
+}
+.cx-settings-tab {
+  height: 40px;
+  flex: none;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--glo-icon);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.cx-settings-tab:hover {
+  background: var(--glo-hover);
+}
+.cx-settings-tab[aria-current='page'] {
+  background: var(--glo-accent-soft);
+  color: var(--glo-ink);
+  font-weight: 700;
+}
+.cx-settings-tab--danger {
+  color: var(--glo-danger-text);
+  font-weight: 600;
+}
+.cx-settings-tab--danger[aria-current='page'] {
+  background: var(--glo-danger-bg);
+  color: var(--glo-danger-text);
+}
+.cx-settings-count {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: #f47a1f;
+  color: #2a1406;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The page */
+.cx-settings-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cx-settings-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 28px 12px;
+}
+.cx-settings-head h1 {
+  margin: 0;
+  flex: 1;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 26px;
+}
+.cx-create-role {
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #f47a1f;
+  color: #2a1406;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cx-create-role:hover {
+  background: #e2650f;
+}
+.cx-create-role:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.cx-settings-close {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--glo-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.cx-settings-close:hover {
+  background: var(--glo-hover);
+}
+.cx-settings-error {
+  margin: 0 28px 12px;
+}
+.cx-settings-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cx-settings-body--roles {
+  overflow: hidden;
+  gap: 0;
+}
+.cx-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.cx-settings-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--glo-muted);
+  line-height: 1.45;
+}
+.cx-settings-text strong {
+  color: var(--glo-ink);
+}
+.cx-settings .cx-field {
+  min-width: 0;
+}
+.cx-settings .cx-field input,
+.cx-settings .cx-field select {
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 15px;
+}
+.cx-settings .cx-field textarea {
+  border-radius: 10px;
+}
+.cx-settings .cx-field input:disabled,
+.cx-settings .cx-field select:disabled,
+.cx-settings .cx-field textarea:disabled {
+  background: var(--glo-subtle);
+  color: var(--glo-muted);
+}
+.cx-settings .cx-button {
+  height: 40px;
+}
+.cx-settings .cx-face {
+  flex: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-weight: 700;
+}
+.cx-settings .cx-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Constellation colors (Overview) */
+.cx-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cx-swatch {
+  position: relative;
+  width: 44px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.cx-swatch span {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+}
+.cx-swatch:disabled {
+  cursor: default;
+}
+.cx-swatch:focus-visible,
+.cx-role-color:focus-visible {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 4px;
+}
+
+/* A two-way switch (Text | Voice) */
+.cx-segment {
+  display: inline-flex;
+  flex: none;
+  height: 42px;
+  padding: 3px;
+  box-sizing: border-box;
+  border-radius: 21px;
+  background: var(--glo-panel);
+}
+.cx-segment button {
+  min-width: 70px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--glo-icon);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cx-segment button[aria-checked='true'] {
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(var(--glo-shadow-rgb), 0.15);
+}
+.cx-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--glo-icon);
+  cursor: pointer;
+}
+.cx-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #f47a1f;
+}
+
+/* Cards, groups and rows (Nebulas, Members, Invites, Moderation) */
+.cx-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--glo-subtle);
+}
+.cx-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cx-settings-group h2,
+.cx-role-heading {
+  margin: 4px 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.cx-settings-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.cx-settings-group-head h2 {
+  flex: 1;
+}
+.cx-settings-cat-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  margin-left: -8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.cx-settings-cat-input:hover {
+  border-color: var(--glo-line);
+}
+.cx-settings-cat-input:focus {
+  outline: none;
+  border-color: var(--glo-accent);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+}
+.cx-settings-group-actions {
+  display: flex;
+  gap: 4px;
+}
+.cx-settings-group-actions button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--glo-icon);
+  font: inherit;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.cx-settings-group-actions button:hover {
+  background: var(--glo-hover);
+}
+.cx-settings-drop {
+  padding: 12px;
+  border: 1px dashed var(--glo-border);
+  border-radius: 12px;
+  text-align: center;
+  font-size: 13px;
+}
+.cx-settings-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+}
+.cx-settings-item[draggable='true'] {
+  cursor: grab;
+}
+.cx-settings-item[draggable='true']:active {
+  cursor: grabbing;
+}
+.cx-settings-item--drag {
+  opacity: 0.45;
+  border-style: dashed;
+  border-color: var(--glo-accent);
+}
+.cx-settings-item-kind {
+  width: 24px;
+  flex: none;
+  text-align: center;
+  color: #e2650f;
+  font-size: 16px;
+}
+.cx-settings-item-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cx-settings-item-text strong {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-settings-item-text > span {
+  font-size: 13px;
+  color: var(--glo-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-settings-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.cx-settings-edit {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.cx-settings-edit input[type='text'] {
+  flex: 1 1 160px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+.cx-settings-edit input[type='text']:focus,
+.cx-settings-search:focus {
+  outline: 2px solid rgba(var(--glo-accent-rgb), 0.35);
+  border-color: var(--glo-accent);
+}
+.cx-settings-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--glo-danger-text);
+}
+.cx-settings-confirm-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--glo-danger-line);
+  background: var(--glo-danger-bg);
+}
+.cx-settings-confirm-box p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.cx-settings-search {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+
+/* Small text buttons (Edit, Delete, Copy, Turn off) */
+.cx-link-button {
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--glo-link);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cx-link-button:hover {
+  background: var(--glo-hover);
+  color: var(--glo-link-hover);
+}
+.cx-link-button--danger {
+  color: var(--glo-danger-text);
+}
+.cx-link-button--danger:hover {
+  background: var(--glo-danger-bg);
+  color: var(--glo-danger-text);
+}
+.cx-link-button--quiet {
+  color: var(--glo-muted);
+  font-weight: 500;
+}
+.cx-link-code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+
+/* Roles (exact mockup) */
+.cx-roles-note {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--glo-muted);
+}
+.cx-roles {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 20px;
+}
+.cx-roles-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 260px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+.cx-role-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  background: transparent;
+  color: var(--glo-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cx-role-row:hover {
+  background: var(--glo-subtle);
+}
+.cx-role-row[aria-pressed='true'] {
+  /* 2px border without the row jumping: 1px border + 1px inset ring. */
+  border-color: #f47a1f;
+  box-shadow: inset 0 0 0 1px #f47a1f;
+  background: var(--glo-accent-tint);
+}
+.cx-role-row[draggable='true'] {
+  cursor: grab;
+}
+.cx-role-row[draggable='true']:active {
+  cursor: grabbing;
+}
+.cx-role-swatch {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 7px;
+}
+.cx-role-row-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-role-row-count {
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.cx-role-edit {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--glo-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+.cx-role-colors {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+.cx-role-color {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  cursor: pointer;
+}
+.cx-role-color:disabled {
+  cursor: default;
+}
+.cx-role-edit > .cx-role-heading {
+  margin-top: 4px;
+}
+.cx-perms {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cx-perm {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--glo-line-soft);
+  cursor: pointer;
+}
+.cx-perm--last {
+  border-bottom: 0;
+}
+.cx-perm-name {
+  display: block;
+  font-weight: 600;
+}
+.cx-perm-what {
+  display: block;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.cx-perm input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  flex: none;
+  accent-color: #f47a1f;
+  cursor: pointer;
+}
+.cx-perm input:disabled {
+  cursor: default;
+}
+.cx-perm:has(input:disabled) {
+  cursor: default;
+}
+
+/* Invites */
+.cx-invite-friends {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.cx-invite-friend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cx-invite-friend:hover {
+  background: var(--glo-subtle);
+}
+.cx-invite-friend:has(input:checked) {
+  border-color: #f47a1f;
+  background: var(--glo-accent-tint);
+}
+.cx-invite-friend input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+  accent-color: #f47a1f;
+}
+
+/* Moderation log */
+.cx-mod-line {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--glo-line-soft);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.cx-mod-when {
+  flex: none;
+  width: 120px;
+  font-size: 12px;
+  color: var(--glo-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A smaller Constellations dialog (confirmations) */
+.cx-dialog--small {
+  max-width: 440px;
+}
+
+/* Narrow windows: the menu becomes a row of tabs on top. */
+@media (max-width: 760px) {
+  .cx-settings-backdrop {
+    padding: 12px;
+  }
+  .cx-settings {
+    flex-direction: column;
+    height: calc(100vh - 24px);
+  }
+  .cx-settings-nav {
+    width: auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 10px;
+    gap: 4px;
+  }
+  .cx-settings-name {
+    display: none;
+  }
+  .cx-settings-nav > span {
+    display: none;
+  }
+  .cx-settings-tab {
+    white-space: nowrap;
+  }
+  .cx-settings-head,
+  .cx-settings-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .cx-roles {
+    flex-direction: column;
+  }
+  .cx-settings-body--roles {
+    overflow-y: auto;
+  }
+  .cx-roles-list {
+    width: auto;
+  }
+}

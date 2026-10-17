@@ -1,16 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { TextInput, View } from 'react-native'
 // Gesture-handler's scroll view: a group being dragged stops the list scrolling under it.
 import { ScrollView } from 'react-native-gesture-handler'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { chatTitle, groupMatches, isMuted, memberCountLabel, mutedLabel, sortGroups, type GroupSummary } from '@glofly/shared'
+import { chatTitle, groupMatches, isMuted, memberCountLabel, mutedLabel, sortGroups, type ConversationSummary, type GroupSummary } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { useStore, patchConversation } from '@/state/store'
 import { useSession } from '@/state/session'
 import { makeNameOf } from '@/lib/chats'
 import { chooseMute, leaveGroup, openChat, setMute, setPinned } from '@/lib/chatActions'
-import { useNow } from '@/lib/hooks'
+import { useListNow } from '@/lib/hooks'
 import { joinCallIn } from '@/calls/controller'
 import { ChatRow } from '@/ui/ChatRow'
 import { chooseFrom, inform, type SheetItem } from '@/ui/dialogs'
@@ -19,6 +19,9 @@ import { Spinner, Text, webNoOutline } from '@/ui/kit'
 import { Fab } from '@/ui/Fab'
 import { ReorderList, reorderActive } from '@/ui/Reorder'
 import { font, useTheme } from '@/ui/theme'
+
+const pressGroup = (g: ConversationSummary) => void openChat(g.id)
+const joinGroup = (g: ConversationSummary) => void joinCallIn(g.id, false)
 
 export default function Groups() {
   const { c } = useTheme()
@@ -31,7 +34,7 @@ export default function Groups() {
   const typing = useStore((s) => s.typing)
   const calls = useStore((s) => s.calls)
   const [query, setQuery] = useState('')
-  const now = useNow(4000)
+  const now = useListNow(typing)
   const nameOf = useMemo(() => makeNameOf(people), [people])
   const groups = useMemo(() => sortGroups(Object.values(conversations).filter((x): x is GroupSummary => x.kind === 'group')), [conversations])
   const shown = useMemo(() => groups.filter((g) => groupMatches(g, query)), [groups, query])
@@ -78,6 +81,11 @@ export default function Groups() {
     else if (pick === 'settings') router.push({ pathname: '/group/[id]', params: { id: g.id } })
     else if (pick === 'leave') void leaveGroup(g)
   }
+
+  // Stable for ChatRow (memo); the ref always calls the latest menu().
+  const menuRef = useRef(menu)
+  menuRef.current = menu
+  const holdGroup = useCallback((g: ConversationSummary) => !reorderActive() && void menuRef.current(g as GroupSummary), [])
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
@@ -133,9 +141,9 @@ export default function Groups() {
                 call={calls[g.id]}
                 now={now}
                 subtitle={`${memberCountLabel(g.memberCount)} · ${onlineCount(g)} online`}
-                onPress={() => void openChat(g.id)}
-                onLongPress={() => !reorderActive() && void menu(g)}
-                onJoin={() => void joinCallIn(g.id, false)}
+                onPress={pressGroup}
+                onLongPress={holdGroup}
+                onJoin={joinGroup}
               />
             </View>
           )}

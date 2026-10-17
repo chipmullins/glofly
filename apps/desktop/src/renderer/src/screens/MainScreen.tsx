@@ -74,7 +74,13 @@ import { isShortcutKey, isWeb, shortcutLabel } from '../lib/platform'
 import { useSocial, useSocialSync } from '../lib/social'
 import { HangToast, SocialActions, SocialStrip, YearInGlowDialog } from '../components/Social'
 import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcast'
-import { useMyBroadcast } from '../lib/broadcast'
+import { stopLive, useMyBroadcast } from '../lib/broadcast'
+import ConstellationsScreen from '../constellations/ConstellationsScreen'
+import { useConstellationsPhase, viewingNebula } from '../constellations/phase'
+import { GalaxyIcon } from '../constellations/sky'
+import { useConstellationCards, usePinnedNebulas } from '../lib/constellations'
+import HomeDock, { type HomeDockHandle } from '../constellations/HomeDock'
+import MyGamesPanel from '../components/MyGames'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -129,12 +135,15 @@ function SettingsMenu({
   onLogout,
   onOpenSettings,
   onEditProfile,
-  onYearInGlow
+  onYearInGlow,
+  onMyGames
 }: {
   onLogout: () => void
   onOpenSettings: () => void
   onEditProfile: () => void
   onYearInGlow: () => void
+  /** 2.0: your games and who sees them */
+  onMyGames: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
@@ -165,6 +174,18 @@ function SettingsMenu({
           >
             <ProfileIcon size={18} />
             Edit profile
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close()
+              onMyGames()
+            }}
+          >
+            <GameIcon size={18} />
+            My games
           </button>
           <button
             type="button"
@@ -496,11 +517,31 @@ export default function MainScreen({
   useSocialSync()
   const social = useSocial()
   const myLive = useMyBroadcast()
+  // Signing out (or the session ending) while live ends the broadcast and stops sharing the screen.
+  useEffect(() => () => void stopLive(), [])
   const [goLive, setGoLive] = useState(false)
   const [livePanel, setLivePanel] = useState(false)
   const [watchingId, setWatchingId] = useState<string | null>(null)
   const [hangPing, setHangPing] = useState<PublicUser | null>(null)
   const [yearOpen, setYearOpen] = useState(false)
+  // Glofly 2.0: Constellations (the night side) and My games.
+  const cx = useConstellationsPhase()
+  const cxNavRef = useRef<HTMLButtonElement>(null)
+  /** Nebula chats seen in live news, so their notifications know where to open */
+  const nebulaChats = useRef(new Map<string, { constellationId: string; nebulaId: string }>())
+  const cxEnterRef = useRef((place: { constellationId: string; nebulaId: string }) =>
+    cx.enter(cxNavRef.current, place)
+  )
+  // The nebula dock on Glofly home (2.0): it opens a nebula's notification right here.
+  const homeDock = useRef<HomeDockHandle>(null)
+  useEffect(() => {
+    cxEnterRef.current = (place) => {
+      if (cx.phase === 'home' && homeDock.current) {
+        homeDock.current.openNebula(place.constellationId, place.nebulaId)
+      } else cx.enter(cxNavRef.current, place)
+    }
+  })
+  const [myGamesOpen, setMyGamesOpen] = useState(false)
   const closeHangPing = useCallback(() => setHangPing(null), [])
   const callControls = useRef<CallsValue | null>(null)
   /** The sidebar's "Find a friend or chat" search */
@@ -530,6 +571,15 @@ export default function MainScreen({
   // 0.4.0: a restricted (family-managed) account: Glofly Control can turn it on or off any time
   // (account:changed), so it's asked again then.
   const [restricted, setRestricted] = useState(user.restricted === true)
+  // Family-managed (restricted) accounts can't use Constellations at all (the server refuses too).
+  const cxCards = useConstellationCards(!restricted)
+  const cxPins = usePinnedNebulas(!restricted && cx.phase === 'home')
+  const cxNew = cxCards.cards.some((c) => c.unreadCount > 0 || c.mentionCount > 0)
+  const cxOpen = cx.phase !== 'home'
+  const { leave: cxLeave } = cx
+  useEffect(() => {
+    if (restricted) cxLeave()
+  }, [restricted, cxLeave])
   useEffect(
     () =>
       window.glofly.onEvent((event) => {
@@ -591,12 +641,21 @@ export default function MainScreen({
 
   // Several refreshes can overlap (say, a burst of changes): only the newest one counts.
   const conversationsRequest = useRef(0)
+  /** Bumped by live changes to the list (new messages, edits, "Seen") */
+  const liveChanges = useRef(0)
   const refreshConversations = useCallback(async () => {
-    const mine = ++conversationsRequest.current
-    const result = await window.glofly.conversations.list()
-    if (mine !== conversationsRequest.current) return
-    if (result.ok) setConversations(result.data)
-    else if (result.error === 'unauthorized') onSessionExpired()
+    const load = async (retry: boolean): Promise<void> => {
+      const mine = ++conversationsRequest.current
+      const seen = liveChanges.current
+      const result = await window.glofly.conversations.list()
+      if (mine !== conversationsRequest.current) return
+      // A live change arrived while this was loading, so the answer may be from before it
+      // (it would undo a new message or unread count): ask once more instead.
+      if (result.ok && retry && liveChanges.current !== seen) return load(false)
+      if (result.ok) setConversations(result.data)
+      else if (result.error === 'unauthorized') onSessionExpired()
+    }
+    await load(true)
   }, [onSessionExpired])
 
   const refreshNotices = useCallback(async () => {
@@ -659,6 +718,9 @@ export default function MainScreen({
     return window.glofly.onEvent((event) => {
       switch (event.type) {
         case 'message:new': {
+          // 2.0: nebula messages belong to Constellations (its own alerts below), not your chats.
+          if (event.nebula) break
+          liveChanges.current++
           const m = event.message
           const viewing = openChatRef.current === m.conversationId && document.hasFocus()
           // Group events ("Maya renamed the group") don't ding or count as unread.
@@ -693,6 +755,7 @@ export default function MainScreen({
           break
         }
         case 'message:updated': {
+          liveChanges.current++
           // Keep the sidebar preview in step with edits and deletes of the latest message.
           const m = event.message
           setConversations((list) =>
@@ -722,6 +785,7 @@ export default function MainScreen({
           break
         }
         case 'conversation:read': {
+          liveChanges.current++
           // They read the chat: update "Seen".
           const { conversationId, readAt } = event
           setConversations((list) =>
@@ -824,7 +888,40 @@ export default function MainScreen({
         case 'session:expired':
           onSessionExpired()
           break
+        case 'constellation:activity': {
+          nebulaChats.current.set(event.conversationId, {
+            constellationId: event.constellationId,
+            nebulaId: event.nebulaId
+          })
+          if (!event.alert || event.senderId === user.id) break
+          const looking =
+            viewingNebula.conversationId === event.conversationId && document.hasFocus()
+          if (looking) break
+          playSound('message')
+          if (shouldNotify()) {
+            const where = `#${event.nebulaName ?? ''}`
+            void notify(
+              {
+                key: `nebula:${event.conversationId}`,
+                conversationId: event.conversationId,
+                title: `${event.senderName ?? 'Someone'} · ${where}`,
+                body: previewsOn()
+                  ? `${event.constellationName ? `${event.constellationName}: ` : ''}${event.preview ?? ''}`
+                  : event.alert === 'mention'
+                    ? `Mentioned you in ${event.constellationName ?? 'a constellation'}`
+                    : `New message in ${event.constellationName ?? 'a constellation'}`
+              },
+              null
+            )
+          }
+          break
+        }
         case 'notification:click':
+          // 2.0: a nebula's notification opens Constellations right at that nebula.
+          if (event.conversationId && nebulaChats.current.has(event.conversationId)) {
+            cxEnterRef.current(nebulaChats.current.get(event.conversationId)!)
+            break
+          }
           // Glofly is already in front: open the chat (or Friends → Pending for a request).
           if (event.conversationId) setOpenChatId(event.conversationId)
           else {
@@ -1060,6 +1157,23 @@ export default function MainScreen({
       list.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0, mentionCount: 0 } : c))
     )
   }, [])
+
+  /** From the night side: the swarm carries you home, then this happens. */
+  const homeThen = (then?: () => void): void => {
+    cx.leave()
+    then?.()
+  }
+  /** A call bar was clicked: a nebula's voice opens Constellations, anything else its chat. */
+  const openFromCall = (conversationId: string): void => {
+    const current = callControls.current?.current
+    const chat = current?.chat
+    if (chat?.kind === 'nebula' && chat.nebula && current?.conversationId === conversationId) {
+      cx.enter(cxNavRef.current, {
+        constellationId: chat.nebula.constellationId,
+        nebulaId: chat.nebula.nebulaId
+      })
+    } else setOpenChatId(conversationId)
+  }
 
   const openChat = conversations.find((c) => c.id === openChatId) ?? null
 
@@ -1353,7 +1467,15 @@ export default function MainScreen({
       onSessionExpired={onSessionExpired}
       controlsRef={callControls}
     >
-      <div className={narrowList ? 'main main--enter main--narrow-list' : 'main main--enter'}>
+      <div
+        className={['main', cx.homeClass || 'main--enter', narrowList ? 'main--narrow-list' : '']
+          .filter(Boolean)
+          .join(' ')}
+        style={
+          { '--cx-ox': `${cx.origin.x}px`, '--cx-oy': `${cx.origin.y}px` } as React.CSSProperties
+        }
+        aria-hidden={cxOpen ? true : undefined}
+      >
         <aside className="sidebar">
           <div className="sidebar-top">
             <div className="sidebar-logo" aria-hidden="true">
@@ -1412,6 +1534,7 @@ export default function MainScreen({
               onOpenSettings={() => setSettingsOpen('general')}
               onEditProfile={() => setEditingProfile(true)}
               onYearInGlow={() => setYearOpen(true)}
+              onMyGames={() => setMyGamesOpen(true)}
             />
             {statusOpen && (
               <StatusMenu
@@ -1453,6 +1576,19 @@ export default function MainScreen({
               <GroupIcon />
               Groups
             </button>
+            {!restricted && (
+              <button
+                ref={cxNavRef}
+                type="button"
+                className="nav-item cx-nav"
+                aria-label={cxNew ? 'Constellations, new activity' : 'Constellations'}
+                onClick={() => cx.enter(cxNavRef.current)}
+              >
+                <GalaxyIcon />
+                Constellations
+                {cxNew && <span className="cx-nav-dot" aria-hidden="true" />}
+              </button>
+            )}
           </nav>
 
           <SocialActions
@@ -1467,7 +1603,7 @@ export default function MainScreen({
             onManageLive={() => setLivePanel(true)}
           />
 
-          <CallStrip openChatId={openChatId} onOpenChat={setOpenChatId} />
+          <CallStrip openChatId={openChatId} onOpenChat={openFromCall} />
 
           <SocialStrip
             people={friendsById}
@@ -1523,7 +1659,7 @@ export default function MainScreen({
             onChangeEmail={() => setSettingsOpen('account')}
             onSessionExpired={onSessionExpired}
           />
-          <CallFloat openChatId={openChatId} onOpenChat={setOpenChatId} />
+          <CallFloat openChatId={openChatId} onOpenChat={openFromCall} />
           {watchingId && friendsById.get(watchingId) && (
             <BroadcastViewer
               person={friendsById.get(watchingId)!}
@@ -1661,7 +1797,95 @@ export default function MainScreen({
             </>
           )}
         </main>
+      </div>
 
+      <ConstellationsScreen
+        phase={cx.phase}
+        origin={cx.origin}
+        start={cx.start}
+        me={user}
+        myStatus={myStatus}
+        onChangeStatus={changeStatus}
+        presence={presence}
+        friends={lists?.friends ?? []}
+        conversations={conversations}
+        now={now}
+        cards={cxCards.cards}
+        invites={cxCards.invites}
+        loaded={cxCards.loaded}
+        reloadCards={cxCards.reload}
+        onHome={() => homeThen()}
+        onOpenChat={(id) => homeThen(() => setOpenChatId(id))}
+        onCall={(c) =>
+          homeThen(() => {
+            setOpenChatId(c.id)
+            callControls.current?.start(c, false)
+          })
+        }
+        onMessage={(person) => homeThen(() => void openChatWith(person.id))}
+        onRead={markedRead}
+        onStartDm={async (person) => {
+          const existing = conversations.find((c) => c.kind === 'dm' && c.partner.id === person.id)
+          if (existing) return existing.id
+          const result = await window.glofly.conversations.openDm(person.id)
+          if (!result.ok) {
+            if (result.error === 'unauthorized') onSessionExpired()
+            else setToast(result.message)
+            return null
+          }
+          const opened = result.data
+          setConversations((list) =>
+            list.some((c) => c.id === opened.id) ? list : [opened, ...list]
+          )
+          return opened.id
+        }}
+        onViewProfile={viewPerson}
+        onReport={(m, sender) =>
+          setReporting({
+            person: sender,
+            message: {
+              id: m.id,
+              conversationId: m.conversationId,
+              preview: (shortBody(m.body) || attachmentSummary(m.attachments)).slice(0, 300)
+            }
+          })
+        }
+        onAppSettings={() => setSettingsOpen('general')}
+        onSessionExpired={onSessionExpired}
+      />
+
+      {cx.phase === 'home' && !restricted && cxCards.cards.length > 0 && (
+        <HomeDock
+          handleRef={homeDock}
+          me={user}
+          cards={cxCards.cards}
+          pins={cxPins.pins}
+          onPins={cxPins.setPins}
+          onEnter={(place) => cx.enter(cxNavRef.current, place)}
+          onCardsChanged={() => {
+            cxCards.reload()
+            cxPins.reload()
+          }}
+          onProblem={setToast}
+        />
+      )}
+
+      <div className="main-dialogs">
+        {myGamesOpen && (
+          <div
+            className="dialog-backdrop"
+            onMouseDown={(e) => e.target === e.currentTarget && setMyGamesOpen(false)}
+          >
+            <div className="mg-alone">
+              <MyGamesPanel
+                userId={user.id}
+                name={user.displayName}
+                isMe
+                onClose={() => setMyGamesOpen(false)}
+              />
+            </div>
+          </div>
+        )}
         {adding && (
           <AddFriendDialog
             onClose={() => setAdding(false)}

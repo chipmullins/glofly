@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import express, { type ErrorRequestHandler } from "express";
 import helmet from "helmet";
 import { sql } from "drizzle-orm";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { authRouter } from "./auth/routes";
 import { accountRouter } from "./account/routes";
 import { purgeDeletedAccounts } from "./account/deletion";
@@ -16,13 +16,15 @@ import { sweepBirthdays } from "./social/birthdays";
 import { stickersRouter } from "./stickers/routes";
 import { broadcastsRouter, sweepBroadcasts } from "./broadcasts/routes";
 import { callsRouter } from "./calls/routes";
+import { constellationsRouter } from "./constellations/routes";
+import { myGamesRouter, sweepPlaytime } from "./games/routes";
 import { watchPageRouter } from "./calls/player";
 import { sweepCalls } from "./calls/service";
 import { livekitConfigured } from "./calls/livekit";
 import { avatarsRouter, profileRouter } from "./profile/routes";
 import { sweepUnsentUploads } from "./messages/attachments";
-import { startRealtime } from "./realtime";
-import { connectRedis } from "./redis";
+import { startRealtime, stopRealtime } from "./realtime";
+import { connectRedis, redis } from "./redis";
 import { storageKind } from "./storage";
 import { pausedPage, webRouter } from "./web/pages";
 import { WEB_ORIGIN, webCors } from "./web/session";
@@ -101,6 +103,9 @@ app.use("/social", socialRouter);
 app.use("/stickers", stickersRouter);
 app.use("/broadcasts", broadcastsRouter);
 app.use("/calls", callsRouter);
+// 2.0: Constellations (communities with nebulas, roles, voice rooms) and My games.
+app.use("/constellations", constellationsRouter);
+app.use("/games", myGamesRouter);
 // Watch Together's video player page (the apps show the shared YouTube video through it).
 app.use("/watch", watchPageRouter);
 app.use("/reports", reportsRouter);
@@ -133,6 +138,34 @@ app.use(errorHandler);
 const server = createServer(app);
 startRealtime(server);
 
+// A promise someone forgot to catch is logged, never allowed to take the whole server down.
+process.on("unhandledRejection", (err) => console.error("Unhandled promise rejection:", err));
+
+// Docker stops the server with SIGTERM (a deploy, a restart): stop taking new requests, close the
+// live connections, let requests already running finish, then close the database and Redis.
+// Anything still going after 10 seconds is cut off.
+let stopping = false;
+async function shutdown(signal: string): Promise<void> {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal}: shutting down.`);
+  setTimeout(() => process.exit(0), 10_000).unref();
+  try {
+    // Closing the live connections also closes the HTTP server, once its requests are done.
+    await stopRealtime();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    // A moment for the disconnected devices' presence updates to reach Redis and the database.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await pool.end().catch(() => undefined);
+    await redis.quit().catch(() => undefined);
+  } catch (err) {
+    console.error("Shutdown didn't go cleanly:", err);
+  }
+  process.exit(0);
+}
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
+process.once("SIGINT", () => void shutdown("SIGINT"));
+
 connectRedis()
   .then(() => {
     server.listen(PORT, () => {
@@ -152,9 +185,7 @@ connectRedis()
       );
     });
     // Calls nobody answered become missed; calls someone dropped out of are ended.
-    setInterval(() => {
-      sweepCalls().catch((err) => console.error("Call check failed", err));
-    }, 15 * 1000);
+    every(15_000, "Call check", sweepCalls);
     // 0.5.0: who's watching broadcasts (and ending abandoned ones), hangs that ran out, birthday
     // reminders, and lantern messages fading once read. Each runs one at a time (never on top of
     // itself if a run takes longer than its interval).
@@ -162,10 +193,10 @@ connectRedis()
     every(60_000, "Hang check", sweepHangs);
     every(60_000, "Birthday check", () => sweepBirthdays());
     every(5_000, "Lantern check", sweepLanterns);
+    // 2.0 My games: a minute of playtime for everyone playing something right now.
+    every(60_000, "Playtime", sweepPlaytime);
     // Files added to a chat but never sent are cleared out after an hour.
-    setInterval(() => {
-      sweepUnsentUploads().catch((err) => console.error("Upload cleanup failed", err));
-    }, 10 * 60 * 1000);
+    every(10 * 60 * 1000, "Upload cleanup", sweepUnsentUploads);
     // Deleted accounts are removed for good once their 30 days are up (checked hourly).
     const purge = () =>
       purgeDeletedAccounts().catch((err) => console.error("Account removal failed", err));

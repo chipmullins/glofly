@@ -6,6 +6,7 @@
 // desktop-only ones and re-exports the shared ones, so imports from here keep working.
 
 export type * from '@glofly/shared/types'
+export type * from '@glofly/shared/constellations'
 import type {
   AccountDetails,
   ActiveCall,
@@ -228,6 +229,9 @@ export type AppSettings = {
 /** Watch Together: what the timeline buttons can ask for. */
 export type WatchControlAction = 'play' | 'pause' | 'seek' | 'back' | 'forward'
 
+/** 2.0: the methods the constellations gateway allows. */
+export type ConstellationMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
 export type GloflyEvent =
   | ServerEvent
   /** Push to talk: the chosen key went down or came up */
@@ -435,6 +439,22 @@ export type GloflyApi = {
     typing: (conversationId: string) => void
   }
   /** 0.5.0: glows, "Want to hang?", birthdays, Year in Glow. */
+  /**
+   * 2.0 Constellations and My games: requests to the server's /constellations/… and /games/…
+   * routes (lib/constellations.ts wraps them with their types).
+   */
+  constellations: {
+    request: <T = unknown>(
+      method: ConstellationMethod,
+      path: string,
+      body?: unknown
+    ) => Promise<ApiResult<T>>
+    setIcon: (
+      constellationId: string,
+      data: ArrayBuffer,
+      type: PhotoType
+    ) => Promise<ApiResult<{ iconVersion: string }>>
+  }
   social: {
     get: () => Promise<ApiResult<SocialToday>>
     /** Free to hang for the next hour; tells these friends (null: every friend). */
@@ -647,6 +667,8 @@ export type GloflyApi = {
   }
   window: {
     setTheme: (theme: WindowTheme) => void
+    /** Windows: paint the minimize / maximize / close buttons to match what's under them (#rrggbb) */
+    setTitleBarColor: (color: string, symbolColor: string) => void
     /** Brings Glofly to your attention (an incoming call): shows it if it's in the tray, flashes the taskbar. */
     attention: () => void
   }

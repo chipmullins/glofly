@@ -21,6 +21,7 @@ import {
 import './dialogs.css'
 import './ProfileDialogs.css'
 import EmojiText from './EmojiText'
+import MyGamesPanel from './MyGames'
 import { NICKNAME_MAX } from '@glofly/shared/rules'
 
 type Fly = { left: string; top: number; size: 'big' | 'small'; rotate: number }
@@ -83,6 +84,8 @@ type ProfileCardProps = {
   onOnlineAlert?: (on: boolean) => void
   onClose: () => void
   onSessionExpired: () => void
+  /** 2.0: it's your own card (My games can be edited) */
+  isMe?: boolean
 }
 
 /** Someone's profile card (Profile.dc.html). */
@@ -98,7 +101,8 @@ export default function ProfileCard({
   onlineAlert,
   onOnlineAlert,
   onClose,
-  onSessionExpired
+  onSessionExpired,
+  isMe
 }: ProfileCardProps): React.JSX.Element {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -148,6 +152,8 @@ export default function ProfileCard({
   const presence = isFriend ? (livePresence ?? shown.presence ?? undefined) : undefined
   const statusText = presence && presence.status !== 'offline' ? presence.statusText : null
   const game = playing(presence)
+  // 2.0 My games: the pop-out beside the card.
+  const [gamesOpen, setGamesOpen] = useState(false)
 
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -156,9 +162,17 @@ export default function ProfileCard({
         role="dialog"
         aria-modal="true"
         aria-label={`${shown.displayName} profile`}
-        className="dialog profile-dialog"
+        className="dialog profile-dialog mg-anchor"
         tabIndex={-1}
       >
+        {gamesOpen && (
+          <MyGamesPanel
+            userId={person.id}
+            name={shown.displayName}
+            isMe={isMe === true}
+            onClose={() => setGamesOpen(false)}
+          />
+        )}
         <ProfileHero
           sparks={['a', 'b']}
           flies={[
@@ -210,6 +224,16 @@ export default function ProfileCard({
                 Report @{person.username}
               </button>
             )}
+
+            <button
+              type="button"
+              className="profile-games"
+              aria-expanded={gamesOpen}
+              onClick={() => setGamesOpen((v) => !v)}
+            >
+              <GameIcon size={16} />
+              My games
+            </button>
 
             {shown.joinedAt && (
               <div className="profile-joined">

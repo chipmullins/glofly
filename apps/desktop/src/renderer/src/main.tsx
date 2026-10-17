@@ -5,11 +5,16 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { startAppearance } from './lib/appearance'
 import { startScrollbars } from './lib/scrollbars'
+import { startTitleBarColor } from './lib/titleBar'
 import { setSoundSettings } from './lib/sounds'
 import { setNotificationSettings } from './lib/notify'
 
 // On Windows the app draws its own top area (see MainScreen.css and LoginScreen.css).
-if (window.glofly.platform === 'win32') document.documentElement.classList.add('has-titlebar')
+if (window.glofly.platform === 'win32') {
+  document.documentElement.classList.add('has-titlebar')
+  // …and the window buttons take on whatever color is under them.
+  startTitleBarColor()
+}
 // On a Mac too, with macOS's traffic-light buttons over the top-left corner.
 if (window.glofly.platform === 'darwin') document.documentElement.classList.add('mac-titlebar')
 

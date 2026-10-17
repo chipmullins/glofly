@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
+import { AppState, FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useWide } from '@/lib/layout'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -21,11 +21,11 @@ import * as api from '@/api/glofly'
 import { isAppActive, sendTyping } from '@/api/realtime'
 import { useStore, putMessage } from '@/state/store'
 import { useSession } from '@/state/session'
-import { loadLatest, loadOlder, loadUntil, markChatRead, updateMessage } from '@/state/sync'
+import { loadLatest, loadOlder, loadUntil, markChatRead, refreshConversations, updateMessage } from '@/state/sync'
 import { SearchPanel } from '@/chat/SearchPanel'
 import { chatMenu } from '@/lib/chatActions'
 import { firstName } from '@/lib/format'
-import { useNow } from '@/lib/hooks'
+import { useListNow } from '@/lib/hooks'
 import { QUICK_REACTIONS } from '@/lib/emoji'
 import { startCallIn, joinCallIn } from '@/calls/controller'
 import { RingSomeSheet } from '@/calls/RingSome'
@@ -49,6 +49,17 @@ import { useTheme } from '@/ui/theme'
 
 /** A GIF, poll or game: its text is only the plain version for older apps. */
 const special = (m: Message) => !!(m.gif || m.poll || m.game)
+
+// Row handlers that don't depend on the screen's state (the same functions every render).
+const retryOrDiscard = async (m: Message) => {
+  const pick = await chooseFrom([
+    { key: 'retry', label: 'Try again', icon: 'refresh' },
+    { key: 'discard', label: 'Delete it', icon: 'trash', danger: true },
+  ])
+  if (pick === 'retry') retry(m.id)
+  if (pick === 'discard') discard(m.id)
+}
+const openProfile = (uid: string) => router.push({ pathname: '/profile/[id]', params: { id: uid } })
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -88,7 +99,8 @@ export default function ChatScreen() {
   const composer = useRef<ComposerHandle>(null)
   const list = useRef<FlatList<RowInfo>>(null)
   const wide = useWide()
-  const now = useNow(3000)
+  // Ticks only while "typing…" can run out (it redrew the whole chat every 3 seconds).
+  const now = useListNow(typing ? { [id]: typing } : {})
   const uploads = useUploads(id)
   const voice = useVoice(id)
 
@@ -107,6 +119,30 @@ export default function ChatScreen() {
   useEffect(() => {
     if (unread > 0 && isAppActive()) void markChatRead(id)
   }, [id, unread])
+  // Messages that came while Glofly was off screen count as unread; coming back to this chat
+  // reads them (the unread count didn't change then, so the effect above didn't run).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active' || useStore.getState().viewing !== id) return
+      const c = useStore.getState().conversations[id]
+      if (c && (c.unreadCount > 0 || (c.mentionCount ?? 0) > 0)) void markChatRead(id)
+    })
+    return () => sub.remove()
+  }, [id])
+  // Not in the chats list (yet): opened from a notification before the list loaded, or it's
+  // gone. Ask for the list once; if it's still not there, say so instead of spinning forever.
+  const hasChat = !!chat
+  const [missing, setMissing] = useState<string | null>(null)
+  useEffect(() => {
+    if (hasChat) return
+    let live = true
+    void refreshConversations().then((ok) => {
+      if (live && ok && !useStore.getState().conversations[id]) setMissing(id)
+    })
+    return () => {
+      live = false
+    }
+  }, [id, hasChat])
 
   const isGroup = chat?.kind === 'group'
   const members = useMemo(() => (chat ? chat.members : []), [chat])
@@ -149,6 +185,7 @@ export default function ChatScreen() {
   }, [messages?.list, meId, chat, outbox, isGroup])
 
   const memberIds = useMemo(() => [meId, ...members.map((p) => p.id)], [meId, members])
+  const canMessage = !!chat?.canMessage
   const nameOf = (uid: string) => (uid === meId ? 'You' : (people[uid]?.displayName ?? 'Someone'))
 
   function onSend(text: string) {
@@ -296,11 +333,52 @@ export default function ChatScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, pendingJump])
 
+  // The message list's handlers and renderItem stay the same between renders, so MessageRow
+  // (memo) only redraws rows that changed. The ref always reaches the latest react / jumpTo.
+  const latest = useRef({ react, jumpTo })
+  latest.current = { react, jumpTo }
+  const onRowLongPress = useCallback((m: Message) => {
+    if (!isLocal(m)) setActionsFor(m)
+  }, [])
+  const onRowReact = useCallback((m: Message, e: string) => void latest.current.react(m, e), [])
+  const onQuotePress = useCallback((mid: string) => void latest.current.jumpTo(mid), [])
+  const onOpenPhoto = useCallback((m: Message, index: number) => setViewer({ message: m, index }), [])
+  const renderRow = useCallback(
+    ({ item }: { item: RowInfo }) => (
+      <MessageRow
+        row={item}
+        meId={meId}
+        isGroup={isGroup}
+        people={people}
+        members={mentionable}
+        highlight={highlight === item.message.id}
+        onLongPress={onRowLongPress}
+        onReact={onRowReact}
+        onQuotePress={onQuotePress}
+        onRetry={retryOrDiscard}
+        onAvatarPress={openProfile}
+        onOpenPhoto={onOpenPhoto}
+        canAct={canMessage}
+        memberIds={memberIds}
+      />
+    ),
+    [meId, isGroup, people, mentionable, highlight, onRowLongPress, onRowReact, onQuotePress, onOpenPhoto, canMessage, memberIds],
+  )
+
   if (!chat) {
     return (
       <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: insets.top }}>
-        <Spinner />
-        <Text tone="muted">Opening the chat…</Text>
+        {missing === id ? (
+          <>
+            <Text tone="muted">This chat isn't available.</Text>
+            {wide ? null : <IconButton name="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/chats'))} color={c.ink} size={24} />}
+          </>
+        ) : (
+          <>
+            <Spinner />
+            <Text tone="muted">Opening the chat…</Text>
+          </>
+        )}
       </View>
     )
   }
@@ -309,7 +387,6 @@ export default function ChatScreen() {
   const typingWho = typing ? Object.entries(typing).filter(([, until]) => until > now).map(([uid]) => uid) : []
   const subtitle = isGroup ? `${memberCountLabel(chat.memberCount)} · ${onlineCount} online` : presenceHeader(presence)
   const muted = isMuted(chat, now)
-  const canMessage = chat.canMessage
   const inCall = call && (call.status === 'ongoing' || call.status === 'ringing')
   const iAmIn = inCall && call.members.find((m) => m.userId === meId)?.state === 'joined'
   // Groups of 3+ (0.5.2): a new call can ring only some of the group.
@@ -398,31 +475,7 @@ export default function ChatScreen() {
           ) : null
         }
         ListEmptyComponent={!messages?.loaded ? <View style={{ padding: 32, transform: [{ scaleY: -1 }] }}><Spinner /></View> : null}
-        renderItem={({ item }) => (
-          <MessageRow
-            row={item}
-            meId={meId}
-            isGroup={isGroup}
-            people={people}
-            members={mentionable}
-            highlight={highlight === item.message.id}
-            onLongPress={(m) => !isLocal(m) && setActionsFor(m)}
-            onReact={(m, e) => void react(m, e)}
-            onQuotePress={(mid) => void jumpTo(mid)}
-            onRetry={async (m) => {
-              const pick = await chooseFrom([
-                { key: 'retry', label: 'Try again', icon: 'refresh' },
-                { key: 'discard', label: 'Delete it', icon: 'trash', danger: true },
-              ])
-              if (pick === 'retry') retry(m.id)
-              if (pick === 'discard') discard(m.id)
-            }}
-            onAvatarPress={(uid) => router.push({ pathname: '/profile/[id]', params: { id: uid } })}
-            onOpenPhoto={(m, index) => setViewer({ message: m, index })}
-            canAct={canMessage}
-            memberIds={memberIds}
-          />
-        )}
+        renderItem={renderRow}
       />
       <ChatFireflies conversationId={id} meId={meId} nameOf={nameOf} />
       {partnerBirthday && chat.kind === 'dm' ? <BirthdayConfetti userId={chat.partner.id} name={chat.partner.displayName} /> : null}

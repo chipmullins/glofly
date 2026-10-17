@@ -7,6 +7,7 @@ import { disconnectSessions, emitToUser } from "../realtime";
 import { removeFiles } from "../messages/attachments";
 import { removeGroupPhoto } from "../messages/routes";
 import { storage } from "../storage";
+import { constellationsOnAccountRemoval } from "../constellations/routes";
 import { endCallsFor } from "../calls/service";
 
 // Deleting an account is a two-step thing, like the design says: "You'll have 30 days to
@@ -68,6 +69,8 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
   for (const user of due) {
     const friends = await friendIdsOf(user.id);
     const partners = await chatPartnersOf(user.id);
+    // 2.0: constellations they own pass to someone else (or go, if nobody else is in them).
+    await constellationsOnAccountRemoval(user.id);
 
     // Their direct messages are removed (both sides); group chats just lose them as a member.
     const dms = await db

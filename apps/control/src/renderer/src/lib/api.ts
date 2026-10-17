@@ -24,6 +24,44 @@ const q = (params: Record<string, string | undefined>): string => {
 
 // ───────────── Shapes ─────────────
 
+/** 2.0: Constellations, as Control sees them */
+export type ConstellationStatus = 'all' | 'live' | 'taken_down'
+export type ConstellationOwner = { id: string; username: string; displayName: string }
+export type ConstellationRow = {
+  id: string
+  name: string
+  visibility: 'invite' | 'public' | 'approval'
+  type: string | null
+  createdAt: string
+  lastActivityAt: string
+  takenDownAt: string | null
+  takedownReason: string | null
+  owner: ConstellationOwner
+  memberCount: number
+  openReports: number
+}
+export type ConstellationInfo = {
+  id: string
+  name: string
+  description: string | null
+  visibility: ConstellationRow['visibility']
+  type: string | null
+  tags: string[]
+  createdAt: string
+  takenDownAt: string | null
+  takedownReason: string | null
+  owner: ConstellationOwner | undefined
+  memberCount: number
+  nebulas: { id: string; name: string; kind: 'text' | 'voice'; messages: number }[]
+  moderation: {
+    action: string
+    actor: string | null
+    target: string | null
+    details: Record<string, unknown> | null
+    createdAt: string
+  }[]
+}
+
 export type AccountStatus = 'deleting' | 'suspended' | 'unconfirmed' | 'confirmed'
 export type InviteStatus = 'pending' | 'expired' | 'accepted' | 'cancelled'
 
@@ -206,7 +244,10 @@ export type ReportDetail = {
   details: string | null
   kind: 'message' | 'person'
   messageId: string | null
-  chat: { kind: 'dm' | 'group'; name: string | null } | null
+  chat:
+    | { kind: 'dm' | 'group'; name: string | null }
+    | { kind: 'nebula'; name: string; constellation: { id: string; name: string } }
+    | null
   message: ReportMessage | null
   context: ReportMessage[]
   people: { id: string; username: string; displayName: string }[]
@@ -325,6 +366,19 @@ export const api = {
       `/admin/reports${q({ status, before })}`
     ),
   report: (id: string) => call<{ report: ReportDetail }>('GET', `/admin/reports/${id}`),
+  constellations: (query: string, status: ConstellationStatus, offset = 0) =>
+    call<{ constellations: ConstellationRow[]; hasMore: boolean }>(
+      'GET',
+      `/admin/constellations${q({ q: query, status, offset: offset ? String(offset) : undefined })}`
+    ),
+  constellation: (id: string) =>
+    call<{ constellation: ConstellationInfo }>('GET', `/admin/constellations/${id}`),
+  takeDown: (id: string, reason: string, note: string) =>
+    call<Done>('POST', `/admin/constellations/${id}/take-down`, { reason, note }),
+  restoreConstellation: (id: string, note: string) =>
+    call<Done>('POST', `/admin/constellations/${id}/restore`, { note }),
+  deleteConstellation: (id: string, confirmName: string, note: string) =>
+    call<Done>('POST', `/admin/constellations/${id}/delete`, { confirmName, note }),
   resolveReport: (id: string, body: ResolveAction) =>
     call<Done>('POST', `/admin/reports/${id}/resolve`, body),
   announcements: () =>

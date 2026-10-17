@@ -8,6 +8,7 @@ import { CreateAccount } from './screens/CreateAccount'
 import { Reports } from './screens/Reports'
 import { Announcements } from './screens/Announcements'
 import { Server } from './screens/Server'
+import { Constellations } from './screens/Constellations'
 import { api } from './lib/api'
 import { Sidebar, type Page } from './components/Sidebar'
 import { Toast } from './components/common'
@@ -143,6 +144,9 @@ export default function App(): JSX.Element {
             onOpenAccount={(id) => openAccounts('', id)}
             onCountChange={setOpenReports}
           />
+        )}
+        {page === 'constellations' && (
+          <Constellations toast={showToast} onOpenAccount={(id) => openAccounts('', id)} />
         )}
         {page === 'announcements' && <Announcements toast={showToast} />}
         {page === 'server' && <Server toast={showToast} onPauseChange={setPaused} />}

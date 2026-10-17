@@ -5,6 +5,8 @@ import { z } from "zod";
 import { db } from "../db";
 import {
   announcements,
+  constellations,
+  nebulas,
   conversationMembers,
   conversations,
   messages,
@@ -90,6 +92,17 @@ const rowFields = {
   deletedAt: messages.deletedAt,
 };
 
+/** How a report names the chat; nebulas (2.0) also name their constellation. */
+async function reportChat(chat: { kind: "dm" | "group" | "nebula"; name: string | null }, conversationId: string): Promise<ReportSnapshot["chat"]> {
+  if (chat.kind !== "nebula") return { kind: chat.kind, name: chat.name };
+  const [n] = await db
+    .select({ name: nebulas.name, constellationId: constellations.id, constellationName: constellations.name })
+    .from(nebulas)
+    .innerJoin(constellations, eq(constellations.id, nebulas.constellationId))
+    .where(eq(nebulas.conversationId, conversationId));
+  return n ? { kind: "nebula", name: n.name, constellation: { id: n.constellationId, name: n.constellationName } } : null;
+}
+
 // POST /reports  { messageId + conversationId | userId, reason, details?, block? }
 // Saves a copy of what was reported, as the reporter saw it, so it can be reviewed even if
 // it's edited or deleted later.
@@ -173,7 +186,7 @@ reportsRouter.post("/", reportLimiter, async (req, res) => {
       },
       context,
       people: await peopleOf([myId, ...context.map((c) => c.senderId)]),
-      chat: chat ?? null,
+      chat: chat ? await reportChat(chat, row.conversationId) : null,
     };
     const duplicate = await db
       .select({ id: reports.id })

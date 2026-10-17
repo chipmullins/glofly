@@ -1,0 +1,97 @@
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { CONSTELLATION_MEMBERS_MAX, CONSTELLATIONS_JOINED_MAX } from "@glofly/shared";
+import { db } from "../db";
+import type { Tx } from "../messages/routes";
+import {
+  attachments,
+  constellationInvites,
+  constellationJoinRequests,
+  constellationMemberRoles,
+  constellationMembers,
+  constellations,
+  conversationMembers,
+  nebulas,
+} from "../db/schema";
+import { removeFiles } from "../messages/attachments";
+import { removeFromChatCall } from "../calls/service";
+import { emitToUser } from "../realtime";
+import { constellationChanged } from "./activity";
+
+// Joining and leaving (2.0). A constellation's members are also members of each of its nebulas'
+// conversations (so every chat feature works there); these keep the two in step.
+
+export class ConstellationFull extends Error {}
+export class TooManyConstellations extends Error {}
+
+/** Adds someone (inside a transaction that locked the constellation row). */
+export async function addMember(tx: Tx, constellationId: string, userId: string): Promise<boolean> {
+  const [already] = await tx
+    .select({ userId: constellationMembers.userId })
+    .from(constellationMembers)
+    .where(and(eq(constellationMembers.constellationId, constellationId), eq(constellationMembers.userId, userId)));
+  if (already) return false;
+  const count = await tx.$count(constellationMembers, eq(constellationMembers.constellationId, constellationId));
+  if (count >= CONSTELLATION_MEMBERS_MAX) throw new ConstellationFull();
+  const mine = await tx.$count(constellationMembers, eq(constellationMembers.userId, userId));
+  if (mine >= CONSTELLATIONS_JOINED_MAX) throw new TooManyConstellations();
+  const now = new Date();
+  await tx.insert(constellationMembers).values({ constellationId, userId, joinedAt: now });
+  const chats = await tx.select({ id: nebulas.conversationId }).from(nebulas).where(eq(nebulas.constellationId, constellationId));
+  if (chats.length) {
+    // Everything already there counts as read (a newcomer doesn't start with 500 unread).
+    await tx
+      .insert(conversationMembers)
+      .values(chats.map((c) => ({ conversationId: c.id, userId, lastReadAt: now, joinedAt: now })))
+      .onConflictDoNothing();
+  }
+  // Joined: their invites and request for it are done.
+  await tx
+    .delete(constellationInvites)
+    .where(and(eq(constellationInvites.constellationId, constellationId), eq(constellationInvites.inviteeId, userId)));
+  await tx
+    .delete(constellationJoinRequests)
+    .where(and(eq(constellationJoinRequests.constellationId, constellationId), eq(constellationJoinRequests.userId, userId)));
+  return true;
+}
+
+/** After someone joined: everyone sees them, and their dashboard gets the new card. */
+export async function afterJoin(constellationId: string, userId: string): Promise<void> {
+  await constellationChanged(constellationId);
+  emitToUser(userId, "constellations:changed", {}, true);
+}
+
+/**
+ * Takes someone out (they left, were kicked or banned, or their account is going): out of every
+ * nebula, its voice rooms and roles. Their messages stay.
+ */
+export async function removeMember(constellationId: string, userId: string): Promise<boolean> {
+  const chats = await db.select({ id: nebulas.conversationId }).from(nebulas).where(eq(nebulas.constellationId, constellationId));
+  const chatIds = chats.map((c) => c.id);
+  const removed = await db.transaction(async (tx) => {
+    const gone = await tx
+      .delete(constellationMembers)
+      .where(and(eq(constellationMembers.constellationId, constellationId), eq(constellationMembers.userId, userId)))
+      .returning({ userId: constellationMembers.userId });
+    if (!gone.length) return null;
+    await tx
+      .delete(constellationMemberRoles)
+      .where(and(eq(constellationMemberRoles.constellationId, constellationId), eq(constellationMemberRoles.userId, userId)));
+    if (chatIds.length) {
+      await tx
+        .delete(conversationMembers)
+        .where(and(inArray(conversationMembers.conversationId, chatIds), eq(conversationMembers.userId, userId)));
+      // Files they added but never sent there.
+      return tx
+        .delete(attachments)
+        .where(and(inArray(attachments.conversationId, chatIds), eq(attachments.uploaderId, userId), isNull(attachments.messageId)))
+        .returning({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind });
+    }
+    return [];
+  });
+  if (removed === null) return false;
+  await removeFiles(removed);
+  for (const id of chatIds) await removeFromChatCall(id, userId);
+  await constellationChanged(constellationId, [userId]);
+  emitToUser(userId, "constellations:changed", {}, true);
+  return true;
+}

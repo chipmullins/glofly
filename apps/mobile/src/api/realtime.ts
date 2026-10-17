@@ -23,8 +23,16 @@ import { refreshAccount } from '@/state/account'
 // in the background Android delivers push notifications instead, so the server knows to send them.
 
 let socket: Socket | null = null
-let appState: AppStateStatus = AppState.currentState
+// Read fresh every time. This used to be copied once when the file loaded: on an iPhone the app is
+// often still "inactive" at that moment and turns "active" before startRealtime() listens, so the
+// copy stayed "inactive", nothing loaded and the app sat on "loading" until it was reopened.
+const currentAppState = (): AppStateStatus => AppState.currentState
+let appState: AppStateStatus = currentAppState()
 let backgroundTimer: ReturnType<typeof setTimeout> | null = null
+/** When Glofly last left the screen (0 while on screen). */
+let leftAt = 0
+/** Set by startRealtime(): connect or let go, following sign-in and the app being on screen. */
+let resync: () => void = () => {}
 /** While a call is going, the connection stays open in the background. */
 let keepAliveReasons = new Set<string>()
 
@@ -45,7 +53,7 @@ const emit = (event: string, payload: unknown) => {
   }
 }
 
-export const isAppActive = () => appState === 'active'
+export const isAppActive = () => currentAppState() === 'active'
 
 function serverParts() {
   const u = new URL(SERVER_URL)
@@ -63,6 +71,9 @@ function connect() {
     auth: { token, version: APP_VERSION, platform: PLATFORM, features: ['callMove'] },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000,
+    // A fresh connection every time instead of socket.io's cached one, which could still be
+    // winding down (or mid-reconnect) from the connection just closed.
+    forceNew: true,
   })
   const s = socket
 
@@ -213,6 +224,9 @@ export function keepConnected(reason: string, on: boolean) {
   if (on) keepAliveReasons.add(reason)
   else keepAliveReasons.delete(reason)
   if (on && !socket && useSession.getState().status === 'signedIn') connect()
+  // A call that ended while Glofly was in the background: let the connection go as usual, or the
+  // server keeps thinking Glofly is open and sends no push notifications.
+  if (!on && keepAliveReasons.size === 0 && currentAppState() !== 'active') resync()
 }
 
 let started = false
@@ -221,23 +235,35 @@ export function startRealtime() {
   if (started) return
   started = true
   const sync = () => {
+    appState = currentAppState()
     const signedIn = useSession.getState().status === 'signedIn'
     // While Glofly is paused nothing connects; ui/Paused.tsx checks back and this runs again.
     if (!signedIn || useSession.getState().paused) return disconnect()
     if (appState === 'active') {
+      const away = leftAt ? Date.now() - leftAt : 0
+      leftAt = 0
+      const graceStillPending = !!backgroundTimer
       if (backgroundTimer) clearTimeout(backgroundTimer)
       backgroundTimer = null
+      // iOS can suspend Glofly before the grace timer below runs. A connection that slept through
+      // that is usually dead without knowing it yet (nothing arrives until its ping times out,
+      // up to ~45 s), so start a fresh one.
+      if (socket && graceStillPending && away > 10_000 && keepAliveReasons.size === 0) disconnect()
       // Load straight away, without waiting for the live connection to come up.
       void refreshAll()
       if (!socket) connect()
-    } else if (!backgroundTimer && keepAliveReasons.size === 0) {
+    } else if (!leftAt) {
+      leftAt = Date.now()
+    }
+    if (appState !== 'active' && !backgroundTimer && keepAliveReasons.size === 0 && socket) {
       // A moment's grace for quick app switches, then push notifications take over.
       backgroundTimer = setTimeout(() => {
         backgroundTimer = null
-        if (appState !== 'active' && keepAliveReasons.size === 0) disconnect()
+        if (currentAppState() !== 'active' && keepAliveReasons.size === 0) disconnect()
       }, 1500)
     }
   }
+  resync = sync
   AppState.addEventListener('change', (next) => {
     appState = next
     sync()

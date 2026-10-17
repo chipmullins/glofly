@@ -70,7 +70,7 @@ import './CallPanel.css'
 // shows whole, with bars); screens are never cropped.
 
 /** A camera or screen, playing in a video element. */
-function TrackVideo({
+export function TrackVideo({
   track,
   mirror = false,
   fit = 'auto',

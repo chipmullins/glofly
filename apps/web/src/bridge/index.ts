@@ -7,6 +7,7 @@ import type {
   CallAddResult,
   CallJoin,
   ConversationSummary,
+  ConstellationMethod,
   FriendLists,
   Broadcast,
   BroadcastJoin,
@@ -57,6 +58,20 @@ import { saveAttachment } from './files'
 import { checkNow, onUpdateReady, reload, startUpdateChecks, updateReady } from './updates'
 import { startIdleWatch } from './idle'
 import { startLongPress } from './touch'
+
+/** 2.0: a request allowed through the constellations gateway (desktop: main/api.ts). */
+function isConstellationPath(method: unknown, path: unknown, body: unknown): boolean {
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method as string)) return false
+  if (typeof path !== 'string' || path.length > 300) return false
+  if (!/^\/(constellations|games)(\/[A-Za-z0-9_-]+)*\/?(\?[A-Za-z0-9=&%._+-]*)?$/.test(path))
+    return false
+  if (body === undefined || body === null) return true
+  try {
+    return typeof body === 'object' && JSON.stringify(body).length <= 20_000
+  } catch {
+    return false
+  }
+}
 
 // window.glofly for a browser: the same functions the desktop app's preload bridge offers
 // (apps/desktop/src/preload/index.ts), done here with fetch, a WebSocket and browser APIs instead
@@ -585,6 +600,15 @@ export function createBridge(): GloflyApi {
     reports: {
       send: (report) => request('POST', '/reports', report)
     },
+    // 2.0 Constellations and My games (the same limits as the desktop app's gateway).
+    constellations: {
+      request: <T>(method: ConstellationMethod, path: string, body?: unknown) =>
+        isConstellationPath(method, path, body)
+          ? request<T>(method, path, body ?? undefined)
+          : Promise.resolve(invalid as ApiResult<T>),
+      setIcon: (id, data, type) =>
+        badId(id) ?? request('PUT', `/constellations/${id}/icon`, undefined, { data, type })
+    },
     notices: {
       list: async () => {
         const result = await request<{ notices: unknown[]; announcement: unknown }>(
@@ -621,6 +645,7 @@ export function createBridge(): GloflyApi {
     },
     window: {
       setTheme: () => undefined,
+      setTitleBarColor: () => undefined,
       // A browser can't flash the taskbar: the call's notification and ringtone do that job.
       attention: () => undefined
     }

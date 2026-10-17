@@ -126,7 +126,7 @@ import {
   startGameWatch
 } from './games'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
-import { isUserId } from './api'
+import { isConstellationRequest, isUserId } from './api'
 import { checkPausedNow, configurePauseChecks, getPaused, getUpdateRequired } from './app-status'
 import { isReportRequest, listNotices, noticeSeen, sendReport } from './safety'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
@@ -186,6 +186,14 @@ const titleBarFor = (screen: WindowTheme): (typeof TITLE_BAR)[keyof typeof TITLE
 
 /** Which screen each window is showing, so its window buttons can follow theme changes. */
 const screenOf = new Map<number, WindowTheme>()
+/** The exact colors under each window's buttons, as the page last reported them (2.0). */
+const titleBarColorOf = new Map<number, { color: string; symbolColor: string; height: number }>()
+const titleBarOf = (
+  window: BrowserWindow
+): { color: string; symbolColor: string; height: number } =>
+  titleBarColorOf.get(window.webContents.id) ??
+  titleBarFor(screenOf.get(window.webContents.id) ?? 'login')
+const HEX = /^#[0-9a-fA-F]{6}$/
 
 // Developer option: `npm run second -w apps/desktop` opens a second copy of Glofly with its
 // own saved sign-in, so two test accounts can chat live on one PC.
@@ -425,7 +433,21 @@ function registerIpcHandlers(): void {
   ipcMain.on('window:theme', (event, theme: unknown) => {
     if (!customTitleBar || !isAppUrl(event.senderFrame?.url ?? '') || !isWindowTheme(theme)) return
     screenOf.set(event.sender.id, theme)
-    BrowserWindow.fromWebContents(event.sender)?.setTitleBarOverlay(titleBarFor(theme))
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (window) window.setTitleBarOverlay(titleBarOf(window))
+  })
+
+  // The page samples the color right under the window buttons (banners, Constellations' night
+  // sky, dialogs' dimming…) and the buttons take it on, so they never sit in a mismatched box.
+  ipcMain.on('window:titlebar-color', (event, color: unknown, symbolColor: unknown) => {
+    if (!customTitleBar || !isAppUrl(event.senderFrame?.url ?? '')) return
+    if (typeof color !== 'string' || typeof symbolColor !== 'string') return
+    if (!HEX.test(color) || !HEX.test(symbolColor)) return
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return
+    const bar = { color, symbolColor, height: 40 }
+    titleBarColorOf.set(event.sender.id, bar)
+    window.setTitleBarOverlay(bar)
   })
 
   ipcMain.handle('auth:register', (event, request: unknown) => {
@@ -642,6 +664,32 @@ function registerIpcHandlers(): void {
       return setGroupPhoto(id, new Uint8Array(data), type as PhotoType)
     }
   )
+  // 2.0 Constellations and My games: one gateway for their routes (/constellations/…, /games/…),
+  // limited to those paths, plain characters and small JSON bodies.
+  ipcMain.handle(
+    'constellations:request',
+    (event, method: unknown, path: unknown, body: unknown) => {
+      if (!fromApp(event) || !isConstellationRequest(method, path, body)) return invalid
+      return apiRequest(method, path as string, body ?? undefined)
+    }
+  )
+  ipcMain.handle('constellations:set-icon', (event, id: unknown, data: unknown, type: unknown) => {
+    if (
+      !fromApp(event) ||
+      !isUserId(id) ||
+      !(data instanceof ArrayBuffer) ||
+      !PHOTO_TYPES.includes(type as PhotoType)
+    ) {
+      return invalid
+    }
+    if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
+      return { ok: false, error: 'invalid', message: 'Photos can be up to 8 MB.' }
+    }
+    return apiRequest('PUT', `/constellations/${id}/icon`, undefined, {
+      data: new Uint8Array(data),
+      type: type as PhotoType
+    })
+  })
   ipcMain.handle('conversations:remove-group-photo', (event, id: unknown) =>
     fromApp(event) && isUserId(id) ? removeGroupPhoto(id) : invalid
   )
@@ -1139,7 +1187,7 @@ app.whenReady().then(() => {
     for (const window of BrowserWindow.getAllWindows()) {
       window.setBackgroundColor(isDark() ? '#1E1916' : '#FFFBF7')
       if (customTitleBar) {
-        window.setTitleBarOverlay(titleBarFor(screenOf.get(window.webContents.id) ?? 'login'))
+        window.setTitleBarOverlay(titleBarOf(window))
       }
     }
   })

@@ -16,6 +16,8 @@ import { sendUpdated } from "../messages/routes";
 import { closeRoom, livekitConfigured, peopleInRoom, removeFromRoom } from "./livekit";
 import { syncCallPushes } from "../push/calls";
 import { forgetWatch, watcherLeft } from "./watch";
+import { chatKind } from "../constellations/chats";
+import { forgetVoiceMutes } from "./voiceMutes";
 
 // How a call goes:
 //
@@ -76,15 +78,25 @@ async function participantsOf(callId: string): Promise<Participant[]> {
   return db.select().from(callParticipants).where(eq(callParticipants.callId, callId));
 }
 
-async function kindOf(conversationId: string): Promise<"dm" | "group"> {
-  const [c] = await db.select({ kind: conversations.kind }).from(conversations).where(eq(conversations.id, conversationId));
-  return c?.kind ?? "dm";
+async function kindOf(conversationId: string): Promise<"dm" | "group" | "nebula"> {
+  return (await chatKind(conversationId)) ?? "dm";
 }
 
-/** Where everyone in the chat stands in this call. */
+// 2.0 voice nebulas: a drop-in room is a call on the nebula's conversation that's "ongoing" from
+// the start (nobody is rung), lasts while anyone is in it, and is only ever told to the people in
+// it and to apps that know Constellations. constellations/voice.ts listens for changes to update
+// everyone's sidebar ("Maya, Jacob and Sam in Campfire").
+type NebulaCallListener = (conversationId: string, callId: string) => void;
+let nebulaCallListener: NebulaCallListener | null = null;
+export function onNebulaCallChange(listener: NebulaCallListener): void {
+  nebulaCallListener = listener;
+}
+
+/** Where everyone in the chat stands in this call. Nebulas: only the people in it. */
 async function statesFor(row: CallRow): Promise<MemberState[]> {
-  const members = await membersOf(row.conversationId);
+  const nebula = (await kindOf(row.conversationId)) === "nebula";
   const parts = await participantsOf(row.id);
+  const members = nebula ? parts.filter(isIn).map((p) => p.userId) : await membersOf(row.conversationId);
   const now = Date.now();
   return members.map((userId) => {
     const p = parts.find((x) => x.userId === userId);
@@ -136,6 +148,16 @@ export async function announceCall(
   endReason: "alone" | null = null,
 ): Promise<void> {
   const payload = { call: await describe(row, endReason), caller: await publicUser(row.callerId) };
+  if ((await kindOf(row.conversationId)) === "nebula") {
+    // A voice nebula: the people in it (and anyone just leaving), newer apps only. No pushes.
+    // Once it's over, everyone who was in it hears (so their call screens close).
+    const inIt = ACTIVE.includes(row.status)
+      ? payload.call.members.map((m) => m.userId)
+      : (await participantsOf(row.id)).map((p) => p.userId);
+    for (const userId of new Set([...inIt, ...alsoTell])) emitToUser(userId, "call:updated", payload, true);
+    nebulaCallListener?.(row.conversationId, row.id);
+    return;
+  }
   for (const userId of new Set([...(await membersOf(row.conversationId)), ...alsoTell])) {
     emitToUser(userId, "call:updated", payload);
   }
@@ -178,14 +200,68 @@ export async function isInCall(callId: string, userId: string): Promise<boolean>
 /** Ringing and ongoing calls in my chats (to show an incoming call, or rejoin one, after a restart). */
 export async function activeCallsFor(userId: string): Promise<CallRow[]> {
   const rows = await db
-    .select({ call: calls })
+    .select({ call: calls, kind: conversations.kind })
     .from(calls)
     .innerJoin(
       conversationMembers,
       and(eq(conversationMembers.conversationId, calls.conversationId), eq(conversationMembers.userId, userId)),
     )
+    .innerJoin(conversations, eq(conversations.id, calls.conversationId))
     .where(inArray(calls.status, ACTIVE));
-  return rows.map((r) => r.call);
+  // Voice nebulas (2.0) only count when I'm in them: a constellation's rooms aren't "calls in my
+  // chats", and older apps must never see them.
+  const out: CallRow[] = [];
+  for (const r of rows) {
+    if (r.kind !== "nebula" || (await isInCall(r.call.id, userId))) out.push(r.call);
+  }
+  return out;
+}
+
+/**
+ * 2.0: joins a voice nebula's room, opening it if nobody's in it. Returns the call, or null if
+ * the room closed at that very moment (try again).
+ */
+export async function joinVoiceRoom(conversationId: string, userId: string): Promise<CallRow | null> {
+  const [open] = await db
+    .select()
+    .from(calls)
+    .where(and(eq(calls.conversationId, conversationId), inArray(calls.status, ACTIVE)));
+  if (open) return joinCall(open.id, userId);
+  try {
+    const now = new Date();
+    const [row] = await db
+      .insert(calls)
+      .values({ conversationId, callerId: userId, video: false, status: "ongoing", answeredAt: now })
+      .returning();
+    await db.insert(callParticipants).values({ callId: row.id, userId, joinedAt: now });
+    await announceCall(row);
+    return row;
+  } catch (err) {
+    // Someone else opened it a moment ago: join theirs.
+    const code = (err as { code?: string })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
+    if (code !== "23505") throw err;
+    const [theirs] = await db
+      .select()
+      .from(calls)
+      .where(and(eq(calls.conversationId, conversationId), inArray(calls.status, ACTIVE)));
+    return theirs ? joinCall(theirs.id, userId) : null;
+  }
+}
+
+/** The voice room open in a nebula right now, if any. */
+export async function openVoiceRoom(conversationId: string): Promise<CallRow | null> {
+  const [row] = await db
+    .select()
+    .from(calls)
+    .where(and(eq(calls.conversationId, conversationId), inArray(calls.status, ACTIVE)));
+  return row ?? null;
+}
+
+/** Who is in a call right now, in the order they joined. */
+export async function peopleInCall(callId: string): Promise<string[]> {
+  const parts = (await participantsOf(callId)).filter(isIn);
+  parts.sort((a, b) => a.joinedAt!.getTime() - b.joinedAt!.getTime());
+  return parts.map((p) => p.userId);
 }
 
 /** The call's line in the chat, matching its current state. */
@@ -271,6 +347,7 @@ export async function closeCall(callId: string, reason: CloseReason, alsoTell: s
   stopRinging(callId);
   forget(callId);
   forgetWatch(callId); // Watch Together: nothing to watch once the call is over
+  forgetVoiceMutes(callId);
   await refreshLine(closed);
   await announceCall(closed, alsoTell, reason === "alone" ? "alone" : null);
   // A missed call counts as unread for whoever missed it: their chat list refreshes the badge.
@@ -365,7 +442,7 @@ export async function declineCall(callId: string, userId: string): Promise<void>
 export async function leaveCall(callId: string, userId: string, alsoTell: string[] = []): Promise<void> {
   const row = await reload(callId);
   if (!row || !ACTIVE.includes(row.status)) return;
-  const group = (await kindOf(row.conversationId)) === "group";
+  const group = (await kindOf(row.conversationId)) !== "dm"; // groups and voice nebulas
 
   if (row.status === "ringing") {
     if (userId === row.callerId) {
@@ -456,7 +533,7 @@ export async function endCallsBetween(a: string, b: string): Promise<void> {
 /** Someone's account is being deleted: their 1-on-1 calls end; they drop out of group calls. */
 export async function endCallsFor(userId: string): Promise<void> {
   for (const row of await activeCallsFor(userId)) {
-    if ((await kindOf(row.conversationId)) === "group") await removeFromChatCall(row.conversationId, userId);
+    if ((await kindOf(row.conversationId)) !== "dm") await removeFromChatCall(row.conversationId, userId);
     else await closeCall(row.id, "not_allowed");
   }
 }
@@ -533,7 +610,7 @@ export async function sweepCalls(): Promise<void> {
     }
     // One person on their own for 7 minutes: the call ends. Their app shows a countdown for the
     // last minute (soloEndsAt), so the call is announced when the count starts and stops.
-    // Normal group chats only (on the 2.0 branch, voice nebulas are left alone).
+    // Normal group chats only (voice nebulas: sitting in Campfire on your own is fine).
     const soloKey = `${row.id}:solo`;
     if (present.length <= 1 && (await kindOf(row.conversationId)) === "group") {
       const counting = missingSince.has(soloKey);

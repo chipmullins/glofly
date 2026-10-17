@@ -153,6 +153,11 @@ export async function setDeviceActivity(
   return true;
 }
 
+/** What someone's playing right now on any device (2.0 My games), whatever their status. */
+export async function currentActivity(userId: string): Promise<Activity | null> {
+  return activityOf(userId);
+}
+
 /** What someone's playing on any of their devices (the game started first wins). */
 async function activityOf(userId: string): Promise<Activity | null> {
   let found: Activity | null = null;
@@ -183,38 +188,55 @@ export async function presenceOf(userIds: string[]): Promise<Map<string, Presenc
     .from(users)
     .where(inArray(users.id, userIds));
 
-  for (const row of rows) {
-    const devices = await liveDevices(row.id);
-    const live = devices.length > 0;
-    // A phone that closed Glofly a few minutes ago (and is still signed in) counts as here.
-    const leftAt = live ? null : await mobileGraceSince(row.id);
-    const grace = leftAt !== null;
-    const connected = live || grace;
-    const active = (grace && Date.now() - leftAt < MOBILE_ACTIVE_MS) || (live && (await liveCount(activeKey(row.id))) > 0);
-    const phones = live ? await redis.sMembers(phonesKey(row.id)) : [];
-    const mobile = grace || (live && devices.every((d) => phones.includes(d)));
-    let status: Status;
-    if (!connected || row.statusPreference === "invisible") status = "offline";
-    else if (row.statusPreference === "dnd") status = "dnd";
-    else if (row.statusPreference === "away" || !active) status = "away";
-    else status = "online";
-
-    result.set(row.id, {
-      status,
-      // Custom status only shows while they're around.
-      statusText: status === "offline" ? null : row.statusText,
-      // Invisible people, and anyone who turned off "Show when I was last online",
-      // don't reveal when they were last seen.
-      lastSeenAt:
-        status === "offline" && row.statusPreference !== "invisible" && row.showLastSeen
-          ? (row.lastSeenAt?.toISOString() ?? null)
-          : null,
-      // Invisible looks offline, so it never shows a game either.
-      activity: status === "offline" ? null : await activityOf(row.id),
-      mobile: status !== "offline" && mobile,
-    });
+  // Worked out a batch at a time: the Redis lookups of a batch go out together (the client
+  // pipelines commands sent at once), so a big friends list or constellation stays quick.
+  const BATCH = 50;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const batch = rows.slice(i, i + BATCH);
+    const found = await Promise.all(batch.map((row) => presenceRow(row)));
+    batch.forEach((row, j) => result.set(row.id, found[j]));
   }
   return result;
+}
+
+type PresenceRow = {
+  id: string;
+  statusPreference: string;
+  statusText: string | null;
+  lastSeenAt: Date | null;
+  showLastSeen: boolean;
+};
+
+async function presenceRow(row: PresenceRow): Promise<Presence> {
+  const devices = await liveDevices(row.id);
+  const live = devices.length > 0;
+  // A phone that closed Glofly a few minutes ago (and is still signed in) counts as here.
+  const leftAt = live ? null : await mobileGraceSince(row.id);
+  const grace = leftAt !== null;
+  const connected = live || grace;
+  const active = (grace && Date.now() - leftAt < MOBILE_ACTIVE_MS) || (live && (await liveCount(activeKey(row.id))) > 0);
+  const phones = live ? await redis.sMembers(phonesKey(row.id)) : [];
+  const mobile = grace || (live && devices.every((d) => phones.includes(d)));
+  let status: Status;
+  if (!connected || row.statusPreference === "invisible") status = "offline";
+  else if (row.statusPreference === "dnd") status = "dnd";
+  else if (row.statusPreference === "away" || !active) status = "away";
+  else status = "online";
+
+  return {
+    status,
+    // Custom status only shows while they're around.
+    statusText: status === "offline" ? null : row.statusText,
+    // Invisible people, and anyone who turned off "Show when I was last online",
+    // don't reveal when they were last seen.
+    lastSeenAt:
+      status === "offline" && row.statusPreference !== "invisible" && row.showLastSeen
+        ? (row.lastSeenAt?.toISOString() ?? null)
+        : null,
+    // Invisible looks offline, so it never shows a game either.
+    activity: status === "offline" ? null : await activityOf(row.id),
+    mobile: status !== "offline" && mobile,
+  };
 }
 
 /** When a phone that's still signed in closed Glofly (within MOBILE_GRACE_MS), or null. */

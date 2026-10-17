@@ -1352,3 +1352,23 @@
 .narrow-back {
   display: none;
 }
+
+/* Glofly 2.0: the dialogs sit beside the main screen (not in it), so they still show over the
+   Constellations night sky while the main screen is hidden. */
+.main-dialogs {
+  display: contents;
+}
+
+/* Windows: banners at the very top leave room for the window buttons, and their empty parts drag
+   the window like the header below them. */
+.has-titlebar .update-bar,
+.has-titlebar .announcement-bar {
+  padding-right: 162px;
+  -webkit-app-region: drag;
+}
+.has-titlebar .update-bar button,
+.has-titlebar .update-bar a,
+.has-titlebar .announcement-bar button,
+.has-titlebar .announcement-bar a {
+  -webkit-app-region: no-drag;
+}

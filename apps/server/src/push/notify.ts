@@ -50,9 +50,10 @@ type NewMessage = {
 /** The notification for a new message, to everyone in the chat who should get one. */
 export async function notifyMessage(
   message: NewMessage,
-  chat: { kind: "dm" | "group"; memberIds: string[]; name: string | null; photoVersion?: string | null },
+  chat: { kind: "dm" | "group" | "nebula"; memberIds: string[]; name: string | null; photoVersion?: string | null },
 ): Promise<void> {
-  if (!pushConfigured || message.event) return;
+  // Nebulas (2.0) don't send push notifications yet: the phone apps can't open them.
+  if (!pushConfigured || message.event || chat.kind === "nebula") return;
   const recipients = chat.memberIds.filter((id) => id !== message.senderId);
   if (!recipients.length) return;
 
