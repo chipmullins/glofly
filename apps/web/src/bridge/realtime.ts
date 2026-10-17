@@ -49,7 +49,8 @@ export function cleanAnnouncement(a: unknown): Announcement | null {
 export function connectRealtime(onUnauthorized: () => void): void {
   disconnectRealtime()
   socket = io(API_URL, {
-    auth: { version: VERSION, platform: 'web' },
+    // features: what this app knows beyond its version (0.5.2: a call can move to a new group).
+    auth: { version: VERSION, platform: 'web', features: ['callMove'] },
     transports: ['websocket'],
     withCredentials: true,
     reconnectionDelayMax: 10_000 // keeps retrying if the connection drops

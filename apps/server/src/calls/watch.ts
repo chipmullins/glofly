@@ -213,6 +213,12 @@ export async function watcherLeft(callId: string, userId: string): Promise<void>
   await announce(callId, entry.conversationId);
 }
 
+/** Add people (0.5.2) moved the call to a new group: what it's watching is told to that group. */
+export function moveWatch(callId: string, conversationId: string): void {
+  const entry = watching.get(callId);
+  if (entry) entry.conversationId = conversationId;
+}
+
 /** The call is over: nothing to watch any more. */
 export function forgetWatch(callId: string): void {
   watching.delete(callId);

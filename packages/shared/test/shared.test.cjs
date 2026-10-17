@@ -196,3 +196,29 @@ test('birthdays: the day only, Feb 29 on Feb 28 in other years', () => {
   assert.equal(s.dayIn(new Date('2026-10-17T03:00:00Z'), 'America/Chicago'), '2026-10-16')
   assert.equal(s.dayGap('2026-02-27', '2026-03-01'), 2)
 })
+
+test('0.5.2 Add people: callAdd lines reach older apps as plain text', () => {
+  const ev = { type: 'callAdd', callId: 'c', userIds: ['u1', 'u2'], names: ['Dana', 'Sam'], movedTo: null }
+  assert.equal(s.eventField(ev), 'eventLine3')
+  assert.equal(s.eventField({ type: 'watch', videoId: 'dQw4w9WgXcQ', title: 'x' }), 'eventLine2')
+  assert.equal(s.legacyEventBody(ev), 'added Dana and Sam to the call')
+  assert.match(s.legacyEventBody({ ...ev, movedTo: 'g' }), /carries on in a new group/)
+  const names = { u1: 'Dana', u2: 'Sam', r: 'Riley' }
+  assert.equal(s.eventText(ev, 'r', 'me', (id) => names[id]), 'Riley added Dana and Sam to the call')
+  assert.equal(s.eventText({ ...ev, userIds: ['me'] }, 'r', 'me', (id) => names[id]), 'Riley added you to the call')
+  const msg = { event: null, body: 'added Dana and Sam to the call', eventLine3: ev }
+  s.upgradeEvents(msg)
+  assert.deepEqual(msg.event, ev)
+  assert.equal(msg.body, '')
+  assert.equal('eventLine3' in msg, false)
+})
+
+test('0.5.2 group calls on your own: the countdown', () => {
+  const now = Date.parse('2026-10-17T12:00:00Z')
+  assert.equal(s.CALL_SOLO_MS, 7 * 60 * 1000)
+  assert.equal(s.soloCountdown(null, now), null)
+  assert.equal(s.soloCountdown(new Date(now + 5 * 60_000).toISOString(), now), null)
+  assert.equal(s.soloCountdown(new Date(now + 60_000).toISOString(), now), '1:00')
+  assert.equal(s.soloCountdown(new Date(now + 41_200).toISOString(), now), '0:42')
+  assert.equal(s.soloCountdown(new Date(now - 5_000).toISOString(), now), '0:00')
+})

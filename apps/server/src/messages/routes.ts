@@ -344,6 +344,12 @@ export async function canPost(chat: Access, myId: string): Promise<boolean> {
 
 const CANT_POST = "You can only message your friends.";
 
+/** One of my chats as the sidebar shows it (null if I'm not in it). */
+export async function summaryOf(myId: string, conversationId: string) {
+  const [summary] = await summaries(myId, [conversationId]);
+  return summary ?? null;
+}
+
 /** Everything the sidebar needs about some of my conversations. */
 async function summaries(myId: string, conversationIds?: string[]) {
   const mine = await db
@@ -814,6 +820,7 @@ async function peopleFor(rows: { senderId: string; event: ChatEvent | null }[]) 
     ids.add(r.senderId);
     if (r.event?.type === "added") r.event.userIds.forEach((id) => ids.add(id));
     if (r.event?.type === "removed") ids.add(r.event.userId);
+    if (r.event?.type === "callAdd") r.event.userIds.forEach((id) => ids.add(id));
   }
   if (!ids.size) return [];
   return db
@@ -829,11 +836,21 @@ async function peopleFor(rows: { senderId: string; event: ChatEvent | null }[]) 
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-/** Adds a line like "Chip renamed the group" (or a call) to a chat. */
-export async function postEvent(tx: Tx, conversationId: string, actorId: string, event: ChatEvent) {
+/**
+ * Adds a line like "Chip renamed the group" (or a call) to a chat. `afterMs`: a few lines posted
+ * in one transaction (which all get the same time) keep their order by being that much later.
+ */
+export async function postEvent(tx: Tx, conversationId: string, actorId: string, event: ChatEvent, afterMs = 0) {
+  const ms = Math.max(0, Math.min(1000, Math.floor(afterMs)));
   const [row] = await tx
     .insert(messages)
-    .values({ conversationId, senderId: actorId, body: "", event })
+    .values({
+      conversationId,
+      senderId: actorId,
+      body: "",
+      event,
+      ...(ms ? { createdAt: sql`now() + ${`${ms} milliseconds`}::interval` } : {}),
+    })
     .returning(messageFields);
   await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));
   // Your own change doesn't make the chat unread for you.
@@ -855,17 +872,17 @@ export async function announce(row: MessageRow, userIds: string[]) {
 }
 
 /** Checks I can add each of these people: they're my friends (not blocked, not leaving). */
-async function addable(myId: string, userIds: string[]): Promise<boolean> {
+export async function addable(myId: string, userIds: string[]): Promise<boolean> {
   for (const id of userIds) if (id === myId || !(await canMessage(myId, id))) return false;
   return true;
 }
 
 class GroupFull extends Error {}
 
-const NOT_FRIENDS = "You can only add your friends to a group.";
+export const NOT_FRIENDS = "You can only add your friends to a group.";
 // Restricted (family-managed) accounts are only ever in groups with their own friends.
-const RESTRICTED_GROUP = "Someone here can only be in groups where everyone is their friend.";
-const groupFull = (n = GROUP_MAX) => `Groups can have up to ${n} people.`;
+export const RESTRICTED_GROUP = "Someone here can only be in groups where everyone is their friend.";
+export const groupFull = (n = GROUP_MAX) => `Groups can have up to ${n} people.`;
 
 // POST /conversations/group  { name?, userIds } — start a group with at least two friends.
 conversationsRouter.post("/group", groupLimiter, async (req, res) => {
@@ -1075,15 +1092,34 @@ conversationsRouter.post("/:id/members", groupLimiter, async (req, res) => {
     res.status(403).json({ error: "restricted", message: RESTRICTED_GROUP });
     return;
   }
-  let result: { row: MessageRow; memberIds: string[] };
+  const result = await addGroupMembers(chat.id, myId, userIds);
+  if (!result) {
+    res.status(409).json({ error: "group_full", message: groupFull() });
+    return;
+  }
+  await announce(result.row, result.memberIds);
+  const [summary] = await summaries(myId, [chat.id]);
+  res.json({ conversation: summary });
+});
+
+/**
+ * Adds people to a group and posts "Chip added Maya" (the caller checks they may be added and
+ * announces the line). Null if that would go past GROUP_MAX, or I left in the meantime. Also
+ * used by Add people in a group call (calls/add.ts).
+ */
+export async function addGroupMembers(
+  chatId: string,
+  myId: string,
+  userIds: string[],
+): Promise<{ row: MessageRow; memberIds: string[]; fresh: string[] } | null> {
   try {
-    result = await db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       // Lock the group so two people adding at once can't go past 25.
-      await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, chat.id)).for("update");
+      await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, chatId)).for("update");
       const current = await tx
         .select({ userId: conversationMembers.userId })
         .from(conversationMembers)
-        .where(eq(conversationMembers.conversationId, chat.id));
+        .where(eq(conversationMembers.conversationId, chatId));
       const currentIds = current.map((m) => m.userId);
       const fresh = userIds.filter((id) => !currentIds.includes(id));
       if (!currentIds.includes(myId)) throw new GroupFull(); // left in the meantime
@@ -1091,23 +1127,17 @@ conversationsRouter.post("/:id/members", groupLimiter, async (req, res) => {
       const now = Date.now();
       if (fresh.length) {
         await tx.insert(conversationMembers).values(
-          fresh.map((userId, i) => ({ conversationId: chat.id, userId, joinedAt: new Date(now + i) })),
+          fresh.map((userId, i) => ({ conversationId: chatId, userId, joinedAt: new Date(now + i) })),
         );
       }
-      const row = await postEvent(tx, chat.id, myId, { type: "added", userIds: fresh });
-      return { row, memberIds: [...currentIds, ...fresh] };
+      const row = await postEvent(tx, chatId, myId, { type: "added", userIds: fresh });
+      return { row, memberIds: [...currentIds, ...fresh], fresh };
     });
   } catch (err) {
-    if (err instanceof GroupFull) {
-      res.status(409).json({ error: "group_full", message: groupFull() });
-      return;
-    }
+    if (err instanceof GroupFull) return null;
     throw err;
   }
-  await announce(result.row, result.memberIds);
-  const [summary] = await summaries(myId, [chat.id]);
-  res.json({ conversation: summary });
-});
+}
 
 /**
  * Takes someone out of a group: they left (actor = themselves) or were removed. The last one out

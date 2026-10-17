@@ -33,7 +33,7 @@ import {
   SearchIcon,
   VideoIcon
 } from './icons'
-import CallPanel, { JoinCallBar } from './CallPanel'
+import CallPanel, { JoinCallBar, RingSomeDialog } from './CallPanel'
 import { useCalls } from '../calls/callState'
 import MessageItem, { type ShownMessage } from './MessageItem'
 import { PinIcon } from './ChatList'
@@ -55,7 +55,7 @@ import {
 } from './ChatExtras'
 import { isShortcutKey, shortcutLabel } from '../lib/platform'
 import { useVoiceRecorder, voiceTime, VOICE_MAX_MS, type Recorded } from '../lib/voice'
-import { MicIcon, WatchIcon } from './icons'
+import { ChevronIcon, MicIcon, WatchIcon } from './icons'
 import {
   isMuted,
   mentionQuery,
@@ -253,6 +253,8 @@ export default function ChatView({
       : groupCallOn
         ? `Join the ${kind.toLowerCase()} call`
         : `${kind} call`
+  /** Groups (0.5.2): picking who a new call rings */
+  const [ringSome, setRingSome] = useState(false)
   const partnerPresence = partner ? presence[partner.id] : undefined
   const title = chatTitle(conversation)
   const [messages, setMessages] = useState<Message[]>([])
@@ -1251,6 +1253,19 @@ export default function ChatView({
               >
                 <VideoIcon size={21} />
               </button>
+              {/* Groups (0.5.2): ring only some of the group. */}
+              {isGroup && !groupCallOn && conversation.memberCount > 2 && (
+                <button
+                  type="button"
+                  className="chat-header-button chat-header-button--narrow"
+                  aria-label="Choose who to ring"
+                  title="Choose who to ring"
+                  disabled={!canCall}
+                  onClick={() => setRingSome(true)}
+                >
+                  <ChevronIcon direction="down" size={16} strokeWidth={2.4} />
+                </button>
+              )}
             </>
           }
           {/* Order (Chip, Oct 12): voice, video, profile, pin, search, then mute. */}
@@ -1361,6 +1376,16 @@ export default function ChatView({
       </header>
 
       {inThisCall ? <CallPanel me={me} /> : <JoinCallBar conversation={conversation} me={me} />}
+      {ringSome && (
+        <RingSomeDialog
+          conversation={conversation}
+          onClose={() => setRingSome(false)}
+          onStart={(video, ring) => {
+            setRingSome(false)
+            calls.start(conversation, video, ring)
+          }}
+        />
+      )}
 
       <div className="chat-messages" ref={listRef} onScroll={onScroll}>
         {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}

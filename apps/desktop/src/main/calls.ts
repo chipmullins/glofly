@@ -2,6 +2,7 @@ import { desktopCapturer, type DesktopCapturerSource } from 'electron'
 import type {
   ActiveCall,
   ApiResult,
+  CallAddResult,
   CallJoin,
   ScreenSource,
   WatchAction,
@@ -35,11 +36,15 @@ export function checkedJoin<T extends { url: string; token: string }>(
     : { ok: false, error: 'server_error', message: "Calls aren't set up correctly on the server." }
 }
 
+/** `ring` (groups, 0.5.2): only these people are rung; the rest of the group can join. */
 export async function startCall(
   conversationId: string,
-  video: boolean
+  video: boolean,
+  ring?: string[]
 ): Promise<ApiResult<CallJoin>> {
-  return checkedJoin(await request<CallJoin>('POST', '/calls', { conversationId, video }))
+  return checkedJoin(
+    await request<CallJoin>('POST', '/calls', { conversationId, video, ...(ring ? { ring } : {}) })
+  )
 }
 
 export async function activeCalls(): Promise<ApiResult<ActiveCall[]>> {
@@ -57,6 +62,16 @@ export async function joinCall(callId: string): Promise<ApiResult<CallJoin>> {
 
 export function ringPeople(callId: string, userIds: string[]): Promise<ApiResult<null>> {
   return request<null>('POST', `/calls/${callId}/ring`, { userIds })
+}
+
+/** 0.5.2 Add people: a 1-on-1 call moves to a new group; a group call rings them. */
+export function addToCall(callId: string, userIds: string[]): Promise<ApiResult<CallAddResult>> {
+  return request<CallAddResult>('POST', `/calls/${callId}/add`, { userIds })
+}
+
+/** 0.5.2 Group calls: on your own, keep the call going another 7 minutes. */
+export function stayInCall(callId: string): Promise<ApiResult<null>> {
+  return request<null>('POST', `/calls/${callId}/stay`)
 }
 
 export function declineCall(callId: string): Promise<ApiResult<null>> {
