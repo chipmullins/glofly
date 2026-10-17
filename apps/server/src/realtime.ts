@@ -96,6 +96,8 @@ export function startRealtime(httpServer: HttpServer): void {
       socket.data.sessionId = found.session.id;
       socket.data.appVersion = version;
       socket.data.constellations = knowsConstellations(socket.handshake.auth);
+      // 0.5.2: what this app knows beyond its version ("callMove": a call can move to a new group).
+      socket.data.features = featuresFrom(socket.handshake.auth?.features);
       next();
     } catch (err) {
       // A database hiccup must never take the whole server down. The app retries.
@@ -258,6 +260,23 @@ function startPresenceHeartbeat(server: Server): void {
       await sweepStalePresence(emitToUser);
     });
   }, 30_000);
+}
+
+/** The features an app says it knows (`auth.features`): short names only, a few at most. */
+function featuresFrom(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((f): f is string => typeof f === "string" && /^[a-zA-Z0-9]{1,32}$/.test(f)).slice(0, 16);
+}
+
+/**
+ * Do this person's apps know a feature? "yes" if any app they have open says so, "no" if they
+ * have apps open and none does (older versions), "offline" if none is connected right now.
+ */
+export async function appsKnow(userId: string, feature: string): Promise<"yes" | "no" | "offline"> {
+  if (!io) return "offline";
+  const sockets = await io.in(userRoom(userId)).fetchSockets();
+  if (!sockets.length) return "offline";
+  return sockets.some((s) => Array.isArray(s.data.features) && s.data.features.includes(feature)) ? "yes" : "no";
 }
 
 /**

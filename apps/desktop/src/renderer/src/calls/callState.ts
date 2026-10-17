@@ -62,8 +62,11 @@ export type CallsValue = {
   ptt: PttState | null
   /** A ringing or ongoing call in this chat, if any (yours or not) */
   callIn: (conversationId: string) => Call | null
-  /** Starts a call, or joins the one already going on in a group. */
-  start: (conversation: ConversationSummary, video: boolean) => void
+  /**
+   * Starts a call, or joins the one already going on in a group. `ring` (groups, 0.5.2): only
+   * these people are rung; the rest of the group can join.
+   */
+  start: (conversation: ConversationSummary, video: boolean, ring?: string[]) => void
   answer: (video: boolean) => Promise<void>
   /** Declines a ringing call, optionally sending a message first. */
   decline: (message?: string) => Promise<void>
@@ -77,6 +80,15 @@ export type CallsValue = {
   stopSharing: () => void
   /** Group calls: rings people in the group who aren't in the call. */
   ring: (userIds: string[]) => Promise<void>
+  /**
+   * 0.5.2 Add people: 1-on-1, the call moves to a new group with everyone (nobody drops out);
+   * groups, they're rung (friends not in the group are added first). Null if it worked, else why not.
+   */
+  addPeople: (userIds: string[]) => Promise<string | null>
+  /** 0.5.2 Group calls: on your own, keep the call going another 7 minutes. */
+  stay: () => void
+  /** Your friends (Add people picks from them) */
+  friends: PublicUser[]
   /** Moves a call you're in on another device to this one. */
   moveHere: () => void
   /** 2.0: drops into a voice nebula (leaving any other call first). */

@@ -28,20 +28,23 @@ import { forgetVoiceMutes } from "./voiceMutes";
 //
 // Each person has their own state too: ringing (rung in the last 23 seconds), joined, or out.
 // 1-on-1: when either person hangs up, the call ends. Groups: people come and go; the call
-// ends when the last person leaves. Anyone in the group can join a group call that's going on.
+// ends when the last person leaves, or once one person has been on their own for 7 minutes
+// (they see a countdown for the last minute, with Stay). Anyone in the group can join a group
+// call that's going on. 0.5.2: a group call can ring only some of the group (the rest can join),
+// and Add people moves a 1-on-1 call into a new group without anyone dropping (calls/add.ts).
 //
 // Every change updates the call's line in the chat and tells everyone in the chat
 // (`call:updated`), on every device, so they all stay in step.
 
 /** How long someone is rung before it counts as missed (matches the ringtone and jingle). */
 export { RING_MS } from "@glofly/shared";
-import { RING_MS } from "@glofly/shared";
+import { CALL_SOLO_MS, RING_MS } from "@glofly/shared";
 /** 1-on-1: the other person gone from the room this long ends the call. */
 const DM_ALONE_MS = 45_000;
 /** Groups: someone who joined but has been gone from the room this long counts as left. */
 const MISSING_MS = 45_000;
-/** Groups: one person on their own this long ends the call. */
-const GROUP_SOLO_MS = 5 * 60 * 1000;
+/** Groups: one person on their own this long ends the call (7 minutes since 0.5.2). */
+const GROUP_SOLO_MS = CALL_SOLO_MS;
 /** No call lasts longer than this (a safety net for anything that went wrong). */
 const LONGEST_CALL_MS = 12 * 60 * 60 * 1000;
 
@@ -106,8 +109,14 @@ async function statesFor(row: CallRow): Promise<MemberState[]> {
   });
 }
 
+/** Group calls with one person on their own: when the call ends (null otherwise). */
+function soloEndsAt(row: CallRow): string | null {
+  const since = row.status === "ongoing" ? missingSince.get(`${row.id}:solo`) : undefined;
+  return since === undefined ? null : new Date(since + GROUP_SOLO_MS).toISOString();
+}
+
 /** What the apps get about a call. */
-export async function describe(row: CallRow) {
+export async function describe(row: CallRow, endReason: "alone" | null = null) {
   return {
     id: row.id,
     conversationId: row.conversationId,
@@ -118,6 +127,9 @@ export async function describe(row: CallRow) {
     answeredAt: row.answeredAt?.toISOString() ?? null,
     endedAt: row.endedAt?.toISOString() ?? null,
     members: await statesFor(row),
+    // 0.5.2 (older apps ignore these): the on-your-own countdown, and why it ended.
+    soloEndsAt: soloEndsAt(row),
+    endReason,
   };
 }
 
@@ -130,8 +142,12 @@ async function publicUser(userId: string) {
 }
 
 /** Tells everyone in the call's chat (all their devices) where the call stands. */
-export async function announceCall(row: CallRow, alsoTell: string[] = []): Promise<void> {
-  const payload = { call: await describe(row), caller: await publicUser(row.callerId) };
+export async function announceCall(
+  row: CallRow,
+  alsoTell: string[] = [],
+  endReason: "alone" | null = null,
+): Promise<void> {
+  const payload = { call: await describe(row, endReason), caller: await publicUser(row.callerId) };
   if ((await kindOf(row.conversationId)) === "nebula") {
     // A voice nebula: the people in it (and anyone just leaving), newer apps only. No pushes.
     // Once it's over, everyone who was in it hears (so their call screens close).
@@ -149,7 +165,7 @@ export async function announceCall(row: CallRow, alsoTell: string[] = []): Promi
   syncCallPushes(payload.call, payload.caller).catch((err) => console.error("Call push failed", err));
 }
 
-async function reload(callId: string): Promise<CallRow | null> {
+export async function reload(callId: string): Promise<CallRow | null> {
   const [row] = await db.select().from(calls).where(eq(calls.id, callId));
   return row ?? null;
 }
@@ -307,7 +323,7 @@ async function afterRinging(callId: string): Promise<void> {
 }
 
 /** Why a call is closing. */
-export type CloseReason = "hang_up" | "declined" | "no_answer" | "not_allowed";
+export type CloseReason = "hang_up" | "declined" | "no_answer" | "not_allowed" | "alone";
 
 /**
  * Ends a ringing or ongoing call. A ringing call becomes missed (or declined); an ongoing one
@@ -333,7 +349,7 @@ export async function closeCall(callId: string, reason: CloseReason, alsoTell: s
   forgetWatch(callId); // Watch Together: nothing to watch once the call is over
   forgetVoiceMutes(callId);
   await refreshLine(closed);
-  await announceCall(closed, alsoTell);
+  await announceCall(closed, alsoTell, reason === "alone" ? "alone" : null);
   // A missed call counts as unread for whoever missed it: their chat list refreshes the badge.
   if (closed.status === "missed") {
     for (const userId of await membersOf(closed.conversationId)) {
@@ -344,14 +360,19 @@ export async function closeCall(callId: string, reason: CloseReason, alsoTell: s
   return closed;
 }
 
-/** Starts a call: the caller is in it, and everyone else in the chat is rung. */
+/**
+ * Starts a call: the caller is in it, and everyone else in the chat is rung. Groups (0.5.2):
+ * `ringOnly` rings just those people; the rest of the group can still join.
+ */
 export async function startCall(
   conversationId: string,
   callerId: string,
   video: boolean,
   postLine: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], callId: string) => Promise<{ id: string }>,
+  ringOnly: string[] | null = null,
 ): Promise<{ call: CallRow; lineId: string; rung: string[] }> {
-  const others = (await membersOf(conversationId)).filter((id) => id !== callerId);
+  const everyone = (await membersOf(conversationId)).filter((id) => id !== callerId);
+  const others = ringOnly ? everyone.filter((id) => ringOnly.includes(id)) : everyone;
   const result = await db.transaction(async (tx) => {
     const now = new Date();
     const [call] = await tx.insert(calls).values({ conversationId, callerId, video }).returning();
@@ -392,6 +413,7 @@ export async function joinCall(callId: string, userId: string): Promise<CallRow 
   if (!joined) return null;
   stopRinging(callId, userId);
   missingSince.delete(timerKey(callId, userId));
+  missingSince.delete(`${callId}:solo`); // someone joined: nobody's on their own any more
   if (joined.started) await refreshLine(joined.row);
   await announceCall(joined.row);
   return joined.row;
@@ -464,6 +486,25 @@ export async function ringMore(callId: string, userIds: string[]): Promise<void>
     startRinging(callId, userId);
   }
   await announceCall(row);
+}
+
+/**
+ * Group calls: the person on their own pressed Stay. The 7 minutes start again (null if the call
+ * isn't counting down).
+ */
+export async function stayInCall(callId: string): Promise<CallRow | null> {
+  const key = `${callId}:solo`;
+  if (!missingSince.has(key)) return null;
+  const row = await reload(callId);
+  if (!row || row.status !== "ongoing") return null;
+  missingSince.set(key, Date.now());
+  await announceCall(row);
+  return row;
+}
+
+/** A call moved to another chat (Add people, calls/add.ts): its 1-on-1 timers no longer apply. */
+export function callMoved(callId: string): void {
+  forget(callId);
 }
 
 /** Someone left (or was removed from) a group: they drop out of its call at once. */
@@ -567,14 +608,18 @@ export async function sweepCalls(): Promise<void> {
       await closeCall(row.id, "hang_up");
       continue;
     }
-    // One person left on their own for a long time: the call ends. (Not voice nebulas: sitting in
-    // Campfire on your own is fine; it closes when the last person leaves.)
-    if (present.length <= 1 && (await kindOf(row.conversationId)) !== "nebula") {
-      if (goneFor(`${row.id}:solo`, GROUP_SOLO_MS, now)) {
-        await closeCall(row.id, "hang_up");
+    // One person on their own for 7 minutes: the call ends. Their app shows a countdown for the
+    // last minute (soloEndsAt), so the call is announced when the count starts and stops.
+    // Normal group chats only (voice nebulas: sitting in Campfire on your own is fine).
+    const soloKey = `${row.id}:solo`;
+    if (present.length <= 1 && (await kindOf(row.conversationId)) === "group") {
+      const counting = missingSince.has(soloKey);
+      if (goneFor(soloKey, GROUP_SOLO_MS, now)) {
+        await closeCall(row.id, "alone");
         continue;
       }
-    } else missingSince.delete(`${row.id}:solo`);
+      if (!counting) changed = true;
+    } else if (missingSince.delete(soloKey)) changed = true;
     if (changed) await announceCall(row);
   }
   // Forget calls that finished some other way.

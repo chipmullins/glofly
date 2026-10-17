@@ -74,6 +74,23 @@ function roomService(): RoomServiceClient | null {
   return rooms;
 }
 
+/**
+ * How many people a call's room can hold (0 = no limit), or null if there's no room yet or
+ * LiveKit can't say. Rooms are sized when the first person joins; 1-on-1 rooms made before
+ * 0.5.2 hold only 2, so they can't take more people.
+ */
+export async function roomCapacity(callId: string): Promise<number | null> {
+  const service = roomService();
+  if (!service) return null;
+  try {
+    const [room] = await service.listRooms([callId]);
+    return room ? room.maxParticipants : null;
+  } catch (err) {
+    console.error("Couldn't check a call's room:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 /** Who is connected to a call's room right now (user ids), or null if LiveKit can't say. */
 export async function peopleInRoom(callId: string): Promise<string[] | null> {
   const service = roomService();

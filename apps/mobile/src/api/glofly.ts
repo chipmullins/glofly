@@ -6,6 +6,7 @@ import type {
   Announcement,
   ApiResult,
   Attachment,
+  CallAddResult,
   CallJoin,
   ConversationSummary,
   FireflyEmoji,
@@ -140,11 +141,17 @@ export const removeUpload = async (id: string, attachmentId: string) => none(awa
 
 // ---- Calls ----
 
-export const startCall = (conversationId: string, video: boolean) => request<CallJoin>('POST', '/calls', { conversationId, video })
+/** `ring` (groups, 0.5.2): only these people are rung; the rest of the group can join. */
+export const startCall = (conversationId: string, video: boolean, ring?: string[]) =>
+  request<CallJoin>('POST', '/calls', { conversationId, video, ...(ring?.length ? { ring } : {}) })
 export const activeCalls = async () => map(await request<{ calls: ActiveCall[] }>('GET', '/calls/active'), (d) => d.calls)
 export const answerCall = (callId: string) => request<CallJoin>('POST', `/calls/${callId}/answer`)
 export const joinCall = (callId: string) => request<CallJoin>('POST', `/calls/${callId}/join`)
 export const ringMore = async (callId: string, userIds: string[]) => none(await request('POST', `/calls/${callId}/ring`, { userIds }))
+/** 0.5.2 Add people: a 1-on-1 call moves to a new group with everyone; a group call rings them. */
+export const addToCall = (callId: string, userIds: string[]) => request<CallAddResult>('POST', `/calls/${callId}/add`, { userIds })
+/** 0.5.2 Group calls: on your own, keep the call going another 7 minutes. */
+export const stayInCall = async (callId: string) => none(await request('POST', `/calls/${callId}/stay`))
 export const declineCall = async (callId: string) => none(await request('POST', `/calls/${callId}/decline`))
 export const leaveCall = async (callId: string) => none(await request('POST', `/calls/${callId}/leave`))
 

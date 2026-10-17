@@ -79,6 +79,11 @@
 .chat-header-button:hover:not(:disabled) {
   background: var(--glo-hover);
 }
+/* Groups (0.5.2): "Choose who to ring", a slim button beside the call buttons. */
+.chat-header-button--narrow {
+  width: 26px;
+  margin-left: -4px;
+}
 /* Call buttons while you're already in a call (from Calling.dc.html). */
 .chat-header-button:disabled {
   color: var(--glo-faint);

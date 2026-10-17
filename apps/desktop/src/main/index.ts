@@ -69,6 +69,8 @@ import {
   leaveCall,
   pickedScreen,
   ringPeople,
+  addToCall,
+  stayInCall,
   screenSources,
   startCall,
   watchControl,
@@ -932,14 +934,20 @@ function registerIpcHandlers(): void {
   })
 
   // Calls.
-  ipcMain.handle('calls:start', (event, id: unknown, video: unknown) =>
-    fromApp(event) && isUserId(id) && typeof video === 'boolean' ? startCall(id, video) : invalid
+  ipcMain.handle('calls:start', (event, id: unknown, video: unknown, ring: unknown) =>
+    fromApp(event) &&
+    isUserId(id) &&
+    typeof video === 'boolean' &&
+    (ring === undefined || isPeople(ring))
+      ? startCall(id, video, ring)
+      : invalid
   )
   ipcMain.handle('calls:active', (event) => (fromApp(event) ? activeCalls() : invalid))
   const byCallId: [string, (id: string) => Promise<unknown>][] = [
     ['calls:answer', answerCall],
     ['calls:join', joinCall],
     ['calls:decline', declineCall],
+    ['calls:stay', stayInCall],
     ['calls:leave', leaveCall]
   ]
   for (const [channel, action] of byCallId) {
@@ -949,6 +957,9 @@ function registerIpcHandlers(): void {
   }
   ipcMain.handle('calls:ring', (event, id: unknown, userIds: unknown) =>
     fromApp(event) && isUserId(id) && isPeople(userIds) ? ringPeople(id, userIds) : invalid
+  )
+  ipcMain.handle('calls:add', (event, id: unknown, userIds: unknown) =>
+    fromApp(event) && isUserId(id) && isPeople(userIds) ? addToCall(id, userIds) : invalid
   )
   // Watch Together (0.5.0). Only well-formed values reach the server.
   const isWatchControl = (v: unknown): v is 'everyone' | 'starter' =>

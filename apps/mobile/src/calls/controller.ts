@@ -7,7 +7,8 @@ import * as Native from 'glofly-native'
 import * as api from '@/api/glofly'
 import { keepConnected, onLive } from '@/api/realtime'
 import { useSession, onSignOut } from '@/state/session'
-import { setCall, useStore } from '@/state/store'
+import { setCall, upsertConversation, useStore } from '@/state/store'
+import { refreshConversations } from '@/state/sync'
 import { firstName } from '@/lib/format'
 import { confirm, inform } from '@/ui/dialogs'
 import { playSound, startLoop } from '@/push/sounds'
@@ -316,10 +317,11 @@ async function enter(request: () => ReturnType<typeof api.startCall>, video: boo
 
 // ---- What the screens call ----
 
-export async function startCallIn(conversationId: string, video: boolean): Promise<void> {
+/** `ring` (groups, 0.5.2): only these people are rung; the rest of the group can join. */
+export async function startCallIn(conversationId: string, video: boolean, ring?: string[]): Promise<void> {
   const active = useStore.getState().calls[conversationId]
   if (active) return joinCallIn(conversationId, video)
-  await enter(() => api.startCall(conversationId, video), video, true)
+  await enter(() => api.startCall(conversationId, video, ring), video, true)
 }
 
 export async function startCallWith(userId: string, video: boolean): Promise<void> {
@@ -426,12 +428,33 @@ export async function flipCamera() {
   }
 }
 
-/** Ring more people into a group call (Add people). */
+/** Ring more people into a group call (Add people before 0.5.2; kept for the same route). */
 export async function ringPeople(userIds: string[]) {
   const call = useCall.getState().call
   if (!call || !userIds.length) return
   const r = await api.ringMore(call.id, userIds)
   if (!r.ok) void inform("Couldn't ring them", r.message)
+}
+
+/**
+ * Add people (0.5.2). 1-on-1: the call carries on in a new group with everyone (nobody drops
+ * out); groups: they're rung (friends not in the group join it first). Null if it worked, else why not.
+ */
+export async function addPeople(userIds: string[]): Promise<string | null> {
+  const call = useCall.getState().call
+  if (!call || !userIds.length) return null
+  const r = await api.addToCall(call.id, userIds)
+  if (!r.ok) return r.message
+  upsertConversation(r.data.conversation)
+  setCall(r.data.call, null)
+  if (useCall.getState().call?.id === r.data.call.id) useCall.setState({ call: r.data.call })
+  return null
+}
+
+/** Group calls on your own (0.5.2): keep the call going another 7 minutes. */
+export async function stayInCall() {
+  const call = useCall.getState().call
+  if (call) await api.stayInCall(call.id)
 }
 
 // ---- Ringing for you ----
@@ -478,12 +501,17 @@ function onCallUpdated(call: Call, caller: PublicUser | null) {
 
   // The call you're in.
   if (s.call?.id !== call.id) return
+  // Add people (0.5.2) moved it to a new group: the call screen follows (once the group's here).
+  if (call.conversationId !== s.call.conversationId && !useStore.getState().conversations[call.conversationId]) {
+    void refreshConversations()
+  }
   useCall.setState({ call })
   const meIn = call.members.find((m) => m.userId === me())?.state === 'joined'
   if (call.status === 'ended' || call.status === 'missed' || call.status === 'declined') {
     const others = call.members.filter((m) => m.userId !== me())
     const isDm = others.length === 1
-    if (call.callerId === me() && !call.answeredAt && isDm) {
+    if (call.endReason === 'alone') cleanup('The call ended because nobody else was in it for 7 minutes.')
+    else if (call.callerId === me() && !call.answeredAt && isDm) {
       if (usePhonePrefs.getState().sounds) playSound('noAnswer')
       cleanup(`${peopleName(others[0].userId)} didn't pick up.`)
     } else cleanup()

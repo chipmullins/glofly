@@ -89,11 +89,13 @@ export async function leaveGroup(c: ConversationSummary): Promise<boolean> {
   return true
 }
 
-export async function chatMenu(c: ConversationSummary, opts: { inChat?: boolean } = {}) {
+/** `onRingSome` (groups, 0.5.2): offers "Choose who to ring" for a new call. */
+export async function chatMenu(c: ConversationSummary, opts: { inChat?: boolean; onRingSome?: () => void } = {}) {
   const muted = isMuted(c)
   const items: SheetItem[] = [
     c.pinnedAt ? { key: 'unpin', label: 'Unpin', icon: 'unpin' } : { key: 'pin', label: 'Pin to the top', icon: 'pin' },
     muted ? { key: 'unmute', label: 'Unmute', icon: 'bell', detail: c.mutedUntil ? mutedLabel(c.mutedUntil) : undefined } : { key: 'mute', label: 'Mute…', icon: 'bellOff' },
+    ...(opts.onRingSome ? [{ key: 'ringSome', label: 'Choose who to ring', icon: 'phone' as const, detail: 'Start a call that rings only some of the group' }] : []),
     ...(c.kind === 'dm'
       ? [{ key: 'profile', label: 'View profile', icon: 'user' as const }]
       : [{ key: 'settings', label: 'Group settings', icon: 'gear' as const }]),
@@ -120,6 +122,9 @@ export async function chatMenu(c: ConversationSummary, opts: { inChat?: boolean 
       return closeChat(c)
     case 'leave':
       if ((await leaveGroup(c)) && opts.inChat) router.back()
+      return
+    case 'ringSome':
+      opts.onRingSome?.()
       return
   }
 }

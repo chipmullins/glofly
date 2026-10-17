@@ -102,6 +102,17 @@ function cameraOptions(p: CallPrefs): VideoCaptureOptions {
   }
 }
 
+/**
+ * The ringing and ongoing calls by chat, with this one's news. A call that moved to another chat
+ * (Add people) leaves its old one.
+ */
+function withCall(map: Record<string, Call>, call: Call): Record<string, Call> {
+  const next: Record<string, Call> = {}
+  for (const [chatId, c] of Object.entries(map)) if (c.id !== call.id) next[chatId] = c
+  if (isActive(call)) next[call.conversationId] = call
+  return next
+}
+
 const chatOf = (c: ConversationSummary): CallChat => ({
   kind: c.kind,
   title: chatTitle(c),
@@ -111,6 +122,13 @@ const chatOf = (c: ConversationSummary): CallChat => ({
 type CallProviderProps = {
   me: SignedInUser
   conversations: ConversationSummary[]
+  /** Your friends (Add people picks from them) */
+  friends?: PublicUser[]
+  /**
+   * 0.5.2 Add people moved the call you're in from a 1-on-1 chat to a new group (`to`: its
+   * summary, when this app has it already). The screen shows the group instead of the old chat.
+   */
+  onCallMoved?: (from: string, toId: string, to: ConversationSummary | null) => void
   /** Opens a chat (answering a call opens its chat). */
   onOpenChat: (conversationId: string) => void
   /** Shows a short message (say, "Jacob didn't pick up."). */
@@ -121,9 +139,13 @@ type CallProviderProps = {
   children: React.ReactNode
 }
 
+const NO_FRIENDS: PublicUser[] = []
+
 export function CallProvider({
   me,
   conversations,
+  friends = NO_FRIENDS,
+  onCallMoved,
   onOpenChat,
   onNotice,
   onSessionExpired,
@@ -149,10 +171,10 @@ export function CallProvider({
   const activeRef = useRef<Record<string, Call>>({})
   const roomRef = useRef<Room | null>(null)
   const conversationsRef = useRef(conversations)
-  const callbacks = useRef({ onOpenChat, onNotice, onSessionExpired })
+  const callbacks = useRef({ onOpenChat, onNotice, onSessionExpired, onCallMoved })
   useEffect(() => {
     conversationsRef.current = conversations
-    callbacks.current = { onOpenChat, onNotice, onSessionExpired }
+    callbacks.current = { onOpenChat, onNotice, onSessionExpired, onCallMoved }
     activeRef.current = active
   })
 
@@ -185,6 +207,8 @@ export function CallProvider({
   const closing = useRef(new WeakSet<Room>())
   /** Calls just hung up here: a late update saying "you're in it" isn't "on another device". */
   const justLeft = useRef(new Set<string>())
+  /** Rung in a group this app hasn't loaded yet (Add people just made it): rings once it has. */
+  const waitingRing = useRef<{ call: Call; caller: PublicUser | null } | null>(null)
 
   const bump = useCallback(() => setTick((t) => t + 1), [])
 
@@ -500,7 +524,7 @@ export function CallProvider({
   )
 
   const start = useCallback(
-    (conversation: ConversationSummary, video: boolean) => {
+    (conversation: ConversationSummary, video: boolean, ring?: string[]) => {
       if (currentRef.current) {
         callbacks.current.onNotice("You're already in a call. Hang up first.")
         return
@@ -523,7 +547,8 @@ export function CallProvider({
         partnerAway: false
       })
       stopOutgoing.current = startLoop('outgoing')
-      void window.glofly.calls.start(conversation.id, video).then((result) => {
+      const only = conversation.kind === 'group' && ring?.length ? ring : undefined
+      void window.glofly.calls.start(conversation.id, video, only).then((result) => {
         if (attempt !== attemptRef.current) {
           // Hung up before the server answered: cancel it there too.
           if (result.ok) void window.glofly.calls.leave(result.data.call.id)
@@ -645,6 +670,62 @@ export function CallProvider({
     [failed]
   )
 
+  /** The call you're in now belongs to another chat (Add people made a group of it). */
+  const moveCurrent = useCallback(
+    (call: Call, summary: ConversationSummary | null) => {
+      const cur = currentRef.current
+      if (!cur || cur.call?.id !== call.id || cur.conversationId === call.conversationId) return
+      const from = cur.conversationId
+      const known = summary ? chatOf(summary) : chatFor(call.conversationId)
+      // Until this app has loaded the new group: a group of the same people (the list catches up).
+      const chat: CallChat = known ?? {
+        kind: 'group',
+        title: cur.chat.people.map(firstName).join(', '),
+        people: cur.chat.people
+      }
+      setCurrent((c) =>
+        c && c.call?.id === call.id
+          ? { ...c, conversationId: call.conversationId, chat, call, partnerAway: false }
+          : c
+      )
+      if (awayTimer.current) clearTimeout(awayTimer.current) // a group doesn't end when one drops
+      awayTimer.current = null
+      callbacks.current.onCallMoved?.(from, call.conversationId, summary)
+    },
+    [chatFor, setCurrent]
+  )
+
+  const addPeople = useCallback(
+    async (userIds: string[]): Promise<string | null> => {
+      const id = currentRef.current?.call?.id
+      if (!id || userIds.length === 0) return null
+      const result = await window.glofly.calls.add(id, userIds)
+      if (!result.ok) {
+        if (result.error === 'unauthorized') callbacks.current.onSessionExpired()
+        return result.message
+      }
+      const { call, conversation } = result.data
+      setActive((map) => withCall(map, call))
+      if (currentRef.current?.call?.id === call.id) {
+        if (currentRef.current.conversationId !== call.conversationId) {
+          moveCurrent(call, conversation)
+        } else {
+          setCurrent((c) => (c && c.call?.id === call.id ? { ...c, call } : c))
+        }
+      }
+      return null
+    },
+    [moveCurrent, setCurrent]
+  )
+
+  const stay = useCallback(() => {
+    const id = currentRef.current?.call?.id
+    if (!id) return
+    void window.glofly.calls.stay(id).then((result) => {
+      if (!result.ok && result.error === 'unauthorized') callbacks.current.onSessionExpired()
+    })
+  }, [])
+
   const toggleMic = useCallback(() => {
     const local = roomRef.current?.localParticipant
     if (!local) return
@@ -721,13 +802,7 @@ export function CallProvider({
   // A call changed somewhere (rang, was answered, someone joined or left, it ended).
   const onCallUpdate = useCallback(
     (call: Call, caller: PublicUser | null) => {
-      setActive((map) => {
-        if (isActive(call)) return { ...map, [call.conversationId]: call }
-        if (map[call.conversationId]?.id !== call.id) return map
-        const next = { ...map }
-        delete next[call.conversationId]
-        return next
-      })
+      setActive((map) => withCall(map, call))
       const cur = currentRef.current
       // This device is starting a call in that chat and hasn't heard back yet: that's ours.
       if (
@@ -745,7 +820,11 @@ export function CallProvider({
           // Over. If nobody picked up, say so.
           const unanswered = call.callerId === me.id && call.status !== 'ended'
           teardown()
-          if (unanswered) {
+          if (call.endReason === 'alone') {
+            callbacks.current.onNotice(
+              'The call ended because nobody else was in it for 7 minutes.'
+            )
+          } else if (unanswered) {
             playNoAnswer() // Dim: always the same sound, after the ringing stops
             const partner = cur.chat.kind === 'dm' ? cur.chat.people[0] : undefined
             callbacks.current.onNotice(
@@ -764,6 +843,8 @@ export function CallProvider({
           return
         }
         if (call.status === 'ongoing') stopOutgoing.current()
+        // Add people (0.5.2): the call moved to a new group.
+        if (call.conversationId !== cur.conversationId) moveCurrent(call, null)
         setCurrent((c) => {
           if (!c) return c
           let phase = c.phase
@@ -779,6 +860,8 @@ export function CallProvider({
 
       // Not the call I'm in here.
       const chat = chatFor(call.conversationId)
+      // Rung in a group this app hasn't loaded yet (just made by Add people): ring once it has.
+      if (!chat && isActive(call) && mine === 'ringing') waitingRing.current = { call, caller }
       const inc = incomingRef.current
       if (isActive(call) && mine === 'ringing' && chat) {
         if (inc?.call.id !== call.id) {
@@ -844,8 +927,30 @@ export function CallProvider({
         setElsewhere(null)
       }
     },
-    [chatFor, clearIncoming, me.id, setCurrent, setElsewhere, setIncoming, teardown]
+    [chatFor, clearIncoming, me.id, moveCurrent, setCurrent, setElsewhere, setIncoming, teardown]
   )
+
+  // The chat list changed: the call you're in follows its chat (its name, people added to the
+  // group), and a call that rang for a group this app hadn't loaded yet rings now.
+  useEffect(() => {
+    const cur = currentRef.current
+    const c = cur ? conversations.find((x) => x.id === cur.conversationId) : undefined
+    if (cur && c) {
+      const next = chatOf(c)
+      const same =
+        next.kind === cur.chat.kind &&
+        next.title === cur.chat.title &&
+        next.people.length === cur.chat.people.length &&
+        next.people.every((p, i) => p.id === cur.chat.people[i]?.id)
+      if (!same) setCurrent((x) => (x && x.conversationId === c.id ? { ...x, chat: next } : x))
+    }
+    const waiting = waitingRing.current
+    if (waiting && conversations.some((x) => x.id === waiting.call.conversationId)) {
+      waitingRing.current = null
+      const latest = activeRef.current[waiting.call.conversationId]
+      if (latest?.id === waiting.call.id) onCallUpdate(latest, waiting.caller)
+    }
+  }, [conversations, onCallUpdate, setCurrent])
 
   /** Catches up with the server: calls in my chats, ringing for me, or mine elsewhere. */
   const syncActive = useCallback(async () => {
@@ -1013,6 +1118,9 @@ export function CallProvider({
     shareScreen,
     stopSharing,
     ring,
+    addPeople,
+    stay,
+    friends,
     moveHere,
     joinVoice,
     clearProblem,

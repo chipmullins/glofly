@@ -185,10 +185,16 @@ export function PhotoIcon(p: IconProps): React.JSX.Element {
 export function ChevronIcon({
   direction,
   ...p
-}: IconProps & { direction: 'left' | 'right' }): React.JSX.Element {
+}: IconProps & { direction: 'left' | 'right' | 'down' }): React.JSX.Element {
   return (
     <Svg {...p}>
-      {direction === 'left' ? <path d="M15 5l-7 7 7 7" /> : <path d="M9 5l7 7-7 7" />}
+      {direction === 'left' ? (
+        <path d="M15 5l-7 7 7 7" />
+      ) : direction === 'down' ? (
+        <path d="M5 9l7 7 7-7" />
+      ) : (
+        <path d="M9 5l7 7-7 7" />
+      )}
     </Svg>
   )
 }

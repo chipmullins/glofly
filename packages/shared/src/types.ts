@@ -294,6 +294,11 @@ export type ChatEvent =
   | { type: 'photo'; removed: boolean }
   /** 0.5.0: someone started watching a video together in the call (Watch Together) */
   | { type: 'watch'; videoId: string; title: string }
+  /**
+   * 0.5.2: someone added people to a call (Add people). `names`: their first names then, for
+   * older apps' plain text. `movedTo`: in a 1-on-1 chat, the new group the call moved to.
+   */
+  | { type: 'callAdd'; callId: string; userIds: string[]; names: string[]; movedTo: string | null }
 
 export type CallStatus = 'ringing' | 'ongoing' | 'ended' | 'missed' | 'declined'
 
@@ -320,10 +325,23 @@ export type Call = {
   endedAt: string | null
   /** Everyone in the chat (you included) and where they stand */
   members: CallMember[]
+  /**
+   * 0.5.2, group calls: only one person has been in it for a while, so it ends then (ISO date).
+   * Missing from older servers; null otherwise.
+   */
+  soloEndsAt?: string | null
+  /** 0.5.2: why it ended, when that's worth saying ("alone": nobody else was in it). */
+  endReason?: 'alone' | null
 }
 
 /** What's needed to join a call's room: a short-lived pass and where the room is. */
 export type CallJoin = { call: Call; token: string; url: string }
+
+/**
+ * 0.5.2 Add people: where the call is now. A 1-on-1 call moves to a new group (`moved`), whose
+ * summary comes along so the app can show it straight away.
+ */
+export type CallAddResult = { call: Call; conversation: ConversationSummary; moved: boolean }
 
 /** A ringing or ongoing call in one of your chats. `joined`: you're in it (maybe on another device). */
 export type ActiveCall = { call: Call; joined: boolean }

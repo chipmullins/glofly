@@ -61,7 +61,7 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
   disconnectRealtime()
   socket = io(url, {
     // features: this app knows Constellations (2.0), so the server sends it their live events.
-    auth: { token, version: app.getVersion(), features: ['constellations'] },
+    auth: { token, version: app.getVersion(), features: ['constellations', 'callMove'] },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000 // keeps retrying if the connection drops
   })

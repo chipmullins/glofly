@@ -10,6 +10,7 @@ export type * from '@glofly/shared/constellations'
 import type {
   AccountDetails,
   ActiveCall,
+  CallAddResult,
   Announcement,
   ApiResult,
   Attachment,
@@ -524,8 +525,11 @@ export type GloflyApi = {
     showInFolder: (path: string) => void
   }
   calls: {
-    /** Calls a friend. Returns the pass to join the call's room right away (it rings meanwhile). */
-    start: (conversationId: string, video: boolean) => Promise<ApiResult<CallJoin>>
+    /**
+     * Calls a friend. Returns the pass to join the call's room right away (it rings meanwhile).
+     * `ring` (groups, 0.5.2): only these people are rung; the rest of the group can join.
+     */
+    start: (conversationId: string, video: boolean, ring?: string[]) => Promise<ApiResult<CallJoin>>
     /** Ringing and ongoing calls in your chats (to show an incoming call after a restart). */
     active: () => Promise<ApiResult<ActiveCall[]>>
     answer: (callId: string) => Promise<ApiResult<CallJoin>>
@@ -533,6 +537,13 @@ export type GloflyApi = {
     join: (callId: string) => Promise<ApiResult<CallJoin>>
     /** Group calls: rings people in the group who aren't in the call. */
     ring: (callId: string, userIds: string[]) => Promise<ApiResult<null>>
+    /**
+     * 0.5.2 Add people: a 1-on-1 call moves to a new group with everyone (nobody drops out); a
+     * group call rings them (friends not in the group are added to it first).
+     */
+    add: (callId: string, userIds: string[]) => Promise<ApiResult<CallAddResult>>
+    /** 0.5.2 Group calls: on your own, keep the call going another 7 minutes. */
+    stay: (callId: string) => Promise<ApiResult<null>>
     decline: (callId: string) => Promise<ApiResult<null>>
     /** Hangs up (or cancels the call while it's still ringing). */
     leave: (callId: string) => Promise<ApiResult<null>>

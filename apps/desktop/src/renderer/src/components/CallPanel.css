@@ -1464,6 +1464,46 @@
   color: var(--glo-muted);
 }
 
+/* Add people (0.5.2): sections, search and the "group is full" note */
+.add-to-call-section {
+  margin: 10px 10px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.add-to-call-search input {
+  height: 44px;
+  padding-right: 14px;
+}
+.add-to-call-search > svg {
+  top: 13px;
+}
+.add-to-call-full {
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+
+/* On your own in a group call (0.5.2): the last minute's countdown, with Stay */
+.call-solo {
+  align-items: center;
+}
+.call-problem .call-solo-stay {
+  flex: none;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--glo-call-glow);
+  color: #2a1406;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.call-problem .call-solo-stay:hover {
+  filter: brightness(1.08);
+}
+
 /* ---------- Call views: bigger, and full screen ---------- */
 
 /* Bigger: the panel grows, and a few messages plus the message box stay visible below. */

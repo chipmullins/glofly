@@ -58,6 +58,12 @@ export function eventText(
       return event.removed ? `${actor} removed the group photo` : `${actor} changed the group photo`
     case 'watch':
       return `${actor} started watching “${event.title}” together`
+    case 'callAdd': {
+      const added = listNames(event.userIds.map(who), 4)
+      return event.movedTo
+        ? `${actor} added ${added} to the call. It carries on in a new group.`
+        : `${actor} added ${added} to the call`
+    }
     default:
       // A line from a newer version of Glofly: nothing to show rather than breaking the chat.
       return ''
