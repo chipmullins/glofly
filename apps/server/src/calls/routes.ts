@@ -33,7 +33,8 @@ import {
   watchUpdate,
   type WatchProblem,
 } from "./watch";
-import { isWatchReaction, isYouTubeId, youTubeIdFrom, youTubeStartFrom } from "@glofly/shared";
+import { isWatchReaction, isYouTubeId, VOICE_NEBULA_MAX, youTubeIdFrom, youTubeStartFrom } from "@glofly/shared";
+import { isVoiceMuted } from "./voiceMutes";
 
 // Voice and video calls: 1-on-1 and group (up to 25 people).
 //
@@ -87,10 +88,14 @@ function notSetUp(res: Response): boolean {
   return true;
 }
 
-/** A pass into the call's room, with where to find it. 1-on-1 rooms hold 2; group rooms 25. */
-async function joinDetails(row: CallRow, user: Me, chat: Access) {
-  const size = chat.kind === "group" ? GROUP_MAX : 2;
-  return { call: await describe(row), token: await callToken(row.id, user, size), url: LIVEKIT_URL };
+/**
+ * A pass into the call's room, with where to find it. 1-on-1 rooms hold 2; group rooms 25; voice
+ * nebulas 50 (2.0), where someone a moderator muted gets a pass without their microphone.
+ */
+export async function joinDetails(row: CallRow, user: Me, chat: Pick<Access, "kind">) {
+  const size = chat.kind === "nebula" ? VOICE_NEBULA_MAX : chat.kind === "group" ? GROUP_MAX : 2;
+  const microphone = chat.kind !== "nebula" || !isVoiceMuted(row.id, user.id);
+  return { call: await describe(row), token: await callToken(row.id, user, size, microphone), url: LIVEKIT_URL };
 }
 
 /** A call in one of my chats (null otherwise, so other people's calls stay invisible). */
@@ -105,7 +110,7 @@ async function myCall(idRaw: unknown, myId: string) {
 
 /** 1-on-1 calls need us to still be friends; group calls just need me in the group. */
 async function allowed(chat: Access, myId: string): Promise<boolean> {
-  if (chat.kind === "group") return canPost(chat, myId);
+  if (chat.kind !== "dm") return canPost(chat, myId); // groups; voice nebulas (not while timed out)
   return !!chat.partner && (await canMessage(myId, chat.partner));
 }
 
@@ -127,6 +132,11 @@ callsRouter.post("/", startLimiter, async (req, res) => {
   const chat = await access(conversationId, user.id);
   if (!chat) {
     notFound(res);
+    return;
+  }
+  if (chat.kind === "nebula") {
+    // Voice nebulas are dropped into (POST /constellations/:id/nebulas/:nebulaId/voice), never rung.
+    res.status(400).json({ error: "invalid", message: "Join the voice nebula instead." });
     return;
   }
   if (!(await allowed(chat, user.id))) {

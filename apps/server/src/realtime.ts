@@ -15,7 +15,7 @@ import {
   type AppPlatform,
 } from "./app-version";
 import { cookieToken, fromWebOrigin } from "./web/session";
-import { blockedEitherWay, canMessage } from "./friends/rules";
+import { blockedEitherWay, blockedWith, canMessage } from "./friends/rules";
 import {
   announcePresence,
   deviceConnected,
@@ -41,6 +41,15 @@ function safely(task: () => Promise<unknown>): void {
 let io: Server | null = null;
 
 const userRoom = (userId: string) => `user:${userId}`;
+// 2.0: devices whose app knows Constellations (they say so when connecting). Constellation events
+// and anything about a nebula only ever go here, so older apps never hear of them.
+const modernRoom = (userId: string) => `user2:${userId}`;
+
+/** Does this connection's app know Constellations? (`auth.features` includes "constellations") */
+function knowsConstellations(auth: unknown): boolean {
+  const features = (auth as { features?: unknown } | undefined)?.features;
+  return Array.isArray(features) && features.includes("constellations");
+}
 
 export function startRealtime(httpServer: HttpServer): void {
   io = new Server(httpServer, {
@@ -86,6 +95,7 @@ export function startRealtime(httpServer: HttpServer): void {
       socket.data.user = found.user;
       socket.data.sessionId = found.session.id;
       socket.data.appVersion = version;
+      socket.data.constellations = knowsConstellations(socket.handshake.auth);
       next();
     } catch (err) {
       // A database hiccup must never take the whole server down. The app retries.
@@ -101,6 +111,7 @@ export function startRealtime(httpServer: HttpServer): void {
   io.on("connection", (socket) => {
     const me = socket.data.user as { id: string; displayName: string };
     void socket.join(userRoom(me.id));
+    if (socket.data.constellations) void socket.join(modernRoom(me.id));
     socket.data.idle = false;
 
     // Presence: this device is here.
@@ -190,6 +201,14 @@ export function startRealtime(httpServer: HttpServer): void {
           .select({ kind: conversations.kind })
           .from(conversations)
           .where(eq(conversations.id, conversationId));
+        if (chat?.kind === "nebula") {
+          // A nebula (2.0): everyone in it (newer apps only), except across a block.
+          const blocked = await blockedWith(me.id);
+          for (const other of others) {
+            if (!blocked.has(other.userId)) emitToUser(other.userId, "typing", { conversationId, userId: me.id }, true);
+          }
+          return;
+        }
         for (const other of others) {
           // DMs: only if you can message each other. Groups: everyone, except across a block.
           const allowed =
@@ -245,10 +264,24 @@ function startPresenceHeartbeat(server: Server): void {
   }, 30_000);
 }
 
-/** Sends an event to every device the person is signed in on. */
-export function emitToUser(userId: string, event: string, payload: unknown): void {
+/**
+ * Sends an event to every device the person is signed in on. `modernOnly` (2.0): only to devices
+ * whose app knows Constellations (everything about constellations and nebulas).
+ */
+export function emitToUser(userId: string, event: string, payload: unknown, modernOnly = false): void {
   // Their nicknames for people go in (loaded when their live connection opened).
-  io?.to(userRoom(userId)).emit(event, withNicknames(payload, userId, cachedNicknames(userId)));
+  io?.to(modernOnly ? modernRoom(userId) : userRoom(userId)).emit(event, withNicknames(payload, userId, cachedNicknames(userId)));
+}
+
+/** Which of these people have Glofly open right now (any device). */
+export async function connectedUserIds(userIds: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!io || !userIds.length) return out;
+  for (const socket of await io.in(userIds.map(userRoom)).fetchSockets()) {
+    const id = (socket.data.user as { id?: string } | undefined)?.id;
+    if (id) out.add(id);
+  }
+  return out;
 }
 
 /**

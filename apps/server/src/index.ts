@@ -16,6 +16,8 @@ import { sweepBirthdays } from "./social/birthdays";
 import { stickersRouter } from "./stickers/routes";
 import { broadcastsRouter, sweepBroadcasts } from "./broadcasts/routes";
 import { callsRouter } from "./calls/routes";
+import { constellationsRouter } from "./constellations/routes";
+import { myGamesRouter, sweepPlaytime } from "./games/routes";
 import { watchPageRouter } from "./calls/player";
 import { sweepCalls } from "./calls/service";
 import { livekitConfigured } from "./calls/livekit";
@@ -101,6 +103,9 @@ app.use("/social", socialRouter);
 app.use("/stickers", stickersRouter);
 app.use("/broadcasts", broadcastsRouter);
 app.use("/calls", callsRouter);
+// 2.0: Constellations (communities with nebulas, roles, voice rooms) and My games.
+app.use("/constellations", constellationsRouter);
+app.use("/games", myGamesRouter);
 // Watch Together's video player page (the apps show the shared YouTube video through it).
 app.use("/watch", watchPageRouter);
 app.use("/reports", reportsRouter);
@@ -162,6 +167,8 @@ connectRedis()
     every(60_000, "Hang check", sweepHangs);
     every(60_000, "Birthday check", () => sweepBirthdays());
     every(5_000, "Lantern check", sweepLanterns);
+    // 2.0 My games: a minute of playtime for everyone playing something right now.
+    every(60_000, "Playtime", sweepPlaytime);
     // Files added to a chat but never sent are cleared out after an hour.
     setInterval(() => {
       sweepUnsentUploads().catch((err) => console.error("Upload cleanup failed", err));

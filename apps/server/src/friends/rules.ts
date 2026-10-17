@@ -27,6 +27,15 @@ export async function blockedEitherWay(a: string, b: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/** Everyone this person has blocked or been blocked by (2.0: typing in nebulas). */
+export async function blockedWith(userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ blockerId: blocks.blockerId, blockedId: blocks.blockedId })
+    .from(blocks)
+    .where(or(eq(blocks.blockerId, userId), eq(blocks.blockedId, userId)));
+  return new Set(rows.map((r) => (r.blockerId === userId ? r.blockedId : r.blockerId)));
+}
+
 export async function areFriends(a: string, b: string): Promise<boolean> {
   const rows = await db
     .select({ id: friendships.id })

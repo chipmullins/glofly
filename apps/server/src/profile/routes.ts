@@ -5,7 +5,7 @@ import { squarePhoto } from "./photo";
 import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { conversationMembers, friendships, users } from "../db/schema";
+import { conversationMembers, conversations, friendships, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { emitToUser } from "../realtime";
 import { presenceOf } from "../presence";
@@ -63,10 +63,12 @@ export async function profileChanged(userId: string): Promise<void> {
 
 /** People you've chatted with (a chat stays open even after an unfriend). */
 async function chatPartnersOf(userId: string): Promise<string[]> {
+  // Not nebulas (2.0): being in the same constellation doesn't make someone a chat partner.
   const myChats = db
     .select({ id: conversationMembers.conversationId })
     .from(conversationMembers)
-    .where(eq(conversationMembers.userId, userId));
+    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
+    .where(and(eq(conversationMembers.userId, userId), ne(conversations.kind, "nebula")));
   const partners = await db
     .selectDistinct({ userId: conversationMembers.userId })
     .from(conversationMembers)

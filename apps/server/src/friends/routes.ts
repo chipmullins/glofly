@@ -3,7 +3,7 @@ import { rateLimit } from "express-rate-limit";
 import { and, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { blocks, conversationMembers, friendships, users } from "../db/schema";
+import { blocks, conversationMembers, conversations, friendships, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { emitToUser } from "../realtime";
 import { endCallsBetween } from "../calls/service";
@@ -132,10 +132,12 @@ async function mySettings(userId: string) {
 
 /** Everyone I have a chat with. */
 export async function chatPartnersOf(userId: string): Promise<string[]> {
+  // Not nebulas (2.0): being in the same constellation doesn't make someone a chat partner.
   const mine = db
     .select({ id: conversationMembers.conversationId })
     .from(conversationMembers)
-    .where(eq(conversationMembers.userId, userId));
+    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
+    .where(and(eq(conversationMembers.userId, userId), ne(conversations.kind, "nebula")));
   const rows = await db
     .selectDistinct({ userId: conversationMembers.userId })
     .from(conversationMembers)

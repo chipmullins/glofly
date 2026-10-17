@@ -153,6 +153,11 @@ export async function setDeviceActivity(
   return true;
 }
 
+/** What someone's playing right now on any device (2.0 My games), whatever their status. */
+export async function currentActivity(userId: string): Promise<Activity | null> {
+  return activityOf(userId);
+}
+
 /** What someone's playing on any of their devices (the game started first wins). */
 async function activityOf(userId: string): Promise<Activity | null> {
   let found: Activity | null = null;

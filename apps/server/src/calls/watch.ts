@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import {
   canControlWatch,
   watchEnded,
@@ -13,7 +13,8 @@ import {
   type WatchUpdate,
 } from "@glofly/shared";
 import { db } from "../db";
-import { conversationMembers } from "../db/schema";
+import { callParticipants, conversationMembers } from "../db/schema";
+import { isNebulaChat } from "../constellations/chats";
 import { emitToUser } from "../realtime";
 
 // Watch Together (Oct 2026): a YouTube video everyone in a call watches at the same moment.
@@ -42,6 +43,21 @@ async function membersOf(conversationId: string): Promise<string[]> {
   return rows.map((r) => r.userId);
 }
 
+/**
+ * Who hears about a call's video: everyone in the chat; for a voice nebula (2.0), only the people
+ * in the room (newer apps only, which modern says).
+ */
+async function audienceOf(conversationId: string, callId: string): Promise<{ ids: string[]; modern: boolean }> {
+  if (await isNebulaChat(conversationId)) {
+    const rows = await db
+      .select({ userId: callParticipants.userId })
+      .from(callParticipants)
+      .where(and(eq(callParticipants.callId, callId), isNotNull(callParticipants.joinedAt), isNull(callParticipants.leftAt)));
+    return { ids: rows.map((r) => r.userId), modern: true };
+  }
+  return { ids: await membersOf(conversationId), modern: false };
+}
+
 /** A playing video that has reached its end becomes paused at the end (once its length is known). */
 function settle(entry: Entry, now = Date.now()): void {
   const s = entry.state;
@@ -64,7 +80,8 @@ export function watchUpdate(callId: string): WatchUpdate {
 
 async function announce(callId: string, conversationId: string): Promise<void> {
   const payload = watchUpdate(callId);
-  for (const userId of await membersOf(conversationId)) emitToUser(userId, "watch:updated", payload);
+  const audience = await audienceOf(conversationId, callId);
+  for (const userId of audience.ids) emitToUser(userId, "watch:updated", payload, audience.modern);
 }
 
 /** Tidies a title from YouTube (or an app) into one short plain line. */
@@ -221,7 +238,8 @@ export function forgetWatch(callId: string): void {
 /** A firefly reaction over the video, to everyone in the call's chat. */
 export async function reactWatch(callId: string, conversationId: string, userId: string, reaction: WatchReaction): Promise<void> {
   const payload = { callId, userId, reaction, id: randomUUID() };
-  for (const id of await membersOf(conversationId)) emitToUser(id, "watch:reaction", payload);
+  const audience = await audienceOf(conversationId, callId);
+  for (const id of audience.ids) emitToUser(id, "watch:reaction", payload, audience.modern);
 }
 
 // ---- What a YouTube link is (the Start dialog) ----

@@ -44,6 +44,9 @@ import {
 import { requireAuth } from "../auth/sessions";
 import { blockedEitherWay, canMessage, deletionPending, groupBreaksRestriction, pair } from "../friends/rules";
 import { emitToUser } from "../realtime";
+import { isNebulaChat } from "../constellations/chats";
+import { canModerateNebula, canPostInNebula, nebulaChatOpen, whyCantPostInNebula } from "../constellations/perms";
+import { logModeration, nebulaActivity } from "../constellations/activity";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
 import { voiceAsM4a } from "./voiceM4a";
@@ -258,13 +261,14 @@ function quoteOf(list: { kind: "image" | "file"; name: string; voice?: unknown; 
     : null;
 }
 
-/** Sends an event to everyone in a conversation. */
+/** Sends an event to everyone in a conversation (a nebula's: only apps that know Constellations). */
 async function broadcast(conversationId: string, event: string, payload: unknown) {
   const members = await db
     .select({ userId: conversationMembers.userId })
     .from(conversationMembers)
     .where(eq(conversationMembers.conversationId, conversationId));
-  for (const m of members) emitToUser(m.userId, event, payload);
+  const modern = await isNebulaChat(conversationId);
+  for (const m of members) emitToUser(m.userId, event, payload, modern);
 }
 
 /** Loads one message of a conversation (only if you're in that conversation). */
@@ -297,7 +301,8 @@ async function shareReadPosition(conversationId: string, readerId: string, partn
 }
 
 export type Access = {
-  kind: "dm" | "group";
+  /** "nebula" (2.0): a constellation's nebula; its members are the constellation's members. */
+  kind: "dm" | "group" | "nebula";
   memberIds: string[];
   /** DMs: the other person */
   partner: string | null;
@@ -306,7 +311,17 @@ export type Access = {
   name: string | null;
   /** Groups: the group photo's version (null = members' faces) */
   photoVersion: string | null;
+  conversationId: string;
 };
+
+/** Events about a nebula only go to apps that know Constellations. */
+const modernOnly = (chat: { kind: string }) => chat.kind === "nebula";
+
+/** What to tell someone who can't post here. */
+async function cantPostMessage(chat: Access, myId: string): Promise<string> {
+  if (chat.kind === "nebula") return (await whyCantPostInNebula(chat.conversationId, myId)) ?? CANT_POST;
+  return CANT_POST;
+}
 
 /** A chat I'm in (null if it doesn't exist or I'm not a member). */
 export async function access(conversationId: string, myId: string): Promise<Access | null> {
@@ -326,10 +341,13 @@ export async function access(conversationId: string, myId: string): Promise<Acce
     .where(eq(conversationMembers.conversationId, conversationId));
   const memberIds = members.map((m) => m.userId);
   if (!memberIds.includes(myId)) return null; // not your chat
+  // 2.0: a nebula of a constellation taken down in Control is closed to everyone.
+  if (conversation.kind === "nebula" && !(await nebulaChatOpen(conversationId))) return null;
   return {
     kind: conversation.kind,
     memberIds,
     partner: conversation.kind === "dm" ? (memberIds.find((id) => id !== myId) ?? null) : null,
+    conversationId,
     createdBy: conversation.createdBy,
     name: conversation.name,
     photoVersion: conversation.photoVersion,
@@ -339,6 +357,7 @@ export async function access(conversationId: string, myId: string): Promise<Acce
 /** Can I post here? DMs need us to be friends (and not blocked); groups just need me in it. */
 export async function canPost(chat: Access, myId: string): Promise<boolean> {
   if (chat.kind === "group") return !(await deletionPending(myId));
+  if (chat.kind === "nebula") return !(await deletionPending(myId)) && (await canPostInNebula(chat.conversationId, myId));
   return chat.partner !== null && (await canMessage(myId, chat.partner));
 }
 
@@ -367,6 +386,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
     .where(
       and(
         eq(conversationMembers.userId, myId),
+        // Nebulas (2.0) never show in anyone's chat list (and older apps never hear of them).
+        ne(conversations.kind, "nebula"),
         conversationIds ? inArray(conversations.id, conversationIds) : undefined,
       ),
     );
@@ -848,10 +869,12 @@ export async function postEvent(tx: Tx, conversationId: string, actorId: string,
 export async function announce(row: MessageRow, userIds: string[]) {
   const [message] = await hydrate([row]);
   const people = await peopleFor([row]);
+  const modern = await isNebulaChat(row.conversationId);
   for (const userId of new Set(userIds)) {
-    emitToUser(userId, "message:new", { message, people });
-    emitToUser(userId, "conversations:changed", {});
+    emitToUser(userId, "message:new", { message, people }, modern);
+    if (!modern) emitToUser(userId, "conversations:changed", {});
   }
+  if (modern) await nebulaActivity(row.conversationId, row.senderId, row.createdAt, []);
 }
 
 /** Checks I can add each of these people: they're my friends (not blocked, not leaving). */
@@ -1218,10 +1241,12 @@ conversationsRouter.get("/messages/search", searchLimiter, async (req, res) => {
 
   // Words are matched as typed, anywhere in the message, ignoring case. % and _ match literally.
   const pattern = `%${q.data.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  // Every chat I'm in, but not nebulas (2.0): those are searched one nebula at a time (`chat`).
   const myChats = db
     .select({ id: conversationMembers.conversationId })
     .from(conversationMembers)
-    .where(eq(conversationMembers.userId, myId));
+    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
+    .where(and(eq(conversationMembers.userId, myId), ne(conversations.kind, "nebula")));
 
   let olderThan = undefined;
   if (before.success) {
@@ -1336,7 +1361,11 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     return;
   }
   if (!(await canPost(chat, myId))) {
-    res.status(403).json({ error: "forbidden", message: CANT_POST });
+    res.status(403).json({ error: "forbidden", message: await cantPostMessage(chat, myId) });
+    return;
+  }
+  if (lantern && chat.kind === "nebula") {
+    res.status(400).json({ error: "invalid", message: "Lantern messages are for your own chats, not nebulas." });
     return;
   }
   // A reply must point at a message in this same chat that still exists.
@@ -1368,8 +1397,8 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   }
   const text = gif ? gifFallback(gif) : body.data;
 
-  // Groups: who this @mentions (only people in the group right now).
-  const mentions = chat.kind === "group" && !gif ? await mentionsIn(text, chat.memberIds, myId) : [];
+  // Groups and nebulas: who this @mentions (only people in it right now).
+  const mentions = chat.kind !== "dm" && !gif ? await mentionsIn(text, chat.memberIds, myId) : [];
 
   let inserted: MessageRow;
   try {
@@ -1421,7 +1450,8 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
 
   const [message] = await hydrate([inserted]);
   // Instantly to everyone in the chat (all their signed-in devices).
-  for (const userId of chat.memberIds) emitToUser(userId, "message:new", { message });
+  for (const userId of chat.memberIds) emitToUser(userId, "message:new", { message }, modernOnly(chat));
+  if (chat.kind === "nebula") inBackground(nebulaActivity(id.data, myId, inserted.createdAt, mentions));
   // Replying means you've read everything before it ("Seen" is for DMs).
   if (chat.partner) await shareReadPosition(id.data, myId, chat.partner, inserted.createdAt);
   res.status(201).json({ message });
@@ -1482,7 +1512,8 @@ export async function postSpecial(
     return row;
   });
   const [message] = await hydrate([inserted]);
-  for (const userId of chat.memberIds) emitToUser(userId, "message:new", { message });
+  for (const userId of chat.memberIds) emitToUser(userId, "message:new", { message }, modernOnly(chat));
+  if (chat.kind === "nebula") inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, []));
   if (chat.partner) await shareReadPosition(conversationId, myId, chat.partner, inserted.createdAt);
   inBackground(notifyMessage(message, chat));
   if (sessionId) inBackground(notifyRead(myId, conversationId, sessionId));
@@ -1533,7 +1564,7 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
     return;
   }
   if (!(await canPost(chat, myId))) {
-    res.status(403).json({ error: "forbidden", message: CANT_POST });
+    res.status(403).json({ error: "forbidden", message: await cantPostMessage(chat, myId) });
     return;
   }
   const hasFiles = (await attachmentsOf([message.id])).has(message.id);
@@ -1547,7 +1578,7 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
   }
   if (body.data !== message.body) {
     // Mentions follow the new text (an edit doesn't notify anyone again).
-    const mentions = chat.kind === "group" ? await mentionsIn(body.data, chat.memberIds, myId) : [];
+    const mentions = chat.kind !== "dm" ? await mentionsIn(body.data, chat.memberIds, myId) : [];
     await db
       .update(messages)
       .set({ body: body.data, editedAt: new Date(), mentions })
@@ -1571,9 +1602,22 @@ conversationsRouter.delete("/:id/messages/:messageId", async (req, res) => {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  const { message, conversationId } = found;
+  const { message, conversationId, chat } = found;
   if (message.senderId !== myId) {
-    res.status(403).json({ error: "forbidden", message: "You can only delete your own messages." });
+    // 2.0: in a nebula, people who can delete messages can delete anyone's (logged in Moderation).
+    const mod = chat.kind === "nebula" ? await canModerateNebula(conversationId, myId, message.senderId) : null;
+    if (!mod) {
+      res.status(403).json({ error: "forbidden", message: "You can only delete your own messages." });
+      return;
+    }
+    if (!message.deletedAt) {
+      await wipeMessage(message.id);
+      await logModeration(mod.constellationId, myId, "message_deleted", message.senderId, {
+        excerpt: message.body.slice(0, 120),
+        conversationId,
+      });
+    }
+    res.json({ message: await sendUpdated(message.id, conversationId) });
     return;
   }
   if (!message.deletedAt) await wipeMessage(message.id);
@@ -1628,7 +1672,10 @@ conversationsRouter.put("/:id/messages/:messageId/reactions/:emoji", sendLimiter
     return;
   }
   if (!(await canPost(found.chat, myId))) {
-    res.status(403).json({ error: "forbidden", message: "You can only react in chats with friends." });
+    res.status(403).json({
+      error: "forbidden",
+      message: found.chat.kind === "nebula" ? await cantPostMessage(found.chat, myId) : "You can only react in chats with friends.",
+    });
     return;
   }
   const [{ count }] = await db
@@ -1705,7 +1752,10 @@ async function uploadGate(req: express.Request, res: Response, next: express.Nex
     return;
   }
   if (!(await canPost(chat, myId))) {
-    res.status(403).json({ error: "forbidden", message: "You can only send files to friends." });
+    res.status(403).json({
+      error: "forbidden",
+      message: chat.kind === "nebula" ? await cantPostMessage(chat, myId) : "You can only send files to friends.",
+    });
     return;
   }
   const declared = Number(req.headers["content-length"] ?? 0);
