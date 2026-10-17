@@ -105,3 +105,26 @@ export async function removeFromRoom(callId: string, userId: string): Promise<vo
     console.error("Couldn't remove someone from a call's room:", err instanceof Error ? err.message : err);
   }
 }
+
+/**
+ * 0.5.0 Broadcast now: a pass for a broadcast's room. The broadcaster may send their screen, its
+ * sound and their microphone; friends watching can only watch and listen (they send nothing).
+ */
+export async function broadcastToken(
+  room: string,
+  user: { id: string; displayName: string },
+  role: "host" | "viewer",
+): Promise<string> {
+  const token = new AccessToken(apiKey, apiSecret, { identity: user.id, name: user.displayName, ttl: "15m" });
+  token.addGrant({
+    room,
+    roomJoin: true,
+    canSubscribe: role === "viewer",
+    canPublish: role === "host",
+    canPublishSources: role === "host" ? [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO, TrackSource.MICROPHONE] : [],
+    canPublishData: false,
+    canUpdateOwnMetadata: false,
+  });
+  token.roomConfig = new RoomConfiguration({ maxParticipants: 101, emptyTimeout: 60, departureTimeout: 20 });
+  return token.toJwt();
+}

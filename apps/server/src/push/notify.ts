@@ -266,3 +266,50 @@ export async function notifyFriendJoined(
       })),
   );
 }
+
+/**
+ * 0.5.0 friend news ("is free to hang", "is live", "🎂 birthday today") to phones and browsers
+ * that aren't open right now. Sent as the 0.3.0 friend alert types so every phone app already
+ * shows them (tap opens their profile): "friend_online" for news that goes stale soon,
+ * "friend_joined" for news that lasts the day. Skipped while you're on Do not disturb.
+ */
+export async function notifyFriendNews(
+  toUserId: string,
+  who: { id: string; displayName: string; avatarVersion: string | null },
+  text: string,
+  lasts: "soon" | "day",
+): Promise<void> {
+  if (!pushConfigured) return;
+  const devices = await db
+    .select({
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
+      status: users.statusPreference,
+    })
+    .from(pushDevices)
+    .innerJoin(users, eq(users.id, pushDevices.userId))
+    .where(eq(pushDevices.userId, toUserId));
+  if (!devices.length) return;
+  const live = (await liveSessions([toUserId])).get(toUserId);
+  const nicks = await nicknamesFor(toUserId).catch(() => undefined);
+  const name = nicks?.get(who.id) ?? who.displayName;
+  await deliver(
+    devices
+      .filter((d) => d.status !== "dnd" && !live?.has(d.sessionId))
+      .map((device) => ({
+        device,
+        ttl: lasts === "soon" ? 30 * 60 : 12 * 60 * 60,
+        data: {
+          type: lasts === "soon" ? "friend_online" : "friend_joined",
+          userId: who.id,
+          senderName: name,
+          senderAvatar: who.avatarVersion ?? "",
+          title: name,
+          text,
+        },
+      })),
+  );
+}

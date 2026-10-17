@@ -104,6 +104,8 @@ export const users = pgTable(
     shareBirthday: boolean("share_birthday").notNull().default(false),
     // "Want to hang?": free for a call until then (null: not right now).
     hangUntil: timestamp("hang_until", { withTimezone: true }),
+    // ...and which friends were told (null: every friend). 0.5.0, migration 0028.
+    hangWith: jsonb("hang_with").$type<string[]>(),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })

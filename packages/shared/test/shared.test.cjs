@@ -155,3 +155,44 @@ test('watch together: keeping a player in step', () => {
   assert.deepEqual(r.commands.map((c) => c.cmd), ['volume', 'play'])
   assert.equal(r.status, 'blocked')
 })
+
+test('glows: brighten each day both write, dim on missed days, never reset', () => {
+  const s = require('../dist/index.js')
+  let g = { level: 0, days: 0, best: 0, lastDay: null }
+  g = s.lightGlow(g, '2026-10-01')
+  assert.deepEqual(g, { level: 1, days: 1, best: 1, lastDay: '2026-10-01' })
+  g = s.lightGlow(g, '2026-10-02')
+  g = s.lightGlow(g, '2026-10-03')
+  assert.equal(g.level, 3)
+  assert.equal(g.days, 3)
+  assert.equal(s.lightGlow(g, '2026-10-03'), g, 'the same day twice changes nothing')
+  // Tomorrow, not written yet: still full. Two days later: dimmed by one.
+  assert.equal(s.glowNow(g, '2026-10-04').level, 3)
+  assert.equal(s.glowNow(g, '2026-10-04').litToday, false)
+  assert.equal(s.glowNow(g, '2026-10-05').level, 2)
+  // Writing again after one missed day: dims for the miss, then brightens; the days carry on.
+  const back = s.lightGlow(g, '2026-10-05')
+  assert.equal(back.level, 3)
+  assert.equal(back.days, 4)
+  // Missed long enough to go fully dim: a new glow starts.
+  const restart = s.lightGlow(g, '2026-10-20')
+  assert.deepEqual([restart.level, restart.days, restart.best], [1, 1, 3])
+  assert.equal(s.glowNow(g, '2026-10-20'), null)
+  // Never brighter than 5.
+  let h = { level: 0, days: 0, best: 0, lastDay: null }
+  for (let d = 1; d <= 9; d++) h = s.lightGlow(h, `2026-11-0${d}`)
+  assert.equal(h.level, 5)
+  assert.equal(h.days, 9)
+  assert.equal(s.glowLabel({ ...s.glowNow(h, '2026-11-09') }), 'Bright 9-day glow')
+})
+
+test('birthdays: the day only, Feb 29 on Feb 28 in other years', () => {
+  const s = require('../dist/index.js')
+  assert.equal(s.isBirthdayOn('1990-10-16', '2026-10-16'), true)
+  assert.equal(s.isBirthdayOn('1990-10-16', '2026-10-17'), false)
+  assert.equal(s.isBirthdayOn('2004-02-29', '2027-02-28'), true)
+  assert.equal(s.isBirthdayOn('2004-02-29', '2028-02-28'), false)
+  assert.equal(s.isBirthdayOn('2004-02-29', '2028-02-29'), true)
+  assert.equal(s.dayIn(new Date('2026-10-17T03:00:00Z'), 'America/Chicago'), '2026-10-16')
+  assert.equal(s.dayGap('2026-02-27', '2026-03-01'), 2)
+})

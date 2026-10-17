@@ -11,6 +11,10 @@ import { conversationsRouter } from "./messages/routes";
 import { extrasRouter } from "./messages/extras";
 import { gifsRouter, gifsConfigured } from "./messages/gifs";
 import { sweepLanterns } from "./messages/lanterns";
+import { socialRouter, sweepHangs } from "./social/routes";
+import { sweepBirthdays } from "./social/birthdays";
+import { stickersRouter } from "./stickers/routes";
+import { broadcastsRouter, sweepBroadcasts } from "./broadcasts/routes";
 import { callsRouter } from "./calls/routes";
 import { watchPageRouter } from "./calls/player";
 import { sweepCalls } from "./calls/service";
@@ -78,6 +82,10 @@ app.use("/conversations", conversationsRouter);
 // 0.5.0: polls, mini games, link preview pictures, firefly swarms (messages/extras.ts); GIFs.
 app.use("/conversations", extrasRouter);
 app.use("/gifs", gifsRouter);
+// 0.5.0: glows, "Want to hang?", birthdays, Year in Glow; custom stickers; Broadcast now.
+app.use("/social", socialRouter);
+app.use("/stickers", stickersRouter);
+app.use("/broadcasts", broadcastsRouter);
 app.use("/calls", callsRouter);
 // Watch Together's video player page (the apps show the shared YouTube video through it).
 app.use("/watch", watchPageRouter);
@@ -134,6 +142,13 @@ connectRedis()
       sweepCalls().catch((err) => console.error("Call check failed", err));
     }, 15 * 1000);
     // Lantern messages fade once everyone else has read them (0.5.0).
+    setInterval(() => {
+      sweepBroadcasts().catch((err) => console.error("Broadcast check failed", err));
+    }, 15_000);
+    setInterval(() => {
+      sweepHangs().catch((err) => console.error("Hang check failed", err));
+      sweepBirthdays().catch((err) => console.error("Birthday check failed", err));
+    }, 60_000);
     setInterval(() => {
       sweepLanterns().catch((err) => console.error("Lantern check failed", err));
     }, 5 * 1000);

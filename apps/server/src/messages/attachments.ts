@@ -33,6 +33,8 @@ export type AttachmentInfo = {
   voice: VoiceInfo | null;
   /** Videos only (0.5.0): length and size (the type stays on the server) */
   video: Omit<VideoInfo, "mime"> | null;
+  /** A sticker (0.5.0): shown without a bubble */
+  sticker?: boolean;
 };
 
 // Voice messages: Opus audio recorded in Glofly, up to 5 minutes (about 1–2 MB).
@@ -311,14 +313,15 @@ export async function attachmentsOf(messageIds: string[]): Promise<Map<string, A
       height: attachments.height,
       voice: attachments.voice,
       video: attachments.video,
+      sticker: attachments.sticker,
     })
     .from(attachments)
     .where(inArray(attachments.messageId, messageIds))
     .orderBy(asc(attachments.position));
-  for (const { messageId, video, ...info } of rows) {
+  for (const { messageId, video, sticker, ...info } of rows) {
     if (!messageId) continue;
     const list = map.get(messageId) ?? [];
-    list.push({ ...info, video: video ? { durationMs: video.durationMs, width: video.width, height: video.height } : null });
+    list.push({ ...info, video: video ? { durationMs: video.durationMs, width: video.width, height: video.height } : null, ...(sticker ? { sticker: true } : {}) });
     map.set(messageId, list);
   }
   return map;

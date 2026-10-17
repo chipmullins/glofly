@@ -197,6 +197,13 @@
       "when": 1792193252804,
       "tag": "0027_glofly_0_5_0",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792195867689,
+      "tag": "0028_glofly_0_5_0_hang",
+      "breakpoints": true
     }
   ]
 }

@@ -52,6 +52,7 @@ import { pollView, votesFor } from "./polls";
 import { gifById } from "./gifs";
 import { addLinkPreview, removePreviewImage } from "./previews";
 import { firstLink } from "./links";
+import { noteGlow } from "../social/glows";
 import { inBackground, notifyMessage, notifyRead } from "../push/notify";
 import {
   GROUP_MAX,
@@ -1430,6 +1431,8 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   inBackground(notifyRead(myId, id.data, res.locals.sessionId));
   // 0.5.0: the first link gets a preview a moment later (message:updated).
   if (!gif && !lantern) inBackground(addLinkPreview(inserted.id, id.data, text));
+  // 0.5.0 Glows: writing to a friend counts toward today's glow.
+  if (chat.partner) inBackground(noteGlow(myId, chat.partner));
 });
 
 class AttachmentGone extends Error {}
@@ -1442,14 +1445,35 @@ export async function postSpecial(
   chat: Access,
   conversationId: string,
   myId: string,
-  values: { body: string; poll?: PollInfo; game?: GameInfo },
+  values: { body: string; poll?: PollInfo; game?: GameInfo; sticker?: { image: Buffer; width: number; height: number }; replyToId?: string | null },
   sessionId?: string,
 ) {
+  // A sticker (0.5.0) is stored as a photo of its own, so older apps show it as one.
+  const stickerId = values.sticker ? randomUUID() : null;
+  if (values.sticker && stickerId) {
+    const base = { id: stickerId, conversationId, kind: "image" as const };
+    await storage.put(keyFor(base, "preview")!, values.sticker.image, "image/webp");
+    await storage.put(keyFor(base, "full")!, values.sticker.image, "image/webp");
+  }
   const inserted = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(messages)
-      .values({ conversationId, senderId: myId, body: values.body, poll: values.poll ?? null, game: values.game ?? null })
+      .values({ conversationId, senderId: myId, body: values.body, poll: values.poll ?? null, game: values.game ?? null, replyToId: values.replyToId ?? null })
       .returning(messageFields);
+    if (values.sticker && stickerId) {
+      await tx.insert(attachments).values({
+        id: stickerId,
+        conversationId,
+        uploaderId: myId,
+        messageId: row.id,
+        kind: "image",
+        name: "Sticker.webp",
+        size: values.sticker.image.length,
+        width: values.sticker.width,
+        height: values.sticker.height,
+        sticker: true,
+      });
+    }
     await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));
     await tx
       .update(conversationMembers)
@@ -1462,6 +1486,7 @@ export async function postSpecial(
   if (chat.partner) await shareReadPosition(conversationId, myId, chat.partner, inserted.createdAt);
   inBackground(notifyMessage(message, chat));
   if (sessionId) inBackground(notifyRead(myId, conversationId, sessionId));
+  if (chat.partner) inBackground(noteGlow(myId, chat.partner));
   return message;
 }
 

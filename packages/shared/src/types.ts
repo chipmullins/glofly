@@ -180,7 +180,12 @@ export type Attachment = {
    * newer ones play them in the chat (variants "poster" and "video").
    */
   video?: VideoInfo | null
+  /** 0.5.0: a sticker (a see-through picture shown without a bubble; older apps show a photo) */
+  sticker?: boolean
 }
+
+/** 0.5.0: a sticker you made (kept in your sticker tray). */
+export type Sticker = { id: string; width: number; height: number; createdAt: string }
 
 export type VoiceInfo = { durationMs: number; peaks: number[] }
 export type VideoInfo = { durationMs: number; width: number; height: number }
@@ -448,6 +453,10 @@ export type ServerEvent =
   | ({ type: 'watch:reaction' } & WatchReactionEvent)
   /** 0.5.0: someone sent a swarm of fireflies across a chat (long-press ❤️ or 🔥) */
   | { type: 'chat:fireflies'; conversationId: string; userId: string; emoji: FireflyEmoji; id: string }
+  /** 0.5.0: glows, hangs, birthdays or broadcasts changed: fetch GET /social again */
+  | { type: 'social:changed' }
+  /** 0.5.0: a friend is free to hang (a gentle ping with a Join button) */
+  | { type: 'hang:ping'; userId: string; until: string }
   /** This version is too old for the server: show "Please update Glofly". */
   | ({ type: 'app:update-required' } & UpdateRequired)
   /** 0.4.0: Glofly is paused (Glofly Control → Server → Pause Glofly) */

@@ -18,8 +18,9 @@ export function fileTypeLabel(name: string): string {
 }
 
 /** What to show for photos/files when there's no text: "Photo", "3 photos", "Report.pdf", "2 files". */
-export function attachmentSummary(list: Pick<Attachment, 'kind' | 'name' | 'voice' | 'video'>[]): string {
+export function attachmentSummary(list: Pick<Attachment, 'kind' | 'name' | 'voice' | 'video' | 'sticker'>[]): string {
   if (!list.length) return ''
+  if (list.length === 1 && list[0].sticker) return 'Sticker'
   if (list.length === 1 && list[0].voice)
     return `Voice message (${voiceTime(list[0].voice.durationMs)})`
   const videos = list.filter((a) => a.video).length
