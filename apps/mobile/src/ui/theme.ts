@@ -1,3 +1,4 @@
+import { createContext, createElement, useContext, type ReactNode } from 'react'
 import { useColorScheme } from 'react-native'
 import { create } from 'zustand'
 
@@ -173,10 +174,72 @@ export const useThemeChoice = create<{ choice: ThemeChoice; accent: AccentChoice
   setAccent: (accent) => set({ accent: ACCENTS.some((a) => a.key === accent) ? accent : 'orange' }),
 }))
 
+/**
+ * Glofly 2.0 on phones: the night side (Constellations) is dark in every theme, from the "Glofly
+ * 2.0 Mobile" canvas. Everything drawn inside it (the composer, sheets, polls, dialogs) uses these
+ * colors through ThemeOverride, so the existing pieces look right there without changes.
+ */
+export const night: Colors = {
+  bg: '#120c0a',
+  surface: '#1c1210',
+  surface2: '#241712',
+  line: '#2a1c17',
+  field: '#1c1210',
+  fieldLine: '#3a2a22',
+  ink: '#f5ede6',
+  ink2: '#d9c2b1',
+  muted: '#b8a699',
+  faint: '#9c8a7d',
+  accent: '#ffb347',
+  accentInk: '#1c1210',
+  accentText: '#ffb347',
+  accentSoft: '#2a1c17',
+  focus: 'rgba(255,179,71,0.22)',
+  glow: 'rgba(255,165,74,0.35)',
+  online: '#3dba6e',
+  onlineText: '#6fd39a',
+  onlineSoft: '#163024',
+  away: '#f0b429',
+  dnd: '#d33a2c',
+  danger: '#ff8a7a',
+  dangerSoft: 'rgba(211,58,44,0.18)',
+  dangerLine: '#5a2a26',
+  them: '#1c1210',
+  me: '#ffb347',
+  meInk: '#1c1210',
+  quoteBg: 'rgba(18,12,10,0.25)',
+  chip: '#1c1210',
+  chipMine: '#2a1c17',
+  barBg: '#120c0a',
+  navBg: 'rgba(18,12,10,0.95)',
+  sheet: '#1c1210',
+  backdrop: 'rgba(5,3,2,0.6)',
+  shadow: 'rgba(0,0,0,0.5)',
+  mentionWash: 'rgba(255,179,71,0.10)',
+  mutedBadge: '#574a41',
+  info: '#8ad8ef',
+  infoSoft: '#173944',
+}
+
+/** 'night' = the Constellations palette; 'dark' = Glofly's own dark theme (the DM Dock, in every theme). */
+export type ThemeMode = 'night' | 'dark'
+const ThemeModeContext = createContext<ThemeMode | null>(null)
+
+/** Everything inside draws with the night (or dark) palette, whatever the app's theme is. */
+export function ThemeOverride({ mode, children }: { mode: ThemeMode | null; children: ReactNode }) {
+  return createElement(ThemeModeContext.Provider, { value: mode }, children)
+}
+
+/** The override in force here (null = the app's own theme). */
+export const useThemeMode = (): ThemeMode | null => useContext(ThemeModeContext)
+
 export function useTheme(): { c: Colors; dark: boolean } {
+  const mode = useContext(ThemeModeContext)
   const system = useColorScheme()
   const choice = useThemeChoice((s) => s.choice)
   const accent = useThemeChoice((s) => s.accent)
+  if (mode === 'night') return { c: night, dark: true }
+  if (mode === 'dark') return { c: colorsFor(true, accent), dark: true }
   const isDark = choice === 'system' ? system === 'dark' : choice === 'dark'
   return { c: colorsFor(isDark, accent), dark: isDark }
 }

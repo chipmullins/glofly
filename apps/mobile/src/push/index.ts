@@ -8,6 +8,7 @@ import { prefs } from '@/lib/storage'
 import { onSignOut, useSession } from '@/state/session'
 import { usePhonePrefs, onPhonePrefsChange } from '@/state/prefs'
 import { useStore } from '@/state/store'
+import { useCx } from '@/state/constellations'
 import { notificationStatus, requestNotifications } from './permissions'
 import { playSound, vibrate } from './sounds'
 
@@ -114,6 +115,34 @@ onLive((event, payload) => {
   const p = usePhonePrefs.getState()
   const now = Date.now()
   if (now - lastSound < 1500) return // a burst makes one sound
+  lastSound = now
+  if (p.sounds) playSound('message')
+  if (p.vibrate) vibrate()
+})
+
+// 0.7.0: nebula messages while Glofly is open. Their sound follows your setting for that nebula
+// (or the constellation's default): all messages, only @mentions, or nothing; a mute still lets
+// @mentions through. Never for the nebula on screen, your own messages, or in Do not disturb.
+onLive((event, payload) => {
+  if (event !== 'nebula:message') return
+  const message = payload as Message
+  if (!isAppActive()) return
+  const me = useSession.getState().user?.id ?? ''
+  if (message.senderId === me || message.event) return
+  if (useStore.getState().myStatus?.status === 'dnd') return
+  const cx = useCx.getState()
+  if (cx.viewing === message.conversationId) return
+  const place = cx.chats[message.conversationId]
+  const detail = place ? cx.details[place.constellationId] : undefined
+  const nebula = detail?.nebulas.find((n) => n.id === place?.nebulaId)
+  const mention = mentionsMe(message, me)
+  const level = nebula?.notify ?? detail?.me.notify ?? 'mentions'
+  const quiet = !!nebula?.mutedUntil && new Date(nebula.mutedUntil).getTime() > Date.now()
+  if (!mention && (level !== 'all' || quiet)) return
+  if (level === 'none' && !mention) return
+  const p = usePhonePrefs.getState()
+  const now = Date.now()
+  if (now - lastSound < 1500) return
   lastSound = now
   if (p.sounds) playSound('message')
   if (p.vibrate) vibrate()

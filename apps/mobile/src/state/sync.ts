@@ -196,10 +196,17 @@ export async function loadUntil(id: string, messageId: string): Promise<boolean>
   return chatMessages(id).list.some((m) => m.id === messageId)
 }
 
+/** 0.7.0: tells nebula chats apart (set by state/constellations; they're never in the chats list). */
+let isNebula: (conversationId: string) => boolean = () => false
+export function setNebulaCheck(fn: (conversationId: string) => boolean) {
+  isNebula = fn
+}
+
 /** A new message (live, or one this phone just sent): into its chat and the chats list. */
 export function receiveMessage(m: Message, opts: { appActive: boolean }): { counts: boolean } {
   putMessage(m)
   const c = useStore.getState().conversations[m.conversationId]
+  if (!c && isNebula(m.conversationId)) return { counts: false }
   if (!c) {
     void refreshConversations()
     return { counts: m.senderId !== me() }

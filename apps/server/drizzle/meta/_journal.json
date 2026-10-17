@@ -225,6 +225,13 @@
       "when": 1792251162463,
       "tag": "0031_indexes_for_deletes",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792262348580,
+      "tag": "0032_push_device_features",
+      "breakpoints": true
     }
   ]
 }

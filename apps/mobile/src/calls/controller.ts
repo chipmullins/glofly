@@ -15,6 +15,7 @@ import { playSound, startLoop } from '@/push/sounds'
 import { usePhonePrefs } from '@/state/prefs'
 import { audioEngineInfo, setupWebRTC, startCallAudio, stopCallAudio } from './media'
 import { APP_SETTINGS } from '@/lib/config'
+import { cx } from '@/api/constellations'
 
 // Calls: starting, answering and leaving, the LiveKit room, ringing in the app, and the
 // "Call in progress" service that keeps a call going when Glofly leaves the screen.
@@ -40,7 +41,12 @@ type CallState = {
   incoming: { call: Call; caller: PublicUser | null } | null
   /** A short message at the bottom ("Jacob didn't pick up."). */
   toast: string | null
+  /** Glofly 2.0: the call is a voice nebula (drop-in, nobody rung), and which one */
+  voice: VoiceNebula | null
 }
+
+/** A voice nebula you're in (Glofly 2.0). */
+export type VoiceNebula = { constellationId: string; nebulaId: string; nebulaName: string; constellationName: string }
 
 export const useCall = create<CallState>(() => ({
   call: null,
@@ -51,6 +57,7 @@ export const useCall = create<CallState>(() => ({
   frontCamera: true,
   incoming: null,
   toast: null,
+  voice: null,
 }))
 
 let room: Room | null = null
@@ -132,6 +139,8 @@ async function permissions(video: boolean): Promise<boolean> {
 }
 
 function title(call: Call): string {
+  const voice = useCall.getState().voice
+  if (voice) return `${voice.nebulaName} · ${voice.constellationName}`
   const chat = useStore.getState().conversations[call.conversationId]
   return chat ? chatTitle(chat) : 'Glofly call'
 }
@@ -222,7 +231,8 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
     if (!rejoinedOnce) {
       rejoinedOnce = true
       void (async () => {
-        const again = await api.joinCall(call.id)
+        const voice = useCall.getState().voice
+        const again = voice ? await cx.joinVoice(voice.constellationId, voice.nebulaId) : await api.joinCall(call.id)
         if (again.ok && useCall.getState().call?.id === call.id) {
           room = null
           await connect(again.data, useCall.getState().cameraOn)
@@ -274,25 +284,27 @@ function cleanup(message?: string) {
   Native.keepScreenOn(false)
   keepConnected('call', false)
   const had = !!useCall.getState().call
-  useCall.setState({ call: null, connecting: false, tiles: [], micOn: true, cameraOn: false, frontCamera: true })
+  useCall.setState({ call: null, connecting: false, tiles: [], micOn: true, cameraOn: false, frontCamera: true, voice: null })
   if (had && usePhonePrefs.getState().sounds) playSound('ended', 0.8)
   if (message) toast(message)
 }
 
-async function enter(request: () => ReturnType<typeof api.startCall>, video: boolean, outgoing: boolean) {
+async function enter(request: () => ReturnType<typeof api.startCall>, video: boolean, outgoing: boolean, voice: VoiceNebula | null = null) {
   if (useCall.getState().call) return void inform("You're already in a call", 'Hang up first to start another.')
   if (!(await permissions(video))) return
-  useCall.setState({ connecting: true, cameraOn: video, micOn: true })
+  useCall.setState({ connecting: true, cameraOn: video, micOn: true, voice })
   keepConnected('call', true)
   const r = await request()
   if (!r.ok) {
-    useCall.setState({ connecting: false })
+    useCall.setState({ connecting: false, voice: null })
     keepConnected('call', false)
-    return void inform(r.error === 'conflict' ? "Can't call right now" : "Couldn't connect the call", r.message)
+    return void inform(r.error === 'conflict' ? "Can't call right now" : voice ? "Couldn't join voice" : "Couldn't connect the call", r.message)
   }
   setCall(r.data.call, null)
   useCall.setState({ call: r.data.call })
-  router.push('/call')
+  // A voice nebula opens its stage on the night side (Glofly 2.0); a call, the call screen.
+  if (voice) router.push('/constellations/voice')
+  else router.push('/call')
   try {
     await connect(r.data, video)
   } catch {
@@ -316,6 +328,24 @@ async function enter(request: () => ReturnType<typeof api.startCall>, video: boo
 }
 
 // ---- What the screens call ----
+
+/**
+ * Drop into a voice nebula (Glofly 2.0): nobody is rung. Already in another call: leave it first.
+ * Already in this one: just show its stage.
+ */
+export async function joinVoiceNebula(voice: VoiceNebula, video = false): Promise<void> {
+  const s = useCall.getState()
+  if (s.voice?.nebulaId === voice.nebulaId && s.call) {
+    router.push('/constellations/voice')
+    return
+  }
+  if (s.call) {
+    const ok = await confirm({ title: s.voice ? `Leave ${s.voice.nebulaName}?` : 'Leave your call?', message: `You'll join ${voice.nebulaName} instead.`, confirmLabel: 'Switch' })
+    if (!ok) return
+    await hangUp()
+  }
+  await enter(() => cx.joinVoice(voice.constellationId, voice.nebulaId), video, false, voice)
+}
 
 /** `ring` (groups, 0.5.2): only these people are rung; the rest of the group can join. */
 export async function startCallIn(conversationId: string, video: boolean, ring?: string[]): Promise<void> {
@@ -507,6 +537,12 @@ function onCallUpdated(call: Call, caller: PublicUser | null) {
   }
   useCall.setState({ call })
   const meIn = call.members.find((m) => m.userId === me())?.state === 'joined'
+  // A voice nebula (Glofly 2.0): out of it without hanging up = a moderator disconnected you, or
+  // you joined it on another device.
+  if (s.voice && !meIn && room && call.status === 'ongoing') {
+    cleanup(`You're no longer in ${s.voice.nebulaName}.`)
+    return
+  }
   if (call.status === 'ended' || call.status === 'missed' || call.status === 'declined') {
     const others = call.members.filter((m) => m.userId !== me())
     const isDm = others.length === 1

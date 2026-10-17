@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { useWide } from '@/lib/layout'
+import { isWideNow, useWide } from '@/lib/layout'
+import { placeOfChat } from '@/state/constellations'
+import { flyIn } from '@/constellations/transition'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Clipboard from 'expo-clipboard'
 import {
@@ -136,6 +138,14 @@ export default function ChatScreen() {
   useEffect(() => {
     if (hasChat) return
     let live = true
+    // 0.7.0: a nebula's notification opens glofly://chat/<its conversation>: fly into that nebula.
+    void placeOfChat(id).then((place) => {
+      if (!live || !place) return
+      live = false
+      if (router.canGoBack()) router.back()
+      else router.replace('/chats')
+      setTimeout(() => flyIn(null, isWideNow() ? [{ pathname: '/constellations/[cid]', params: { cid: place.constellationId, nebula: place.nebulaId } }] : ['/constellations', `/constellations/${place.constellationId}`, `/constellations/${place.constellationId}/nebula/${place.nebulaId}`]), 60)
+    })
     void refreshConversations().then((ok) => {
       if (live && ok && !useStore.getState().conversations[id]) setMissing(id)
     })

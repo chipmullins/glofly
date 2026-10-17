@@ -8,7 +8,8 @@ import { useFonts } from 'expo-font'
 import { DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-google-fonts/dm-sans'
 import { Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit'
 import * as SystemUI from 'expo-system-ui'
-import { useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
+import { ThemeOverride, useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
+import { useCx } from '@/state/constellations'
 import { DialogHost } from '@/ui/dialogs'
 import { PhotoCropperHost } from '@/ui/PhotoCropper'
 import { SheetHost } from '@/ui/sheets'
@@ -71,12 +72,22 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)" />
           </Stack.Protected>
         </Stack>
-        <SheetHost />
-        <DialogHost />
+        <OverlayHosts />
         <PhotoCropperHost />
         <Paused />
         <UpdateRequired />
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  )
+}
+
+/** Menus, sheets and dialogs: in the night colors while Constellations is on screen (Glofly 2.0). */
+function OverlayHosts() {
+  const night = useCx((s) => s.front)
+  return (
+    <ThemeOverride mode={night ? 'night' : null}>
+      <SheetHost />
+      <DialogHost />
+    </ThemeOverride>
   )
 }

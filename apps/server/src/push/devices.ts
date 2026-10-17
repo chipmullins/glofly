@@ -10,7 +10,7 @@ import { webEnabled } from "../web/session";
 import { parseSubscription, vapidKeys } from "./web";
 
 // Phones register for push notifications here, after signing in:
-//   PUT /devices/push    { token, platform: "android" | "ios", preview?, voipToken?, messageSound?, ringtone? }   (again whenever the token or a setting changes)
+//   PUT /devices/push    { token, platform: "android" | "ios", preview?, voipToken?, messageSound?, ringtone?, features? }   (again whenever the token or a setting changes)
 //   DELETE /devices/push                                                    (notifications turned off on this phone)
 // Glofly in a browser does the same with platform "web" and its push subscription as the token
 // (JSON from PushSubscription.toJSON()), after GET /devices/web-push-key for the server's key.
@@ -47,7 +47,13 @@ const registration = z.object({
   // (older apps). A name this server doesn't know is stored as the default (null).
   messageSound: z.string().max(40).optional(),
   ringtone: z.string().max(40).optional(),
+  // 0.7.0: what the app can show beyond plain chats ("constellations": nebula notifications).
+  // Left out = unchanged (older apps keep none). Unknown names are dropped.
+  features: z.array(z.string().max(40)).max(20).optional(),
 });
+
+/** The push features this server knows (an app sends the ones it can show). */
+const PUSH_FEATURES = new Set(["constellations"]);
 
 devicesRouter.put("/push", limiter, async (req, res) => {
   const parsed = registration.safeParse(req.body);
@@ -56,6 +62,11 @@ devicesRouter.put("/push", limiter, async (req, res) => {
     return;
   }
   const { token, platform, preview, voipToken, messageSound, ringtone } = parsed.data;
+  // Phones only: browsers keep their own notifications (they never get nebula pushes).
+  const features =
+    parsed.data.features !== undefined && platform !== "web"
+      ? { features: [...new Set(parsed.data.features.filter((f) => PUSH_FEATURES.has(f)))] }
+      : {};
   // A browser's subscription only from the web app (its cookie session), and only a real one:
   // an address at a browser's push service with its keys (push/web.ts). Phones never send "web".
   const web = platform === "web";
@@ -75,10 +86,10 @@ devicesRouter.put("/push", limiter, async (req, res) => {
     await tx.delete(pushDevices).where(and(eq(pushDevices.token, token), ne(pushDevices.sessionId, sessionId)));
     await tx
       .insert(pushDevices)
-      .values({ sessionId, userId, platform, token, preview, ...voip, ...sounds })
+      .values({ sessionId, userId, platform, token, preview, ...voip, ...sounds, ...features })
       .onConflictDoUpdate({
         target: pushDevices.sessionId,
-        set: { token, platform, preview, ...voip, ...sounds, updatedAt: new Date() },
+        set: { token, platform, preview, ...voip, ...sounds, ...features, updatedAt: new Date() },
       });
     // A VoIP token belongs to one phone too.
     if (voip.voipToken) {

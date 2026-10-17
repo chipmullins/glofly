@@ -134,6 +134,7 @@ export default function Settings() {
 
       <SectionLabel>Fun</SectionLabel>
       <SettingsRow icon="sparkles" label="Year in Glow" detail="Your year on Glofly: friends, glows, calls, emoji" onPress={() => router.push('/year')} />
+      <SettingsRow icon="gamepad" label="My games" detail="Your playtime, favorites and who sees them" onPress={() => router.push({ pathname: '/games/[id]', params: { id: 'me' } })} />
 
       <SectionLabel>Account</SectionLabel>
       <SettingsRow icon="user" label="Account" detail="Email, password, devices, delete account" onPress={() => router.push('/settings/account')} />

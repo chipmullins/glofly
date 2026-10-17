@@ -1,13 +1,15 @@
 import { nicknamesFor } from "../profile/nicknames";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { attachmentSummary, listNames, shortBody, type Attachment } from "@glofly/shared";
 import { db } from "../db";
-import { conversationMembers, pushDevices, users } from "../db/schema";
+import { constellationMembers, constellations, conversationMembers, pushDevices, users } from "../db/schema";
 import { blockedEitherWay } from "../friends/rules";
 import { liveSessions } from "../realtime";
 import { pushConfigured, sendPush, type PushData } from "./fcm";
 import { forgetTokens } from "./devices";
 import { isPaused } from "../admin/pause";
+import { alertFor } from "../constellations/activity";
+import { nebulaOfChat } from "../constellations/chats";
 
 // What phones are told, and when. Every push is a data message the Glofly app turns into a
 // notification (see apps/mobile). The rules:
@@ -52,8 +54,9 @@ export async function notifyMessage(
   message: NewMessage,
   chat: { kind: "dm" | "group" | "nebula"; memberIds: string[]; name: string | null; photoVersion?: string | null },
 ): Promise<void> {
-  // Nebulas (2.0) don't send push notifications yet: the phone apps can't open them.
-  if (!pushConfigured || message.event || chat.kind === "nebula") return;
+  if (!pushConfigured || message.event) return;
+  // Nebulas (0.7.0): only phones whose app can open them, by each person's nebula settings.
+  if (chat.kind === "nebula") return notifyNebula(message, chat.memberIds);
   const recipients = chat.memberIds.filter((id) => id !== message.senderId);
   if (!recipients.length) return;
 
@@ -313,4 +316,90 @@ export async function notifyFriendNews(
         },
       })),
   );
+}
+
+/**
+ * A nebula message (0.7.0): a notification on phones whose Glofly can open nebulas (they register
+ * with the "constellations" feature; older apps get nothing, like before). Who gets one follows
+ * the same rules as the desktop's ding (constellations/activity.ts alertFor): the nebula's
+ * "Notify me about" setting (or the constellation's default), timed mutes (@mentions still come
+ * through), never for "Nothing". Not to the sender, the phone in use, Do not disturb, or across a
+ * block. Tapping it opens glofly://chat/<conversationId>, which the app turns into that nebula.
+ */
+async function notifyNebula(message: NewMessage, memberIds: string[]): Promise<void> {
+  const recipients = memberIds.filter((id) => id !== message.senderId);
+  if (!recipients.length) return;
+  const nebula = await nebulaOfChat(message.conversationId);
+  if (!nebula) return;
+  const devices = await db
+    .select({
+      userId: pushDevices.userId,
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
+      status: users.statusPreference,
+      level: conversationMembers.notifyLevel,
+      mutedUntil: conversationMembers.mutedUntil,
+      defaultLevel: constellationMembers.notify,
+    })
+    .from(pushDevices)
+    .innerJoin(users, eq(users.id, pushDevices.userId))
+    .innerJoin(
+      conversationMembers,
+      and(eq(conversationMembers.userId, pushDevices.userId), eq(conversationMembers.conversationId, message.conversationId)),
+    )
+    .innerJoin(
+      constellationMembers,
+      and(eq(constellationMembers.userId, pushDevices.userId), eq(constellationMembers.constellationId, nebula.constellationId)),
+    )
+    .where(and(inArray(pushDevices.userId, recipients), sql`'constellations' = any(${pushDevices.features})`));
+  if (!devices.length) return;
+  const [c] = await db.select({ name: constellations.name }).from(constellations).where(eq(constellations.id, nebula.constellationId));
+  const [sender] = await db
+    .select({ id: users.id, displayName: users.displayName, avatarVersion: users.avatarVersion })
+    .from(users)
+    .where(eq(users.id, message.senderId));
+  if (!c || !sender) return;
+  const live = await liveSessions([...new Set(devices.map((d) => d.userId))]);
+  const text = (shortBody(message.body) || attachmentSummary(message.attachments)).slice(0, PREVIEW_MAX);
+  const now = Date.now();
+  const blocked = new Map<string, boolean>();
+  const out: { device: Device; data: PushData }[] = [];
+  for (const d of devices) {
+    if (live.get(d.userId)?.has(d.sessionId)) continue;
+    if (d.status === "dnd") continue;
+    const mention = !!message.mentions?.includes(d.userId);
+    if (!alertFor(d.level ?? d.defaultLevel, d.mutedUntil, mention, now)) continue;
+    if (!blocked.has(d.userId)) blocked.set(d.userId, await blockedEitherWay(d.userId, message.senderId));
+    if (blocked.get(d.userId)) continue;
+    const nicks = await nicknamesFor(d.userId).catch(() => undefined);
+    const senderName = nicks?.get(sender.id) ?? sender.displayName;
+    const shown = d.preview ? text : "New message";
+    // Android draws it as a conversation titled "#nebula · Constellation"; iPhone shows
+    // "Name · #nebula" over "Constellation: text" (like the approved lock-screen mockup).
+    out.push({
+      device: d,
+      data: {
+        type: "message",
+        conversationId: message.conversationId,
+        messageId: message.id,
+        chatKind: "group",
+        chatTitle: `#${nebula.name} · ${c.name}`,
+        groupPhoto: "",
+        senderId: sender.id,
+        senderName,
+        senderAvatar: sender.avatarVersion ?? "",
+        title: `${senderName} · #${nebula.name}`,
+        text: d.platform === "ios" ? `${c.name}: ${shown}` : shown,
+        preview: d.preview ? "1" : "0",
+        mention: mention ? "1" : "0",
+        sentAt: new Date(message.createdAt).toISOString(),
+        nebula: "1",
+        thread: `constellation:${nebula.constellationId}`,
+      },
+    });
+  }
+  await deliver(out);
 }

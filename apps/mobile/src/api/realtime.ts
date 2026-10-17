@@ -1,9 +1,9 @@
 import { AppState, type AppStateStatus } from 'react-native'
 import { io, type Socket } from 'socket.io-client'
-import { cleanFireflies, cleanWatchReaction, cleanWatchUpdate, upgradeEvents, type Call, type Message, type PublicUser } from '@glofly/shared'
+import { CONSTELLATION_EVENT_NAMES, cleanConstellationEvent, cleanFireflies, cleanWatchReaction, cleanWatchUpdate, upgradeEvents, type Call, type Message, type PublicUser } from '@glofly/shared'
 import { APP_VERSION, PLATFORM, SERVER_URL } from '@/lib/config'
 import { endSessionLocally, onSignOut, useSession } from '@/state/session'
-import { patchConversation, rememberPeople, resetStore, setPresence, setTyping, useStore } from '@/state/store'
+import { patchConversation, putMessage, rememberPeople, resetStore, setPresence, setTyping, useStore } from '@/state/store'
 import {
   markChatRead,
   receiveMessage,
@@ -67,8 +67,9 @@ function connect() {
   const { origin, path } = serverParts()
   socket = io(origin, {
     path,
-    // features: what this app knows beyond its version (0.5.2: a call can move to a new group).
-    auth: { token, version: APP_VERSION, platform: PLATFORM, features: ['callMove'] },
+    // features: what this app knows beyond its version (0.5.2: a call can move to a new group;
+    // 0.7.0: Constellations, whose live events only go to apps that say so).
+    auth: { token, version: APP_VERSION, platform: PLATFORM, features: ['callMove', 'constellations'] },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000,
     // A fresh connection every time instead of socket.io's cached one, which could still be
@@ -110,10 +111,17 @@ function connect() {
     notePaused(503, body)
   })
 
-  s.on('message:new', (p: { message?: Message; people?: PublicUser[] }) => {
+  s.on('message:new', (p: { message?: Message; people?: PublicUser[]; nebula?: boolean }) => {
     if (!p?.message?.id) return
     const message = upgradeEvents(p.message)
     if (Array.isArray(p.people)) rememberPeople(p.people)
+    // 0.7.0: a nebula's message only goes into its chat (if it's open); Constellations keeps its
+    // own counts from constellation:activity, so the chats list and its badges never see it.
+    if (p.nebula === true) {
+      putMessage(message)
+      emit('nebula:message', message)
+      return
+    }
     const { counts } = receiveMessage(message, { appActive: isAppActive() })
     if (useStore.getState().viewing === message.conversationId && isAppActive() && message.senderId !== useSession.getState().user?.id) {
       void markChatRead(message.conversationId)
@@ -199,6 +207,13 @@ function connect() {
   s.on('hang:ping', (p: { userId?: unknown; until?: unknown }) => {
     if (typeof p?.userId === 'string' && typeof p?.until === 'string') emit('hang:ping', { userId: p.userId, until: p.until })
   })
+  // 0.7.0: Constellations' live events, checked field by field (shared cleanConstellationEvent).
+  for (const name of CONSTELLATION_EVENT_NAMES) {
+    s.on(name, (payload: unknown) => {
+      const event = cleanConstellationEvent(name, payload)
+      if (event) emit('cx', event)
+    })
+  }
   s.on('notice:new', () => void refreshNotices())
   s.on('announcement', () => void refreshNotices())
 }

@@ -12,6 +12,7 @@ import { Avatar } from '@/ui/Avatar'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { answer, decline, hangUp, setMic, useCall } from './controller'
+import { flyIn } from '@/constellations/transition'
 
 // Over every screen: the incoming call card, the "call in progress" strip (when the call screen
 // isn't showing), and short call messages ("Jacob didn't pick up.").
@@ -153,14 +154,16 @@ export function CallStrip() {
   const insets = useSafeAreaInsets()
   const call = useCall((s) => s.call)!
   const micOn = useCall((s) => s.micOn)
+  const voice = useCall((s) => s.voice)
   const chat = useStore((s) => s.conversations[call.conversationId])
   const now = useNow(1000)
-  const title = chat ? chatTitle(chat) : 'Call'
+  const title = voice ? `${voice.nebulaName} · ${voice.constellationName}` : chat ? chatTitle(chat) : 'Call'
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Call with ${title}. Tap to go back to it`}
-      onPress={() => router.push('/call')}
+      accessibilityLabel={voice ? `In ${voice.nebulaName}. Tap to go back to it` : `Call with ${title}. Tap to go back to it`}
+      // Glofly 2.0: a voice nebula's stage is on the night side.
+      onPress={() => (voice ? flyIn(null, ['/constellations', '/constellations/voice']) : router.push('/call'))}
       style={{ paddingTop: insets.top + 4, paddingBottom: 6, height: insets.top + 58, backgroundColor: '#1C1210', flexDirection: 'row', alignItems: 'center', paddingLeft: 18, paddingRight: 8, gap: 10 }}
     >
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3DBA6E', boxShadow: '0 0 8px 2px rgba(61,186,110,0.7)' }} />
@@ -169,7 +172,7 @@ export function CallStrip() {
           {title}
         </Text>
         <Text size={12} style={{ color: 'rgba(255,255,255,0.7)' }}>
-          {call.answeredAt ? timer(call.answeredAt, now) : 'Ringing…'}
+          {voice ? 'Voice nebula' : call.answeredAt ? timer(call.answeredAt, now) : 'Ringing…'}
         </Text>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={micOn ? 'Mute microphone' : 'Unmute microphone'} onPress={() => void setMic(!micOn)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: micOn ? 'rgba(255,255,255,0.14)' : '#F3E6DC', alignItems: 'center', justifyContent: 'center' }}>
@@ -198,9 +201,12 @@ function Toast({ text }: { text: string }) {
 /** Puts the call strip above the app while a call goes on (and not on the call screen itself). */
 export function WithCallStrip({ children }: { children: React.ReactNode }) {
   const call = useCall((s) => s.call)
+  const voice = useCall((s) => !!s.voice)
   const path = usePathname()
   const insets = useSafeAreaInsets()
-  if (!call || path === '/call') return <>{children}</>
+  // Glofly 2.0: on the night side a voice nebula has its own green bar (and its stage).
+  const night = path === '/constellations' || path.startsWith('/constellations/')
+  if (!call || path === '/call' || (voice && night)) return <>{children}</>
   return (
     <View style={{ flex: 1 }}>
       <CallStrip />

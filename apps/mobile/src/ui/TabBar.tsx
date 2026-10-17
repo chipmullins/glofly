@@ -8,11 +8,15 @@ import { useTheme } from './theme'
 import { useStore } from '@/state/store'
 import { unreadTotal } from '@/lib/chats'
 import { usePaneTab, type PaneTab } from '@/lib/layout'
+import { useCxAvailable } from '@/state/constellations'
+import { ConstellationsTab } from '@/constellations/ConstellationsTab'
 
 type BottomTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0]
 
-// The bottom navigation bar from the design: Chats · Friends · Groups · Settings
-// Chats · Groups · Friends · Settings (the order itself comes from the screens in (tabs)/_layout.tsx).
+// The bottom navigation bar from the design: Chats · Groups · Friends · Settings (the order itself
+// comes from the screens in (tabs)/_layout.tsx). Glofly 2.0: a 5th tab, Constellations (the galaxy
+// pill with its glowing dot), sits before Settings; it isn't a page here but the way into the night
+// side. Restricted (family) accounts don't get it.
 
 const TABS: Record<string, { label: string; icon: IconName }> = {
   chats: { label: 'Chats', icon: 'chatsLine' },
@@ -55,6 +59,7 @@ function TabButtons({ names, active, onSelect }: { names: string[]; active: stri
   const conversations = useStore((s) => s.conversations)
   const incoming = useStore((s) => s.friends.incoming.length)
   const all = Object.values(conversations)
+  const constellations = useCxAvailable()
   const badges: Record<string, number> = {
     chats: unreadTotal(all),
     groups: unreadTotal(all.filter((x) => x.kind === 'group')),
@@ -69,33 +74,39 @@ function TabButtons({ names, active, onSelect }: { names: string[]; active: stri
       {names.map((name) => {
         const tab = TABS[name]
         if (!tab) return null
-        const focused = active === name
-        const badge = badges[name] ?? 0
-        return (
-          <Pressable
-            key={name}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: focused }}
-            accessibilityLabel={badge ? `${tab.label}, ${badge} new` : tab.label}
-            onPress={() => onSelect(name)}
-            style={{ flex: 1, alignItems: 'center', gap: 4 }}
-          >
-            <View style={{ width: 64, height: 32, borderRadius: 16, backgroundColor: focused ? c.accentSoft : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name={tab.icon} size={22} color={focused ? c.ink : c.muted} />
-              {badge > 0 ? (
-                <View style={{ position: 'absolute', left: 38, top: -2, minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: c.dnd, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text size={11} weight="bold" style={{ color: '#FFFFFF' }}>
-                    {badge > 99 ? '99+' : badge}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-            <Text size={12} weight={focused ? 'bold' : 'medium'} style={{ color: focused ? c.ink : c.muted }}>
-              {tab.label}
-            </Text>
-          </Pressable>
-        )
+        if (name === 'settings' && constellations) return [<ConstellationsTab key="constellations" />, renderTab(name)]
+        return renderTab(name)
       })}
     </View>
   )
+
+  function renderTab(name: string) {
+    const tab = TABS[name]
+    const focused = active === name
+    const badge = badges[name] ?? 0
+    return (
+      <Pressable
+        key={name}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: focused }}
+        accessibilityLabel={badge ? `${tab.label}, ${badge} new` : tab.label}
+        onPress={() => onSelect(name)}
+        style={{ flex: 1, alignItems: 'center', gap: 4 }}
+      >
+        <View style={{ width: constellations ? 56 : 64, height: 32, borderRadius: 16, backgroundColor: focused ? c.accentSoft : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name={tab.icon} size={22} color={focused ? c.ink : c.muted} />
+          {badge > 0 ? (
+            <View style={{ position: 'absolute', left: constellations ? 34 : 38, top: -2, minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: c.dnd, alignItems: 'center', justifyContent: 'center' }}>
+              <Text size={11} weight="bold" style={{ color: '#FFFFFF' }}>
+                {badge > 99 ? '99+' : badge}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Text size={constellations ? 11.5 : 12} weight={focused ? 'bold' : 'medium'} style={{ color: focused ? c.ink : c.muted }}>
+          {tab.label}
+        </Text>
+      </Pressable>
+    )
+  }
 }

@@ -186,8 +186,9 @@ export const noticeSeen = async (id: string) => none(await request('POST', `/not
 // ---- Push notifications ----
 
 /** voipToken: iPhone lock-screen calls (left out when there isn't one yet: the server keeps what it has). */
+/** features (0.7.0): what this app can show; "constellations" = nebula alerts (older servers ignore it). */
 export const registerPush = async (token: string, preview: boolean, voipToken?: string, sounds?: { messageSound: string; ringtone: string }) =>
-  none(await request('PUT', '/devices/push', { token, platform: PLATFORM, preview, ...(voipToken ? { voipToken } : {}), ...(sounds ?? {}) }))
+  none(await request('PUT', '/devices/push', { token, platform: PLATFORM, preview, ...(voipToken ? { voipToken } : {}), ...(sounds ?? {}), features: ['constellations'] }))
 export const unregisterPush = async () => none(await request('DELETE', '/devices/push'))
 
 // ---- 0.5.0 chat extras: GIFs, link previews, polls, games, firefly swarms ----

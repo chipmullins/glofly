@@ -8,6 +8,7 @@ import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
 import { refreshFriends } from '@/state/sync'
 import { openDmWith } from '@/lib/chatActions'
+import { GamesCard } from '@/constellations/games'
 import { block, removeFriend } from '@/lib/friendActions'
 import { longDate } from '@/lib/format'
 import { startCallWith } from '@/calls/controller'
@@ -167,6 +168,8 @@ export default function ProfileCard() {
                 {action('video', 'Video', () => void startCallWith(id, true))}
               </View>
             ) : null}
+            {/* Glofly 2.0: My games (hidden when they keep it private or haven't played anything). */}
+            {(isMe || isFriend) && !blocked ? <GamesCard userId={id} isMe={isMe} onOpen={close} /> : null}
             {!isMe && isFriend && onlineAlert !== undefined ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16, backgroundColor: c.surface }}>
                 <Icon name={onlineAlert ? 'bell' : 'bellOff'} size={20} color={onlineAlert ? c.accentText : c.ink2} />

@@ -121,7 +121,8 @@ export function apnsFor(data: PushData, ttlSeconds: number, sounds: DeviceSounds
   const aps: Record<string, unknown> = { "mutable-content": 0 };
   if (data.type === "message") {
     aps.alert = { title: data.title || data.senderName || "Glofly", body: data.text || "New message" };
-    aps["thread-id"] = data.conversationId;
+    // 0.7.0: nebula alerts are grouped by constellation ("thread"); chats by chat.
+    aps["thread-id"] = data.thread || data.conversationId;
     aps.category = "GLOFLY_MESSAGE";
     aps.sound = messageSound;
   } else if (data.type === "friend_request") {

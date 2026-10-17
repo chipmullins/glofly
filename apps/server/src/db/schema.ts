@@ -189,6 +189,9 @@ export const pushDevices = pgTable(
     // notifications, which name their sound file. Null = the defaults (older apps). Oct 13.
     messageSound: text("message_sound"),
     ringtone: text("ringtone"),
+    // 0.7.0: what this phone's app can show beyond plain chats, e.g. "constellations" (nebula
+    // notifications). Empty = an older app, which never gets nebula pushes.
+    features: text("features").array().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

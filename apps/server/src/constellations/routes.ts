@@ -63,7 +63,7 @@ import { activeCallOf, closeCall, joinVoiceRoom, leaveCall, openVoiceRoom, peopl
 import { joinDetails } from "../calls/routes";
 import { livekitConfigured, removeFromRoom, setMicrophoneAllowed } from "../calls/livekit";
 import { setVoiceMuted } from "../calls/voiceMutes";
-import { rememberNebulaChat } from "./chats";
+import { nebulaOfChat, rememberNebulaChat } from "./chats";
 import { can, OWNER_RANK, outranks, standingOf, type Standing } from "./perms";
 import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstellations } from "./members";
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
@@ -83,6 +83,7 @@ import { mentionsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula
 //   GET    /constellations/mentions?before=         @mentions of me, newest first
 //   POST   /constellations/mentions/read            "Mark all read"
 //   PUT    /constellations/:id/nebulas/:nid/pin     pin to the home dock · DELETE unpin
+//   GET    /constellations/chats/:conversationId    which nebula a nebula chat is (phones' notifications)
 //   GET    /constellations/links/:code              what an invite link is (preview)
 //   POST   /constellations/links/:code/join         join with it
 //   POST   /constellations/invites/:id/dismiss      "Not now"
@@ -370,6 +371,20 @@ constellationsRouter.post("/", createLimiter, async (req, res) => {
   }
   emitToUser(myId, "constellations:changed", {}, true);
   res.status(201).json({ constellation: await detailFor(id, myId) });
+});
+
+// GET /constellations/chats/:conversationId — which constellation and nebula a nebula's chat
+// belongs to (0.7.0 phones: a nebula notification opens glofly://chat/<conversationId>, and the
+// app asks here where that is). Members only; anything else is a 404.
+constellationsRouter.get("/chats/:conversationId", async (req, res) => {
+  const cid = idParam.safeParse(req.params.conversationId);
+  const nebula = cid.success ? await nebulaOfChat(cid.data) : null;
+  const s = nebula ? await standingOf(nebula.constellationId, me(res).id) : null;
+  if (!nebula || !s) {
+    res.status(404).json({ error: "not_found", message: "That nebula isn't available." });
+    return;
+  }
+  res.json({ constellationId: nebula.constellationId, nebulaId: nebula.id, kind: nebula.kind });
 });
 
 // ───────────── Directory, links and invites ─────────────

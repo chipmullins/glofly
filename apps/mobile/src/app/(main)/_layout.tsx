@@ -14,6 +14,11 @@ import { FriendAlert } from '@/ui/FriendAlert'
 import '@/state/social'
 import { LeftPane } from '@/ui/TwoPane'
 import { useWide } from '@/lib/layout'
+import Animated from 'react-native-reanimated'
+import { startConstellations } from '@/state/constellations'
+import { watchReduceMotion } from '@/constellations/motion'
+import { NightOverlay, useHomeAwayStyle } from '@/constellations/transition'
+import { HomeDock } from '@/constellations/HomeDock'
 
 // Everything after signing in: the live connection, push notifications and calls start here.
 
@@ -24,7 +29,12 @@ export default function MainLayout() {
   // you were. A call takes the whole screen.
   const wide = useWide()
   const path = usePathname()
+  // Glofly 2.0: the night side (Constellations) takes the whole screen, on iPad too.
+  const night = path === '/constellations' || path.startsWith('/constellations/')
+  const homeAway = useHomeAwayStyle()
   useEffect(() => {
+    watchReduceMotion()
+    startConstellations()
     startRealtime()
     startPush()
     startCalls()
@@ -35,7 +45,11 @@ export default function MainLayout() {
     <>
       <WithCallStrip>
         <View style={{ flex: 1, flexDirection: 'row', backgroundColor: c.bg }}>
-          {wide ? <LeftPane hidden={path === '/call'} /> : null}
+          {wide ? (
+            <Animated.View style={[{ display: path === '/call' || night ? 'none' : 'flex' }, homeAway]}>
+              <LeftPane />
+            </Animated.View>
+          ) : null}
           <View style={{ flex: 1 }}>
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: wide ? 'fade' : 'slide_from_right' }}>
               <Stack.Screen name="(tabs)" />
@@ -44,10 +58,14 @@ export default function MainLayout() {
               <Stack.Screen name="call" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
               <Stack.Screen name="live/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
               <Stack.Screen name="year" options={{ animation: 'fade', contentStyle: { backgroundColor: '#1A1030' } }} />
+              {/* Glofly 2.0: over Glofly home (which stays drawn underneath for the trip back). */}
+              <Stack.Screen name="constellations" options={{ presentation: 'transparentModal', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
             </Stack>
           </View>
         </View>
       </WithCallStrip>
+      <HomeDock />
+      <NightOverlay />
       <CallOverlay />
       <FriendAlert />
       <TeamNotice />
