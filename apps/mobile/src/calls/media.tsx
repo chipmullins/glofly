@@ -182,3 +182,29 @@ export function CallVideo({ track, style, mirror, contain, zOrder, pip, shape }:
   }
   return <VideoView videoTrack={track} style={style} mirror={mirror} objectFit={contain ? 'contain' : 'cover'} zOrder={zOrder} />
 }
+
+/**
+ * Watch Together during a call (iPhone). The call runs iOS's voice processing (the echo
+ * canceller), which turns every other sound way down while it's on ("ducking") — including the
+ * YouTube video in the web view, which plays outside the call's audio engine. That's why the
+ * video seemed to have no sound on iPhone. While a video is on, duck it as little as iOS allows,
+ * and only while someone is talking; back to normal when the video stops. Uses calls that are
+ * already in the app's LiveKit WebRTC build (no new native code). Android has no ducking here.
+ */
+let duckingBefore: { level: number; advanced: boolean } | null = null
+export function setWatchDucking(watching: boolean): void {
+  if (Platform.OS !== 'ios') return
+  try {
+    if (watching && !duckingBefore) {
+      duckingBefore = { level: AudioDeviceModule.getDuckingLevel(), advanced: AudioDeviceModule.isAdvancedDuckingEnabled() }
+      AudioDeviceModule.setAdvancedDuckingEnabled(true)
+      AudioDeviceModule.setDuckingLevel(10) // AVAudioVoiceProcessingOtherAudioDuckingLevel.min
+    } else if (!watching && duckingBefore) {
+      AudioDeviceModule.setDuckingLevel(duckingBefore.level)
+      AudioDeviceModule.setAdvancedDuckingEnabled(duckingBefore.advanced)
+      duckingBefore = null
+    }
+  } catch {
+    // an older build without these calls: nothing to change
+  }
+}

@@ -10,10 +10,10 @@ import { sendText } from '@/chat/send'
 import { firstName } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
 import { Avatar } from '@/ui/Avatar'
-import { BottomSheet } from '@/ui/dialogs'
+import { BottomSheet, confirm } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Button, Field, Text } from '@/ui/kit'
-import { controlWatch, reactWatch, setWatchControl, startWatching, useWatchStore, watchClock } from './watch'
+import { controlWatch, reactWatch, setWatchControl, startWatching, stopWatching, useWatchStore, watchClock } from './watch'
 import { WatchView } from './WatchView'
 import type { PlayerState } from './watchSync'
 import type { Tile } from './controller'
@@ -24,6 +24,11 @@ import type { Tile } from './controller'
 
 const ORANGE = '#F47A1F'
 const firstOf = (p: PublicUser) => firstName(p.displayName, p.username)
+
+/** Stop watching (for everyone in the call), after a quick check: like the desktop app's button. */
+async function askStop() {
+  if (await confirm({ title: 'Stop watching?', message: 'The video stops for everyone in the call.', confirmLabel: 'Stop watching', danger: true })) stopWatching()
+}
 
 // ---------------------------------------------------------------------------------------------
 
@@ -298,7 +303,7 @@ function Controls({ watch, meId, state, compact }: { watch: WatchState; meId: st
 }
 
 /** The video with its overlays (reactions, problems, "tap to start", what just happened). */
-function Video({ watch, w, h, nameOf, onState, state }: { watch: WatchState; w: number; h: number; nameOf: (id: string) => string; onState: (s: PlayerState) => void; state: PlayerState }) {
+function Video({ watch, w, h, nameOf, onState, state, onPress }: { watch: WatchState; w: number; h: number; nameOf: (id: string) => string; onState: (s: PlayerState) => void; state: PlayerState; onPress?: () => void }) {
   const [unmute, setUnmute] = useState(0)
   const [firstSeq] = useState(watch.seq)
   const [doneSeq, setDoneSeq] = useState<number | null>(null)
@@ -312,6 +317,18 @@ function Video({ watch, w, h, nameOf, onState, state }: { watch: WatchState; w: 
   return (
     <View style={{ width: w, height: h, backgroundColor: '#000' }}>
       <WatchView watch={watch} unmute={unmute} onState={onState} style={{ width: w, height: h }} />
+      {/* A tap on the video turns a muted video's sound on (and, sideways, shows the controls).
+          Not while it's "blocked": then the tap has to reach the player itself. */}
+      {state.status !== 'blocked' ? (
+        <Pressable
+          accessible={false}
+          onPress={() => {
+            if (state.muted) setUnmute((n) => n + 1)
+            onPress?.()
+          }}
+          style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }}
+        />
+      ) : null}
       <Fireflies w={w} h={h} nameOf={nameOf} />
       {said ? (
         <View pointerEvents="none" style={{ position: 'absolute', bottom: 10, alignSelf: 'center', paddingHorizontal: 12, height: 28, borderRadius: 14, backgroundColor: 'rgba(28,18,16,0.8)', justifyContent: 'center' }}>
@@ -430,6 +447,14 @@ export function WatchPortrait({ watch, meId, people, tiles, conversationId, top,
             </Text>
           ) : null}
         </Text>
+        {canControlWatch(watch, meId) ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Stop watching, for everyone" onPress={() => void askStop()} style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#2A1C17', opacity: pressed ? 0.8 : 1 })}>
+            <Icon name="close" size={14} color="#F5EDE6" />
+            <Text size={13} weight="bold" style={{ color: '#F5EDE6' }}>
+              Stop watching
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
       <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 14, paddingHorizontal: 16, justifyContent: 'center', flexGrow: 1 }}>
         {tiles.map((t) => {
@@ -457,21 +482,24 @@ export function WatchLandscape({ watch, meId, people, tiles, onExit }: { watch: 
   const [state, setState] = useState<PlayerState>({ status: 'catching', error: null, muted: false })
   const [shown, setShown] = useState(true)
   const [picking, setPicking] = useState(false)
+  const [changing, setChanging] = useState(false)
+  const can = canControlWatch(watch, meId)
   const nameOf = useCallback((id: string) => (id === meId ? 'You' : firstOf(people(id))), [meId, people])
   useEffect(() => {
-    if (!shown || picking) return
+    if (!shown || picking || changing) return
     const t = setTimeout(() => setShown(false), 3500)
     return () => clearTimeout(t)
-  }, [shown, picking, watch.seq])
+  }, [shown, picking, changing, watch.seq])
   // The video's box: 16:9 inside the screen.
   const vw = Math.min(width, (height * 16) / 9)
   const vh = (vw * 9) / 16
   const talking = tiles.filter((t) => t.speaking && !t.micMuted)
   return (
     <View style={{ position: 'absolute', inset: 0, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
-      <Video watch={watch} w={vw} h={vh} nameOf={nameOf} onState={setState} state={state} />
-      {/* Tapping anywhere shows (or hides) the controls. */}
+      {/* Tapping anywhere shows (or hides) the controls. Under the video, so the video's own taps
+          ("Turn on sound", "Tap the video to start it") still reach it. */}
       <Pressable accessibilityLabel={shown ? 'Hide video controls' : 'Show video controls'} onPress={() => setShown((s) => !s)} style={{ position: 'absolute', inset: 0 }} />
+      <Video watch={watch} w={vw} h={vh} nameOf={nameOf} onState={setState} state={state} onPress={() => setShown((s) => !s)} />
       {talking.length ? (
         <View pointerEvents="none" style={{ position: 'absolute', top: 16, right: 16, gap: 6, alignItems: 'flex-end' }}>
           {talking.slice(0, 3).map((t) => (
@@ -510,6 +538,19 @@ export function WatchLandscape({ watch, meId, people, tiles, onExit }: { watch: 
                 <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFD27A', boxShadow: '0 0 10px 4px rgba(255,166,60,0.6)' }} />
               </Pressable>
             )}
+            {can && !picking ? (
+              <>
+                <Pressable accessibilityRole="button" accessibilityLabel="Change video" onPress={() => setChanging(true)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="swapVideo" size={22} color="#FFF" />
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="Stop watching, for everyone" onPress={() => void askStop()} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#3A2618' }}>
+                  <Icon name="close" size={14} color="#F5EDE6" />
+                  <Text size={13} weight="bold" style={{ color: '#F5EDE6' }}>
+                    Stop watching
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
             <Pressable accessibilityRole="button" accessibilityLabel="Leave full screen" onPress={onExit} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="minimize" size={22} color="#FFF" />
             </Pressable>
@@ -517,6 +558,7 @@ export function WatchLandscape({ watch, meId, people, tiles, onExit }: { watch: 
           <Controls watch={watch} meId={meId} state={state} compact />
         </View>
       ) : null}
+      {changing ? <StartWatchSheet changing onClose={() => setChanging(false)} /> : null}
     </View>
   )
 }

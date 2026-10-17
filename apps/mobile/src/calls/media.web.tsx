@@ -9,6 +9,7 @@ export async function startCallAudio(_video: boolean): Promise<void> {}
 export async function stopCallAudio(): Promise<void> {}
 export async function startWatchAudio(): Promise<void> {}
 export async function stopWatchAudio(): Promise<void> {}
+export function setWatchDucking(_watching: boolean): void {}
 export function audioEngineInfo(): Record<string, string> {
   return {}
 }
