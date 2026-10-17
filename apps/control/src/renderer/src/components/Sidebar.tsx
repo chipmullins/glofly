@@ -4,7 +4,14 @@ import { initials } from '../lib/format'
 import type { AdminUser } from '../../../preload/types'
 
 export type Page =
-  'dashboard' | 'accounts' | 'signups' | 'reports' | 'announcements' | 'server' | 'audit'
+  | 'dashboard'
+  | 'accounts'
+  | 'signups'
+  | 'reports'
+  | 'constellations'
+  | 'announcements'
+  | 'server'
+  | 'audit'
 
 const ITEMS: {
   id: Page
@@ -15,6 +22,7 @@ const ITEMS: {
   { id: 'accounts', label: 'Accounts', icon: ICONS.accounts },
   { id: 'signups', label: 'Sign-ups', icon: ICONS.signups },
   { id: 'reports', label: 'Reports', icon: ICONS.reports },
+  { id: 'constellations', label: 'Constellations', icon: ICONS.constellations },
   { id: 'announcements', label: 'Announcements', icon: ICONS.announcements },
   { id: 'server', label: 'Server', icon: ICONS.server },
   { id: 'audit', label: 'Audit log', icon: ICONS.audit }

@@ -16,7 +16,7 @@ import { connectedSummary, emitToUser } from "../realtime";
 //
 //   GET    /games/me                     my games and who can see them
 //   PUT    /games/me/settings            { visibility }
-//   PUT    /games/me/:key                { favorite?, hidden? }
+//   PUT    /games/me/:key                { favorite?, hidden? }   (key: the game's key as hex)
 //   DELETE /games/me/:key                remove a game from my list
 //   GET    /games/user/:userId           someone's games (if they share them with me)
 
@@ -85,7 +85,11 @@ myGamesRouter.put("/me/settings", async (req, res) => {
   res.json({ visibility: v.data });
 });
 
-const keyParam = z.string().min(1).max(120);
+// A game's key arrives as hex (the apps' request gateway only passes plain characters).
+const keyParam = z
+  .string()
+  .regex(/^(?:[0-9a-f]{2}){1,240}$/)
+  .transform((hex) => Buffer.from(hex, "hex").toString("utf8"));
 
 myGamesRouter.put("/me/:key", async (req, res) => {
   const key = keyParam.safeParse(req.params.key);

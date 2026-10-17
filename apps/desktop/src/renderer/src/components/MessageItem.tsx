@@ -56,6 +56,13 @@ type MessageItemProps = {
   onFireflies?: (emoji: FireflyEmoji) => void
   /** Take the link preview off your own message */
   onRemovePreview?: () => void
+  // ---- 2.0 nebulas ----
+  /** Their role's badge and name color (Owner, Admin…), or null */
+  authorRole?: { name: string; light: string; badgeBg: string; badgeText: string } | null
+  /** A moderator may delete this (someone else's) message */
+  canDeleteOthers?: boolean
+  /** Shown under the message (a voice nebula's Join card) */
+  extra?: React.ReactNode
 }
 
 const HOLD_FOR_FIREFLIES_MS = 450
@@ -222,7 +229,10 @@ export default function MessageItem({
   onUpdated,
   onFailure,
   onFireflies,
-  onRemovePreview
+  onRemovePreview,
+  authorRole,
+  canDeleteOthers,
+  extra
 }: MessageItemProps): React.JSX.Element {
   const m = item.message
   const mine = m.senderId === meId
@@ -350,9 +360,20 @@ export default function MessageItem({
 
         {!grouped && (
           <div className="message-meta">
-            <span className={mine ? 'message-author message-author--mine' : 'message-author'}>
+            <span
+              className={mine ? 'message-author message-author--mine' : 'message-author'}
+              style={authorRole ? { color: authorRole.light } : undefined}
+            >
               {authorName}
             </span>
+            {authorRole && (
+              <span
+                className="cx-role-badge"
+                style={{ background: authorRole.badgeBg, color: authorRole.badgeText }}
+              >
+                {authorRole.name.toUpperCase()}
+              </span>
+            )}
             <span className="message-time">{time}</span>
           </div>
         )}
@@ -418,6 +439,7 @@ export default function MessageItem({
         )}
 
         {!m.deleted && attachments}
+        {extra}
 
         {m.lantern && !m.deleted && !item.pending && <LanternTag fadeAt={m.lanternFadeAt} />}
 
@@ -667,7 +689,7 @@ export default function MessageItem({
                   Report message
                 </button>
               )}
-              {mine && (
+              {(mine || canDeleteOthers) && (
                 <button
                   type="button"
                   role="menuitem"

@@ -290,9 +290,11 @@ function ReportView({
         <dd>
           {r.kind === 'person'
             ? 'From their profile card'
-            : r.chat?.kind === 'group'
-              ? `A group${r.chat.name ? ` (${r.chat.name})` : ''}`
-              : 'A direct message'}
+            : r.chat?.kind === 'nebula'
+              ? `#${r.chat.name} in the constellation ${r.chat.constellation.name}`
+              : r.chat?.kind === 'group'
+                ? `A group${r.chat.name ? ` (${r.chat.name})` : ''}`
+                : 'A direct message'}
         </dd>
         <dt>Other reports</dt>
         <dd>

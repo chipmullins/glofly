@@ -12,6 +12,7 @@ import type {
 import { notePaused, noteUpdateRequired } from './app-status'
 import { cleanWatchReaction, cleanWatchUpdate } from '@glofly/shared/watch'
 import { cleanFireflies } from '@glofly/shared/types'
+import { CONSTELLATION_EVENT_NAMES, cleanConstellationEvent } from '@glofly/shared/constellations'
 
 // The live connection to the server lives here in the main process, like the
 // session token. Events are passed on to the window as plain data.
@@ -59,7 +60,8 @@ export function cleanAnnouncement(a: unknown): Announcement | null {
 export function connectRealtime(url: string, token: string, onUnauthorized: () => void): void {
   disconnectRealtime()
   socket = io(url, {
-    auth: { token, version: app.getVersion() },
+    // features: this app knows Constellations (2.0), so the server sends it their live events.
+    auth: { token, version: app.getVersion(), features: ['constellations'] },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000 // keeps retrying if the connection drops
   })
@@ -95,6 +97,13 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
   socket.on('announcement', (p) => {
     forward({ type: 'announcement', announcement: cleanAnnouncement(p?.announcement) })
   })
+  // 2.0 Constellations and My games: only these, checked field by field.
+  for (const name of CONSTELLATION_EVENT_NAMES) {
+    socket.on(name, (p) => {
+      const event = cleanConstellationEvent(name, p)
+      if (event) forward(event)
+    })
+  }
   socket.on('disconnect', (reason) => {
     // The server only closes a connection itself when that device was signed out
     // (say, "Sign me out of Glofly on all other devices"). Sign out here too.

@@ -466,7 +466,7 @@ export function CallProvider({
         problem: null,
         partnerAway: false
       })
-      callbacks.current.onOpenChat(call.conversationId)
+      if (chat.kind !== 'nebula') callbacks.current.onOpenChat(call.conversationId)
       void window.glofly.calls[how](call.id).then((result) => {
         if (attempt !== attemptRef.current) {
           if (result.ok) void window.glofly.calls.leave(result.data.call.id)
@@ -572,6 +572,63 @@ export function CallProvider({
     enter(away.call, away.chat, false, 'join')
   }, [enter, setElsewhere])
 
+  // 2.0: drop into a voice nebula. Nobody is rung; the room opens if nobody's in it yet.
+  const joinVoice = useCallback(
+    (chat: CallChat & { nebula: { constellationId: string; nebulaId: string } }) => {
+      const previous = currentRef.current?.call?.id
+      if (currentRef.current) teardown()
+      if (previous) void window.glofly.calls.leave(previous)
+      const attempt = ++attemptRef.current
+      const { constellationId, nebulaId } = chat.nebula
+      setCurrent({
+        conversationId: '',
+        chat,
+        call: null,
+        video: false,
+        phase: 'connecting',
+        problem: null,
+        partnerAway: false
+      })
+      void window.glofly.constellations
+        .request<CallJoin>('POST', `/constellations/${constellationId}/nebulas/${nebulaId}/voice`)
+        .then((result) => {
+          if (attempt !== attemptRef.current) {
+            if (result.ok) void window.glofly.calls.leave(result.data.call.id)
+            return
+          }
+          if (!result.ok) {
+            teardown()
+            failed(result.error, result.message)
+            return
+          }
+          playSound('callConnected')
+          setCurrent((c) =>
+            c
+              ? {
+                  ...c,
+                  conversationId: result.data.call.conversationId,
+                  call: result.data.call,
+                  phase: 'connected'
+                }
+              : c
+          )
+          void connectRoom(result.data, false, attempt)
+        })
+    },
+    [connectRoom, failed, setCurrent, teardown]
+  )
+
+  // Voice nebulas: sharing your screen shows a LIVE badge to everyone in the constellation.
+  const reportSharing = useCallback((sharing: boolean) => {
+    const c = currentRef.current
+    if (c?.chat.kind !== 'nebula' || !c.chat.nebula || !c.call) return
+    void window.glofly.constellations.request(
+      'POST',
+      `/constellations/${c.chat.nebula.constellationId}/voice/sharing`,
+      { callId: c.call.id, sharing }
+    )
+  }, [])
+
   const ring = useCallback(
     async (userIds: string[]) => {
       const id = currentRef.current?.call?.id
@@ -611,6 +668,7 @@ export function CallProvider({
       if (isWeb) {
         try {
           await shareBrowserScreen(local, true)
+          reportSharing(true)
         } catch (err) {
           const e = err as { name?: string }
           // Cancelled in the browser's picker: nothing to say.
@@ -624,6 +682,7 @@ export function CallProvider({
       try {
         // With sound: only the shared app's (a window), or everything but Glofly (a screen).
         await shareDesktopScreen(local, sourceId, sound)
+        reportSharing(true)
       } catch (err) {
         // Glofly's own picker has already been answered by now, so any failure here is real
         // (an AbortError too: that's how Electron reports a share it couldn't start). It used to
@@ -640,12 +699,13 @@ export function CallProvider({
       }
       bump()
     },
-    [bump, problem]
+    [bump, problem, reportSharing]
   )
 
   const stopSharing = useCallback(() => {
     void roomRef.current?.localParticipant.setScreenShareEnabled(false).finally(bump)
-  }, [bump])
+    reportSharing(false)
+  }, [bump, reportSharing])
 
   const clearProblem = useCallback(
     () => setCurrent((c) => (c ? { ...c, problem: null } : c)),
@@ -689,8 +749,12 @@ export function CallProvider({
           return
         }
         if (!call.members.some((m) => m.userId === me.id)) {
-          teardown() // no longer in the group
-          callbacks.current.onNotice("You're no longer in this group, so you've left its call.")
+          teardown() // no longer in the group (or taken out of a voice nebula)
+          callbacks.current.onNotice(
+            cur.chat.kind === 'nebula'
+              ? `You're no longer in ${cur.chat.title}.`
+              : "You're no longer in this group, so you've left its call."
+          )
           return
         }
         if (call.status === 'ongoing') stopOutgoing.current()
@@ -943,6 +1007,7 @@ export function CallProvider({
     stopSharing,
     ring,
     moveHere,
+    joinVoice,
     clearProblem,
     showProblem: problem
   }

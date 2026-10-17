@@ -124,7 +124,7 @@ import {
   startGameWatch
 } from './games'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
-import { isUserId } from './api'
+import { isConstellationRequest, isUserId } from './api'
 import { checkPausedNow, configurePauseChecks, getPaused, getUpdateRequired } from './app-status'
 import { isReportRequest, listNotices, noticeSeen, sendReport } from './safety'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
@@ -640,6 +640,32 @@ function registerIpcHandlers(): void {
       return setGroupPhoto(id, new Uint8Array(data), type as PhotoType)
     }
   )
+  // 2.0 Constellations and My games: one gateway for their routes (/constellations/…, /games/…),
+  // limited to those paths, plain characters and small JSON bodies.
+  ipcMain.handle(
+    'constellations:request',
+    (event, method: unknown, path: unknown, body: unknown) => {
+      if (!fromApp(event) || !isConstellationRequest(method, path, body)) return invalid
+      return apiRequest(method, path as string, body ?? undefined)
+    }
+  )
+  ipcMain.handle('constellations:set-icon', (event, id: unknown, data: unknown, type: unknown) => {
+    if (
+      !fromApp(event) ||
+      !isUserId(id) ||
+      !(data instanceof ArrayBuffer) ||
+      !PHOTO_TYPES.includes(type as PhotoType)
+    ) {
+      return invalid
+    }
+    if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
+      return { ok: false, error: 'invalid', message: 'Photos can be up to 8 MB.' }
+    }
+    return apiRequest('PUT', `/constellations/${id}/icon`, undefined, {
+      data: new Uint8Array(data),
+      type: type as PhotoType
+    })
+  })
   ipcMain.handle('conversations:remove-group-photo', (event, id: unknown) =>
     fromApp(event) && isUserId(id) ? removeGroupPhoto(id) : invalid
   )

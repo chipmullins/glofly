@@ -75,6 +75,11 @@ import { useSocial, useSocialSync } from '../lib/social'
 import { HangToast, SocialActions, SocialStrip, YearInGlowDialog } from '../components/Social'
 import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcast'
 import { useMyBroadcast } from '../lib/broadcast'
+import ConstellationsScreen from '../constellations/ConstellationsScreen'
+import { useConstellationsPhase } from '../constellations/phase'
+import { GalaxyIcon } from '../constellations/sky'
+import { useConstellationCards } from '../lib/constellations'
+import MyGamesPanel from '../components/MyGames'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -129,12 +134,15 @@ function SettingsMenu({
   onLogout,
   onOpenSettings,
   onEditProfile,
-  onYearInGlow
+  onYearInGlow,
+  onMyGames
 }: {
   onLogout: () => void
   onOpenSettings: () => void
   onEditProfile: () => void
   onYearInGlow: () => void
+  /** 2.0: your games and who sees them */
+  onMyGames: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
@@ -165,6 +173,18 @@ function SettingsMenu({
           >
             <ProfileIcon size={18} />
             Edit profile
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close()
+              onMyGames()
+            }}
+          >
+            <GameIcon size={18} />
+            My games
           </button>
           <button
             type="button"
@@ -498,6 +518,10 @@ export default function MainScreen({
   const [watchingId, setWatchingId] = useState<string | null>(null)
   const [hangPing, setHangPing] = useState<PublicUser | null>(null)
   const [yearOpen, setYearOpen] = useState(false)
+  // Glofly 2.0: Constellations (the night side) and My games.
+  const cx = useConstellationsPhase()
+  const cxNavRef = useRef<HTMLButtonElement>(null)
+  const [myGamesOpen, setMyGamesOpen] = useState(false)
   const closeHangPing = useCallback(() => setHangPing(null), [])
   const callControls = useRef<CallsValue | null>(null)
   /** The sidebar's "Find a friend or chat" search */
@@ -527,6 +551,14 @@ export default function MainScreen({
   // 0.4.0: a restricted (family-managed) account: Glofly Control can turn it on or off any time
   // (account:changed), so it's asked again then.
   const [restricted, setRestricted] = useState(user.restricted === true)
+  // Family-managed (restricted) accounts can't use Constellations at all (the server refuses too).
+  const cxCards = useConstellationCards(!restricted)
+  const cxNew = cxCards.cards.some((c) => c.unreadCount > 0 || c.mentionCount > 0)
+  const cxOpen = cx.phase !== 'home'
+  const { leave: cxLeave } = cx
+  useEffect(() => {
+    if (restricted) cxLeave()
+  }, [restricted, cxLeave])
   useEffect(
     () =>
       window.glofly.onEvent((event) => {
@@ -1058,6 +1090,23 @@ export default function MainScreen({
     )
   }, [])
 
+  /** From the night side: the swarm carries you home, then this happens. */
+  const homeThen = (then?: () => void): void => {
+    cx.leave()
+    then?.()
+  }
+  /** A call bar was clicked: a nebula's voice opens Constellations, anything else its chat. */
+  const openFromCall = (conversationId: string): void => {
+    const current = callControls.current?.current
+    const chat = current?.chat
+    if (chat?.kind === 'nebula' && chat.nebula && current?.conversationId === conversationId) {
+      cx.enter(cxNavRef.current, {
+        constellationId: chat.nebula.constellationId,
+        nebulaId: chat.nebula.nebulaId
+      })
+    } else setOpenChatId(conversationId)
+  }
+
   const openChat = conversations.find((c) => c.id === openChatId) ?? null
 
   // Opening a closed chat from anywhere (search, Friends, Groups, a notification) puts it back
@@ -1342,7 +1391,15 @@ export default function MainScreen({
       onSessionExpired={onSessionExpired}
       controlsRef={callControls}
     >
-      <div className={narrowList ? 'main main--enter main--narrow-list' : 'main main--enter'}>
+      <div
+        className={['main', cx.homeClass || 'main--enter', narrowList ? 'main--narrow-list' : '']
+          .filter(Boolean)
+          .join(' ')}
+        style={
+          { '--cx-ox': `${cx.origin.x}px`, '--cx-oy': `${cx.origin.y}px` } as React.CSSProperties
+        }
+        aria-hidden={cxOpen ? true : undefined}
+      >
         <aside className="sidebar">
           <div className="sidebar-top">
             <div className="sidebar-logo" aria-hidden="true">
@@ -1401,6 +1458,7 @@ export default function MainScreen({
               onOpenSettings={() => setSettingsOpen('general')}
               onEditProfile={() => setEditingProfile(true)}
               onYearInGlow={() => setYearOpen(true)}
+              onMyGames={() => setMyGamesOpen(true)}
             />
             {statusOpen && (
               <StatusMenu
@@ -1442,6 +1500,19 @@ export default function MainScreen({
               <GroupIcon />
               Groups
             </button>
+            {!restricted && (
+              <button
+                ref={cxNavRef}
+                type="button"
+                className="nav-item cx-nav"
+                aria-label={cxNew ? 'Constellations, new activity' : 'Constellations'}
+                onClick={() => cx.enter(cxNavRef.current)}
+              >
+                <GalaxyIcon />
+                Constellations
+                {cxNew && <span className="cx-nav-dot" aria-hidden="true" />}
+              </button>
+            )}
           </nav>
 
           <SocialActions
@@ -1456,7 +1527,7 @@ export default function MainScreen({
             onManageLive={() => setLivePanel(true)}
           />
 
-          <CallStrip openChatId={openChatId} onOpenChat={setOpenChatId} />
+          <CallStrip openChatId={openChatId} onOpenChat={openFromCall} />
 
           <SocialStrip
             people={friendsById}
@@ -1512,7 +1583,7 @@ export default function MainScreen({
             onChangeEmail={() => setSettingsOpen('account')}
             onSessionExpired={onSessionExpired}
           />
-          <CallFloat openChatId={openChatId} onOpenChat={setOpenChatId} />
+          <CallFloat openChatId={openChatId} onOpenChat={openFromCall} />
           {watchingId && friendsById.get(watchingId) && (
             <BroadcastViewer
               person={friendsById.get(watchingId)!}
@@ -1650,7 +1721,63 @@ export default function MainScreen({
             </>
           )}
         </main>
+      </div>
 
+      <ConstellationsScreen
+        phase={cx.phase}
+        origin={cx.origin}
+        start={cx.start}
+        me={user}
+        myStatus={myStatus}
+        presence={presence}
+        friends={lists?.friends ?? []}
+        conversations={conversations}
+        now={now}
+        cards={cxCards.cards}
+        invites={cxCards.invites}
+        loaded={cxCards.loaded}
+        reloadCards={cxCards.reload}
+        onHome={() => homeThen()}
+        onOpenChat={(id) => homeThen(() => setOpenChatId(id))}
+        onCall={(c) =>
+          homeThen(() => {
+            setOpenChatId(c.id)
+            callControls.current?.start(c, false)
+          })
+        }
+        onMessage={(person) => homeThen(() => void openChatWith(person.id))}
+        onRead={markedRead}
+        onViewProfile={viewPerson}
+        onReport={(m, sender) =>
+          setReporting({
+            person: sender,
+            message: {
+              id: m.id,
+              conversationId: m.conversationId,
+              preview: (shortBody(m.body) || attachmentSummary(m.attachments)).slice(0, 300)
+            }
+          })
+        }
+        onAppSettings={() => setSettingsOpen('general')}
+        onSessionExpired={onSessionExpired}
+      />
+
+      <div className="main-dialogs">
+        {myGamesOpen && (
+          <div
+            className="dialog-backdrop"
+            onMouseDown={(e) => e.target === e.currentTarget && setMyGamesOpen(false)}
+          >
+            <div className="mg-alone">
+              <MyGamesPanel
+                userId={user.id}
+                name={user.displayName}
+                isMe
+                onClose={() => setMyGamesOpen(false)}
+              />
+            </div>
+          </div>
+        )}
         {adding && (
           <AddFriendDialog
             onClose={() => setAdding(false)}

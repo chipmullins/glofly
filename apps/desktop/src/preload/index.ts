@@ -5,6 +5,7 @@ import type {
   Attachment,
   ChatGameKind,
   ChatGameMove,
+  ConstellationMethod,
   FireflyEmoji,
   GloflyApi,
   GameState,
@@ -294,6 +295,12 @@ const glofly: GloflyApi = {
   },
   reports: {
     send: (request: ReportRequest) => ipcRenderer.invoke('reports:send', request)
+  },
+  constellations: {
+    request: (method: ConstellationMethod, path: string, body?: unknown) =>
+      ipcRenderer.invoke('constellations:request', method, path, body ?? null),
+    setIcon: (constellationId: string, data: ArrayBuffer, type: PhotoType) =>
+      ipcRenderer.invoke('constellations:set-icon', constellationId, data, type)
   },
   notices: {
     list: () => ipcRenderer.invoke('notices:list'),

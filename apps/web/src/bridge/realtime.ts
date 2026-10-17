@@ -10,6 +10,7 @@ import type {
 import { upgradeEvents } from '@glofly/shared/events'
 import { cleanWatchReaction, cleanWatchUpdate } from '@glofly/shared/watch'
 import { cleanFireflies } from '@glofly/shared/types'
+import { CONSTELLATION_EVENT_NAMES, cleanConstellationEvent } from '@glofly/shared/constellations'
 import { API_URL, VERSION } from './config'
 import { notePaused, noteUpdateRequired } from './appStatus'
 import { emit } from './events'
@@ -49,7 +50,7 @@ export function cleanAnnouncement(a: unknown): Announcement | null {
 export function connectRealtime(onUnauthorized: () => void): void {
   disconnectRealtime()
   socket = io(API_URL, {
-    auth: { version: VERSION, platform: 'web' },
+    auth: { version: VERSION, platform: 'web', features: ['constellations'] },
     transports: ['websocket'],
     withCredentials: true,
     reconnectionDelayMax: 10_000 // keeps retrying if the connection drops
@@ -85,6 +86,13 @@ export function connectRealtime(onUnauthorized: () => void): void {
   socket.on('announcement', (p) => {
     forward({ type: 'announcement', announcement: cleanAnnouncement(p?.announcement) })
   })
+  // 2.0 Constellations and My games: only these, checked field by field.
+  for (const name of CONSTELLATION_EVENT_NAMES) {
+    socket.on(name, (p) => {
+      const event = cleanConstellationEvent(name, p)
+      if (event) forward(event)
+    })
+  }
   socket.on('disconnect', (reason) => {
     // The server only closes a connection itself when that device was signed out.
     if (reason === 'io server disconnect') {

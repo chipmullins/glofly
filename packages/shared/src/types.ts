@@ -467,6 +467,26 @@ export type ServerEvent =
   | { type: 'notice:new'; notice: TeamNotice }
   /** The announcement banner changed (null: none showing now) */
   | { type: 'announcement'; announcement: Announcement | null }
+  // ---- 2.0 Constellations and My games (only apps that say they know them get these) ----
+  /** My dashboard changed (joined, left, invited, renamed…): reload the cards */
+  | { type: 'constellations:changed' }
+  /** Something in this constellation changed (nebulas, roles, members, settings): reload it */
+  | { type: 'constellation:updated'; constellationId: string }
+  /** Someone posted in one of its nebulas */
+  | {
+      type: 'constellation:activity'
+      constellationId: string
+      nebulaId: string
+      conversationId: string
+      senderId: string
+      mentions: string[]
+    }
+  /** Who's in one of its voice nebulas changed */
+  | { type: 'constellation:voice'; constellationId: string; voice: import('./constellations').VoiceNebulaState }
+  /** It's gone for me (deleted, I was kicked or banned, or it was taken down) */
+  | { type: 'constellation:removed'; constellationId: string; reason: 'kicked' | 'banned' | 'taken_down' | 'deleted' }
+  /** My games changed (on another device) */
+  | { type: 'games:changed' }
 
 /** 0.4.0: Glofly is paused (Glofly Control → Server → Pause Glofly). Nobody can use it until then. */
 export type Paused = {

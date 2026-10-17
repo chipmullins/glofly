@@ -50,6 +50,10 @@ function serverPathFor(
   if (url.host === 'groups' && parts.length === 2 && parts.every(isUserId)) {
     return { path: `/conversations/${parts[0]}/photo/${parts[1]}`, maxBytes: 2 * MB }
   }
+  // 2.0: a constellation's icon (glofly-media://constellation-icons/<constellationId>/<version>)
+  if (url.host === 'constellation-icons' && parts.length === 2 && parts.every(isUserId)) {
+    return { path: `/constellations/${parts[0]}/icon/${parts[1]}`, maxBytes: 2 * MB }
+  }
   if (
     url.host === 'attachments' &&
     parts.length === 3 &&

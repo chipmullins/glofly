@@ -12,7 +12,10 @@ export type CallPhase = 'starting' | 'ringing' | 'connecting' | 'connected' | 'r
 
 /** The chat a call belongs to, as the call screens need it. */
 export type CallChat = {
-  kind: 'dm' | 'group'
+  /** "nebula" (2.0): a constellation's voice nebula (drop-in, nobody is rung) */
+  kind: 'dm' | 'group' | 'nebula'
+  /** Voice nebulas: which constellation and nebula (to open it, and report screen sharing) */
+  nebula?: { constellationId: string; nebulaId: string }
   /** "Jacob Jones", or "Friday Squad" / "Maya, Jacob and 2 others" */
   title: string
   /** Everyone else in the chat */
@@ -76,6 +79,8 @@ export type CallsValue = {
   ring: (userIds: string[]) => Promise<void>
   /** Moves a call you're in on another device to this one. */
   moveHere: () => void
+  /** 2.0: drops into a voice nebula (leaving any other call first). */
+  joinVoice: (chat: CallChat & { nebula: { constellationId: string; nebulaId: string } }) => void
   clearProblem: () => void
   /** Shows a short problem in the call panel (say, a Watch Together button that was refused). */
   showProblem: (message: string) => void

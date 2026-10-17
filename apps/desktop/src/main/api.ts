@@ -87,3 +87,32 @@ export const isUserId = (value: unknown): value is string =>
 // Shared with the mobile app: packages/shared/src/events.ts
 import { upgradeEvents } from '@glofly/shared/events'
 export { upgradeEvents }
+
+/**
+ * 2.0: a request the window may pass to /constellations/… or /games/… (Constellations, My games):
+ * a known method, one of those paths in plain characters (ids, codes, simple query strings) and a
+ * small JSON body.
+ */
+export function isConstellationRequest(
+  method: unknown,
+  path: unknown,
+  body: unknown
+): method is 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' {
+  if (
+    method !== 'GET' &&
+    method !== 'POST' &&
+    method !== 'PUT' &&
+    method !== 'PATCH' &&
+    method !== 'DELETE'
+  )
+    return false
+  if (typeof path !== 'string' || path.length > 300) return false
+  if (!/^\/(constellations|games)(\/[A-Za-z0-9_-]+)*\/?(\?[A-Za-z0-9=&%._+-]*)?$/.test(path))
+    return false
+  if (body === undefined || body === null) return true
+  try {
+    return typeof body === 'object' && JSON.stringify(body).length <= 20_000
+  } catch {
+    return false
+  }
+}

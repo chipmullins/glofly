@@ -5,7 +5,7 @@
 // conversation of kind "nebula" on the server, so every chat feature works in them) and voice
 // nebulas are drop-in voice/video rooms (a LiveKit room per nebula, no ringing).
 
-import type { PublicUser } from './types'
+import type { PublicUser, ServerEvent } from './types'
 
 // ───────────── Limits ─────────────
 
@@ -575,4 +575,66 @@ export function playtimeLabel(seconds: number): string {
   const hours = Math.round((seconds / 3600) * 10) / 10
   const shown = hours >= 10 ? Math.round(hours) : hours
   return `${shown} ${shown === 1 ? 'hour' : 'hours'}`
+}
+
+// ───────────── Live events (the apps' realtime forwarders pass on only these, checked) ─────────────
+
+const str = (x: unknown): x is string => typeof x === 'string' && x.length > 0 && x.length <= 64
+const strList = (x: unknown): string[] => (Array.isArray(x) ? x.filter(str).slice(0, 300) : [])
+
+/** The live events Constellations and My games add (the forwarder subscribes to these names). */
+export const CONSTELLATION_EVENT_NAMES = [
+  'constellations:changed',
+  'constellation:updated',
+  'constellation:activity',
+  'constellation:voice',
+  'constellation:removed',
+  'games:changed',
+] as const
+
+/** One of those events, checked field by field (null if it doesn't look right). */
+export function cleanConstellationEvent(name: string, payload: unknown): ServerEvent | null {
+  const p = (payload ?? {}) as Record<string, unknown>
+  switch (name) {
+    case 'constellations:changed':
+      return { type: 'constellations:changed' }
+    case 'games:changed':
+      return { type: 'games:changed' }
+    case 'constellation:updated':
+      return str(p.constellationId) ? { type: 'constellation:updated', constellationId: p.constellationId } : null
+    case 'constellation:removed': {
+      if (!str(p.constellationId)) return null
+      const reason = p.reason === 'kicked' || p.reason === 'banned' || p.reason === 'taken_down' ? p.reason : 'deleted'
+      return { type: 'constellation:removed', constellationId: p.constellationId, reason }
+    }
+    case 'constellation:activity':
+      return str(p.constellationId) && str(p.nebulaId) && str(p.conversationId) && str(p.senderId)
+        ? {
+            type: 'constellation:activity',
+            constellationId: p.constellationId,
+            nebulaId: p.nebulaId,
+            conversationId: p.conversationId,
+            senderId: p.senderId,
+            mentions: strList(p.mentions),
+          }
+        : null
+    case 'constellation:voice': {
+      const v = (p.voice ?? {}) as Record<string, unknown>
+      if (!str(p.constellationId) || !str(v.nebulaId)) return null
+      return {
+        type: 'constellation:voice',
+        constellationId: p.constellationId,
+        voice: {
+          nebulaId: v.nebulaId,
+          callId: str(v.callId) ? v.callId : null,
+          userIds: strList(v.userIds),
+          live: v.live === true,
+          sharing: strList(v.sharing),
+          muted: strList(v.muted),
+        },
+      }
+    }
+    default:
+      return null
+  }
 }
