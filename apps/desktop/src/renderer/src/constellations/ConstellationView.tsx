@@ -253,7 +253,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       document.removeEventListener('mousedown', close)
       document.removeEventListener('keydown', close)
     }
-  }, [menu, headMenu])
+  }, [menu, headMenu, nebMenu])
 
   function toggleCategory(id: string): void {
     setCollapsed((list) => {

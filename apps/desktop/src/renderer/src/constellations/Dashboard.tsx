@@ -22,6 +22,7 @@ import {
   StarIcon
 } from './bits'
 import { DashboardSky, FireflyMark } from './sky'
+import './Discover.css'
 
 // The Constellations dashboard (Dashboard.dc.html, approved): the night sky, "Back to Glofly" top
 // left, search, your profile top right; your constellations as cards in 3 columns; invites from
@@ -104,7 +105,7 @@ function Card({
   return (
     <button
       type="button"
-      className={dragging ? 'cx-card cx-card--dragging' : 'cx-card'}
+      className={dragging ? 'cx-card cx-card--mine cx-card--dragging' : 'cx-card cx-card--mine'}
       onClick={onOpen}
       aria-label={`${card.name}, ${card.memberCount} members, ${card.onlineCount} online${badge ? `, ${badge}` : ''}`}
       {...dragProps}
@@ -299,6 +300,20 @@ export default function Dashboard({
   const [browse, setBrowse] = useState(false)
   const searching = query.trim().length > 0 || type !== null || tag !== null
   const seq = useRef(0)
+  // "Adventure to new constellations": popular tags and a few to try (quietly empty on failure).
+  const [discover, setDiscover] = useState<{ tags: string[]; suggestions: DirectoryEntry[] }>({
+    tags: [],
+    suggestions: []
+  })
+  useEffect(() => {
+    let stale = false
+    void api.discover().then((r) => {
+      if (!stale && r.ok) setDiscover(r.data)
+    })
+    return () => {
+      stale = true
+    }
+  }, [cards.length])
   const results = searching ? found : null
 
   // The directory, as you type (a moment after you stop).
@@ -525,6 +540,26 @@ export default function Dashboard({
           </section>
         )}
 
+        {!browse && !searching && (
+          <Adventure
+            tags={discover.tags}
+            suggestions={discover.suggestions.filter(
+              (e) => !e.joined && !cards.some((c) => c.id === e.id)
+            )}
+            busyId={busy}
+            onBrowse={() => setBrowse(true)}
+            onType={(t) => {
+              setBrowse(true)
+              setType(t)
+            }}
+            onTag={(t) => {
+              setBrowse(true)
+              setTag(t)
+            }}
+            onJoin={(e) => void join(e)}
+          />
+        )}
+
         {(browse || searching) && (
           <section className="cx-invites" aria-labelledby="cx-dir-head">
             <h2 id="cx-dir-head" className="cx-section-head">
@@ -587,3 +622,145 @@ export default function Dashboard({
     </div>
   )
 }
+
+/** "Adventure to new constellations" (Discover board, approved Oct 17): kinds, popular tags, and a
+ * few public constellations to try, under your own so a short dashboard never looks empty. */
+function Adventure({
+  tags,
+  suggestions,
+  busyId,
+  onBrowse,
+  onType,
+  onTag,
+  onJoin
+}: {
+  tags: string[]
+  suggestions: DirectoryEntry[]
+  busyId: string | null
+  onBrowse: () => void
+  onType: (type: ConstellationType) => void
+  onTag: (tag: string) => void
+  onJoin: (entry: DirectoryEntry) => void
+}): React.JSX.Element {
+  return (
+    <section className="cx-adv" aria-labelledby="cx-adv-head">
+      <div className="cx-adv-top">
+        <div className="cx-adv-titles">
+          <h2 id="cx-adv-head" className="cx-adv-head">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffb347" aria-hidden="true">
+              <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" />
+              <circle cx="19" cy="4" r="1.2" />
+              <circle cx="5" cy="19" r="1" />
+            </svg>
+            Adventure to new constellations
+          </h2>
+          <p>Find a crew by what you’re into.</p>
+        </div>
+        <button type="button" className="cx-adv-browse" onClick={onBrowse}>
+          Browse all
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </button>
+      </div>
+      <div className="cx-adv-kinds" role="group" aria-label="Kinds">
+        {CONSTELLATION_TYPES.filter((t) => t.id !== 'other').map((t) => (
+          <button key={t.id} type="button" className="cx-adv-kind" onClick={() => onType(t.id)}>
+            {t.name}
+          </button>
+        ))}
+      </div>
+      {tags.length > 0 && (
+        <div className="cx-adv-tags" role="group" aria-label="Popular tags">
+          <span className="cx-adv-label">Popular tags</span>
+          {tags.map((t) => (
+            <button key={t} type="button" className="cx-adv-tag" onClick={() => onTag(t)}>
+              #{t}
+            </button>
+          ))}
+        </div>
+      )}
+      {suggestions.length > 0 && (
+        <div className="cx-adv-cards">
+          {suggestions.map((e) => (
+            <SuggestionCard key={e.id} entry={e} busy={busyId === e.id} onJoin={() => onJoin(e)} />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** A compact constellation to try: icon, name, kind and size, one line about it, two tags. */
+function SuggestionCard({
+  entry,
+  busy,
+  onJoin
+}: {
+  entry: DirectoryEntry
+  busy: boolean
+  onJoin: () => void
+}): React.JSX.Element {
+  const typeName = CONSTELLATION_TYPES.find((x) => x.id === entry.type)?.name
+  const friend = entry.friends[0]
+  const hint = friend
+    ? entry.friends.length > 1
+      ? `${firstOf(friend.displayName)} and ${entry.friends.length - 1} more are in it`
+      : `${firstOf(friend.displayName)} is in it`
+    : entry.visibility === 'approval'
+      ? 'A moderator lets people in'
+      : 'Anyone can join'
+  return (
+    <article className="cx-adv-card">
+      <div className="cx-adv-card-top">
+        <ConstellationIcon
+          id={entry.id}
+          name={entry.name}
+          color={entry.color}
+          iconVersion={entry.iconVersion}
+          className="cx-adv-card-icon"
+        />
+        <span className="cx-adv-card-text">
+          <span className="cx-adv-card-name">{entry.name}</span>
+          <span className="cx-adv-card-meta">
+            {typeName ? `${typeName} · ` : ''}
+            {entry.memberCount} {entry.memberCount === 1 ? 'member' : 'members'} ·{' '}
+            <span className="cx-online">{entry.onlineCount} online</span>
+          </span>
+        </span>
+        {entry.requested ? (
+          <span className="cx-adv-asked">Asked</span>
+        ) : entry.visibility === 'approval' ? (
+          <button type="button" className="cx-adv-ask" disabled={busy} onClick={onJoin}>
+            Ask to join
+          </button>
+        ) : (
+          <button type="button" className="cx-adv-join" disabled={busy} onClick={onJoin}>
+            Join
+          </button>
+        )}
+      </div>
+      {entry.description && <span className="cx-adv-card-desc">{entry.description}</span>}
+      <span className="cx-adv-card-foot">
+        {entry.tags.slice(0, 2).map((t) => (
+          <span key={t} className="cx-adv-card-tag">
+            #{t}
+          </span>
+        ))}
+        <span className="cx-adv-card-hint">{hint}</span>
+      </span>
+    </article>
+  )
+}
+
+const firstOf = (name: string): string => name.trim().split(/\s+/)[0] || name

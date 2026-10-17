@@ -76,6 +76,7 @@ import { announceVoice, setSharing } from "./voice";
 //   POST   /constellations                          create  { name, template, visibility, type?, tags?, color? }
 //   PUT    /constellations/order                    { ids }  my dashboard / icon strip order
 //   GET    /constellations/directory?q=&type=&tag=&offset=   public ones
+//   GET    /constellations/discover                           top tags + 3 to try
 //   GET    /constellations/links/:code              what an invite link is (preview)
 //   POST   /constellations/links/:code/join         join with it
 //   POST   /constellations/invites/:id/dismiss      "Not now"
@@ -396,6 +397,45 @@ constellationsRouter.get("/directory", directoryLimiter, async (req, res) => {
     .limit(PAGE + 1);
   const page = rows.slice(0, PAGE);
   res.json({ results: await entriesFor(myId, page.map((r) => r.id)), hasMore: rows.length > PAGE });
+});
+
+// GET /constellations/discover — the dashboard's "Adventure to new constellations": the most-used
+// genre tags in the directory, and up to 3 public constellations to try (friends in them first,
+// then the biggest, then the most active). Ones I'm in, banned from or taken down are left out.
+constellationsRouter.get("/discover", directoryLimiter, async (_req, res) => {
+  const myId = me(res).id;
+  const listed = and(
+    ne(constellations.visibility, "invite"),
+    isNull(constellations.takenDownAt),
+    sql`not exists (select 1 from ${constellationBans} b where b.constellation_id = ${constellations.id} and b.user_id = ${myId})`,
+  );
+  const tagRows = await db.execute<{ tag: string; uses: number }>(
+    sql`select t.tag, count(*)::int as uses
+        from ${constellations}, unnest(${constellations.tags}) as t(tag)
+        where ${constellations.visibility} <> 'invite' and ${constellations.takenDownAt} is null
+        group by t.tag order by uses desc, t.tag asc limit 10`,
+  );
+  const memberCount = sql<number>`(select count(*)::int from ${constellationMembers} cm where cm.constellation_id = ${constellations.id})`;
+  const candidates = await db
+    .select({ id: constellations.id })
+    .from(constellations)
+    .where(
+      and(
+        listed,
+        sql`not exists (select 1 from ${constellationMembers} m where m.constellation_id = ${constellations.id} and m.user_id = ${myId})`,
+      ),
+    )
+    .orderBy(desc(memberCount), desc(constellations.lastActivityAt))
+    .limit(30);
+  const entries = await entriesFor(myId, candidates.map((r) => r.id));
+  // Friends in it first; otherwise keep the biggest / most active order.
+  const suggestions = entries
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => (b.e.friends.length > 0 ? 1 : 0) - (a.e.friends.length > 0 ? 1 : 0) || a.i - b.i)
+    .map((x) => x.e)
+    .filter((e) => !e.joined)
+    .slice(0, 3);
+  res.json({ tags: tagRows.rows.map((r) => r.tag), suggestions });
 });
 
 /** A link that still works (null otherwise). */

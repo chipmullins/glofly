@@ -52,6 +52,9 @@ export const api = {
     tags: string[]
     description?: string | null
   }) => call<Detail>('POST', '/constellations', values),
+  /** The dashboard's "Adventure to new constellations": top tags and up to 3 to try */
+  discover: () =>
+    call<{ tags: string[]; suggestions: DirectoryEntry[] }>('GET', '/constellations/discover'),
   directory: (q: string, type: ConstellationType | null, tag: string | null, offset = 0) => {
     const params = new URLSearchParams()
     if (q.trim()) params.set('q', q.trim())
