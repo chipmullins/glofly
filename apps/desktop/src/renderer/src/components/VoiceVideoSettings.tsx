@@ -10,6 +10,7 @@ import {
 import { playPtt, PTT_SOUNDS, SOUND_FILES, type PttSound } from '../lib/sounds'
 import { Segmented, Toggle } from './SettingsDialog'
 import { isMac, isTouch, isWeb, privacySettingsPath } from '../lib/platform'
+import { isBackCamera } from '../lib/cameraFacing'
 
 // Settings → Voice & video: pick the microphone, speakers and camera for calls, check they
 // work, and choose how your voice is cleaned up. Saved on this computer. Changes made during
@@ -89,6 +90,7 @@ export default function VoiceVideoSettings(): React.JSX.Element {
   const [testingMic, setTestingMic] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [previewBack, setPreviewBack] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { level, error: micError } = useMicLevel(testingMic, prefs)
 
@@ -129,7 +131,13 @@ export default function VoiceVideoSettings(): React.JSX.Element {
     let cancelled = false
     void navigator.mediaDevices
       .getUserMedia({
-        video: { ...(prefs.cameraId ? { deviceId: prefs.cameraId } : {}), width: 640, height: 360 }
+        // A tablet's camera in its own shape (like in a call), the front one unless one is picked.
+        video: isTouch
+          ? {
+              ...(prefs.cameraId ? { deviceId: prefs.cameraId } : { facingMode: 'user' }),
+              width: { ideal: 640 }
+            }
+          : { ...(prefs.cameraId ? { deviceId: prefs.cameraId } : {}), width: 640, height: 360 }
       })
       .then((s) => {
         if (cancelled) {
@@ -138,6 +146,7 @@ export default function VoiceVideoSettings(): React.JSX.Element {
         }
         stream = s
         setCameraError(null)
+        setPreviewBack(isBackCamera(s.getVideoTracks()[0]))
         video = videoRef.current
         if (video) video.srcObject = s
         void refresh() // names show once the camera has been allowed
@@ -308,11 +317,13 @@ export default function VoiceVideoSettings(): React.JSX.Element {
                   autoPlay
                   playsInline
                   muted
-                  className={
-                    prefs.mirrorCamera
-                      ? 'voice-preview-video voice-preview-video--mirror'
-                      : 'voice-preview-video'
-                  }
+                  className={[
+                    'voice-preview-video',
+                    prefs.mirrorCamera && !previewBack && 'voice-preview-video--mirror',
+                    isTouch && 'voice-preview-video--whole'
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 />
               ) : (
                 <span className="voice-preview-empty">{cameraError ?? 'Your camera is off'}</span>

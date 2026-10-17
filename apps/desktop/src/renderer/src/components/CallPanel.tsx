@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Track, type Participant, type VideoTrack } from 'livekit-client'
+import { Track, TrackEvent, type Participant, type VideoTrack } from 'livekit-client'
 import type {
   Call,
   ConversationSummary,
@@ -51,7 +51,8 @@ import {
 import { useWatch } from '../calls/useWatch'
 import { StartWatchDialog, WatchStage } from './WatchTogether'
 import { canControlWatch } from '@glofly/shared/watch'
-import { isMac, isWeb, web } from '../lib/platform'
+import { isMac, isTouch, isWeb, web } from '../lib/platform'
+import { isBackCamera } from '../lib/cameraFacing'
 import { screenSoundSupport } from '../lib/screenSound'
 import { cameraFit, type VideoFit } from '../lib/videoFit'
 import './CallPanel.css'
@@ -72,6 +73,7 @@ function TrackVideo({
   onShape
 }: {
   track: VideoTrack
+  /** Your own camera: show it like a mirror, unless it's a back camera (checked again on a switch) */
   mirror?: boolean
   /** 'auto' (cameras): fill the box unless that would crop a lot, e.g. an upright phone in a wide tile */
   fit?: VideoFit | 'auto'
@@ -81,6 +83,7 @@ function TrackVideo({
   const ref = useRef<HTMLVideoElement>(null)
   const shapeRef = useRef(onShape)
   const [autoFit, setAutoFit] = useState<VideoFit>('cover')
+  const [back, setBack] = useState(() => isBackCamera(track.mediaStreamTrack))
   useEffect(() => {
     shapeRef.current = onShape
   })
@@ -92,18 +95,24 @@ function TrackVideo({
       const next = cameraFit(el.videoWidth, el.videoHeight, el.clientWidth, el.clientHeight)
       setAutoFit((f) => (f === next ? f : next))
     }
+    // Switching cameras (Settings, or a tablet's front/back) keeps the track but swaps what's in it.
+    const checkFacing = (): void => setBack(isBackCamera(track.mediaStreamTrack))
+    checkFacing()
     const report = (): void => {
       if (el.videoWidth > 0 && el.videoHeight > 0) shapeRef.current?.(el.videoWidth, el.videoHeight)
       refit()
+      checkFacing()
     }
     el.addEventListener('loadedmetadata', report)
     el.addEventListener('resize', report)
+    track.on(TrackEvent.Restarted, checkFacing)
     // The box changes too: side by side vs full frame, full screen, the window resized.
     const boxWatch = new ResizeObserver(refit)
     boxWatch.observe(el)
     return () => {
       el.removeEventListener('loadedmetadata', report)
       el.removeEventListener('resize', report)
+      track.off(TrackEvent.Restarted, checkFacing)
       boxWatch.disconnect()
       track.detach(el)
     }
@@ -112,7 +121,7 @@ function TrackVideo({
   return (
     <video
       ref={ref}
-      className={`call-video call-video--${shown}${mirror ? ' call-video--mirror' : ''}`}
+      className={`call-video call-video--${shown}${mirror && !back ? ' call-video--mirror' : ''}`}
       autoPlay
       playsInline
       muted
@@ -271,7 +280,7 @@ function Tile({
       }
     >
       {camera ? (
-        <TrackVideo track={camera} mirror={mirror} />
+        <TrackVideo track={camera} mirror={mirror} fit={tile.me && isTouch ? 'contain' : 'auto'} />
       ) : (
         <div className="call-tile-face">
           <div
@@ -401,6 +410,13 @@ function SelfPip({
     y: number
   } | null>(null)
   const [dragging, setDragging] = useState(false)
+  // The box takes your camera's own shape (a tablet's 4:3, or upright after turning it), so you
+  // see the whole picture the others get, not a cropped band of it.
+  const [ratio, setRatio] = useState<number | null>(null)
+  const onShape = useCallback((w: number, h: number) => {
+    const r = Math.round((w / h) * 1000) / 1000
+    setRatio((old) => (old === r ? old : r))
+  }, [])
 
   /** Where the box would be (0..1) with its top-left corner at this point on screen. */
   const fractionAt = (el: HTMLElement, left: number, top: number): { x: number; y: number } => {
@@ -458,7 +474,11 @@ function SelfPip({
     else onDrop(d.x, d.y)
   }
 
-  const style = { '--px': x, '--py': y } as React.CSSProperties
+  const style = {
+    '--px': x,
+    '--py': y,
+    ...(tile.camera && ratio ? { '--pip-r': ratio } : {})
+  } as React.CSSProperties
   if (hidden) {
     return (
       <div className="call-pip call-pip--chip" style={style}>
@@ -501,7 +521,7 @@ function SelfPip({
       }}
     >
       {tile.camera ? (
-        <TrackVideo track={tile.camera} mirror={tile.mirror} />
+        <TrackVideo track={tile.camera} mirror={tile.mirror} onShape={onShape} />
       ) : (
         <div className="call-pip-face">
           <Avatar
