@@ -62,6 +62,12 @@
   window's app, or the whole computer minus Glofly (Windows 10 2004+: loopback-capture + koffi;
   macOS 14.2+: AudioTee); the renderer turns it into the screen share's audio track
   (`lib/screenSound.ts`). Older Windows falls back to Electron's loopback (everything).
+- 0.5.2 calls (Oct 17, 2026): **Add people** to a running call (`calls/add.ts`): from a 1-on-1 the
+  server makes a new group and re-points the same call to it (no disconnect); only allowed when the
+  other person's open apps send the `callMove` feature (older desktop apps can't follow a moved call).
+  Group calls can **ring only some members** (others see Join). Group calls end after **7 minutes
+  with one person** (last-minute countdown with Stay); voice nebulas are excluded. Event types newer
+  than 0.5.1 travel as `eventLine3` (events.ts) so 0.5.0/0.5.1 apps show plain text.
 - **Constellations branch:** Glofly 2.0 work goes on the `constellations` branch (made from `dev`
   on Oct 14, 2026), never on `dev`, so bug fixes and releases keep going from `dev` untouched.
   Bring fixes in with `git merge dev` on `constellations` now and then; it goes back into `dev`
