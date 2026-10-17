@@ -10,7 +10,7 @@
          img-src media.giphy.com: GIFs (0.5.0), only ever from GIPHY's own servers. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: glofly-media: https://i.ytimg.com https://media.giphy.com; connect-src 'self' glofly-media: wss://*.livekit.cloud https://*.livekit.cloud; media-src 'self' blob: mediastream: glofly-media:; frame-src %GLOFLY_SERVER_ORIGIN%"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: glofly-media: https://i.ytimg.com https://media.giphy.com; connect-src 'self' glofly-media: wss://*.livekit.cloud https://*.livekit.cloud; media-src 'self' blob: mediastream: glofly-media:; frame-src %GLOFLY_SERVER_ORIGIN%; object-src 'none'; base-uri 'none'"
     />
   </head>
 

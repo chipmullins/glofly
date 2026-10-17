@@ -216,7 +216,9 @@ export function LinkCard({ message, preview, mine }: { message: Message; preview
     <Pressable
       accessibilityRole="link"
       accessibilityLabel={`${preview.title}, ${preview.siteName ?? host}. Open link`}
-      onPress={() => void Linking.openURL(preview.url)}
+      onPress={() => {
+        if (/^https?:\/\//i.test(preview.url)) void Linking.openURL(preview.url)
+      }}
       style={{ marginTop: 6, width: 240, borderRadius: 14, overflow: 'hidden', backgroundColor: mine ? c.quoteBg : c.bg, borderLeftWidth: 3, borderLeftColor: mine ? c.meInk : c.accent }}
     >
       {preview.image && imageOk && wide ? (

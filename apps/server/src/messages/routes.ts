@@ -1430,7 +1430,7 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   inBackground(notifyMessage(lantern ? { ...message, body: "🏮 Lantern message", attachments: [] } : message, chat));
   inBackground(notifyRead(myId, id.data, res.locals.sessionId));
   // 0.5.0: the first link gets a preview a moment later (message:updated).
-  if (!gif && !lantern) inBackground(addLinkPreview(inserted.id, id.data, text));
+  if (!gif && !lantern) inBackground(addLinkPreview(inserted.id, id.data, text, myId));
   // 0.5.0 Glows: writing to a friend counts toward today's glow.
   if (chat.partner) inBackground(noteGlow(myId, chat.partner));
 });
@@ -1556,7 +1556,7 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
     if (firstLink(body.data) !== (message.linkPreview?.url ?? null)) {
       await db.update(messages).set({ linkPreview: null }).where(eq(messages.id, message.id));
       await removePreviewImage(message.id);
-      if (!message.lantern) inBackground(addLinkPreview(message.id, conversationId, body.data));
+      if (!message.lantern) inBackground(addLinkPreview(message.id, conversationId, body.data, message.senderId));
     }
   }
   res.json({ message: await sendUpdated(message.id, conversationId) });
@@ -1691,21 +1691,54 @@ conversationsRouter.post("/:id/read", async (req, res) => {
 
 // POST /conversations/:id/attachments?name=<file name> — upload a photo or file to send.
 // The file itself is the request body. Returns its id, to include when sending the message.
+// Uploads being received right now, per person: a big body is only read once the chat and
+// permission are checked, and nobody can hold more than a few in memory at once.
+const uploadsInFlight = new Map<string, number>();
+const UPLOADS_AT_ONCE = 3;
+
+async function uploadGate(req: express.Request, res: Response, next: express.NextFunction): Promise<void> {
+  const id = idParam.safeParse(req.params.id);
+  const myId = me(res).id;
+  const chat = id.success ? await access(id.data, myId) : null;
+  if (!id.success || chat === null) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (!(await canPost(chat, myId))) {
+    res.status(403).json({ error: "forbidden", message: "You can only send files to friends." });
+    return;
+  }
+  const declared = Number(req.headers["content-length"] ?? 0);
+  if (declared > VIDEO_MAX_BYTES) {
+    res.status(413).json({ error: "too_big", message: "Too big. Files can be up to 25 MB (videos up to 64 MB)." });
+    return;
+  }
+  const busy = uploadsInFlight.get(myId) ?? 0;
+  if (busy >= UPLOADS_AT_ONCE) {
+    res.status(429).json({ error: "too_many_requests", message: "Wait for your other files to finish uploading." });
+    return;
+  }
+  uploadsInFlight.set(myId, busy + 1);
+  res.on("close", () => {
+    const left = (uploadsInFlight.get(myId) ?? 1) - 1;
+    if (left > 0) uploadsInFlight.set(myId, left);
+    else uploadsInFlight.delete(myId);
+  });
+  res.locals.chat = chat;
+  next();
+}
+
 conversationsRouter.post(
   "/:id/attachments",
   uploadLimiter,
+  uploadGate,
   // Videos may be bigger than other files (VIDEO_MAX_BYTES); everything else is checked below.
   express.raw({ type: () => true, limit: VIDEO_MAX_BYTES }),
   async (req, res) => {
     const id = idParam.safeParse(req.params.id);
     const myId = me(res).id;
-    const chat = id.success ? await access(id.data, myId) : null;
-    if (!id.success || chat === null) {
+    if (!id.success) {
       res.status(404).json({ error: "not_found" });
-      return;
-    }
-    if (!(await canPost(chat, myId))) {
-      res.status(403).json({ error: "forbidden", message: "You can only send files to friends." });
       return;
     }
     const data = req.body;

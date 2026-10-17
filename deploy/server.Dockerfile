@@ -33,7 +33,9 @@ COPY apps/control/package.json apps/control/
 COPY apps/mobile/package.json apps/mobile/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
-RUN npm ci -w @glofly/server --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
+# Custom stickers (0.5.0) use ONNX Runtime: only its Linux files are kept (it ships every platform's).
+RUN npm ci -w @glofly/server --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force \
+  && rm -rf node_modules/onnxruntime-node/bin/napi-v*/win32 node_modules/onnxruntime-node/bin/napi-v*/darwin
 
 # Amazon's certificate list, so the encrypted connection to RDS is verified (see src/db/index.ts).
 # (Kept in its own folder: ADD --chmod into /etc/ssl locked that folder and broke Node's OpenSSL.)
@@ -47,6 +49,8 @@ COPY --from=build /app/packages/shared/dist /app/packages/shared/dist
 WORKDIR /app/apps/server
 COPY --from=build /app/apps/server/dist ./dist
 COPY apps/server/drizzle ./drizzle
+# The small background-removal model for custom stickers (0.5.0, src/stickers/cutout.ts).
+COPY apps/server/models ./models
 
 # Never run as root inside the container.
 USER node

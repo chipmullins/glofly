@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { yearInGlowSeason, type PublicUser, type YearInGlow } from "@glofly/shared";
 import { db } from "../db";
-import { attachments, callParticipants, calls, conversationMembers, conversations, messageReactions, messages, users } from "../db/schema";
+import { attachments, blocks, callParticipants, calls, conversationMembers, conversations, messageReactions, messages, users } from "../db/schema";
 import { longestGlowOf, TIME_ZONE } from "./glows";
 
 // Year in Glow (0.5.0): a recap of someone's year on Glofly, worked out from their own messages,
@@ -20,7 +20,21 @@ function emojiIn(text: string): string[] {
   return out;
 }
 
+// Worked out at most every 10 minutes per person (it reads a lot of their messages).
+const cache = new Map<string, { at: number; year: YearInGlow }>();
+const CACHE_MS = 10 * 60 * 1000;
+
 export async function yearInGlow(userId: string, askedYear?: number): Promise<YearInGlow> {
+  const key = `${userId}:${askedYear ?? ""}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.year;
+  const year = await workOut(userId, askedYear);
+  if (cache.size > 2000) cache.clear();
+  cache.set(key, { at: Date.now(), year });
+  return year;
+}
+
+async function workOut(userId: string, askedYear?: number): Promise<YearInGlow> {
   const season = yearInGlowSeason(new Date());
   const year = askedYear ?? season.year;
   const soFar = year === new Date().getFullYear() && new Date().getMonth() !== 11;
@@ -61,8 +75,8 @@ export async function yearInGlow(userId: string, askedYear?: number): Promise<Ye
     if (c.joinedAt && end && end > c.joinedAt) callMs += Math.min(end.getTime() - c.joinedAt.getTime(), 12 * 3600 * 1000);
   }
 
-  // Emoji: in your messages (the most recent 20,000 this year) and your reactions.
-  const bodies = await db.select({ body: messages.body }).from(messages).where(and(mine, isNull(messages.gif))).orderBy(desc(messages.createdAt)).limit(20_000);
+  // Emoji: in your messages (the most recent 5,000 this year) and your reactions.
+  const bodies = await db.select({ body: messages.body }).from(messages).where(and(mine, isNull(messages.gif))).orderBy(desc(messages.createdAt)).limit(5_000);
   const counts = new Map<string, number>();
   for (const b of bodies) for (const e of emojiIn(b.body)) counts.set(e, (counts.get(e) ?? 0) + 1);
   const reactions = await db
@@ -98,7 +112,14 @@ export async function yearInGlow(userId: string, askedYear?: number): Promise<Ye
     ? await db
         .select({ id: users.id, username: users.username, displayName: users.displayName, avatarVersion: users.avatarVersion })
         .from(users)
-        .where(and(inArray(users.id, ids), isNull(users.deleteAfter)))
+        .where(
+          and(
+            inArray(users.id, ids),
+            isNull(users.deleteAfter),
+            // Nobody who has blocked you (or you them) is shown.
+            sql`not exists (select 1 from ${blocks} b where (b.blocker_id = ${users.id} and b.blocked_id = ${userId}) or (b.blocker_id = ${userId} and b.blocked_id = ${users.id}))`,
+          ),
+        )
     : [];
   const known = new Set(people.map((p) => p.id));
 

@@ -46,6 +46,15 @@
   CSPs allow that one frame (desktop `index.html` gets the server address at build time, web
   `vite.config.ts`, Caddy's chat block). Event types newer than 0.4.0 travel as `eventLine2`
   (events.ts) so 0.2.1–0.4.0 apps show plain text instead of an empty line.
+- 0.5.0 chat extras and social (project doc `glofly-release-0.5.0.md`): GIFs (`messages/gifs.ts`,
+  GIPHY key only on the server, apps load pictures from media.giphy.com by id), link previews
+  (`messages/links.ts`: the SSRF-safe fetcher; only the server fetches links), polls/games/fireflies
+  (`messages/extras.ts`, rules in shared `games.ts`), lanterns (`messages/lanterns.ts`), videos
+  (`messages/video.ts`, ffprobe/ffmpeg). Glows/hangs/birthdays/Year in Glow (`social/`, "Glofly's
+  day" = `GLOFLY_TIME_ZONE`, US Central by default), stickers (`stickers/`, background removal with
+  ONNX Runtime + `models/u2netp.onnx`), Broadcast now (`broadcasts/`, in memory like Watch Together).
+  New message fields are optional and each carries a plain-text `body` for older apps; pushes for
+  social news reuse the 0.3.0 friend alert types so no phone needs new native code for them.
 - **Constellations branch:** Glofly 2.0 work goes on the `constellations` branch (made from `dev`
   on Oct 14, 2026), never on `dev`, so bug fixes and releases keep going from `dev` untouched.
   Bring fixes in with `git merge dev` on `constellations` now and then; it goes back into `dev`

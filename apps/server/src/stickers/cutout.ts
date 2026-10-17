@@ -22,15 +22,27 @@ function model(): Promise<InferenceSession> {
   return session;
 }
 
-/** Only one cut-out at a time, so a burst can't take over the server's CPU. */
+export class CutoutError extends Error {
+  constructor(
+    message: string,
+    /** The server is busy making other stickers: try again in a moment */
+    readonly busy = false,
+  ) {
+    super(message);
+  }
+}
+
+/** Only one cut-out at a time, so a burst can't take over the server's CPU (and only a few wait). */
 let queue: Promise<unknown> = Promise.resolve();
+let waiting = 0;
+const MAX_WAITING = 6;
 function oneAtATime<T>(task: () => Promise<T>): Promise<T> {
-  const run = queue.then(task, task);
+  if (waiting >= MAX_WAITING) return Promise.reject(new CutoutError("Lots of stickers are being made right now. Try again in a moment.", true));
+  waiting++;
+  const run = queue.then(task, task).finally(() => waiting--);
   queue = run.catch(() => undefined);
   return run;
 }
-
-export class CutoutError extends Error {}
 
 export type Cutout = { data: Buffer; width: number; height: number };
 

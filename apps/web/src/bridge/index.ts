@@ -29,6 +29,7 @@ import type {
   YearInGlow
 } from '../../../desktop/src/preload/api-types'
 import { isYouTubeId } from '@glofly/shared/watch'
+import { isGifId } from '@glofly/shared/gifs'
 import { looksLikeVideo } from '@glofly/shared/attachments'
 import { endSession, nothing, onSessionEnded, request, setPauseHandler, unwrap } from './api'
 import * as auth from './auth'
@@ -71,7 +72,7 @@ const badId = (...ids: unknown[]): Promise<typeof invalid> | null =>
   ids.every((id) => id === undefined || isId(id)) ? null : Promise.resolve(invalid)
 
 /** The call address must be LiveKit's, never anything else the page might be sent to. */
-function checkedJoin(result: ApiResult<CallJoin>): ApiResult<CallJoin> {
+function checkedJoin<T extends { url: string; token: string }>(result: ApiResult<T>): ApiResult<T> {
   if (!result.ok) return result
   const { url, token } = result.data
   const fine =
@@ -421,11 +422,14 @@ export function createBridge(): GloflyApi {
         )
     },
     broadcasts: {
-      start: (title) => request<BroadcastJoin>('POST', '/broadcasts', title ? { title } : {}),
+      start: async (title) =>
+        checkedJoin(await request<BroadcastJoin>('POST', '/broadcasts', title ? { title } : {})),
       stop: () => nothing(request('DELETE', '/broadcasts')),
       mine: () =>
         request<{ broadcast: Broadcast | null; viewers: PublicUser[] }>('GET', '/broadcasts/mine'),
-      watch: (userId) => badId(userId) ?? request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`),
+      watch: async (userId) =>
+        badId(userId) ??
+        checkedJoin(await request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`)),
       // Chrome and Edge can share a tab's or the computer's sound; the browser asks.
       canShareSound: async () => true
     },
@@ -433,7 +437,8 @@ export function createBridge(): GloflyApi {
     chat: {
       gifs: (query, offset) => {
         const q = typeof query === 'string' ? query.trim().slice(0, 50) : ''
-        const from = Number.isInteger(offset) && (offset ?? 0) >= 0 ? offset : 0
+        const from = Number.isInteger(offset) && (offset ?? 0) >= 0 ? (offset ?? 0) : 0
+        if (from >= 5000) return Promise.resolve({ ok: true, data: { gifs: [], next: null } })
         return request<GifPage>(
           'GET',
           q ? `/gifs/search?q=${encodeURIComponent(q)}&offset=${from}` : `/gifs/trending?offset=${from}`
@@ -441,7 +446,7 @@ export function createBridge(): GloflyApi {
       },
       sendGif: (id, gifId, replyToId) =>
         badId(id) ??
-        (/^[A-Za-z0-9]{1,40}$/.test(gifId)
+        (isGifId(gifId)
           ? unwrap(
               request<{ message: Message }>('POST', `/conversations/${id}/messages`, {
                 body: '',

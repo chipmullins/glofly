@@ -68,13 +68,15 @@ export function StartWatchDialog({
     preview: WatchPreview | null
     problem: string | null
   } | null>(null)
-  const [startProblem, setStartProblem] = useState<string | null>(null)
+  /** Why starting failed, for the link it was about (a new link clears it) */
+  const [startFailed, setStartFailed] = useState<{ id: string | null; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const id = youTubeIdFrom(link)
   const answer = found && found.id === id ? found : null
   const preview = answer?.preview ?? null
   const looking = !!id && !answer
+  const startProblem = startFailed && startFailed.id === id ? startFailed.text : null
   const problem = startProblem ?? answer?.problem ?? null
 
   useEffect(() => {
@@ -111,7 +113,7 @@ export function StartWatchDialog({
     const r = await onStart(link.trim(), control)
     setBusy(false)
     if (r.ok) onClose()
-    else setStartProblem(r.message)
+    else setStartFailed({ id, text: r.message })
   }
 
   // Only YouTube's own picture address is ever shown.
@@ -150,7 +152,7 @@ export function StartWatchDialog({
             value={link}
             onChange={(e) => {
               setLink(e.target.value)
-              setStartProblem(null)
+              setStartFailed(null)
             }}
             placeholder="https://youtu.be/…"
             maxLength={500}
@@ -299,7 +301,7 @@ function WatchFireflies({
     })
   }, [callId])
   return (
-    <div className="watch-fireflies" aria-live="polite">
+    <div className="watch-fireflies" aria-hidden="true">
       {flying.map((f) => (
         <span
           key={f.id}

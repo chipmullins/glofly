@@ -61,11 +61,13 @@ type Probe = { streams?: { codec_type?: string; width?: number; height?: number;
  * and a poster picture (WebP). Null if it isn't a video ffmpeg can read, or is too long.
  */
 export async function examineVideo(data: Buffer): Promise<{ info: Omit<VideoInfo, "mime">; poster: Buffer } | null> {
-  if (running >= MAX_RUNNING) {
-    await new Promise((r) => setTimeout(r, 1500));
-    if (running >= MAX_RUNNING) return null;
+  // At most MAX_RUNNING at once; the rest wait their turn (up to 20 seconds).
+  const waitUntil = Date.now() + 20_000;
+  while (running >= MAX_RUNNING) {
+    if (Date.now() > waitUntil) return null;
+    await new Promise((r) => setTimeout(r, 250));
   }
-  running++;
+  running++; // (no await between the check and this, so two can't both get in)
   const dir = await mkdtemp(join(tmpdir(), "glofly-video-"));
   const file = join(dir, "video");
   try {

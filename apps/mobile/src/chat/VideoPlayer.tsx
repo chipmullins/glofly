@@ -19,14 +19,19 @@ export function VideoPlayer({ conversationId, attachment, onClose }: { conversat
   useEffect(() => {
     if (Platform.OS !== 'web') return
     let url: string | null = null
-    void fetch(uri, { headers: authHeaders() as Record<string, string> })
+    let cancelled = false
+    const stop = new AbortController()
+    void fetch(uri, { headers: authHeaders() as Record<string, string>, signal: stop.signal })
       .then((r) => r.blob())
       .then((b) => {
+        if (cancelled) return
         url = URL.createObjectURL(b)
         setWebUri(url)
       })
       .catch(() => undefined)
     return () => {
+      cancelled = true
+      stop.abort()
       if (url) URL.revokeObjectURL(url)
     }
   }, [uri])

@@ -7,7 +7,7 @@ import { BROADCAST_TITLE_MAX, type BroadcastJoin, type PublicUser } from "@glofl
 import { requireAuth } from "../auth/sessions";
 import { db } from "../db";
 import { users } from "../db/schema";
-import { broadcastToken, closeRoom, LIVEKIT_URL, livekitConfigured, peopleInRoom } from "../calls/livekit";
+import { broadcastToken, closeRoom, LIVEKIT_URL, livekitConfigured, peopleInRoom, removeFromRoom } from "../calls/livekit";
 import { emitToUser } from "../realtime";
 import { inBackground, notifyFriendNews } from "../push/notify";
 import { friendIdsOf } from "../social/routes";
@@ -145,7 +145,13 @@ export async function sweepBroadcasts(): Promise<void> {
       await endBroadcast(b.userId);
       continue;
     }
-    const viewers = people.filter((id) => id !== b.userId);
+    // Someone unfriended or blocked during the broadcast stops watching right away.
+    let viewers = people.filter((id) => id !== b.userId);
+    if (viewers.length) {
+      const friends = new Set(await friendIdsOf(b.userId));
+      for (const id of viewers.filter((v) => !friends.has(v))) await removeFromRoom(b.room, id);
+      viewers = viewers.filter((v) => friends.has(v));
+    }
     if (viewers.join() !== b.viewers.join()) {
       b.viewers = viewers;
       emitToUser(b.userId, "social:changed", {});

@@ -105,7 +105,12 @@ function serverPathFor(
 const VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm'])
 
 /** A video: the player's Range request passed on, the answer streamed back (only video types). */
-async function videoResponse(req: Request, path: string, token: string): Promise<Response> {
+async function videoResponse(
+  req: Request,
+  path: string,
+  token: string,
+  maxBytes: number
+): Promise<Response> {
   const range = req.headers.get('range')
   let response: Response
   try {
@@ -113,13 +118,17 @@ async function videoResponse(req: Request, path: string, token: string): Promise
       headers: {
         Authorization: `Bearer ${token}`,
         ...(range && /^bytes=\d*-\d*$/.test(range) ? { Range: range } : {})
-      }
+      },
+      // Stops when the player stops asking (scrolled away, seeked, closed); never hangs forever.
+      signal: AbortSignal.any([req.signal, AbortSignal.timeout(10 * 60 * 1000)])
     })
   } catch {
     return empty(502)
   }
   const type = response.headers.get('content-type') ?? ''
-  if (!response.ok || !VIDEO_TYPES.has(type) || !response.body) {
+  const length = Number(response.headers.get('content-length') ?? 0)
+  if (!response.ok || !VIDEO_TYPES.has(type) || !response.body || length > maxBytes) {
+    void response.body?.cancel().catch(() => undefined)
     return empty(response.ok ? 502 : response.status)
   }
   const headers: Record<string, string> = {
@@ -147,7 +156,7 @@ export async function handleMediaRequest(req: Request): Promise<Response> {
 
   const token = getSessionToken()
   if (!token) return empty(401)
-  if (target.video) return videoResponse(req, target.path, token)
+  if (target.video) return videoResponse(req, target.path, token, target.maxBytes)
   if (cacheOwner !== token) {
     cache.clear()
     cacheBytes = 0

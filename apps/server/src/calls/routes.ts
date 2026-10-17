@@ -522,7 +522,7 @@ callsRouter.post("/:id/watch/report", watchLimiter, async (req, res) => {
   }
   const found = await callImIn(req, res);
   if (!found) return;
-  await reportWatch(found.row.id, parsed.data.videoId, parsed.data.durationSec, parsed.data.title);
+  await reportWatch(found.row.id, me(res).id, parsed.data.videoId, parsed.data.durationSec, parsed.data.title);
   res.status(204).end();
 });
 

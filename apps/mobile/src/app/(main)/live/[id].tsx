@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Platform, Pressable, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Room, RoomEvent, Track, type RemoteTrack, type RemoteTrackPublication, type VideoTrack } from 'livekit-client'
 import * as api from '@/api/glofly'
+import { useCall } from '@/calls/controller'
 import { CallVideo, setupWebRTC, startWatchAudio, stopWatchAudio } from '@/calls/media'
 import { useNow } from '@/lib/hooks'
 import { useSocial } from '@/state/social'
@@ -17,6 +18,7 @@ import { call as callColors } from '@/ui/theme'
 // watch; going live is on the computer. Turn the phone sideways for a bigger picture.
 
 type State = 'joining' | 'waiting' | 'watching' | 'ended' | 'problem'
+const isUserId = (v: string | undefined): v is string => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
 
 export default function WatchLive() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -29,13 +31,21 @@ export default function WatchLive() {
   const [video, setVideo] = useState<VideoTrack | null>(null)
   const [muted, setMuted] = useState(false)
   const [room, setRoom] = useState<Room | null>(null)
+  const mutedRef = useRef(false)
 
   useEffect(() => {
     let r: Room | null = null
     let cancelled = false
     const webAudio: HTMLMediaElement[] = []
     setupWebRTC()
+    // While you're in a call, its audio session stays as it is (the broadcast plays along in it).
+    const inCall = !!useCall.getState().call
+    let audioStarted = false
     void (async () => {
+      if (!isUserId(id)) {
+        setState('ended')
+        return
+      }
       const pass = await api.watchBroadcast(id)
       if (cancelled) return
       if (!pass.ok) {
@@ -43,13 +53,21 @@ export default function WatchLive() {
         setProblem(pass.message)
         return
       }
-      await startWatchAudio().catch(() => {})
+      if (!inCall) {
+        await startWatchAudio().catch(() => {})
+        audioStarted = true
+      }
+      if (cancelled) {
+        if (audioStarted) void stopWatchAudio()
+        return
+      }
       r = new Room({ adaptiveStream: true, dynacast: true })
       r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication) => {
         if (track.kind === Track.Kind.Video && pub.source === Track.Source.ScreenShare) {
           setVideo(track as unknown as VideoTrack)
           setState('watching')
         }
+        if (track.kind === Track.Kind.Audio && mutedRef.current) pub.setEnabled(false)
         // Phones play remote sound by themselves; the browser preview needs an element.
         if (track.kind === Track.Kind.Audio && Platform.OS === 'web') {
           const el = track.attach()
@@ -83,12 +101,13 @@ export default function WatchLive() {
       cancelled = true
       void r?.disconnect()
       for (const el of webAudio) el.remove()
-      void stopWatchAudio()
+      if (audioStarted) void stopWatchAudio()
     }
   }, [id])
 
   // Mute: stop receiving their sound (remote audio has no per-app volume on phones).
   useEffect(() => {
+    mutedRef.current = muted
     if (!room) return
     for (const p of room.remoteParticipants.values()) {
       for (const pub of p.audioTrackPublications.values()) pub.setEnabled(!muted)

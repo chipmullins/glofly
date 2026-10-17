@@ -10,13 +10,24 @@ import { firstLink, previewFor, previewImageKey, savePreviewImage } from "./link
 const LINKS_PER_MINUTE = 30;
 let recent: number[] = [];
 
-export async function addLinkPreview(messageId: string, conversationId: string, text: string): Promise<void> {
+const PER_PERSON_PER_MINUTE = 6;
+const bySender = new Map<string, number[]>();
+
+export async function addLinkPreview(messageId: string, conversationId: string, text: string, senderId?: string): Promise<void> {
   const link = firstLink(text);
   if (!link) return;
-  // The whole server makes at most this many previews a minute (a flood of links just goes without).
+  // The whole server makes at most this many previews a minute, and one person only a few of
+  // them (a flood of links just goes without previews).
   const now = Date.now();
   recent = recent.filter((t) => now - t < 60_000);
   if (recent.length >= LINKS_PER_MINUTE) return;
+  if (senderId) {
+    const mine = (bySender.get(senderId) ?? []).filter((t) => now - t < 60_000);
+    if (mine.length >= PER_PERSON_PER_MINUTE) return;
+    mine.push(now);
+    bySender.set(senderId, mine);
+    if (bySender.size > 5000) bySender.clear(); // never grows without end
+  }
   recent.push(now);
 
   const found = await previewFor(link);

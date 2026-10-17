@@ -74,7 +74,7 @@ stickersRouter.post("/", makeLimiter, express.raw({ type: () => true, limit: PHO
     made = await makeSticker(req.body);
   } catch (err) {
     if (err instanceof CutoutError) {
-      res.status(422).json({ error: "no_cutout", message: err.message });
+      res.status(err.busy ? 503 : 422).json({ error: err.busy ? "busy" : "no_cutout", message: err.message });
       return;
     }
     throw err;
@@ -141,7 +141,7 @@ stickersRouter.post("/:id/send", sendLimiter, async (req, res) => {
     chat,
     parsed.data.conversationId,
     myId,
-    { body: "", sticker: { image: Buffer.concat(chunks), width: row.width, height: row.height }, replyToId: reply && !reply.deletedAt ? reply.id : null },
+    { body: "", sticker: { image: Buffer.concat(chunks), width: row.width, height: row.height }, replyToId: reply && !reply.deletedAt && !reply.event ? reply.id : null },
     res.locals.sessionId,
   );
   res.status(201).json({ message });

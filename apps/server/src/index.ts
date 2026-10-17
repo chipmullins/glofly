@@ -35,6 +35,20 @@ import { pushKind } from "./push/fcm";
 import { voipKind } from "./push/apns";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
+/** Runs a background job every so often, never two runs of it at once. */
+function every(ms: number, name: string, job: () => Promise<void>): void {
+  let running = false;
+  setInterval(() => {
+    if (running) return;
+    running = true;
+    job()
+      .catch((err) => console.error(`${name} failed`, err))
+      .finally(() => {
+        running = false;
+      });
+  }, ms);
+}
+
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 
@@ -141,17 +155,13 @@ connectRedis()
     setInterval(() => {
       sweepCalls().catch((err) => console.error("Call check failed", err));
     }, 15 * 1000);
-    // Lantern messages fade once everyone else has read them (0.5.0).
-    setInterval(() => {
-      sweepBroadcasts().catch((err) => console.error("Broadcast check failed", err));
-    }, 15_000);
-    setInterval(() => {
-      sweepHangs().catch((err) => console.error("Hang check failed", err));
-      sweepBirthdays().catch((err) => console.error("Birthday check failed", err));
-    }, 60_000);
-    setInterval(() => {
-      sweepLanterns().catch((err) => console.error("Lantern check failed", err));
-    }, 5 * 1000);
+    // 0.5.0: who's watching broadcasts (and ending abandoned ones), hangs that ran out, birthday
+    // reminders, and lantern messages fading once read. Each runs one at a time (never on top of
+    // itself if a run takes longer than its interval).
+    every(15_000, "Broadcast check", sweepBroadcasts);
+    every(60_000, "Hang check", sweepHangs);
+    every(60_000, "Birthday check", () => sweepBirthdays());
+    every(5_000, "Lantern check", sweepLanterns);
     // Files added to a chat but never sent are cleared out after an hour.
     setInterval(() => {
       sweepUnsentUploads().catch((err) => console.error("Upload cleanup failed", err));

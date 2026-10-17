@@ -1,7 +1,7 @@
 import { lookup } from "node:dns/promises";
 import http from "node:http";
 import https from "node:https";
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
 import sharp from "sharp";
 import type { LinkPreviewInfo } from "../db/schema";
 import { storage } from "../storage";
@@ -39,32 +39,54 @@ export function firstLink(body: string): string | null {
 }
 
 // ---- Is this address on the public internet? ----
+// Node's BlockList understands every way of writing an address (IPv6 short forms, IPv4 written
+// inside IPv6 like ::ffff:a9fe:a9fe), so a trick spelling can't slip a private address through.
 
-function v4Private(ip: string): boolean {
-  const [a, b] = ip.split(".").map(Number);
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) || // carrier-grade NAT
-    (a === 169 && b === 254) || // link-local, incl. AWS metadata 169.254.169.254
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 192 && b === 0) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224 // multicast and reserved
-  );
+const BLOCKED_V4: [string, number][] = [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10], // carrier-grade NAT
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16], // link-local, incl. AWS metadata 169.254.169.254
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 3], // multicast and reserved
+];
+const blocked4 = new BlockList();
+for (const [net, bits] of BLOCKED_V4) blocked4.addSubnet(net, bits, "ipv4");
+// IPv6: only global unicast (2000::/3) is public, minus documentation, 6to4, Teredo and NAT64.
+const global6 = new BlockList();
+global6.addSubnet("2000::", 3, "ipv6");
+const blocked6 = new BlockList();
+for (const [net, bits] of [
+  ["2001:db8::", 32],
+  ["2001::", 32],
+  ["2002::", 16],
+  ["64:ff9b::", 96],
+] as [string, number][])
+  blocked6.addSubnet(net, bits, "ipv6");
+
+/** An IPv4 address written inside IPv6 (::ffff:a.b.c.d or ::a.b.c.d, any spelling), or null. */
+function embeddedV4(v6: string): string | null {
+  const m = v6.toLowerCase().match(/^(?:0*:)*?(?:0*:)?(?::ffff:|::|0:0:0:0:0:ffff:|0:0:0:0:0:0:)((?:\d+\.){3}\d+|[0-9a-f]{1,4}:[0-9a-f]{1,4})$/);
+  if (!m) return null;
+  if (m[1].includes(".")) return m[1];
+  const [hi, lo] = m[1].split(":").map((x) => parseInt(x, 16));
+  return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
 }
 
 export function isPublicAddress(ip: string): boolean {
   const kind = isIP(ip);
-  if (kind === 4) return !v4Private(ip);
+  if (kind === 4) return !blocked4.check(ip, "ipv4");
   if (kind !== 6) return false;
-  const v6 = ip.toLowerCase();
-  const mapped = v6.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return !v4Private(mapped[1]);
-  if (v6 === "::" || v6 === "::1") return false;
-  return !/^(fc|fd|fe8|fe9|fea|feb|ff|64:ff9b|100::|2001:db8|2001::|2002:)/.test(v6);
+  const v4 = embeddedV4(ip);
+  if (v4) return isIP(v4) === 4 && !blocked4.check(v4, "ipv4");
+  return global6.check(ip, "ipv6") && !blocked6.check(ip, "ipv6");
 }
 
 /** Resolves a host and refuses anything not on the public internet. */
@@ -175,12 +197,33 @@ function decode(s: string): string {
     .trim();
 }
 
-function meta(html: string, names: string[]): string | null {
+/**
+ * The page's <meta> tags as name → content, read in one pass over the start of the page (where
+ * they live). The patterns can't backtrack, so a hostile page can't make this slow.
+ */
+function metaTags(html: string): Map<string, string> {
+  const head = html.slice(0, 64 * 1024);
+  const end = head.search(/<\/head\s*>/i);
+  const part = end >= 0 ? head.slice(0, end) : head;
+  const tags = new Map<string, string>();
+  const tag = /<meta\b[^>]{0,2000}>/gi;
+  let m: RegExpExecArray | null;
+  let count = 0;
+  while ((m = tag.exec(part)) && count++ < 400) {
+    const attrs = new Map<string, string>();
+    const attr = /([a-z:-]{1,40})\s*=\s*(?:"([^"]{0,2000})"|'([^']{0,2000})')/gi;
+    let a: RegExpExecArray | null;
+    while ((a = attr.exec(m[0]))) attrs.set(a[1].toLowerCase(), a[2] ?? a[3] ?? "");
+    const key = (attrs.get("property") ?? attrs.get("name") ?? "").toLowerCase();
+    const content = attrs.get("content");
+    if (key && content && !tags.has(key)) tags.set(key, content);
+  }
+  return tags;
+}
+
+function meta(tags: Map<string, string>, names: string[]): string | null {
   for (const name of names) {
-    const re = new RegExp(`<meta\\s[^>]*(?:property|name)\\s*=\\s*["']${name}["'][^>]*>`, "i");
-    const tag = html.match(re)?.[0];
-    const content = tag?.match(/content\s*=\s*("([^"]*)"|'([^']*)')/i);
-    const value = content ? decode(content[2] ?? content[3] ?? "") : "";
+    const value = decode(tags.get(name) ?? "");
     if (value) return value;
   }
   return null;
@@ -193,11 +236,12 @@ export async function previewFor(link: string): Promise<FoundPreview | null> {
   const page = await safeFetch(link, "text/html,application/xhtml+xml", PAGE_MAX);
   if (!page || !/text\/html|application\/xhtml/.test(page.type)) return null;
   const html = page.body.toString("utf8");
-  const title = meta(html, ["og:title", "twitter:title"]) ?? decode(html.match(/<title[^>]*>([^<]{1,300})<\/title>/i)?.[1] ?? "");
+  const tags = metaTags(html);
+  const title = meta(tags, ["og:title", "twitter:title"]) ?? decode(html.slice(0, 64 * 1024).match(/<title[^>]{0,200}>([^<]{1,300})<\/title>/i)?.[1] ?? "");
   if (!title) return null;
-  const description = meta(html, ["og:description", "twitter:description", "description"]);
-  const siteName = meta(html, ["og:site_name", "application-name"]) ?? page.url.hostname.replace(/^www\./, "");
-  const imageLink = meta(html, ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"]);
+  const description = meta(tags, ["og:description", "twitter:description", "description"]);
+  const siteName = meta(tags, ["og:site_name", "application-name"]) ?? page.url.hostname.replace(/^www\./, "");
+  const imageLink = meta(tags, ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"]);
 
   let image: Buffer | null = null;
   let size: { width: number; height: number } | null = null;

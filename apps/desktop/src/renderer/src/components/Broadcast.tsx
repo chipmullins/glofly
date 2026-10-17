@@ -70,7 +70,7 @@ export function GoLiveDialog({
             <small>
               {isWeb
                 ? 'Your browser will ask which sound to share.'
-                : 'What your computer plays goes with the screen.'}
+                : 'Everything your computer plays goes with the screen, Glofly calls too.'}
             </small>
           </span>
         </label>

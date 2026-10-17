@@ -156,11 +156,17 @@ export function GifPicker({
     const result = await window.glofly.chat.gifs(q, offset)
     if (ask !== asked.current) return // a newer search is on its way
     if (!result.ok) {
+      // A later page that fails just stops there; the GIFs already shown stay.
+      if (offset > 0) return
       setStatus('error')
       setProblem(result.message)
       return
     }
-    setGifs((list) => (offset === 0 ? result.data.gifs : [...list, ...result.data.gifs]))
+    setGifs((list) =>
+      offset === 0
+        ? result.data.gifs
+        : [...list, ...result.data.gifs.filter((g) => !list.some((x) => x.id === g.id))]
+    )
     setNext(result.data.next)
     setStatus('ready')
   }, [])
@@ -1206,9 +1212,10 @@ export function ChatFireflies({
     })
   }, [conversationId, meId])
   return (
-    <div className="chat-fireflies" aria-live="polite">
+    // Decoration: screen readers hear only the visually hidden line, once per swarm.
+    <div className="chat-fireflies">
       {swarms.map((s) => (
-        <div key={s.id} className="chat-swarm">
+        <div key={s.id} className="chat-swarm" aria-hidden="true">
           {s.flies.map((f, i) => (
             <span
               key={i}

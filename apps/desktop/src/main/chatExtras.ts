@@ -6,6 +6,7 @@ import type {
   GifPage,
   Message
 } from '../preload/api-types'
+import { isGifId } from '@glofly/shared/gifs'
 import { isUserId, request } from './api'
 
 // 0.5.0 chat extras: GIFs, link previews, polls, mini games and firefly swarms. Every value from
@@ -30,10 +31,10 @@ const isText = (v: unknown, max: number): v is string =>
 
 export function gifs(query: unknown, offset: unknown): Promise<ApiResult<GifPage>> {
   if (typeof query !== 'string' || query.length > 50) return bad()
-  const from =
-    Number.isInteger(offset) && (offset as number) >= 0 && (offset as number) < 5000
-      ? (offset as number)
-      : 0
+  if (offset !== undefined && (!Number.isInteger(offset) || (offset as number) < 0)) return bad()
+  const from = (offset as number | undefined) ?? 0
+  // GIPHY stops at 5,000 results: past that there's nothing more (never page 1 again).
+  if (from >= 5000) return Promise.resolve({ ok: true, data: { gifs: [], next: null } })
   const q = query.trim()
   return request<GifPage>(
     'GET',
@@ -46,7 +47,7 @@ export function sendGif(
   gifId: unknown,
   replyTo: unknown
 ): Promise<ApiResult<Message>> {
-  if (!isUserId(id) || typeof gifId !== 'string' || !/^[A-Za-z0-9]{1,40}$/.test(gifId)) return bad()
+  if (!isUserId(id) || !isGifId(gifId)) return bad()
   if (replyTo != null && !isUserId(replyTo)) return bad()
   return unwrap(
     request('POST', `/conversations/${id}/messages`, {

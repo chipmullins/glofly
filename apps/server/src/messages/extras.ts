@@ -169,6 +169,8 @@ extrasRouter.put("/:id/messages/:mid/vote", moveLimiter, async (req, res) => {
   }
   const myId = me(res).id;
   await db.transaction(async (tx) => {
+    // One vote change at a time per poll (two quick taps can't leave two picks on a pick-one poll).
+    await tx.select({ id: messages.id }).from(messages).where(eq(messages.id, message.id)).for("update");
     await tx.delete(pollVotes).where(and(eq(pollVotes.messageId, message.id), eq(pollVotes.userId, myId)));
     if (options.length) await tx.insert(pollVotes).values(options.map((option) => ({ messageId: message.id, userId: myId, option })));
   });

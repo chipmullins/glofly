@@ -30,8 +30,9 @@ const EXPO_PROJECT_ID = '3aa33fd8-907f-4f50-b1a8-db37c96e107b'
 const updateChannel = variant === 'production' ? 'production' : 'preview'
 // 2026-10-13.2: Glofly 0.3.0 ("is online" / "joined from your invite" notifications in glofly-native).
 // 2026-10-14.1: Glofly 0.4.0, the iPad version (ios.supportsTablet below is a native setting).
-// 2026-10-16.1: Glofly 0.5.0, Watch Together (react-native-webview) and videos (expo-video).
-const RUNTIME_VERSION = '2026-10-16.1'
+// 2026-10-16.1: Glofly 0.5.0, Watch Together (react-native-webview).
+// 2026-10-17.1: Glofly 0.5.0, videos in chats (expo-video), after builds of 16.1 may already exist.
+const RUNTIME_VERSION = '2026-10-17.1'
 
 const config: ExpoConfig = {
   name: 'Glofly',

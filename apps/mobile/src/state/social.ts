@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { EMPTY_SOCIAL, type SocialToday } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { onLive } from '@/api/realtime'
-import { onSignOut } from './session'
+import { onSignOut, useSession } from './session'
 
 // 0.5.0: glows, who's free to hang, birthdays today and who's live (GET /social), kept fresh:
 // on start, when the server says it changed, when the app comes back, and every few minutes.
@@ -11,11 +11,15 @@ import { onSignOut } from './session'
 export const useSocial = create<SocialToday>(() => EMPTY_SOCIAL)
 
 let asking: Promise<void> | null = null
+/** Bumped on sign-out, so an answer for the previous account is thrown away. */
+let generation = 0
 export function refreshSocial(): Promise<void> {
+  if (!useSession.getState().token) return Promise.resolve()
+  const mine = generation
   asking ??= api
     .social()
     .then((r) => {
-      if (r.ok) useSocial.setState(r.data, true)
+      if (r.ok && mine === generation) useSocial.setState(r.data, true)
     })
     .catch(() => undefined)
     .finally(() => {
@@ -33,4 +37,7 @@ AppState.addEventListener('change', (s) => {
 setInterval(() => {
   if (AppState.currentState === 'active') void refreshSocial()
 }, 4 * 60 * 1000)
-onSignOut(() => useSocial.setState(EMPTY_SOCIAL, true))
+onSignOut(() => {
+  generation++
+  useSocial.setState(EMPTY_SOCIAL, true)
+})

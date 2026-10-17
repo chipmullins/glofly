@@ -9,7 +9,7 @@ import type {
   YearInGlow
 } from '../preload/api-types'
 import { isUserId, request } from './api'
-import { canShareSound } from './calls'
+import { canShareSound, checkedJoin } from './calls'
 
 // 0.5.0 social extras (glows, hangs, birthdays, Year in Glow), custom stickers and Broadcast now.
 // Every value from the window is checked here before it goes to the server.
@@ -83,9 +83,9 @@ export async function sendSticker(
   return r.ok ? { ok: true, data: r.data.message } : r
 }
 
-export function startBroadcast(title: unknown): Promise<ApiResult<BroadcastJoin>> {
+export async function startBroadcast(title: unknown): Promise<ApiResult<BroadcastJoin>> {
   if (title !== null && (typeof title !== 'string' || title.length > 60)) return bad()
-  return request('POST', '/broadcasts', title ? { title } : {})
+  return checkedJoin(await request<BroadcastJoin>('POST', '/broadcasts', title ? { title } : {}))
 }
 
 export const stopBroadcast = (): Promise<ApiResult<null>> => request('DELETE', '/broadcasts')
@@ -94,9 +94,9 @@ export const myBroadcast = (): Promise<
   ApiResult<{ broadcast: Broadcast | null; viewers: PublicUser[] }>
 > => request('GET', '/broadcasts/mine')
 
-export function watchBroadcast(userId: unknown): Promise<ApiResult<BroadcastJoin>> {
+export async function watchBroadcast(userId: unknown): Promise<ApiResult<BroadcastJoin>> {
   if (!isUserId(userId)) return bad()
-  return request('POST', `/broadcasts/${userId}/watch`)
+  return checkedJoin(await request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`))
 }
 
 export { canShareSound }

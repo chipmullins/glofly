@@ -8,6 +8,8 @@ import { EMPTY_SOCIAL, type SocialToday } from '@glofly/shared/social'
 let state: SocialToday = EMPTY_SOCIAL
 const listeners = new Set<() => void>()
 let asking: Promise<void> | null = null
+/** Bumped when signing out, so an answer for the previous account is thrown away. */
+let generation = 0
 
 function set(next: SocialToday): void {
   state = next
@@ -16,10 +18,11 @@ function set(next: SocialToday): void {
 
 /** Fetches the latest (one request at a time; a second ask waits for the first). */
 export function refreshSocial(): Promise<void> {
+  const mine = generation
   asking ??= window.glofly.social
     .get()
     .then((r) => {
-      if (r.ok) set(r.data)
+      if (r.ok && mine === generation) set(r.data)
     })
     .catch(() => undefined)
     .finally(() => {
@@ -58,6 +61,8 @@ export function useSocialSync(): void {
       off()
       window.removeEventListener('focus', onFocus)
       clearInterval(timer)
+      generation++
+      asking = null
       set(EMPTY_SOCIAL)
     }
   }, [])

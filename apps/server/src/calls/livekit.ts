@@ -115,7 +115,8 @@ export async function broadcastToken(
   user: { id: string; displayName: string },
   role: "host" | "viewer",
 ): Promise<string> {
-  const token = new AccessToken(apiKey, apiSecret, { identity: user.id, name: user.displayName, ttl: "15m" });
+  // Viewers' passes are short: once in, the connection lasts; an expired pass only stops rejoining.
+  const token = new AccessToken(apiKey, apiSecret, { identity: user.id, name: user.displayName, ttl: role === "host" ? "15m" : "3m" });
   token.addGrant({
     room,
     roomJoin: true,

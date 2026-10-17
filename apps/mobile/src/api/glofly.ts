@@ -225,5 +225,14 @@ export const sendSticker = async (id: string, conversationId: string, replyToId?
   map(await request<{ message: Message }>('POST', `/stickers/${id}/send`, { conversationId, ...(replyToId ? { replyToId } : {}) }), (d) => d.message)
 export const stickerImagePath = (id: string) => `/stickers/${id}/image`
 
-export const watchBroadcast = (userId: string) => request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`)
+/** A pass to watch a friend's broadcast. The address must be LiveKit's, never anything else. */
+export const watchBroadcast = async (userId: string): Promise<ApiResult<BroadcastJoin>> => {
+  const r = await request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`)
+  if (!r.ok) return r
+  const fine =
+    typeof r.data.token === 'string' &&
+    r.data.token.length < 4000 &&
+    (/^wss:\/\/[a-z0-9.-]+\.livekit\.cloud\/?$/i.test(r.data.url) || /^ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(r.data.url))
+  return fine ? r : { ok: false, error: 'server_error', message: "Broadcasts aren't set up correctly on the server." }
+}
 export type { Broadcast, PublicUser as BroadcastPerson }

@@ -18,7 +18,9 @@ import { API_URL } from './auth'
 // (That pass only works for that one call. The Glofly session token never leaves this process.)
 
 /** The call address must be LiveKit's, never anything else the window might be sent to. */
-function checkedJoin(result: ApiResult<CallJoin>): ApiResult<CallJoin> {
+export function checkedJoin<T extends { url: string; token: string }>(
+  result: ApiResult<T>
+): ApiResult<T> {
   if (!result.ok) return result
   const { url, token } = result.data
   const fine =

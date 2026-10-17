@@ -37,10 +37,13 @@ export function WatchView({ watch, style, unmute, onState }: { watch: WatchState
         scrollEnabled={false}
         bounces={false}
         overScrollMode="never"
-        // Only the player page and YouTube's player load here; anything else opens in the browser.
+        // Only the player page and YouTube's player load as the page; a link tapped on the page
+        // opens in the browser. Frames inside YouTube's player (iPhone asks about those too) are
+        // left alone: the page's own rules (CSP) already decide what may load there.
         onShouldStartLoadWithRequest={(req) => {
           if (ALLOWED.some((o) => req.url.startsWith(`${o}/`))) return true
-          if (req.url.startsWith('https://')) void Linking.openURL(req.url)
+          if (req.isTopFrame === false) return true
+          if (req.url.startsWith('https://') && (req.navigationType ?? 'click') === 'click') void Linking.openURL(req.url)
           return false
         }}
         onMessage={(e: WebViewMessageEvent) => {

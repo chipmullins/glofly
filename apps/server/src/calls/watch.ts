@@ -165,13 +165,19 @@ export async function setWatchControl(callId: string, userId: string, control: W
 
 /**
  * A player found out how long the video is (YouTube tells each player once it loads). The first
- * answer for the current video counts. A title too, if YouTube's page couldn't be asked.
+ * answer for the current video from someone who can control it counts (so nobody else can end
+ * the video for everyone by reporting it as 1 second long), and never shorter than where it is.
+ * A title too, if YouTube's page couldn't be asked.
  */
-export async function reportWatch(callId: string, videoId: string, durationSec: number, title?: string): Promise<void> {
+export async function reportWatch(callId: string, userId: string, videoId: string, durationSec: number, title?: string): Promise<void> {
   const entry = watching.get(callId);
   if (!entry || entry.state.videoId !== videoId) return;
   const s = entry.state;
-  const better = s.durationSec === null && durationSec > 0 && durationSec < 48 * 3600;
+  if (!canControlWatch(s, userId)) return;
+  // A very short video is only believed from whoever picked it.
+  if (durationSec < 10 && userId !== s.startedBy) return;
+  const here = watchPositionAt(s, Date.now());
+  const better = s.durationSec === null && durationSec > 0 && durationSec < 48 * 3600 && durationSec >= here - 2;
   const named = s.title === "YouTube video" && typeof title === "string" && cleanTitle(title) !== "YouTube video";
   if (!better && !named) return;
   entry.state = {
