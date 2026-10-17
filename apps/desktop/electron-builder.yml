@@ -38,9 +38,6 @@ asarUnpack:
   - '**/node_modules/@koromix/**'
   - '**/node_modules/audiotee/bin/**'
 win:
-  # Screen sound on Windows uses loopback-capture + koffi; the Mac's helper isn't needed here.
-  files:
-    - '!**/node_modules/audiotee/**'
   executableName: Glofly
   icon: build/icon.ico
 nsis:
@@ -68,11 +65,7 @@ mac:
   icon: build/icon.icns
   # Electron 44 needs macOS 13 (Ventura) or newer.
   minimumSystemVersion: '13.0'
-  # Screen sound on a Mac uses the AudioTee helper; Windows' capture modules aren't needed.
-  files:
-    - '!**/node_modules/loopback-capture/**'
-    - '!**/node_modules/koffi/**'
-    - '!**/node_modules/@koromix/**'
+
   category: public.app-category.social-networking
   # Names the .zip (and the .dmg, which also sets it below): Glofly-<version>-mac.zip / .dmg.
   # electron-builder has no top-level "zip:" section.
@@ -92,7 +85,10 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   # Universal build: the keyboard hook's prebuilt darwin-x64 and darwin-arm64 files sit side by side
   # in both halves and the right one is picked at runtime, so keep them as they are (no merging).
-  x64ArchFiles: '**/node_modules/uiohook-napi/prebuilds/darwin-*/*.node'
+  # Same for koffi (installed on the Mac only for its own chip; Glofly uses it on Windows only).
+  # Don't add platform-level "files:" lists to this file: electron-builder then drops its
+  # default rules and packs dist/ (old installers) into the app (the 0.5.0 build hit 4 GB).
+  x64ArchFiles: '{**/node_modules/uiohook-napi/prebuilds/darwin-*/*.node,**/node_modules/@koromix/**}'
   # The words in macOS's permission prompts. Without them macOS won't let Glofly ask at all.
   extendInfo:
     NSCameraUsageDescription: Glofly uses your camera for video calls.
@@ -102,11 +98,6 @@ mac:
 dmg:
   artifactName: Glofly-${version}-mac.${ext}
 linux:
-  files:
-    - '!**/node_modules/loopback-capture/**'
-    - '!**/node_modules/koffi/**'
-    - '!**/node_modules/@koromix/**'
-    - '!**/node_modules/audiotee/**'
   target:
     - AppImage
   maintainer: Glofly
