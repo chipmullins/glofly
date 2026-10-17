@@ -332,6 +332,7 @@ export type SyncStatus = 'sync' | 'catching' | 'paused' | 'blocked' | 'ended'
 /** What one player remembers between steps. */
 export type SyncMemory = {
   lastSeekAt: number
+  /** When "play" or "pause" was last sent */
   lastPlayAt: number
   /** "Play" sent without the player starting (a browser blocking sound until a tap) */
   playTries: number
@@ -362,7 +363,13 @@ export function watchSyncStep(
 
   if (!watch.playing || ended) {
     mem.playTries = 0
-    if (player.state === 'playing' || player.state === 'buffering') commands.push({ cmd: 'pause' })
+    // Anything but a player known to be stopped gets "pause" (at most once a second): a player
+    // whose state didn't come through (an "unstarted" one that YouTube autoplayed) must stop too.
+    const stopped = player.state === 'paused' || player.state === 'ended' || player.state === 'cued'
+    if (!stopped && now - mem.lastPlayAt > 1000) {
+      commands.push({ cmd: 'pause' })
+      mem.lastPlayAt = now
+    }
     if (Math.abs(drift) > 0.5 && now - mem.lastSeekAt > 1000 && player.state !== 'unstarted') {
       commands.push({ cmd: 'seek', to: expected })
       mem.lastSeekAt = now

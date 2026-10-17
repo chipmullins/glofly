@@ -136,7 +136,8 @@ const PLAYER_JS = String.raw`(function () {
     clearInterval(listenTimer);
     var tries = 0;
     var once = function () {
-      if (heard || tries++ > 40 || !frame || !frame.contentWindow) return clearInterval(listenTimer);
+      // Up to two minutes: YouTube's player can take a while to start on a slow computer.
+      if (heard || tries++ > 480 || !frame || !frame.contentWindow) return clearInterval(listenTimer);
       frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), YT_ORIGIN);
     };
     once();
@@ -149,11 +150,18 @@ const PLAYER_JS = String.raw`(function () {
       var data;
       try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (err) { return; }
       if (!data || typeof data !== 'object') return;
-      if (!heard) { heard = true; clearInterval(listenTimer); tell({ ev: 'ready' }); }
+      if (!heard) {
+        heard = true;
+        clearInterval(listenTimer);
+        // Like YouTube's own API: ask for state changes and errors as they happen.
+        yt('addEventListener', ['onStateChange']);
+        yt('addEventListener', ['onError']);
+        tell({ ev: 'ready' });
+      }
       var i = data.info;
       if ((data.event === 'infoDelivery' || data.event === 'initialDelivery') && i && typeof i === 'object') {
-        if (typeof i.currentTime === 'number') { info.time = i.currentTime; info.at = Date.now(); }
         if (typeof i.playerState === 'number') setState(i.playerState);
+        if (typeof i.currentTime === 'number') { info.time = i.currentTime; info.at = Date.now(); }
         if (typeof i.duration === 'number' && i.duration > 0) info.duration = i.duration;
         if (typeof i.muted === 'boolean') info.muted = i.muted;
         if (i.videoData && typeof i.videoData === 'object') {
