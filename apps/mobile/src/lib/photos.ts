@@ -71,47 +71,63 @@ async function squarePhoto(source: 'library' | 'camera', options: ImagePicker.Im
   return { uri: saved.uri, type: 'image/jpeg' }
 }
 
-/** Photos to send (or null if they cancelled). */
-export async function pickChatPhotos(source: 'library' | 'camera', limit: number): Promise<Picked[] | 'denied' | null> {
-  await afterOverlaysClose()
-  try {
-    return await chatPhotos(source, limit)
-  } catch (e) {
-    return pickFailed(e)
-  }
-}
-
-async function chatPhotos(source: 'library' | 'camera', limit: number): Promise<Picked[] | 'denied' | null> {
-  let result: ImagePicker.ImagePickerResult
-  if (source === 'camera') {
-    const perm = await ImagePicker.requestCameraPermissionsAsync()
-    if (!perm.granted) return 'denied'
-    result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 }) // a fresh camera photo: one quick encode
-  } else {
-    result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: limit > 1,
-      selectionLimit: limit,
-      quality: QUALITY,
-      orderedSelection: true,
-      ...iosCompatible,
-    })
-  }
-  if (result.canceled) return null
-  return result.assets.map((a, i) => ({
-    uri: a.uri,
-    type: a.mimeType ?? 'image/jpeg',
-    name: photoName(a.fileName, a.mimeType, i),
-    size: a.fileSize ?? null,
-    width: a.width ?? null,
-    height: a.height ?? null,
-  }))
-}
-
 /** The photo's name, with .jpg when iOS turned a HEIC photo into a JPEG for us. */
 function photoName(fileName: string | null | undefined, mimeType: string | undefined, i: number): string {
   const type = mimeType ?? 'image/jpeg'
   if (!fileName) return `Photo ${i + 1}.${type === 'image/jpeg' ? 'jpg' : (type.split('/')[1] ?? 'jpg')}`
   if (type === 'image/jpeg' && /\.(heic|heif)$/i.test(fileName)) return fileName.replace(/\.(heic|heif)$/i, '.jpg')
   return fileName
+}
+
+/**
+ * Photos and videos to send (0.5.0). iPhone videos are turned into H.264 MP4 at up to 720p by
+ * iOS itself while picking (plays everywhere, and a minute is about 30 MB); Android hands over
+ * what it has (usually MP4). Videos up to 3 minutes.
+ */
+export async function pickChatMedia(source: 'library' | 'camera', limit: number): Promise<(Picked & { video: boolean })[] | 'denied' | null> {
+  await afterOverlaysClose()
+  try {
+    const video: ImagePicker.ImagePickerOptions = {
+      videoMaxDuration: 180,
+      ...(IOS ? { videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720, videoQuality: ImagePicker.UIImagePickerControllerQualityType.High } : {}),
+    }
+    let result: ImagePicker.ImagePickerResult
+    if (source === 'camera') {
+      const perm = await ImagePicker.requestCameraPermissionsAsync()
+      if (!perm.granted) return 'denied'
+      result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.9, ...video })
+    } else {
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsMultipleSelection: limit > 1,
+        selectionLimit: limit,
+        quality: QUALITY,
+        orderedSelection: true,
+        ...iosCompatible,
+        ...video,
+      })
+    }
+    if (result.canceled) return null
+    return result.assets.map((a, i) => {
+      const isVideo = a.type === 'video'
+      return {
+        uri: a.uri,
+        type: a.mimeType ?? (isVideo ? 'video/mp4' : 'image/jpeg'),
+        name: isVideo ? videoName(a.fileName, a.mimeType, i) : photoName(a.fileName, a.mimeType, i),
+        size: a.fileSize ?? null,
+        width: a.width ?? null,
+        height: a.height ?? null,
+        video: isVideo,
+      }
+    })
+  } catch (e) {
+    return pickFailed(e)
+  }
+}
+
+/** A video's name, ending in .mp4 when it is one (iOS hands over "IMG_1234.MOV" turned into MP4). */
+function videoName(fileName: string | null | undefined, mimeType: string | undefined, i: number): string {
+  const ext = mimeType === 'video/quicktime' ? 'mov' : mimeType === 'video/webm' ? 'webm' : 'mp4'
+  const base = (fileName ?? `Video ${i + 1}`).replace(/\.[^.]+$/, '')
+  return `${base}.${ext}`
 }

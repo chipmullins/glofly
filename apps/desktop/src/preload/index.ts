@@ -3,6 +3,9 @@ import type {
   AccentChoice,
   AppSettingsChanges,
   Attachment,
+  ChatGameKind,
+  ChatGameMove,
+  FireflyEmoji,
   GloflyApi,
   GameState,
   GloflyEvent,
@@ -14,6 +17,7 @@ import type {
   ProfileChanges,
   RegisterRequest,
   ReportRequest,
+  SendOptions,
   ShowNotification,
   VoiceInfo,
   WatchControl,
@@ -116,8 +120,21 @@ const glofly: GloflyApi = {
       ipcRenderer.invoke('conversations:messages', conversationId, beforeMessageId),
     search: (query: string, conversationId?: string, beforeMessageId?: string) =>
       ipcRenderer.invoke('conversations:search', query, conversationId, beforeMessageId),
-    send: (conversationId: string, body: string, replyToId?: string, attachmentIds?: string[]) =>
-      ipcRenderer.invoke('conversations:send', conversationId, body, replyToId, attachmentIds),
+    send: (
+      conversationId: string,
+      body: string,
+      replyToId?: string,
+      attachmentIds?: string[],
+      options?: SendOptions
+    ) =>
+      ipcRenderer.invoke(
+        'conversations:send',
+        conversationId,
+        body,
+        replyToId,
+        attachmentIds,
+        options
+      ),
     upload: (conversationId: string, data: ArrayBuffer, name: string, voice?: VoiceInfo) =>
       ipcRenderer.invoke('conversations:upload', conversationId, data, name, voice),
     removeUpload: (conversationId: string, attachmentId: string) =>
@@ -138,6 +155,25 @@ const glofly: GloflyApi = {
     close: (conversationId: string, closed: boolean) =>
       ipcRenderer.invoke('conversations:close', conversationId, closed),
     typing: (conversationId: string) => ipcRenderer.send('conversations:typing', conversationId)
+  },
+  chat: {
+    gifs: (query: string, offset?: number) => ipcRenderer.invoke('chat:gifs', query, offset),
+    sendGif: (conversationId: string, gifId: string, replyToId?: string) =>
+      ipcRenderer.invoke('chat:send-gif', conversationId, gifId, replyToId),
+    removePreview: (conversationId: string, messageId: string) =>
+      ipcRenderer.invoke('chat:remove-preview', conversationId, messageId),
+    createPoll: (conversationId: string, question: string, options: string[], multi: boolean) =>
+      ipcRenderer.invoke('chat:create-poll', conversationId, question, options, multi),
+    vote: (conversationId: string, messageId: string, options: number[]) =>
+      ipcRenderer.invoke('chat:vote', conversationId, messageId, options),
+    closePoll: (conversationId: string, messageId: string) =>
+      ipcRenderer.invoke('chat:close-poll', conversationId, messageId),
+    startGame: (conversationId: string, kind: ChatGameKind) =>
+      ipcRenderer.invoke('chat:start-game', conversationId, kind),
+    move: (conversationId: string, messageId: string, move: ChatGameMove) =>
+      ipcRenderer.invoke('chat:move', conversationId, messageId, move),
+    fireflies: (conversationId: string, emoji: FireflyEmoji) =>
+      ipcRenderer.invoke('chat:fireflies', conversationId, emoji)
   },
   files: {
     save: (conversationId: string, attachment: Attachment) =>

@@ -1,3 +1,4 @@
+import { shortBody } from '@glofly/shared/gifs'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ApiResult,
@@ -592,7 +593,7 @@ export default function MainScreen({
     const name = sender?.displayName ?? 'Someone'
     const count = (unseen.current.get(m.conversationId) ?? 0) + 1
     unseen.current.set(m.conversationId, count)
-    const text = (m.body || attachmentSummary(m.attachments)).replace(/\s+/g, ' ').trim()
+    const text = (shortBody(m.body) || attachmentSummary(m.attachments)).replace(/\s+/g, ' ').trim()
     const more = count > 1 ? ` · +${count - 1} more` : ''
     void notify(
       {
@@ -1475,7 +1476,7 @@ export default function MainScreen({
                   message: {
                     id: m.id,
                     conversationId: m.conversationId,
-                    preview: (m.body || attachmentSummary(m.attachments)).slice(0, 300)
+                    preview: (shortBody(m.body) || attachmentSummary(m.attachments)).slice(0, 300)
                   }
                 })
               }}

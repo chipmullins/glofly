@@ -340,6 +340,20 @@ const strokes: Record<string, (fill: string) => React.ReactNode> = {
       <Path d="M7 10v4M5 12h4M15 11h.01M18 13h.01" />
     </>
   ),
+  // 0.5.0 chat extras
+  gif: () => (
+    <>
+      <Rect x="2.5" y="5" width="19" height="14" rx="3.5" />
+      <Path d="M9.5 10.2a2 2 0 1 0 0 3.6v-1.6H8.6M12.5 10v4M15 14v-4h2.6M15 12h2" />
+    </>
+  ),
+  poll: () => <Path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
+  lantern: () => (
+    <>
+      <Path d="M9 3h6M12 3v2M8 7h8l1 3v5l-1 3H8l-1-3v-5zM9 21h6M12 18v3" />
+      <Path d="M12 10.5c1 .9 1.2 1.8.6 2.7-.4.5-1 .6-1.4.2-.5-.5-.3-1.4.8-2.9z" />
+    </>
+  ),
 }
 
 export type IconName = keyof typeof strokes

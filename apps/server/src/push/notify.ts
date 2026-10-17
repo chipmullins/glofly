@@ -1,6 +1,6 @@
 import { nicknamesFor } from "../profile/nicknames";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { attachmentSummary, listNames, type Attachment } from "@glofly/shared";
+import { attachmentSummary, listNames, shortBody, type Attachment } from "@glofly/shared";
 import { db } from "../db";
 import { conversationMembers, pushDevices, users } from "../db/schema";
 import { blockedEitherWay } from "../friends/rules";
@@ -87,7 +87,7 @@ export async function notifyMessage(
   if (!sender) return;
   const live = await liveSessions([...new Set(devices.map((d) => d.userId))]);
 
-  const text = (message.body || attachmentSummary(message.attachments)).slice(0, PREVIEW_MAX);
+  const text = (shortBody(message.body) || attachmentSummary(message.attachments)).slice(0, PREVIEW_MAX);
   const now = Date.now();
   const out: { device: Device; data: PushData }[] = [];
   const blocked = new Map<string, boolean>();

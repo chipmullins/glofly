@@ -9,6 +9,7 @@ import type {
 } from '../../../desktop/src/preload/api-types'
 import { upgradeEvents } from '@glofly/shared/events'
 import { cleanWatchReaction, cleanWatchUpdate } from '@glofly/shared/watch'
+import { cleanFireflies } from '@glofly/shared/types'
 import { API_URL, VERSION } from './config'
 import { notePaused, noteUpdateRequired } from './appStatus'
 import { emit } from './events'
@@ -132,6 +133,11 @@ export function connectRealtime(onUnauthorized: () => void): void {
   socket.on('watch:reaction', (p) => {
     const reaction = cleanWatchReaction(p)
     if (reaction) forward({ type: 'watch:reaction', ...reaction })
+  })
+  // 0.5.0: a swarm of fireflies across a chat.
+  socket.on('chat:fireflies', (p) => {
+    const swarm = cleanFireflies(p)
+    if (swarm) forward({ type: 'chat:fireflies', ...swarm })
   })
   socket.on('friends:changed', () => forward({ type: 'friends:changed' }))
   socket.on('conversations:changed', () => forward({ type: 'conversations:changed' }))

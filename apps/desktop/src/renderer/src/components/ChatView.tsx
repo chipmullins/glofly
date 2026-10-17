@@ -1,7 +1,11 @@
+import { shortBody } from '@glofly/shared/gifs'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   Attachment,
+  ChatGameKind,
   ConversationSummary,
+  FireflyEmoji,
+  GifInfo,
   Message,
   MuteDuration,
   Presence,
@@ -16,7 +20,7 @@ import { clockTime, continuesGroup, dayLabel, isSameDay } from '../lib/time'
 import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
 import { MessageAttachments, PhotoViewer, UploadTray, type Upload } from './Attachments'
-import { attachmentSummary } from '../lib/attachments'
+import { attachmentSummary, looksLikeVideo } from '../lib/attachments'
 import {
   CallLineIcon,
   FileIcon,
@@ -35,6 +39,16 @@ import { PinIcon } from './ChatList'
 import EmojiPicker from './EmojiPicker'
 import EmojiText from './EmojiText'
 import './ChatView.css'
+import {
+  ChatFireflies,
+  GameIcon,
+  GameMenu,
+  GifIcon,
+  GifPicker,
+  LanternIcon,
+  NewPollDialog,
+  PollIcon
+} from './ChatExtras'
 import { isShortcutKey, shortcutLabel } from '../lib/platform'
 import { useVoiceRecorder, voiceTime, VOICE_MAX_MS, type Recorded } from '../lib/voice'
 import { MicIcon, WatchIcon } from './icons'
@@ -79,6 +93,8 @@ type Pending = {
   failed: boolean
   replyTo: ReplyPreview | null
   attachments: Attachment[]
+  /** 0.5.0: fades once everyone else has read it */
+  lantern: boolean
 }
 
 const TYPING_SEND_EVERY_MS = 3000 // how often we tell the other person we're typing
@@ -86,6 +102,7 @@ const TYPING_SHOW_FOR_MS = 4500 // how long "is typing…" stays after their las
 const MESSAGE_MAX = 4000
 const FILES_PER_MESSAGE = 10
 const FILE_MAX_BYTES = 25 * 1024 * 1024
+const VIDEO_MAX_BYTES = 64 * 1024 * 1024
 
 function SendIcon(): React.JSX.Element {
   return (
@@ -137,7 +154,7 @@ const preview = (m: Message): ReplyPreview => ({
 
 /** Short text for a message: its words, or "Photo" / the file name if it has none. */
 const textOf = (m: Pick<Message, 'body' | 'attachments'>): string =>
-  m.body || attachmentSummary(m.attachments)
+  shortBody(m.body) || attachmentSummary(m.attachments)
 
 function TrashIcon(): React.JSX.Element {
   return (
@@ -192,6 +209,15 @@ function AttachIcon(): React.JSX.Element {
       <path d="M12 5v14M5 12h14" />
     </svg>
   )
+}
+
+/** The + menu opens above its button, lined up with its left edge. */
+function plusMenuPlace(anchor: HTMLElement): React.CSSProperties {
+  const rect = anchor.getBoundingClientRect()
+  return {
+    left: Math.max(8, Math.min(rect.left, window.innerWidth - 258)),
+    bottom: window.innerHeight - rect.top + 8
+  }
 }
 
 export default function ChatView({
@@ -255,6 +281,16 @@ export default function ChatView({
   const cursorAfterInsert = useRef<number | null>(null)
   const dragDepth = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // 0.5.0: the + menu, GIFs, polls, games and lantern messages.
+  const [plusAnchor, setPlusAnchor] = useState<HTMLElement | null>(null)
+  const [gameAnchor, setGameAnchor] = useState<HTMLElement | null>(null)
+  const [gifAnchor, setGifAnchor] = useState<HTMLElement | null>(null)
+  const [pollOpen, setPollOpen] = useState(false)
+  const [lantern, setLantern] = useState(false)
+  const plusRef = useRef<HTMLButtonElement>(null)
+  const plusMenuRef = useRef<HTMLDivElement>(null)
+  const closeGifs = useCallback(() => setGifAnchor(null), [])
+  const closeGames = useCallback(() => setGameAnchor(null), [])
   const uploadsRef = useRef<Upload[]>([])
   const chatOpen = useRef(true)
 
@@ -276,6 +312,7 @@ export default function ChatView({
   )
   // Groups: everyone who can be @mentioned (you too, so your own name shows as a mention).
   const mentionPeople = isGroup ? [me, ...conversation.members] : []
+  const memberIds = [me.id, ...conversation.members.map((p) => p.id)]
   const suggestions =
     mention && isGroup ? mentionSuggestions(mention.query, conversation.members) : []
   const nameOf = useCallback(
@@ -434,7 +471,8 @@ export default function ChatView({
       conversation.id,
       item.body,
       item.replyTo?.id,
-      item.attachments.map((a) => a.id)
+      item.attachments.map((a) => a.id),
+      item.lantern ? { lantern: true } : undefined
     )
     if (result.ok) {
       const sent = result.data
@@ -556,7 +594,8 @@ export default function ChatView({
       createdAt: new Date().toISOString(),
       failed: false,
       replyTo,
-      attachments: [up.data]
+      attachments: [up.data],
+      lantern: false
     }
     stickToBottom.current = true
     setPending((p) => [...p, item])
@@ -577,7 +616,8 @@ export default function ChatView({
       createdAt: new Date().toISOString(),
       failed: false,
       replyTo: replyingTo ? preview(replyingTo) : null,
-      attachments: readyFiles
+      attachments: readyFiles,
+      lantern
     }
     stickToBottom.current = true
     setPending((p) => [...p, item])
@@ -585,7 +625,83 @@ export default function ChatView({
     setMention(null)
     setReplyingTo(null)
     setUploads([]) // sent ones go with the message; failed ones are dropped
+    setLantern(false) // one lantern at a time
     void deliver(item)
+  }
+
+  // ---- 0.5.0 extras ----
+
+  async function sendGif(gif: GifInfo): Promise<void> {
+    setGifAnchor(null)
+    const replyTo = replyingTo
+    setReplyingTo(null)
+    stickToBottom.current = true
+    const result = await window.glofly.chat.sendGif(conversation.id, gif.id, replyTo?.id)
+    if (result.ok) {
+      upsert(result.data)
+      setNotice(null)
+    } else handleFailure(result.error, result.message)
+    inputRef.current?.focus()
+  }
+
+  async function createPoll(question: string, options: string[], multi: boolean): Promise<boolean> {
+    stickToBottom.current = true
+    const result = await window.glofly.chat.createPoll(conversation.id, question, options, multi)
+    if (result.ok) upsert(result.data)
+    else handleFailure(result.error, result.message)
+    return result.ok
+  }
+
+  async function startGame(kind: ChatGameKind): Promise<void> {
+    setGameAnchor(null)
+    stickToBottom.current = true
+    const result = await window.glofly.chat.startGame(conversation.id, kind)
+    if (result.ok) upsert(result.data)
+    else handleFailure(result.error, result.message)
+  }
+
+  /** Long-press ❤️ or 🔥: the reaction stays on (never toggled off), and fireflies fly. */
+  async function sendFireflies(m: Message, emoji: FireflyEmoji): Promise<void> {
+    if (!conversation.canMessage) return
+    const mine = m.reactions.find((r) => r.emoji === emoji)?.userIds.includes(me.id) ?? false
+    const [reacted, flew] = await Promise.all([
+      mine ? null : window.glofly.conversations.react(conversation.id, m.id, emoji, true),
+      window.glofly.chat.fireflies(conversation.id, emoji)
+    ])
+    if (reacted?.ok) upsert(reacted.data)
+    else if (reacted) handleFailure(reacted.error, reacted.message)
+    if (!flew.ok) handleFailure(flew.error, flew.message)
+  }
+
+  async function removePreview(m: Message): Promise<void> {
+    const result = await window.glofly.chat.removePreview(conversation.id, m.id)
+    if (result.ok) upsert(result.data)
+    else handleFailure(result.error, result.message)
+  }
+
+  // The + menu closes when clicking elsewhere or pressing Escape.
+  useEffect(() => {
+    if (!plusAnchor) return
+    const onDown = (e: MouseEvent): void => {
+      const t = e.target as Node
+      if (!plusMenuRef.current?.contains(t) && !plusAnchor.contains(t)) setPlusAnchor(null)
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setPlusAnchor(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [plusAnchor])
+
+  // A new chat starts without a lantern lit.
+  const [lanternFor, setLanternFor] = useState(conversation.id)
+  if (lanternFor !== conversation.id) {
+    setLanternFor(conversation.id)
+    setLantern(false)
   }
 
   /** Adds files to the message box and starts uploading them right away. */
@@ -612,8 +728,13 @@ export default function ChatView({
         setUploads((list) => [...list, fail('This file is empty.')])
         continue
       }
-      if (file.size > FILE_MAX_BYTES) {
-        setUploads((list) => [...list, fail('Too big. Files can be up to 25 MB.')])
+      // Videos (0.5.0) can be bigger and play right in the chat.
+      const video = file.type.startsWith('video/') || looksLikeVideo(upload.name)
+      if (file.size > (video ? VIDEO_MAX_BYTES : FILE_MAX_BYTES)) {
+        setUploads((list) => [
+          ...list,
+          fail(video ? 'Too big. Videos can be up to 64 MB.' : 'Too big. Files can be up to 25 MB.')
+        ])
         continue
       }
       setUploads((list) => [...list, upload])
@@ -837,7 +958,7 @@ export default function ChatView({
     if (e.key === 'ArrowUp' && !draft) {
       const last = [...messages]
         .reverse()
-        .find((m) => m.senderId === me.id && !m.deleted && !m.event)
+        .find((m) => m.senderId === me.id && !m.deleted && !m.event && !m.gif && !m.poll && !m.game)
       if (last && conversation.canMessage) {
         e.preventDefault()
         setEditingId(last.id)
@@ -950,7 +1071,8 @@ export default function ChatView({
         replyTo: p.replyTo,
         reactions: [],
         attachments: p.attachments,
-        event: null
+        event: null,
+        lantern: p.lantern
       },
       pending: { failed: p.failed }
     }))
@@ -1381,6 +1503,13 @@ export default function ChatView({
                 people={mentionPeople}
                 onMentionClick={(u) => onViewProfile(u)}
                 onReport={onReport && !item.pending ? () => onReport(m) : undefined}
+                memberIds={memberIds}
+                onUpdated={upsert}
+                onFailure={handleFailure}
+                onFireflies={
+                  conversation.canMessage ? (emoji) => void sendFireflies(m, emoji) : undefined
+                }
+                onRemovePreview={() => void removePreview(m)}
                 attachments={
                   m.attachments.length > 0 ? (
                     <MessageAttachments
@@ -1428,7 +1557,31 @@ export default function ChatView({
         )}
 
         {conversation.canMessage ? (
-          <div className={replyingTo ? 'composer composer--replying' : 'composer'}>
+          <div
+            className={[
+              'composer',
+              replyingTo && 'composer--replying',
+              lantern && 'composer--lantern'
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {lantern && (
+              <div className="lantern-bar">
+                <LanternIcon size={18} />
+                <span>
+                  <strong>Lantern message</strong> · fades away once everyone has read it
+                </span>
+                <button
+                  type="button"
+                  aria-label="Turn off lantern"
+                  title="Turn off lantern"
+                  onClick={() => setLantern(false)}
+                >
+                  ×
+                </button>
+              </div>
+            )}
             {uploads.length > 0 && (
               <UploadTray
                 conversationId={conversation.id}
@@ -1523,11 +1676,17 @@ export default function ChatView({
               ) : (
                 <>
                   <button
+                    ref={plusRef}
                     type="button"
-                    className="attach-button"
-                    aria-label="Attach a file"
-                    title="Attach photos or files"
-                    onClick={() => fileInputRef.current?.click()}
+                    className={plusAnchor ? 'attach-button attach-button--open' : 'attach-button'}
+                    aria-label="Add photos, files, a poll or a game"
+                    aria-haspopup="menu"
+                    aria-expanded={!!plusAnchor}
+                    title="Photos, videos, files and more"
+                    onClick={(e) => {
+                      const button = e.currentTarget
+                      setPlusAnchor((a) => (a ? null : button))
+                    }}
                   >
                     <AttachIcon />
                   </button>
@@ -1564,6 +1723,17 @@ export default function ChatView({
                         : undefined
                     }
                   />
+                  <button
+                    type="button"
+                    className={gifAnchor ? 'gif-button gif-button--open' : 'gif-button'}
+                    aria-label="GIF"
+                    aria-expanded={!!gifAnchor}
+                    aria-haspopup="dialog"
+                    title="Send a GIF"
+                    onClick={(e) => (gifAnchor ? closeGifs() : setGifAnchor(e.currentTarget))}
+                  >
+                    <GifIcon />
+                  </button>
                   <button
                     type="button"
                     className={emojiAnchor ? 'emoji-button emoji-button--open' : 'emoji-button'}
@@ -1642,9 +1812,87 @@ export default function ChatView({
           <strong>
             Drop to send to <EmojiText text={title} />
           </strong>
-          <span>Photos and files up to 25 MB</span>
+          <span>Photos, videos and files (files up to 25 MB, videos up to 64 MB)</span>
         </div>
       )}
+
+      <ChatFireflies conversationId={conversation.id} nameOf={nameOf} meId={me.id} />
+
+      {plusAnchor && conversation.canMessage && (
+        <div
+          ref={plusMenuRef}
+          role="menu"
+          className="menu plus-menu"
+          style={plusMenuPlace(plusAnchor)}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              setPlusAnchor(null)
+              fileInputRef.current?.click()
+            }}
+          >
+            <FileIcon size={18} />
+            Photos, videos or files
+          </button>
+          {isGroup && (
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                setPlusAnchor(null)
+                setPollOpen(true)
+              }}
+            >
+              <PollIcon />
+              Poll
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              setPlusAnchor(null)
+              setGameAnchor(plusRef.current)
+            }}
+          >
+            <GameIcon />
+            Play a game
+          </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={lantern}
+            className={lantern ? 'menu-item menu-item--on' : 'menu-item'}
+            onClick={() => {
+              setPlusAnchor(null)
+              setLantern((on) => !on)
+              inputRef.current?.focus()
+            }}
+          >
+            <LanternIcon />
+            <span className="menu-item-text">
+              <span>Lantern message</span>
+              <span className="menu-item-sub">Fades away once it’s read</span>
+            </span>
+            {lantern && <span className="plus-menu-check">✓</span>}
+          </button>
+        </div>
+      )}
+
+      {gameAnchor && conversation.canMessage && (
+        <GameMenu anchor={gameAnchor} onPick={(k) => void startGame(k)} onClose={closeGames} />
+      )}
+
+      {gifAnchor && conversation.canMessage && (
+        <GifPicker anchor={gifAnchor} onPick={(g) => void sendGif(g)} onClose={closeGifs} />
+      )}
+
+      {pollOpen && <NewPollDialog onCreate={createPoll} onClose={() => setPollOpen(false)} />}
 
       {emojiAnchor && conversation.canMessage && (
         <EmojiPicker

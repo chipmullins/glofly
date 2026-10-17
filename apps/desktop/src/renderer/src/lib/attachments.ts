@@ -39,3 +39,21 @@ export const photoUrl = (
   server
     ? `${server}/conversations/${conversationId}/attachments/${attachmentId}/${variant}`
     : `glofly-media://attachments/${conversationId}/${attachmentId}/${variant}`
+
+/** A video's picture, shown in the chat until it's played (0.5.0). */
+export const posterUrl = (conversationId: string, attachmentId: string): string =>
+  server
+    ? `${server}/conversations/${conversationId}/attachments/${attachmentId}/poster`
+    : `glofly-media://attachments/${conversationId}/${attachmentId}/poster`
+
+/** Where a video plays from (streamed as it plays). */
+export const videoUrl = (conversationId: string, attachmentId: string): string =>
+  server
+    ? `${server}/conversations/${conversationId}/attachments/${attachmentId}/video`
+    : `glofly-media://attachments/${conversationId}/${attachmentId}/video`
+
+/** A link preview's picture (saved by the server, 0.5.0). */
+export const previewImageUrl = (conversationId: string, messageId: string): string =>
+  server
+    ? `${server}/conversations/${conversationId}/messages/${messageId}/preview-image`
+    : `glofly-media://previews/${conversationId}/${messageId}`

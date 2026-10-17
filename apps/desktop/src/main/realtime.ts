@@ -11,6 +11,7 @@ import type {
 } from '../preload/api-types'
 import { notePaused, noteUpdateRequired } from './app-status'
 import { cleanWatchReaction, cleanWatchUpdate } from '@glofly/shared/watch'
+import { cleanFireflies } from '@glofly/shared/types'
 
 // The live connection to the server lives here in the main process, like the
 // session token. Events are passed on to the window as plain data.
@@ -168,6 +169,11 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
   socket.on('watch:reaction', (p) => {
     const reaction = cleanWatchReaction(p)
     if (reaction) forward({ type: 'watch:reaction', ...reaction })
+  })
+  // 0.5.0: a swarm of fireflies across a chat.
+  socket.on('chat:fireflies', (p) => {
+    const swarm = cleanFireflies(p)
+    if (swarm) forward({ type: 'chat:fireflies', ...swarm })
   })
   // 0.3.0: a friend you asked about came online / someone joined from your invite.
   socket.on('friend:online', (p) => {

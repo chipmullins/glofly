@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { db } from "../db";
-import { attachments, type VoiceInfo } from "../db/schema";
+import { attachments, type VideoInfo, type VoiceInfo } from "../db/schema";
 import { storage } from "../storage";
 
 // Photos and files shared in chats.
@@ -11,7 +11,7 @@ import { storage } from "../storage";
 // full-size version), which drops hidden data like the GPS location phones add.
 // Everything else is stored exactly as sent and only ever offered as a download.
 
-export { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE } from "@glofly/shared";
+export { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, VIDEO_MAX_BYTES } from "@glofly/shared";
 /** Uploads waiting to be sent, per person. Stops someone filling the server with unsent files. */
 export const UNSENT_PER_PERSON = 20;
 const UNSENT_KEEP_MS = 60 * 60 * 1000; // unsent uploads are removed after an hour
@@ -20,7 +20,7 @@ const FULL_SIZE = 2560; // longest side of the full-size photo
 const PREVIEW_SIZE = 720; // longest side of the preview shown in the chat
 
 export type AttachmentKind = "image" | "file";
-export type Variant = "preview" | "full" | "file";
+export type Variant = "preview" | "full" | "file" | "poster";
 
 export type AttachmentInfo = {
   id: string;
@@ -31,6 +31,8 @@ export type AttachmentInfo = {
   height: number | null;
   /** Voice messages only */
   voice: VoiceInfo | null;
+  /** Videos only (0.5.0): length and size (the type stays on the server) */
+  video: Omit<VideoInfo, "mime"> | null;
 };
 
 // Voice messages: Opus audio recorded in Glofly, up to 5 minutes (about 1–2 MB).
@@ -51,7 +53,10 @@ export function voiceFormat(data: Buffer): "webm" | "ogg" | "m4a" | null {
 export function keysFor(a: { id: string; conversationId: string; kind: AttachmentKind }): string[] {
   const dir = `attachments/${a.conversationId}/${a.id}`;
   // voice.m4a: a voice message turned into AAC for iPhones (only exists once one asked for it).
-  return a.kind === "image" ? [`${dir}/preview.webp`, `${dir}/full.webp`] : [`${dir}/file.bin`, `${dir}/voice.m4a`];
+  // poster.webp: a video's picture (0.5.0).
+  return a.kind === "image"
+    ? [`${dir}/preview.webp`, `${dir}/full.webp`]
+    : [`${dir}/file.bin`, `${dir}/voice.m4a`, `${dir}/poster.webp`];
 }
 
 export function keyFor(
@@ -61,6 +66,7 @@ export function keyFor(
   const dir = `attachments/${a.conversationId}/${a.id}`;
   if (a.kind === "image" && (variant === "preview" || variant === "full")) return `${dir}/${variant}.webp`;
   if (a.kind === "file" && variant === "file") return `${dir}/file.bin`;
+  if (a.kind === "file" && variant === "poster") return `${dir}/poster.webp`;
   return null;
 }
 
@@ -189,7 +195,7 @@ type Processed =
       width: number;
       height: number;
     }
-  | { kind: "file"; data: Buffer };
+  | { kind: "file"; data: Buffer; video?: { info: VideoInfo; poster: Buffer } };
 
 const IMAGE_FORMATS = ["jpeg", "png", "webp", "gif", "heif", "avif"];
 
@@ -247,7 +253,10 @@ export async function storeUpload(
     await storage.put(keyFor(base, "full")!, processed.full, "image/webp");
   } else {
     await storage.put(keyFor(base, "file")!, processed.data, "application/octet-stream");
+    if (processed.video) await storage.put(keyFor(base, "poster")!, processed.video.poster, "image/webp");
   }
+  const video = processed.kind === "file" && processed.video ? processed.video.info : null;
+  const shownVideo = video ? { durationMs: video.durationMs, width: video.width, height: video.height } : null;
   try {
     await db.insert(attachments).values({
       id,
@@ -259,6 +268,7 @@ export async function storeUpload(
       width: processed.kind === "image" ? processed.width : null,
       height: processed.kind === "image" ? processed.height : null,
       voice: processed.kind === "file" ? voice : null,
+      video,
     });
   } catch (err) {
     await removeFiles([base]);
@@ -272,6 +282,7 @@ export async function storeUpload(
     width: processed.kind === "image" ? processed.width : null,
     height: processed.kind === "image" ? processed.height : null,
     voice: processed.kind === "file" ? voice : null,
+    video: shownVideo,
   };
 }
 
@@ -299,14 +310,15 @@ export async function attachmentsOf(messageIds: string[]): Promise<Map<string, A
       width: attachments.width,
       height: attachments.height,
       voice: attachments.voice,
+      video: attachments.video,
     })
     .from(attachments)
     .where(inArray(attachments.messageId, messageIds))
     .orderBy(asc(attachments.position));
-  for (const { messageId, ...info } of rows) {
+  for (const { messageId, video, ...info } of rows) {
     if (!messageId) continue;
     const list = map.get(messageId) ?? [];
-    list.push(info);
+    list.push({ ...info, video: video ? { durationMs: video.durationMs, width: video.width, height: video.height } : null });
     map.set(messageId, list);
   }
   return map;

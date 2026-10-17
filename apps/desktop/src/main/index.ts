@@ -50,6 +50,7 @@ import {
   sendMessage,
   uploadAttachment
 } from './messages'
+import * as extras from './chatExtras'
 import { saveAttachment, showInFolder } from './files'
 import {
   clearAllNotifications,
@@ -80,6 +81,8 @@ import {
   watchStop
 } from './calls'
 import { isWatchReaction, isYouTubeId } from '@glofly/shared/watch'
+import { looksLikeVideo } from '@glofly/shared/attachments'
+import { VIDEO_MAX_BYTES } from '@glofly/shared/rules'
 import {
   cancelEmailChange,
   changeEmail,
@@ -198,7 +201,14 @@ protocol.registerSchemesAsPrivileged([
   // corsEnabled: the window can draw a profile photo onto a canvas (notification pictures).
   {
     scheme: MEDIA_SCHEME,
-    privileges: { standard: true, secure: true, corsEnabled: true, supportFetchAPI: true }
+    // stream: videos (0.5.0) play while they load, and can be skipped through (Range requests).
+    privileges: {
+      standard: true,
+      secure: true,
+      corsEnabled: true,
+      supportFetchAPI: true,
+      stream: true
+    }
   }
 ])
 
@@ -651,14 +661,54 @@ function registerIpcHandlers(): void {
     Array.isArray(v) && v.length <= 10 && v.every(isUserId)
   ipcMain.handle(
     'conversations:send',
-    (event, id: unknown, body: unknown, replyTo: unknown, attachmentIds: unknown) =>
+    (
+      event,
+      id: unknown,
+      body: unknown,
+      replyTo: unknown,
+      attachmentIds: unknown,
+      options: unknown
+    ) =>
       fromApp(event) &&
       isUserId(id) &&
       isMessage(body) &&
       (replyTo == null || isUserId(replyTo)) &&
       (attachmentIds == null || isAttachmentIds(attachmentIds))
-        ? sendMessage(id, body, replyTo ?? undefined, attachmentIds ?? undefined)
+        ? sendMessage(id, body, replyTo ?? undefined, attachmentIds ?? undefined, {
+            lantern: (options as { lantern?: unknown } | null)?.lantern === true
+          })
         : invalid
+  )
+
+  // 0.5.0 chat extras (each checks its own values in chatExtras.ts).
+  ipcMain.handle('chat:gifs', (event, q: unknown, offset: unknown) =>
+    fromApp(event) ? extras.gifs(q, offset) : invalid
+  )
+  ipcMain.handle('chat:send-gif', (event, id: unknown, gif: unknown, replyTo: unknown) =>
+    fromApp(event) ? extras.sendGif(id, gif, replyTo) : invalid
+  )
+  ipcMain.handle('chat:remove-preview', (event, id: unknown, mid: unknown) =>
+    fromApp(event) ? extras.removePreview(id, mid) : invalid
+  )
+  ipcMain.handle(
+    'chat:create-poll',
+    (event, id: unknown, question: unknown, options: unknown, multi: unknown) =>
+      fromApp(event) ? extras.createPoll(id, question, options, multi) : invalid
+  )
+  ipcMain.handle('chat:vote', (event, id: unknown, mid: unknown, options: unknown) =>
+    fromApp(event) ? extras.vote(id, mid, options) : invalid
+  )
+  ipcMain.handle('chat:close-poll', (event, id: unknown, mid: unknown) =>
+    fromApp(event) ? extras.closePoll(id, mid) : invalid
+  )
+  ipcMain.handle('chat:start-game', (event, id: unknown, kind: unknown) =>
+    fromApp(event) ? extras.startGame(id, kind) : invalid
+  )
+  ipcMain.handle('chat:move', (event, id: unknown, mid: unknown, move: unknown) =>
+    fromApp(event) ? extras.move(id, mid, move) : invalid
+  )
+  ipcMain.handle('chat:fireflies', (event, id: unknown, emoji: unknown) =>
+    fromApp(event) ? extras.fireflies(id, emoji) : invalid
   )
 
   // Photos and files in chats.
@@ -695,8 +745,15 @@ function registerIpcHandlers(): void {
       }
       if (data.byteLength === 0)
         return { ok: false, error: 'invalid', message: 'That file is empty.' }
-      if (data.byteLength > FILE_MAX_BYTES) {
-        return { ok: false, error: 'invalid', message: 'Files can be up to 25 MB.' }
+      // Videos (0.5.0) may be bigger; the server checks they really are videos.
+      if (data.byteLength > (looksLikeVideo(name) ? VIDEO_MAX_BYTES : FILE_MAX_BYTES)) {
+        return {
+          ok: false,
+          error: 'invalid',
+          message: looksLikeVideo(name)
+            ? 'Videos can be up to 64 MB.'
+            : 'Files can be up to 25 MB (videos up to 64 MB).'
+        }
       }
       if (voice && data.byteLength > VOICE_MAX_BYTES) {
         return { ok: false, error: 'invalid', message: 'Voice messages can be up to 5 minutes.' }

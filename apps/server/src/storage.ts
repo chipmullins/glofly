@@ -14,6 +14,8 @@ export interface Storage {
   put(key: string, data: Buffer, contentType: string): Promise<void>;
   /** Null if there's no such file. */
   get(key: string): Promise<{ stream: Readable; size: number } | null>;
+  /** Bytes start..end (inclusive) of a file, for videos that are played as they load. */
+  getRange(key: string, start: number, end: number): Promise<Readable | null>;
   remove(key: string): Promise<void>;
 }
 
@@ -46,6 +48,16 @@ class LocalDiskStorage implements Storage {
     try {
       const info = await stat(path);
       return { stream: createReadStream(path), size: info.size };
+    } catch {
+      return null;
+    }
+  }
+
+  async getRange(key: string, start: number, end: number): Promise<Readable | null> {
+    const path = this.pathFor(key);
+    try {
+      await stat(path);
+      return createReadStream(path, { start, end });
     } catch {
       return null;
     }
@@ -98,6 +110,19 @@ class S3Storage implements Storage {
       const out = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: checkKey(key) }));
       if (!(out.Body instanceof Readable)) return null;
       return { stream: out.Body, size: out.ContentLength ?? 0 };
+    } catch (err) {
+      const name = (err as { name?: string })?.name;
+      if (name === "NoSuchKey" || name === "NotFound") return null;
+      throw err;
+    }
+  }
+
+  async getRange(key: string, start: number, end: number): Promise<Readable | null> {
+    try {
+      const out = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: checkKey(key), Range: `bytes=${start}-${end}` })
+      );
+      return out.Body instanceof Readable ? out.Body : null;
     } catch (err) {
       const name = (err as { name?: string })?.name;
       if (name === "NoSuchKey" || name === "NotFound") return null;

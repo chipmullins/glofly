@@ -18,10 +18,12 @@ export function fileTypeLabel(name: string): string {
 }
 
 /** What to show for photos/files when there's no text: "Photo", "3 photos", "Report.pdf", "2 files". */
-export function attachmentSummary(list: Pick<Attachment, 'kind' | 'name' | 'voice'>[]): string {
+export function attachmentSummary(list: Pick<Attachment, 'kind' | 'name' | 'voice' | 'video'>[]): string {
   if (!list.length) return ''
   if (list.length === 1 && list[0].voice)
     return `Voice message (${voiceTime(list[0].voice.durationMs)})`
+  const videos = list.filter((a) => a.video).length
+  if (videos === list.length) return videos === 1 ? 'Video' : `${videos} videos`
   const photos = list.filter((a) => a.kind === 'image').length
   if (photos === list.length) return photos === 1 ? 'Photo' : `${photos} photos`
   if (photos === 0) return list.length === 1 ? list[0].name : `${list.length} files`
@@ -34,7 +36,11 @@ export function quoteSummary(a: {
   name: string
   count: number
   voice?: boolean
+  video?: boolean
 }): string {
-  const first = a.voice ? 'Voice message' : a.kind === 'image' ? 'Photo' : a.name
+  const first = a.voice ? 'Voice message' : a.video ? 'Video' : a.kind === 'image' ? 'Photo' : a.name
   return a.count > 1 ? `${first} and ${a.count - 1} more` : first
 }
+
+/** A file name that looks like a video Glofly can play in the chat (MP4, MOV, WebM). */
+export const looksLikeVideo = (name: string): boolean => /\.(mp4|m4v|mov|webm)$/i.test(name)

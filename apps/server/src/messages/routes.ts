@@ -11,13 +11,19 @@ import {
   conversations,
   messageReactions,
   messages,
+  pollVotes,
   users,
   type ChatEvent,
+  type GameInfo,
+  type GifInfo,
+  type LinkPreviewInfo,
+  type PollInfo,
   type VoiceInfo,
 } from "../db/schema";
 import { storage } from "../storage";
 import {
   ATTACHMENT_MAX_BYTES,
+  VIDEO_MAX_BYTES,
   ATTACHMENTS_PER_MESSAGE,
   UNSENT_PER_PERSON,
   VOICE_MAX_BYTES,
@@ -41,6 +47,11 @@ import { emitToUser } from "../realtime";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
 import { voiceAsM4a } from "./voiceM4a";
+import { examineVideo, videoContainer } from "./video";
+import { pollView, votesFor } from "./polls";
+import { gifById } from "./gifs";
+import { addLinkPreview, removePreviewImage } from "./previews";
+import { firstLink } from "./links";
 import { inBackground, notifyMessage, notifyRead } from "../push/notify";
 import {
   GROUP_MAX,
@@ -50,6 +61,9 @@ import {
   MAX_PINNED,
   MAX_REACTIONS_PER_PERSON,
   MESSAGE_MAX,
+  gifFallback,
+  publicGame,
+  type GameState,
 } from "@glofly/shared";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
@@ -91,6 +105,12 @@ const messageFields = {
   deletedAt: messages.deletedAt,
   event: messages.event,
   mentions: messages.mentions,
+  gif: messages.gif,
+  linkPreview: messages.linkPreview,
+  poll: messages.poll,
+  game: messages.game,
+  lantern: messages.lantern,
+  lanternFadeAt: messages.lanternFadeAt,
 };
 export type MessageRow = {
   id: string;
@@ -103,6 +123,12 @@ export type MessageRow = {
   deletedAt: Date | null;
   event: ChatEvent | null;
   mentions: string[];
+  gif: GifInfo | null;
+  linkPreview: LinkPreviewInfo | null;
+  poll: PollInfo | null;
+  game: GameInfo | null;
+  lantern: boolean;
+  lanternFadeAt: Date | null;
 };
 
 const messageBody = z
@@ -154,6 +180,7 @@ async function hydrate(rows: MessageRow[]) {
     .orderBy(messageReactions.createdAt);
 
   const files = await attachmentsOf([...ids, ...replyIds]);
+  const votes = await votesFor(rows.filter((r) => r.poll && !r.deletedAt).map((r) => r.id));
 
   const original = alias(messages, "original");
   const replies = replyIds.length
@@ -204,6 +231,13 @@ async function hydrate(rows: MessageRow[]) {
         : null,
       reactions: grouped,
       attachments: deleted ? [] : (files.get(r.id) ?? []),
+      // 0.5.0 (older apps ignore these and show the body, which carries a text version).
+      gif: deleted ? null : r.gif,
+      linkPreview: deleted ? null : r.linkPreview,
+      poll: deleted || !r.poll ? null : pollView(r.poll, votes.get(r.id) ?? []),
+      game: deleted || !r.game ? null : publicGame(r.game as unknown as GameState),
+      lantern: r.lantern,
+      lanternFadeAt: r.lanternFadeAt?.toISOString() ?? null,
     };
   });
 }
@@ -214,10 +248,13 @@ function legacyEvent(event: ChatEvent | null): { body: string } | null {
   return body === null ? null : { body };
 }
 
-function quoteOf(list: { kind: "image" | "file"; name: string; voice?: unknown }[] | undefined) {
+function quoteOf(list: { kind: "image" | "file"; name: string; voice?: unknown; video?: unknown }[] | undefined) {
   const first = list?.[0];
   // voice: so a reply to a voice message can say "Voice message" (0.2.1+; older apps show the name).
-  return first ? { kind: first.kind, name: first.name, count: list.length, voice: !!first.voice } : null;
+  // video (0.5.0): likewise "Video".
+  return first
+    ? { kind: first.kind, name: first.name, count: list.length, voice: !!first.voice, video: !!first.video }
+    : null;
 }
 
 /** Sends an event to everyone in a conversation. */
@@ -1264,7 +1301,13 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     .optional()
     .safeParse(req.body?.attachmentIds ?? undefined);
   const attachmentIds = files.success ? [...new Set(files.data ?? [])] : [];
-  const body = (attachmentIds.length ? captionBody : messageBody).safeParse(req.body?.body);
+  // 0.5.0: a GIF ({ gif: { id } }: no text; its link goes in the body for older apps), or a
+  // lantern message ({ lantern: true }: fades once everyone else has read it).
+  const gifId = typeof req.body?.gif?.id === "string" ? (req.body.gif.id as string) : null;
+  const lantern = req.body?.lantern === true;
+  const body = gifId
+    ? ({ success: true, data: "" } as const)
+    : (attachmentIds.length ? captionBody : messageBody).safeParse(req.body?.body);
   const replyTo = z.uuid().optional().safeParse(req.body?.replyToId ?? undefined);
   const myId = me(res).id;
 
@@ -1305,15 +1348,34 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     }
   }
 
+  let gif: GifInfo | null = null;
+  if (gifId) {
+    if (attachmentIds.length) {
+      res.status(400).json({ error: "invalid", message: "Send the GIF on its own." });
+      return;
+    }
+    const found = await gifById(gifId, myId);
+    if (found === "unavailable") {
+      res.status(503).json({ error: "gifs_unavailable", message: "GIFs aren't available right now. Try again in a moment." });
+      return;
+    }
+    if (!found) {
+      res.status(400).json({ error: "invalid", message: "That GIF isn't available." });
+      return;
+    }
+    gif = found;
+  }
+  const text = gif ? gifFallback(gif) : body.data;
+
   // Groups: who this @mentions (only people in the group right now).
-  const mentions = chat.kind === "group" ? await mentionsIn(body.data, chat.memberIds, myId) : [];
+  const mentions = chat.kind === "group" && !gif ? await mentionsIn(text, chat.memberIds, myId) : [];
 
   let inserted: MessageRow;
   try {
     inserted = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)
-        .values({ conversationId: id.data, senderId: myId, body: body.data, replyToId, mentions })
+        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, gif, lantern })
         .returning(messageFields);
       const inserted = row;
       // Attach your uploads, in the order given. Each must be yours, for this chat, and unsent.
@@ -1363,11 +1425,50 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   if (chat.partner) await shareReadPosition(id.data, myId, chat.partner, inserted.createdAt);
   res.status(201).json({ message });
   // Phones: a notification for everyone else, and this chat's notification cleared on your others.
-  inBackground(notifyMessage(message, chat));
+  // A lantern message's words stay in the chat (the notification just says there's one).
+  inBackground(notifyMessage(lantern ? { ...message, body: "🏮 Lantern message", attachments: [] } : message, chat));
   inBackground(notifyRead(myId, id.data, res.locals.sessionId));
+  // 0.5.0: the first link gets a preview a moment later (message:updated).
+  if (!gif && !lantern) inBackground(addLinkPreview(inserted.id, id.data, text));
 });
 
 class AttachmentGone extends Error {}
+
+/**
+ * 0.5.0: posts a special message (a poll, a game) the way sending does: the chat moves to the
+ * top, it counts as read for the sender, everyone gets it live, phones get a notification.
+ */
+export async function postSpecial(
+  chat: Access,
+  conversationId: string,
+  myId: string,
+  values: { body: string; poll?: PollInfo; game?: GameInfo },
+  sessionId?: string,
+) {
+  const inserted = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(messages)
+      .values({ conversationId, senderId: myId, body: values.body, poll: values.poll ?? null, game: values.game ?? null })
+      .returning(messageFields);
+    await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));
+    await tx
+      .update(conversationMembers)
+      .set({ lastReadAt: row.createdAt })
+      .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, myId)));
+    return row;
+  });
+  const [message] = await hydrate([inserted]);
+  for (const userId of chat.memberIds) emitToUser(userId, "message:new", { message });
+  if (chat.partner) await shareReadPosition(conversationId, myId, chat.partner, inserted.createdAt);
+  inBackground(notifyMessage(message, chat));
+  if (sessionId) inBackground(notifyRead(myId, conversationId, sessionId));
+  return message;
+}
+
+/** 0.5.0: a message in a chat I'm in (null otherwise). */
+export async function messageIn(conversationId: string, messageId: string) {
+  return findMessage(conversationId, messageId);
+}
 
 /** Shared checks for changing a message: it exists in a chat you're in, and messaging is allowed. */
 async function loadForChange(conversationIdRaw: unknown, messageIdRaw: unknown, myId: string) {
@@ -1402,6 +1503,10 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
     res.status(403).json({ error: "forbidden", message: "You can only edit your own messages." });
     return;
   }
+  if (message.gif || message.poll || message.game) {
+    res.status(400).json({ error: "invalid", message: "This kind of message can't be edited." });
+    return;
+  }
   if (!(await canPost(chat, myId))) {
     res.status(403).json({ error: "forbidden", message: CANT_POST });
     return;
@@ -1422,6 +1527,12 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
       .update(messages)
       .set({ body: body.data, editedAt: new Date(), mentions })
       .where(eq(messages.id, message.id));
+    // The link changed: a new preview (or none).
+    if (firstLink(body.data) !== (message.linkPreview?.url ?? null)) {
+      await db.update(messages).set({ linkPreview: null }).where(eq(messages.id, message.id));
+      await removePreviewImage(message.id);
+      if (!message.lantern) inBackground(addLinkPreview(message.id, conversationId, body.data));
+    }
   }
   res.json({ message: await sendUpdated(message.id, conversationId) });
 });
@@ -1449,9 +1560,10 @@ async function wipeMessage(messageId: string): Promise<void> {
   const removed = await db.transaction(async (tx) => {
     await tx
       .update(messages)
-      .set({ body: "", deletedAt: new Date(), editedAt: null, mentions: [] })
+      .set({ body: "", deletedAt: new Date(), editedAt: null, mentions: [], gif: null, linkPreview: null, poll: null, game: null })
       .where(eq(messages.id, messageId));
     await tx.delete(messageReactions).where(eq(messageReactions.messageId, messageId));
+    await tx.delete(pollVotes).where(eq(pollVotes.messageId, messageId));
     // Photos and files go too, for good.
     return tx
       .delete(attachments)
@@ -1459,6 +1571,7 @@ async function wipeMessage(messageId: string): Promise<void> {
       .returning({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind });
   });
   await removeFiles(removed);
+  await removePreviewImage(messageId);
 }
 
 /**
@@ -1556,7 +1669,8 @@ conversationsRouter.post("/:id/read", async (req, res) => {
 conversationsRouter.post(
   "/:id/attachments",
   uploadLimiter,
-  express.raw({ type: () => true, limit: ATTACHMENT_MAX_BYTES }),
+  // Videos may be bigger than other files (VIDEO_MAX_BYTES); everything else is checked below.
+  express.raw({ type: () => true, limit: VIDEO_MAX_BYTES }),
   async (req, res) => {
     const id = idParam.safeParse(req.params.id);
     const myId = me(res).id;
@@ -1597,6 +1711,19 @@ conversationsRouter.post(
       });
       return;
     }
+    // 0.5.0 videos: MP4 / MOV / WebM that ffmpeg can read, up to 3 minutes, played in the chat.
+    // Anything else bigger than a normal file is refused.
+    const container = voice ? null : videoContainer(data);
+    const looked = container && data.length <= VIDEO_MAX_BYTES ? await examineVideo(data) : null;
+    if (!looked && data.length > ATTACHMENT_MAX_BYTES) {
+      res.status(413).json({
+        error: "too_big",
+        message: container
+          ? "Videos can be up to 3 minutes and 64 MB."
+          : "Too big. Files can be up to 25 MB (videos up to 64 MB).",
+      });
+      return;
+    }
     if ((await unsentCount(myId)) >= UNSENT_PER_PERSON) {
       res.status(429).json({
         error: "too_many_requests",
@@ -1608,7 +1735,11 @@ conversationsRouter.post(
       id.data,
       myId,
       name,
-      voice ? { kind: "file", data } : await processUpload(data),
+      voice
+        ? { kind: "file", data }
+        : looked && container
+          ? { kind: "file", data, video: { info: { ...looked.info, mime: container }, poster: looked.poster } }
+          : await processUpload(data),
       voice,
     );
     res.status(201).json({ attachment });
@@ -1672,10 +1803,56 @@ conversationsRouter.get("/:id/attachments/:attachmentId/m4a", async (req, res) =
   res.end(data);
 });
 
-// GET /conversations/:id/attachments/:attachmentId/:variant — preview | full (photos), file (files).
+// GET /conversations/:id/attachments/:attachmentId/video — a video (0.5.0), played in the chat:
+// its real type, shown inline, and in pieces (Range) so it can start before it has all loaded.
+conversationsRouter.get("/:id/attachments/:attachmentId/video", async (req, res) => {
+  const row = await loadAttachment(req.params.id, req.params.attachmentId, me(res).id);
+  const key = row?.video ? keyFor(row, "file") : null;
+  const file = key ? await storage.get(key) : null;
+  if (!row?.video || !key || !file) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const total = file.size;
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Content-Type", row.video.mime);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(row.name)}`);
+  const range = typeof req.headers.range === "string" ? req.headers.range.match(/^bytes=(\d*)-(\d*)$/) : null;
+  if (!range || (!range[1] && !range[2])) {
+    res.setHeader("Content-Length", String(total));
+    file.stream.pipe(res);
+    return;
+  }
+  file.stream.destroy();
+  let start = range[1] ? Number(range[1]) : Math.max(0, total - Number(range[2]));
+  let end = range[1] && range[2] ? Number(range[2]) : total - 1;
+  end = Math.min(end, total - 1);
+  if (!(start >= 0) || start > end) {
+    res.setHeader("Content-Range", `bytes */${total}`);
+    res.status(416).end();
+    return;
+  }
+  start = Math.floor(start);
+  end = Math.floor(end);
+  const part = await storage.getRange(key, start, end);
+  if (!part) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  res.status(206);
+  res.setHeader("Content-Range", `bytes ${start}-${end}/${total}`);
+  res.setHeader("Content-Length", String(end - start + 1));
+  part.pipe(res);
+});
+
+// GET /conversations/:id/attachments/:attachmentId/:variant — preview | full (photos), file
+// (files), poster (a video's picture, 0.5.0).
 conversationsRouter.get("/:id/attachments/:attachmentId/:variant", async (req, res) => {
   const row = await loadAttachment(req.params.id, req.params.attachmentId, me(res).id);
-  const variant = z.enum(["preview", "full", "file"]).safeParse(req.params.variant);
+  const variant = z.enum(["preview", "full", "file", "poster"]).safeParse(req.params.variant);
   const key = row && variant.success ? keyFor(row, variant.data as Variant) : null;
   const file = key ? await storage.get(key) : null;
   if (!row || !file) {
@@ -1686,7 +1863,7 @@ conversationsRouter.get("/:id/attachments/:attachmentId/:variant", async (req, r
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
   const downloadName = row.kind === "image" ? webpName(row.name) : row.name;
-  if (row.kind === "image") {
+  if (row.kind === "image" || variant.data === "poster") {
     res.setHeader("Content-Type", "image/webp");
     // An attachment never changes, so it can be kept.
     res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
@@ -1697,7 +1874,7 @@ conversationsRouter.get("/:id/attachments/:attachmentId/:variant", async (req, r
   }
   res.setHeader(
     "Content-Disposition",
-    `${row.kind === "image" && variant.data !== "file" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+    `${(row.kind === "image" && variant.data !== "file") || variant.data === "poster" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(variant.data === "poster" ? webpName(row.name) : downloadName)}`,
   );
   file.stream.pipe(res);
 });

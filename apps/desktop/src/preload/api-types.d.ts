@@ -14,6 +14,8 @@ import type {
   Attachment,
   CallJoin,
   ConversationSummary,
+  FireflyEmoji,
+  GifInfo,
   ForgotPasswordResult,
   FriendLists,
   LoginRequest,
@@ -377,7 +379,9 @@ export type GloflyApi = {
       conversationId: string,
       body: string,
       replyToId?: string,
-      attachmentIds?: string[]
+      attachmentIds?: string[],
+      /** 0.5.0: a lantern message (fades once everyone else has read it) */
+      options?: SendOptions
     ) => Promise<ApiResult<Message>>
     /** Uploads a photo or file (up to 25 MB) to send with the next message. */
     upload: (
@@ -412,6 +416,40 @@ export type GloflyApi = {
     /** Closes a chat in the sidebar (history kept; comes back with a new message), or reopens it. */
     close: (conversationId: string, closed: boolean) => Promise<ApiResult<null>>
     typing: (conversationId: string) => void
+  }
+  /** 0.5.0 chat extras: GIFs, link previews, polls, mini games and firefly swarms. */
+  chat: {
+    /** Trending GIFs (empty query) or a search, 24 at a time. */
+    gifs: (query: string, offset?: number) => Promise<ApiResult<GifPage>>
+    sendGif: (
+      conversationId: string,
+      gifId: string,
+      replyToId?: string
+    ) => Promise<ApiResult<Message>>
+    /** Takes the link preview off your own message. */
+    removePreview: (conversationId: string, messageId: string) => Promise<ApiResult<Message>>
+    /** Groups only: 2–6 choices. */
+    createPoll: (
+      conversationId: string,
+      question: string,
+      options: string[],
+      multi: boolean
+    ) => Promise<ApiResult<Message>>
+    /** Your choices (an empty list takes your vote back). */
+    vote: (
+      conversationId: string,
+      messageId: string,
+      options: number[]
+    ) => Promise<ApiResult<Message>>
+    closePoll: (conversationId: string, messageId: string) => Promise<ApiResult<Message>>
+    startGame: (conversationId: string, kind: ChatGameKind) => Promise<ApiResult<Message>>
+    move: (
+      conversationId: string,
+      messageId: string,
+      move: ChatGameMove
+    ) => Promise<ApiResult<Message>>
+    /** A swarm of fireflies across the chat, for everyone in it. */
+    fireflies: (conversationId: string, emoji: FireflyEmoji) => Promise<ApiResult<null>>
   }
   files: {
     /** Asks where to save, then saves it there. Null if the person cancelled. */
@@ -540,3 +578,9 @@ export type GloflyApi = {
     attention: () => void
   }
 }
+
+export type SendOptions = { lantern?: boolean }
+export type GifPage = { gifs: GifInfo[]; next: number | null }
+export type ChatGameKind = 'tictactoe' | 'wordguess' | 'trivia'
+export type ChatGameMove =
+  { square: number } | { word: string } | { question: number; choice: number } | { reveal: true }

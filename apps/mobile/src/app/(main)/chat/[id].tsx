@@ -36,12 +36,16 @@ import { chatOpened } from '@/push'
 import { attachMenu, UploadTray, useUploads } from '@/chat/uploads'
 import { VoiceRecorderBar, RecordButton, useVoice } from '@/chat/voice'
 import { PhotoViewer, type ViewerState } from '@/chat/PhotoViewer'
+import { ChatFireflies, GAMES, GifSheet, LanternBar, PollSheet } from '@/chat/Extras'
 import { ChatAvatar } from '@/ui/Avatar'
 import { BottomSheet, chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { IconButton, Spinner, Text } from '@/ui/kit'
 import { openReport, pickEmoji } from '@/ui/sheets'
 import { useTheme } from '@/ui/theme'
+
+/** A GIF, poll or game: its text is only the plain version for older apps. */
+const special = (m: Message) => !!(m.gif || m.poll || m.game)
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -64,6 +68,15 @@ export default function ChatScreen() {
   /** A message to scroll to once it's in the list (after loading older pages). */
   const [pendingJump, setPendingJump] = useState<string | null>(null)
   const [viewer, setViewer] = useState<ViewerState | null>(null)
+  // 0.5.0: GIFs, polls and lantern messages.
+  const [gifOpen, setGifOpen] = useState(false)
+  const [pollOpen, setPollOpen] = useState(false)
+  const [lantern, setLantern] = useState(false)
+  const [lanternFor, setLanternFor] = useState(id)
+  if (lanternFor !== id) {
+    setLanternFor(id)
+    setLantern(false)
+  }
   const composer = useRef<ComposerHandle>(null)
   const list = useRef<FlatList<RowInfo>>(null)
   const wide = useWide()
@@ -127,6 +140,7 @@ export default function ChatScreen() {
     return out.reverse()
   }, [messages?.list, meId, chat, outbox, isGroup])
 
+  const memberIds = useMemo(() => [meId, ...members.map((p) => p.id)], [meId, members])
   const nameOf = (uid: string) => (uid === meId ? 'You' : (people[uid]?.displayName ?? 'Someone'))
 
   function onSend(text: string) {
@@ -147,9 +161,47 @@ export default function ChatScreen() {
     const ready = uploads.readyAttachments()
     if (uploads.busy) return void inform('Still uploading', 'Wait for your photos and files to finish, then send.')
     if (!text && !ready.length) return
-    sendText(id, text, reply, ready)
+    sendText(id, text, reply, ready, lantern)
     uploads.clear()
     setReply(null)
+    setLantern(false)
+  }
+
+  async function plusMenu() {
+    const pick = await attachMenu(uploads, [
+      { key: 'gif', label: 'GIF', icon: 'gif' },
+      ...(isGroup ? [{ key: 'poll', label: 'Poll', icon: 'poll' }] : []),
+      { key: 'game', label: 'Play a game', icon: 'gamepad' },
+      { key: 'lantern', label: lantern ? 'Lantern message (on)' : 'Lantern message', icon: 'lantern', detail: 'Fades away once it’s read', checked: lantern },
+    ])
+    if (pick === 'gif') setGifOpen(true)
+    if (pick === 'poll') setPollOpen(true)
+    if (pick === 'lantern') setLantern((on) => !on)
+    if (pick === 'game') {
+      const kind = await chooseFrom(
+        GAMES.map((g) => ({ key: g.kind, label: g.label, detail: g.detail, icon: 'gamepad' })),
+        'Play a game',
+      )
+      if (!kind) return
+      const r = await api.startGame(id, kind as api.ChatGameKind)
+      if (r.ok) updateMessage(r.data)
+      else void inform("Couldn't start the game", r.message)
+    }
+  }
+
+  async function sendGif(gifId: string) {
+    const r = await api.sendGif(id, gifId, reply?.id)
+    setReply(null)
+    if (r.ok) updateMessage(r.data)
+    else void inform("Couldn't send the GIF", r.message)
+  }
+
+  /** Long-press ❤️ or 🔥: the reaction goes on (never off) and fireflies fly across the chat. */
+  async function sendFireflies(m: Message, emoji: '❤️' | '🔥') {
+    const already = m.reactions.find((r) => r.emoji === emoji)?.userIds.includes(meId)
+    if (!already) void react(m, emoji)
+    const r = await api.fireflies(id, emoji)
+    if (!r.ok) void inform("Couldn't send fireflies", r.message)
   }
 
   async function react(m: Message, emoji: string) {
@@ -193,6 +245,12 @@ export default function ChatScreen() {
         const r = await api.deleteMessage(id, m.id)
         if (r.ok) updateMessage(r.data)
         else void inform("Couldn't delete it", r.message)
+        return
+      }
+      case 'unpreview': {
+        const r = await api.removePreview(id, m.id)
+        if (r.ok) updateMessage(r.data)
+        else void inform("Couldn't remove it", r.message)
         return
       }
       case 'report':
@@ -297,6 +355,7 @@ export default function ChatScreen() {
         </View>
       </View>
 
+      <View style={{ flex: 1 }}>
       <FlatList
         ref={list}
         data={rows}
@@ -347,9 +406,13 @@ export default function ChatScreen() {
             }}
             onAvatarPress={(uid) => router.push({ pathname: '/profile/[id]', params: { id: uid } })}
             onOpenPhoto={(m, index) => setViewer({ message: m, index })}
+            canAct={canMessage}
+            memberIds={memberIds}
           />
         )}
       />
+      <ChatFireflies conversationId={id} meId={meId} nameOf={nameOf} />
+      </View>
 
       {canMessage ? (
         <Composer
@@ -366,8 +429,13 @@ export default function ChatScreen() {
           }}
           onSend={onSend}
           onTyping={() => sendTyping(id)}
-          onAttach={() => void attachMenu(uploads)}
-          topSlot={<UploadTray uploads={uploads} />}
+          onAttach={() => void plusMenu()}
+          topSlot={
+            <>
+              {lantern ? <LanternBar onOff={() => setLantern(false)} /> : null}
+              <UploadTray uploads={uploads} />
+            </>
+          }
           canSendEmpty={uploads.items.length > 0}
           voice={voice.recording ? <VoiceRecorderBar voice={voice} /> : undefined}
           recordButton={<RecordButton voice={voice} />}
@@ -396,6 +464,17 @@ export default function ChatScreen() {
                       setActionsFor(null)
                       void react(m, e)
                     }}
+                    // Hold ❤️ or 🔥 to send a swarm of fireflies.
+                    onLongPress={
+                      (e === '❤️' || e === '🔥') && canMessage
+                        ? () => {
+                            const m = actionsFor
+                            setActionsFor(null)
+                            void sendFireflies(m, e)
+                          }
+                        : undefined
+                    }
+                    delayLongPress={400}
                     style={{ width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.chipMine : c.surface }}
                   >
                     <Text size={24}>{e}</Text>
@@ -406,11 +485,17 @@ export default function ChatScreen() {
                 <Icon name="emojiAdd" size={22} color={c.ink2} />
               </Pressable>
             </View>
+            {canMessage ? (
+              <Text size={12} tone="faint" style={{ textAlign: 'center', marginTop: -4, marginBottom: 6 }}>
+                Hold ❤️ or 🔥 to send fireflies
+              </Text>
+            ) : null}
             <View accessibilityLabel="Message actions">
               {[
                 { key: 'reply', label: 'Reply', icon: 'reply' as const, show: canMessage },
-                { key: 'copy', label: 'Copy text', icon: 'copy' as const, show: !!actionsFor.body },
-                { key: 'edit', label: 'Edit', icon: 'pencil' as const, show: actionsFor.senderId === meId && !!actionsFor.body && canMessage },
+                { key: 'copy', label: 'Copy text', icon: 'copy' as const, show: !!actionsFor.body && !special(actionsFor) },
+                { key: 'edit', label: 'Edit', icon: 'pencil' as const, show: actionsFor.senderId === meId && !!actionsFor.body && canMessage && !special(actionsFor) },
+                { key: 'unpreview', label: 'Remove link preview', icon: 'link' as const, show: actionsFor.senderId === meId && !!actionsFor.linkPreview && canMessage },
                 { key: 'delete', label: 'Delete', icon: 'trash' as const, show: actionsFor.senderId === meId, danger: true },
                 { key: 'report', label: 'Report message', icon: 'flag' as const, show: actionsFor.senderId !== meId, danger: true },
               ]
@@ -427,6 +512,15 @@ export default function ChatScreen() {
           </View>
         </BottomSheet>
       ) : null}
+      {gifOpen ? (
+        <GifSheet
+          onPick={(g) => {
+            setGifOpen(false)
+            if (g) void sendGif(g.id)
+          }}
+        />
+      ) : null}
+      {pollOpen ? <PollSheet conversationId={id} onDone={() => setPollOpen(false)} /> : null}
       {viewer ? <PhotoViewer state={viewer} onClose={() => setViewer(null)} /> : null}
       {searching ? (
         <SearchPanel

@@ -2,10 +2,10 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
 import * as DocumentPicker from 'expo-document-picker'
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, fileTypeLabel, formatSize, type Attachment } from '@glofly/shared'
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, VIDEO_MAX_BYTES, fileTypeLabel, formatSize, looksLikeVideo, type Attachment } from '@glofly/shared'
 import * as api from '@/api/glofly'
-import { pickChatPhotos } from '@/lib/photos'
-import { afterOverlaysClose, chooseFrom, inform } from '@/ui/dialogs'
+import { pickChatMedia } from '@/lib/photos'
+import { afterOverlaysClose, chooseFrom, inform, type SheetItem } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { useTheme } from '@/ui/theme'
@@ -18,7 +18,7 @@ export type UploadItem = {
   key: string
   uri: string
   name: string
-  kind: 'image' | 'file'
+  kind: 'image' | 'file' | 'video'
   size: number | null
   progress: number
   attachment: Attachment | null
@@ -28,7 +28,7 @@ export type UploadItem = {
 export type Uploads = {
   items: UploadItem[]
   busy: boolean
-  add: (files: { uri: string; name: string; kind: 'image' | 'file'; size: number | null }[]) => void
+  add: (files: { uri: string; name: string; kind: 'image' | 'file' | 'video'; size: number | null }[]) => void
   remove: (key: string) => void
   readyAttachments: () => Attachment[]
   clear: () => void
@@ -62,8 +62,9 @@ export function useUploads(conversationId: string): Uploads {
     if (files.length > room) void inform(`Up to ${ATTACHMENTS_PER_MESSAGE} at a time`, 'Send these first, then add more.')
     const fresh: UploadItem[] = []
     for (const f of files.slice(0, Math.max(0, room))) {
-      if (f.size !== null && f.size > ATTACHMENT_MAX_BYTES) {
-        void inform(`${f.name} is too big`, `Files can be up to ${formatSize(ATTACHMENT_MAX_BYTES)}.`)
+      const limit = f.kind === 'video' ? VIDEO_MAX_BYTES : ATTACHMENT_MAX_BYTES
+      if (f.size !== null && f.size > limit) {
+        void inform(`${f.name} is too big`, f.kind === 'video' ? `Videos can be up to ${formatSize(VIDEO_MAX_BYTES)} (about 3 minutes).` : `Files can be up to ${formatSize(ATTACHMENT_MAX_BYTES)}.`)
         continue
       }
       fresh.push({ key: `u${counter++}`, uri: f.uri, name: f.name, kind: f.kind, size: f.size, progress: 0, attachment: null, error: null })
@@ -94,26 +95,34 @@ export function useUploads(conversationId: string): Uploads {
 }
 
 /** The + button: Photos, Camera or File. */
-export async function attachMenu(uploads: Uploads) {
+/**
+ * The + menu: photos and videos, the camera, files, and (0.5.0) anything else the chat adds
+ * (GIF, poll, game, lantern). Returns the key of an extra item that was picked, for the chat to do.
+ */
+export async function attachMenu(uploads: Uploads, extras: SheetItem[] = []): Promise<string | null> {
   const pick = await chooseFrom(
     [
-      { key: 'photos', label: 'Photos', icon: 'photo' },
+      { key: 'photos', label: 'Photos & videos', icon: 'photo' },
       { key: 'camera', label: 'Camera', icon: 'camera' },
       { key: 'file', label: 'File', icon: 'file' },
+      ...extras,
     ],
     'Send',
   )
   if (pick === 'photos' || pick === 'camera') {
     const left = ATTACHMENTS_PER_MESSAGE - uploads.items.length
-    const photos = await pickChatPhotos(pick === 'camera' ? 'camera' : 'library', Math.max(1, left))
-    if (photos === 'denied') return void inform('Camera not allowed', `Allow Glofly to use the camera in ${APP_SETTINGS}.`)
-    if (photos) uploads.add(photos.map((p) => ({ uri: p.uri, name: p.name, kind: 'image', size: p.size })))
-  } else if (pick === 'file') {
+    const media = await pickChatMedia(pick === 'camera' ? 'camera' : 'library', Math.max(1, left))
+    if (media === 'denied') void inform('Camera not allowed', `Allow Glofly to use the camera in ${APP_SETTINGS}.`)
+    else if (media) uploads.add(media.map((p) => ({ uri: p.uri, name: p.name, kind: p.video ? 'video' : 'image', size: p.size })))
+    return null
+  }
+  if (pick === 'file') {
     await afterOverlaysClose()
     const r = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true })
-    if (r.canceled) return
-    uploads.add(r.assets.map((a) => ({ uri: a.uri, name: a.name, kind: a.mimeType?.startsWith('image/') ? 'image' : 'file', size: a.size ?? null })))
+    if (!r.canceled) uploads.add(r.assets.map((a) => ({ uri: a.uri, name: a.name, kind: a.mimeType?.startsWith('image/') ? 'image' : a.mimeType?.startsWith('video/') || looksLikeVideo(a.name) ? 'video' : 'file', size: a.size ?? null })))
+    return null
   }
+  return pick
 }
 
 export function UploadTray({ uploads }: { uploads: Uploads }) {
@@ -125,6 +134,15 @@ export function UploadTray({ uploads }: { uploads: Uploads }) {
         <View key={i.key} style={{ width: 76, height: 76, borderRadius: 14, overflow: 'hidden', backgroundColor: c.surface, borderWidth: i.error ? 2 : 0, borderColor: c.danger }}>
           {i.kind === 'image' ? (
             <Image source={{ uri: i.uri }} style={{ width: 76, height: 76 }} contentFit="cover" />
+          ) : i.kind === 'video' ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1C1210', gap: 4 }}>
+              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="play" size={14} color="#1C1210" />
+              </View>
+              <Text size={10} weight="bold" style={{ color: '#FFF' }}>
+                {i.size ? formatSize(i.size) : 'Video'}
+              </Text>
+            </View>
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 6, gap: 2 }}>
               <Icon name="file" size={22} color={c.ink2} />

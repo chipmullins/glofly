@@ -120,6 +120,9 @@ export const VOICE_MIN_MS = 200
 export const VOICE_MAX_MS = 5 * 60 * 1000
 export const VOICE_MAX_BYTES = 6 * 1024 * 1024
 export const VOICE_PEAKS_MAX = 64
+/** Videos (0.5.0): sent from phones and computers, played right in the chat */
+export const VIDEO_MAX_BYTES = 64 * 1024 * 1024
+export const VIDEO_MAX_MS = 3 * 60 * 1000
 
 // ---------------------------------------------------------------------------------------
 // Calls

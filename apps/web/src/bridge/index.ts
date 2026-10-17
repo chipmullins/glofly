@@ -8,6 +8,7 @@ import type {
   ConversationSummary,
   FriendLists,
   GameState,
+  GifPage,
   GloflyApi,
   Message,
   MessagePage,
@@ -22,6 +23,7 @@ import type {
   WatchUpdate
 } from '../../../desktop/src/preload/api-types'
 import { isYouTubeId } from '@glofly/shared/watch'
+import { looksLikeVideo } from '@glofly/shared/attachments'
 import { endSession, nothing, onSessionEnded, request, setPauseHandler, unwrap } from './api'
 import * as auth from './auth'
 import { API_URL, isApple, isId, isTouch } from './config'
@@ -294,13 +296,14 @@ export function createBridge(): GloflyApi {
           request<MessageSearchPage>('GET', `/conversations/messages/search?${params}`)
         )
       },
-      send: (id, body, replyToId, attachmentIds) =>
+      send: (id, body, replyToId, attachmentIds, options) =>
         badId(id) ??
         unwrap(
           request<{ message: Message }>('POST', `/conversations/${id}/messages`, {
             body,
             replyToId,
-            ...(attachmentIds?.length ? { attachmentIds } : {})
+            ...(attachmentIds?.length ? { attachmentIds } : {}),
+            ...(options?.lantern ? { lantern: true } : {})
           }),
           'message'
         ),
@@ -308,11 +311,14 @@ export function createBridge(): GloflyApi {
         if (!isId(id)) return Promise.resolve(invalid)
         if (data.byteLength === 0)
           return Promise.resolve({ ok: false, error: 'invalid', message: 'That file is empty.' })
-        if (data.byteLength > 25 * 1024 * 1024) {
+        // Videos (0.5.0) may be bigger; the server checks they really are videos.
+        if (data.byteLength > (looksLikeVideo(name) ? 64 : 25) * 1024 * 1024) {
           return Promise.resolve({
             ok: false,
             error: 'invalid',
-            message: 'Files can be up to 25 MB.'
+            message: looksLikeVideo(name)
+              ? 'Videos can be up to 64 MB.'
+              : 'Files can be up to 25 MB (videos up to 64 MB).'
           })
         }
         const voiceQuery = voice
@@ -373,6 +379,70 @@ export function createBridge(): GloflyApi {
       typing: (id) => {
         if (isId(id)) sendTyping(id)
       }
+    },
+    // 0.5.0 chat extras (the server checks everything; these only keep addresses well-formed).
+    chat: {
+      gifs: (query, offset) => {
+        const q = typeof query === 'string' ? query.trim().slice(0, 50) : ''
+        const from = Number.isInteger(offset) && (offset ?? 0) >= 0 ? offset : 0
+        return request<GifPage>(
+          'GET',
+          q ? `/gifs/search?q=${encodeURIComponent(q)}&offset=${from}` : `/gifs/trending?offset=${from}`
+        )
+      },
+      sendGif: (id, gifId, replyToId) =>
+        badId(id) ??
+        (/^[A-Za-z0-9]{1,40}$/.test(gifId)
+          ? unwrap(
+              request<{ message: Message }>('POST', `/conversations/${id}/messages`, {
+                body: '',
+                gif: { id: gifId },
+                ...(replyToId ? { replyToId } : {})
+              }),
+              'message'
+            )
+          : Promise.resolve(invalid)),
+      removePreview: (id, mid) =>
+        badId(id, mid) ??
+        unwrap(
+          request<{ message: Message }>('DELETE', `/conversations/${id}/messages/${mid}/preview`),
+          'message'
+        ),
+      createPoll: (id, question, options, multi) =>
+        badId(id) ??
+        unwrap(
+          request<{ message: Message }>('POST', `/conversations/${id}/polls`, {
+            question,
+            options,
+            multi: multi === true
+          }),
+          'message'
+        ),
+      vote: (id, mid, options) =>
+        badId(id, mid) ??
+        unwrap(
+          request<{ message: Message }>('PUT', `/conversations/${id}/messages/${mid}/vote`, {
+            options
+          }),
+          'message'
+        ),
+      closePoll: (id, mid) =>
+        badId(id, mid) ??
+        unwrap(
+          request<{ message: Message }>('POST', `/conversations/${id}/messages/${mid}/close-poll`),
+          'message'
+        ),
+      startGame: (id, kind) =>
+        badId(id) ??
+        unwrap(request<{ message: Message }>('POST', `/conversations/${id}/games`, { kind }), 'message'),
+      move: (id, mid, move) =>
+        badId(id, mid) ??
+        unwrap(
+          request<{ message: Message }>('POST', `/conversations/${id}/messages/${mid}/move`, move),
+          'message'
+        ),
+      fireflies: (id, emoji) =>
+        badId(id) ?? request<null>('POST', `/conversations/${id}/fireflies`, { emoji })
     },
     files: {
       save: saveAttachment,

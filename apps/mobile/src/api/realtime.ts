@@ -1,6 +1,6 @@
 import { AppState, type AppStateStatus } from 'react-native'
 import { io, type Socket } from 'socket.io-client'
-import { cleanWatchReaction, cleanWatchUpdate, upgradeEvents, type Call, type Message, type PublicUser } from '@glofly/shared'
+import { cleanFireflies, cleanWatchReaction, cleanWatchUpdate, upgradeEvents, type Call, type Message, type PublicUser } from '@glofly/shared'
 import { APP_VERSION, PLATFORM, SERVER_URL } from '@/lib/config'
 import { endSessionLocally, onSignOut, useSession } from '@/state/session'
 import { patchConversation, rememberPeople, resetStore, setPresence, setTyping, useStore } from '@/state/store'
@@ -175,6 +175,11 @@ function connect() {
   s.on('watch:reaction', (p) => {
     const reaction = cleanWatchReaction(p)
     if (reaction) emit('watch:reaction', reaction)
+  })
+  // 0.5.0: a swarm of fireflies across a chat (someone long-pressed ❤️ or 🔥).
+  s.on('chat:fireflies', (p) => {
+    const swarm = cleanFireflies(p)
+    if (swarm) emit('chat:fireflies', swarm)
   })
   s.on('notice:new', () => void refreshNotices())
   s.on('announcement', () => void refreshNotices())

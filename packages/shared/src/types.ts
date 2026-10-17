@@ -175,9 +175,15 @@ export type Attachment = {
   height: number | null
   /** Voice messages: length and waveform (bar heights 0–100). Missing from older servers. */
   voice?: VoiceInfo | null
+  /**
+   * 0.5.0 videos: length and size. They're kind "file", so older apps offer them as a download;
+   * newer ones play them in the chat (variants "poster" and "video").
+   */
+  video?: VideoInfo | null
 }
 
 export type VoiceInfo = { durationMs: number; peaks: number[] }
+export type VideoInfo = { durationMs: number; width: number; height: number }
 
 /** A short preview of the message being replied to. */
 export type ReplyPreview = {
@@ -186,7 +192,7 @@ export type ReplyPreview = {
   body: string
   deleted: boolean
   /** Its first photo or file (and how many it has), so "Photo" can show when there's no text. */
-  attachment?: { kind: 'image' | 'file'; name: string; count: number; voice?: boolean } | null
+  attachment?: { kind: 'image' | 'file'; name: string; count: number; voice?: boolean; video?: boolean } | null
 }
 
 export type Message = {
@@ -208,7 +214,61 @@ export type Message = {
   event: ChatEvent | null
   /** Group members this message @mentions. Missing from servers before 0.2.0. */
   mentions?: string[]
+  // ---- 0.5.0 (missing from older servers; older apps show the body, a plain-text version) ----
+  /** A GIF (shown from GIPHY; the body holds its link for older apps) */
+  gif?: GifInfo | null
+  /** The first link's preview, added by the server a moment after sending */
+  linkPreview?: LinkPreview | null
+  /** A poll (groups) */
+  poll?: Poll | null
+  /** A mini game */
+  game?: Game | null
+  /** A lantern message: fades away once everyone else has read it */
+  lantern?: boolean
+  /** A lantern that has been read by everyone: when it fades (ISO date) */
+  lanternFadeAt?: string | null
 }
+
+/** 0.5.0: the reactions that can fly across a chat as fireflies. */
+export type FireflyEmoji = '❤️' | '🔥'
+export const FIREFLY_EMOJI: readonly FireflyEmoji[] = ['❤️', '🔥']
+
+/** A chat:fireflies event's fields, checked (apps pass on only this). */
+export function cleanFireflies(
+  p: unknown
+): { conversationId: string; userId: string; emoji: FireflyEmoji; id: string } | null {
+  const o = p as Record<string, unknown> | null
+  if (!o || typeof o !== 'object') return null
+  const { conversationId, userId, emoji, id } = o
+  if (typeof conversationId !== 'string' || typeof userId !== 'string' || typeof id !== 'string') return null
+  if (emoji !== '❤️' && emoji !== '🔥') return null
+  return { conversationId, userId, emoji, id: id.slice(0, 64) }
+}
+
+/** 0.5.0: a GIF from GIPHY (see gifUrl in gifs.ts). */
+export type GifInfo = { id: string; title: string; width: number; height: number }
+
+/** 0.5.0: what a link is. `image`: the server saved its picture (loaded from the server). */
+export type LinkPreview = {
+  url: string
+  title: string
+  description: string | null
+  siteName: string | null
+  image: { width: number; height: number } | null
+}
+
+/** 0.5.0: a poll and its votes (who picked each option). */
+export type Poll = {
+  question: string
+  options: { text: string; votes: string[] }[]
+  /** More than one option may be picked */
+  multi: boolean
+  /** ISO date it was closed, or null while open */
+  closedAt: string | null
+}
+
+/** 0.5.0: a mini game in a chat (see games.ts). */
+export type Game = import('./games').GameState
 
 /** Things that happen in a chat, shown as a line ("Chip added Maya", "Chip started a video call"). */
 export type ChatEvent =
@@ -386,6 +446,8 @@ export type ServerEvent =
   | ({ type: 'watch:updated' } & WatchUpdate)
   /** 0.5.0 Watch Together: someone sent a firefly reaction over the video */
   | ({ type: 'watch:reaction' } & WatchReactionEvent)
+  /** 0.5.0: someone sent a swarm of fireflies across a chat (long-press ❤️ or 🔥) */
+  | { type: 'chat:fireflies'; conversationId: string; userId: string; emoji: FireflyEmoji; id: string }
   /** This version is too old for the server: show "Please update Glofly". */
   | ({ type: 'app:update-required' } & UpdateRequired)
   /** 0.4.0: Glofly is paused (Glofly Control → Server → Pause Glofly) */

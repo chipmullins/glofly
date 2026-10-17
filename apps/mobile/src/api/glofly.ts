@@ -6,7 +6,9 @@ import type {
   Attachment,
   CallJoin,
   ConversationSummary,
+  FireflyEmoji,
   FriendLists,
+  GifInfo,
   Message,
   MessagePage,
   MessageSearchPage,
@@ -94,12 +96,13 @@ export const loadMessages = (id: string, before?: string) => request<MessagePage
 /** Messages containing these words (newest first), in one chat or all; `before` = the last result you have. */
 export const searchMessages = (q: string, chat?: string, before?: string) =>
   request<MessageSearchPage>('GET', `/conversations/messages/search?q=${enc(q)}${chat ? `&chat=${chat}` : ''}${before ? `&before=${before}` : ''}`)
-export const sendMessage = async (id: string, body: string, replyToId?: string, attachmentIds?: string[]) =>
+export const sendMessage = async (id: string, body: string, replyToId?: string, attachmentIds?: string[], lantern?: boolean) =>
   map(
     await request<{ message: Message }>('POST', `/conversations/${id}/messages`, {
       body,
       ...(replyToId ? { replyToId } : {}),
       ...(attachmentIds?.length ? { attachmentIds } : {}),
+      ...(lantern ? { lantern: true } : {}),
     }),
     (d) => d.message,
   )
@@ -173,3 +176,28 @@ export const noticeSeen = async (id: string) => none(await request('POST', `/not
 export const registerPush = async (token: string, preview: boolean, voipToken?: string, sounds?: { messageSound: string; ringtone: string }) =>
   none(await request('PUT', '/devices/push', { token, platform: PLATFORM, preview, ...(voipToken ? { voipToken } : {}), ...(sounds ?? {}) }))
 export const unregisterPush = async () => none(await request('DELETE', '/devices/push'))
+
+// ---- 0.5.0 chat extras: GIFs, link previews, polls, games, firefly swarms ----
+
+export type GifPage = { gifs: GifInfo[]; next: number | null }
+export type ChatGameKind = 'tictactoe' | 'wordguess' | 'trivia'
+export type ChatGameMove = { square: number } | { word: string } | { question: number; choice: number } | { reveal: true }
+const messageOf = (r: ApiResult<{ message: Message }>) => map(r, (d) => d.message)
+
+/** Trending (empty query) or a search, 24 at a time. */
+export const gifs = (query: string, offset = 0) => {
+  const q = query.trim().slice(0, 50)
+  return request<GifPage>('GET', q ? `/gifs/search?q=${enc(q)}&offset=${offset}` : `/gifs/trending?offset=${offset}`)
+}
+export const sendGif = async (id: string, gifId: string, replyToId?: string) =>
+  messageOf(await request('POST', `/conversations/${id}/messages`, { body: '', gif: { id: gifId }, ...(replyToId ? { replyToId } : {}) }))
+export const removePreview = async (id: string, messageId: string) => messageOf(await request('DELETE', `/conversations/${id}/messages/${messageId}/preview`))
+export const createPoll = async (id: string, question: string, options: string[], multi: boolean) =>
+  messageOf(await request('POST', `/conversations/${id}/polls`, { question, options, multi }))
+export const vote = async (id: string, messageId: string, options: number[]) => messageOf(await request('PUT', `/conversations/${id}/messages/${messageId}/vote`, { options }))
+export const closePoll = async (id: string, messageId: string) => messageOf(await request('POST', `/conversations/${id}/messages/${messageId}/close-poll`))
+export const startGame = async (id: string, kind: ChatGameKind) => messageOf(await request('POST', `/conversations/${id}/games`, { kind }))
+export const gameMove = async (id: string, messageId: string, move: ChatGameMove) => messageOf(await request('POST', `/conversations/${id}/messages/${messageId}/move`, move))
+export const fireflies = async (id: string, emoji: FireflyEmoji) => none(await request('POST', `/conversations/${id}/fireflies`, { emoji }))
+/** A link preview's picture (the server's copy). */
+export const previewImagePath = (id: string, messageId: string) => `/conversations/${id}/messages/${messageId}/preview-image`

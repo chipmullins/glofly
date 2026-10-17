@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Attachment } from '../../../preload/api-types'
-import { fileTypeLabel, formatSize, photoUrl, voiceUrl } from '../lib/attachments'
+import {
+  fileTypeLabel,
+  formatSize,
+  photoUrl,
+  posterUrl,
+  videoUrl,
+  voiceUrl
+} from '../lib/attachments'
 import { isWeb } from '../lib/platform'
 import { playVoice, stopVoice, voiceTime } from '../lib/voice'
 import { ChevronIcon, CloseIcon, DownloadIcon, FileIcon, PhotoIcon } from './icons'
@@ -31,8 +38,8 @@ const SINGLE_MAX_H = 320
 const TILE = 176
 
 function singleSize(a: Attachment): { width: number; height: number } {
-  const w = a.width ?? SINGLE_MAX_W
-  const h = a.height ?? SINGLE_MAX_H
+  const w = a.width ?? a.video?.width ?? SINGLE_MAX_W
+  const h = a.height ?? a.video?.height ?? SINGLE_MAX_H
   const scale = Math.min(SINGLE_MAX_W / w, SINGLE_MAX_H / h, 1)
   return { width: Math.max(80, Math.round(w * scale)), height: Math.max(60, Math.round(h * scale)) }
 }
@@ -124,8 +131,9 @@ export function MessageAttachments({
   onFailure: Failure
 }): React.JSX.Element {
   const photos = attachments.filter((a) => a.kind === 'image')
-  const files = attachments.filter((a) => a.kind === 'file' && !a.voice)
+  const files = attachments.filter((a) => a.kind === 'file' && !a.voice && !a.video)
   const voices = attachments.filter((a) => a.kind === 'file' && a.voice)
+  const videos = attachments.filter((a) => a.kind === 'file' && a.video)
   const single = photos.length === 1 ? singleSize(photos[0]) : null
 
   return (
@@ -147,12 +155,83 @@ export function MessageAttachments({
           ))}
         </div>
       )}
+      {videos.map((a) => (
+        <VideoTile
+          key={a.id}
+          conversationId={conversationId}
+          attachment={a}
+          onFailure={onFailure}
+        />
+      ))}
       {voices.map((a) => (
         <VoiceBubble key={a.id} conversationId={conversationId} attachment={a} />
       ))}
       {files.map((a) => (
         <FileCard key={a.id} conversationId={conversationId} attachment={a} onFailure={onFailure} />
       ))}
+    </div>
+  )
+}
+
+/**
+ * A video (0.5.0): its picture with a play button and its length; pressing play plays it right
+ * there (streamed as it loads, with the player's own controls, full screen included).
+ */
+function VideoTile({
+  conversationId,
+  attachment,
+  onFailure
+}: {
+  conversationId: string
+  attachment: Attachment
+  onFailure: Failure
+}): React.JSX.Element {
+  const [playing, setPlaying] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const size = singleSize(attachment)
+  const seconds = Math.round((attachment.video?.durationMs ?? 0) / 1000)
+  const length = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+  if (failed) {
+    return (
+      <div className="video-tile video-tile--failed" style={size}>
+        <span>This video can&apos;t play here.</span>
+        <button
+          type="button"
+          onClick={() => void save(conversationId, attachment, onFailure)}
+          className="video-tile-save"
+        >
+          <DownloadIcon size={16} strokeWidth={2} /> Download it
+        </button>
+      </div>
+    )
+  }
+  return (
+    <div className="video-tile" style={size}>
+      {playing ? (
+        <video
+          src={videoUrl(conversationId, attachment.id)}
+          poster={posterUrl(conversationId, attachment.id)}
+          controls
+          autoPlay
+          playsInline
+          preload="metadata"
+          aria-label={attachment.name}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <button
+          type="button"
+          className="video-tile-start"
+          aria-label={`Play video ${attachment.name} (${length})`}
+          onClick={() => setPlaying(true)}
+        >
+          <Photo src={posterUrl(conversationId, attachment.id)} alt="" />
+          <span className="video-tile-play" aria-hidden="true">
+            <PlayIcon />
+          </span>
+          <span className="video-tile-length">{length}</span>
+        </button>
+      )}
     </div>
   )
 }
@@ -444,6 +523,7 @@ export function UploadTray({
     <ul className="upload-tray" aria-label="Files to send">
       {uploads.map((u) => {
         const photo = u.attachment?.kind === 'image' ? u.attachment : null
+        const video = u.attachment?.video ? u.attachment : null
         return (
           <li
             key={u.localId}
@@ -452,6 +532,8 @@ export function UploadTray({
             <span className="upload-thumb" aria-hidden="true">
               {photo ? (
                 <img src={photoUrl(conversationId, photo.id, 'preview')} alt="" draggable={false} />
+              ) : video ? (
+                <img src={posterUrl(conversationId, video.id)} alt="" draggable={false} />
               ) : u.looksLikePhoto ? (
                 <PhotoIcon size={20} />
               ) : (
@@ -468,7 +550,9 @@ export function UploadTray({
                   ? 'Uploading…'
                   : u.status === 'failed'
                     ? u.error
-                    : formatSize(u.attachment?.size ?? u.size)}
+                    : video
+                      ? `Video · ${formatSize(video.size)}`
+                      : formatSize(u.attachment?.size ?? u.size)}
               </span>
             </span>
             <button

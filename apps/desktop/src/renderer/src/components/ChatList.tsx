@@ -1,3 +1,4 @@
+import { shortBody } from '@glofly/shared/gifs'
 import { useState } from 'react'
 import type {
   ConversationSummary,
@@ -86,7 +87,7 @@ function lastMessagePreview(c: ConversationSummary, me: PublicUser): string {
   if (last.event) return eventText(last.event, last.senderId, me.id, nameOf)
   const text = last.deleted
     ? 'Message deleted'
-    : last.body.replace(/\s+/g, ' ') || attachmentSummary(last.attachments)
+    : shortBody(last.body).replace(/\s+/g, ' ') || attachmentSummary(last.attachments)
   // Groups say who sent it ("Maya: hi"); DMs only mark your own ("You: hi").
   const who =
     last.senderId === me.id ? 'You: ' : c.kind === 'group' ? `${nameOf(last.senderId)}: ` : ''

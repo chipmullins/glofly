@@ -35,7 +35,7 @@ export const CSP = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   // i.ytimg.com: the YouTube video's picture in the Watch together dialog (0.5.0)
-  `img-src 'self' data: blob: ${API_URL} https://i.ytimg.com`,
+  `img-src 'self' data: blob: ${API_URL} https://i.ytimg.com https://media.giphy.com`,
   "font-src 'self'",
   `media-src 'self' blob: mediastream: ${API_URL}`,
   `connect-src 'self' ${API_URL} ${wsOrigin} wss://*.livekit.cloud https://*.livekit.cloud`,

@@ -25,7 +25,7 @@ export async function request<T>(
         ...(body !== undefined && !file ? { 'Content-Type': 'application/json' } : {})
       },
       body: file ? (file.data as BodyInit) : body !== undefined ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(file ? 60_000 : 10_000)
+      signal: AbortSignal.timeout(file ? 180_000 : 10_000) // a 64 MB video on a slow connection
     })
   } catch {
     return {

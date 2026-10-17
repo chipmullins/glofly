@@ -7,7 +7,8 @@ import { authHeaders } from '@/api/http'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { useTheme } from '@/ui/theme'
-import { attachmentUrl, imageSource, shareFile, voiceFileForIos } from './media'
+import { attachmentUrl, imageSource, posterSource, shareFile, voiceFileForIos } from './media'
+import { VideoPlayer } from './VideoPlayer'
 import { inform } from '@/ui/dialogs'
 
 // Photos (a grid, or one photo in its own shape), file cards, and voice messages in a bubble.
@@ -25,6 +26,8 @@ export function Attachments({ message, mine, onOpenPhoto, onLongPress }: Props) 
       {others.map((a) =>
         a.voice ? (
           <VoiceBubble key={a.id} conversationId={message.conversationId} a={a} mine={mine} onLongPress={onLongPress} />
+        ) : a.video ? (
+          <VideoCard key={a.id} conversationId={message.conversationId} a={a} onLongPress={onLongPress} />
         ) : (
           <FileCard key={a.id} conversationId={message.conversationId} a={a} mine={mine} onLongPress={onLongPress} />
         ),
@@ -64,6 +67,34 @@ function PhotoGrid({ message, photos, onOpen, onLongPress }: { message: Message;
         </Pressable>
       ))}
     </View>
+  )
+}
+
+/** A video (0.5.0): its picture, a play button and its length. Tap: full screen player. */
+function VideoCard({ conversationId, a, onLongPress }: { conversationId: string; a: Attachment; onLongPress: () => void }) {
+  const { c } = useTheme()
+  const [open, setOpen] = useState(false)
+  const v = a.video!
+  const ratio = v.width && v.height ? v.width / v.height : 16 / 9
+  const w = Math.min(MAX_W, ratio >= 1 ? MAX_W : MAX_W * Math.max(ratio, 0.56))
+  const h = Math.min(320, w / ratio)
+  const s = Math.round(v.durationMs / 1000)
+  const length = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  return (
+    <>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Video, ${length}. Play`} onPress={() => setOpen(true)} onLongPress={onLongPress}>
+        <Image source={posterSource(conversationId, a)} style={{ width: w, height: h, borderRadius: 14, backgroundColor: c.surface2 }} contentFit="cover" transition={150} cachePolicy="disk" />
+        <View style={{ position: 'absolute', top: h / 2 - 26, left: w / 2 - 26, width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(28,18,16,0.62)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.85)', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="play" size={20} color="#FFFFFF" />
+        </View>
+        <View style={{ position: 'absolute', right: 8, bottom: 8, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.66)' }}>
+          <Text size={12} weight="bold" style={{ color: '#FFF' }}>
+            {length}
+          </Text>
+        </View>
+      </Pressable>
+      {open ? <VideoPlayer conversationId={conversationId} attachment={a} onClose={() => setOpen(false)} /> : null}
+    </>
   )
 }
 

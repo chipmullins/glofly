@@ -13,6 +13,8 @@ type Outgoing = {
   body: string
   replyToId?: string
   attachmentIds?: string[]
+  /** 0.5.0: a lantern message */
+  lantern?: boolean
   status: 'sending' | 'failed'
   error?: string
 }
@@ -28,7 +30,7 @@ const setItem = (id: string, item: Outgoing | null) => {
 
 let counter = 0
 
-export function sendText(conversationId: string, body: string, reply: Message | null, attachments: Attachment[] = []): void {
+export function sendText(conversationId: string, body: string, reply: Message | null, attachments: Attachment[] = [], lantern = false): void {
   const me = useSession.getState().user
   if (!me) return
   const localId = `local-${Date.now()}-${counter++}`
@@ -54,16 +56,17 @@ export function sendText(conversationId: string, body: string, reply: Message | 
     attachments,
     event: null,
     mentions: [],
+    lantern,
   }
   if (!chatMessages(conversationId).loaded) setChatMessages(conversationId, { loaded: true })
   putMessage(local)
-  const item: Outgoing = { conversationId, body, replyToId: reply?.id, attachmentIds: attachments.map((a) => a.id), status: 'sending' }
+  const item: Outgoing = { conversationId, body, replyToId: reply?.id, attachmentIds: attachments.map((a) => a.id), lantern, status: 'sending' }
   setItem(localId, item)
   void deliver(localId, item)
 }
 
 async function deliver(localId: string, item: Outgoing) {
-  const r = await api.sendMessage(item.conversationId, item.body, item.replyToId, item.attachmentIds)
+  const r = await api.sendMessage(item.conversationId, item.body, item.replyToId, item.attachmentIds, item.lantern)
   if (r.ok) {
     dropLocal(item.conversationId, localId)
     setItem(localId, null)

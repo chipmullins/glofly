@@ -8,6 +8,9 @@ import { accountRouter } from "./account/routes";
 import { purgeDeletedAccounts } from "./account/deletion";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
 import { conversationsRouter } from "./messages/routes";
+import { extrasRouter } from "./messages/extras";
+import { gifsRouter, gifsConfigured } from "./messages/gifs";
+import { sweepLanterns } from "./messages/lanterns";
 import { callsRouter } from "./calls/routes";
 import { watchPageRouter } from "./calls/player";
 import { sweepCalls } from "./calls/service";
@@ -72,6 +75,9 @@ app.use("/avatars", avatarsRouter);
 app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
 app.use("/conversations", conversationsRouter);
+// 0.5.0: polls, mini games, link preview pictures, firefly swarms (messages/extras.ts); GIFs.
+app.use("/conversations", extrasRouter);
+app.use("/gifs", gifsRouter);
 app.use("/calls", callsRouter);
 // Watch Together's video player page (the apps show the shared YouTube video through it).
 app.use("/watch", watchPageRouter);
@@ -111,6 +117,7 @@ connectRedis()
       console.log(`Glofly server running at http://localhost:${PORT} (files: ${storageKind}; emails: ${emailKind})`);
       console.log(WEB_ORIGIN ? `Glofly in a browser: ${WEB_ORIGIN}` : "Glofly in a browser is off: set WEB_ORIGIN to turn it on.");
       if (!livekitConfigured) console.log("Calls are off: add the LIVEKIT_ settings to .env to turn them on.");
+      console.log(gifsConfigured ? "GIFs: GIPHY" : "GIFs are off: set GIPHY_API_KEY to turn them on.");
       console.log(
         pushKind === "off"
           ? "Push notifications are off: set FCM_SERVICE_ACCOUNT_FILE to turn them on."
@@ -126,6 +133,10 @@ connectRedis()
     setInterval(() => {
       sweepCalls().catch((err) => console.error("Call check failed", err));
     }, 15 * 1000);
+    // Lantern messages fade once everyone else has read them (0.5.0).
+    setInterval(() => {
+      sweepLanterns().catch((err) => console.error("Lantern check failed", err));
+    }, 5 * 1000);
     // Files added to a chat but never sent are cleared out after an hour.
     setInterval(() => {
       sweepUnsentUploads().catch((err) => console.error("Upload cleanup failed", err));

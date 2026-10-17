@@ -190,6 +190,13 @@
       "when": 1791958797818,
       "tag": "0026_restricted_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792193252804,
+      "tag": "0027_glofly_0_5_0",
+      "breakpoints": true
     }
   ]
 }

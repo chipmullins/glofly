@@ -7,6 +7,9 @@ import { isUserId } from './api'
 //   glofly-media://groups/<conversationId>/<version>                group photos (0.2.1)
 //   glofly-media://attachments/<conversationId>/<id>/<preview|full> photos in chats
 //   glofly-media://attachments/<conversationId>/<id>/voice          voice messages (0.2.1)
+//   glofly-media://attachments/<conversationId>/<id>/poster         a video's picture (0.5.0)
+//   glofly-media://attachments/<conversationId>/<id>/video          a video, streamed (0.5.0)
+//   glofly-media://previews/<conversationId>/<messageId>            a link preview's picture (0.5.0)
 // and this fetches them with the token, here in the main process. Only these shapes are
 // allowed, and only WebP images (re-saved by the server) or voice audio (Opus in WebM/Ogg, AAC in MP4; checked
 // by its first bytes) are passed back.
@@ -36,7 +39,9 @@ function remember(key: string, bytes: Uint8Array): void {
 const empty = (status: number): Response => new Response(null, { status })
 
 /** The server address for a glofly-media address, or null if it isn't one we allow. */
-function serverPathFor(url: URL): { path: string; maxBytes: number; audio?: boolean } | null {
+function serverPathFor(
+  url: URL
+): { path: string; maxBytes: number; audio?: boolean; video?: boolean } | null {
   const parts = url.pathname.split('/').slice(1)
   if (url.host === 'avatars' && parts.length === 2 && parts.every(isUserId)) {
     return { path: `/avatars/${parts[0]}/${parts[1]}`, maxBytes: 2 * MB }
@@ -49,11 +54,17 @@ function serverPathFor(url: URL): { path: string; maxBytes: number; audio?: bool
     parts.length === 3 &&
     isUserId(parts[0]) &&
     isUserId(parts[1]) &&
-    (parts[2] === 'preview' || parts[2] === 'full')
+    (parts[2] === 'preview' || parts[2] === 'full' || parts[2] === 'poster')
   ) {
     return {
       path: `/conversations/${parts[0]}/attachments/${parts[1]}/${parts[2]}`,
       maxBytes: 30 * MB
+    }
+  }
+  if (url.host === 'previews' && parts.length === 2 && parts.every(isUserId)) {
+    return {
+      path: `/conversations/${parts[0]}/messages/${parts[1]}/preview-image`,
+      maxBytes: 2 * MB
     }
   }
   // A voice message is stored as a file (only ever a download for anything else).
@@ -70,7 +81,53 @@ function serverPathFor(url: URL): { path: string; maxBytes: number; audio?: bool
       audio: true
     }
   }
+  // 0.5.0: a video, passed through piece by piece as the player asks (never kept in memory).
+  if (
+    url.host === 'attachments' &&
+    parts.length === 3 &&
+    isUserId(parts[0]) &&
+    isUserId(parts[1]) &&
+    parts[2] === 'video'
+  ) {
+    return {
+      path: `/conversations/${parts[0]}/attachments/${parts[1]}/video`,
+      maxBytes: 64 * MB,
+      video: true
+    }
+  }
   return null
+}
+
+const VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm'])
+
+/** A video: the player's Range request passed on, the answer streamed back (only video types). */
+async function videoResponse(req: Request, path: string, token: string): Promise<Response> {
+  const range = req.headers.get('range')
+  let response: Response
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(range && /^bytes=\d*-\d*$/.test(range) ? { Range: range } : {})
+      }
+    })
+  } catch {
+    return empty(502)
+  }
+  const type = response.headers.get('content-type') ?? ''
+  if (!response.ok || !VIDEO_TYPES.has(type) || !response.body) {
+    return empty(response.ok ? 502 : response.status)
+  }
+  const headers: Record<string, string> = {
+    'Content-Type': type,
+    'X-Content-Type-Options': 'nosniff',
+    'Accept-Ranges': 'bytes'
+  }
+  for (const h of ['content-length', 'content-range']) {
+    const v = response.headers.get(h)
+    if (v) headers[h] = v
+  }
+  return new Response(response.body, { status: response.status, headers })
 }
 
 export async function handleMediaRequest(req: Request): Promise<Response> {
@@ -86,6 +143,7 @@ export async function handleMediaRequest(req: Request): Promise<Response> {
 
   const token = getSessionToken()
   if (!token) return empty(401)
+  if (target.video) return videoResponse(req, target.path, token)
   if (cacheOwner !== token) {
     cache.clear()
     cacheBytes = 0

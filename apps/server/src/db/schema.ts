@@ -99,6 +99,11 @@ export const users = pgTable(
     // Control), doesn't show up in search, can only be in groups with their own friends, and
     // can't change their email or delete the account. Off for everyone else.
     restricted: boolean("restricted").notNull().default(false),
+    // ---- 0.5.0 ----
+    // Birthday glow: friends see the day (never the year) and get a reminder. Off unless chosen.
+    shareBirthday: boolean("share_birthday").notNull().default(false),
+    // "Want to hang?": free for a call until then (null: not right now).
+    hangUntil: timestamp("hang_until", { withTimezone: true }),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -328,6 +333,18 @@ export const messages = pgTable(
     event: jsonb("event").$type<ChatEvent>(),
     // Group members this message @mentions (checked against the group when sent or edited).
     mentions: uuid("mentions").array().notNull().default(sql`'{}'::uuid[]`),
+    // ---- 0.5.0 (older apps ignore these; the body carries a plain-text version) ----
+    // A GIF from GIPHY: only its id and shape are kept; apps show it from GIPHY's own address.
+    gif: jsonb("gif").$type<GifInfo>(),
+    // The first link's preview (title, site, picture), made by the server after sending.
+    linkPreview: jsonb("link_preview").$type<LinkPreviewInfo>(),
+    // A poll (groups): question and options; votes are in poll_votes.
+    poll: jsonb("poll").$type<PollInfo>(),
+    // A mini game (tic-tac-toe, word guess, trivia): its state, changed by moves.
+    game: jsonb("game").$type<GameInfo>(),
+    // Lantern messages fade away once everyone else has read them: lanternFadeAt is when.
+    lantern: boolean("lantern").notNull().default(false),
+    lanternFadeAt: timestamp("lantern_fade_at", { withTimezone: true }),
   },
   // Loading a chat = newest messages in one conversation, so index exactly that.
   // Searching messages = "contains these words": a trigram index keeps that fast.
@@ -336,7 +353,81 @@ export const messages = pgTable(
     index("messages_body_trgm_idx").using("gin", sql`${t.body} gin_trgm_ops`),
     // "Messages that mention me" (unread mention counts).
     index("messages_mentions_idx").using("gin", t.mentions),
+    // Lantern messages still glowing (0.5.0): the few the fading sweep looks at.
+    index("messages_lantern_idx")
+      .on(t.conversationId, t.createdAt)
+      .where(sql`${t.lantern} and ${t.deletedAt} is null`),
   ],
+);
+
+/** 0.5.0: a GIF in a message (GIPHY's id; apps build its addresses on GIPHY's servers). */
+export type GifInfo = { id: string; title: string; width: number; height: number };
+/** 0.5.0: a link's preview. `image`: a picture was saved (served by the server, never hotlinked). */
+export type LinkPreviewInfo = {
+  url: string;
+  title: string;
+  description: string | null;
+  siteName: string | null;
+  image: { width: number; height: number } | null;
+};
+/** 0.5.0: a poll. */
+export type PollInfo = { question: string; options: string[]; multi: boolean; closedAt: string | null };
+/** 0.5.0: a mini game's state (see messages/games.ts). */
+export type GameInfo = { kind: string; [key: string]: unknown };
+
+// 0.5.0 Glows: a streak between two friends who message each other. Each day both write, it
+// gets brighter (level 0–5); a missed day dims it by one instead of starting over.
+export const glows = pgTable(
+  "glows",
+  {
+    userLow: uuid("user_low")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userHigh: uuid("user_high")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    level: integer("level").notNull().default(0),
+    /** Days in a row (or with only dims in between) both wrote */
+    days: integer("days").notNull().default(0),
+    best: integer("best").notNull().default(0),
+    /** The last day (YYYY-MM-DD, Glofly's day) both wrote */
+    lastDay: date("last_day"),
+    /** Today's progress: who has written today (the day it's for) */
+    lowWroteOn: date("low_wrote_on"),
+    highWroteOn: date("high_wrote_on"),
+  },
+  (t) => [primaryKey({ columns: [t.userLow, t.userHigh] })],
+);
+
+// 0.5.0 Custom stickers: pictures made in Glofly (background removed), kept for their maker.
+export const stickers = pgTable(
+  "stickers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("stickers_owner_idx").on(t.ownerId, t.createdAt)],
+);
+
+// 0.5.0: votes in polls, one row per person per option picked.
+export const pollVotes = pgTable(
+  "poll_votes",
+  {
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    option: integer("option").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.messageId, t.userId, t.option] })],
 );
 
 // One row per person per emoji per message.
@@ -357,6 +448,8 @@ export const messageReactions = pgTable(
 
 /** A voice message's length and its waveform (bar heights 0–100). */
 export type VoiceInfo = { durationMs: number; peaks: number[] };
+/** 0.5.0: a video's length and size (videos are kind "file" with a poster picture beside them). */
+export type VideoInfo = { durationMs: number; width: number; height: number; mime: "video/mp4" | "video/quicktime" | "video/webm" };
 
 export const attachmentKind = pgEnum("attachment_kind", ["image", "file"]);
 
@@ -386,6 +479,10 @@ export const attachments = pgTable(
     // Voice messages (0.2.1): how long it is and its waveform. They're kind "file", so apps
     // before 0.2.1 show them as a downloadable "Voice message.webm".
     voice: jsonb("voice").$type<VoiceInfo>(),
+    // Videos (0.5.0): length, size and type. Kind "file", so older apps offer a download.
+    video: jsonb("video").$type<VideoInfo>(),
+    // A sticker (0.5.0): a see-through picture shown without a bubble (older apps: a photo).
+    sticker: boolean("sticker").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

@@ -9,13 +9,20 @@ import { APP_SETTINGS } from '@/lib/config'
 // Loading chat photos, files and voice messages (they need the session, so headers go along),
 // and saving or sharing them.
 
-export const attachmentUrl = (conversationId: string, a: Pick<Attachment, 'id'>, variant: 'preview' | 'full' | 'file') =>
+export const attachmentUrl = (conversationId: string, a: Pick<Attachment, 'id'>, variant: 'preview' | 'full' | 'file' | 'poster' | 'video') =>
   url(`/conversations/${conversationId}/attachments/${a.id}/${variant}`)
 
 export const imageSource = (conversationId: string, a: Attachment, variant: 'preview' | 'full') => ({
   uri: attachmentUrl(conversationId, a, variant),
   headers: authHeaders(),
   cacheKey: `att-${a.id}-${variant}`,
+})
+
+/** A video's picture (0.5.0). */
+export const posterSource = (conversationId: string, a: Attachment) => ({
+  uri: attachmentUrl(conversationId, a, 'poster'),
+  headers: authHeaders(),
+  cacheKey: `att-${a.id}-poster`,
 })
 
 /** Downloads to this phone's cache (kept by name, so the share sheet shows the real file name). */

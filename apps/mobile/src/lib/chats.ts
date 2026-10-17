@@ -4,6 +4,7 @@ import {
   eventText,
   isClosed,
   isMuted,
+  shortBody,
   typingText,
   type Call,
   type ConversationSummary,
@@ -37,7 +38,7 @@ export function messagePreview(m: Message, c: ConversationSummary, meId: string,
     return { text, missed, photo: false }
   }
   if (m.deleted) return { text: 'Message deleted', missed: false, photo: false }
-  const body = m.body.replace(/\s+/g, ' ').trim()
+  const body = shortBody(m.body).replace(/\s+/g, ' ').trim()
   const text = body || attachmentSummary(m.attachments)
   const who = m.senderId === meId ? 'You: ' : c.kind === 'group' ? `${nameOf(m.senderId)}: ` : ''
   return { text: who + text, missed: false, photo: !body && m.attachments.some((a) => a.kind === 'image') }

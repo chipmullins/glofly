@@ -2,9 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { Message, PublicUser } from '../../../preload/api-types'
 import { splitMentions } from '../lib/mentions'
 import { quoteSummary } from '../lib/attachments'
+import { shortBody } from '@glofly/shared/gifs'
 import { addRecent, isJumbo } from '../lib/emoji'
 import EmojiPicker from './EmojiPicker'
 import EmojiText, { Emoji } from './EmojiText'
+import { GameCard, GifView, LanternTag, LinkPreviewCard, PollCard } from './ChatExtras'
+import { lanternStyle } from '../lib/lantern'
+import type { FireflyEmoji } from '../../../preload/api-types'
 
 export type ShownMessage = {
   key: string
@@ -42,7 +46,20 @@ type MessageItemProps = {
   onMentionClick?: (user: PublicUser) => void
   /** Report someone else's message (opens the Report dialog) */
   onReport?: () => void
+  // ---- 0.5.0 ----
+  /** Everyone in the chat, you included (games) */
+  memberIds: string[]
+  /** A vote or move came back: the newest version of the message */
+  onUpdated: (m: Message) => void
+  onFailure: (error: string, message: string) => void
+  /** Long-press ❤️ or 🔥: react, and send a swarm of fireflies across the chat */
+  onFireflies?: (emoji: FireflyEmoji) => void
+  /** Take the link preview off your own message */
+  onRemovePreview?: () => void
 }
+
+const HOLD_FOR_FIREFLIES_MS = 450
+const isFireflyEmoji = (e: string): e is FireflyEmoji => e === '❤️' || e === '🔥'
 
 /** Message text with "@username" of people in the chat shown as mentions (you stand out). */
 function MentionText({
@@ -200,7 +217,12 @@ export default function MessageItem({
   attachments,
   people,
   onMentionClick,
-  onReport
+  onReport,
+  memberIds,
+  onUpdated,
+  onFailure,
+  onFireflies,
+  onRemovePreview
 }: MessageItemProps): React.JSX.Element {
   const m = item.message
   const mine = m.senderId === meId
@@ -211,6 +233,18 @@ export default function MessageItem({
   const [copied, setCopied] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const showToolbar = !item.pending && !m.deleted && !editing
+  /** A GIF, poll or game: the body is only the plain-text version for older apps. */
+  const special = !!(m.gif || m.poll || m.game)
+  // Holding ❤️ or 🔥 in the quick reactions sends fireflies.
+  const [charging, setCharging] = useState<string | null>(null)
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const held = useRef(false)
+  const stopHold = useCallback(() => {
+    if (holdTimer.current) clearTimeout(holdTimer.current)
+    holdTimer.current = null
+    setCharging(null)
+  }, [])
+  useEffect(() => stopHold, [stopHold])
 
   // Close the reaction picker or menu when clicking elsewhere or pressing Escape.
   useEffect(() => {
@@ -257,6 +291,8 @@ export default function MessageItem({
   if (!item.pending && !m.deleted && !mine && m.mentions?.includes(meId)) {
     classes.push('message--mentions-me')
   }
+  if (m.lantern && !m.deleted) classes.push('message--lantern')
+  if (m.lantern && m.lanternFadeAt && !m.deleted) classes.push('message--lantern-fading')
 
   const bodyClass = item.pending
     ? item.pending.failed
@@ -266,7 +302,12 @@ export default function MessageItem({
   const jumbo = !item.pending && !m.deleted && isJumbo(m.body)
 
   return (
-    <div className={classes.join(' ')} data-message-id={m.id} ref={wrapRef}>
+    <div
+      className={classes.join(' ')}
+      data-message-id={m.id}
+      ref={wrapRef}
+      style={m.lantern && !m.deleted ? lanternStyle(m.lanternFadeAt) : undefined}
+    >
       {!grouped && avatar}
       <div
         className={
@@ -297,7 +338,7 @@ export default function MessageItem({
               {m.replyTo.deleted ? (
                 'Original message was deleted'
               ) : m.replyTo.body ? (
-                <EmojiText text={m.replyTo.body} />
+                <EmojiText text={shortBody(m.replyTo.body)} />
               ) : m.replyTo.attachment ? (
                 quoteSummary(m.replyTo.attachment)
               ) : (
@@ -319,8 +360,10 @@ export default function MessageItem({
         {editing ? (
           <EditBox initial={m.body} onSave={onSaveEdit} onCancel={onCancelEdit} />
         ) : m.deleted ? (
-          <p className="message-body message-body--deleted">This message was deleted.</p>
-        ) : !m.body && m.attachments.length > 0 ? null : (
+          <p className="message-body message-body--deleted">
+            {m.lantern ? 'A lantern message faded away.' : 'This message was deleted.'}
+          </p>
+        ) : special || (!m.body && m.attachments.length > 0) ? null : (
           <p
             className={jumbo ? `${bodyClass} message-body--jumbo` : bodyClass}
             title={grouped ? time : undefined}
@@ -342,7 +385,41 @@ export default function MessageItem({
           </p>
         )}
 
+        {!m.deleted && !editing && m.gif && <GifView gif={m.gif} />}
+        {!m.deleted && m.poll && (
+          <PollCard
+            message={m}
+            meId={meId}
+            nameOf={nameOf}
+            canAct={canAct}
+            onUpdated={onUpdated}
+            onFailure={onFailure}
+          />
+        )}
+        {!m.deleted && m.game && (
+          <GameCard
+            message={m}
+            meId={meId}
+            nameOf={nameOf}
+            canAct={canAct}
+            memberIds={memberIds}
+            onUpdated={onUpdated}
+            onFailure={onFailure}
+          />
+        )}
+        {!m.deleted && !editing && m.linkPreview && (
+          <LinkPreviewCard
+            conversationId={m.conversationId}
+            messageId={m.id}
+            preview={m.linkPreview}
+            canRemove={mine && canAct && !!onRemovePreview}
+            onRemove={() => onRemovePreview?.()}
+          />
+        )}
+
         {!m.deleted && attachments}
+
+        {m.lantern && !m.deleted && !item.pending && <LanternTag fadeAt={m.lanternFadeAt} />}
 
         {item.pending?.failed && (
           <span className="message-failed">
@@ -450,8 +527,29 @@ export default function MessageItem({
                   key={emoji}
                   type="button"
                   role="menuitem"
-                  aria-label={`React with ${emoji}`}
+                  aria-label={
+                    isFireflyEmoji(emoji) && onFireflies
+                      ? `React with ${emoji} (hold to send fireflies)`
+                      : `React with ${emoji}`
+                  }
+                  className={charging === emoji ? 'reaction-picker-charging' : undefined}
+                  onPointerDown={() => {
+                    held.current = false
+                    if (!isFireflyEmoji(emoji) || !onFireflies) return
+                    setCharging(emoji)
+                    holdTimer.current = setTimeout(() => {
+                      held.current = true
+                      stopHold()
+                      setPopup(null)
+                      addRecent(meId, emoji)
+                      onFireflies(emoji)
+                    }, HOLD_FOR_FIREFLIES_MS)
+                  }}
+                  onPointerUp={stopHold}
+                  onPointerLeave={stopHold}
+                  onPointerCancel={stopHold}
                   onClick={() => {
+                    if (held.current) return // the hold already sent it
                     setPopup(null)
                     addRecent(meId, emoji)
                     onReact(emoji)
@@ -475,12 +573,17 @@ export default function MessageItem({
                   <path d="M12 5v14M5 12h14" />
                 </Icon>
               </button>
+              {onFireflies && (
+                <span className="reaction-picker-hint" aria-hidden="true">
+                  Hold ❤️ or 🔥 to send fireflies
+                </span>
+              )}
             </div>
           )}
 
           {popup === 'menu' && (
             <div role="menu" className="menu message-menu">
-              {mine && canAct && (
+              {mine && canAct && !special && (
                 <button
                   type="button"
                   role="menuitem"
@@ -497,7 +600,7 @@ export default function MessageItem({
                   Edit message
                 </button>
               )}
-              {m.body && (
+              {m.body && !special && (
                 <button
                   type="button"
                   role="menuitem"
@@ -509,6 +612,23 @@ export default function MessageItem({
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                   </Icon>
                   Copy text
+                </button>
+              )}
+              {mine && canAct && m.linkPreview && onRemovePreview && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="menu-item"
+                  onClick={() => {
+                    setPopup(null)
+                    onRemovePreview()
+                  }}
+                >
+                  <Icon>
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="M4 4l16 16" />
+                  </Icon>
+                  Remove link preview
                 </button>
               )}
               {!mine && onReport && (
