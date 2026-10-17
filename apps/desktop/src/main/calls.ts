@@ -12,6 +12,7 @@ import type {
 } from '../preload/api-types'
 import { request } from './api'
 import { API_URL } from './auth'
+import { screenSoundSupport } from './screenSound'
 
 // Calls. The server decides who may join which call and hands back a short-lived pass for the
 // call's LiveKit room; the window then connects to LiveKit itself for the audio and video.
@@ -162,16 +163,16 @@ export async function screenSources(): Promise<ScreenSource[]> {
 }
 
 /**
- * `sound` (0.5.0 Broadcast now): also send what the computer is playing. Windows only: Electron
- * can capture the system sound there ("loopback"); a Mac has no way to without extra software.
+ * `sound`: also send what the computer is playing through Electron's own loopback. Only used
+ * where Glofly's own screen-sound capture can't run (screenSound: 'system', older Windows); it
+ * hears everything, Glofly's calls included. Everywhere else the sound comes from screenSound.
  */
 export function chooseScreen(sourceId: string, sound = false): boolean {
   chosen = { id: sourceId, at: Date.now(), sound }
   return true
 }
 
-/** Can this computer share its sound along with the screen? */
-export const canShareSound = (): boolean => process.platform === 'win32'
+const canShareSound = (): boolean => screenSoundSupport() === 'system'
 
 /** Answers the window's request to share its screen with the picked screen or window, if any. */
 export async function pickedScreen(): Promise<{

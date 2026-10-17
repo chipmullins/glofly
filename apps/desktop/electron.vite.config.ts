@@ -34,7 +34,18 @@ const cspServer = (mode: string): Plugin => ({
 })
 
 export default defineConfig(({ mode }) => ({
-  main: { resolve: { alias: shared } },
+  main: {
+    resolve: { alias: shared },
+    build: {
+      rollupOptions: {
+        // The screen-sound capture runs in a process of its own (src/main/screenSound).
+        input: {
+          index: resolve('src/main/index.ts'),
+          screenSound: resolve('src/main/screenSound/worker.ts')
+        }
+      }
+    }
+  },
   preload: { resolve: { alias: shared } },
   renderer: {
     resolve: {

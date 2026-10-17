@@ -4,6 +4,16 @@ productName: Glofly
 copyright: Copyright © 2026 Glofly
 directories:
   buildResources: build
+# Electron's built-in switches ("fuses"), flipped in the packaged app (not in npm run dev):
+# the Glofly program can't be reused as a plain Node.js runner, doesn't take Node options or a
+# debugger from the command line or environment, and only runs its own signed-in-place app.asar
+# (checked against the hash built into the program), so nobody can swap in other code.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 files:
   - '!**/.vscode/*'
   - '!src/*'
@@ -21,7 +31,16 @@ asarUnpack:
   - resources/**
   # Push to talk's native keyboard hook: .node files can't load from inside the archive
   - '**/node_modules/uiohook-napi/**'
+  # 0.5.0 screen sound (src/main/screenSound): Windows' capture (loopback-capture, plus koffi to
+  # find a window's app) and the Mac's AudioTee helper, which must be a real file to run.
+  - '**/node_modules/loopback-capture/**'
+  - '**/node_modules/koffi/**'
+  - '**/node_modules/@koromix/**'
+  - '**/node_modules/audiotee/bin/**'
 win:
+  # Screen sound on Windows uses loopback-capture + koffi; the Mac's helper isn't needed here.
+  files:
+    - '!**/node_modules/audiotee/**'
   executableName: Glofly
   icon: build/icon.ico
 nsis:
@@ -47,6 +66,13 @@ nsis:
 # Action falls back to the old ad-hoc test build (it overrides identity/hardenedRuntime/notarize).
 mac:
   icon: build/icon.icns
+  # Electron 44 needs macOS 13 (Ventura) or newer.
+  minimumSystemVersion: '13.0'
+  # Screen sound on a Mac uses the AudioTee helper; Windows' capture modules aren't needed.
+  files:
+    - '!**/node_modules/loopback-capture/**'
+    - '!**/node_modules/koffi/**'
+    - '!**/node_modules/@koromix/**'
   category: public.app-category.social-networking
   # Names the .zip (and the .dmg, which also sets it below): Glofly-<version>-mac.zip / .dmg.
   # electron-builder has no top-level "zip:" section.
@@ -71,9 +97,16 @@ mac:
   extendInfo:
     NSCameraUsageDescription: Glofly uses your camera for video calls.
     NSMicrophoneUsageDescription: Glofly uses your microphone for voice and video calls.
+    # macOS 14.2+: sending a game's or the computer's sound with a shared screen (0.5.0).
+    NSAudioCaptureUsageDescription: Glofly sends the sound of what you share with your screen.
 dmg:
   artifactName: Glofly-${version}-mac.${ext}
 linux:
+  files:
+    - '!**/node_modules/loopback-capture/**'
+    - '!**/node_modules/koffi/**'
+    - '!**/node_modules/@koromix/**'
+    - '!**/node_modules/audiotee/**'
   target:
     - AppImage
   maintainer: Glofly

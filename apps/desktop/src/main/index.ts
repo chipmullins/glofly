@@ -81,6 +81,7 @@ import {
   watchStart,
   watchStop
 } from './calls'
+import { screenSoundSupport, startScreenSound, stopScreenSound } from './screenSound'
 import { isWatchReaction, isYouTubeId } from '@glofly/shared/watch'
 import { looksLikeVideo } from '@glofly/shared/attachments'
 import { VIDEO_MAX_BYTES } from '@glofly/shared/rules'
@@ -335,7 +336,8 @@ function setUpPermissions(): void {
       void pickedScreen()
         .then((picked) => {
           if (!picked) console.warn('[screen share] the picked screen or window was not found')
-          // Broadcasts on Windows also send the computer's sound (asked for, and only then).
+          // Older Windows: Electron's loopback sends the computer's sound (asked for, and only
+          // then). Everywhere else the sound comes from screenSound, never from here.
           callback(
             picked
               ? picked.sound && request.audioRequested
@@ -716,9 +718,6 @@ function registerIpcHandlers(): void {
   ipcMain.handle('broadcasts:watch', (event, userId: unknown) =>
     fromApp(event) ? social.watchBroadcast(userId) : invalid
   )
-  ipcMain.handle('broadcasts:can-share-sound', (event) =>
-    fromApp(event) ? social.canShareSound() : false
-  )
 
   // 0.5.0 chat extras (each checks its own values in chatExtras.ts).
   ipcMain.handle('chat:gifs', (event, q: unknown, offset: unknown) =>
@@ -962,6 +961,20 @@ function registerIpcHandlers(): void {
   ipcMain.handle('calls:screen-access', (event) => (fromApp(event) ? macScreenAccess() : 'unknown'))
   ipcMain.on('app:open-privacy-settings', (event, pane: unknown) => {
     if (isAppUrl(event.senderFrame?.url ?? '') && isPrivacyPane(pane)) openMacPrivacySettings(pane)
+  })
+  // 0.5.0: the sound that goes with a shared screen or window (screenSound/index.ts).
+  ipcMain.handle('screen-sound:support', (event) =>
+    fromApp(event) ? screenSoundSupport() : 'none'
+  )
+  ipcMain.handle('screen-sound:start', (event, sourceId: unknown) =>
+    fromApp(event) &&
+    typeof sourceId === 'string' &&
+    /^(screen|window):[\w:-]{1,100}$/.test(sourceId)
+      ? startScreenSound(event.sender, sourceId)
+      : { ok: false }
+  )
+  ipcMain.handle('screen-sound:stop', (event) => {
+    if (fromApp(event)) stopScreenSound(event.sender)
   })
   ipcMain.handle('calls:choose-screen', (event, sourceId: unknown, sound: unknown) =>
     fromApp(event) &&

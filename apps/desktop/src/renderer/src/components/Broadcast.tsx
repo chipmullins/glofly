@@ -14,7 +14,7 @@ import { useSocial } from '../lib/social'
 import { goLive, stopLive, useMyBroadcast } from '../lib/broadcast'
 import Avatar from './Avatar'
 import EmojiText from './EmojiText'
-import { ScreenPicker } from './CallPanel'
+import { ScreenPicker, SoundChoice } from './CallPanel'
 import { ExitFullscreenIcon, FullscreenIcon, SpeakerIcon, SpeakerOffIcon } from './icons'
 import { LiveIcon } from './Social'
 import './Broadcast.css'
@@ -38,15 +38,12 @@ export function GoLiveDialog({
   onProblem: (m: string) => void
 }): React.JSX.Element {
   const [title, setTitle] = useState('')
+  // Browser only (the desktop picker has its own "Include sound").
   const [sound, setSound] = useState(true)
-  const [canSound, setCanSound] = useState(false)
-  useEffect(() => {
-    void window.glofly.broadcasts.canShareSound().then(setCanSound)
-  }, [])
 
-  async function start(sourceId: string | null): Promise<void> {
+  async function start(sourceId: string | null, withSound: boolean): Promise<void> {
     onClose()
-    const problem = await goLive(title.trim() || null, sourceId, sound && canSound)
+    const problem = await goLive(title.trim() || null, sourceId, withSound)
     if (problem) onProblem(problem)
   }
 
@@ -62,23 +59,7 @@ export function GoLiveDialog({
           autoFocus
         />
       </label>
-      {canSound ? (
-        <label className="golive-sound">
-          <input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} />
-          <span>
-            Include sound
-            <small>
-              {isWeb
-                ? 'Your browser will ask which sound to share.'
-                : 'Everything your computer plays goes with the screen, Glofly calls too.'}
-            </small>
-          </span>
-        </label>
-      ) : (
-        <p className="golive-note">
-          On a Mac, only your screen is shared (macOS doesn&apos;t let apps send its sound).
-        </p>
-      )}
+      {isWeb && <SoundChoice support="browser" picked={null} on={sound} onChange={setSound} />}
     </div>
   )
 
@@ -109,7 +90,7 @@ export function GoLiveDialog({
             <button
               type="button"
               className="small-button golive-start"
-              onClick={() => void start(null)}
+              onClick={() => void start(null, sound)}
             >
               Go live
             </button>
@@ -124,7 +105,8 @@ export function GoLiveDialog({
       subtitle="Friends can drop in and watch, no call needed. Pick what they'll see."
       confirmLabel="Go live"
       extra={options}
-      onPick={(id) => void start(id)}
+      soundDefault="on"
+      onPick={(id, withSound) => void start(id, withSound)}
       onClose={onClose}
     />
   )

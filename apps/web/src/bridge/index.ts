@@ -429,9 +429,7 @@ export function createBridge(): GloflyApi {
         request<{ broadcast: Broadcast | null; viewers: PublicUser[] }>('GET', '/broadcasts/mine'),
       watch: async (userId) =>
         badId(userId) ??
-        checkedJoin(await request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`)),
-      // Chrome and Edge can share a tab's or the computer's sound; the browser asks.
-      canShareSound: async () => true
+        checkedJoin(await request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`))
     },
     // 0.5.0 chat extras (the server checks everything; these only keep addresses well-formed).
     chat: {
@@ -441,7 +439,9 @@ export function createBridge(): GloflyApi {
         if (from >= 5000) return Promise.resolve({ ok: true, data: { gifs: [], next: null } })
         return request<GifPage>(
           'GET',
-          q ? `/gifs/search?q=${encodeURIComponent(q)}&offset=${from}` : `/gifs/trending?offset=${from}`
+          q
+            ? `/gifs/search?q=${encodeURIComponent(q)}&offset=${from}`
+            : `/gifs/trending?offset=${from}`
         )
       },
       sendGif: (id, gifId, replyToId) =>
@@ -488,7 +488,10 @@ export function createBridge(): GloflyApi {
         ),
       startGame: (id, kind) =>
         badId(id) ??
-        unwrap(request<{ message: Message }>('POST', `/conversations/${id}/games`, { kind }), 'message'),
+        unwrap(
+          request<{ message: Message }>('POST', `/conversations/${id}/games`, { kind }),
+          'message'
+        ),
       move: (id, mid, move) =>
         badId(id, mid) ??
         unwrap(
@@ -517,7 +520,15 @@ export function createBridge(): GloflyApi {
       // The browser shows its own picker (getDisplayMedia), so there's no list to show here.
       screenSources: async () => [],
       chooseScreen: async () => true,
-      screenAccess: async () => 'granted'
+      screenAccess: async () => 'granted',
+      // Chrome and Edge can share a tab's or the computer's sound; the browser asks which.
+      screenSound: {
+        support: async () => 'browser',
+        start: async () => ({ ok: false }),
+        stop: async () => undefined,
+        onChunk: () => () => undefined,
+        onEnded: () => () => undefined
+      }
     },
     watch: {
       playerUrl: async () => `${API_URL}/watch/player`,

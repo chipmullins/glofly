@@ -65,9 +65,12 @@ export function showNotification(n: ShowNotification, appIcon: string): void {
     }
     clearNotification(n.key)
   })
-  toast.on('close', () => {
+  const forget = (): void => {
     if (shown.get(n.key) === toast) shown.delete(n.key)
-  })
+  }
+  toast.on('close', forget)
+  // Electron 42+ on a Mac: an unsigned test build can't show notifications (they fail instead).
+  toast.on('failed', forget)
   shown.set(n.key, toast)
   toast.show()
 }

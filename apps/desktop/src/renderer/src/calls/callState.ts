@@ -69,7 +69,8 @@ export type CallsValue = {
   toggleMic: () => void
   toggleCamera: () => void
   /** Shares a screen or window picked in Glofly's picker. */
-  shareScreen: (sourceId: string) => Promise<void>
+  /** `sound`: send the shared app's sound too (desktop; the browser asks for itself). */
+  shareScreen: (sourceId: string, sound?: boolean) => Promise<void>
   stopSharing: () => void
   /** Group calls: rings people in the group who aren't in the call. */
   ring: (userIds: string[]) => Promise<void>

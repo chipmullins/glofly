@@ -87,6 +87,16 @@ export type ScreenSource = {
   icon: string | null
 }
 
+/** What sound can go with a shared screen on this computer (calls.screenSound). */
+export type ScreenSoundSupport = 'app' | 'system' | 'browser' | 'none'
+export type ScreenSoundFormat = {
+  sampleRate: number
+  channels: number
+  float: boolean
+  /** 'app': only the shared window's app. 'computer': everything except Glofly. */
+  scope: 'app' | 'computer'
+}
+
 export type AppSettingsChanges = Partial<
   Pick<AppSettings, 'closeToTray' | 'openAtLogin' | 'theme' | 'accent' | 'textSize'>
 > & { sounds?: Partial<SoundSettings>; notifications?: Partial<NotificationSettings> }
@@ -449,8 +459,6 @@ export type GloflyApi = {
     stop: () => Promise<ApiResult<null>>
     mine: () => Promise<ApiResult<{ broadcast: Broadcast | null; viewers: PublicUser[] }>>
     watch: (userId: string) => Promise<ApiResult<BroadcastJoin>>
-    /** Can the computer's sound go with the screen? (Windows and browsers yes; a Mac no) */
-    canShareSound: () => Promise<boolean>
   }
   /** 0.5.0 chat extras: GIFs, link previews, polls, mini games and firefly swarms. */
   chat: {
@@ -511,8 +519,8 @@ export type GloflyApi = {
     /** Screens and windows that can be shared. */
     screenSources: () => Promise<ScreenSource[]>
     /**
-     * Picks what the next screen share shows (the share itself starts in the call). `sound`
-     * (0.5.0 broadcasts, Windows only): the computer's sound goes with it.
+     * Picks what the next screen share shows (the share itself starts in the call). `sound`:
+     * Electron's own loopback goes with it (only where screenSound.support() is 'system').
      */
     chooseScreen: (sourceId: string, sound?: boolean) => Promise<boolean>
     /**
@@ -520,6 +528,22 @@ export type GloflyApi = {
      * Security → Screen & System Audio Recording). Always "granted" on Windows.
      */
     screenAccess: () => Promise<'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown'>
+    /** 0.5.0: the sound that goes with a shared screen or window (renderer lib/screenSound.ts). */
+    screenSound: {
+      /**
+       * 'app': only the shared window's app, or the whole computer without Glofly (Windows 10
+       * 2004+, macOS 14.2+). 'system': everything, Glofly too (older Windows). 'browser': the
+       * browser asks. 'none': no sound (older Macs).
+       */
+      support: () => Promise<ScreenSoundSupport>
+      /** Starts listening for a picked screen or window; the sound arrives through onChunk. */
+      start: (sourceId: string) => Promise<{ ok: true; format: ScreenSoundFormat } | { ok: false }>
+      stop: () => Promise<void>
+      /** Interleaved 16-bit (or 32-bit float) PCM, about 20 ms at a time. */
+      onChunk: (callback: (pcm: Uint8Array) => void) => () => void
+      /** The capture stopped by itself (the app quit, the computer said no). */
+      onEnded: (callback: () => void) => () => void
+    }
   }
   /** Watch Together (0.5.0): a YouTube video everyone in the call watches at the same moment. */
   watch: {

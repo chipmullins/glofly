@@ -6,6 +6,7 @@ import { Room, RoomEvent, Track } from 'livekit-client'
 import type { Broadcast } from '../../../preload/api-types'
 import { isMac, isWeb } from './platform'
 import { refreshSocial } from './social'
+import { shareBrowserScreen, shareDesktopScreen } from './screenSound'
 
 type Host =
   | { status: 'idle' }
@@ -46,21 +47,9 @@ export async function goLive(
   const room = new Room({ adaptiveStream: false, dynacast: true })
   try {
     await room.connect(r.data.url, r.data.token, { autoSubscribe: false })
-    if (isWeb) {
-      await room.localParticipant.setScreenShareEnabled(true, {
-        audio: sound,
-        systemAudio: sound ? 'include' : 'exclude',
-        selfBrowserSurface: 'exclude',
-        surfaceSwitching: 'include',
-        resolution: { width: 1920, height: 1080, frameRate: 30 }
-      })
-    } else if (sourceId) {
-      await window.glofly.calls.chooseScreen(sourceId, sound)
-      await room.localParticipant.setScreenShareEnabled(true, {
-        audio: sound,
-        resolution: { width: 1920, height: 1080, frameRate: 30 }
-      })
-    }
+    const resolution = { width: 1920, height: 1080, frameRate: 30 }
+    if (isWeb) await shareBrowserScreen(room.localParticipant, sound, resolution)
+    else if (sourceId) await shareDesktopScreen(room.localParticipant, sourceId, sound, resolution)
     if (!room.localParticipant.isScreenShareEnabled)
       throw Object.assign(new Error('not shared'), { name: 'NotAllowedError' })
   } catch (err) {

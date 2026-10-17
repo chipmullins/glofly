@@ -174,8 +174,7 @@ const glofly: GloflyApi = {
     start: (title: string | null) => ipcRenderer.invoke('broadcasts:start', title),
     stop: () => ipcRenderer.invoke('broadcasts:stop'),
     mine: () => ipcRenderer.invoke('broadcasts:mine'),
-    watch: (userId: string) => ipcRenderer.invoke('broadcasts:watch', userId),
-    canShareSound: () => ipcRenderer.invoke('broadcasts:can-share-sound')
+    watch: (userId: string) => ipcRenderer.invoke('broadcasts:watch', userId)
   },
   chat: {
     gifs: (query: string, offset?: number) => ipcRenderer.invoke('chat:gifs', query, offset),
@@ -219,7 +218,28 @@ const glofly: GloflyApi = {
     screenSources: () => ipcRenderer.invoke('calls:screen-sources'),
     chooseScreen: (sourceId: string, sound?: boolean) =>
       ipcRenderer.invoke('calls:choose-screen', sourceId, sound),
-    screenAccess: () => ipcRenderer.invoke('calls:screen-access')
+    screenAccess: () => ipcRenderer.invoke('calls:screen-access'),
+    screenSound: {
+      support: () => ipcRenderer.invoke('screen-sound:support'),
+      start: (sourceId: string) => ipcRenderer.invoke('screen-sound:start', sourceId),
+      stop: () => ipcRenderer.invoke('screen-sound:stop'),
+      onChunk: (callback: (pcm: Uint8Array) => void) => {
+        const listener = (_e: Electron.IpcRendererEvent, pcm: unknown): void => {
+          if (pcm instanceof Uint8Array) callback(pcm)
+        }
+        ipcRenderer.on('screen-sound:chunk', listener)
+        return () => {
+          ipcRenderer.removeListener('screen-sound:chunk', listener)
+        }
+      },
+      onEnded: (callback: () => void) => {
+        const listener = (): void => callback()
+        ipcRenderer.on('screen-sound:ended', listener)
+        return () => {
+          ipcRenderer.removeListener('screen-sound:ended', listener)
+        }
+      }
+    }
   },
   watch: {
     playerUrl: () => ipcRenderer.invoke('watch:player-url'),

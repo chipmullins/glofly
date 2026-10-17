@@ -5,6 +5,7 @@ import type {
   ConversationSummary,
   PublicUser,
   ScreenSource,
+  ScreenSoundSupport,
   SignedInUser
 } from '../../../preload/api-types'
 import {
@@ -51,6 +52,7 @@ import { useWatch } from '../calls/useWatch'
 import { StartWatchDialog, WatchStage } from './WatchTogether'
 import { canControlWatch } from '@glofly/shared/watch'
 import { isMac, isWeb, web } from '../lib/platform'
+import { screenSoundSupport } from '../lib/screenSound'
 import { cameraFit, type VideoFit } from '../lib/videoFit'
 import './CallPanel.css'
 
@@ -579,24 +581,99 @@ function useCallPrefsLive(): CallPrefs {
 }
 
 /** Pick a screen or window to share (with pictures, like the system picker). */
+/** What this computer can send along with a shared screen ('browser' in a browser). */
+function useSoundSupport(): ScreenSoundSupport | null {
+  const [support, setSupport] = useState<ScreenSoundSupport | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void screenSoundSupport().then((s) => !cancelled && setSupport(s))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return support
+}
+
+const shortName = (name: string): string => (name.length > 36 ? `${name.slice(0, 35)}…` : name)
+
+/**
+ * 0.5.0 "Include sound", worded for what will actually be sent: a window sends only that app's
+ * sound, a screen sends everything except Glofly (Windows 10 2004+, macOS 14.2+); older Windows
+ * sends everything; older Macs can't send any.
+ */
+export function SoundChoice({
+  support,
+  picked,
+  on,
+  onChange
+}: {
+  support: ScreenSoundSupport | null
+  picked: ScreenSource | null
+  on: boolean
+  onChange: (on: boolean) => void
+}): React.JSX.Element | null {
+  if (!support) return null
+  if (support === 'none') {
+    return (
+      <p className="share-sound-note">
+        {isMac
+          ? 'Sound can go with your screen on macOS 14.2 or newer.'
+          : "This computer can't send sound with your screen."}
+      </p>
+    )
+  }
+  const label =
+    support === 'app' && picked?.kind === 'window'
+      ? `Include ${shortName(picked.name)}'s sound`
+      : 'Include sound'
+  const detail =
+    support === 'browser'
+      ? 'Your browser will ask which sound to share.'
+      : support === 'system'
+        ? 'Everything your computer plays goes too, Glofly calls included.'
+        : picked?.kind === 'window'
+          ? 'Only this app. Glofly, music and everything else stay out.'
+          : 'Everything your computer plays, except Glofly (nobody hears themselves).'
+  return (
+    <label className="share-sound">
+      <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        {label}
+        <small>{detail}</small>
+      </span>
+    </label>
+  )
+}
+
 export function ScreenPicker({
   onPick,
   onClose,
   title = 'Share your screen',
   subtitle = "Pick what they'll see. You can stop sharing anytime.",
   confirmLabel = 'Share',
-  extra
+  extra,
+  soundDefault = 'when-separate'
 }: {
-  onPick: (sourceId: string) => void
+  /** `sound`: send its sound too (the choice under the list). */
+  onPick: (sourceId: string, sound: boolean) => void
   onClose: () => void
   /** 0.5.0 Broadcast now reuses the picker with its own words and options. */
   title?: string
   subtitle?: string
   confirmLabel?: string
   extra?: React.ReactNode
+  /**
+   * Whether "Include sound" starts on. 'when-separate' (calls): only where Glofly's own sound
+   * stays out of it, so a call never hears itself back.
+   */
+  soundDefault?: 'on' | 'when-separate'
 }): React.JSX.Element {
   const [sources, setSources] = useState<ScreenSource[] | null>(null)
   const [picked, setPicked] = useState<string | null>(null)
+  const support = useSoundSupport()
+  const [soundChoice, setSoundChoice] = useState<boolean | null>(null)
+  const sound = soundChoice ?? (soundDefault === 'on' || support === 'app')
+  const pick = (id: string): void => onPick(id, sound && support !== 'none')
   // Mac: macOS must allow Screen Recording, or the list only has Glofly and the wallpaper.
   const [needsMacPermission, setNeedsMacPermission] = useState(false)
 
@@ -639,7 +716,7 @@ export function ScreenPicker({
               aria-checked={picked === s.id}
               className={picked === s.id ? 'screen-option screen-option--picked' : 'screen-option'}
               onClick={() => setPicked(s.id)}
-              onDoubleClick={() => onPick(s.id)}
+              onDoubleClick={() => pick(s.id)}
             >
               <span className="screen-thumb">
                 {s.thumbnail ? <img src={s.thumbnail} alt="" draggable={false} /> : null}
@@ -701,6 +778,14 @@ export function ScreenPicker({
             </>
           )}
         </div>
+        <div className="share-sound-row">
+          <SoundChoice
+            support={support}
+            picked={sources?.find((x) => x.id === picked) ?? null}
+            on={sound}
+            onChange={setSoundChoice}
+          />
+        </div>
         <div className="dialog-foot">
           <button type="button" className="small-button small-button--quiet" onClick={onClose}>
             Cancel
@@ -709,7 +794,7 @@ export function ScreenPicker({
             type="button"
             className="small-button small-button--primary"
             disabled={!picked}
-            onClick={() => picked && onPick(picked)}
+            onClick={() => picked && pick(picked)}
           >
             {confirmLabel}
           </button>
@@ -1528,9 +1613,9 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       {picking && (
         <ScreenPicker
           onClose={() => setPicking(false)}
-          onPick={(id) => {
+          onPick={(id, sound) => {
             setPicking(false)
-            void calls.shareScreen(id)
+            void calls.shareScreen(id, sound)
           }}
         />
       )}

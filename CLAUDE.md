@@ -55,6 +55,13 @@
   ONNX Runtime + `models/u2netp.onnx`), Broadcast now (`broadcasts/`, in memory like Watch Together).
   New message fields are optional and each carries a plain-text `body` for older apps; pushes for
   social news reuse the 0.3.0 friend alert types so no phone needs new native code for them.
+- Electron 44 (desktop and Control; Mac app needs macOS 13+). Electron no longer downloads itself
+  on `npm install`: the first `npm run dev` (or electron-builder) fetches it. Packaged apps flip
+  Electron's fuses (no run-as-Node, no NODE_OPTIONS/--inspect, app.asar only + integrity check).
+  Screen sound (0.5.0, `src/main/screenSound/`): a utility process captures only the shared
+  window's app, or the whole computer minus Glofly (Windows 10 2004+: loopback-capture + koffi;
+  macOS 14.2+: AudioTee); the renderer turns it into the screen share's audio track
+  (`lib/screenSound.ts`). Older Windows falls back to Electron's loopback (everything).
 - **Constellations branch:** Glofly 2.0 work goes on the `constellations` branch (made from `dev`
   on Oct 14, 2026), never on `dev`, so bug fixes and releases keep going from `dev` untouched.
   Bring fixes in with `git merge dev` on `constellations` now and then; it goes back into `dev`

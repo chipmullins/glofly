@@ -9,7 +9,7 @@ import type {
   YearInGlow
 } from '../preload/api-types'
 import { isUserId, request } from './api'
-import { canShareSound, checkedJoin } from './calls'
+import { checkedJoin } from './calls'
 
 // 0.5.0 social extras (glows, hangs, birthdays, Year in Glow), custom stickers and Broadcast now.
 // Every value from the window is checked here before it goes to the server.
@@ -98,5 +98,3 @@ export async function watchBroadcast(userId: unknown): Promise<ApiResult<Broadca
   if (!isUserId(userId)) return bad()
   return checkedJoin(await request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`))
 }
-
-export { canShareSound }

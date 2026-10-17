@@ -58,30 +58,6 @@
   border-color: var(--glo-orange);
   box-shadow: 0 0 0 3px rgba(var(--glo-accent-rgb), 0.14);
 }
-.golive-sound {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 14px;
-  color: var(--glo-ink);
-  cursor: pointer;
-}
-.golive-sound input {
-  margin-top: 3px;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--glo-orange);
-}
-.golive-sound small {
-  display: block;
-  font-size: 12.5px;
-  color: var(--glo-muted);
-}
-.golive-note {
-  margin: 0;
-  font-size: 13px;
-  color: var(--glo-muted);
-}
 .golive-start {
   border: 0;
   background: #d33a2c;

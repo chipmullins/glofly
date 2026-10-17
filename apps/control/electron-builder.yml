@@ -6,6 +6,16 @@ productName: Glofly Control
 copyright: Copyright © 2026 Glofly
 directories:
   buildResources: build
+# Electron's built-in switches ("fuses"), flipped in the packaged app (not in npm run dev):
+# the Glofly program can't be reused as a plain Node.js runner, doesn't take Node options or a
+# debugger from the command line or environment, and only runs its own signed-in-place app.asar
+# (checked against the hash built into the program), so nobody can swap in other code.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 files:
   - '!**/.vscode/*'
   - '!src/*'

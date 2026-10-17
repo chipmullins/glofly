@@ -42,7 +42,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
-    "electron": "39.8.10",
+    "electron": "44.5.1",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
     "emojibase-data": "^17.0.0",
@@ -55,5 +55,10 @@
     "react-dom": "^19.2.1",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"
+  },
+  "optionalDependencies": {
+    "audiotee": "0.0.7",
+    "koffi": "3.3.2",
+    "loopback-capture": "3.0.2"
   }
 }

@@ -141,8 +141,9 @@ function setUpIpc(): void {
     await writeFile(choice.filePath, result.csv, 'utf8')
     return { ok: true, saved: true }
   })
-  ipcMain.handle('control:copy', (event, value: unknown) => {
-    if (fromApp(event) && text(value, 200)) clipboard.writeText(value)
+  ipcMain.handle('control:copy', async (event, value: unknown) => {
+    // Electron 44: writeText answers with a promise (it used to be instant).
+    if (fromApp(event) && text(value, 200)) await clipboard.writeText(value).catch(() => undefined)
   })
   ipcMain.handle('control:open-external', (event, url: unknown) => {
     if (

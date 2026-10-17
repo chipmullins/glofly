@@ -37,6 +37,7 @@ import {
 } from './callState'
 import '../components/CallPanel.css'
 import { isMac, isTouch, isWeb, privacySettingsPath } from '../lib/platform'
+import { shareBrowserScreen, shareDesktopScreen } from '../lib/screenSound'
 
 // Mac: what to do when macOS won't let Glofly see the screen. Builds before Oct 12 had a different
 // signature, so an old "Glofly" switch in that list can look on while it no longer counts.
@@ -602,19 +603,14 @@ export function CallProvider({
   }, [bump, problem, setCurrent])
 
   const shareScreen = useCallback(
-    async (sourceId: string) => {
+    async (sourceId: string, sound = false) => {
       const local = roomRef.current?.localParticipant
       if (!local) return
       // In a browser, the browser shows its own picker (a tab, a window or the whole screen),
       // and can share that tab's sound or the computer's sound with it (Chrome and Edge).
       if (isWeb) {
         try {
-          await local.setScreenShareEnabled(true, {
-            audio: true,
-            systemAudio: 'include',
-            selfBrowserSurface: 'exclude',
-            surfaceSwitching: 'include'
-          })
+          await shareBrowserScreen(local, true)
         } catch (err) {
           const e = err as { name?: string }
           // Cancelled in the browser's picker: nothing to say.
@@ -625,9 +621,9 @@ export function CallProvider({
         bump()
         return
       }
-      await window.glofly.calls.chooseScreen(sourceId)
       try {
-        await local.setScreenShareEnabled(true, { audio: false })
+        // With sound: only the shared app's (a window), or everything but Glofly (a screen).
+        await shareDesktopScreen(local, sourceId, sound)
       } catch (err) {
         // Glofly's own picker has already been answered by now, so any failure here is real
         // (an AbortError too: that's how Electron reports a share it couldn't start). It used to
