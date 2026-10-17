@@ -109,14 +109,16 @@ export const call = {
 
 export type ThemeChoice = 'system' | 'light' | 'dark'
 
-/** Accent colors, the same four as the desktop app (Settings → Appearance → Accent color). */
-export type AccentChoice = 'orange' | 'red' | 'lagoon' | 'violet'
+/** Accent colors, the same as the desktop app (Settings → Appearance → Accent color). */
+export type AccentChoice = 'orange' | 'red' | 'lagoon' | 'violet' | 'blossom' | 'graphite'
 
 export const ACCENTS: { key: AccentChoice; label: string; swatch: string }[] = [
   { key: 'orange', label: 'Glow Orange', swatch: '#F47A1F' },
   { key: 'red', label: 'Glofly Red', swatch: '#E0193A' },
   { key: 'lagoon', label: 'Glofly Lagoon', swatch: '#1789AD' },
   { key: 'violet', label: 'Glofly Violet', swatch: '#8B3FD9' },
+  { key: 'blossom', label: 'Glofly Blossom', swatch: '#D63384' },
+  { key: 'graphite', label: 'Glofly Graphite', swatch: '#3D3530' },
 ]
 
 /** The accent parts of a theme (values from the desktop's main.css data-accent blocks). */
@@ -147,6 +149,14 @@ const accentColors: Record<Exclude<AccentChoice, 'orange'>, { light: AccentParts
   violet: {
     light: accentParts('#8B3FD9', '#FFFFFF', '#7230B8', '#EBDCFA', '#F5EEFD', '139,63,217', false),
     dark: accentParts('#B57CFF', '#1D0A33', '#CFA8FF', '#3A2552', '#3A2552', '181,124,255', true),
+  },
+  blossom: {
+    light: accentParts('#D63384', '#FFFFFF', '#B0266A', '#F8D3E5', '#FCEBF3', '214,51,132', false),
+    dark: accentParts('#FF74B0', '#33081B', '#FF9FC8', '#4A1F33', '#4A1F33', '255,116,176', true),
+  },
+  graphite: {
+    light: accentParts('#3D3530', '#FFFFFF', '#3D3530', '#E3DBD4', '#F3EEE9', '61,53,48', false),
+    dark: accentParts('#E8DDD3', '#1E1916', '#F2E9E1', '#3D342E', '#3D342E', '232,221,211', true),
   },
 }
 const themed: Record<string, Colors> = {}

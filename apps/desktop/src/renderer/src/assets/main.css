@@ -212,6 +212,54 @@
   --glo-link-hover: #e2c9ff;
 }
 
+/* Glofly Blossom accent (pink, 0.5.0) */
+:root[data-accent='blossom'] {
+  --glo-accent: #d63384;
+  --glo-accent-deep: #b9286f;
+  --glo-on-accent: #ffffff;
+  --glo-accent-rgb: 214, 51, 132;
+  --glo-accent-soft: #f8d3e5;
+  --glo-accent-tint: #fcebf3;
+  --glo-accent-muted: #f0b2d0;
+  --glo-link: #b0266a;
+  --glo-link-hover: #861d51;
+}
+:root[data-theme='dark'][data-accent='blossom'] {
+  --glo-accent: #ff74b0;
+  --glo-accent-deep: #f2619f;
+  --glo-on-accent: #33081b;
+  --glo-accent-rgb: 255, 116, 176;
+  --glo-accent-soft: #4a1f33;
+  --glo-accent-tint: #3a1828;
+  --glo-accent-muted: #5c2a41;
+  --glo-link: #ff9fc8;
+  --glo-link-hover: #ffc4dd;
+}
+
+/* Glofly Graphite accent (no color, 0.5.0) */
+:root[data-accent='graphite'] {
+  --glo-accent: #3d3530;
+  --glo-accent-deep: #2a2420;
+  --glo-on-accent: #ffffff;
+  --glo-accent-rgb: 61, 53, 48;
+  --glo-accent-soft: #e3dbd4;
+  --glo-accent-tint: #f3eee9;
+  --glo-accent-muted: #cfc4ba;
+  --glo-link: #3d3530;
+  --glo-link-hover: #1f1a17;
+}
+:root[data-theme='dark'][data-accent='graphite'] {
+  --glo-accent: #e8ddd3;
+  --glo-accent-deep: #d8ccc1;
+  --glo-on-accent: #1e1916;
+  --glo-accent-rgb: 232, 221, 211;
+  --glo-accent-soft: #3d342e;
+  --glo-accent-tint: #2f2823;
+  --glo-accent-muted: #4d433c;
+  --glo-link: #f2e9e1;
+  --glo-link-hover: #ffffff;
+}
+
 *,
 *::before,
 *::after {

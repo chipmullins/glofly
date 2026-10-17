@@ -99,7 +99,7 @@ const CALL_SOUNDS: CallSound[] = [
   'none'
 ]
 const THEMES: ThemeChoice[] = ['light', 'dark', 'system']
-const ACCENTS: AccentChoice[] = ['orange', 'red', 'lagoon', 'violet']
+const ACCENTS: AccentChoice[] = ['orange', 'red', 'lagoon', 'violet', 'blossom', 'graphite']
 const TEXT_SIZES: Record<TextSize, number> = { small: 0.9, default: 1, large: 1.1, larger: 1.25 }
 
 function soundSettingOk(key: string, value: unknown): boolean {

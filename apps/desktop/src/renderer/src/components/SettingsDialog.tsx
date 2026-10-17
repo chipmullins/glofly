@@ -729,7 +729,9 @@ export default function SettingsDialog({
                           { value: 'orange', label: 'Glow Orange', swatch: '#f47a1f' },
                           { value: 'red', label: 'Glofly Red', swatch: '#e0193a' },
                           { value: 'lagoon', label: 'Glofly Lagoon', swatch: '#1789ad' },
-                          { value: 'violet', label: 'Glofly Violet', swatch: '#8b3fd9' }
+                          { value: 'violet', label: 'Glofly Violet', swatch: '#8b3fd9' },
+                          { value: 'blossom', label: 'Glofly Blossom', swatch: '#d63384' },
+                          { value: 'graphite', label: 'Glofly Graphite', swatch: '#3d3530' }
                         ]}
                         onChange={(accent) => void changeApp({ accent })}
                       />

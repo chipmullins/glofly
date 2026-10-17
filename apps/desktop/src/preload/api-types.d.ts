@@ -203,7 +203,7 @@ export type SoundSettings = {
 }
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
-export type AccentChoice = 'orange' | 'red' | 'lagoon' | 'violet'
+export type AccentChoice = 'orange' | 'red' | 'lagoon' | 'violet' | 'blossom' | 'graphite'
 export type TextSize = 'small' | 'default' | 'large' | 'larger'
 
 /** Settings → General → Appearance and App. Kept on this computer, not on the server. */

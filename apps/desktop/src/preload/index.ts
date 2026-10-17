@@ -32,7 +32,13 @@ import type {
 /** The accent the main process passed at launch (--glofly-accent=…), so the first frame is right. */
 function accentFromArgs(): AccentChoice {
   const arg = process.argv.find((a) => a.startsWith('--glofly-accent='))?.split('=')[1]
-  return arg === 'red' || arg === 'lagoon' || arg === 'violet' ? arg : 'orange'
+  return arg === 'red' ||
+    arg === 'lagoon' ||
+    arg === 'violet' ||
+    arg === 'blossom' ||
+    arg === 'graphite'
+    ? arg
+    : 'orange'
 }
 
 const glofly: GloflyApi = {
