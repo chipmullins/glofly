@@ -1,3 +1,4 @@
+import { AppState } from 'react-native'
 import { create } from 'zustand'
 import type { Paused, SignedInUser, UpdateRequired } from '@glofly/shared'
 import { secure } from '@/lib/storage'
@@ -43,8 +44,25 @@ export const useSession = create<SessionState>((set) => ({
 }))
 
 /** At start: a saved sign-in, if there is one. Checked against the server later (401 → signed out). */
+let restoreTries = 0
 export async function restoreSession(): Promise<void> {
-  const [token, rawUser] = await Promise.all([secure.get(TOKEN_KEY), secure.get(USER_KEY)])
+  const [t, u] = await Promise.all([secure.read(TOKEN_KEY), secure.read(USER_KEY)])
+  if ((t.failed || u.failed) && restoreTries++ < 10) {
+    // The Keychain is locked (iOS can start the app early, before the phone is unlocked). Don't
+    // treat that as "signed out": try again when Glofly comes to the screen.
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return
+      sub.remove()
+      void restoreSession()
+    })
+    if (AppState.currentState === 'active') {
+      sub.remove()
+      setTimeout(() => void restoreSession(), 300 * restoreTries)
+    }
+    return
+  }
+  const token = t.value
+  const rawUser = u.value
   let user: SignedInUser | null = null
   try {
     user = rawUser ? (JSON.parse(rawUser) as SignedInUser) : null

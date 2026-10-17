@@ -31,6 +31,18 @@ export const secure = {
       return null
     }
   },
+  /**
+   * Like get, but says when the Keychain/Keystore couldn't be read at all (an iPhone can start
+   * Glofly in the background before it's unlocked), so a saved sign-in isn't mistaken for none.
+   */
+  async read(key: string): Promise<{ value: string | null; failed: boolean }> {
+    if (web) return { value: webGet(key), failed: false }
+    try {
+      return { value: await SecureStore.getItemAsync(key), failed: false }
+    } catch {
+      return { value: null, failed: true }
+    }
+  },
   async set(key: string, value: string | null): Promise<void> {
     if (web) return webSet(key, value)
     try {

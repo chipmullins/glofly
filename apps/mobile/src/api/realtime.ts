@@ -23,7 +23,11 @@ import { refreshAccount } from '@/state/account'
 // in the background Android delivers push notifications instead, so the server knows to send them.
 
 let socket: Socket | null = null
-let appState: AppStateStatus = AppState.currentState
+// Read fresh every time. This used to be copied once when the file loaded: on an iPhone the app is
+// often still "inactive" at that moment and turns "active" before startRealtime() listens, so the
+// copy stayed "inactive", nothing loaded and the app sat on "loading" until it was reopened.
+const currentAppState = (): AppStateStatus => AppState.currentState
+let appState: AppStateStatus = currentAppState()
 let backgroundTimer: ReturnType<typeof setTimeout> | null = null
 /** While a call is going, the connection stays open in the background. */
 let keepAliveReasons = new Set<string>()
@@ -45,7 +49,7 @@ const emit = (event: string, payload: unknown) => {
   }
 }
 
-export const isAppActive = () => appState === 'active'
+export const isAppActive = () => currentAppState() === 'active'
 
 function serverParts() {
   const u = new URL(SERVER_URL)
@@ -220,6 +224,7 @@ export function startRealtime() {
   if (started) return
   started = true
   const sync = () => {
+    appState = currentAppState()
     const signedIn = useSession.getState().status === 'signedIn'
     // While Glofly is paused nothing connects; ui/Paused.tsx checks back and this runs again.
     if (!signedIn || useSession.getState().paused) return disconnect()
@@ -233,7 +238,7 @@ export function startRealtime() {
       // A moment's grace for quick app switches, then push notifications take over.
       backgroundTimer = setTimeout(() => {
         backgroundTimer = null
-        if (appState !== 'active' && keepAliveReasons.size === 0) disconnect()
+        if (currentAppState() !== 'active' && keepAliveReasons.size === 0) disconnect()
       }, 1500)
     }
   }

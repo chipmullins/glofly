@@ -1,3 +1,4 @@
+import { AppState } from 'react-native'
 import { mentionsMe, type ConversationSummary, type Message } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { useSession } from './session'
@@ -82,11 +83,17 @@ export function refreshAll(opts: { ifStale?: boolean } = {}): Promise<void> {
     retryTimer = null
     if (results.every(Boolean)) {
       retries = 0
-    } else if (retries < RETRY_MS.length && useSession.getState().status === 'signedIn') {
+    } else if (useSession.getState().status === 'signedIn') {
+      // After the quick retries, keep trying every 30 seconds while Glofly is on screen, instead
+      // of giving up and leaving the lists on "loading" until the app is reopened.
+      const wait = RETRY_MS[retries] ?? 30_000
+      retries++
       retryTimer = setTimeout(() => {
         retryTimer = null
-        if (useSession.getState().status === 'signedIn') void refreshAll()
-      }, RETRY_MS[retries++])
+        if (useSession.getState().status !== 'signedIn') return
+        if (AppState.currentState === 'active') void refreshAll()
+        else retries = 0 // coming back to the app loads everything again anyway
+      }, wait)
     }
   })().finally(() => {
     inFlight = null
