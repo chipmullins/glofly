@@ -559,10 +559,14 @@
 }
 
 /* Your camera on top of the video: drag it anywhere. --px/--py (0..1) place it across the space
-   left over; it keeps clear of the title and buttons while they show. */
+   left over; it keeps clear of the title and buttons while they show. It takes the camera's own
+   shape (--pip-r, width / height, set from the video), its longer side --pip-size, so a 4:3 or
+   upright tablet camera shows whole instead of cropped. An upright call area (a tablet held
+   upright) sizes it by its height. */
 .call-pip {
-  --pip-w: clamp(150px, 20cqw, 300px);
-  --pip-h: calc(var(--pip-w) * 9 / 16);
+  --pip-size: clamp(150px, max(20cqw, 20cqh), 300px);
+  --pip-h: min(calc(var(--pip-size) / var(--pip-r, 1.7778)), var(--pip-size));
+  --pip-w: calc(var(--pip-h) * var(--pip-r, 1.7778));
   --pip-m: 16px;
   --pip-mt: 60px;
   --pip-mb: 82px;
@@ -582,14 +586,16 @@
   touch-action: none;
   transition:
     top 0.25s ease,
-    left 0.25s ease;
+    left 0.25s ease,
+    width 0.25s ease,
+    height 0.25s ease;
 }
 .call-panel--hidden .call-pip {
   --pip-mt: 16px;
   --pip-mb: 16px;
 }
 .call-panel--full .call-pip {
-  --pip-w: clamp(220px, 17cqw, 380px);
+  --pip-size: clamp(220px, max(17cqw, 17cqh), 380px);
   --pip-m: 28px;
   --pip-mt: 76px;
   --pip-mb: 112px;

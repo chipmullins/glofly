@@ -538,6 +538,10 @@
 .voice-preview-video--mirror {
   transform: scaleX(-1);
 }
+/* Tablets: the whole picture in the camera's own shape (it may be 4:3, or upright) */
+.voice-preview-video--whole {
+  object-fit: contain;
+}
 .voice-preview-empty {
   padding: 16px;
   text-align: center;
