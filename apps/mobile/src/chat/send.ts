@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Attachment, Message, ReplyPreview } from '@glofly/shared'
 import * as api from '@/api/glofly'
-import { useSession } from '@/state/session'
+import { onSignOut, useSession } from '@/state/session'
 import { chatMessages, putMessage, setChatMessages, useStore } from '@/state/store'
 import { receiveMessage } from '@/state/sync'
 
@@ -20,6 +20,7 @@ type Outgoing = {
 }
 
 export const useOutbox = create<{ items: Record<string, Outgoing> }>(() => ({ items: {} }))
+onSignOut(() => useOutbox.setState({ items: {} }))
 
 const setItem = (id: string, item: Outgoing | null) => {
   const items = { ...useOutbox.getState().items }

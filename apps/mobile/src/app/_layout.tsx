@@ -26,7 +26,7 @@ setupWebRTC()
 void SplashScreen.preventAutoHideAsync().catch(() => {})
 
 export default function RootLayout() {
-  const [fontsReady] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
     DMSans_700Bold,
@@ -49,6 +49,9 @@ export default function RootLayout() {
     void SystemUI.setBackgroundColorAsync(c.bg).catch(() => {})
   }, [c.bg])
 
+  // A font that fails to load falls back to the system font instead of keeping the splash
+  // screen up for good.
+  const fontsReady = fontsLoaded || !!fontError
   const ready = fontsReady && status !== 'starting'
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync().catch(() => {})

@@ -96,7 +96,9 @@ export async function request<T>(
     return { ok: false, error: 'unreachable', message: UNREACHABLE }
   }
   const json = response.status === 204 ? null : ((await response.json().catch(() => null)) as Json | null)
-  return toResult<T>(response.status, json, auth)
+  // A 401 for a token that's no longer this phone's (signed out, or out and in again while the
+  // request was on its way) must not sign out the session that replaced it.
+  return toResult<T>(response.status, json, auth && useSession.getState().token === token)
 }
 
 /** The raw JSON of a failed request (some answers carry extra fields, like `deleteAfter`). */

@@ -9,3 +9,13 @@ export function useNow(ms = 1000): number {
   }, [ms])
   return now
 }
+
+/**
+ * For the Chats and Groups lists: ticks every 4 seconds only while someone's "typing…" can still
+ * run out, otherwise once a minute (mutes ending). It used to redraw every row every 4 seconds.
+ */
+export function useListNow(typing: Record<string, Record<string, number>>): number {
+  const t = Date.now()
+  const live = Object.values(typing).some((forChat) => Object.values(forChat).some((until) => until > t))
+  return useNow(live ? 4000 : 60_000)
+}

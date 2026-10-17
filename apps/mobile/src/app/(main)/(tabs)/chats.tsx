@@ -14,7 +14,7 @@ import { refreshAll } from '@/state/sync'
 import { chatSections, makeNameOf, pinTimesFor } from '@/lib/chats'
 import { chatMenu, closeChat, openChat, openDmWith } from '@/lib/chatActions'
 import { statusMenu } from '@/lib/status'
-import { useNow } from '@/lib/hooks'
+import { useListNow } from '@/lib/hooks'
 import { joinCallIn } from '@/calls/controller'
 import { Avatar, ChatAvatar } from '@/ui/Avatar'
 import { ChatRow } from '@/ui/ChatRow'
@@ -67,6 +67,11 @@ export function SearchPill({ value, onChange, placeholder }: { value: string; on
   )
 }
 
+// The same functions for every row and render, so ChatRow (memo) only redraws rows that changed.
+const pressChat = (chat: ConversationSummary) => void openChat(chat.id)
+const holdChat = (chat: ConversationSummary) => !reorderActive() && void chatMenu(chat)
+const joinChat = (chat: ConversationSummary) => void joinCallIn(chat.id, false)
+
 export default function Chats() {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
@@ -80,7 +85,7 @@ export default function Chats() {
   const synced = useStore((s) => s.synced.conversations)
   const [query, setQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
-  const now = useNow(4000)
+  const now = useListNow(typing)
   const nameOf = useMemo(() => makeNameOf(people), [people])
   const all = useMemo(() => Object.values(conversations), [conversations])
 
@@ -114,9 +119,9 @@ export default function Chats() {
       typing={typing[chat.id]}
       call={calls[chat.id]}
       now={now}
-      onPress={() => void openChat(chat.id)}
-      onLongPress={() => !reorderActive() && void chatMenu(chat)}
-      onJoin={() => void joinCallIn(chat.id, false)}
+      onPress={pressChat}
+      onLongPress={holdChat}
+      onJoin={joinChat}
     />
   )
 
@@ -141,8 +146,11 @@ export default function Chats() {
             progressBackgroundColor={c.surface}
             onRefresh={async () => {
               setRefreshing(true)
-              await refreshAll()
-              setRefreshing(false)
+              try {
+                await refreshAll()
+              } finally {
+                setRefreshing(false)
+              }
             }}
           />
         }

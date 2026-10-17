@@ -26,15 +26,23 @@ export default function AddFriend() {
     const q = query.trim().replace(/^@/, '')
     if (q.length < 2) {
       setResults(null)
+      setLoading(false)
       return
     }
     setLoading(true)
+    // An older search answering after a newer one was typed is thrown away (it used to replace
+    // the newer results and switch the spinner off while the newer one was still loading).
+    let live = true
     const t = setTimeout(async () => {
       const r = await api.searchUsers(q)
+      if (!live) return
       setLoading(false)
       setResults(r.ok ? r.data : [])
     }, 300)
-    return () => clearTimeout(t)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
   }, [query])
 
   async function add(u: SearchResult) {

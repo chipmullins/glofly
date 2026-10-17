@@ -1,4 +1,4 @@
-import { AppState } from 'react-native'
+import { AppState, Platform } from 'react-native'
 import { create } from 'zustand'
 import type { Paused, SignedInUser, UpdateRequired } from '@glofly/shared'
 import { secure } from '@/lib/storage'
@@ -69,8 +69,21 @@ export async function restoreSession(): Promise<void> {
   } catch {
     user = null
   }
-  if (token && user) useSession.setState({ status: 'signedIn', token, user })
-  else useSession.setState({ status: 'signedOut' })
+  if (token && user) {
+    useSession.setState({ status: 'signedIn', token, user })
+    void upgradeKeychain(token, rawUser!)
+  } else useSession.setState({ status: 'signedOut' })
+}
+
+/** iPhone, once: re-save a sign-in from before Oct 17 so it's readable while the phone is locked. */
+const UPGRADED_KEY = 'session.keychainUpgraded'
+async function upgradeKeychain(token: string, rawUser: string): Promise<void> {
+  if (Platform.OS !== 'ios' || (await secure.get(UPGRADED_KEY))) return
+  // Signed out (or in again) meanwhile: nothing to re-save.
+  if (useSession.getState().token !== token) return
+  await secure.upgrade(TOKEN_KEY, token)
+  await secure.upgrade(USER_KEY, rawUser)
+  await secure.set(UPGRADED_KEY, '1')
 }
 
 export async function startSession(token: string, user: SignedInUser, keep: boolean): Promise<void> {
