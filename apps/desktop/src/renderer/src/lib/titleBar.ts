@@ -60,6 +60,29 @@ export function startTitleBarColor(): void {
     last = key
     window.glofly.window.setTitleBarColor(color, light ? '#4A372B' : '#E8DCD2')
   }
-  setInterval(check, 250)
+  // Four times a second while Glofly is in front, once a second behind other windows (an incoming
+  // call's dimming still shows), and not at all while minimized or in the tray.
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const schedule = (): void => {
+    if (timer !== null) clearTimeout(timer)
+    timer = null
+    if (document.hidden) return
+    timer = setTimeout(
+      () => {
+        timer = null
+        check()
+        schedule()
+      },
+      document.hasFocus() ? 250 : 1000
+    )
+  }
+  const wake = (): void => {
+    check()
+    schedule()
+  }
+  document.addEventListener('visibilitychange', wake)
+  window.addEventListener('focus', wake)
+  window.addEventListener('blur', schedule)
   window.addEventListener('resize', check)
+  schedule()
 }

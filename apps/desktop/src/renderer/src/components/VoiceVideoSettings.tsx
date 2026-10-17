@@ -63,7 +63,8 @@ function useMicLevel(on: boolean, prefs: CallPrefs): { level: number; error: str
           analyser.getByteTimeDomainData(data)
           let peak = 0
           for (const v of data) peak = Math.max(peak, Math.abs(v - 128))
-          setLevel(Math.min(1, peak / 64))
+          // In 2% steps: an unchanged level skips the re-render (this runs every frame).
+          setLevel(Math.round(Math.min(1, peak / 64) * 50) / 50)
           frame = requestAnimationFrame(read)
         }
         read()

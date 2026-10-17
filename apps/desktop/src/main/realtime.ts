@@ -292,6 +292,17 @@ export function disconnectRealtime(): void {
   socket = null
 }
 
+/**
+ * Waking from sleep: the old connection is usually dead without knowing it yet (it would take the
+ * server's ping timeout, up to about a minute, to notice). Start a fresh one now; its "connect"
+ * makes the window catch up on anything missed.
+ */
+export function reconnectRealtime(): void {
+  if (!socket) return
+  socket.disconnect()
+  socket.connect()
+}
+
 /** Tells the server whether someone is using the computer (idle shows as Away). */
 export function setIdle(value: boolean): void {
   if (value === idle) return

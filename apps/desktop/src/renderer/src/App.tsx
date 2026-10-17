@@ -45,9 +45,12 @@ export default function App(): React.JSX.Element {
   // On launch, try the saved session. If it's valid, go straight into the app.
   useEffect(() => {
     let cancelled = false
-    window.glofly.auth.restore().then((user) => {
-      if (!cancelled) setScreen(user ? { name: 'app', user } : { name: 'auth', form: 'login' })
-    })
+    window.glofly.auth
+      .restore()
+      .catch(() => null) // (never stuck on the blank starting screen)
+      .then((user) => {
+        if (!cancelled) setScreen(user ? { name: 'app', user } : { name: 'auth', form: 'login' })
+      })
     return () => {
       cancelled = true
     }
@@ -105,8 +108,11 @@ export default function App(): React.JSX.Element {
 
   async function handleLogout(): Promise<void> {
     playSound('logout')
-    await window.glofly.auth.logout()
-    setScreen({ name: 'auth', form: 'login' })
+    try {
+      await window.glofly.auth.logout()
+    } finally {
+      setScreen({ name: 'auth', form: 'login' })
+    }
   }
 
   // The server ended the session (it expired, or was signed out elsewhere).

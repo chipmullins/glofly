@@ -151,6 +151,7 @@ export function MessageAttachments({
             title="Sticker"
             width={Math.round((a.width ?? 168) * scale)}
             height={Math.round((a.height ?? 168) * scale)}
+            loading="lazy"
             draggable={false}
           />
         )

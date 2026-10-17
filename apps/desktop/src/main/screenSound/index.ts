@@ -47,12 +47,13 @@ export function screenSoundSupport(): ScreenSoundSupport {
   return support
 }
 
-let running: { child: UtilityProcess; owner: WebContents } | null = null
+let running: { child: UtilityProcess; owner: WebContents; off: () => void } | null = null
 
 export function stopScreenSound(owner?: WebContents): void {
   if (!running || (owner && running.owner !== owner)) return
-  const { child } = running
+  const { child, off } = running
   running = null
+  off()
   child.postMessage({ type: 'stop' })
   setTimeout(() => child.kill(), 1500)
 }
@@ -83,14 +84,30 @@ export function startScreenSound(
     serviceName: 'Glofly screen sound',
     stdio: 'inherit'
   })
-  const mine = { child, owner }
+  // The window going away or loading a new page stops it. Only the page itself: a frame inside
+  // it (the Watch Together player) or an in-page change doesn't.
+  const onDestroyed = (): void => stopScreenSound(owner)
+  const onNavigation = (
+    details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
+  ): void => {
+    if (details.isMainFrame && !details.isSameDocument) stopScreenSound(owner)
+  }
+  owner.once('destroyed', onDestroyed)
+  owner.on('did-start-navigation', onNavigation)
+  const off = (): void => {
+    if (owner.isDestroyed()) return
+    owner.off('destroyed', onDestroyed)
+    owner.off('did-start-navigation', onNavigation)
+  }
+  const mine = { child, owner, off }
   running = mine
   const done = (): void => {
-    if (running === mine) running = null
+    if (running === mine) {
+      running = null
+      off()
+    }
     if (!owner.isDestroyed()) owner.send('screen-sound:ended')
   }
-  owner.once('destroyed', () => stopScreenSound(owner))
-  owner.once('did-start-navigation', () => stopScreenSound(owner))
 
   return new Promise((resolve) => {
     let answered = false

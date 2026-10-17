@@ -406,13 +406,17 @@ export default function ChatView({
     setTypingIds((ids) => (ids.includes(userId) ? ids.filter((id) => id !== userId) : ids))
   }, [])
 
-  const handleFailure = useCallback(
-    (error: string, message: string) => {
-      if (error === 'unauthorized') onSessionExpired()
-      else setNotice(message)
-    },
-    [onSessionExpired]
-  )
+  // The latest callbacks from the parent, so a parent passing new functions on every render (a
+  // nebula's chat in Constellations) doesn't reload the messages each time.
+  const parentCallbacks = useRef({ onRead, onSessionExpired })
+  useEffect(() => {
+    parentCallbacks.current = { onRead, onSessionExpired }
+  })
+
+  const handleFailure = useCallback((error: string, message: string) => {
+    if (error === 'unauthorized') parentCallbacks.current.onSessionExpired()
+    else setNotice(message)
+  }, [])
 
   /** Puts the newest version of a message in the list. */
   const upsert = useCallback((m: Message) => {
@@ -423,8 +427,8 @@ export default function ChatView({
   const markRead = useCallback(async () => {
     if (!document.hasFocus()) return
     const result = await window.glofly.conversations.markRead(conversation.id)
-    if (result.ok) onRead(conversation.id)
-  }, [conversation.id, onRead])
+    if (result.ok) parentCallbacks.current.onRead(conversation.id)
+  }, [conversation.id])
 
   // Load the newest messages.
   useEffect(() => {
@@ -434,7 +438,12 @@ export default function ChatView({
       setLoading(false)
       if (!result.ok) return handleFailure(result.error, result.message)
       stickToBottom.current = true
-      setMessages(result.data.messages)
+      // Messages that arrived live while this was loading stay (the answer may predate them).
+      const loaded = result.data.messages
+      setMessages((live) => {
+        const ids = new Set(loaded.map((m) => m.id))
+        return [...loaded, ...live.filter((m) => !ids.has(m.id))]
+      })
       setHasMore(result.data.hasMore)
       rememberPeople(result.data.people)
       void markRead()

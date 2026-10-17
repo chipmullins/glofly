@@ -74,7 +74,7 @@ import { isShortcutKey, isWeb, shortcutLabel } from '../lib/platform'
 import { useSocial, useSocialSync } from '../lib/social'
 import { HangToast, SocialActions, SocialStrip, YearInGlowDialog } from '../components/Social'
 import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcast'
-import { useMyBroadcast } from '../lib/broadcast'
+import { stopLive, useMyBroadcast } from '../lib/broadcast'
 import ConstellationsScreen from '../constellations/ConstellationsScreen'
 import { useConstellationsPhase, viewingNebula } from '../constellations/phase'
 import { GalaxyIcon } from '../constellations/sky'
@@ -514,6 +514,8 @@ export default function MainScreen({
   useSocialSync()
   const social = useSocial()
   const myLive = useMyBroadcast()
+  // Signing out (or the session ending) while live ends the broadcast and stops sharing the screen.
+  useEffect(() => () => void stopLive(), [])
   const [goLive, setGoLive] = useState(false)
   const [livePanel, setLivePanel] = useState(false)
   const [watchingId, setWatchingId] = useState<string | null>(null)
@@ -636,12 +638,21 @@ export default function MainScreen({
 
   // Several refreshes can overlap (say, a burst of changes): only the newest one counts.
   const conversationsRequest = useRef(0)
+  /** Bumped by live changes to the list (new messages, edits, "Seen") */
+  const liveChanges = useRef(0)
   const refreshConversations = useCallback(async () => {
-    const mine = ++conversationsRequest.current
-    const result = await window.glofly.conversations.list()
-    if (mine !== conversationsRequest.current) return
-    if (result.ok) setConversations(result.data)
-    else if (result.error === 'unauthorized') onSessionExpired()
+    const load = async (retry: boolean): Promise<void> => {
+      const mine = ++conversationsRequest.current
+      const seen = liveChanges.current
+      const result = await window.glofly.conversations.list()
+      if (mine !== conversationsRequest.current) return
+      // A live change arrived while this was loading, so the answer may be from before it
+      // (it would undo a new message or unread count): ask once more instead.
+      if (result.ok && retry && liveChanges.current !== seen) return load(false)
+      if (result.ok) setConversations(result.data)
+      else if (result.error === 'unauthorized') onSessionExpired()
+    }
+    await load(true)
   }, [onSessionExpired])
 
   const refreshNotices = useCallback(async () => {
@@ -706,6 +717,7 @@ export default function MainScreen({
         case 'message:new': {
           // 2.0: nebula messages belong to Constellations (its own alerts below), not your chats.
           if (event.nebula) break
+          liveChanges.current++
           const m = event.message
           const viewing = openChatRef.current === m.conversationId && document.hasFocus()
           // Group events ("Maya renamed the group") don't ding or count as unread.
@@ -740,6 +752,7 @@ export default function MainScreen({
           break
         }
         case 'message:updated': {
+          liveChanges.current++
           // Keep the sidebar preview in step with edits and deletes of the latest message.
           const m = event.message
           setConversations((list) =>
@@ -769,6 +782,7 @@ export default function MainScreen({
           break
         }
         case 'conversation:read': {
+          liveChanges.current++
           // They read the chat: update "Seen".
           const { conversationId, readAt } = event
           setConversations((list) =>

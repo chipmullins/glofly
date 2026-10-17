@@ -980,12 +980,13 @@ export function CallProvider({
   // Signing out (or the window closing) ends the call.
   useEffect(() => {
     return () => {
-      stopRingtone.current()
+      // A call still ringing in: its ringtone, ring timer and notification go too.
+      clearIncoming()
       const id = currentRef.current?.call?.id
       teardown()
       if (id) void window.glofly.calls.leave(id)
     }
-  }, [teardown])
+  }, [teardown, clearIncoming])
 
   const callIn = useCallback((conversationId: string) => active[conversationId] ?? null, [active])
 
