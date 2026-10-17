@@ -23,6 +23,7 @@ import type {
   RoleColor,
   TimeoutLength
 } from '../../../preload/api-types'
+import type { NebulaMention, PinnedNebula } from '@glofly/shared/constellations'
 
 // Glofly 2.0: Constellations and My games, as the screens call them. Every request goes through
 // window.glofly.constellations.request (the main process / web bridge only lets /constellations/…
@@ -53,6 +54,18 @@ export const api = {
     description?: string | null
   }) => call<Detail>('POST', '/constellations', values),
   /** The dashboard's "Adventure to new constellations": top tags and up to 3 to try */
+  // The nebula dock on Glofly home (2.0)
+  pins: () => call<{ pins: PinnedNebula[] }>('GET', '/constellations/pins'),
+  pin: (id: string, nebulaId: string) =>
+    call<{ pins: PinnedNebula[] }>('PUT', `${base(id)}/nebulas/${nebulaId}/pin`),
+  unpin: (id: string, nebulaId: string) =>
+    call<{ pins: PinnedNebula[] }>('DELETE', `${base(id)}/nebulas/${nebulaId}/pin`),
+  mentions: (before?: string) =>
+    call<{ mentions: NebulaMention[]; unread: number; more: boolean }>(
+      'GET',
+      `/constellations/mentions${before ? `?before=${encodeURIComponent(before)}` : ''}`
+    ),
+  readMentions: () => call<null>('POST', '/constellations/mentions/read'),
   discover: () =>
     call<{ tags: string[]; suggestions: DirectoryEntry[] }>('GET', '/constellations/discover'),
   directory: (q: string, type: ConstellationType | null, tag: string | null, offset = 0) => {
@@ -272,4 +285,46 @@ export function useConstellationCards(enabled: boolean): {
     }
   }, [enabled, load, reload])
   return { cards, invites, loaded, reload }
+}
+
+/** Your pinned nebulas (the home dock), kept fresh by live events. */
+export function usePinnedNebulas(enabled: boolean): {
+  pins: PinnedNebula[]
+  reload: () => void
+  setPins: (pins: PinnedNebula[]) => void
+} {
+  const [pins, setPins] = useState<PinnedNebula[]>([])
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const load = useCallback(() => {
+    void api.pins().then((r) => {
+      if (r.ok) setPins(r.data.pins)
+    })
+  }, [])
+  const reload = useCallback(() => {
+    if (timer.current) return
+    timer.current = setTimeout(() => {
+      timer.current = null
+      load()
+    }, 400)
+  }, [load])
+  useEffect(() => {
+    if (!enabled) return
+    load()
+    const stop = window.glofly.onEvent((event) => {
+      if (
+        event.type === 'constellations:changed' ||
+        event.type === 'constellation:updated' ||
+        event.type === 'constellation:activity' ||
+        event.type === 'constellation:removed' ||
+        (event.type === 'connection' && event.connected)
+      )
+        reload()
+    })
+    return () => {
+      stop()
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = null
+    }
+  }, [enabled, load, reload])
+  return { pins, reload, setPins }
 }

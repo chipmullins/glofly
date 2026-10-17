@@ -11,7 +11,7 @@ import type {
   PublicUser,
   SignedInUser
 } from '../../../preload/api-types'
-import { api } from '../lib/constellations'
+import { api, usePinnedNebulas } from '../lib/constellations'
 import { Swarm } from './sky'
 import { makeStars, makeSwarm, prefersReducedMotion } from './skyData'
 import { viewingNebula, type CxPhase, type CxPlace } from './phase'
@@ -114,6 +114,9 @@ export default function ConstellationsScreen(props: Props): React.JSX.Element | 
 /** What's on the night side once the swipe is done. */
 function Space(props: Props): React.JSX.Element {
   const { me, cards, reloadCards, phase } = props
+  // Nebulas pinned to the dock on Glofly home (right-click a nebula → Pin to Glofly dock)
+  const pinned = usePinnedNebulas(true)
+  const pinnedIds = useMemo(() => new Set(pinned.pins.map((p) => p.nebula.id)), [pinned.pins])
   const [place, setPlace] = useState<CxPlace>(props.start)
   // Asked to go somewhere while already here (a notification): go.
   const [startSeen, setStartSeen] = useState(props.start)
@@ -302,6 +305,21 @@ function Space(props: Props): React.JSX.Element {
           onReload={() => {
             load(detail.id)
             reloadCards()
+          }}
+          pinnedIds={pinnedIds}
+          onTogglePin={(n) => {
+            const on = pinnedIds.has(n.id)
+            void (on ? api.unpin(detail.id, n.id) : api.pin(detail.id, n.id)).then((r) => {
+              if (!r.ok) say(r.message)
+              else {
+                pinned.setPins(r.data.pins)
+                say(
+                  on
+                    ? `Unpinned #${n.name} from your Glofly dock.`
+                    : `Pinned #${n.name} to your Glofly dock.`
+                )
+              }
+            })
           }}
           onLeft={() => {
             setPlace(null)

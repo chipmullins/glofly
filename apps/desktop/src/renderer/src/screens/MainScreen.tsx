@@ -78,7 +78,8 @@ import { useMyBroadcast } from '../lib/broadcast'
 import ConstellationsScreen from '../constellations/ConstellationsScreen'
 import { useConstellationsPhase, viewingNebula } from '../constellations/phase'
 import { GalaxyIcon } from '../constellations/sky'
-import { useConstellationCards } from '../lib/constellations'
+import { useConstellationCards, usePinnedNebulas } from '../lib/constellations'
+import HomeDock, { type HomeDockHandle } from '../constellations/HomeDock'
 import MyGamesPanel from '../components/MyGames'
 
 type MainScreenProps = {
@@ -526,8 +527,14 @@ export default function MainScreen({
   const cxEnterRef = useRef((place: { constellationId: string; nebulaId: string }) =>
     cx.enter(cxNavRef.current, place)
   )
+  // The nebula dock on Glofly home (2.0): it opens a nebula's notification right here.
+  const homeDock = useRef<HomeDockHandle>(null)
   useEffect(() => {
-    cxEnterRef.current = (place) => cx.enter(cxNavRef.current, place)
+    cxEnterRef.current = (place) => {
+      if (cx.phase === 'home' && homeDock.current) {
+        homeDock.current.openNebula(place.constellationId, place.nebulaId)
+      } else cx.enter(cxNavRef.current, place)
+    }
   })
   const [myGamesOpen, setMyGamesOpen] = useState(false)
   const closeHangPing = useCallback(() => setHangPing(null), [])
@@ -561,6 +568,7 @@ export default function MainScreen({
   const [restricted, setRestricted] = useState(user.restricted === true)
   // Family-managed (restricted) accounts can't use Constellations at all (the server refuses too).
   const cxCards = useConstellationCards(!restricted)
+  const cxPins = usePinnedNebulas(!restricted && cx.phase === 'home')
   const cxNew = cxCards.cards.some((c) => c.unreadCount > 0 || c.mentionCount > 0)
   const cxOpen = cx.phase !== 'home'
   const { leave: cxLeave } = cx
@@ -1820,6 +1828,22 @@ export default function MainScreen({
         onAppSettings={() => setSettingsOpen('general')}
         onSessionExpired={onSessionExpired}
       />
+
+      {cx.phase === 'home' && !restricted && cxCards.cards.length > 0 && (
+        <HomeDock
+          handleRef={homeDock}
+          me={user}
+          cards={cxCards.cards}
+          pins={cxPins.pins}
+          onPins={cxPins.setPins}
+          onEnter={(place) => cx.enter(cxNavRef.current, place)}
+          onCardsChanged={() => {
+            cxCards.reload()
+            cxPins.reload()
+          }}
+          onProblem={setToast}
+        />
+      )}
 
       <div className="main-dialogs">
         {myGamesOpen && (

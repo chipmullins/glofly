@@ -177,6 +177,9 @@ export type ConstellationViewProps = {
   onChanged: (detail: ConstellationDetail) => void
   onReload: () => void
   onLeft: () => void
+  /** Nebulas pinned to the dock on Glofly home */
+  pinnedIds: Set<string>
+  onTogglePin: (nebula: Nebula) => void
 }
 
 export type SettingsPageName =
@@ -981,6 +984,31 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               Mark as read
             </button>
           )}
+          <button
+            type="button"
+            role="menuitem"
+            className="cx-menu-item cx-menu-item--pin"
+            onClick={() => {
+              setNebMenu(null)
+              props.onTogglePin(n)
+            }}
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 4h6l-1 6 4 3v2H6v-2l4-3z" />
+              <path d="M12 15v6" />
+            </svg>
+            {props.pinnedIds.has(n.id) ? 'Unpin from Glofly dock' : 'Pin to Glofly dock'}
+          </button>
           <span className="cx-menu-sub">
             {muted ? `Muted ${mutedUntilText(n.mutedUntil!)}` : 'Mute'}
           </span>

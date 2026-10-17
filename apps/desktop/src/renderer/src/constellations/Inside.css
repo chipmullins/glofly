@@ -1034,3 +1034,9 @@
 .cx-neb:has(.cx-neb-muted) .cx-neb-name {
   opacity: 0.7;
 }
+
+/* Right-click a nebula → Pin to Glofly dock (board 14). */
+.cx-menu-item--pin {
+  color: #ffb347;
+  font-weight: 700;
+}
