@@ -352,6 +352,8 @@ function VoiceStage({ person, speaking, ringing, compact }: { person: PublicUser
 
 function TileView({ tile, person, w, h, ringing, onPress, fill, pip }: { tile: Tile | null; person: PublicUser; w: number; h: number; ringing?: boolean; onPress?: () => void; fill?: boolean; pip?: boolean }) {
   const talking = tile?.speaking
+  // Only your front camera's picture is mirrored (like a mirror); the back camera shows the world as it is.
+  const frontCamera = useCall((s) => s.frontCamera)
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -362,7 +364,7 @@ function TileView({ tile, person, w, h, ringing, onPress, fill, pip }: { tile: T
       {tile?.camera ? (
         // fill: the video covers the tile (edges trimmed) like FaceTime, instead of a narrow strip with
         // bars beside it. A pinned (big) tile shows the whole picture.
-        <CallVideo track={tile.camera} mirror={tile.local} contain={!fill} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} pip={pip && !tile.local} />
+        <CallVideo track={tile.camera} mirror={tile.local && frontCamera} contain={!fill} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} pip={pip && !tile.local} />
       ) : (
         <View style={{ opacity: ringing ? 0.85 : 1, borderRadius: 60, boxShadow: ringing ? '0 0 24px rgba(255,179,71,0.6)' : undefined }}>
           <Avatar user={person} size={Math.min(w, h) * 0.42} />
