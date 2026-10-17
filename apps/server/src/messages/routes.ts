@@ -20,7 +20,7 @@ import {
   type PollInfo,
   type VoiceInfo,
 } from "../db/schema";
-import { storage } from "../storage";
+import { sendStream, storage } from "../storage";
 import {
   ATTACHMENT_MAX_BYTES,
   VIDEO_MAX_BYTES,
@@ -42,7 +42,7 @@ import {
   type Variant,
 } from "./attachments";
 import { requireAuth } from "../auth/sessions";
-import { blockedEitherWay, canMessage, deletionPending, groupBreaksRestriction, pair } from "../friends/rules";
+import { blockedEitherWay, canMessage, deletionPending, groupBreaksRestriction, isRestricted, messageableAmong, pair } from "../friends/rules";
 import { emitToUser } from "../realtime";
 import { isNebulaChat } from "../constellations/chats";
 import { canModerateNebula, canPostInNebula, nebulaChatOpen, whyCantPostInNebula } from "../constellations/perms";
@@ -350,6 +350,9 @@ export async function access(conversationId: string, myId: string): Promise<Acce
   if (!memberIds.includes(myId)) return null; // not your chat
   // 2.0: a nebula of a constellation taken down in Control is closed to everyone.
   if (conversation.kind === "nebula" && !(await nebulaChatOpen(conversationId))) return null;
+  // Restricted (family) accounts can't use constellations at all, nebula chats included (someone
+  // restricted after joining one is still listed as a member).
+  if (conversation.kind === "nebula" && (await isRestricted(myId))) return null;
   return {
     kind: conversation.kind,
     memberIds,
@@ -470,6 +473,11 @@ async function summaries(myId: string, conversationIds?: string[]) {
     avatarVersion: p.avatarVersion,
   });
 
+  // Who I can message among my DM partners, all at once (not three queries per DM).
+  const dmIds = new Set(mine.filter((c) => c.kind === "dm").map((c) => c.id));
+  const dmPartners = others.filter((p) => dmIds.has(p.conversationId)).map((p) => p.id);
+  const messageable = await messageableAmong(myId, dmPartners);
+
   const result = [];
   for (const c of mine) {
     const members = others.filter((p) => p.conversationId === c.id);
@@ -517,7 +525,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
       members: [person(partner)],
       memberCount: 2,
       createdBy: null,
-      canMessage: await canMessage(myId, partner.id),
+      canMessage: messageable.has(partner.id),
       // How far they've read, shown as "Seen". Only when both people allow read receipts.
       partnerReadAt:
         mySettings?.readReceipts && partner.readReceipts ? partner.lastReadAt.toISOString() : null,
@@ -1076,7 +1084,7 @@ conversationsRouter.get("/:id/photo/:version", async (req, res) => {
   res.setHeader("Content-Type", "image/webp");
   res.setHeader("Content-Length", String(file.size));
   res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-  file.stream.pipe(res);
+  sendStream(file.stream, res);
 });
 
 // POST /conversations/:id/members  { userIds } — add friends to a group.
@@ -1826,23 +1834,24 @@ conversationsRouter.post(
       });
       return;
     }
+    // Checked before any video is looked at (ffmpeg is the expensive part).
+    if ((await unsentCount(myId)) >= UNSENT_PER_PERSON) {
+      res.status(429).json({
+        error: "too_many_requests",
+        message: "Send or remove the files you've already added first.",
+      });
+      return;
+    }
     // 0.5.0 videos: MP4 / MOV / WebM that ffmpeg can read, up to 3 minutes, played in the chat.
     // Anything else bigger than a normal file is refused.
     const container = voice ? null : videoContainer(data);
-    const looked = container && data.length <= VIDEO_MAX_BYTES ? await examineVideo(data) : null;
+    const looked = container && data.length <= VIDEO_MAX_BYTES ? await examineVideo(data, container) : null;
     if (!looked && data.length > ATTACHMENT_MAX_BYTES) {
       res.status(413).json({
         error: "too_big",
         message: container
           ? "Videos can be up to 3 minutes and 64 MB."
           : "Too big. Files can be up to 25 MB (videos up to 64 MB).",
-      });
-      return;
-    }
-    if ((await unsentCount(myId)) >= UNSENT_PER_PERSON) {
-      res.status(429).json({
-        error: "too_many_requests",
-        message: "Send or remove the files you've already added first.",
       });
       return;
     }
@@ -1938,7 +1947,7 @@ conversationsRouter.get("/:id/attachments/:attachmentId/video", async (req, res)
   const range = typeof req.headers.range === "string" ? req.headers.range.match(/^bytes=(\d*)-(\d*)$/) : null;
   if (!range || (!range[1] && !range[2])) {
     res.setHeader("Content-Length", String(total));
-    file.stream.pipe(res);
+    sendStream(file.stream, res);
     return;
   }
   file.stream.destroy();
@@ -1960,7 +1969,7 @@ conversationsRouter.get("/:id/attachments/:attachmentId/video", async (req, res)
   res.status(206);
   res.setHeader("Content-Range", `bytes ${start}-${end}/${total}`);
   res.setHeader("Content-Length", String(end - start + 1));
-  part.pipe(res);
+  sendStream(part, res);
 });
 
 // GET /conversations/:id/attachments/:attachmentId/:variant — preview | full (photos), file
@@ -1991,5 +2000,5 @@ conversationsRouter.get("/:id/attachments/:attachmentId/:variant", async (req, r
     "Content-Disposition",
     `${(row.kind === "image" && variant.data !== "file") || variant.data === "poster" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(variant.data === "poster" ? webpName(row.name) : downloadName)}`,
   );
-  file.stream.pipe(res);
+  sendStream(file.stream, res);
 });

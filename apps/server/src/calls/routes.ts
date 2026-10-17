@@ -18,6 +18,7 @@ import {
   isInCall,
   joinCall,
   leaveCall,
+  peopleInCall,
   ringMore,
   startCall,
   type CallRow,
@@ -112,6 +113,15 @@ async function myCall(idRaw: unknown, myId: string) {
 async function allowed(chat: Access, myId: string): Promise<boolean> {
   if (chat.kind !== "dm") return canPost(chat, myId); // groups; voice nebulas (not while timed out)
   return !!chat.partner && (await canMessage(myId, chat.partner));
+}
+
+/** A voice nebula's room that's already full (2.0), for someone not in it yet. Answers 409 if so. */
+async function nebulaRoomFull(res: Response, row: CallRow, chat: Access, myId: string): Promise<boolean> {
+  if (chat.kind !== "nebula") return false;
+  const inRoom = await peopleInCall(row.id);
+  if (inRoom.includes(myId) || inRoom.length < VOICE_NEBULA_MAX) return false;
+  res.status(409).json({ error: "invalid", message: `This voice nebula is full (${VOICE_NEBULA_MAX} people).` });
+  return true;
 }
 
 const notFound = (res: Response) => res.status(404).json({ error: "not_found" });
@@ -228,6 +238,7 @@ callsRouter.post("/:id/answer", actionLimiter, async (req, res) => {
     callOver(res); // already answered (on another device)
     return;
   }
+  if (await nebulaRoomFull(res, row, chat, user.id)) return;
   const joined = await joinCall(row.id, user.id);
   if (!joined) {
     callOver(res);
@@ -271,6 +282,7 @@ callsRouter.post("/:id/join", actionLimiter, async (req, res) => {
     res.status(409).json({ error: "busy", message: "Hang up your other call first." });
     return;
   }
+  if (!inIt && (await nebulaRoomFull(res, row, chat, user.id))) return;
   const joined = inIt ? row : await joinCall(row.id, user.id);
   if (!joined) {
     callOver(res);

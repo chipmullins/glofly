@@ -222,7 +222,8 @@ export async function acceptFriendInvite(invite: FriendInvite, details: JoinDeta
         const [inviter] = await tx
           .select({ id: users.id })
           .from(users)
-          .where(and(eq(users.id, inviterId), isNull(users.deleteAfter)));
+          // Not someone restricted since (family accounts only get friends their family adds).
+          .where(and(eq(users.id, inviterId), isNull(users.deleteAfter), eq(users.restricted, false)));
         if (!inviter) continue;
         await tx
           .insert(friendships)

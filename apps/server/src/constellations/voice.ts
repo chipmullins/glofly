@@ -23,21 +23,29 @@ export function setSharing(callId: string, userId: string, on: boolean): void {
 
 /** Every voice nebula's state in one constellation. */
 export async function voiceStatesOf(constellationId: string): Promise<VoiceNebulaState[]> {
+  return (await voiceStatesFor([constellationId])).get(constellationId) ?? [];
+}
+
+/** Every voice nebula's state in several constellations (the dashboard), in two queries plus one per open room. */
+export async function voiceStatesFor(constellationIds: string[]): Promise<Map<string, VoiceNebulaState[]>> {
+  const out = new Map<string, VoiceNebulaState[]>();
+  if (!constellationIds.length) return out;
   const rows = await db
-    .select({ nebulaId: nebulas.id, conversationId: nebulas.conversationId })
+    .select({ nebulaId: nebulas.id, constellationId: nebulas.constellationId, conversationId: nebulas.conversationId })
     .from(nebulas)
-    .where(and(eq(nebulas.constellationId, constellationId), eq(nebulas.kind, "voice")));
-  if (!rows.length) return [];
+    .where(and(inArray(nebulas.constellationId, constellationIds), eq(nebulas.kind, "voice")))
+    .orderBy(nebulas.position);
+  if (!rows.length) return out;
   const open = await db
     .select({ id: calls.id, conversationId: calls.conversationId })
     .from(calls)
     .where(and(inArray(calls.conversationId, rows.map((r) => r.conversationId)), inArray(calls.status, ["ringing", "ongoing"])));
-  const out: VoiceNebulaState[] = [];
   for (const r of rows) {
     const call = open.find((c) => c.conversationId === r.conversationId);
     const userIds = call ? await peopleInCall(call.id) : [];
     const live = call ? [...(sharing.get(call.id) ?? [])].filter((id) => userIds.includes(id)) : [];
-    out.push({
+    const list = out.get(r.constellationId) ?? [];
+    list.push({
       nebulaId: r.nebulaId,
       callId: call && userIds.length ? call.id : null,
       userIds,
@@ -45,6 +53,7 @@ export async function voiceStatesOf(constellationId: string): Promise<VoiceNebul
       sharing: live,
       muted: call ? voiceMutedIn(call.id).filter((id) => userIds.includes(id)) : [],
     });
+    out.set(r.constellationId, list);
   }
   return out;
 }

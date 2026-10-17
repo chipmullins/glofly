@@ -16,6 +16,7 @@ import { nicknames } from "../db/schema";
 
 type NickMap = Map<string, string>;
 const cache = new Map<string, NickMap>();
+const MAX_CACHED = 50_000;
 
 /** Your nicknames (loads them the first time). */
 export async function nicknamesFor(ownerId: string): Promise<NickMap> {
@@ -26,6 +27,9 @@ export async function nicknamesFor(ownerId: string): Promise<NickMap> {
     .from(nicknames)
     .where(eq(nicknames.ownerId, ownerId));
   const map: NickMap = new Map(rows.map((r) => [r.targetId, r.nickname]));
+  // Never grows without end: past the limit, whoever was loaded longest ago is dropped (and simply
+  // loaded again on their next request).
+  if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value!);
   cache.set(ownerId, map);
   return map;
 }

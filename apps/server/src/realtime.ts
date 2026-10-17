@@ -1,6 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
-import { and, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { cachedNicknames, nicknamesFor, withNicknames } from "./profile/nicknames";
 import { conversationMembers, conversations, users } from "./db/schema";
@@ -15,7 +15,7 @@ import {
   type AppPlatform,
 } from "./app-version";
 import { cookieToken, fromWebOrigin } from "./web/session";
-import { blockedEitherWay, blockedWith, canMessage } from "./friends/rules";
+import { blockedWith, canMessage } from "./friends/rules";
 import {
   announcePresence,
   deviceConnected,
@@ -121,8 +121,15 @@ export function startRealtime(httpServer: HttpServer): void {
     });
 
     // The app says whether someone is actually using the computer (idle = away).
+    // Each change reaches every friend, so a misbehaving app can't flip it more than a few
+    // times in 10 seconds (real apps change it every few minutes at most).
+    let idleChanges: number[] = [];
     socket.on("idle", (idle: unknown) => {
       if (typeof idle !== "boolean" || idle === socket.data.idle) return;
+      const now = Date.now();
+      idleChanges = idleChanges.filter((t) => now - t < 10_000);
+      if (idleChanges.length >= 10) return;
+      idleChanges.push(now);
       socket.data.idle = idle;
       safely(async () => {
         await deviceIdle(me.id, socket.id, idle);
@@ -164,60 +171,41 @@ export function startRealtime(httpServer: HttpServer): void {
     let lastTyping = 0;
     socket.on("typing", async (payload: unknown) => {
       const conversationId = (payload as { conversationId?: unknown })?.conversationId;
-      if (typeof conversationId !== "string" || conversationId.length > 40) return;
+      if (typeof conversationId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversationId)) return;
       const now = Date.now();
       if (now - lastTyping < 1500) return; // ignore floods
       lastTyping = now;
 
       try {
-        const others = await db
-          .select({ userId: conversationMembers.userId })
-          .from(conversationMembers)
-          .where(
-            and(
-              eq(conversationMembers.conversationId, conversationId),
-              ne(conversationMembers.userId, me.id),
-            ),
-          );
-        // Only tell people who share this chat, and only if messaging is allowed.
-        const isMember = await db
-          .select({ userId: conversationMembers.userId })
-          .from(conversationMembers)
-          .where(
-            and(
-              eq(conversationMembers.conversationId, conversationId),
-              eq(conversationMembers.userId, me.id),
-            ),
-          )
-          .limit(1);
-        if (!isMember.length) return;
-        // Respect "Show when I'm typing".
+        // Respect "Show when I'm typing" (checked first: it's the cheapest no).
         const [settings] = await db
           .select({ showTyping: users.showTyping })
           .from(users)
           .where(eq(users.id, me.id));
         if (!settings?.showTyping) return;
+        // Only tell people who share this chat (one query for everyone in it, me included).
+        const members = await db
+          .select({ userId: conversationMembers.userId })
+          .from(conversationMembers)
+          .where(eq(conversationMembers.conversationId, conversationId));
+        if (!members.some((m) => m.userId === me.id)) return;
+        const others = members.filter((m) => m.userId !== me.id);
+        if (!others.length) return;
         const [chat] = await db
           .select({ kind: conversations.kind })
           .from(conversations)
           .where(eq(conversations.id, conversationId));
-        if (chat?.kind === "nebula") {
-          // A nebula (2.0): everyone in it (newer apps only), except across a block.
-          const blocked = await blockedWith(me.id);
-          for (const other of others) {
-            if (!blocked.has(other.userId)) emitToUser(other.userId, "typing", { conversationId, userId: me.id }, true);
-          }
+        if (chat?.kind === "dm") {
+          // DMs: only if you can message each other.
+          const other = others[0].userId;
+          if (await canMessage(me.id, other)) emitToUser(other, "typing", { conversationId, userId: me.id });
           return;
         }
+        // Groups and nebulas (2.0, newer apps only): everyone, except across a block.
+        const blocked = await blockedWith(me.id);
+        const nebula = chat?.kind === "nebula";
         for (const other of others) {
-          // DMs: only if you can message each other. Groups: everyone, except across a block.
-          const allowed =
-            chat?.kind === "group"
-              ? !(await blockedEitherWay(me.id, other.userId))
-              : await canMessage(me.id, other.userId);
-          if (allowed) {
-            emitToUser(other.userId, "typing", { conversationId, userId: me.id });
-          }
+          if (!blocked.has(other.userId)) emitToUser(other.userId, "typing", { conversationId, userId: me.id }, nebula);
         }
       } catch {
         // Typing hints aren't important enough to report.
@@ -249,6 +237,14 @@ export async function pauseConnections(): Promise<number> {
 /** The pause is over: phones leaving Glofly count as "Active on mobile" again. */
 export function resumeConnections(): void {
   pausing = false;
+}
+
+/** Shutting down: closes every live connection (the apps reconnect to the next server). */
+export async function stopRealtime(): Promise<void> {
+  if (!io) return;
+  const server = io;
+  io = null;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
 }
 
 /** Every 30 seconds: refresh each connected device, then catch anyone who vanished. */

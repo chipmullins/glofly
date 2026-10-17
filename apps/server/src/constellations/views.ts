@@ -28,7 +28,7 @@ import {
 import { friendIdsOf, presenceOf } from "../presence";
 import { connectedUserIds } from "../realtime";
 import { can, OWNER_RANK, standingOf, type Standing } from "./perms";
-import { voiceStatesOf } from "./voice";
+import { voiceStatesFor, voiceStatesOf } from "./voice";
 
 // What the apps get about constellations (2.0): dashboard cards, directory entries, and the whole
 // constellation when it's open.
@@ -76,16 +76,17 @@ export async function unreadFor(userId: string, conversationIds: string[]) {
   return out;
 }
 
-/** How many of these people are online right now (connected and not invisible). */
-async function onlineCount(userIds: string[]): Promise<number> {
-  if (!userIds.length) return 0;
+/** Which of these people show as online right now: connected, and not set to invisible. */
+async function visiblyOnline(userIds: string[]): Promise<Set<string>> {
+  if (!userIds.length) return new Set();
   const connected = await connectedUserIds(userIds);
-  if (!connected.size) return 0;
+  if (!connected.size) return connected;
   const invisible = await db
     .select({ id: users.id })
     .from(users)
     .where(and(inArray(users.id, [...connected]), eq(users.statusPreference, "invisible")));
-  return connected.size - invisible.length;
+  for (const r of invisible) connected.delete(r.id);
+  return connected;
 }
 
 /** My dashboard: every constellation I'm in. */
@@ -125,7 +126,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
     .from(constellationMemberRoles)
     .where(eq(constellationMemberRoles.userId, userId));
   const heldIds = new Set(held.map((h) => h.roleId));
-  const connected = await connectedUserIds([...new Set(members.map((m) => m.userId))]);
+  const connected = await visiblyOnline([...new Set(members.map((m) => m.userId))]);
 
   const cards: ConstellationCard[] = [];
   for (const { c, position, notify } of mine) {
@@ -166,8 +167,9 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
   }
 
   // The busiest voice nebula on each card, and the latest mention of me.
+  const voiceByCard = await voiceStatesFor(cards.map((c) => c.id));
   for (const card of cards) {
-    const states = await voiceStatesOf(card.id);
+    const states = voiceByCard.get(card.id) ?? [];
     const busiest = states.filter((s) => s.userIds.length).sort((a, b) => b.userIds.length - a.userIds.length)[0];
     if (busiest) {
       const people = await publicUsers(busiest.userIds.slice(0, 3));
@@ -214,7 +216,7 @@ export async function entriesFor(viewerId: string, ids: string[]): Promise<Direc
     .from(constellationJoinRequests)
     .where(and(eq(constellationJoinRequests.userId, viewerId), inArray(constellationJoinRequests.constellationId, ids)));
   const friends = new Set(await friendIdsOf(viewerId));
-  const connected = await connectedUserIds([...new Set(members.map((m) => m.userId))]);
+  const connected = await visiblyOnline([...new Set(members.map((m) => m.userId))]);
   const friendIdsShown = new Set<string>();
   const byConstellation = new Map<string, string[]>();
   for (const r of rows) {

@@ -6,7 +6,7 @@ import type { Sticker } from "@glofly/shared";
 import { requireAuth } from "../auth/sessions";
 import { db } from "../db";
 import { stickers } from "../db/schema";
-import { storage } from "../storage";
+import { sendStream, storage } from "../storage";
 import { PHOTO_UPLOAD_MAX } from "../profile/photo";
 import { access, canPost, messageIn, postSpecial } from "../messages/routes";
 import { CutoutError, makeSticker } from "./cutout";
@@ -104,7 +104,7 @@ stickersRouter.get("/:id/image", async (req, res) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
   res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-  file.stream.pipe(res);
+  sendStream(file.stream, res);
 });
 
 stickersRouter.delete("/:id", async (req, res) => {

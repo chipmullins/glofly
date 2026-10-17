@@ -23,7 +23,7 @@ import { requireAuth } from "../auth/sessions";
 import { db } from "../db";
 import { messages, pollVotes, type GameInfo } from "../db/schema";
 import { emitToUser } from "../realtime";
-import { storage } from "../storage";
+import { sendStream, storage } from "../storage";
 import { access, canPost, cantPostMessage, messageIn, postSpecial, sendUpdated } from "./routes";
 import { pollFallback, POLL_OPTIONS_MAX, POLL_TEXT_MAX } from "./polls";
 import { previewImageKey } from "./links";
@@ -96,7 +96,7 @@ extrasRouter.get("/:id/messages/:mid/preview-image", async (req, res) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
   res.setHeader("Cache-Control", "private, max-age=86400");
-  file.stream.pipe(res);
+  sendStream(file.stream, res);
 });
 
 extrasRouter.delete("/:id/messages/:mid/preview", async (req, res) => {

@@ -7,7 +7,7 @@ import { sessions, users } from "../db/schema";
 import { hashPassword, verifyPassword } from "../auth/passwords";
 import { requireAuth } from "../auth/sessions";
 import { emailSchema, passwordSchema, PASSWORD_MAX } from "../auth/validation";
-import { pendingEmailFor } from "../email/tokens";
+import { cancelTokens, pendingEmailFor } from "../email/tokens";
 import {
   cancelEmailChange,
   notifyPasswordChanged,
@@ -197,6 +197,8 @@ accountRouter.post("/password", passwordCheckLimiter, async (req, res) => {
   }
 
   await db.update(users).set({ passwordHash: await hashPassword(newPassword) }).where(eq(users.id, myId));
+  // A reset link sent before the change can't be used to undo it.
+  await cancelTokens(myId, ["reset_password"]);
 
   let signedOut = 0;
   if (signOutOthers) {

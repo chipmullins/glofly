@@ -55,7 +55,7 @@ import {
 import { requireAuth } from "../auth/sessions";
 import { canMessage, deletionPending, isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
 import { emitToUser } from "../realtime";
-import { storage } from "../storage";
+import { sendStream, storage } from "../storage";
 import { PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 import { removeFiles } from "../messages/attachments";
 import type { Tx } from "../messages/routes";
@@ -548,10 +548,33 @@ constellationsRouter.post("/links/:code/join", joinLimiter, async (req, res) => 
     deadLink(res);
     return;
   }
-  await joinNow(res, link.constellationId, me(res).id, async (tx) => {
-    await tx.update(constellationLinks).set({ uses: sql`${constellationLinks.uses} + 1` }).where(eq(constellationLinks.id, link.id));
-  });
+  try {
+    await joinNow(res, link.constellationId, me(res).id, async (tx) => {
+      // Counted only while it still has uses left, so two people joining at once can't go past
+      // its limit (the join is undone if it ran out in the meantime).
+      const counted = await tx
+        .update(constellationLinks)
+        .set({ uses: sql`${constellationLinks.uses} + 1` })
+        .where(
+          and(
+            eq(constellationLinks.id, link.id),
+            isNull(constellationLinks.revokedAt),
+            or(isNull(constellationLinks.maxUses), lt(constellationLinks.uses, constellationLinks.maxUses)),
+          ),
+        )
+        .returning({ id: constellationLinks.id });
+      if (!counted.length) throw new LinkUsedUp();
+    });
+  } catch (err) {
+    if (err instanceof LinkUsedUp) {
+      deadLink(res);
+      return;
+    }
+    throw err;
+  }
 });
+
+class LinkUsedUp extends Error {}
 
 // POST /constellations/invites/:inviteId/dismiss — "Not now".
 constellationsRouter.post("/invites/:inviteId/dismiss", async (req, res) => {
@@ -696,7 +719,7 @@ constellationsRouter.get("/:id/icon/:version", async (req, res) => {
   res.setHeader("Content-Type", "image/webp");
   res.setHeader("Content-Length", String(file.size));
   res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-  file.stream.pipe(res);
+  sendStream(file.stream, res);
 });
 
 /** Removes a constellation for good: its nebulas, their messages and files, its icon. */
@@ -1377,7 +1400,7 @@ constellationsRouter.put("/:id/roles/order", changeLimiter, async (req, res) => 
         s.owner ? undefined : lt(constellationRoles.position, s.rank),
       ),
     );
-  const ids = parsed.data.ids.filter((id) => movable.some((m) => m.id === id));
+  const ids = [...new Set(parsed.data.ids)].filter((id) => movable.some((m) => m.id === id));
   if (ids.length !== movable.length) {
     bad(res, "That order didn't make sense. Try again.");
     return;

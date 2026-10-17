@@ -60,7 +60,13 @@ type Probe = { streams?: { codec_type?: string; width?: number; height?: number;
  * Looks at a video: its length and size (as it shows, so a phone video filmed upright is tall),
  * and a poster picture (WebP). Null if it isn't a video ffmpeg can read, or is too long.
  */
-export async function examineVideo(data: Buffer): Promise<{ info: Omit<VideoInfo, "mime">; poster: Buffer } | null> {
+export async function examineVideo(
+  data: Buffer,
+  container: VideoInfo["mime"],
+): Promise<{ info: Omit<VideoInfo, "mime">; poster: Buffer } | null> {
+  // ffmpeg reads it only as the container its first bytes say (never guessing some other format,
+  // like a playlist that points at other files).
+  const demuxer = container === "video/webm" ? "matroska" : "mov";
   // At most MAX_RUNNING at once; the rest wait their turn (up to 20 seconds).
   const waitUntil = Date.now() + 20_000;
   while (running >= MAX_RUNNING) {
@@ -68,13 +74,14 @@ export async function examineVideo(data: Buffer): Promise<{ info: Omit<VideoInfo
     await new Promise((r) => setTimeout(r, 250));
   }
   running++; // (no await between the check and this, so two can't both get in)
-  const dir = await mkdtemp(join(tmpdir(), "glofly-video-"));
-  const file = join(dir, "video");
+  let dir: string | null = null;
   try {
+    dir = await mkdtemp(join(tmpdir(), "glofly-video-"));
+    const file = join(dir, "video");
     await writeFile(file, data, { mode: 0o600 });
     const probeOut = await run(
       FFPROBE,
-      ["-v", "error", "-protocol_whitelist", "file", "-print_format", "json", "-show_streams", "-show_format", file],
+      ["-v", "error", "-protocol_whitelist", "file", "-f", demuxer, "-print_format", "json", "-show_streams", "-show_format", file],
       256 * 1024,
     );
     if (!probeOut) return null;
@@ -89,7 +96,7 @@ export async function examineVideo(data: Buffer): Promise<{ info: Omit<VideoInfo
     const at = durationMs > 1500 ? "0.5" : "0";
     const frame = await run(
       FFMPEG,
-      ["-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "file", "-ss", at, "-i", file, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1"],
+      ["-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "file", "-ss", at, "-f", demuxer, "-i", file, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1"],
       40 * 1024 * 1024,
     );
     if (!frame) return null;
@@ -102,6 +109,6 @@ export async function examineVideo(data: Buffer): Promise<{ info: Omit<VideoInfo
     return null;
   } finally {
     running--;
-    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

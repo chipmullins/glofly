@@ -368,6 +368,10 @@ export const messages = pgTable(
     index("messages_lantern_idx")
       .on(t.conversationId, t.createdAt)
       .where(sql`${t.lantern} and ${t.deletedAt} is null`),
+    // Someone's own messages (Year in Glow), and removing an account's messages with it.
+    index("messages_sender_created_idx").on(t.senderId, t.createdAt),
+    // Replies to a message: deleting messages (a group, a nebula) clears the links to them.
+    index("messages_reply_to_idx").on(t.replyToId).where(sql`${t.replyToId} is not null`),
   ],
 );
 
@@ -499,6 +503,8 @@ export const attachments = pgTable(
   (t) => [
     index("attachments_message_idx").on(t.messageId),
     index("attachments_unsent_idx").on(t.uploaderId, t.createdAt),
+    // A chat's files (removing a group, a nebula or a constellation).
+    index("attachments_conversation_idx").on(t.conversationId),
   ],
 );
 

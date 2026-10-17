@@ -1,6 +1,6 @@
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../db";
-import { sessions, users } from "../db/schema";
+import { emailTokens, sessions, users } from "../db/schema";
 import { hashPassword } from "../auth/passwords";
 import { disconnectSessions, emitToUser } from "../realtime";
 import { sendInBackground, sendNow } from "../email/send";
@@ -110,16 +110,27 @@ export async function requestPasswordReset(identifier: string): Promise<void> {
  */
 export async function resetPassword(link: EmailToken, newPassword: string): Promise<boolean> {
   const passwordHash = await hashPassword(newPassword);
-  if (!(await consumeToken(link.id))) return false;
   const user = await person(link.userId);
   if (!user) return false;
 
   const confirmsEmail = !user.emailVerifiedAt && user.email.toLowerCase() === link.email.toLowerCase();
-  await db
-    .update(users)
-    .set({ passwordHash, ...(confirmsEmail ? { emailVerifiedAt: new Date() } : {}) })
-    .where(eq(users.id, user.id));
-  await db.delete(sessions).where(eq(sessions.userId, user.id));
+  // Using the link, the new password and signing out everywhere happen together or not at all
+  // (a failure halfway can't use up the link without changing the password).
+  const done = await db.transaction(async (tx) => {
+    const used = await tx
+      .update(emailTokens)
+      .set({ usedAt: new Date() })
+      .where(and(eq(emailTokens.id, link.id), isNull(emailTokens.usedAt), gt(emailTokens.expiresAt, new Date())))
+      .returning({ id: emailTokens.id });
+    if (used.length !== 1) return false;
+    await tx
+      .update(users)
+      .set({ passwordHash, ...(confirmsEmail ? { emailVerifiedAt: new Date() } : {}) })
+      .where(eq(users.id, user.id));
+    await tx.delete(sessions).where(eq(sessions.userId, user.id));
+    return true;
+  });
+  if (!done) return false;
   await disconnectSessions(user.id);
   await cancelTokens(user.id, ["reset_password"]);
   sendInBackground(passwordChangedNotice(user));
