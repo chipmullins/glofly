@@ -88,8 +88,8 @@ export function FriendAlert() {
         }}
       >
         <Avatar user={alert.user} size={40} status="online" ring={alert.hang ? c.online : c.sheet} />
-        <Text size={15} style={{ flex: 1 }} numberOfLines={2}>
-          <Text size={15} weight="bold">
+        <Text size={15} style={{ flex: 1, lineHeight: 21 }} numberOfLines={2}>
+          <Text size={15} weight="bold" style={{ lineHeight: 21 }}>
             {alert.user.displayName}
           </Text>{' '}
           {alert.text}
@@ -105,7 +105,7 @@ export function FriendAlert() {
             style={{ height: 38, paddingHorizontal: 14, borderRadius: 19, backgroundColor: c.online, flexDirection: 'row', alignItems: 'center', gap: 6 }}
           >
             <Icon name="phone" size={16} color="#FFFFFF" />
-            <Text size={14} weight="bold" style={{ color: '#FFFFFF' }}>
+            <Text size={14} weight="bold" style={{ color: '#FFFFFF', lineHeight: 19 }}>
               Call
             </Text>
           </Pressable>

@@ -74,11 +74,11 @@ export function SocialStrip() {
           </Text>
         </View>
       ) : null}
-      <Text size={12} numberOfLines={1} style={{ maxWidth: 70, marginTop: badge ? 4 : 0 }}>
+      <Text size={12} numberOfLines={1} style={{ maxWidth: 70, marginTop: badge ? 4 : 0, lineHeight: 17 }}>
         {p.displayName.split(/\s+/)[0]}
       </Text>
       {sub ? (
-        <Text size={11} tone="muted" numberOfLines={1} style={{ marginTop: -4 }}>
+        <Text size={11} tone="muted" numberOfLines={1} style={{ marginTop: -5, lineHeight: 15 }}>
           {sub}
         </Text>
       ) : null}
@@ -102,7 +102,7 @@ export function SocialStrip() {
           <View style={{ width: 59, height: 59, borderRadius: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: mine ? c.onlineSoft : c.surface, borderWidth: 2.5, borderColor: mine ? c.online : c.line, borderStyle: mine ? 'solid' : 'dashed' }}>
             <Icon name={mine ? 'check' : 'coffee'} size={24} color={mine ? c.onlineText : c.accentText} />
           </View>
-          <Text size={12} numberOfLines={1} weight={mine ? 'bold' : 'regular'} style={{ color: mine ? c.onlineText : c.ink }}>
+          <Text size={12} numberOfLines={1} weight={mine ? 'bold' : 'regular'} style={{ color: mine ? c.onlineText : c.ink, lineHeight: 17 }}>
             {mine ? `Free · ${minutesLeft(mine.until, now)}m` : 'Hang?'}
           </Text>
         </Pressable>
@@ -143,7 +143,7 @@ function HangSheet({ friends, onDone }: { friends: PublicUser[]; onDone: () => v
   return (
     <BottomSheet onClose={onDone}>
       <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 16, gap: 12, maxHeight: 620 }}>
-        <Text display size={22}>
+        <Text display size={22} style={{ lineHeight: 30 }}>
           Want to hang?
         </Text>
         <Text size={14} tone="muted" style={{ lineHeight: 20 }}>
