@@ -73,6 +73,12 @@ const webChanged = !ok(
 
 const from = desktopVersion()
 const version = setDesktopVersion(bump)
+if (version === from) {
+  fail(
+    `Glofly is already version ${version} (that release was already committed and tagged).\n` +
+      '  To finish it: update the server if you haven\'t, then run:  npm run release:upload'
+  )
+}
 console.log(green(`  Version ${from} → ${version}`))
 console.log(
   `  Server code changed since the last release: ${serverChanged ? yellow('yes') : 'no'}` +
