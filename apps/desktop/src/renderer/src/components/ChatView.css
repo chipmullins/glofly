@@ -991,3 +991,23 @@
     animation: none;
   }
 }
+
+/* 0.5.0: "4-day glow" by a friend's name in the chat header */
+.chat-glow {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px 2px 2px;
+  border-radius: 999px;
+  background: rgba(255, 176, 72, 0.14);
+  color: #b8700a;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chat-glow .glow-mark-days {
+  display: none;
+}
+:root[data-theme='dark'] .chat-glow {
+  color: #ffbe6a;
+}

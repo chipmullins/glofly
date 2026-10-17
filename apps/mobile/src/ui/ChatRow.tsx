@@ -5,6 +5,8 @@ import { ChatAvatar } from './Avatar'
 import { Icon } from './icons'
 import { Badge, Text } from './kit'
 import { useTheme } from './theme'
+import { useSocial } from '@/state/social'
+import { BirthdayMark, GlowMark } from './Social'
 import { callLine, chatTitle, isMuted, previewOf, typingLine, type NameOf } from '@/lib/chats'
 import { listTime } from '@/lib/format'
 import type { Call } from '@glofly/shared'
@@ -34,6 +36,9 @@ export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typ
   const wide = useWide()
   const open = useStore((s) => wide && s.viewing === chat.id)
   const title = chatTitle(chat)
+  // 0.5.0: your glow with a friend, and a 🎂 on their birthday.
+  const glow = useSocial((s) => (chat.kind === 'dm' ? s.glows[chat.partner.id] : undefined))
+  const birthday = useSocial((s) => chat.kind === 'dm' && s.birthdays.includes(chat.partner.id))
   const muted = isMuted(chat, now)
   const unread = chat.unreadCount
   const mentions = chat.mentionCount ?? 0
@@ -77,9 +82,12 @@ export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typ
       <ChatAvatar chat={chat} size={54} status={chat.kind === 'dm' ? (presence?.status ?? null) : null} mobile={onMobile(presence ?? undefined)} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-          <Text numberOfLines={1} size={16} weight="bold" style={{ flex: 1, fontWeight: bold ? '700' : '600' }}>
+          <Text numberOfLines={1} size={16} weight="bold" style={{ flexShrink: 1, fontWeight: bold ? '700' : '600' }}>
             {title}
           </Text>
+          {glow ? <GlowMark glow={glow} /> : null}
+          {birthday ? <BirthdayMark /> : null}
+          <View style={{ flex: 1 }} />
           {muted ? <Icon name="bellOff" size={14} color={c.faint} /> : null}
           <Text size={13} weight={bold ? 'bold' : 'regular'} style={{ color: bold ? c.accentText : c.muted }}>
             {time}

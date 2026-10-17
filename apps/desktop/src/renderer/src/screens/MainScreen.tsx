@@ -1,5 +1,5 @@
 import { shortBody } from '@glofly/shared/gifs'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ApiResult,
   ConversationSummary,
@@ -71,6 +71,10 @@ import type { CallsValue } from '../calls/callState'
 import { CallFloat, CallStrip } from '../components/CallPanel'
 import { ChevronIcon, GameIcon, PhoneIcon, VideoIcon } from '../components/icons'
 import { isShortcutKey, isWeb, shortcutLabel } from '../lib/platform'
+import { useSocial, useSocialSync } from '../lib/social'
+import { HangToast, SocialActions, SocialStrip, YearInGlowDialog } from '../components/Social'
+import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcast'
+import { useMyBroadcast } from '../lib/broadcast'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -124,11 +128,13 @@ function useClickOutside(open: boolean, close: () => void): React.RefObject<HTML
 function SettingsMenu({
   onLogout,
   onOpenSettings,
-  onEditProfile
+  onEditProfile,
+  onYearInGlow
 }: {
   onLogout: () => void
   onOpenSettings: () => void
   onEditProfile: () => void
+  onYearInGlow: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
@@ -171,6 +177,20 @@ function SettingsMenu({
           >
             <SettingsIcon size={18} />
             Settings
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close()
+              onYearInGlow()
+            }}
+          >
+            <span className="menu-sparkle" aria-hidden="true">
+              ✨
+            </span>
+            Year in Glow
           </button>
           <button
             type="button"
@@ -413,6 +433,12 @@ export default function MainScreen({
   const [teamNotices, setTeamNotices] = useState<TeamNotice[]>([])
   const [announcement, setAnnouncement] = useState<Announcement | null>(null)
   const [lists, setLists] = useState<FriendLists | null>(null)
+  /** Friends by id (0.5.0: who's live, free to hang, birthdays) */
+  const friendsById = useMemo(() => new Map((lists?.friends ?? []).map((f) => [f.id, f])), [lists])
+  const friendsRef = useRef<PublicUser[]>([])
+  useEffect(() => {
+    friendsRef.current = lists?.friends ?? []
+  }, [lists])
   const [notice, setNotice] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
@@ -463,6 +489,16 @@ export default function MainScreen({
   const [leaveBusy, setLeaveBusy] = useState(false)
   /** Short messages about calls ("Jacob didn't pick up."), shown for a few seconds */
   const [toast, setToast] = useState<string | null>(null)
+  // 0.5.0 social: glows, hangs, birthdays, broadcasts, Year in Glow.
+  useSocialSync()
+  const social = useSocial()
+  const myLive = useMyBroadcast()
+  const [goLive, setGoLive] = useState(false)
+  const [livePanel, setLivePanel] = useState(false)
+  const [watchingId, setWatchingId] = useState<string | null>(null)
+  const [hangPing, setHangPing] = useState<PublicUser | null>(null)
+  const [yearOpen, setYearOpen] = useState(false)
+  const closeHangPing = useCallback(() => setHangPing(null), [])
   const callControls = useRef<CallsValue | null>(null)
   /** The sidebar's "Find a friend or chat" search */
   const [chatQuery, setChatQuery] = useState('')
@@ -711,6 +747,25 @@ export default function MainScreen({
         case 'friends:changed':
           void refresh()
           break
+        case 'hang:ping': {
+          // A friend is free to hang: a gentle card with Call and Message.
+          const who = friendsRef.current.find((f) => f.id === event.userId)
+          if (!who) break
+          playSound('friendOnline')
+          setHangPing(who)
+          if (shouldNotify()) {
+            void notify(
+              {
+                key: `hang:${who.id}`,
+                conversationId: null,
+                title: who.displayName,
+                body: 'is free to hang for the next hour'
+              },
+              who
+            )
+          }
+          break
+        }
         case 'friend:online': {
           // "Notify me when they come online" (the server already skipped Do not disturb).
           const who = event.user
@@ -1345,6 +1400,7 @@ export default function MainScreen({
               onLogout={onLogout}
               onOpenSettings={() => setSettingsOpen('general')}
               onEditProfile={() => setEditingProfile(true)}
+              onYearInGlow={() => setYearOpen(true)}
             />
             {statusOpen && (
               <StatusMenu
@@ -1388,7 +1444,28 @@ export default function MainScreen({
             </button>
           </nav>
 
+          <SocialActions
+            friends={lists?.friends ?? []}
+            now={now}
+            live={
+              myLive.status === 'live'
+                ? { viewers: social.broadcasts.find((b) => b.userId === user.id)?.viewers ?? 0 }
+                : null
+            }
+            onGoLive={() => setGoLive(true)}
+            onManageLive={() => setLivePanel(true)}
+          />
+
           <CallStrip openChatId={openChatId} onOpenChat={setOpenChatId} />
+
+          <SocialStrip
+            people={friendsById}
+            meId={user.id}
+            now={now}
+            onWatch={setWatchingId}
+            onCall={(id) => void callFriend(id, false)}
+            onMessage={(id) => void openChatWith(id)}
+          />
 
           <ChatList
             me={user}
@@ -1436,6 +1513,12 @@ export default function MainScreen({
             onSessionExpired={onSessionExpired}
           />
           <CallFloat openChatId={openChatId} onOpenChat={setOpenChatId} />
+          {watchingId && friendsById.get(watchingId) && (
+            <BroadcastViewer
+              person={friendsById.get(watchingId)!}
+              onClose={() => setWatchingId(null)}
+            />
+          )}
           {messageSearch && (
             <SearchPanel
               me={user}
@@ -1727,6 +1810,23 @@ export default function MainScreen({
               const id = teamNotices[0].id
               setTeamNotices((list) => list.filter((n) => n.id !== id))
               void window.glofly.notices.seen(id)
+            }}
+          />
+        )}
+        {goLive && <GoLiveDialog onClose={() => setGoLive(false)} onProblem={setToast} />}
+        {livePanel && <LivePanel onClose={() => setLivePanel(false)} />}
+        {yearOpen && <YearInGlowDialog onClose={() => setYearOpen(false)} />}
+        {hangPing && (
+          <HangToast
+            person={hangPing}
+            onClose={closeHangPing}
+            onCall={() => {
+              setHangPing(null)
+              void callFriend(hangPing.id, false)
+            }}
+            onMessage={() => {
+              setHangPing(null)
+              void openChatWith(hangPing.id)
             }}
           />
         )}

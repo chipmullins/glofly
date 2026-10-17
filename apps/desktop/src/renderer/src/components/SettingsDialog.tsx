@@ -1,3 +1,4 @@
+import { patchSocial, refreshSocial, useSocial } from '../lib/social'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type {
   AlertSound,
@@ -68,6 +69,37 @@ const PRIVACY: Row[] = [
   },
   { key: 'showTyping', label: 'Show when I’m typing' }
 ]
+
+/** 0.5.0 Birthday glow: friends see the day (never the year) and get a reminder. */
+function BirthdayRow(): React.JSX.Element {
+  const social = useSocial()
+  const [busy, setBusy] = useState(false)
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <span className="settings-row-label">Share my birthday with friends</span>
+        <span className="settings-row-desc">
+          On your birthday, friends see a 🎂 by your name and get a reminder. Only the day, never
+          the year.
+        </span>
+      </div>
+      <Toggle
+        on={social.shareBirthday}
+        label="Share my birthday with friends"
+        disabled={busy}
+        onChange={(on) => {
+          setBusy(true)
+          patchSocial({ shareBirthday: on })
+          void window.glofly.social.shareBirthday(on).then((r) => {
+            setBusy(false)
+            if (!r.ok) patchSocial({ shareBirthday: !on })
+            void refreshSocial()
+          })
+        }}
+      />
+    </div>
+  )
+}
 
 export function Toggle({
   on,
@@ -745,6 +777,7 @@ export default function SettingsDialog({
                         )}
                       </div>
                     ))}
+                    <BirthdayRow />
                     <div className="settings-row">
                       <div className="settings-row-text">
                         <label className="settings-row-label" htmlFor="settings-requests">

@@ -581,10 +581,19 @@ function useCallPrefsLive(): CallPrefs {
 /** Pick a screen or window to share (with pictures, like the system picker). */
 export function ScreenPicker({
   onPick,
-  onClose
+  onClose,
+  title = 'Share your screen',
+  subtitle = "Pick what they'll see. You can stop sharing anytime.",
+  confirmLabel = 'Share',
+  extra
 }: {
   onPick: (sourceId: string) => void
   onClose: () => void
+  /** 0.5.0 Broadcast now reuses the picker with its own words and options. */
+  title?: string
+  subtitle?: string
+  confirmLabel?: string
+  extra?: React.ReactNode
 }): React.JSX.Element {
   const [sources, setSources] = useState<ScreenSource[] | null>(null)
   const [picked, setPicked] = useState<string | null>(null)
@@ -660,9 +669,10 @@ export function ScreenPicker({
         className="dialog dialog--panel screen-picker"
       >
         <div className="dialog-head">
-          <h1 id="screen-picker-title">Share your screen</h1>
-          <p>Pick what they&apos;ll see. You can stop sharing anytime.</p>
+          <h1 id="screen-picker-title">{title}</h1>
+          <p>{subtitle}</p>
         </div>
+        {extra}
         <div className="screen-picker-body">
           {needsMacPermission && (
             <div className="screen-picker-permission" role="note">
@@ -701,7 +711,7 @@ export function ScreenPicker({
             disabled={!picked}
             onClick={() => picked && onPick(picked)}
           >
-            Share
+            {confirmLabel}
           </button>
         </div>
       </div>

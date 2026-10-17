@@ -78,6 +78,27 @@ export async function stopCallAudio(): Promise<void> {
   await AudioSession.stopAudioSession().catch(() => {})
 }
 
+/**
+ * 0.5.0 watching a friend's broadcast: listening only, like a video (the speaker, Bluetooth or
+ * headphones; never the earpiece, and the microphone is never touched).
+ */
+export async function startWatchAudio(): Promise<void> {
+  if (Platform.OS === 'ios') {
+    const listen: AppleAudioConfiguration = { audioCategory: 'playback', audioCategoryOptions: ['mixWithOthers', 'allowAirPlay'], audioMode: 'moviePlayback' }
+    setupIOSAudioManagement(false, { recording: listen, recordingWithoutVoiceProcessing: listen, playout: listen, deactivateOnStop: true })
+    return
+  }
+  await AudioSession.configureAudio({
+    android: { preferredOutputList: ['bluetooth', 'headset', 'speaker'], audioTypeOptions: AndroidAudioTypePresets.media },
+  })
+  await AudioSession.startAudioSession()
+}
+
+export async function stopWatchAudio(): Promise<void> {
+  if (Platform.OS === 'ios') return // LiveKit lets the session go when the engine stops
+  await AudioSession.stopAudioSession().catch(() => {})
+}
+
 /** Call diagnostics: what LiveKit's audio engine is doing (iPhone only; empty elsewhere). */
 export function audioEngineInfo(): Record<string, string> {
   if (Platform.OS !== 'ios') return {}

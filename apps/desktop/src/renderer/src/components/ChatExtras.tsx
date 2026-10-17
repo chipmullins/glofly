@@ -11,9 +11,10 @@ import type {
   FireflyEmoji,
   GifInfo,
   LinkPreview,
-  Message
+  Message,
+  Sticker
 } from '../../../preload/api-types'
-import { previewImageUrl } from '../lib/attachments'
+import { previewImageUrl, stickerUrl } from '../lib/attachments'
 import EmojiText from './EmojiText'
 import './ChatExtras.css'
 
@@ -128,13 +129,17 @@ function placeAbove(
 export function GifPicker({
   anchor,
   onPick,
+  onPickSticker,
   onClose
 }: {
   anchor: HTMLElement
   onPick: (gif: GifInfo) => void
+  /** 0.5.0 custom stickers: the Stickers tab */
+  onPickSticker: (sticker: Sticker) => void
   onClose: () => void
 }): React.JSX.Element {
   const WIDTH = 380
+  const [tab, setTab] = useState<'gifs' | 'stickers'>('gifs')
   const [query, setQuery] = useState('')
   const [gifs, setGifs] = useState<GifInfo[]>([])
   const [next, setNext] = useState<number | null>(null)
@@ -212,73 +217,205 @@ export function GifPicker({
       aria-label="Send a GIF"
       style={{ top: place.top, left: place.left, height: place.height, width: WIDTH }}
     >
-      <div className="gif-picker-head">
-        <label className="gif-search">
-          <Svg size={16}>
-            <circle cx="11" cy="11" r="7" />
-            <path d="M20 20l-3.5-3.5" />
-          </Svg>
-          <input
-            autoFocus
-            value={query}
-            maxLength={50}
-            placeholder="Search GIPHY"
-            aria-label="Search GIFs"
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && (
-            <button type="button" aria-label="Clear search" onClick={() => setQuery('')}>
+      <div className="gif-tabs" role="tablist" aria-label="GIFs or stickers">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'gifs'}
+          className={tab === 'gifs' ? 'gif-tab gif-tab--on' : 'gif-tab'}
+          onClick={() => setTab('gifs')}
+        >
+          GIFs
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'stickers'}
+          className={tab === 'stickers' ? 'gif-tab gif-tab--on' : 'gif-tab'}
+          onClick={() => setTab('stickers')}
+        >
+          My stickers
+        </button>
+      </div>
+      {tab === 'stickers' ? (
+        <StickerTray onPick={onPickSticker} />
+      ) : (
+        <>
+          <div className="gif-picker-head">
+            <label className="gif-search">
+              <Svg size={16}>
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5" />
+              </Svg>
+              <input
+                autoFocus
+                value={query}
+                maxLength={50}
+                placeholder="Search GIPHY"
+                aria-label="Search GIFs"
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              {query && (
+                <button type="button" aria-label="Clear search" onClick={() => setQuery('')}>
+                  ×
+                </button>
+              )}
+            </label>
+          </div>
+          <div className="gif-picker-label">{query.trim() ? 'Results' : 'Trending'}</div>
+          <div className="gif-picker-grid" ref={scrollRef} onScroll={onScroll}>
+            {status === 'error' ? (
+              <p className="gif-picker-empty">{problem}</p>
+            ) : status === 'loading' && gifs.length === 0 ? (
+              <div className="gif-picker-cols" aria-busy="true">
+                {[0, 1].map((c) => (
+                  <div key={c} className="gif-col">
+                    {[0, 1, 2, 3].map((i) => (
+                      <span
+                        key={i}
+                        className="gif-skeleton"
+                        style={{ height: 90 + ((i + c) % 3) * 30 }}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : gifs.length === 0 ? (
+              <p className="gif-picker-empty">No GIFs for “{query.trim()}”. Try another word.</p>
+            ) : (
+              <div className="gif-picker-cols">
+                {columns.map((col, c) => (
+                  <div key={c} className="gif-col">
+                    {col.map((g) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        className="gif-option"
+                        title={g.title}
+                        aria-label={`Send GIF: ${g.title}`}
+                        style={{ aspectRatio: `${g.width} / ${g.height}` }}
+                        onClick={() => onPick(g)}
+                      >
+                        <img src={gifUrl(g.id, 'small')} alt="" loading="lazy" draggable={false} />
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="gif-picker-foot">
+            <span>Powered by</span>
+            <strong>GIPHY</strong>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Your stickers, and "Make a sticker" from a photo (the server cuts out the background). */
+function StickerTray({ onPick }: { onPick: (sticker: Sticker) => void }): React.JSX.Element {
+  const [stickers, setStickers] = useState<Sticker[] | null>(null)
+  const [making, setMaking] = useState(false)
+  const [problem, setProblem] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.glofly.stickers.list().then((r) => {
+      if (cancelled) return
+      if (r.ok) setStickers(r.data)
+      else setProblem(r.message)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function make(file: File): Promise<void> {
+    setMaking(true)
+    setProblem('')
+    const r = await window.glofly.stickers.make(await file.arrayBuffer())
+    setMaking(false)
+    if (r.ok) setStickers((list) => [r.data, ...(list ?? [])])
+    else setProblem(r.message)
+  }
+
+  async function remove(id: string): Promise<void> {
+    setStickers((list) => list?.filter((x) => x.id !== id) ?? null)
+    const r = await window.glofly.stickers.remove(id)
+    if (!r.ok) setProblem(r.message)
+  }
+
+  return (
+    <div className="sticker-tray">
+      <p className="sticker-hint">
+        Turn any photo into a sticker: Glofly cuts out what&apos;s in front.
+      </p>
+      {problem && (
+        <p className="sticker-problem" role="alert">
+          {problem}
+        </p>
+      )}
+      <div className="sticker-grid">
+        <button
+          type="button"
+          className="sticker-make"
+          disabled={making}
+          onClick={() => fileRef.current?.click()}
+        >
+          {making ? (
+            <>
+              <span className="sticker-spinner" aria-hidden="true" />
+              Cutting it out…
+            </>
+          ) : (
+            <>
+              <Svg size={22}>
+                <path d="M12 5v14M5 12h14" />
+              </Svg>
+              Make a sticker
+            </>
+          )}
+        </button>
+        {stickers?.map((st) => (
+          <div key={st.id} className="sticker-cell">
+            <button
+              type="button"
+              className="sticker-option"
+              aria-label="Send sticker"
+              title="Send"
+              onClick={() => onPick(st)}
+            >
+              <img src={stickerUrl(st.id)} alt="" draggable={false} loading="lazy" />
+            </button>
+            <button
+              type="button"
+              className="sticker-remove"
+              aria-label="Delete sticker"
+              title="Delete from your stickers"
+              onClick={() => void remove(st.id)}
+            >
               ×
             </button>
-          )}
-        </label>
-      </div>
-      <div className="gif-picker-label">{query.trim() ? 'Results' : 'Trending'}</div>
-      <div className="gif-picker-grid" ref={scrollRef} onScroll={onScroll}>
-        {status === 'error' ? (
-          <p className="gif-picker-empty">{problem}</p>
-        ) : status === 'loading' && gifs.length === 0 ? (
-          <div className="gif-picker-cols" aria-busy="true">
-            {[0, 1].map((c) => (
-              <div key={c} className="gif-col">
-                {[0, 1, 2, 3].map((i) => (
-                  <span
-                    key={i}
-                    className="gif-skeleton"
-                    style={{ height: 90 + ((i + c) % 3) * 30 }}
-                  />
-                ))}
-              </div>
-            ))}
           </div>
-        ) : gifs.length === 0 ? (
-          <p className="gif-picker-empty">No GIFs for “{query.trim()}”. Try another word.</p>
-        ) : (
-          <div className="gif-picker-cols">
-            {columns.map((col, c) => (
-              <div key={c} className="gif-col">
-                {col.map((g) => (
-                  <button
-                    key={g.id}
-                    type="button"
-                    className="gif-option"
-                    title={g.title}
-                    aria-label={`Send GIF: ${g.title}`}
-                    style={{ aspectRatio: `${g.width} / ${g.height}` }}
-                    onClick={() => onPick(g)}
-                  >
-                    <img src={gifUrl(g.id, 'small')} alt="" loading="lazy" draggable={false} />
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
+        ))}
       </div>
-      <div className="gif-picker-foot">
-        <span>Powered by</span>
-        <strong>GIPHY</strong>
-      </div>
+      {stickers?.length === 0 && !making && (
+        <p className="sticker-empty">Your stickers show up here.</p>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          e.target.value = ''
+          if (f) void make(f)
+        }}
+      />
     </div>
   )
 }

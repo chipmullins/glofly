@@ -37,6 +37,8 @@ import { attachMenu, UploadTray, useUploads } from '@/chat/uploads'
 import { VoiceRecorderBar, RecordButton, useVoice } from '@/chat/voice'
 import { PhotoViewer, type ViewerState } from '@/chat/PhotoViewer'
 import { ChatFireflies, GAMES, GifSheet, LanternBar, PollSheet } from '@/chat/Extras'
+import { BirthdayConfetti, GlowMark } from '@/ui/Social'
+import { useSocial } from '@/state/social'
 import { ChatAvatar } from '@/ui/Avatar'
 import { BottomSheet, chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
@@ -59,6 +61,9 @@ export default function ChatScreen() {
   const allPresence = useStore((s) => s.presence)
   const typing = useStore((s) => s.typing[id])
   const call = useStore((s) => s.calls[id])
+  // 0.5.0: your glow with this friend, and their birthday.
+  const partnerGlow = useSocial((s) => (chat?.kind === 'dm' ? s.glows[chat.partner.id] : undefined))
+  const partnerBirthday = useSocial((s) => chat?.kind === 'dm' && s.birthdays.includes(chat.partner.id))
   const outbox = useOutbox((s) => s.items)
   const [reply, setReply] = useState<Message | null>(null)
   const [editing, setEditing] = useState<Message | null>(null)
@@ -169,7 +174,7 @@ export default function ChatScreen() {
 
   async function plusMenu() {
     const pick = await attachMenu(uploads, [
-      { key: 'gif', label: 'GIF', icon: 'gif' },
+      { key: 'gif', label: 'GIF or sticker', icon: 'gif' },
       ...(isGroup ? [{ key: 'poll', label: 'Poll', icon: 'poll' }] : []),
       { key: 'game', label: 'Play a game', icon: 'gamepad' },
       { key: 'lantern', label: lantern ? 'Lantern message (on)' : 'Lantern message', icon: 'lantern', detail: 'Fades away once it’s read', checked: lantern },
@@ -328,6 +333,7 @@ export default function ChatScreen() {
                   {title}
                 </Text>
                 {muted ? <Icon name="bellOff" size={14} color={c.faint} /> : null}
+                {partnerGlow ? <GlowMark glow={partnerGlow} /> : null}
               </View>
               {subtitle ? (
                 <Text size={13} tone="muted" numberOfLines={1}>
@@ -412,6 +418,7 @@ export default function ChatScreen() {
         )}
       />
       <ChatFireflies conversationId={id} meId={meId} nameOf={nameOf} />
+      {partnerBirthday && chat.kind === 'dm' ? <BirthdayConfetti userId={chat.partner.id} name={chat.partner.displayName} /> : null}
       </View>
 
       {canMessage ? (
@@ -517,6 +524,14 @@ export default function ChatScreen() {
           onPick={(g) => {
             setGifOpen(false)
             if (g) void sendGif(g.id)
+          }}
+          onPickSticker={(st) => {
+            setGifOpen(false)
+            void api.sendSticker(st.id, id, reply?.id).then((r) => {
+              setReply(null)
+              if (r.ok) updateMessage(r.data)
+              else void inform("Couldn't send the sticker", r.message)
+            })
           }}
         />
       ) : null}

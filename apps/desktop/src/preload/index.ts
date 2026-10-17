@@ -156,6 +156,27 @@ const glofly: GloflyApi = {
       ipcRenderer.invoke('conversations:close', conversationId, closed),
     typing: (conversationId: string) => ipcRenderer.send('conversations:typing', conversationId)
   },
+  social: {
+    get: () => ipcRenderer.invoke('social:get'),
+    hang: (userIds: string[] | null) => ipcRenderer.invoke('social:hang', userIds),
+    stopHang: () => ipcRenderer.invoke('social:stop-hang'),
+    shareBirthday: (share: boolean) => ipcRenderer.invoke('social:birthday', share),
+    year: () => ipcRenderer.invoke('social:year')
+  },
+  stickers: {
+    list: () => ipcRenderer.invoke('stickers:list'),
+    make: (data: ArrayBuffer) => ipcRenderer.invoke('stickers:make', data),
+    remove: (id: string) => ipcRenderer.invoke('stickers:remove', id),
+    send: (id: string, conversationId: string, replyToId?: string) =>
+      ipcRenderer.invoke('stickers:send', id, conversationId, replyToId)
+  },
+  broadcasts: {
+    start: (title: string | null) => ipcRenderer.invoke('broadcasts:start', title),
+    stop: () => ipcRenderer.invoke('broadcasts:stop'),
+    mine: () => ipcRenderer.invoke('broadcasts:mine'),
+    watch: (userId: string) => ipcRenderer.invoke('broadcasts:watch', userId),
+    canShareSound: () => ipcRenderer.invoke('broadcasts:can-share-sound')
+  },
   chat: {
     gifs: (query: string, offset?: number) => ipcRenderer.invoke('chat:gifs', query, offset),
     sendGif: (conversationId: string, gifId: string, replyToId?: string) =>
@@ -196,7 +217,8 @@ const glofly: GloflyApi = {
     decline: (callId: string) => ipcRenderer.invoke('calls:decline', callId),
     leave: (callId: string) => ipcRenderer.invoke('calls:leave', callId),
     screenSources: () => ipcRenderer.invoke('calls:screen-sources'),
-    chooseScreen: (sourceId: string) => ipcRenderer.invoke('calls:choose-screen', sourceId),
+    chooseScreen: (sourceId: string, sound?: boolean) =>
+      ipcRenderer.invoke('calls:choose-screen', sourceId, sound),
     screenAccess: () => ipcRenderer.invoke('calls:screen-access')
   },
   watch: {

@@ -130,7 +130,8 @@ export function MessageAttachments({
   onOpenPhoto: (photos: Attachment[], index: number) => void
   onFailure: Failure
 }): React.JSX.Element {
-  const photos = attachments.filter((a) => a.kind === 'image')
+  const stickers = attachments.filter((a) => a.kind === 'image' && a.sticker)
+  const photos = attachments.filter((a) => a.kind === 'image' && !a.sticker)
   const files = attachments.filter((a) => a.kind === 'file' && !a.voice && !a.video)
   const voices = attachments.filter((a) => a.kind === 'file' && a.voice)
   const videos = attachments.filter((a) => a.kind === 'file' && a.video)
@@ -138,6 +139,22 @@ export function MessageAttachments({
 
   return (
     <div className="attachments">
+      {stickers.map((a) => {
+        // A sticker (0.5.0): see-through, no frame, a comfortable size.
+        const scale = Math.min(1, 168 / Math.max(a.width ?? 168, a.height ?? 168))
+        return (
+          <img
+            key={a.id}
+            className="msg-sticker"
+            src={photoUrl(conversationId, a.id, 'full')}
+            alt="Sticker"
+            title="Sticker"
+            width={Math.round((a.width ?? 168) * scale)}
+            height={Math.round((a.height ?? 168) * scale)}
+            draggable={false}
+          />
+        )
+      })}
       {photos.length > 0 && (
         <div className={single ? 'photo-grid photo-grid--single' : 'photo-grid'}>
           {photos.map((a, i) => (

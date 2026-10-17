@@ -10,6 +10,7 @@ import { isUserId } from './api'
 //   glofly-media://attachments/<conversationId>/<id>/poster         a video's picture (0.5.0)
 //   glofly-media://attachments/<conversationId>/<id>/video          a video, streamed (0.5.0)
 //   glofly-media://previews/<conversationId>/<messageId>            a link preview's picture (0.5.0)
+//   glofly-media://stickers/<stickerId>                             a sticker in your tray (0.5.0)
 // and this fetches them with the token, here in the main process. Only these shapes are
 // allowed, and only WebP images (re-saved by the server) or voice audio (Opus in WebM/Ogg, AAC in MP4; checked
 // by its first bytes) are passed back.
@@ -60,6 +61,9 @@ function serverPathFor(
       path: `/conversations/${parts[0]}/attachments/${parts[1]}/${parts[2]}`,
       maxBytes: 30 * MB
     }
+  }
+  if (url.host === 'stickers' && parts.length === 1 && isUserId(parts[0])) {
+    return { path: `/stickers/${parts[0]}/image`, maxBytes: 2 * MB }
   }
   if (url.host === 'previews' && parts.length === 2 && parts.every(isUserId)) {
     return {

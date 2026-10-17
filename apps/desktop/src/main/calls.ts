@@ -125,7 +125,7 @@ export function watchStop(callId: string): Promise<ApiResult<WatchUpdate>> {
 // one, and only then does the window ask to start sharing. The share request is answered with
 // exactly the picked screen or window, and only within a few seconds of picking it.
 
-let chosen: { id: string; at: number } | null = null
+let chosen: { id: string; at: number; sound: boolean } | null = null
 const CHOICE_GOOD_FOR_MS = 15_000
 // What the picker last showed, by id. The share is answered with that exact source rather than
 // a fresh listing: on a Mac a second listing (with no pictures) could come back without the
@@ -159,20 +159,32 @@ export async function screenSources(): Promise<ScreenSource[]> {
   }
 }
 
-export function chooseScreen(sourceId: string): boolean {
-  chosen = { id: sourceId, at: Date.now() }
+/**
+ * `sound` (0.5.0 Broadcast now): also send what the computer is playing. Windows only: Electron
+ * can capture the system sound there ("loopback"); a Mac has no way to without extra software.
+ */
+export function chooseScreen(sourceId: string, sound = false): boolean {
+  chosen = { id: sourceId, at: Date.now(), sound }
   return true
 }
 
+/** Can this computer share its sound along with the screen? */
+export const canShareSound = (): boolean => process.platform === 'win32'
+
 /** Answers the window's request to share its screen with the picked screen or window, if any. */
-export async function pickedScreen(): Promise<DesktopCapturerSource | null> {
+export async function pickedScreen(): Promise<{
+  source: DesktopCapturerSource
+  sound: boolean
+} | null> {
   const choice = chosen
   chosen = null
   if (!choice || Date.now() - choice.at > CHOICE_GOOD_FOR_MS) return null
+  const sound = choice.sound && canShareSound()
   const shown = listed.get(choice.id)
-  if (shown) return shown
+  if (shown) return { source: shown, sound }
   try {
-    return (await sources(false)).find((s) => s.id === choice.id) ?? null
+    const found = (await sources(false)).find((s) => s.id === choice.id)
+    return found ? { source: found, sound } : null
   } catch (err) {
     console.warn('[screen share] listing failed', err)
     return null

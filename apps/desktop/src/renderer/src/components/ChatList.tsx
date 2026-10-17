@@ -10,6 +10,8 @@ import { attachmentSummary } from '../lib/attachments'
 import type { ChatResult } from '../lib/chatSearch'
 import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
 import { useTypingByChat } from '../lib/typingWatch'
+import { useSocial } from '../lib/social'
+import { BirthdayMark, GlowMark } from './Social'
 import { joinedCount, useCalls } from '../calls/callState'
 import { onMobile, playing, presenceLine } from '../lib/presence'
 import Avatar from './Avatar'
@@ -134,6 +136,7 @@ function DmRow({
   // Like the design: friends show their status; otherwise the last message (groups always).
   // A call going on shows instead: "In call · 4 of 6" (GroupCall.dc.html).
   const calls = useCalls()
+  const social = useSocial()
   const call = calls.callIn(c.id)
   const callLabel = call
     ? call.status === 'ringing' && joinedCount(call) <= 1
@@ -208,6 +211,12 @@ function DmRow({
             title={c.kind === 'group' ? `${title} · ${memberCountLabel(c.memberCount)}` : undefined}
           >
             <EmojiText text={title} />
+            {c.kind === 'dm' && social.glows[c.partner.id] && (
+              <GlowMark glow={social.glows[c.partner.id]} name={c.partner.displayName} />
+            )}
+            {c.kind === 'dm' && social.birthdays.includes(c.partner.id) && (
+              <BirthdayMark name={c.partner.displayName} />
+            )}
           </span>
           <span
             className={

@@ -12,6 +12,7 @@ import { Avatar } from '@/ui/Avatar'
 import { chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { SectionLabel, Text } from '@/ui/kit'
 import { SettingsRow } from '@/ui/SettingsRow'
+import { refreshSocial, useSocial } from '@/state/social'
 import { ACCENTS, useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
 
 const THEMES: { key: ThemeChoice; label: string }[] = [
@@ -28,6 +29,7 @@ export default function Settings() {
   const theme = useThemeChoice((s) => s.choice)
   const accent = useThemeChoice((s) => s.accent)
   const [privacy, setPrivacy] = useState<PrivacySettings | null>(null)
+  const shareBirthday = useSocial((x) => x.shareBirthday)
 
   useEffect(() => {
     void api.getPrivacy().then((r) => r.ok && setPrivacy(r.data))
@@ -114,6 +116,24 @@ export default function Settings() {
       <SettingsRow icon="clock" label="Show last seen" toggle={{ value: privacy?.showLastSeen ?? true, onChange: (v) => void changePrivacy({ showLastSeen: v }) }} disabled={!privacy} />
       <SettingsRow icon="pencil" label="Show when I'm typing" toggle={{ value: privacy?.showTyping ?? true, onChange: (v) => void changePrivacy({ showTyping: v }) }} disabled={!privacy} />
       <SettingsRow icon="addPerson" label="Friend requests from" value={privacy?.friendRequests === 'nobody' ? 'No one' : 'Everyone'} onPress={() => void friendRequests()} disabled={!privacy} />
+      <SettingsRow
+        icon="gift"
+        label="Share my birthday with friends"
+        detail="A 🎂 by your name on the day (never the year)"
+        toggle={{
+          value: shareBirthday,
+          onChange: (v) => {
+            useSocial.setState({ shareBirthday: v })
+            void api.shareBirthday(v).then((r) => {
+              if (!r.ok) useSocial.setState({ shareBirthday: !v })
+              void refreshSocial()
+            })
+          },
+        }}
+      />
+
+      <SectionLabel>Fun</SectionLabel>
+      <SettingsRow icon="sparkles" label="Year in Glow" detail="Your year on Glofly: friends, glows, calls, emoji" onPress={() => router.push('/year')} />
 
       <SectionLabel>Account</SectionLabel>
       <SettingsRow icon="user" label="Account" detail="Email, password, devices, delete account" onPress={() => router.push('/settings/account')} />

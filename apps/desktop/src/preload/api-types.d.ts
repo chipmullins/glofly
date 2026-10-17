@@ -13,6 +13,8 @@ import type {
   ApiResult,
   Attachment,
   CallJoin,
+  Broadcast,
+  BroadcastJoin,
   ConversationSummary,
   FireflyEmoji,
   GifInfo,
@@ -29,6 +31,7 @@ import type {
   PrivacySettings,
   Profile,
   ProfileChanges,
+  PublicUser,
   RegisterRequest,
   RegisterResult,
   ReportRequest,
@@ -37,6 +40,8 @@ import type {
   SignedInDevice,
   SignedInUser,
   SignupMode,
+  SocialToday,
+  Sticker,
   TeamNotice,
   UpdateRequired,
   UsernameCheck,
@@ -45,6 +50,7 @@ import type {
   WatchReaction,
   WatchUpdate,
   VoiceInfo,
+  YearInGlow,
   Paused
 } from '@glofly/shared/types'
 
@@ -417,6 +423,35 @@ export type GloflyApi = {
     close: (conversationId: string, closed: boolean) => Promise<ApiResult<null>>
     typing: (conversationId: string) => void
   }
+  /** 0.5.0: glows, "Want to hang?", birthdays, Year in Glow. */
+  social: {
+    get: () => Promise<ApiResult<SocialToday>>
+    /** Free to hang for the next hour; tells these friends (null: every friend). */
+    hang: (
+      userIds: string[] | null
+    ) => Promise<ApiResult<{ until: string; with: string[] | null; told: number }>>
+    stopHang: () => Promise<ApiResult<null>>
+    /** Friends see your birthday (the day, never the year) and get a reminder. */
+    shareBirthday: (share: boolean) => Promise<ApiResult<{ share: boolean }>>
+    year: () => Promise<ApiResult<YearInGlow>>
+  }
+  /** 0.5.0 custom stickers (your tray). */
+  stickers: {
+    list: () => Promise<ApiResult<Sticker[]>>
+    /** A photo → a sticker (the server cuts out the background). */
+    make: (data: ArrayBuffer) => Promise<ApiResult<Sticker>>
+    remove: (id: string) => Promise<ApiResult<null>>
+    send: (id: string, conversationId: string, replyToId?: string) => Promise<ApiResult<Message>>
+  }
+  /** 0.5.0 Broadcast now: your screen (and its sound) for any friend to drop in and watch. */
+  broadcasts: {
+    start: (title: string | null) => Promise<ApiResult<BroadcastJoin>>
+    stop: () => Promise<ApiResult<null>>
+    mine: () => Promise<ApiResult<{ broadcast: Broadcast | null; viewers: PublicUser[] }>>
+    watch: (userId: string) => Promise<ApiResult<BroadcastJoin>>
+    /** Can the computer's sound go with the screen? (Windows and browsers yes; a Mac no) */
+    canShareSound: () => Promise<boolean>
+  }
   /** 0.5.0 chat extras: GIFs, link previews, polls, mini games and firefly swarms. */
   chat: {
     /** Trending GIFs (empty query) or a search, 24 at a time. */
@@ -475,8 +510,11 @@ export type GloflyApi = {
     leave: (callId: string) => Promise<ApiResult<null>>
     /** Screens and windows that can be shared. */
     screenSources: () => Promise<ScreenSource[]>
-    /** Picks what the next screen share shows (the share itself starts in the call). */
-    chooseScreen: (sourceId: string) => Promise<boolean>
+    /**
+     * Picks what the next screen share shows (the share itself starts in the call). `sound`
+     * (0.5.0 broadcasts, Windows only): the computer's sound goes with it.
+     */
+    chooseScreen: (sourceId: string, sound?: boolean) => Promise<boolean>
     /**
      * Mac: whether macOS allows Glofly to record the screen (System Settings → Privacy &
      * Security → Screen & System Audio Recording). Always "granted" on Windows.

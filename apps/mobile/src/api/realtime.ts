@@ -69,6 +69,7 @@ function connect() {
     useStore.setState({ connected: true })
     // Skipped if the app just loaded everything over plain requests (see sync()).
     void refreshAll({ ifStale: true })
+    emit('connected', null)
   })
   s.on('disconnect', (reason) => {
     useStore.setState({ connected: false })
@@ -180,6 +181,11 @@ function connect() {
   s.on('chat:fireflies', (p) => {
     const swarm = cleanFireflies(p)
     if (swarm) emit('chat:fireflies', swarm)
+  })
+  // 0.5.0: glows, hangs, birthdays or broadcasts changed (fetch /social again); a hang ping.
+  s.on('social:changed', () => emit('social:changed', null))
+  s.on('hang:ping', (p: { userId?: unknown; until?: unknown }) => {
+    if (typeof p?.userId === 'string' && typeof p?.until === 'string') emit('hang:ping', { userId: p.userId, until: p.until })
   })
   s.on('notice:new', () => void refreshNotices())
   s.on('announcement', () => void refreshNotices())

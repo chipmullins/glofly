@@ -525,3 +525,6 @@ export type ReportRequest = {
   /** Also block them */
   block?: boolean
 }
+
+// 0.5.0 social types live in social.ts (with their rules); re-exported for the apps' API types.
+export type { Broadcast, BroadcastJoin, Glow, Hanging, SocialToday, YearInGlow } from './social'

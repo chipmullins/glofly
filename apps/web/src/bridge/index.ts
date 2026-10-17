@@ -7,6 +7,8 @@ import type {
   CallJoin,
   ConversationSummary,
   FriendLists,
+  Broadcast,
+  BroadcastJoin,
   GameState,
   GifPage,
   GloflyApi,
@@ -16,11 +18,15 @@ import type {
   MyStatus,
   PrivacySettings,
   Profile,
+  PublicUser,
   SearchResult,
   SignedInDevice,
+  SocialToday,
+  Sticker,
   TeamNotice,
   WatchPreview,
-  WatchUpdate
+  WatchUpdate,
+  YearInGlow
 } from '../../../desktop/src/preload/api-types'
 import { isYouTubeId } from '@glofly/shared/watch'
 import { looksLikeVideo } from '@glofly/shared/attachments'
@@ -379,6 +385,49 @@ export function createBridge(): GloflyApi {
       typing: (id) => {
         if (isId(id)) sendTyping(id)
       }
+    },
+    // 0.5.0 social extras, stickers and broadcasts.
+    social: {
+      get: () => request<SocialToday>('GET', '/social'),
+      hang: (userIds) =>
+        userIds !== null && (!Array.isArray(userIds) || !userIds.every(isId))
+          ? Promise.resolve(invalid)
+          : request('POST', '/social/hang', userIds ? { userIds } : {}),
+      stopHang: () => nothing(request('DELETE', '/social/hang')),
+      shareBirthday: (share) => request('PUT', '/social/birthday', { share: share === true }),
+      year: () => request<YearInGlow>('GET', '/social/year')
+    },
+    stickers: {
+      list: () => unwrap(request<{ stickers: Sticker[] }>('GET', '/stickers'), 'stickers'),
+      make: (data) =>
+        data.byteLength === 0 || data.byteLength > 15 * 1024 * 1024
+          ? Promise.resolve({ ok: false, error: 'invalid', message: 'Pick a photo under 15 MB.' })
+          : unwrap(
+              request<{ sticker: Sticker }>('POST', '/stickers', undefined, {
+                data,
+                type: 'application/octet-stream'
+              }),
+              'sticker'
+            ),
+      remove: (id) => badId(id) ?? nothing(request('DELETE', `/stickers/${id}`)),
+      send: (id, chat, replyToId) =>
+        badId(id, chat) ??
+        unwrap(
+          request<{ message: Message }>('POST', `/stickers/${id}/send`, {
+            conversationId: chat,
+            ...(replyToId ? { replyToId } : {})
+          }),
+          'message'
+        )
+    },
+    broadcasts: {
+      start: (title) => request<BroadcastJoin>('POST', '/broadcasts', title ? { title } : {}),
+      stop: () => nothing(request('DELETE', '/broadcasts')),
+      mine: () =>
+        request<{ broadcast: Broadcast | null; viewers: PublicUser[] }>('GET', '/broadcasts/mine'),
+      watch: (userId) => badId(userId) ?? request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`),
+      // Chrome and Edge can share a tab's or the computer's sound; the browser asks.
+      canShareSound: async () => true
     },
     // 0.5.0 chat extras (the server checks everything; these only keep addresses well-formed).
     chat: {

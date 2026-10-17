@@ -19,6 +19,7 @@ import { joinCallIn } from '@/calls/controller'
 import { Avatar, ChatAvatar } from '@/ui/Avatar'
 import { ChatRow } from '@/ui/ChatRow'
 import { Banners } from '@/ui/Banners'
+import { SocialStrip } from '@/ui/Social'
 import { Icon } from '@/ui/icons'
 import { SectionLabel, Spinner, Text, webNoOutline } from '@/ui/kit'
 import { ReorderList, reorderActive } from '@/ui/Reorder'
@@ -127,6 +128,7 @@ export default function Chats() {
         <SearchPill value={query} onChange={setQuery} placeholder="Find a friend or chat" />
       </View>
       {!query ? <Banners /> : null}
+      {!query ? <SocialStrip /> : null}
       <FlatList
         data={items}
         keyExtractor={(i) => i.key}

@@ -57,3 +57,7 @@ export const previewImageUrl = (conversationId: string, messageId: string): stri
   server
     ? `${server}/conversations/${conversationId}/messages/${messageId}/preview-image`
     : `glofly-media://previews/${conversationId}/${messageId}`
+
+/** A sticker in your tray (0.5.0). Stickers you send are photos in the chat (photoUrl). */
+export const stickerUrl = (stickerId: string): string =>
+  server ? `${server}/stickers/${stickerId}/image` : `glofly-media://stickers/${stickerId}`

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Animated, Easing, FlatList, Linking, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
+import { ActivityIndicator, Animated, Easing, FlatList, Linking, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
+import { pickChatMedia } from '@/lib/photos'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { gifSize, gifUrl, triviaScores, WORD_LENGTH, type FireflyEmoji, type GifInfo, type LinkPreview, type Message, type TicTacToe, type Trivia, type WordGuess } from '@glofly/shared'
+import { gifSize, gifUrl, triviaScores, WORD_LENGTH, type FireflyEmoji, type GifInfo, type LinkPreview, type Message, type Sticker, type TicTacToe, type Trivia, type WordGuess } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { authHeaders, url } from '@/api/http'
 import { onLive } from '@/api/realtime'
 import { updateMessage } from '@/state/sync'
-import { BottomSheet, inform } from '@/ui/dialogs'
+import { BottomSheet, confirm, inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Button, Checkbox, Text, webNoOutline } from '@/ui/kit'
 import { font, useTheme } from '@/ui/theme'
@@ -31,7 +32,8 @@ export function GifView({ gif, onLongPress }: { gif: GifInfo; onLongPress: () =>
 }
 
 /** Search GIPHY (trending until you type); resolves with the GIF picked, or null. */
-export function GifSheet({ onPick }: { onPick: (gif: GifInfo | null) => void }) {
+export function GifSheet({ onPick, onPickSticker }: { onPick: (gif: GifInfo | null) => void; onPickSticker: (sticker: Sticker) => void }) {
+  const [tab, setTab] = useState<'gifs' | 'stickers'>('gifs')
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
@@ -64,6 +66,19 @@ export function GifSheet({ onPick }: { onPick: (gif: GifInfo | null) => void }) 
   return (
     <BottomSheet onClose={() => onPick(null)}>
       <View style={{ height: 520, paddingBottom: insets.bottom }}>
+        <View style={{ flexDirection: 'row', gap: 4, marginHorizontal: 16, marginBottom: 10, padding: 3, borderRadius: 12, backgroundColor: c.surface }} accessibilityRole="tablist">
+          {(['gifs', 'stickers'] as const).map((t) => (
+            <Pressable key={t} accessibilityRole="tab" accessibilityState={{ selected: tab === t }} onPress={() => setTab(t)} style={{ flex: 1, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: tab === t ? c.sheet : 'transparent' }}>
+              <Text size={14} weight="bold" tone={tab === t ? 'ink' : 'muted'}>
+                {t === 'gifs' ? 'GIFs' : 'My stickers'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        {tab === 'stickers' ? (
+          <StickerTray onPick={onPickSticker} />
+        ) : (
+        <>
         <View style={{ marginHorizontal: 16, height: 48, borderRadius: 24, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 8 }}>
           <Icon name="search" size={20} color={c.muted} />
           <TextInput
@@ -118,8 +133,69 @@ export function GifSheet({ onPick }: { onPick: (gif: GifInfo | null) => void }) 
             GIPHY
           </Text>
         </View>
+        </>
+        )}
       </View>
     </BottomSheet>
+  )
+}
+
+/** Your stickers, and "Make a sticker" from a photo (the server cuts out the background). */
+function StickerTray({ onPick }: { onPick: (sticker: Sticker) => void }) {
+  const { c } = useTheme()
+  const { width } = useWindowDimensions()
+  const [stickers, setStickers] = useState<Sticker[] | null>(null)
+  const [making, setMaking] = useState(false)
+  const [problem, setProblem] = useState('')
+  useEffect(() => {
+    void api.stickers().then((r) => (r.ok ? setStickers(r.data) : setProblem(r.message)))
+  }, [])
+  const cell = (Math.min(width, 560) - 32 - 16) / 3
+
+  async function make() {
+    const picked = await pickChatMedia('library', 1)
+    if (picked === 'denied' || !picked?.length) return
+    const photo = picked[0]
+    if (photo.video) return setProblem('Pick a photo, not a video.')
+    setMaking(true)
+    setProblem('')
+    const r = await api.makeSticker({ uri: photo.uri, type: photo.type || 'image/jpeg' })
+    setMaking(false)
+    if (r.ok) setStickers((list) => [r.data, ...(list ?? [])])
+    else setProblem(r.message)
+  }
+
+  async function remove(st: Sticker) {
+    const ok = await confirm({ title: 'Delete this sticker?', message: 'It stays in chats you already sent it to.', confirmLabel: 'Delete', danger: true })
+    if (!ok) return
+    setStickers((list) => list?.filter((x) => x.id !== st.id) ?? null)
+    await api.removeSticker(st.id)
+  }
+
+  return (
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, gap: 10 }}>
+      <Text size={13} tone="muted">
+        Turn any photo into a sticker: Glofly cuts out what's in front. Hold a sticker to delete it.
+      </Text>
+      {problem ? (
+        <Text size={13} tone="danger">
+          {problem}
+        </Text>
+      ) : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Make a sticker" disabled={making} onPress={() => void make()} style={{ width: cell, height: cell, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c.accent, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          {making ? <ActivityIndicator color={c.accent} /> : <Icon name="plus" size={24} color={c.accentText} />}
+          <Text size={12} weight="bold" tone="accent" style={{ textAlign: 'center' }}>
+            {making ? 'Cutting it out…' : 'Make a sticker'}
+          </Text>
+        </Pressable>
+        {stickers?.map((st) => (
+          <Pressable key={st.id} accessibilityRole="button" accessibilityLabel="Send sticker" onPress={() => onPick(st)} onLongPress={() => void remove(st)} style={{ width: cell, height: cell, borderRadius: 16, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', padding: 8 }}>
+            <Image source={{ uri: url(api.stickerImagePath(st.id)), headers: authHeaders(), cacheKey: `st-${st.id}` }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
+          </Pressable>
+        ))}
+      </View>
+    </ScrollView>
   )
 }
 

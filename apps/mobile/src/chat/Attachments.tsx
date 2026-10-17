@@ -18,10 +18,20 @@ type Props = { message: Message; mine: boolean; onOpenPhoto: (index: number) => 
 const MAX_W = 240
 
 export function Attachments({ message, mine, onOpenPhoto, onLongPress }: Props) {
-  const photos = message.attachments.filter((a) => a.kind === 'image')
+  const stickers = message.attachments.filter((a) => a.kind === 'image' && a.sticker)
+  const photos = message.attachments.filter((a) => a.kind === 'image' && !a.sticker)
   const others = message.attachments.filter((a) => a.kind !== 'image')
   return (
     <View style={{ gap: 6 }}>
+      {stickers.map((a) => {
+        // A sticker (0.5.0): see-through, no frame.
+        const scale = Math.min(1, 150 / Math.max(a.width ?? 150, a.height ?? 150))
+        return (
+          <Pressable key={a.id} accessibilityLabel="Sticker" onLongPress={onLongPress}>
+            <Image source={imageSource(message.conversationId, a, 'full')} style={{ width: Math.round((a.width ?? 150) * scale), height: Math.round((a.height ?? 150) * scale) }} contentFit="contain" cachePolicy="disk" />
+          </Pressable>
+        )
+      })}
       {photos.length ? <PhotoGrid message={message} photos={photos} onOpen={(a) => onOpenPhoto(message.attachments.indexOf(a))} onLongPress={onLongPress} /> : null}
       {others.map((a) =>
         a.voice ? (

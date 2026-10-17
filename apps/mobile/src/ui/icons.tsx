@@ -348,6 +348,25 @@ const strokes: Record<string, (fill: string) => React.ReactNode> = {
     </>
   ),
   poll: () => <Path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
+  gift: () => (
+    <>
+      <Rect x="3" y="8" width="18" height="13" rx="2" />
+      <Path d="M12 8v13M3 12h18M12 8c-1.5-3-5-3.5-5-1.2C7 8 9.5 8 12 8zM12 8c1.5-3 5-3.5 5-1.2C17 8 14.5 8 12 8z" />
+    </>
+  ),
+  coffee: () => (
+    <>
+      <Path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" />
+      <Path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2.5c-.6.8-.6 1.7 0 2.5M12 2.5c-.6.8-.6 1.7 0 2.5" />
+    </>
+  ),
+  live: (fill) => (
+    <>
+      <Circle cx="12" cy="12" r="2.4" fill={fill} />
+      <Path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14" />
+    </>
+  ),
+  sparkles: () => <Path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />,
   lantern: () => (
     <>
       <Path d="M9 3h6M12 3v2M8 7h8l1 3v5l-1 3H8l-1-3v-5zM9 21h6M12 18v3" />

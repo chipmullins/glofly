@@ -11,7 +11,8 @@ import type {
   Presence,
   PublicUser,
   ReplyPreview,
-  SignedInUser
+  SignedInUser,
+  Sticker
 } from '../../../preload/api-types'
 import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
 import GroupAvatar from './GroupAvatar'
@@ -39,6 +40,9 @@ import { PinIcon } from './ChatList'
 import EmojiPicker from './EmojiPicker'
 import EmojiText from './EmojiText'
 import './ChatView.css'
+import { BirthdayConfetti, BirthdayMark, GlowMark } from './Social'
+import { useSocial } from '../lib/social'
+import { glowLabel } from '@glofly/shared/social'
 import {
   ChatFireflies,
   GameIcon,
@@ -237,6 +241,7 @@ export default function ChatView({
 }: ChatViewProps): React.JSX.Element {
   const partner = conversation.partner
   const isGroup = conversation.kind === 'group'
+  const social = useSocial()
   const calls = useCalls()
   const inThisCall = calls.current?.conversationId === conversation.id
   // One call at a time. 1-on-1: friends only. Groups: anyone in it (joins a call going on).
@@ -641,6 +646,17 @@ export default function ChatView({
       upsert(result.data)
       setNotice(null)
     } else handleFailure(result.error, result.message)
+    inputRef.current?.focus()
+  }
+
+  async function sendSticker(sticker: Sticker): Promise<void> {
+    setGifAnchor(null)
+    const replyTo = replyingTo
+    setReplyingTo(null)
+    stickToBottom.current = true
+    const result = await window.glofly.stickers.send(sticker.id, conversation.id, replyTo?.id)
+    if (result.ok) upsert(result.data)
+    else handleFailure(result.error, result.message)
     inputRef.current?.focus()
   }
 
@@ -1184,6 +1200,15 @@ export default function ChatView({
               <EmojiText text={title} />
             </span>
             {partner && <span className="chat-user">@{partner.username}</span>}
+            {partner && social.glows[partner.id] && (
+              <span className="chat-glow">
+                <GlowMark glow={social.glows[partner.id]} name={partner.displayName} />
+                {glowLabel(social.glows[partner.id])}
+              </span>
+            )}
+            {partner && social.birthdays.includes(partner.id) && (
+              <BirthdayMark name={partner.displayName} />
+            )}
           </div>
           {partner ? (
             partnerPresence && (
@@ -1817,6 +1842,9 @@ export default function ChatView({
       )}
 
       <ChatFireflies conversationId={conversation.id} nameOf={nameOf} meId={me.id} />
+      {partner && social.birthdays.includes(partner.id) && (
+        <BirthdayConfetti key={partner.id} userId={partner.id} name={partner.displayName} />
+      )}
 
       {plusAnchor && conversation.canMessage && (
         <div
@@ -1889,7 +1917,12 @@ export default function ChatView({
       )}
 
       {gifAnchor && conversation.canMessage && (
-        <GifPicker anchor={gifAnchor} onPick={(g) => void sendGif(g)} onClose={closeGifs} />
+        <GifPicker
+          anchor={gifAnchor}
+          onPick={(g) => void sendGif(g)}
+          onPickSticker={(st) => void sendSticker(st)}
+          onClose={closeGifs}
+        />
       )}
 
       {pollOpen && <NewPollDialog onCreate={createPoll} onClose={() => setPollOpen(false)} />}

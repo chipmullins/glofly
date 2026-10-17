@@ -139,6 +139,13 @@ export function connectRealtime(onUnauthorized: () => void): void {
     const swarm = cleanFireflies(p)
     if (swarm) forward({ type: 'chat:fireflies', ...swarm })
   })
+  // 0.5.0: glows, hangs, birthdays or broadcasts changed (the app fetches /social again).
+  socket.on('social:changed', () => forward({ type: 'social:changed' }))
+  socket.on('hang:ping', (p) => {
+    if (typeof p?.userId === 'string' && typeof p?.until === 'string') {
+      forward({ type: 'hang:ping', userId: p.userId, until: p.until })
+    }
+  })
   socket.on('friends:changed', () => forward({ type: 'friends:changed' }))
   socket.on('conversations:changed', () => forward({ type: 'conversations:changed' }))
   socket.on('account:changed', () => forward({ type: 'account:changed' }))

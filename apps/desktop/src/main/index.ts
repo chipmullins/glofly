@@ -51,6 +51,7 @@ import {
   uploadAttachment
 } from './messages'
 import * as extras from './chatExtras'
+import * as social from './social'
 import { saveAttachment, showInFolder } from './files'
 import {
   clearAllNotifications,
@@ -332,9 +333,16 @@ function setUpPermissions(): void {
         return
       }
       void pickedScreen()
-        .then((source) => {
-          if (!source) console.warn('[screen share] the picked screen or window was not found')
-          callback(source ? { video: source } : {})
+        .then((picked) => {
+          if (!picked) console.warn('[screen share] the picked screen or window was not found')
+          // Broadcasts on Windows also send the computer's sound (asked for, and only then).
+          callback(
+            picked
+              ? picked.sound && request.audioRequested
+                ? { video: picked.source, audio: 'loopback' }
+                : { video: picked.source }
+              : {}
+          )
         })
         .catch((err) => {
           console.warn('[screen share] failed', err)
@@ -680,6 +688,38 @@ function registerIpcHandlers(): void {
         : invalid
   )
 
+  // 0.5.0 social extras, stickers and broadcasts (each checks its own values in social.ts).
+  ipcMain.handle('social:get', (event) => (fromApp(event) ? social.getSocial() : invalid))
+  ipcMain.handle('social:hang', (event, ids: unknown) =>
+    fromApp(event) ? social.hang(ids) : invalid
+  )
+  ipcMain.handle('social:stop-hang', (event) => (fromApp(event) ? social.stopHang() : invalid))
+  ipcMain.handle('social:birthday', (event, share: unknown) =>
+    fromApp(event) ? social.shareBirthday(share) : invalid
+  )
+  ipcMain.handle('social:year', (event) => (fromApp(event) ? social.year() : invalid))
+  ipcMain.handle('stickers:list', (event) => (fromApp(event) ? social.listStickers() : invalid))
+  ipcMain.handle('stickers:make', (event, data: unknown) =>
+    fromApp(event) ? social.makeSticker(data) : invalid
+  )
+  ipcMain.handle('stickers:remove', (event, id: unknown) =>
+    fromApp(event) ? social.removeSticker(id) : invalid
+  )
+  ipcMain.handle('stickers:send', (event, id: unknown, chat: unknown, replyTo: unknown) =>
+    fromApp(event) ? social.sendSticker(id, chat, replyTo) : invalid
+  )
+  ipcMain.handle('broadcasts:start', (event, title: unknown) =>
+    fromApp(event) ? social.startBroadcast(title) : invalid
+  )
+  ipcMain.handle('broadcasts:stop', (event) => (fromApp(event) ? social.stopBroadcast() : invalid))
+  ipcMain.handle('broadcasts:mine', (event) => (fromApp(event) ? social.myBroadcast() : invalid))
+  ipcMain.handle('broadcasts:watch', (event, userId: unknown) =>
+    fromApp(event) ? social.watchBroadcast(userId) : invalid
+  )
+  ipcMain.handle('broadcasts:can-share-sound', (event) =>
+    fromApp(event) ? social.canShareSound() : false
+  )
+
   // 0.5.0 chat extras (each checks its own values in chatExtras.ts).
   ipcMain.handle('chat:gifs', (event, q: unknown, offset: unknown) =>
     fromApp(event) ? extras.gifs(q, offset) : invalid
@@ -923,11 +963,11 @@ function registerIpcHandlers(): void {
   ipcMain.on('app:open-privacy-settings', (event, pane: unknown) => {
     if (isAppUrl(event.senderFrame?.url ?? '') && isPrivacyPane(pane)) openMacPrivacySettings(pane)
   })
-  ipcMain.handle('calls:choose-screen', (event, sourceId: unknown) =>
+  ipcMain.handle('calls:choose-screen', (event, sourceId: unknown, sound: unknown) =>
     fromApp(event) &&
     typeof sourceId === 'string' &&
     /^(screen|window):[\w:-]{1,100}$/.test(sourceId)
-      ? chooseScreen(sourceId)
+      ? chooseScreen(sourceId, sound === true)
       : false
   )
 

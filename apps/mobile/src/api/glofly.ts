@@ -1,5 +1,7 @@
 import type {
   AccountDetails,
+  Broadcast,
+  BroadcastJoin,
   ActiveCall,
   Announcement,
   ApiResult,
@@ -20,12 +22,16 @@ import type {
   ReportRequest,
   SearchResult,
   SignedInDevice,
+  SocialToday,
+  Sticker,
+  PublicUser,
   TeamNotice,
   VoiceInfo,
   WatchControl,
   WatchPreview,
   WatchReaction,
   WatchUpdate,
+  YearInGlow,
 } from '@glofly/shared'
 import { request, upload, type Upload } from './http'
 import { PLATFORM } from '@/lib/config'
@@ -201,3 +207,23 @@ export const gameMove = async (id: string, messageId: string, move: ChatGameMove
 export const fireflies = async (id: string, emoji: FireflyEmoji) => none(await request('POST', `/conversations/${id}/fireflies`, { emoji }))
 /** A link preview's picture (the server's copy). */
 export const previewImagePath = (id: string, messageId: string) => `/conversations/${id}/messages/${messageId}/preview-image`
+
+// ---- 0.5.0 social extras: glows, hangs, birthdays, Year in Glow; stickers; broadcasts ----
+
+export const social = () => request<SocialToday>('GET', '/social')
+export const hang = (userIds: string[] | null) =>
+  request<{ until: string; with: string[] | null; told: number }>('POST', '/social/hang', userIds ? { userIds } : {})
+export const stopHang = async () => none(await request('DELETE', '/social/hang'))
+export const shareBirthday = (share: boolean) => request<{ share: boolean }>('PUT', '/social/birthday', { share })
+export const yearInGlow = () => request<YearInGlow>('GET', '/social/year')
+
+export const stickers = async () => map(await request<{ stickers: Sticker[] }>('GET', '/stickers'), (d) => d.stickers)
+/** A photo → a sticker (the server cuts out the background). */
+export const makeSticker = async (file: Upload) => map(await upload<{ sticker: Sticker }>('POST', '/stickers', file), (d) => d.sticker)
+export const removeSticker = async (id: string) => none(await request('DELETE', `/stickers/${id}`))
+export const sendSticker = async (id: string, conversationId: string, replyToId?: string) =>
+  map(await request<{ message: Message }>('POST', `/stickers/${id}/send`, { conversationId, ...(replyToId ? { replyToId } : {}) }), (d) => d.message)
+export const stickerImagePath = (id: string) => `/stickers/${id}/image`
+
+export const watchBroadcast = (userId: string) => request<BroadcastJoin>('POST', `/broadcasts/${userId}/watch`)
+export type { Broadcast, PublicUser as BroadcastPerson }

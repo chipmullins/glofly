@@ -11,6 +11,7 @@ import { CallOverlay, WithCallStrip } from '@/calls/CallOverlay'
 import { CallPip } from '@/calls/CallPip'
 import { TeamNotice } from '@/ui/TeamNotice'
 import { FriendAlert } from '@/ui/FriendAlert'
+import '@/state/social'
 import { LeftPane } from '@/ui/TwoPane'
 import { useWide } from '@/lib/layout'
 
@@ -41,6 +42,8 @@ export default function MainLayout() {
               <Stack.Screen name="chat/[id]" options={wide ? { animation: 'none' } : undefined} />
               <Stack.Screen name="profile/[id]" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom', contentStyle: { backgroundColor: 'transparent' } }} />
               <Stack.Screen name="call" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
+              <Stack.Screen name="live/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
+              <Stack.Screen name="year" options={{ animation: 'fade', contentStyle: { backgroundColor: '#1A1030' } }} />
             </Stack>
           </View>
         </View>
