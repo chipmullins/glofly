@@ -358,6 +358,304 @@ function MiniChat({
   )
 }
 
+type AllFilter = 'all' | 'unread' | 'dms' | 'groups'
+
+/** "8:31 PM", "Yesterday", "Tue", or "Oct 3": when a chat last had something new. */
+function listTime(iso: string, now = new Date()): string {
+  const d = new Date(iso)
+  const day = (x: Date): number => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.round((day(now) - day(d)) / 86_400_000)
+  if (days <= 0) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return d.toLocaleDateString([], { weekday: 'short' })
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
+/** The last message as one line: "You: lol same", "Jacob: who's bringing the speaker?". */
+function previewLine(c: ConversationSummary, me: SignedInUser): string {
+  const m = c.lastMessage
+  if (!m) return 'No messages yet'
+  if (m.deleted) return 'Message deleted'
+  const text = (shortBody(m.body) || attachmentSummary(m.attachments)).replace(/\s+/g, ' ').trim()
+  if (m.event) return text
+  if (m.senderId === me.id) return `You: ${text}`
+  if (c.kind === 'group') {
+    const who = c.members.find((p) => p.id === m.senderId)
+    return who ? `${firstName(who)}: ${text}` : text
+  }
+  return text
+}
+
+/** Does this chat match what was typed in "Find a chat"? */
+function chatMatches(c: ConversationSummary, q: string): boolean {
+  if (!q) return true
+  const has = (x: string | null | undefined): boolean => !!x && x.toLowerCase().includes(q)
+  if (has(chatTitle(c))) return true
+  if (c.kind === 'dm') return has(c.partner.displayName) || has(c.partner.username)
+  return c.members.some((p) => has(p.displayName) || has(p.username))
+}
+
+/** "All chats" from the dock (approved Oct 17, canvas board 7): every chat, without leaving. */
+function AllChats({
+  me,
+  chats,
+  presence,
+  left,
+  tailLeft,
+  onPick,
+  onNewChat,
+  onHome,
+  onClose
+}: {
+  me: SignedInUser
+  chats: ConversationSummary[]
+  presence: Record<string, Presence>
+  left: number
+  tailLeft: number
+  onPick: (conversationId: string) => void
+  onNewChat: () => void
+  onHome: () => void
+  onClose: () => void
+}): React.JSX.Element {
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<AllFilter>('all')
+  const [now] = useState(() => new Date())
+  const q = query.trim().toLowerCase()
+  const unreadCount = chats.filter((c) => c.unreadCount > 0).length
+  const shown = chats.filter(
+    (c) =>
+      chatMatches(c, q) &&
+      (filter === 'all' ||
+        (filter === 'unread' && c.unreadCount > 0) ||
+        (filter === 'dms' && c.kind === 'dm') ||
+        (filter === 'groups' && c.kind === 'group'))
+  )
+  const chips: { id: AllFilter; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'unread', label: 'Unread' },
+    { id: 'dms', label: 'DMs' },
+    { id: 'groups', label: 'Groups' }
+  ]
+  return (
+    <section className="all-chats" role="dialog" aria-label="All chats" style={{ left }}>
+      <header className="all-chats-head">
+        <h2>All chats</h2>
+        <button
+          type="button"
+          className="all-chats-icon"
+          aria-label="New chat"
+          title="New chat (opens Glofly)"
+          onClick={onNewChat}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="all-chats-icon"
+          aria-label="Close"
+          title="Close"
+          onClick={onClose}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </header>
+      <div className="all-chats-search-row">
+        <label className="all-chats-search">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Find a chat"
+            aria-label="Find a chat"
+            autoFocus
+            value={query}
+            maxLength={40}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && shown[0]) onPick(shown[0].id)
+            }}
+          />
+        </label>
+      </div>
+      <div className="all-chats-filters" role="group" aria-label="Show">
+        {chips.map((chip) => (
+          <button
+            key={chip.id}
+            type="button"
+            className="all-chats-chip"
+            aria-pressed={filter === chip.id}
+            onClick={() => setFilter(chip.id)}
+          >
+            {chip.label}
+            {chip.id === 'unread' && unreadCount > 0 && (
+              <span className="all-chats-chip-count">{unreadCount}</span>
+            )}
+          </button>
+        ))}
+      </div>
+      <ul className="all-chats-list">
+        {shown.map((c) => {
+          const p = c.kind === 'dm' ? presence[c.partner.id] : undefined
+          const quiet = muted(c)
+          const unread = c.unreadCount > 0
+          return (
+            <li key={c.id}>
+              <button
+                type="button"
+                className={[
+                  'all-chats-row',
+                  unread && 'all-chats-row--unread',
+                  quiet && 'all-chats-row--muted'
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-label={`${chatTitle(c)}${unread ? `, ${c.unreadCount} unread` : ''}${quiet ? ', muted' : ''}`}
+                onClick={() => onPick(c.id)}
+              >
+                <span
+                  className={
+                    c.kind === 'group' ? 'all-chats-face all-chats-face--group' : 'all-chats-face'
+                  }
+                >
+                  <DockFace c={c} me={me} size={40} />
+                  {c.kind === 'dm' && (
+                    <StatusDot
+                      status={p?.status ?? 'offline'}
+                      mobile={onMobile(p)}
+                      ring="#1c1210"
+                      size={11}
+                    />
+                  )}
+                </span>
+                <span className="all-chats-text">
+                  <span className="all-chats-name-row">
+                    <span className="all-chats-name">
+                      <EmojiText text={chatTitle(c)} />
+                    </span>
+                    {c.pinnedAt && (
+                      <svg
+                        className="all-chats-flag"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        role="img"
+                        aria-label="Pinned"
+                      >
+                        <path d="M9 4h6l-1 6 4 3v2H6v-2l4-3z" />
+                        <path d="M12 15v6" />
+                      </svg>
+                    )}
+                    {quiet && (
+                      <svg
+                        className="all-chats-flag all-chats-flag--muted"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        role="img"
+                        aria-label="Muted"
+                      >
+                        <path d="M6 10a6 6 0 0 1 10-4.5M18 10v4l2 3H8" />
+                        <path d="M10 20a2 2 0 0 0 4 0M4 4l16 16" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="all-chats-preview">
+                    <EmojiText text={previewLine(c, me)} />
+                  </span>
+                </span>
+                <span className="all-chats-side">
+                  <span className="all-chats-time">{listTime(c.activityAt, now)}</span>
+                  <span className="all-chats-open">Open chat</span>
+                  {unread && (
+                    <span
+                      className={
+                        quiet ? 'all-chats-badge all-chats-badge--muted' : 'all-chats-badge'
+                      }
+                    >
+                      {c.unreadCount > 99 ? '99+' : c.unreadCount}
+                    </span>
+                  )}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+        {shown.length === 0 && (
+          <li className="all-chats-empty">
+            {chats.length === 0 ? 'No chats yet' : 'Nothing matches'}
+          </li>
+        )}
+      </ul>
+      <footer className="all-chats-foot">
+        <span>
+          {chats.length} {chats.length === 1 ? 'chat' : 'chats'}
+        </span>
+        <button type="button" className="all-chats-home" onClick={onHome}>
+          Open Glofly
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M14 4h6v6M20 4l-8 8" />
+            <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+          </svg>
+        </button>
+      </footer>
+      <span className="all-chats-tail" aria-hidden="true" style={{ left: tailLeft }} />
+    </section>
+  )
+}
+
 export default function DmDock({
   me,
   conversations,
@@ -406,6 +704,10 @@ export default function DmDock({
   const dockRef = useRef<HTMLElement>(null)
   const itemRefs = useRef(new Map<string, HTMLButtonElement>())
   const [anchorX, setAnchorX] = useState<number | null>(null)
+  /** "All chats" is open above the dock */
+  const [allOpen, setAllOpen] = useState(false)
+  const allRef = useRef<HTMLButtonElement>(null)
+  const [allX, setAllX] = useState<number | null>(null)
 
   const visible = conversations.filter(
     (c) => !c.closedAt || (c.lastMessage?.createdAt && c.lastMessage.createdAt > c.closedAt)
@@ -434,7 +736,7 @@ export default function DmDock({
   )
   const expandedChat = expanded ? byId(expanded) : null
 
-  const popupOpen = !!expandedChat
+  const popupOpen = !!expandedChat || allOpen
   const up = shown || popupOpen
 
   // Where the open chat sits: above its face in the dock.
@@ -451,7 +753,38 @@ export default function DmDock({
     setOpen((list) => (list.includes(id) ? list : [...list, id].slice(-MAX_OPEN)))
     setExpanded(id)
     setPeek(null)
+    setAllOpen(false)
   }
+
+  // "All chats" sits above its button; Escape or a click anywhere else closes it.
+  useLayoutEffect(() => {
+    if (!allOpen) return
+    const r = allRef.current?.getBoundingClientRect()
+    if (r) setAllX(r.left + r.width / 2)
+  }, [allOpen, up, conversations])
+  useEffect(() => {
+    if (!allOpen) return
+    const close = (e: Event): void => {
+      if (e instanceof KeyboardEvent) {
+        if (e.key === 'Escape') setAllOpen(false)
+        return
+      }
+      const target = e.target as HTMLElement
+      if (target.closest?.('.all-chats, .dock-all')) return
+      setAllOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', close)
+    }
+  }, [allOpen])
+  // The panel: 380 px wide, its tail under the All chats button (kept inside the window).
+  const allLeft =
+    allX === null ? 12 : Math.max(12, Math.min(window.innerWidth - 392, Math.round(allX - 320)))
+  const allTail = allX === null ? 311 : Math.round(allX - allLeft - 9)
+  const allChats = [...visible].sort(pinsFirst)
   function closeChat(id: string): void {
     setOpen((list) => list.filter((x) => x !== id))
     if (expanded === id) setExpanded(null)
@@ -576,6 +909,26 @@ export default function DmDock({
           </>
         )}
       </div>
+
+      {allOpen && (
+        <AllChats
+          me={me}
+          chats={allChats}
+          presence={presence}
+          left={allLeft}
+          tailLeft={allTail}
+          onPick={openChat}
+          onNewChat={() => {
+            setAllOpen(false)
+            onHome()
+          }}
+          onHome={() => {
+            setAllOpen(false)
+            onHome()
+          }}
+          onClose={() => setAllOpen(false)}
+        />
+      )}
 
       {expandedChat && (
         <div className="mini-chat-wrap" style={{ left: anchorX ?? window.innerWidth / 2 }}>
@@ -741,12 +1094,23 @@ export default function DmDock({
           <span className="dock-slot">
             <button
               type="button"
-              className="dock-item dock-all"
-              aria-label="All your chats"
+              ref={allRef}
+              className={allOpen ? 'dock-item dock-all dock-item--current' : 'dock-item dock-all'}
+              aria-label={allOpen ? 'All your chats (open)' : 'All your chats'}
+              aria-expanded={allOpen}
+              aria-haspopup="dialog"
               tabIndex={up ? 0 : -1}
               onMouseEnter={() => setHover('all')}
               onMouseLeave={() => setHover(null)}
-              onClick={onHome}
+              onClick={() => {
+                if (allOpen) {
+                  setAllOpen(false)
+                  return
+                }
+                setExpanded(null)
+                setPeek(null)
+                setAllOpen(true)
+              }}
             >
               <svg
                 width="22"
@@ -763,7 +1127,8 @@ export default function DmDock({
                 <path d="M8 9h8M8 12h5" />
               </svg>
             </button>
-            {hover === 'all' && (
+            {allOpen && <span className="dock-running" aria-hidden="true" />}
+            {hover === 'all' && !allOpen && (
               <span role="tooltip" className="dock-tip">
                 All chats
               </span>
