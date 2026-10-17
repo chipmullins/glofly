@@ -4,6 +4,7 @@ import type {
   Announcement,
   ApiResult,
   Attachment,
+  CallAddResult,
   CallJoin,
   ConversationSummary,
   FriendLists,
@@ -506,15 +507,24 @@ export function createBridge(): GloflyApi {
       showInFolder: () => undefined
     },
     calls: {
-      start: async (id, video) =>
+      start: async (id, video, ring) =>
         badId(id) ??
-        checkedJoin(await request<CallJoin>('POST', '/calls', { conversationId: id, video })),
+        checkedJoin(
+          await request<CallJoin>('POST', '/calls', {
+            conversationId: id,
+            video,
+            ...(ring ? { ring } : {})
+          })
+        ),
       active: () => unwrap(request<{ calls: ActiveCall[] }>('GET', '/calls/active'), 'calls'),
       answer: async (id) =>
         badId(id) ?? checkedJoin(await request<CallJoin>('POST', `/calls/${id}/answer`)),
       join: async (id) =>
         badId(id) ?? checkedJoin(await request<CallJoin>('POST', `/calls/${id}/join`)),
       ring: (id, userIds) => badId(id) ?? request<null>('POST', `/calls/${id}/ring`, { userIds }),
+      add: (id, userIds) =>
+        badId(id) ?? request<CallAddResult>('POST', `/calls/${id}/add`, { userIds }),
+      stay: (id) => badId(id) ?? request<null>('POST', `/calls/${id}/stay`),
       decline: (id) => badId(id) ?? request<null>('POST', `/calls/${id}/decline`),
       leave: (id) => badId(id) ?? request<null>('POST', `/calls/${id}/leave`),
       // The browser shows its own picker (getDisplayMedia), so there's no list to show here.

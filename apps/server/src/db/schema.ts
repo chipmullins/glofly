@@ -34,6 +34,10 @@ export type ChatEvent =
   // 0.5.0: someone started watching a video together in the call (calls/watch.ts). 0.2.1–0.4.0
   // apps don't know it either, so it travels as `eventLine2` (packages/shared/src/events.ts).
   | { type: "watch"; videoId: string; title: string }
+  // 0.5.2 Add people: someone added people to a call (calls/add.ts). 0.5.0–0.5.1 apps don't know
+  // it, so it travels as `eventLine3`. `names` are for older apps' plain text; `movedTo` (in a
+  // 1-on-1 chat) is the new group the call moved to.
+  | { type: "callAdd"; callId: string; userIds: string[]; names: string[]; movedTo: string | null }
   // A call. The line changes as the call goes: ringing → ongoing → ended (or missed / declined).
   | { type: "call"; callId: string; video: boolean; status: CallStatus; durationSec: number | null };
 

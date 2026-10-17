@@ -28,6 +28,7 @@ import { firstName } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
 import { QUICK_REACTIONS } from '@/lib/emoji'
 import { startCallIn, joinCallIn } from '@/calls/controller'
+import { RingSomeSheet } from '@/calls/RingSome'
 import { Composer, type ComposerHandle } from '@/chat/Composer'
 import { MessageRow, type RowInfo } from '@/chat/MessageRow'
 import { TypingBubble } from '@/chat/TypingBubble'
@@ -76,6 +77,8 @@ export default function ChatScreen() {
   // 0.5.0: GIFs, polls and lantern messages.
   const [gifOpen, setGifOpen] = useState(false)
   const [pollOpen, setPollOpen] = useState(false)
+  /** Groups (0.5.2): picking who a new call rings */
+  const [ringSome, setRingSome] = useState(false)
   const [lantern, setLantern] = useState(false)
   const [lanternFor, setLanternFor] = useState(id)
   if (lanternFor !== id) {
@@ -309,6 +312,9 @@ export default function ChatScreen() {
   const canMessage = chat.canMessage
   const inCall = call && (call.status === 'ongoing' || call.status === 'ringing')
   const iAmIn = inCall && call.members.find((m) => m.userId === meId)?.state === 'joined'
+  // Groups of 3+ (0.5.2): a new call can ring only some of the group.
+  const canRingSome = isGroup && !inCall && chat.memberCount > 2
+  const ringSomeHint = canRingSome ? 'Long-press to choose who to ring' : undefined
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -351,13 +357,14 @@ export default function ChatScreen() {
               </Pressable>
             ) : (
               <>
-                <IconButton name="phone" label="Voice call" box={44} onPress={() => void startCallIn(id, false)} disabled={!!inCall} />
-                <IconButton name="video" label="Video call" box={44} size={24} onPress={() => void startCallIn(id, true)} disabled={!!inCall} />
+                {/* Groups (0.5.2): long-press to choose who to ring. */}
+                <IconButton name="phone" label="Voice call" accessibilityHint={ringSomeHint} box={44} onPress={() => void startCallIn(id, false)} onLongPress={canRingSome ? () => setRingSome(true) : undefined} disabled={!!inCall} />
+                <IconButton name="video" label="Video call" accessibilityHint={ringSomeHint} box={44} size={24} onPress={() => void startCallIn(id, true)} onLongPress={canRingSome ? () => setRingSome(true) : undefined} disabled={!!inCall} />
               </>
             )
           ) : null}
           <IconButton name="search" label="Search this chat" box={40} size={22} onPress={() => setSearching(true)} />
-          <IconButton name="more" label="More options" box={40} onPress={() => void chatMenu(chat, { inChat: true })} />
+          <IconButton name="more" label="More options" box={40} onPress={() => void chatMenu(chat, { inChat: true, onRingSome: canRingSome ? () => setRingSome(true) : undefined })} />
         </View>
       </View>
 
@@ -536,6 +543,7 @@ export default function ChatScreen() {
         />
       ) : null}
       {pollOpen ? <PollSheet conversationId={id} onDone={() => setPollOpen(false)} /> : null}
+      {ringSome && canRingSome ? <RingSomeSheet chat={chat} onClose={() => setRingSome(false)} /> : null}
       {viewer ? <PhotoViewer state={viewer} onClose={() => setViewer(null)} /> : null}
       {searching ? (
         <SearchPanel

@@ -59,7 +59,8 @@ function connect() {
   const { origin, path } = serverParts()
   socket = io(origin, {
     path,
-    auth: { token, version: APP_VERSION, platform: PLATFORM },
+    // features: what this app knows beyond its version (0.5.2: a call can move to a new group).
+    auth: { token, version: APP_VERSION, platform: PLATFORM, features: ['callMove'] },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000,
   })

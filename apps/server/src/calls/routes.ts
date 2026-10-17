@@ -6,7 +6,8 @@ import { db } from "../db";
 import { calls, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { canMessage } from "../friends/rules";
-import { access, announce, canPost, GROUP_MAX, postEvent, type Access } from "../messages/routes";
+import { access, announce, canPost, GROUP_MAX, postEvent, summaryOf, type Access } from "../messages/routes";
+import { addPeopleToCall } from "./add";
 import { callToken, LIVEKIT_URL, livekitConfigured } from "./livekit";
 import {
   activeCallOf,
@@ -20,6 +21,7 @@ import {
   leaveCall,
   ringMore,
   startCall,
+  stayInCall,
   type CallRow,
 } from "./service";
 import {
@@ -37,13 +39,20 @@ import { isWatchReaction, isYouTubeId, youTubeIdFrom, youTubeStartFrom } from "@
 
 // Voice and video calls: 1-on-1 and group (up to 25 people).
 //
-//   POST /calls                 { conversationId, video }  start a call → { call, token, url }
+//   POST /calls                 { conversationId, video, ring? }  start a call → { call, token, url }
+//                               ring (groups, 0.5.2): only these people are rung; the rest can join
 //   GET  /calls/active                                     ringing / ongoing calls in my chats
 //   POST /calls/:id/answer                                  pick up → { call, token, url }
 //   POST /calls/:id/join                                    join a group call, or get back into mine
 //   POST /calls/:id/ring        { userIds }                groups: ring people who aren't in it
 //   POST /calls/:id/decline
 //   POST /calls/:id/leave                                   hang up (or cancel while it rings)
+//   POST /calls/:id/add         { userIds }                0.5.2 Add people (calls/add.ts): a 1-on-1
+//                                                           call moves to a new group; a group call
+//                                                           rings them (adding friends to the group)
+//                                                           → { call, conversation, moved }
+//   POST /calls/:id/stay                                    0.5.2 groups: on your own, keep the call
+//                                                           going another 7 minutes
 //
 // Watch Together (0.5.0, calls/watch.ts): a YouTube video everyone in the call watches together.
 //   GET    /calls/watch/preview?link=     what a YouTube link is (title, channel, picture)
@@ -72,6 +81,15 @@ const startLimiter = rateLimit({
   message: { error: "too_many_requests", message: "That's a lot of calls. Wait a few minutes and try again." },
 });
 
+const addLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 20,
+  keyGenerator: (_req, res) => me(res).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "That's a lot of adding. Wait a few minutes and try again." },
+});
+
 const actionLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 60,
@@ -87,10 +105,13 @@ function notSetUp(res: Response): boolean {
   return true;
 }
 
-/** A pass into the call's room, with where to find it. 1-on-1 rooms hold 2; group rooms 25. */
-async function joinDetails(row: CallRow, user: Me, chat: Access) {
-  const size = chat.kind === "group" ? GROUP_MAX : 2;
-  return { call: await describe(row), token: await callToken(row.id, user, size), url: LIVEKIT_URL };
+/**
+ * A pass into the call's room, with where to find it. Every room holds a group's worth of people
+ * (0.5.2: a 1-on-1 call can become a group call without moving rooms; before, 1-on-1 rooms held 2).
+ * The room's size is set by whoever joins first; only Glofly hands out passes, so nobody else gets in.
+ */
+async function joinDetails(row: CallRow, user: Me, _chat: Access) {
+  return { call: await describe(row), token: await callToken(row.id, user, GROUP_MAX), url: LIVEKIT_URL };
 }
 
 /** A call in one of my chats (null otherwise, so other people's calls stay invisible). */
@@ -118,7 +139,9 @@ const ACTIVE = ["ringing", "ongoing"];
 callsRouter.post("/", startLimiter, async (req, res) => {
   if (notSetUp(res)) return;
   const user = me(res);
-  const parsed = z.object({ conversationId: idParam, video: z.boolean() }).safeParse(req.body);
+  const parsed = z
+    .object({ conversationId: idParam, video: z.boolean(), ring: z.array(idParam).min(1).max(GROUP_MAX).optional() })
+    .safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid", message: "Pick someone to call." });
     return;
@@ -145,6 +168,16 @@ callsRouter.post("/", startLimiter, async (req, res) => {
     res.status(409).json({ error: "busy", message: "They're on another call right now. Try again in a bit." });
     return;
   }
+  // Groups (0.5.2): ring only some of the group. Everyone picked must be in it (not you).
+  let ringOnly: string[] | null = null;
+  if (parsed.data.ring) {
+    const picked = [...new Set(parsed.data.ring)];
+    if (chat.kind !== "group" || picked.some((id) => id === user.id || !chat.memberIds.includes(id))) {
+      res.status(400).json({ error: "invalid", message: "Pick people in the group to ring." });
+      return;
+    }
+    ringOnly = picked;
+  }
 
   let started: Awaited<ReturnType<typeof startCall>>;
   const posted: { line?: Awaited<ReturnType<typeof postEvent>> } = {};
@@ -158,7 +191,7 @@ callsRouter.post("/", startLimiter, async (req, res) => {
         durationSec: null,
       });
       return posted.line;
-    });
+    }, ringOnly);
   } catch (err) {
     // There's already a call ringing or going in this chat (say, two people pressed call at once).
     const code = (err as { code?: string })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
@@ -295,6 +328,50 @@ callsRouter.post("/:id/ring", actionLimiter, async (req, res) => {
   const notIn = [];
   for (const id of targets) if (!(await isInCall(row.id, id))) notIn.push(id);
   if (notIn.length) await ringMore(row.id, notIn);
+  res.status(204).end();
+});
+
+// POST /calls/:id/add  { userIds } — Add people (0.5.2, calls/add.ts). 1-on-1: the call moves to
+// a new group with everyone; groups: rings them (friends not in the group are added to it first).
+callsRouter.post("/:id/add", addLimiter, async (req, res) => {
+  if (notSetUp(res)) return;
+  const user = me(res);
+  const found = await myCall(req.params.id, user.id);
+  if (!found) {
+    notFound(res);
+    return;
+  }
+  const parsed = z.object({ userIds: z.array(idParam).min(1).max(GROUP_MAX) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: "Pick people to add to the call." });
+    return;
+  }
+  const result = await addPeopleToCall(found.row, found.chat, user.id, parsed.data.userIds);
+  if ("status" in result) {
+    res.status(result.status).json({ error: result.error, message: result.message });
+    return;
+  }
+  const conversation = await summaryOf(user.id, result.call.conversationId);
+  res.json({ call: await describe(result.call), conversation, moved: result.moved });
+});
+
+// POST /calls/:id/stay — group calls: you're on your own and want to keep waiting (another 7 minutes).
+callsRouter.post("/:id/stay", actionLimiter, async (req, res) => {
+  const user = me(res);
+  const found = await myCall(req.params.id, user.id);
+  if (!found) {
+    notFound(res);
+    return;
+  }
+  if (found.chat.kind !== "group" || !ACTIVE.includes(found.row.status)) {
+    callOver(res);
+    return;
+  }
+  if (!(await isInCall(found.row.id, user.id))) {
+    res.status(403).json({ error: "forbidden", message: "Join the call first." });
+    return;
+  }
+  await stayInCall(found.row.id);
   res.status(204).end();
 });
 

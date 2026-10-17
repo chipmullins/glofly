@@ -213,12 +213,14 @@ const glofly: GloflyApi = {
     showInFolder: (path: string) => ipcRenderer.send('files:show-in-folder', path)
   },
   calls: {
-    start: (conversationId: string, video: boolean) =>
-      ipcRenderer.invoke('calls:start', conversationId, video),
+    start: (conversationId: string, video: boolean, ring?: string[]) =>
+      ipcRenderer.invoke('calls:start', conversationId, video, ring),
     active: () => ipcRenderer.invoke('calls:active'),
     answer: (callId: string) => ipcRenderer.invoke('calls:answer', callId),
     join: (callId: string) => ipcRenderer.invoke('calls:join', callId),
     ring: (callId: string, userIds: string[]) => ipcRenderer.invoke('calls:ring', callId, userIds),
+    add: (callId: string, userIds: string[]) => ipcRenderer.invoke('calls:add', callId, userIds),
+    stay: (callId: string) => ipcRenderer.invoke('calls:stay', callId),
     decline: (callId: string) => ipcRenderer.invoke('calls:decline', callId),
     leave: (callId: string) => ipcRenderer.invoke('calls:leave', callId),
     screenSources: () => ipcRenderer.invoke('calls:screen-sources'),

@@ -4,9 +4,9 @@ import { router } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { chatTitle, type PublicUser } from '@glofly/shared'
+import { GROUP_MAX, chatTitle, soloCountdown, type Call, type ConversationSummary, type PublicUser } from '@glofly/shared'
 import type { VideoTrack } from 'livekit-client'
-import { useCall, hangUp, setMic, setCamera, flipCamera, ringPeople, callDiagnostics, type Tile } from '@/calls/controller'
+import { useCall, hangUp, setMic, setCamera, flipCamera, addPeople, stayInCall, callDiagnostics, type Tile } from '@/calls/controller'
 import { featured } from '@/calls/CallPip'
 import { CallVideo, audioRoutes, currentAudioRoute, selectAudioRoute, type AudioRoute } from '@/calls/media'
 import { useStore } from '@/state/store'
@@ -16,10 +16,9 @@ import { allowRotation, lockPortrait } from '@/lib/orientation'
 import { useNow } from '@/lib/hooks'
 import { Avatar } from '@/ui/Avatar'
 import { BottomSheet, chooseFrom } from '@/ui/dialogs'
-import { FriendPicker } from '@/ui/FriendPicker'
 import { Icon, type IconName } from '@/ui/icons'
 import { Button, Text } from '@/ui/kit'
-import { call as callColors } from '@/ui/theme'
+import { call as callColors, useTheme } from '@/ui/theme'
 import { canControlWatch } from '@glofly/shared'
 import { useWatchStore } from '@/calls/watch'
 import { StartWatchSheet, WatchLandscape, WatchPortrait } from '@/calls/WatchMode'
@@ -108,6 +107,10 @@ export default function CallScreen() {
   const watch = meJoined ? watchState : null
   const canWatchControl = !!watch && canControlWatch(watch, meId)
   const watchingFull = !!watch && landscape && watchFull
+  // Add people (0.5.2): groups any time; 1-on-1 once they've picked up (it becomes a group call).
+  const canAdd = !!call && meJoined && (isGroup || (call.status === 'ongoing' && !!chat))
+  // On your own in a group call (0.5.2): the last minute's countdown, with Stay.
+  const soloLeft = isGroup && meJoined ? soloCountdown(call?.soloEndsAt, now) : null
 
   async function pickRoute() {
     const routes = await audioRoutes()
@@ -212,7 +215,7 @@ export default function CallScreen() {
             <Pressable accessibilityRole="button" accessibilityLabel="Change video" onPress={() => setWatchSheet('change')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="swapVideo" size={22} color="#FFFFFF" />
             </Pressable>
-          ) : isGroup ? (
+          ) : canAdd ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Add people to call" onPress={() => setAdding(true)} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="addPerson" size={22} color="#FFFFFF" />
             </Pressable>
@@ -221,6 +224,27 @@ export default function CallScreen() {
           )}
         </View>
       </View>
+
+      {/* On your own in a group call: the call ends in a minute unless you stay. */}
+      {soloLeft ? (
+        <View
+          accessibilityRole="alert"
+          style={{ position: 'absolute', left: 16 + insets.left, right: 16 + insets.right, bottom: bottomSpace + 10, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingLeft: 16, paddingRight: 10, borderRadius: 20, backgroundColor: 'rgba(42,28,23,0.94)', alignSelf: 'center', maxWidth: 520 }}
+        >
+          <Text size={14} style={{ color: '#FFF', flex: 1 }}>
+            You&apos;re the only one here. The call ends in{' '}
+            <Text size={14} weight="bold" style={{ color: callColors.glow }}>
+              {soloLeft}
+            </Text>
+            .
+          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Stay in the call" onPress={() => void stayInCall()} style={{ height: 36, paddingHorizontal: 16, borderRadius: 18, backgroundColor: '#FFA54A', justifyContent: 'center' }}>
+            <Text size={14} weight="bold" style={{ color: '#2A1406' }}>
+              Stay
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Controls */}
       <View
@@ -269,16 +293,7 @@ export default function CallScreen() {
 
       {diagOpen ? <CallDiagnostics onClose={() => setDiagOpen(false)} /> : null}
 
-      {adding && call ? (
-        <AddToCall
-          exclude={call.members.filter((m) => m.state !== 'out').map((m) => m.userId)}
-          inChat={chat?.members.map((m) => m.id) ?? []}
-          onDone={(ids) => {
-            setAdding(false)
-            void ringPeople(ids)
-          }}
-        />
-      ) : null}
+      {adding && call && chat ? <AddToCall call={call} chat={chat} meId={meId} onClose={() => setAdding(false)} /> : null}
     </View>
   )
 }
@@ -470,20 +485,105 @@ function SelfPip({ track, mirror, top, bottom, landscape }: { track: VideoTrack;
   )
 }
 
-function AddToCall({ exclude, inChat, onDone }: { exclude: string[]; inChat: string[]; onDone: (ids: string[]) => void }) {
+/**
+ * Add people (0.5.2). Groups: ring people in the group who aren't in the call, or add friends who
+ * aren't in the group (they join it, then ring). 1-on-1: pick friends, and the call carries on in a
+ * new group with everyone (nobody is cut off).
+ */
+function AddToCall({ call, chat, meId, onClose }: { call: Call; chat: ConversationSummary; meId: string; onClose: () => void }) {
+  const { c } = useTheme()
+  const friends = useStore((x) => x.friends.friends)
   const [picked, setPicked] = useState<string[]>([])
-  const notIn = (useStore.getState().friends.friends.map((f) => f.id) as string[]).filter((id) => !inChat.includes(id))
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const group = chat.kind === 'group'
+  const inChat = new Set([meId, ...chat.members.map((m) => m.id)])
+  const stateOf = (id: string) => call.members.find((m) => m.userId === id)?.state ?? 'out'
+  const members = group ? chat.members.filter((m) => stateOf(m.id) !== 'joined') : []
+  const outsiders = friends.filter((f) => !inChat.has(f.id)).sort((a, b) => a.displayName.localeCompare(b.displayName))
+  const newcomers = picked.filter((id) => !inChat.has(id)).length
+  const room = GROUP_MAX - (group ? chat.memberCount : 2)
+  const full = newcomers >= room
+  const toggle = (id: string) => {
+    setMessage(null)
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : !inChat.has(id) && full ? p : [...p, id]))
+  }
+  async function submit() {
+    if (!picked.length || busy) return
+    setBusy(true)
+    const problem = await addPeople(picked)
+    setBusy(false)
+    if (problem) setMessage(problem)
+    else onClose()
+  }
+  const row = (p: PublicUser) => {
+    const ringing = stateOf(p.id) === 'ringing'
+    const on = picked.includes(p.id) || ringing
+    const off = ringing || (!picked.includes(p.id) && !inChat.has(p.id) && full)
+    return (
+      <Pressable
+        key={p.id}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: on, disabled: off }}
+        accessibilityLabel={`${p.displayName}${ringing ? ', ringing' : ''}`}
+        disabled={off}
+        onPress={() => toggle(p.id)}
+        android_ripple={{ color: c.line }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 16, opacity: ringing ? 0.6 : 1 }}
+      >
+        <Avatar user={p} size={44} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text size={16} weight="bold" numberOfLines={1}>
+            {p.displayName}
+          </Text>
+          <Text size={13} tone="muted">
+            {ringing ? 'Ringing…' : `@${p.username}`}
+          </Text>
+        </View>
+        <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: on ? 0 : 2, borderColor: c.muted, backgroundColor: on ? c.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+          {on ? <Icon name="check" size={14} color={c.accentInk} strokeWidth={3} /> : null}
+        </View>
+      </Pressable>
+    )
+  }
+  const section = (title: string) => (
+    <Text size={12} weight="bold" tone="muted" style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      {title}
+    </Text>
+  )
+  const label = !group || newcomers > 0 ? (picked.length > 1 ? `Add ${picked.length} people` : 'Add to call') : picked.length > 1 ? `Ring ${picked.length} people` : picked.length ? 'Ring' : 'Pick people to add'
   return (
-    <BottomSheet onClose={() => onDone([])}>
-      <View style={{ height: 480 }}>
-        <Text display size={20} style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+    <BottomSheet onClose={onClose}>
+      <View style={{ height: 520 }}>
+        <Text display size={20} style={{ paddingHorizontal: 20 }}>
           Add people to call
         </Text>
-        <View style={{ flex: 1 }}>
-          <FriendPicker selected={picked} onToggle={(f) => setPicked((p) => (p.includes(f.id) ? p.filter((x) => x !== f.id) : [...p, f.id]))} exclude={[...exclude, ...notIn]} />
-        </View>
-        <View style={{ padding: 16 }}>
-          <Button label={picked.length ? `Ring ${picked.length}` : 'Pick people in the group'} disabled={!picked.length} onPress={() => onDone(picked)} />
+        <Text size={14} tone="muted" style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8 }}>
+          {group ? "They'll be rung. Friends who aren't in the group join it too." : "You'll all carry on in a new group call. Nobody gets cut off."}
+        </Text>
+        {message ? (
+          <Text size={14} style={{ color: c.danger, paddingHorizontal: 20, paddingBottom: 8 }}>
+            {message}
+          </Text>
+        ) : null}
+        <ScrollView style={{ flex: 1 }}>
+          {members.length === 0 && outsiders.length === 0 ? (
+            <Text tone="muted" style={{ textAlign: 'center', padding: 24 }}>
+              {group ? 'Everyone in the group is already here, and all your friends are in it.' : 'Add some friends first, then you can bring them into calls.'}
+            </Text>
+          ) : null}
+          {members.length ? section('In this group') : null}
+          {members.map(row)}
+          {outsiders.length && group ? section('Your friends') : null}
+          {outsiders.map(row)}
+        </ScrollView>
+        <View style={{ padding: 16, gap: 8 }}>
+          {full ? (
+            <Text size={13} tone="muted" style={{ textAlign: 'center' }}>
+              That&apos;s the most a group can have ({GROUP_MAX} people).
+            </Text>
+          ) : null}
+          <Button label={label} busy={busy} disabled={!picked.length} onPress={() => void submit()} />
         </View>
       </View>
     </BottomSheet>

@@ -413,6 +413,9 @@ const matches = (p: FriendEntry, q: string): boolean => {
   return !s || p.displayName.toLowerCase().includes(s) || p.username.toLowerCase().includes(s)
 }
 
+/** No friends list yet (a stable empty list, so calls don't re-render for it). */
+const NO_FRIENDS: PublicUser[] = []
+
 export default function MainScreen({
   user,
   onLogout,
@@ -1337,6 +1340,14 @@ export default function MainScreen({
     <CallProvider
       me={user}
       conversations={conversations}
+      friends={lists?.friends ?? NO_FRIENDS}
+      onCallMoved={(from, toId, to) => {
+        // Add people (0.5.2): the call is in a new group now. Showing the old chat? Show the group.
+        if (to)
+          setConversations((list) => (list.some((c) => c.id === to.id) ? list : [to, ...list]))
+        setOpenChatId((open) => (open === from ? toId : open))
+        void refreshConversations()
+      }}
       onOpenChat={setOpenChatId}
       onNotice={setToast}
       onSessionExpired={onSessionExpired}

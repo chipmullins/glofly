@@ -140,9 +140,10 @@ export function setPresence(userId: string, p: Presence) {
 }
 
 export function setCall(call: Call, caller: PublicUser | null) {
-  const calls = { ...get().calls }
+  // A call that moved to another chat (0.5.2 Add people) leaves its old one.
+  const calls: Record<string, Call> = {}
+  for (const [chatId, c] of Object.entries(get().calls)) if (c.id !== call.id) calls[chatId] = c
   if (call.status === 'ringing' || call.status === 'ongoing') calls[call.conversationId] = call
-  else if (calls[call.conversationId]?.id === call.id) delete calls[call.conversationId]
   set({ calls, ...(caller ? { callers: { ...get().callers, [call.id]: caller } } : {}) })
   if (caller) rememberPeople([caller])
 }

@@ -130,6 +130,21 @@ export const VIDEO_MAX_MS = 3 * 60 * 1000
 /** How long a call rings (matches the ringtone). */
 export const RING_MS = 23_000
 
+/** Group calls: one person on their own this long, and the call ends (0.5.2; was 5 minutes). */
+export const CALL_SOLO_MS = 7 * 60 * 1000
+
+/** How long before that the person left is told (with a Stay button). */
+export const CALL_SOLO_WARN_MS = 60 * 1000
+
+/** "1:00", "0:42": the time left before a call on your own ends. */
+export function soloCountdown(soloEndsAt: string | null | undefined, now = Date.now()): string | null {
+  if (!soloEndsAt) return null
+  const left = new Date(soloEndsAt).getTime() - now
+  if (!Number.isFinite(left) || left > CALL_SOLO_WARN_MS) return null
+  const s = Math.max(0, Math.ceil(left / 1000))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 /** Nicknames you give someone (only you see them): same length as display names. */
 export const NICKNAME_MAX = DISPLAY_NAME_MAX
 

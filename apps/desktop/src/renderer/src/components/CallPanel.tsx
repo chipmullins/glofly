@@ -14,9 +14,12 @@ import {
   joinedCount,
   memberState,
   useCalls,
+  type CallChat,
   type CurrentCall,
   type PttState
 } from '../calls/callState'
+import { GROUP_MAX } from '../lib/groups'
+import { CALL_SOLO_WARN_MS, soloCountdown } from '@glofly/shared/rules'
 import { getCallPrefs, onCallPrefsChange, setCallPrefs, type CallPrefs } from '../lib/callPrefs'
 import { isMutedForMe } from '../lib/callAudio'
 import { CallAudioPanel, PersonVolumeMenu } from './CallAudio'
@@ -37,6 +40,7 @@ import {
   MinimizeIcon,
   PhoneIcon,
   ScreenShareIcon,
+  SearchIcon,
   ShrinkIcon,
   SideBySideIcon,
   SpeakerIcon,
@@ -804,19 +808,31 @@ export function ScreenPicker({
   )
 }
 
-/** Group calls: ring people in the group who aren't in the call. */
+/**
+ * Add people (0.5.2). Group calls: ring people in the group who aren't in the call, or add friends
+ * who aren't in the group (they join it, then ring). 1-on-1 calls: pick friends, and the call
+ * carries on in a new group with everyone (nobody is cut off).
+ */
 function AddToCall({
   call,
-  people,
-  onRing,
+  chat,
+  friends,
+  meId,
+  onAdd,
   onClose
 }: {
   call: Call
-  people: PublicUser[]
-  onRing: (userIds: string[]) => void
+  chat: CallChat
+  friends: PublicUser[]
+  meId: string
+  /** Null if it worked, else what went wrong */
+  onAdd: (userIds: string[]) => Promise<string | null>
   onClose: () => void
 }): React.JSX.Element {
   const [picked, setPicked] = useState<string[]>([])
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -824,7 +840,76 @@ function AddToCall({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
-  const outside = people.filter((p) => memberState(call, p.id) !== 'joined')
+  const group = chat.kind === 'group'
+  const inChat = new Set([meId, ...chat.people.map((p) => p.id)])
+  const byName = (a: PublicUser, b: PublicUser): number =>
+    a.displayName.localeCompare(b.displayName)
+  const q = query.trim().toLowerCase().replace(/^@/, '')
+  const matches = (p: PublicUser): boolean =>
+    !q || p.displayName.toLowerCase().includes(q) || p.username.toLowerCase().includes(q)
+  // In the group but not in the call (rung, or ringing now), then friends who aren't in the chat.
+  const members = group ? chat.people.filter((p) => memberState(call, p.id) !== 'joined') : []
+  const outsiders = friends.filter((f) => !inChat.has(f.id)).sort(byName)
+  const newcomers = picked.filter((id) => !inChat.has(id)).length
+  // Room left for people who aren't in the chat yet (you, and everyone already in it, count).
+  const room = GROUP_MAX - (group ? chat.people.length + 1 : 2)
+  const full = newcomers >= room
+
+  function toggle(id: string): void {
+    setMessage(null)
+    setPicked((list) => {
+      if (list.includes(id)) return list.filter((x) => x !== id)
+      if (!inChat.has(id) && full) return list
+      return [...list, id]
+    })
+  }
+
+  async function submit(): Promise<void> {
+    if (!picked.length || busy) return
+    setBusy(true)
+    setMessage(null)
+    const problem = await onAdd(picked)
+    setBusy(false)
+    if (problem) setMessage(problem)
+    else onClose()
+  }
+
+  const row = (p: PublicUser): React.ReactNode => {
+    const ringing = memberState(call, p.id) === 'ringing'
+    const on = picked.includes(p.id)
+    return (
+      <label
+        key={p.id}
+        className={ringing ? 'add-to-call-row add-to-call-row--ringing' : 'add-to-call-row'}
+      >
+        <input
+          type="checkbox"
+          checked={on || ringing}
+          disabled={ringing || (!on && !inChat.has(p.id) && full)}
+          onChange={() => toggle(p.id)}
+        />
+        <Avatar id={p.id} name={p.displayName} avatarVersion={p.avatarVersion} size={36} />
+        <span className="add-to-call-name">
+          <strong>{p.displayName}</strong>
+          <span>{ringing ? 'Ringing…' : `@${p.username}`}</span>
+        </span>
+      </label>
+    )
+  }
+  const shownMembers = members.filter(matches)
+  const shownFriends = outsiders.filter(matches)
+  const nothing = members.length === 0 && outsiders.length === 0
+  const label = !group
+    ? picked.length > 1
+      ? `Add ${picked.length} people`
+      : 'Add to call'
+    : newcomers > 0
+      ? picked.length > 1
+        ? `Add ${picked.length} people`
+        : 'Add to call'
+      : picked.length > 1
+        ? `Ring ${picked.length} people`
+        : 'Ring'
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
@@ -835,44 +920,145 @@ function AddToCall({
       >
         <div className="dialog-head">
           <h1 id="add-to-call-title">Add people to the call</h1>
-          <p>They&apos;ll be rung wherever they&apos;re signed in.</p>
+          <p>
+            {group
+              ? "They'll be rung wherever they're signed in. Friends who aren't in the group join it too."
+              : "You'll all carry on in a new group call. Nobody gets cut off."}
+          </p>
+        </div>
+        {!nothing && (
+          <div className="people-search add-to-call-search">
+            <SearchIcon size={18} strokeWidth={2.2} />
+            <input
+              type="search"
+              aria-label="Search people"
+              placeholder="Search"
+              spellCheck={false}
+              maxLength={32}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+        )}
+        {message && (
+          <p className="dialog-message" role="alert">
+            {message}
+          </p>
+        )}
+        <div className="add-to-call-list">
+          {nothing && (
+            <p className="screen-picker-note">
+              {group
+                ? 'Everyone in the group is already here, and all your friends are in it.'
+                : 'Add some friends first, then you can bring them into calls.'}
+            </p>
+          )}
+          {shownMembers.length > 0 && (
+            <>
+              <h2 className="add-to-call-section">In this group</h2>
+              {shownMembers.map(row)}
+            </>
+          )}
+          {shownFriends.length > 0 && (
+            <>
+              {group && <h2 className="add-to-call-section">Your friends</h2>}
+              {shownFriends.map(row)}
+            </>
+          )}
+          {!nothing && q && shownMembers.length === 0 && shownFriends.length === 0 && (
+            <p className="screen-picker-note">Nobody matches “{query.trim()}”.</p>
+          )}
+        </div>
+        <div className="dialog-foot">
+          {full && (
+            <span className="add-to-call-full">
+              That&apos;s the most a group can have ({GROUP_MAX} people).
+            </span>
+          )}
+          <button type="button" className="small-button small-button--quiet" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="small-button small-button--primary"
+            disabled={picked.length === 0 || busy}
+            onClick={() => void submit()}
+          >
+            {busy ? 'Adding…' : label}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Groups (0.5.2): start a call that rings only some of the group. Everyone starts picked (like a
+ * normal call); whoever isn't picked sees the call in the chat and can join, without ringing.
+ */
+export function RingSomeDialog({
+  conversation,
+  onStart,
+  onClose
+}: {
+  conversation: ConversationSummary
+  onStart: (video: boolean, ring: string[]) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const people = [...conversation.members].sort((a, b) =>
+    a.displayName.localeCompare(b.displayName)
+  )
+  const [picked, setPicked] = useState<string[]>(() => people.map((p) => p.id))
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+  const all = picked.length === people.length
+  const toggle = (id: string): void =>
+    setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]))
+  return (
+    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ring-some-title"
+        className="dialog dialog--panel add-to-call"
+      >
+        <div className="dialog-head">
+          <h1 id="ring-some-title">Who should be rung?</h1>
+          <p>Only the people you pick are rung. Everyone else in the group can still join.</p>
         </div>
         <div className="add-to-call-list">
-          {outside.length === 0 ? (
-            <p className="screen-picker-note">Everyone in the group is already here.</p>
-          ) : (
-            outside.map((p) => {
-              const ringing = memberState(call, p.id) === 'ringing'
-              const on = picked.includes(p.id)
-              return (
-                <label
-                  key={p.id}
-                  className={
-                    ringing ? 'add-to-call-row add-to-call-row--ringing' : 'add-to-call-row'
-                  }
-                >
-                  <input
-                    type="checkbox"
-                    checked={on || ringing}
-                    disabled={ringing}
-                    onChange={() =>
-                      setPicked((list) => (on ? list.filter((x) => x !== p.id) : [...list, p.id]))
-                    }
-                  />
-                  <Avatar
-                    id={p.id}
-                    name={p.displayName}
-                    avatarVersion={p.avatarVersion}
-                    size={36}
-                  />
-                  <span className="add-to-call-name">
-                    <strong>{p.displayName}</strong>
-                    <span>{ringing ? 'Ringing…' : `@${p.username}`}</span>
-                  </span>
-                </label>
-              )
-            })
-          )}
+          <label className="add-to-call-row">
+            <input
+              type="checkbox"
+              checked={all}
+              onChange={() => setPicked(all ? [] : people.map((p) => p.id))}
+            />
+            <span className="add-to-call-name">
+              <strong>Everyone</strong>
+              <span>
+                {picked.length} of {people.length} picked
+              </span>
+            </span>
+          </label>
+          {people.map((p) => (
+            <label key={p.id} className="add-to-call-row">
+              <input
+                type="checkbox"
+                checked={picked.includes(p.id)}
+                onChange={() => toggle(p.id)}
+              />
+              <Avatar id={p.id} name={p.displayName} avatarVersion={p.avatarVersion} size={36} />
+              <span className="add-to-call-name">
+                <strong>{p.displayName}</strong>
+                <span>@{p.username}</span>
+              </span>
+            </label>
+          ))}
         </div>
         <div className="dialog-foot">
           <button type="button" className="small-button small-button--quiet" onClick={onClose}>
@@ -880,15 +1066,50 @@ function AddToCall({
           </button>
           <button
             type="button"
+            className="small-button"
+            disabled={picked.length === 0}
+            onClick={() => onStart(false, picked)}
+          >
+            <PhoneIcon size={15} strokeWidth={2.2} /> Voice call
+          </button>
+          <button
+            type="button"
             className="small-button small-button--primary"
             disabled={picked.length === 0}
-            onClick={() => onRing(picked)}
+            onClick={() => onStart(true, picked)}
           >
-            {picked.length > 1 ? `Ring ${picked.length} people` : 'Ring'}
+            <VideoIcon size={16} strokeWidth={2.2} /> Video call
           </button>
         </div>
       </div>
     </div>
+  )
+}
+
+/** Group calls on your own (0.5.2): the last minute's countdown, with Stay. */
+function SoloNotice({
+  endsAt,
+  onStay
+}: {
+  endsAt: string
+  onStay: () => void
+}): React.JSX.Element | null {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const left = soloCountdown(endsAt, now)
+  if (!left) return null
+  return (
+    <p className="call-problem call-solo" role="status">
+      <span>
+        You&apos;re the only one here. The call ends in <strong>{left}</strong>.
+      </span>
+      <button type="button" className="call-solo-stay" onClick={onStay}>
+        Stay
+      </button>
+    </p>
   )
 }
 
@@ -1104,7 +1325,17 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   const overlay = layout === 'frame' || full
   const autoHide = overlay && prefs.callControls === 'hover'
   const { idle, wake } = useAutoHide(autoHide, panelRef)
-  const hold = audioOpen || !!menuAt || picking || adding || keyboardIn || !!watchDialog
+  // On your own in a group call (0.5.2): the buttons stay showing during the last minute's notice.
+  const soloEndsAt = group && inCall ? (call?.soloEndsAt ?? null) : null
+  const [soloSoonFor, setSoloSoonFor] = useState<string | null>(null)
+  useEffect(() => {
+    if (!soloEndsAt) return
+    const wait = new Date(soloEndsAt).getTime() - CALL_SOLO_WARN_MS - Date.now()
+    const t = setTimeout(() => setSoloSoonFor(soloEndsAt), Math.max(0, wait))
+    return () => clearTimeout(t)
+  }, [soloEndsAt])
+  const soloSoon = !!soloEndsAt && soloSoonFor === soloEndsAt
+  const hold = audioOpen || !!menuAt || picking || adding || keyboardIn || !!watchDialog || soloSoon
   const hidden = idle && !hold
 
   // The buttons come back for a moment when something changes: you're muted or unmuted (not by
@@ -1130,11 +1361,15 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
 
   if (!current) return null
   const title = titleOf(current)
+  // Add people (0.5.2): groups, anyone not in the call or friends not in the group; 1-on-1,
+  // once they've picked up (the call then moves to a new group).
   const canAdd =
-    group &&
     ready &&
     !!call &&
-    current.chat.people.some((p) => memberState(call, p.id) !== 'joined')
+    (group
+      ? current.chat.people.some((p) => memberState(call, p.id) !== 'joined') ||
+        calls.friends.some((f) => !current.chat.people.some((p) => p.id === f.id))
+      : call.status === 'ongoing' && calls.friends.length > 1)
 
   // ---- view actions (hover buttons and right-click menus) ----
   const isFullOn = (id: string): boolean =>
@@ -1455,6 +1690,7 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
         </span>
       </div>
 
+      {soloEndsAt && <SoloNotice key={soloEndsAt} endsAt={soloEndsAt} onStay={calls.stay} />}
       {current.problem && (
         <p className="call-problem" role="alert">
           {current.problem}
@@ -1575,7 +1811,7 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
             {sharing ? <StopShareIcon size={22} /> : <ScreenShareIcon size={22} />}
           </button>
         )}
-        {group && (
+        {(group || call?.status === 'ongoing') && (
           <button
             type="button"
             className="call-button"
@@ -1622,12 +1858,11 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       {adding && call && (
         <AddToCall
           call={call}
-          people={current.chat.people}
+          chat={current.chat}
+          friends={calls.friends}
+          meId={me.id}
           onClose={() => setAdding(false)}
-          onRing={(ids) => {
-            setAdding(false)
-            void calls.ring(ids)
-          }}
+          onAdd={calls.addPeople}
         />
       )}
     </section>
