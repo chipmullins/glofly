@@ -1,7 +1,7 @@
 // Shared by release.mjs and release-upload.mjs: paths, small helpers, and the S3 upload.
 
 import { execSync } from 'node:child_process'
-import { copyFileSync, existsSync, readFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
@@ -44,6 +44,33 @@ export function ok(cmd) {
 }
 export const desktopVersion = () =>
   JSON.parse(readFileSync(join(DESKTOP, 'package.json'), 'utf8')).version
+
+/**
+ * Sets the desktop app's version in its package.json and in package-lock.json, editing just
+ * those two lines. (`npm version -w` used to do this, but it also re-runs the install scripts,
+ * which rebuild the Electron parts and can fail halfway through a release.)
+ */
+export function setDesktopVersion(bump) {
+  const from = desktopVersion()
+  const [major, minor, patch] = from.split('.').map(Number)
+  const to =
+    bump === 'major' ? `${major + 1}.0.0`
+    : bump === 'minor' ? `${major}.${minor + 1}.0`
+    : bump === 'patch' ? `${major}.${minor}.${patch + 1}`
+    : bump
+  const pkgFile = join(DESKTOP, 'package.json')
+  const pkg = readFileSync(pkgFile, 'utf8')
+  const pkgLine = `"version": "${from}"`
+  if (!pkg.includes(pkgLine)) throw new Error(`apps/desktop/package.json has no ${pkgLine}`)
+  writeFileSync(pkgFile, pkg.replace(pkgLine, `"version": "${to}"`))
+  const lockFile = join(ROOT, 'package-lock.json')
+  const lock = readFileSync(lockFile, 'utf8')
+  const entry = `"apps/desktop": {\n      "name": "@glofly/desktop",\n      "version": "${from}"`
+  const crlf = entry.replaceAll('\n', '\r\n')
+  const found = lock.includes(entry) ? entry : lock.includes(crlf) ? crlf : null
+  if (found) writeFileSync(lockFile, lock.replace(found, found.replace(`"${from}"`, `"${to}"`)))
+  return to
+}
 
 // One prompt reader for the whole run (closing it would close the terminal's input for later questions).
 let prompts = null

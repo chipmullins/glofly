@@ -19,6 +19,7 @@ import {
   checkAws,
   doneAsking,
   desktopVersion,
+  setDesktopVersion,
   fail,
   green,
   ok,
@@ -71,8 +72,7 @@ const webChanged = !ok(
 )
 
 const from = desktopVersion()
-run(`npm version ${bump} -w apps/desktop --no-git-tag-version --silent`)
-const version = desktopVersion()
+const version = setDesktopVersion(bump)
 console.log(green(`  Version ${from} → ${version}`))
 console.log(
   `  Server code changed since the last release: ${serverChanged ? yellow('yes') : 'no'}` +
