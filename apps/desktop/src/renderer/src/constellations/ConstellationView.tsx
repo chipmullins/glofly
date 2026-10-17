@@ -6,6 +6,7 @@ import type {
   ConstellationMember,
   GroupSummary,
   Message,
+  MuteDuration,
   MyStatus,
   Nebula,
   NotifyLevel,
@@ -16,6 +17,7 @@ import type {
 import ChatView from '../components/ChatView'
 import SearchPanel from '../components/SearchPanel'
 import ConfirmDialog from '../components/ConfirmDialog'
+import StatusMenu from '../components/StatusMenu'
 import { AvatarFace } from '../components/Avatar'
 import StatusDot from '../components/StatusDot'
 import { colorsFor } from '../lib/avatarColors'
@@ -98,11 +100,60 @@ function Face({
   )
 }
 
+/** The mute lengths (the same as Glofly's own chats). */
+const MUTE_CHOICES: { duration: MuteDuration; label: string }[] = [
+  { duration: '1h', label: 'For 1 hour' },
+  { duration: '8h', label: 'For 8 hours' },
+  { duration: '24h', label: 'For 24 hours' },
+  { duration: 'forever', label: 'Until I turn it back on' }
+]
+
+/** Muted right now (a timed mute that hasn't run out). */
+const isQuiet = (n: Nebula): boolean =>
+  !!n.mutedUntil && new Date(n.mutedUntil).getTime() > Date.now()
+
+/** "until 3:40 PM", "until Sat 9:00 AM", or "until you turn it back on". */
+function mutedUntilText(iso: string): string {
+  const d = new Date(iso)
+  if (d.getFullYear() >= 2099) return 'until you turn it back on'
+  const sameDay = d.toDateString() === new Date().toDateString()
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return sameDay
+    ? `until ${time}`
+    : `until ${d.toLocaleDateString([], { weekday: 'short' })} ${time}`
+}
+
+function muteTitle(n: Nebula): string {
+  if (isQuiet(n)) return `Muted ${mutedUntilText(n.mutedUntil!)} (@mentions still come through)`
+  return 'Notifications off for this nebula'
+}
+
+/** A small crossed-out bell (muted nebulas). */
+function BellOffLine(): React.JSX.Element {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M13.7 21a2 2 0 0 1-3.4 0M18.6 13.5A6 6 0 0 0 18 11V8a6 6 0 0 0-9.3-5M6.3 6.3A6 6 0 0 0 6 8v3c0 3.5-2 5-2 5h12M3 3l18 18" />
+    </svg>
+  )
+}
+
 type MenuState = { member: ConstellationMember; x: number; y: number } | null
 
 export type ConstellationViewProps = {
   me: SignedInUser
   myStatus: MyStatus
+  /** Change your status (the same as Glofly's own status menu) */
+  onChangeStatus: (changes: Partial<MyStatus>) => Promise<boolean>
   /** Friends' presence (for the profile card) */
   presence: Record<string, Presence>
   friendIds: Set<string>
@@ -140,6 +191,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const [membersOpen, setMembersOpen] = useState(true)
   const [menu, setMenu] = useState<MenuState>(null)
   const [headMenu, setHeadMenu] = useState(false)
+  /** Right-click on a nebula in the sidebar: its notification and mute menu */
+  const [nebMenu, setNebMenu] = useState<{ nebula: Nebula; x: number; y: number } | null>(null)
+  const [statusOpen, setStatusOpen] = useState(false)
   const [searching, setSearching] = useState(false)
   const [jump, setJump] = useState<{ messageId: string; nonce: number } | null>(null)
   const [confirm, setConfirm] = useState<{
@@ -181,7 +235,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
 
   // Close the menus on Escape or a click elsewhere.
   useEffect(() => {
-    if (!menu && !headMenu) return
+    if (!menu && !headMenu && !nebMenu) return
     const close = (e: Event): void => {
       if (e instanceof KeyboardEvent && e.key !== 'Escape') return
       if (
@@ -191,6 +245,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         return
       setMenu(null)
       setHeadMenu(false)
+      setNebMenu(null)
     }
     document.addEventListener('mousedown', close)
     document.addEventListener('keydown', close)
@@ -482,8 +537,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const sidebar = (
     <aside aria-label={`${c.name} nebulas`} className="cx-side">
       <div className="cx-side-me">
-        <span
-          className="cx-face"
+        <button
+          type="button"
+          className="cx-face cx-side-me-face avatar--me"
           style={{
             width: 36,
             height: 36,
@@ -492,11 +548,21 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             fontSize: 13,
             position: 'relative'
           }}
-          aria-hidden="true"
+          aria-label={`Change your status (now ${STATUS_WORD[myStatus.status]})`}
+          aria-expanded={statusOpen}
+          title="Change your status"
+          onClick={() => setStatusOpen((v) => !v)}
         >
           <AvatarFace id={me.id} name={me.displayName} avatarVersion={me.avatarVersion} />
           <StatusDot status={myDot} ring="#150e0b" size={11} />
-        </span>
+        </button>
+        {statusOpen && (
+          <StatusMenu
+            current={myStatus}
+            onChange={props.onChangeStatus}
+            onClose={() => setStatusOpen(false)}
+          />
+        )}
         <span className="cx-side-me-text">
           <span className="cx-side-me-name">{me.displayName}</span>
           <span
@@ -706,6 +772,12 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                         .join(' ')}
                       aria-current={current ? 'page' : undefined}
                       onClick={() => props.onSelectNebula(n.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setMenu(null)
+                        setHeadMenu(false)
+                        setNebMenu({ nebula: n, x: e.clientX, y: e.clientY })
+                      }}
                       onDoubleClick={() =>
                         n.kind === 'voice' && inVoiceHere?.id !== n.id && joinVoice(n)
                       }
@@ -716,6 +788,15 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                         <SpeakerIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
                       )}
                       <span className="cx-neb-name">{n.name}</span>
+                      {(isQuiet(n) || n.notify === 'none') && (
+                        <span
+                          className="cx-neb-muted"
+                          title={muteTitle(n)}
+                          aria-label={muteTitle(n)}
+                        >
+                          <BellOffLine />
+                        </span>
+                      )}
                       {mention ? (
                         <span className="cx-neb-badge cx-neb-badge--mention">
                           @{n.mentionCount > 1 ? n.mentionCount : ''}
@@ -847,6 +928,111 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       ))}
     </aside>
   )
+
+  // ---- A nebula's menu (right-click in the sidebar): notifications and mute ----
+  async function setNebulaNotify(n: Nebula, level: NotifyLevel | null): Promise<void> {
+    setNebMenu(null)
+    const r = await api.nebulaNotify(c.id, n.id, level)
+    if (!r.ok) props.onProblem(r.message)
+    else props.onReload()
+  }
+  async function muteNebula(n: Nebula, duration: MuteDuration | null): Promise<void> {
+    setNebMenu(null)
+    const r = await window.glofly.conversations.mute(n.conversationId, duration)
+    if (!r.ok) props.onProblem(r.message)
+    props.onReload()
+  }
+  const nebMenuEl =
+    nebMenu &&
+    (() => {
+      const n = nebMenu.nebula
+      const muted = isQuiet(n)
+      const level = n.notify
+      const levelLabel = { all: 'All messages', mentions: 'Only @mentions', none: 'Nothing' }
+      return (
+        <div
+          role="menu"
+          aria-label={`${n.name} notifications`}
+          className="cx-menu cx-neb-menu"
+          style={{
+            top: Math.min(nebMenu.y, window.innerHeight - 440),
+            left: Math.min(nebMenu.x, window.innerWidth - 260)
+          }}
+        >
+          <div className="cx-neb-menu-head">
+            {n.kind === 'text' ? (
+              <StarIcon size={15} color="#ffb347" />
+            ) : (
+              <SpeakerIcon size={15} color="#ffb347" />
+            )}
+            <strong>{n.name}</strong>
+          </div>
+          {(n.unreadCount > 0 || n.mentionCount > 0) && (
+            <button
+              type="button"
+              role="menuitem"
+              className="cx-menu-item"
+              onClick={async () => {
+                setNebMenu(null)
+                await window.glofly.conversations.markRead(n.conversationId)
+                props.onReload()
+              }}
+            >
+              Mark as read
+            </button>
+          )}
+          <span className="cx-menu-sub">
+            {muted ? `Muted ${mutedUntilText(n.mutedUntil!)}` : 'Mute'}
+          </span>
+          {muted ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="cx-menu-item cx-menu-item--indent"
+              onClick={() => void muteNebula(n, null)}
+            >
+              Unmute
+            </button>
+          ) : (
+            MUTE_CHOICES.map((m) => (
+              <button
+                key={m.duration}
+                type="button"
+                role="menuitem"
+                className="cx-menu-item cx-menu-item--indent"
+                onClick={() => void muteNebula(n, m.duration)}
+              >
+                {m.label}
+              </button>
+            ))
+          )}
+          <span className="cx-menu-sub">Notify me about</span>
+          {(['all', 'mentions', 'none'] as const).map((l) => (
+            <button
+              key={l}
+              type="button"
+              role="menuitemradio"
+              aria-checked={level === l}
+              className="cx-menu-item cx-menu-item--indent"
+              onClick={() => void setNebulaNotify(n, l)}
+            >
+              {levelLabel[l]}
+              {level === l && <span className="cx-menu-check">✓</span>}
+            </button>
+          ))}
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={level === null}
+            className="cx-menu-item cx-menu-item--indent"
+            onClick={() => void setNebulaNotify(n, null)}
+          >
+            Same as {c.name} ({levelLabel[c.me.notify].toLowerCase()})
+            {level === null && <span className="cx-menu-check">✓</span>}
+          </button>
+        </div>
+      )
+    })()
 
   // ---- A member's menu ----
   const menuEl =
@@ -1131,6 +1317,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       {main}
       {nebula && (nebula.kind === 'text' || voiceChatOpen) && membersPanel}
       {menuEl}
+      {nebMenuEl}
       {confirm &&
         (confirm.kind === 'leave' ? (
           <ConfirmDialog

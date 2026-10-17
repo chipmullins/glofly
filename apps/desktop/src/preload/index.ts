@@ -325,6 +325,8 @@ const glofly: GloflyApi = {
   },
   window: {
     setTheme: (theme: WindowTheme) => ipcRenderer.send('window:theme', theme),
+    setTitleBarColor: (color: string, symbolColor: string) =>
+      ipcRenderer.send('window:titlebar-color', color, symbolColor),
     attention: () => ipcRenderer.send('window:attention')
   }
 }

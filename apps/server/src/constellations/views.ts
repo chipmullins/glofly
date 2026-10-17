@@ -42,6 +42,8 @@ export async function publicUsers(ids: string[]): Promise<Map<string, PublicUser
   return out;
 }
 
+/** A mute that hasn't run out yet, as an ISO date. */
+const activeMute = (d: Date | null | undefined): string | null => (d && d.getTime() > Date.now() ? d.toISOString() : null);
 const notifyLevel = (x: string | null | undefined): NotifyLevel | null => (x === "all" || x === "mentions" || x === "none" ? x : null);
 const colorOf = (x: string) => (isConstellationColor(x) ? x : "ember");
 
@@ -262,7 +264,11 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
   const unread = await unreadFor(userId, nebulaRows.map((n) => n.conversationId));
   const mySettings = nebulaRows.length
     ? await db
-        .select({ conversationId: conversationMembers.conversationId, level: conversationMembers.notifyLevel })
+        .select({
+          conversationId: conversationMembers.conversationId,
+          level: conversationMembers.notifyLevel,
+          mutedUntil: conversationMembers.mutedUntil,
+        })
         .from(conversationMembers)
         .where(and(eq(conversationMembers.userId, userId), inArray(conversationMembers.conversationId, nebulaRows.map((n) => n.conversationId))))
     : [];
@@ -330,6 +336,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       unreadCount: unread.get(n.conversationId)?.unread ?? 0,
       mentionCount: unread.get(n.conversationId)?.mentions ?? 0,
       notify: notifyLevel(mySettings.find((s) => s.conversationId === n.conversationId)?.level),
+      mutedUntil: activeMute(mySettings.find((s) => s.conversationId === n.conversationId)?.mutedUntil),
     })),
     roles,
     members: memberRows

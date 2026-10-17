@@ -24,7 +24,7 @@ import { db } from "../db";
 import { messages, pollVotes, type GameInfo } from "../db/schema";
 import { emitToUser } from "../realtime";
 import { storage } from "../storage";
-import { access, canPost, messageIn, postSpecial, sendUpdated } from "./routes";
+import { access, canPost, cantPostMessage, messageIn, postSpecial, sendUpdated } from "./routes";
 import { pollFallback, POLL_OPTIONS_MAX, POLL_TEXT_MAX } from "./polls";
 import { previewImageKey } from "./links";
 import { removePreviewImage } from "./previews";
@@ -33,7 +33,7 @@ import { removePreviewImage } from "./previews";
 //
 //   GET    /messages/:mid/preview-image     a link preview's picture
 //   DELETE /messages/:mid/preview           remove the preview from your own message
-//   POST   /polls                           { question, options[2–6], multi }   (groups)
+//   POST   /polls                           { question, options[2–6], multi }   (groups and nebulas)
 //   PUT    /messages/:mid/vote              { options: number[] }  ([] takes your vote back)
 //   POST   /messages/:mid/close-poll        whoever asked can close it
 //   POST   /games                           { kind: tictactoe | wordguess | trivia }
@@ -79,7 +79,8 @@ async function load(res: Response, conversationRaw: unknown, messageRaw?: unknow
 
 async function mayPost(res: Response, chat: NonNullable<Awaited<ReturnType<typeof access>>>): Promise<boolean> {
   if (await canPost(chat, me(res).id)) return true;
-  res.status(403).json({ error: "forbidden", message: "You can only do that in chats with friends." });
+  const message = chat.kind === "nebula" ? await cantPostMessage(chat, me(res).id) : "You can only do that in chats with friends.";
+  res.status(403).json({ error: "forbidden", message });
   return false;
 }
 
@@ -121,8 +122,9 @@ extrasRouter.post("/:id/polls", createLimiter, async (req, res) => {
   const found = await load(res, req.params.id);
   if (!found) return;
   const { chat, conversationId } = found;
-  if (chat.kind !== "group") {
-    res.status(400).json({ error: "invalid", message: "Polls are for groups." });
+  // Groups and (2.0) nebulas.
+  if (chat.kind === "dm") {
+    res.status(400).json({ error: "invalid", message: "Polls are for groups and nebulas." });
     return;
   }
   if (!(await mayPost(res, chat))) return;
@@ -287,6 +289,6 @@ extrasRouter.post("/:id/fireflies", fireflyLimiter, async (req, res) => {
     return;
   }
   const payload = { conversationId, userId: me(res).id, emoji, id: randomUUID() };
-  for (const userId of chat.memberIds) emitToUser(userId, "chat:fireflies", payload);
+  for (const userId of chat.memberIds) emitToUser(userId, "chat:fireflies", payload, chat.kind === "nebula");
   res.status(204).end();
 });

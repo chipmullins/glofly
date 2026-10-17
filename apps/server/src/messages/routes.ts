@@ -67,6 +67,8 @@ import {
   MESSAGE_MAX,
   gifFallback,
   publicGame,
+  shortBody,
+  attachmentSummary,
   type GameState,
 } from "@glofly/shared";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
@@ -314,11 +316,16 @@ export type Access = {
   conversationId: string;
 };
 
+/** A nebula message as a notification's text (2.0). */
+function nebulaPreview(m: { body: string; attachments: Parameters<typeof attachmentSummary>[0] }): string {
+  return (shortBody(m.body) || attachmentSummary(m.attachments)).replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
 /** Events about a nebula only go to apps that know Constellations. */
 const modernOnly = (chat: { kind: string }) => chat.kind === "nebula";
 
 /** What to tell someone who can't post here. */
-async function cantPostMessage(chat: Access, myId: string): Promise<string> {
+export async function cantPostMessage(chat: Access, myId: string): Promise<string> {
   if (chat.kind === "nebula") return (await whyCantPostInNebula(chat.conversationId, myId)) ?? CANT_POST;
   return CANT_POST;
 }
@@ -871,7 +878,7 @@ export async function announce(row: MessageRow, userIds: string[]) {
   const people = await peopleFor([row]);
   const modern = await isNebulaChat(row.conversationId);
   for (const userId of new Set(userIds)) {
-    emitToUser(userId, "message:new", { message, people }, modern);
+    emitToUser(userId, "message:new", modern ? { message, people, nebula: true } : { message, people }, modern);
     if (!modern) emitToUser(userId, "conversations:changed", {});
   }
   if (modern) await nebulaActivity(row.conversationId, row.senderId, row.createdAt, []);
@@ -1450,8 +1457,8 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
 
   const [message] = await hydrate([inserted]);
   // Instantly to everyone in the chat (all their signed-in devices).
-  for (const userId of chat.memberIds) emitToUser(userId, "message:new", { message }, modernOnly(chat));
-  if (chat.kind === "nebula") inBackground(nebulaActivity(id.data, myId, inserted.createdAt, mentions));
+  for (const userId of chat.memberIds) emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  if (chat.kind === "nebula") inBackground(nebulaActivity(id.data, myId, inserted.createdAt, mentions, nebulaPreview(message)));
   // Replying means you've read everything before it ("Seen" is for DMs).
   if (chat.partner) await shareReadPosition(id.data, myId, chat.partner, inserted.createdAt);
   res.status(201).json({ message });
@@ -1512,8 +1519,8 @@ export async function postSpecial(
     return row;
   });
   const [message] = await hydrate([inserted]);
-  for (const userId of chat.memberIds) emitToUser(userId, "message:new", { message }, modernOnly(chat));
-  if (chat.kind === "nebula") inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, []));
+  for (const userId of chat.memberIds) emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  if (chat.kind === "nebula") inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, [], nebulaPreview(message)));
   if (chat.partner) await shareReadPosition(conversationId, myId, chat.partner, inserted.createdAt);
   inBackground(notifyMessage(message, chat));
   if (sessionId) inBackground(notifyRead(myId, conversationId, sessionId));

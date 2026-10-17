@@ -184,6 +184,14 @@ const titleBarFor = (screen: WindowTheme): (typeof TITLE_BAR)[keyof typeof TITLE
 
 /** Which screen each window is showing, so its window buttons can follow theme changes. */
 const screenOf = new Map<number, WindowTheme>()
+/** The exact colors under each window's buttons, as the page last reported them (2.0). */
+const titleBarColorOf = new Map<number, { color: string; symbolColor: string; height: number }>()
+const titleBarOf = (
+  window: BrowserWindow
+): { color: string; symbolColor: string; height: number } =>
+  titleBarColorOf.get(window.webContents.id) ??
+  titleBarFor(screenOf.get(window.webContents.id) ?? 'login')
+const HEX = /^#[0-9a-fA-F]{6}$/
 
 // Developer option: `npm run second -w apps/desktop` opens a second copy of Glofly with its
 // own saved sign-in, so two test accounts can chat live on one PC.
@@ -423,7 +431,21 @@ function registerIpcHandlers(): void {
   ipcMain.on('window:theme', (event, theme: unknown) => {
     if (!customTitleBar || !isAppUrl(event.senderFrame?.url ?? '') || !isWindowTheme(theme)) return
     screenOf.set(event.sender.id, theme)
-    BrowserWindow.fromWebContents(event.sender)?.setTitleBarOverlay(titleBarFor(theme))
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (window) window.setTitleBarOverlay(titleBarOf(window))
+  })
+
+  // The page samples the color right under the window buttons (banners, Constellations' night
+  // sky, dialogs' dimming…) and the buttons take it on, so they never sit in a mismatched box.
+  ipcMain.on('window:titlebar-color', (event, color: unknown, symbolColor: unknown) => {
+    if (!customTitleBar || !isAppUrl(event.senderFrame?.url ?? '')) return
+    if (typeof color !== 'string' || typeof symbolColor !== 'string') return
+    if (!HEX.test(color) || !HEX.test(symbolColor)) return
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return
+    const bar = { color, symbolColor, height: 40 }
+    titleBarColorOf.set(event.sender.id, bar)
+    window.setTitleBarOverlay(bar)
   })
 
   ipcMain.handle('auth:register', (event, request: unknown) => {
@@ -1154,7 +1176,7 @@ app.whenReady().then(() => {
     for (const window of BrowserWindow.getAllWindows()) {
       window.setBackgroundColor(isDark() ? '#1E1916' : '#FFFBF7')
       if (customTitleBar) {
-        window.setTitleBarOverlay(titleBarFor(screenOf.get(window.webContents.id) ?? 'login'))
+        window.setTitleBarOverlay(titleBarOf(window))
       }
     }
   })

@@ -1358,3 +1358,17 @@
 .main-dialogs {
   display: contents;
 }
+
+/* Windows: banners at the very top leave room for the window buttons, and their empty parts drag
+   the window like the header below them. */
+.has-titlebar .update-bar,
+.has-titlebar .announcement-bar {
+  padding-right: 162px;
+  -webkit-app-region: drag;
+}
+.has-titlebar .update-bar button,
+.has-titlebar .update-bar a,
+.has-titlebar .announcement-bar button,
+.has-titlebar .announcement-bar a {
+  -webkit-app-region: no-drag;
+}

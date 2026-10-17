@@ -76,7 +76,7 @@ import { HangToast, SocialActions, SocialStrip, YearInGlowDialog } from '../comp
 import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcast'
 import { useMyBroadcast } from '../lib/broadcast'
 import ConstellationsScreen from '../constellations/ConstellationsScreen'
-import { useConstellationsPhase } from '../constellations/phase'
+import { useConstellationsPhase, viewingNebula } from '../constellations/phase'
 import { GalaxyIcon } from '../constellations/sky'
 import { useConstellationCards } from '../lib/constellations'
 import MyGamesPanel from '../components/MyGames'
@@ -521,6 +521,14 @@ export default function MainScreen({
   // Glofly 2.0: Constellations (the night side) and My games.
   const cx = useConstellationsPhase()
   const cxNavRef = useRef<HTMLButtonElement>(null)
+  /** Nebula chats seen in live news, so their notifications know where to open */
+  const nebulaChats = useRef(new Map<string, { constellationId: string; nebulaId: string }>())
+  const cxEnterRef = useRef((place: { constellationId: string; nebulaId: string }) =>
+    cx.enter(cxNavRef.current, place)
+  )
+  useEffect(() => {
+    cxEnterRef.current = (place) => cx.enter(cxNavRef.current, place)
+  })
   const [myGamesOpen, setMyGamesOpen] = useState(false)
   const closeHangPing = useCallback(() => setHangPing(null), [])
   const callControls = useRef<CallsValue | null>(null)
@@ -688,6 +696,8 @@ export default function MainScreen({
     return window.glofly.onEvent((event) => {
       switch (event.type) {
         case 'message:new': {
+          // 2.0: nebula messages belong to Constellations (its own alerts below), not your chats.
+          if (event.nebula) break
           const m = event.message
           const viewing = openChatRef.current === m.conversationId && document.hasFocus()
           // Group events ("Maya renamed the group") don't ding or count as unread.
@@ -853,7 +863,40 @@ export default function MainScreen({
         case 'session:expired':
           onSessionExpired()
           break
+        case 'constellation:activity': {
+          nebulaChats.current.set(event.conversationId, {
+            constellationId: event.constellationId,
+            nebulaId: event.nebulaId
+          })
+          if (!event.alert || event.senderId === user.id) break
+          const looking =
+            viewingNebula.conversationId === event.conversationId && document.hasFocus()
+          if (looking) break
+          playSound('message')
+          if (shouldNotify()) {
+            const where = `#${event.nebulaName ?? ''}`
+            void notify(
+              {
+                key: `nebula:${event.conversationId}`,
+                conversationId: event.conversationId,
+                title: `${event.senderName ?? 'Someone'} · ${where}`,
+                body: previewsOn()
+                  ? `${event.constellationName ? `${event.constellationName}: ` : ''}${event.preview ?? ''}`
+                  : event.alert === 'mention'
+                    ? `Mentioned you in ${event.constellationName ?? 'a constellation'}`
+                    : `New message in ${event.constellationName ?? 'a constellation'}`
+              },
+              null
+            )
+          }
+          break
+        }
         case 'notification:click':
+          // 2.0: a nebula's notification opens Constellations right at that nebula.
+          if (event.conversationId && nebulaChats.current.has(event.conversationId)) {
+            cxEnterRef.current(nebulaChats.current.get(event.conversationId)!)
+            break
+          }
           // Glofly is already in front: open the chat (or Friends → Pending for a request).
           if (event.conversationId) setOpenChatId(event.conversationId)
           else {
@@ -1729,6 +1772,7 @@ export default function MainScreen({
         start={cx.start}
         me={user}
         myStatus={myStatus}
+        onChangeStatus={changeStatus}
         presence={presence}
         friends={lists?.friends ?? []}
         conversations={conversations}

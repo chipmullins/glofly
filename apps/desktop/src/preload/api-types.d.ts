@@ -656,6 +656,8 @@ export type GloflyApi = {
   }
   window: {
     setTheme: (theme: WindowTheme) => void
+    /** Windows: paint the minimize / maximize / close buttons to match what's under them (#rrggbb) */
+    setTitleBarColor: (color: string, symbolColor: string) => void
     /** Brings Glofly to your attention (an incoming call): shows it if it's in the tray, flashes the taskbar. */
     attention: () => void
   }

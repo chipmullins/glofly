@@ -432,7 +432,13 @@ export type MessagePage = { messages: Message[]; hasMore: boolean; people: Publi
 
 /** Live updates the server sends over the real-time connection (Socket.IO event name = type). */
 export type ServerEvent =
-  | { type: 'message:new'; message: Message; people?: PublicUser[] }
+  | {
+      type: 'message:new'
+      message: Message
+      people?: PublicUser[]
+      /** 2.0: it's in a constellation's nebula (not one of your Glofly chats) */
+      nebula?: boolean
+    }
   | { type: 'message:updated'; message: Message }
   | { type: 'typing'; conversationId: string; userId: string }
   | { type: 'friends:changed' }
@@ -480,6 +486,13 @@ export type ServerEvent =
       conversationId: string
       senderId: string
       mentions: string[]
+      /** Should this ding and notify me (my setting for the nebula, mutes, @mentions)? */
+      alert?: 'message' | 'mention' | null
+      /** With an alert: what the notification shows */
+      nebulaName?: string
+      constellationName?: string
+      senderName?: string
+      preview?: string
     }
   /** Who's in one of its voice nebulas changed */
   | { type: 'constellation:voice'; constellationId: string; voice: import('./constellations').VoiceNebulaState }

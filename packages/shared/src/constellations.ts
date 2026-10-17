@@ -413,6 +413,8 @@ export type Nebula = {
   mentionCount: number
   /** Your notification setting for it (null = the constellation's default for you) */
   notify: NotifyLevel | null
+  /** Muted for a while (ISO; @mentions still get through), or null. Missing from older servers. */
+  mutedUntil?: string | null
 }
 
 export type NotifyLevel = 'all' | 'mentions' | 'none'
@@ -579,6 +581,8 @@ export function playtimeLabel(seconds: number): string {
 
 // ───────────── Live events (the apps' realtime forwarders pass on only these, checked) ─────────────
 
+/** Free text from the server, cut to a length ('' if missing). */
+const text = (x: unknown, max: number): string => (typeof x === 'string' ? x.slice(0, max) : '')
 const str = (x: unknown): x is string => typeof x === 'string' && x.length > 0 && x.length <= 64
 const strList = (x: unknown): string[] => (Array.isArray(x) ? x.filter(str).slice(0, 300) : [])
 
@@ -616,6 +620,15 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
             conversationId: p.conversationId,
             senderId: p.senderId,
             mentions: strList(p.mentions),
+            ...(p.alert === 'message' || p.alert === 'mention'
+              ? {
+                  alert: p.alert,
+                  nebulaName: text(p.nebulaName, 100),
+                  constellationName: text(p.constellationName, 100),
+                  senderName: text(p.senderName, 100) || 'Someone',
+                  preview: text(p.preview, 200),
+                }
+              : { alert: null }),
           }
         : null
     case 'constellation:voice': {

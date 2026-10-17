@@ -133,7 +133,8 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
   socket.on('message:new', (payload) => {
     if (payload?.message?.id) {
       const people = Array.isArray(payload.people) ? payload.people : undefined
-      forward({ type: 'message:new', message: upgradeEvents(payload.message), people })
+      const nebula = payload.nebula === true ? { nebula: true } : {}
+      forward({ type: 'message:new', message: upgradeEvents(payload.message), people, ...nebula })
     }
   })
   socket.on('message:updated', (payload) => {

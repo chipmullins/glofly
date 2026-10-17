@@ -978,3 +978,59 @@
     transition: none;
   }
 }
+
+/* Your face at the top of the sidebar: click it to change your status. */
+.cx-side-me {
+  position: relative;
+}
+.cx-side-me-face {
+  flex: none;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  transition: box-shadow 140ms ease-out;
+}
+.cx-side-me-face:hover,
+.cx-side-me-face[aria-expanded='true'] {
+  box-shadow: 0 0 0 2px #ffb347;
+}
+.cx-side-me-face:focus-visible {
+  outline: 2px solid #ffb347;
+  outline-offset: 2px;
+}
+.cx-side-me .status-menu {
+  left: 8px;
+  right: 8px;
+  top: calc(100% + 6px);
+  z-index: 41;
+}
+
+/* Right-click a nebula: notifications and mute. */
+.cx-neb-menu {
+  position: fixed;
+  width: 250px;
+}
+.cx-neb-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #3a2a22;
+  font-size: 14px;
+  min-width: 0;
+}
+.cx-neb-menu-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A muted nebula: a small crossed bell, and the name a little quieter. */
+.cx-neb-muted {
+  flex: none;
+  display: inline-flex;
+  color: #8f7a6c;
+}
+.cx-neb:has(.cx-neb-muted) .cx-neb-name {
+  opacity: 0.7;
+}

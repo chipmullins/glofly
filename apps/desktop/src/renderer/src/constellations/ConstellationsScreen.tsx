@@ -14,7 +14,7 @@ import type {
 import { api } from '../lib/constellations'
 import { Swarm } from './sky'
 import { makeStars, makeSwarm, prefersReducedMotion } from './skyData'
-import type { CxPhase, CxPlace } from './phase'
+import { viewingNebula, type CxPhase, type CxPlace } from './phase'
 import Dashboard from './Dashboard'
 import CreateJoin, { AskToJoin } from './CreateJoin'
 import ConstellationView, { type SettingsPageName } from './ConstellationView'
@@ -33,6 +33,7 @@ type Props = {
   start: CxPlace
   me: SignedInUser
   myStatus: MyStatus
+  onChangeStatus: (changes: Partial<MyStatus>) => Promise<boolean>
   presence: Record<string, Presence>
   friends: PublicUser[]
   conversations: ConversationSummary[]
@@ -112,6 +113,12 @@ export default function ConstellationsScreen(props: Props): React.JSX.Element | 
 function Space(props: Props): React.JSX.Element {
   const { me, cards, reloadCards, phase } = props
   const [place, setPlace] = useState<CxPlace>(props.start)
+  // Asked to go somewhere while already here (a notification): go.
+  const [startSeen, setStartSeen] = useState(props.start)
+  if (startSeen !== props.start) {
+    setStartSeen(props.start)
+    if (props.start) setPlace(props.start)
+  }
   const [loadedDetail, setDetail] = useState<ConstellationDetail | null>(null)
   const [loadProblem, setLoadProblem] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
@@ -218,6 +225,17 @@ function Space(props: Props): React.JSX.Element {
     },
     [reloadCards]
   )
+  // Which nebula's chat is on screen (Glofly doesn't ding for the one you're looking at).
+  const onScreen =
+    detail?.nebulas.find((n) => n.id === place?.nebulaId) ??
+    detail?.nebulas.find((n) => n.kind === 'text')
+  const onScreenChat = !leaving && onScreen ? onScreen.conversationId : null
+  useEffect(() => {
+    viewingNebula.conversationId = onScreenChat
+    return () => {
+      viewingNebula.conversationId = null
+    }
+  }, [onScreenChat])
   const friendIds = useMemo(() => new Set(props.friends.map((f) => f.id)), [props.friends])
   const night = !place
 
@@ -255,6 +273,7 @@ function Space(props: Props): React.JSX.Element {
         <ConstellationView
           me={me}
           myStatus={props.myStatus}
+          onChangeStatus={props.onChangeStatus}
           presence={props.presence}
           friendIds={friendIds}
           detail={detail}

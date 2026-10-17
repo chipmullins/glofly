@@ -5,6 +5,9 @@ import { prefersReducedMotion } from './skyData'
 // Component: sweep → space at 1050 ms, return → home at 2100 ms). Kept in the main screen,
 // because it moves the normal screen too.
 
+/** The nebula chat on screen in Constellations right now (no ding or notification for it). */
+export const viewingNebula: { conversationId: string | null } = { conversationId: null }
+
 export type CxPhase = 'home' | 'sweep' | 'space' | 'return'
 export type CxPlace = { constellationId: string; nebulaId: string | null } | null
 
@@ -26,6 +29,10 @@ export function useConstellationsPhase(): {
   const [origin, setOrigin] = useState({ x: 150, y: 250 })
   const [start, setStart] = useState<CxPlace>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const phaseRef = useRef<CxPhase>('home')
+  useEffect(() => {
+    phaseRef.current = phase
+  }, [phase])
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current)
@@ -34,6 +41,11 @@ export function useConstellationsPhase(): {
   )
 
   const enter = useCallback((from: HTMLElement | null, place: CxPlace = null) => {
+    // Already up there (say, a nebula's notification was clicked): just fly to the place.
+    if (phaseRef.current === 'space' || phaseRef.current === 'sweep') {
+      setStart(place ? { ...place } : null)
+      return
+    }
     if (timer.current) clearTimeout(timer.current)
     timer.current = null
     setStart(place)

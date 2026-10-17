@@ -1224,3 +1224,67 @@
   font-weight: 400;
   color: var(--glo-faint);
 }
+
+/* ───────────── Windows title bar ─────────────
+   Windows draws minimize / maximize / close over the top-right corner (about 138 px wide, 40 px
+   tall; lib/titleBar.ts colors them to match). Whatever sits up there leaves them room, and the
+   empty parts of each top bar drag the window. Buttons and fields in a drag area must say
+   no-drag or they can't be clicked. */
+.has-titlebar .cx-dash-header {
+  padding-right: 162px;
+  -webkit-app-region: drag;
+}
+.has-titlebar .cx-dash-header > * {
+  -webkit-app-region: no-drag;
+}
+.has-titlebar .cx-dash-header > span[style] {
+  -webkit-app-region: drag; /* the spacer */
+}
+.has-titlebar .chat-header.cx-nebula-header {
+  padding-right: 20px;
+  -webkit-app-region: drag;
+}
+/* No member list beside it: the header runs to the window's edge. */
+.has-titlebar .cx-inside:not(:has(.cx-members)) .chat-header.cx-nebula-header {
+  padding-right: 162px;
+}
+.has-titlebar .cx-nebula-header button,
+.has-titlebar .cx-nebula-header a,
+.has-titlebar .cx-nebula-header input,
+.has-titlebar .cx-nebula-header [role='menu'] {
+  -webkit-app-region: no-drag;
+}
+.has-titlebar .cx-members {
+  padding-top: 48px;
+}
+.has-titlebar .cx-voice-head {
+  -webkit-app-region: drag;
+}
+.has-titlebar .cx-inside:not(:has(.cx-members)) .cx-voice-head {
+  padding-right: 146px;
+}
+.has-titlebar .cx-voice-head button {
+  -webkit-app-region: no-drag;
+}
+
+/* Dark theme: the Constellations button glows orange, so it stands out from the dark sidebar. */
+:root[data-theme='dark'] .nav-item.cx-nav {
+  background: linear-gradient(135deg, #ffb347, #f47a1f);
+  color: #1c1210;
+  box-shadow: 0 0 14px rgba(255, 165, 74, 0.28);
+}
+:root[data-theme='dark'] .nav-item.cx-nav:hover {
+  background: linear-gradient(135deg, #ffc061, #f78a2e);
+  color: #1c1210;
+  box-shadow: 0 0 20px rgba(255, 165, 74, 0.45);
+}
+:root[data-theme='dark'] .nav-item.cx-nav svg {
+  stroke: #1c1210;
+}
+:root[data-theme='dark'] .nav-item.cx-nav svg circle {
+  fill: #1c1210;
+}
+:root[data-theme='dark'] .nav-item.cx-nav .cx-nav-dot {
+  background: #fff6ea;
+  box-shadow: 0 0 8px 2px rgba(255, 246, 234, 0.7);
+}

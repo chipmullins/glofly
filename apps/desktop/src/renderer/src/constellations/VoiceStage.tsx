@@ -24,6 +24,9 @@ type Tile = {
   camera: VideoTrack | null
 }
 
+/** Columns for the voice grid: 1, then 2 up to four people, then 3. */
+const gridColumns = (n: number): number => (n <= 1 ? 1 : n <= 4 ? 2 : 3)
+
 function videoOf(p: Participant | undefined, source: Track.Source): VideoTrack | null {
   const pub = p?.getTrackPublication(source)
   return pub && !pub.isMuted && pub.track ? (pub.track as VideoTrack) : null
@@ -291,6 +294,14 @@ export default function VoiceStage({
         <div
           className={media ? 'cx-voice-tiles' : 'cx-voice-grid'}
           data-count={Math.min(tiles.length, 9)}
+          style={
+            media
+              ? undefined
+              : ({
+                  '--cx-cols': gridColumns(tiles.length),
+                  '--cx-rows': Math.ceil(tiles.length / gridColumns(tiles.length))
+                } as React.CSSProperties)
+          }
         >
           {tiles.map((t) => (
             <TileFace key={t.person.id} tile={t} large={!media} />
