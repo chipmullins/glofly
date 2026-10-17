@@ -1120,3 +1120,19 @@ export const userGames = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.gameKey] })],
 );
+
+// Glofly 2.0: nebulas someone pinned to the dock on Glofly home ("Pin to Glofly dock"), in their order.
+export const nebulaPins = pgTable(
+  "nebula_pins",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.nebulaId] })],
+);

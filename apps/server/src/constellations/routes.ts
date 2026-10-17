@@ -31,6 +31,7 @@ import {
   isPermission,
   type ConstellationPermission,
   type NebulaKind,
+  PINNED_NEBULAS_MAX,
 } from "@glofly/shared";
 import { db } from "../db";
 import {
@@ -68,6 +69,7 @@ import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstella
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
 import { cardsFor, detailFor, entriesFor, publicUsers } from "./views";
 import { announceVoice, setSharing } from "./voice";
+import { mentionsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula } from "./home";
 
 // Constellations (Glofly 2.0): communities with nebulas, categories, members and roles.
 // Every action is permission-checked here. Restricted (family) accounts can't use any of it.
@@ -77,6 +79,10 @@ import { announceVoice, setSharing } from "./voice";
 //   PUT    /constellations/order                    { ids }  my dashboard / icon strip order
 //   GET    /constellations/directory?q=&type=&tag=&offset=   public ones
 //   GET    /constellations/discover                           top tags + 3 to try
+//   GET    /constellations/pins                     nebulas pinned to the home dock
+//   GET    /constellations/mentions?before=         @mentions of me, newest first
+//   POST   /constellations/mentions/read            "Mark all read"
+//   PUT    /constellations/:id/nebulas/:nid/pin     pin to the home dock · DELETE unpin
 //   GET    /constellations/links/:code              what an invite link is (preview)
 //   POST   /constellations/links/:code/join         join with it
 //   POST   /constellations/invites/:id/dismiss      "Not now"
@@ -397,6 +403,28 @@ constellationsRouter.get("/directory", directoryLimiter, async (req, res) => {
     .limit(PAGE + 1);
   const page = rows.slice(0, PAGE);
   res.json({ results: await entriesFor(myId, page.map((r) => r.id)), hasMore: rows.length > PAGE });
+});
+
+// ───────────── The nebula dock on Glofly home ─────────────
+
+// GET /constellations/pins — nebulas I pinned to the home dock, with unread counts.
+constellationsRouter.get("/pins", async (_req, res) => {
+  res.json({ pins: await pinsFor(me(res).id) });
+});
+
+// GET /constellations/mentions?before= — @mentions of me across my nebulas, newest first.
+constellationsRouter.get("/mentions", async (req, res) => {
+  const before = typeof req.query.before === "string" ? new Date(req.query.before) : undefined;
+  res.json(await mentionsFor(me(res).id, before && !Number.isNaN(before.getTime()) ? before : undefined));
+});
+
+// POST /constellations/mentions/read — "Mark all read" (every nebula with an unread @mention of me).
+constellationsRouter.post("/mentions/read", async (_req, res) => {
+  const myId = me(res).id;
+  const touched = await readAllMentions(myId);
+  for (const constellationId of touched) emitToUser(myId, "constellation:updated", { constellationId }, true);
+  emitToUser(myId, "constellations:changed", {}, true);
+  res.status(204).end();
 });
 
 // GET /constellations/discover — the dashboard's "Adventure to new constellations": the most-used
@@ -883,6 +911,29 @@ constellationsRouter.put("/:id/nebulas/:nid/notify", async (req, res) => {
   emitToUser(s.userId, "constellation:updated", { constellationId: s.constellationId }, true);
   emitToUser(s.userId, "constellations:changed", {}, true);
   res.status(204).end();
+});
+
+// PUT /constellations/:id/nebulas/:nid/pin — "Pin to Glofly dock".  DELETE — unpin.
+constellationsRouter.put("/:id/nebulas/:nid/pin", async (req, res) => {
+  const s = await standingFor(req, res);
+  if (!s) return;
+  const n = await nebulaFor(req, res, s);
+  if (!n) return;
+  if ((await pinCount(s.userId)) >= PINNED_NEBULAS_MAX) {
+    bad(res, `You can pin up to ${PINNED_NEBULAS_MAX} nebulas. Unpin one first.`);
+    return;
+  }
+  await pinNebula(s.userId, n.id);
+  emitToUser(s.userId, "constellations:changed", {}, true);
+  res.json({ pins: await pinsFor(s.userId) });
+});
+constellationsRouter.delete("/:id/nebulas/:nid/pin", async (req, res) => {
+  const s = await standingFor(req, res);
+  if (!s) return;
+  const nid = idParam.safeParse(req.params.nid);
+  if (nid.success) await unpinNebula(s.userId, nid.data);
+  emitToUser(s.userId, "constellations:changed", {}, true);
+  res.json({ pins: await pinsFor(s.userId) });
 });
 
 // ───────────── Categories and nebulas ─────────────

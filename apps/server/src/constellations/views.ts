@@ -48,7 +48,7 @@ const notifyLevel = (x: string | null | undefined): NotifyLevel | null => (x ===
 const colorOf = (x: string) => (isConstellationColor(x) ? x : "ember");
 
 /** Unread and @mention counts per nebula conversation for one person. */
-async function unreadFor(userId: string, conversationIds: string[]) {
+export async function unreadFor(userId: string, conversationIds: string[]) {
   const out = new Map<string, { unread: number; mentions: number }>();
   if (!conversationIds.length) return out;
   const rows = await db

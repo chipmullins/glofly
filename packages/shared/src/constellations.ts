@@ -651,3 +651,39 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
       return null
   }
 }
+
+// ---- The nebula dock on Glofly home (2.0) ----
+
+/** A nebula pinned to the dock on Glofly home ("Pin to Glofly dock"). */
+export type PinnedNebula = {
+  constellationId: string
+  constellationName: string
+  color: ConstellationColor
+  iconVersion: string | null
+  nebula: {
+    id: string
+    name: string
+    kind: NebulaKind
+    conversationId: string
+    unreadCount: number
+    mentionCount: number
+  }
+}
+
+/** Someone @mentioned you in a nebula (the dock's Mentions, newest first). */
+export type NebulaMention = {
+  /** The message */
+  id: string
+  conversationId: string
+  constellation: { id: string; name: string; color: ConstellationColor; iconVersion: string | null }
+  nebula: { id: string; name: string }
+  sender: PublicUser
+  /** The message as one line of text */
+  text: string
+  createdAt: string
+  /** Newer than when you last read that nebula */
+  unread: boolean
+}
+
+/** How many nebulas one person can pin to the home dock. */
+export const PINNED_NEBULAS_MAX = 8
