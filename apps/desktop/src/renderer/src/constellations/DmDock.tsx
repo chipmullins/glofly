@@ -395,6 +395,195 @@ function chatMatches(c: ConversationSummary, q: string): boolean {
   return c.members.some((p) => has(p.displayName) || has(p.username))
 }
 
+/** A friend's face (round, their colors or photo). */
+function FriendFace({ person, size }: { person: PublicUser; size: number }): React.JSX.Element {
+  const [bg, fg] = colorsFor(person.id)
+  return (
+    <span
+      className="dock-face-inner"
+      style={{ background: bg, color: fg, fontSize: Math.round(size * 0.32) }}
+    >
+      <AvatarFace id={person.id} name={person.displayName} avatarVersion={person.avatarVersion} />
+    </span>
+  )
+}
+
+/** All chats → +: pick a friend and their chat pops up right here, without leaving. */
+function NewChat({
+  friends,
+  chats,
+  presence,
+  left,
+  tailLeft,
+  onBack,
+  onPick,
+  onStartDm,
+  onClose
+}: {
+  friends: PublicUser[]
+  chats: ConversationSummary[]
+  presence: Record<string, Presence>
+  left: number
+  tailLeft: number
+  onBack: () => void
+  onPick: (conversationId: string) => void
+  onStartDm: (person: PublicUser) => Promise<string | null>
+  onClose: () => void
+}): React.JSX.Element {
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const q = query.trim().toLowerCase()
+  const online = (p: PublicUser): boolean => (presence[p.id]?.status ?? 'offline') !== 'offline'
+  const shown = friends
+    .filter(
+      (p) => !q || p.displayName.toLowerCase().includes(q) || p.username.toLowerCase().includes(q)
+    )
+    .sort(
+      (a, b) => Number(online(b)) - Number(online(a)) || a.displayName.localeCompare(b.displayName)
+    )
+  const dmWith = (p: PublicUser): ConversationSummary | undefined =>
+    chats.find((c) => c.kind === 'dm' && c.partner.id === p.id)
+
+  async function pick(p: PublicUser): Promise<void> {
+    const existing = dmWith(p)
+    if (existing) return onPick(existing.id)
+    setBusy(p.id)
+    const id = await onStartDm(p)
+    setBusy(null)
+    if (id) onPick(id)
+  }
+
+  return (
+    <section className="all-chats" role="dialog" aria-label="New message" style={{ left }}>
+      <header className="all-chats-head all-chats-head--back">
+        <button
+          type="button"
+          className="all-chats-icon"
+          aria-label="Back to all chats"
+          title="Back"
+          onClick={onBack}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M15 6l-6 6 6 6" />
+          </svg>
+        </button>
+        <h2>New message</h2>
+        <button
+          type="button"
+          className="all-chats-icon"
+          aria-label="Close"
+          title="Close"
+          onClick={onClose}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </header>
+      <div className="all-chats-search-row">
+        <label className="all-chats-search">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Find a friend"
+            aria-label="Find a friend"
+            autoFocus
+            value={query}
+            maxLength={40}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation()
+                onBack()
+              }
+              if (e.key === 'Enter' && shown[0]) void pick(shown[0])
+            }}
+          />
+        </label>
+      </div>
+      <p className="all-chats-label">Your friends</p>
+      <ul className="all-chats-list">
+        {shown.map((p) => {
+          const pr = presence[p.id]
+          const existing = dmWith(p)
+          return (
+            <li key={p.id}>
+              <button
+                type="button"
+                className="all-chats-row"
+                aria-label={`Message ${p.displayName}`}
+                disabled={busy !== null}
+                onClick={() => void pick(p)}
+              >
+                <span className="all-chats-face">
+                  <FriendFace person={p} size={40} />
+                  <StatusDot
+                    status={pr?.status ?? 'offline'}
+                    mobile={onMobile(pr)}
+                    ring="#1c1210"
+                    size={11}
+                  />
+                </span>
+                <span className="all-chats-text">
+                  <span className="all-chats-name-row">
+                    <span className="all-chats-name">
+                      <EmojiText text={p.displayName} />
+                    </span>
+                  </span>
+                  <span className="all-chats-preview">
+                    @{p.username} · {pr ? (STATUS_LABEL[pr.status] ?? 'Offline') : 'Offline'}
+                  </span>
+                </span>
+                <span className="all-chats-side">
+                  <span className="all-chats-time">{busy === p.id ? 'Opening…' : ''}</span>
+                  <span className="all-chats-open">{existing ? 'Open chat' : 'Message'}</span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+        {shown.length === 0 && (
+          <li className="all-chats-empty">
+            {friends.length === 0 ? 'Add friends in Glofly to message them here' : 'Nobody matches'}
+          </li>
+        )}
+      </ul>
+      <span className="all-chats-tail" aria-hidden="true" style={{ left: tailLeft }} />
+    </section>
+  )
+}
+
 /** "All chats" from the dock (approved Oct 17, canvas board 7): every chat, without leaving. */
 function AllChats({
   me,
@@ -403,7 +592,8 @@ function AllChats({
   left,
   tailLeft,
   onPick,
-  onNewChat,
+  friends,
+  onStartDm,
   onHome,
   onClose
 }: {
@@ -413,10 +603,13 @@ function AllChats({
   left: number
   tailLeft: number
   onPick: (conversationId: string) => void
-  onNewChat: () => void
+  /** + → pick a friend and message them right here */
+  friends: PublicUser[]
+  onStartDm: (person: PublicUser) => Promise<string | null>
   onHome: () => void
   onClose: () => void
 }): React.JSX.Element {
+  const [picking, setPicking] = useState(false)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<AllFilter>('all')
   const [now] = useState(() => new Date())
@@ -436,6 +629,21 @@ function AllChats({
     { id: 'dms', label: 'DMs' },
     { id: 'groups', label: 'Groups' }
   ]
+  if (picking) {
+    return (
+      <NewChat
+        friends={friends}
+        chats={chats}
+        presence={presence}
+        left={left}
+        tailLeft={tailLeft}
+        onBack={() => setPicking(false)}
+        onPick={onPick}
+        onStartDm={onStartDm}
+        onClose={onClose}
+      />
+    )
+  }
   return (
     <section className="all-chats" role="dialog" aria-label="All chats" style={{ left }}>
       <header className="all-chats-head">
@@ -443,9 +651,9 @@ function AllChats({
         <button
           type="button"
           className="all-chats-icon"
-          aria-label="New chat"
-          title="New chat (opens Glofly)"
-          onClick={onNewChat}
+          aria-label="New message"
+          title="New message"
+          onClick={() => setPicking(true)}
         >
           <svg
             width="18"
@@ -664,9 +872,15 @@ export default function DmDock({
   onHome,
   onOpenFull,
   onCall,
-  onRead
+  onRead,
+  friends,
+  onStartDm
 }: {
   me: SignedInUser
+  /** Your friends, for a new message from All chats → + */
+  friends: PublicUser[]
+  /** Opens (or finds) your DM with them; its id, or null if that didn't work */
+  onStartDm: (person: PublicUser) => Promise<string | null>
   conversations: ConversationSummary[]
   presence: Record<string, Presence>
   /** On the night-sky dashboard: a touch more see-through */
@@ -918,10 +1132,8 @@ export default function DmDock({
           left={allLeft}
           tailLeft={allTail}
           onPick={openChat}
-          onNewChat={() => {
-            setAllOpen(false)
-            onHome()
-          }}
+          friends={friends}
+          onStartDm={onStartDm}
           onHome={() => {
             setAllOpen(false)
             onHome()

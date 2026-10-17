@@ -51,6 +51,8 @@ type Props = {
   /** Back to Glofly with a DM to this person */
   onMessage: (person: PublicUser) => void
   onRead: (conversationId: string) => void
+  /** Opens (or finds) your DM with a friend, for a new message from the dock; its id or null */
+  onStartDm: (person: PublicUser) => Promise<string | null>
   onViewProfile: (person: PublicUser) => void
   onReport: (message: Message, sender: PublicUser) => void
   onAppSettings: () => void
@@ -378,6 +380,8 @@ function Space(props: Props): React.JSX.Element {
           onOpenFull={props.onOpenChat}
           onCall={props.onCall}
           onRead={props.onRead}
+          friends={props.friends}
+          onStartDm={props.onStartDm}
         />
       )}
       <CxToast text={toast} />

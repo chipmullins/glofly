@@ -1791,6 +1791,21 @@ export default function MainScreen({
         }
         onMessage={(person) => homeThen(() => void openChatWith(person.id))}
         onRead={markedRead}
+        onStartDm={async (person) => {
+          const existing = conversations.find((c) => c.kind === 'dm' && c.partner.id === person.id)
+          if (existing) return existing.id
+          const result = await window.glofly.conversations.openDm(person.id)
+          if (!result.ok) {
+            if (result.error === 'unauthorized') onSessionExpired()
+            else setToast(result.message)
+            return null
+          }
+          const opened = result.data
+          setConversations((list) =>
+            list.some((c) => c.id === opened.id) ? list : [opened, ...list]
+          )
+          return opened.id
+        }}
         onViewProfile={viewPerson}
         onReport={(m, sender) =>
           setReporting({
