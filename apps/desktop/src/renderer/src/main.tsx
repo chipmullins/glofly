@@ -4,6 +4,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { startAppearance } from './lib/appearance'
+import { startScrollbars } from './lib/scrollbars'
 import { setSoundSettings } from './lib/sounds'
 import { setNotificationSettings } from './lib/notify'
 
@@ -14,6 +15,8 @@ if (window.glofly.platform === 'darwin') document.documentElement.classList.add(
 
 // Light or dark theme and the accent color, set before anything is drawn.
 startAppearance()
+// Scrollbars only show while scrolling.
+startScrollbars()
 
 // Which sounds play (Settings → Notifications & sounds).
 void window.glofly.app.getSettings().then((s) => {

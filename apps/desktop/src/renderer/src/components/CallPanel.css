@@ -293,10 +293,6 @@
   width: min(calc(100cqw - var(--column-w) - 10px), calc(100cqh * 16 / 9));
   aspect-ratio: 16 / 9;
 }
-.call-column,
-.call-beside {
-  scrollbar-width: thin;
-}
 .call-column {
   width: var(--column-w);
   height: 100%;

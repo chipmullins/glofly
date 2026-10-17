@@ -247,3 +247,38 @@ img.emoji {
   height: 100%;
   background: var(--glo-cream);
 }
+
+/* Scrollbars: thin, no arrows, and out of sight until you scroll (lib/scrollbars.ts adds
+   .is-scrolling while something moves) or point at where the bar is. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background-clip: padding-box;
+  background-color: transparent;
+}
+.is-scrolling::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--glo-muted) 45%, transparent);
+}
+::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--glo-muted) 70%, transparent);
+}
+/* Firefox (browser version) has no ::-webkit-scrollbar: a thin, quiet bar instead. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--glo-muted) 35%, transparent) transparent;
+  }
+}
