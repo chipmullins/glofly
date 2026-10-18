@@ -215,6 +215,8 @@
 }
 
 .dock-face-inner {
+  /* The photo (.avatar-photo, absolutely placed) stays inside this circle. */
+  position: relative;
   width: 100%;
   height: 100%;
   border-radius: inherit;

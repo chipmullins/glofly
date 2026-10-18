@@ -28,6 +28,8 @@
 /* A small round face (voice lists, member rows, the sidebar's you). Not clipped, so a status dot
    can sit on its edge; the photo is rounded instead. */
 .cx-face {
+  /* The photo (.avatar-photo, absolutely placed) stays inside this circle. */
+  position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
