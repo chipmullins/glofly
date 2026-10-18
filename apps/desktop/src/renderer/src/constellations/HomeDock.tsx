@@ -1,3 +1,4 @@
+import { VoiceBubble } from '../components/Attachments'
 import {
   useCallback,
   useEffect,
@@ -1570,13 +1571,16 @@ function NebulaMini({
             previous &&
             previous.senderId === m.senderId &&
             new Date(m.createdAt).getTime() - new Date(previous.createdAt).getTime() < 5 * 60_000
+          // 0.7.1: voice messages play right here.
+          const voices = m.deleted ? [] : m.attachments.filter((a) => a.kind === 'file' && a.voice)
+          const others = m.attachments.filter((a) => !voices.includes(a))
           const text = m.deleted
             ? 'This message was deleted.'
             : m.poll
               ? ''
               : m.gif || m.game
                 ? shortBody(m.body)
-                : m.body || attachmentSummary(m.attachments)
+                : m.body || (others.length ? attachmentSummary(others) : '')
           return (
             <div
               key={m.id}
@@ -1621,11 +1625,14 @@ function NebulaMini({
                 {text && (
                   <div className={m.deleted ? 'hd-msg-body hd-msg-body--deleted' : 'hd-msg-body'}>
                     <WithMentions text={text} me={me} className="hd-at" />
-                    {!m.deleted && m.body && m.attachments.length > 0 && (
-                      <span className="mini-bubble-files">{attachmentSummary(m.attachments)}</span>
+                    {!m.deleted && m.body && others.length > 0 && (
+                      <span className="mini-bubble-files">{attachmentSummary(others)}</span>
                     )}
                   </div>
                 )}
+                {voices.map((a) => (
+                  <VoiceBubble key={a.id} conversationId={m.conversationId} attachment={a} />
+                ))}
                 {m.poll && !m.deleted && (
                   <div className="hd-poll">
                     <div className="hd-poll-q">

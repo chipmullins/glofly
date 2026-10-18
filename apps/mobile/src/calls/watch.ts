@@ -89,7 +89,10 @@ export async function startWatching(link: string, control: WatchControl) {
   if (!id) return { ok: false as const, error: 'invalid' as const, message: 'Join the call first.' }
   const sentAt = Date.now()
   const r = await api.watchStart(id, link, control)
-  if (r.ok) take(r.data, sentAt)
+  if (r.ok) {
+    take(r.data, sentAt)
+    if (r.data.someoneNeedsUpdate) inform('Someone in the call needs to update Glofly to see this video.')
+  }
   return r
 }
 export const controlWatch = (action: 'play' | 'pause' | 'seek' | 'back' | 'forward', to?: number) => void run((id) => api.watchControl(id, action, to))

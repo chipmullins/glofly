@@ -274,7 +274,7 @@ function InviteCard({ invite, onJoin }: { invite: ConstellationInvite; onJoin: (
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <NightButton
           kind="outline"
-          label="Not now"
+          label="Decline"
           style={{ flex: 1, backgroundColor: 'transparent' }}
           onPress={async () => {
             useCx.setState({ invites: useCx.getState().invites.filter((i) => i.id !== invite.id) })

@@ -525,7 +525,7 @@ export default function Dashboard({
                   disabled={busy === inv.id}
                   onClick={() => void dismiss(inv)}
                 >
-                  Not now
+                  Decline
                 </button>
                 <button
                   type="button"

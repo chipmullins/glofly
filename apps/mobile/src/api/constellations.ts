@@ -1,4 +1,4 @@
-import type {
+import type { NebulaNews,
   ApiResult,
   ConstellationBan,
   ConstellationCard,
@@ -44,6 +44,8 @@ export const cx = {
     description?: string | null
   }) => request<Detail>('POST', '/constellations', values),
   pins: () => request<{ pins: PinnedNebula[] }>('GET', '/constellations/pins'),
+  /** 0.7.1: nebulas with news for you (the Chats list) */
+  news: () => request<{ news: NebulaNews[] }>('GET', '/constellations/news'),
   pin: (id: string, nebulaId: string) => request<{ pins: PinnedNebula[] }>('PUT', `${base(id)}/nebulas/${nebulaId}/pin`),
   unpin: (id: string, nebulaId: string) => request<{ pins: PinnedNebula[] }>('DELETE', `${base(id)}/nebulas/${nebulaId}/pin`),
   mentions: (before?: string) =>

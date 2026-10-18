@@ -1149,3 +1149,13 @@
   cursor: progress;
   opacity: 0.7;
 }
+
+/* 0.7.1: voice messages in the mini chat */
+.mini-msg .voice-bubble {
+  width: 270px;
+  max-width: 100%;
+}
+.hd-msg-main .voice-bubble {
+  width: 240px;
+  margin-top: 4px;
+}

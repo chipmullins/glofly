@@ -14,7 +14,7 @@ import type {
 import { api, usePinnedNebulas } from '../lib/constellations'
 import { Swarm } from './sky'
 import { makeStars, makeSwarm, prefersReducedMotion } from './skyData'
-import { viewingNebula, type CxPhase, type CxPlace } from './phase'
+import { rememberPlace, viewingNebula, type CxPhase, type CxPlace } from './phase'
 import Dashboard from './Dashboard'
 import CreateJoin, { AskToJoin } from './CreateJoin'
 import ConstellationView, { type SettingsPageName } from './ConstellationView'
@@ -29,6 +29,8 @@ import './Constellations.css'
 
 type Props = {
   phase: CxPhase
+  /** 0.7.1: a quick hop (you're in a constellation already) instead of the full swipe and swarm */
+  quick?: boolean
   origin: { x: number; y: number }
   start: CxPlace
   me: SignedInUser
@@ -74,7 +76,7 @@ const REMOVED_TEXT = {
 
 /** The night layer: rendered whenever the phase isn't "home". */
 export default function ConstellationsScreen(props: Props): React.JSX.Element | null {
-  const { phase, origin } = props
+  const { phase, origin, quick } = props
   const stars = useMemo(() => makeStars(), [])
   const swarm = useMemo(() => makeSwarm(), [])
   if (phase === 'home') return null
@@ -85,7 +87,7 @@ export default function ConstellationsScreen(props: Props): React.JSX.Element | 
   return (
     <>
       <div
-        className={`cx-root ${nightClass}`}
+        className={`cx-root ${nightClass}${quick ? ' cx-quick' : ''}`}
         style={style}
         aria-hidden={phase === 'return' ? true : undefined}
       >
@@ -106,10 +108,12 @@ export default function ConstellationsScreen(props: Props): React.JSX.Element | 
         </div>
         {inSpace && <Space {...props} />}
       </div>
-      {phase === 'return' && <Swarm flies={swarm} />}
+      {phase === 'return' && !quick && <Swarm flies={swarm} />}
     </>
   )
 }
+
+const detailCache = new Map<string, ConstellationDetail>()
 
 /** What's on the night side once the swipe is done. */
 function Space(props: Props): React.JSX.Element {
@@ -124,7 +128,22 @@ function Space(props: Props): React.JSX.Element {
     setStartSeen(props.start)
     if (props.start) setPlace(props.start)
   }
-  const [loadedDetail, setDetail] = useState<ConstellationDetail | null>(null)
+  // 0.7.1: the last look at each constellation, so flying back in shows it straight away (no
+  // "Flying in…" flash) while the fresh copy loads.
+  const [loadedDetail, setDetailState] = useState<ConstellationDetail | null>(() =>
+    props.start ? (detailCache.get(props.start.constellationId) ?? null) : null
+  )
+  const setDetail = useCallback((d: React.SetStateAction<ConstellationDetail | null>) => {
+    setDetailState((old) => {
+      const next = typeof d === 'function' ? d(old) : d
+      if (next) detailCache.set(next.id, next)
+      return next
+    })
+  }, [])
+  // Remembered for the Constellations button: it brings you back here next time.
+  useEffect(() => {
+    rememberPlace(me.id, place)
+  }, [me.id, place])
   const [loadProblem, setLoadProblem] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -149,7 +168,12 @@ function Space(props: Props): React.JSX.Element {
 
   const openId = place?.constellationId ?? null
   // The loaded one, while it's still the one that's open
-  const detail = loadedDetail && loadedDetail.id === openId ? loadedDetail : null
+  const detail =
+    loadedDetail && loadedDetail.id === openId
+      ? loadedDetail
+      : openId
+        ? (detailCache.get(openId) ?? null)
+        : null
   const load = useCallback(
     (id: string): void => {
       void api.get(id).then((r) => {
@@ -210,7 +234,7 @@ function Space(props: Props): React.JSX.Element {
       if (reloadTimer.current) clearTimeout(reloadTimer.current)
       reloadTimer.current = null
     }
-  }, [load, say])
+  }, [load, say, setDetail])
 
   // Escape on the dashboard (nothing else open) goes home, like the "Back to Glofly" pill.
   useEffect(() => {

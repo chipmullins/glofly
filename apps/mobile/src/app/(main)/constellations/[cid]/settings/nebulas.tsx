@@ -17,6 +17,7 @@ import { Glyph, N, NightButton, NightField, Segmented, SpeakerGlyph, StarGlyph, 
 // too); tap a nebula or category to rename, move or delete it.
 
 const ROW = 48
+const NEW_CATEGORY = '__new_category__'
 
 export default function NebulasScreen() {
   const { cid } = useLocalSearchParams<{ cid: string }>()
@@ -52,7 +53,7 @@ export default function NebulasScreen() {
         { key: 'rename', label: 'Rename', icon: 'pencil' },
         ...(i > 0 ? [{ key: 'up', label: 'Move up', icon: 'arrowUp' as const }] : []),
         ...(i < cats.length - 1 ? [{ key: 'down', label: 'Move down', icon: 'arrowDown' as const }] : []),
-        { key: 'delete', label: 'Delete category', icon: 'trash', danger: true, detail: 'Its nebulas stay' },
+        { key: 'delete', label: 'Delete category', icon: 'trash', danger: true, detail: name.trim().toLowerCase() === 'general' ? "Its nebulas won't be in a category" : 'Its nebulas move to General' },
       ],
       name,
     )
@@ -67,7 +68,10 @@ export default function NebulasScreen() {
       await runDetail(() => cx.layout(c!.id, ids, ordered.map((n) => ({ id: n.id, categoryId: n.categoryId }))))
     }
     if (pick === 'delete') {
-      const ok = await confirm({ title: `Delete ${name}?`, message: 'Its nebulas move out of the category. Nothing else is deleted.', confirmLabel: 'Delete', danger: true })
+      const count = ordered.filter((n) => n.categoryId === id).length
+      const general = name.trim().toLowerCase() === 'general'
+      const message = !count ? 'Nothing else is deleted.' : general ? "Its nebulas won't be in a category. Nothing else is deleted." : `Its ${count === 1 ? 'nebula moves' : `${count} nebulas move`} to General. Nothing else is deleted.`
+      const ok = await confirm({ title: `Delete ${name}?`, message, confirmLabel: 'Delete', danger: true })
       if (ok) await runDetail(() => cx.removeCategory(c!.id, id))
     }
   }
@@ -116,14 +120,37 @@ export default function NebulasScreen() {
 
   return (
     <SettingsScreen title="Nebulas & categories" c={c}>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <NightButton kind="amberOutline" label="+ Nebula" style={{ flex: 1 }} onPress={() => (c.nebulas.length >= NEBULAS_MAX ? cxSay(`Up to ${NEBULAS_MAX} nebulas.`) : setEditing('new'))} />
-        <NightButton kind="outline" label="+ Category" style={{ flex: 1 }} onPress={() => void addCategory()} />
-      </View>
+      <NightButton kind="amberOutline" label="+ Nebula" onPress={() => (c.nebulas.length >= NEBULAS_MAX ? cxSay(`Up to ${NEBULAS_MAX} nebulas.`) : setEditing('new'))} />
       <Text size={12} style={{ color: N.faint }}>
         Hold a nebula and drag it to move it, even into another category.
       </Text>
       <ReorderList key={flat.map((x) => (x.kind === 'cat' ? x.id : `${x.n.id}:${x.n.categoryId}`)).join()} items={items} rowHeight={ROW} gap={4} bounds={[0, flat.length - 1]} onReorder={(ids) => void saveOrder(ids)} />
+      {/* 0.7.1: Categories — add, rename and delete them here */}
+      <Text size={12} weight="bold" style={{ color: N.muted, letterSpacing: 0.96, textTransform: 'uppercase', marginTop: 14 }}>
+        Categories
+      </Text>
+      <View style={{ borderRadius: 14, backgroundColor: N.card, borderWidth: 1, borderColor: N.line, overflow: 'hidden' }}>
+        {cats.length === 0 ? (
+          <Text size={14} style={{ color: N.muted, padding: 14 }}>
+            No categories yet.
+          </Text>
+        ) : null}
+        {cats.map((cat, i) => {
+          const count = ordered.filter((n) => n.categoryId === cat.id).length
+          return (
+            <Pressable key={cat.id} accessibilityRole="button" accessibilityLabel={`${cat.name}, ${count} nebulas. Rename, move or delete`} onPress={() => void categoryMenu(cat.id, cat.name)} style={({ pressed }) => ({ minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, borderTopWidth: i ? 1 : 0, borderTopColor: N.line, backgroundColor: pressed ? N.card2 : 'transparent' })}>
+              <Text size={15} numberOfLines={1} style={{ flex: 1 }}>
+                {cat.name}
+              </Text>
+              <Text size={13} style={{ color: N.muted }}>
+                {count} {count === 1 ? 'nebula' : 'nebulas'}
+              </Text>
+              <Icon name="chevronRight" size={16} color={N.faint} />
+            </Pressable>
+          )
+        })}
+      </View>
+      <NightButton kind="outline" label="+ New category" onPress={() => void addCategory()} />
       {editing ? <NebulaSheet c={c} nebula={editing === 'new' ? null : editing} onClose={() => setEditing(null)} /> : null}
     </SettingsScreen>
   )
@@ -141,9 +168,25 @@ function NebulaSheet({ c, nebula, onClose }: { c: ConstellationDetail; nebula: N
 
   async function pickCategory() {
     const pick = await chooseFrom(
-      [{ key: '', label: 'Not in a category', checked: !categoryId }, ...cats.map((x) => ({ key: x.id, label: x.name, checked: x.id === categoryId }))],
+      [
+        { key: '', label: 'Not in a category', checked: !categoryId },
+        ...cats.map((x) => ({ key: x.id, label: x.name, checked: x.id === categoryId })),
+        // 0.7.1: make one right here
+        ...(cats.length < CATEGORIES_MAX ? [{ key: NEW_CATEGORY, label: '+ New category', icon: 'plus' as const }] : []),
+      ],
       'Category',
     )
+    if (pick === NEW_CATEGORY) {
+      const t = await askText('New category', 'e.g. Gaming')
+      if (!t) return
+      const before = new Set(c.categories.map((x) => x.id))
+      const r = await cx.addCategory(c.id, t)
+      if (!r.ok) return cxSay(r.message)
+      putDetail(r.data.constellation)
+      const made = r.data.constellation.categories.find((x) => !before.has(x.id))
+      if (made) setCategoryId(made.id)
+      return
+    }
     if (pick !== null) setCategoryId(pick || null)
   }
 
@@ -175,6 +218,10 @@ function NebulaSheet({ c, nebula, onClose }: { c: ConstellationDetail; nebula: N
           {nebula ? 'Edit nebula' : 'New nebula'}
         </Text>
         {nebula ? null : (
+          <View style={{ gap: 6 }}>
+            <Text size={12} weight="bold" style={{ color: N.muted }}>
+              Type
+            </Text>
           <Segmented
             label="Kind of nebula"
             options={[
@@ -184,6 +231,7 @@ function NebulaSheet({ c, nebula, onClose }: { c: ConstellationDetail; nebula: N
             value={kind}
             onChange={setKind}
           />
+          </View>
         )}
         <NightField label="Name" value={name} onChangeText={setName} max={NEBULA_NAME_MAX} autoCapitalize={kind === 'text' ? 'none' : 'sentences'} placeholder={kind === 'text' ? 'movie-night' : 'Campfire'} />
         {kind === 'text' ? (

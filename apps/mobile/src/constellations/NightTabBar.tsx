@@ -1,5 +1,5 @@
 import { Pressable, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, usePathname } from 'expo-router'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { runOnJS } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -38,8 +38,10 @@ export function NightTabBar({ active }: { active: NightTab }) {
     Gesture.Tap().onEnd(() => runOnJS(flyHome)()),
   )
 
+  const path = usePathname()
   const goTab = (tab: Exclude<NightTab, null>) => {
-    if (tab === active) return
+    // 0.7.1: inside a constellation, the Constellations tab takes you to the dashboard.
+    if (tab === active && !(tab === 'constellations' && path !== '/constellations')) return
     haptic.select()
     if (tab === 'constellations') router.navigate('/constellations')
     else router.navigate(tab === 'mentions' ? '/constellations/mentions' : '/constellations/you')

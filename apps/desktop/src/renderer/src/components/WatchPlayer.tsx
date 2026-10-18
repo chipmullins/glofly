@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   newSyncMemory,
+  noteWatchChange,
   watchSyncStep,
   type PlayerCommand,
   type PlayerReport,
@@ -9,14 +10,17 @@ import {
   type WatchState
 } from '@glofly/shared/watch'
 import { isWeb } from '../lib/platform'
+import { PlayIcon } from './icons'
 
 // The shared video itself: the server's player page (/watch/player) in a frame, kept in step
-// with everyone (watchSyncStep, twice a second). The frame can't be clicked: play, pause and
-// skips go through Glofly's own buttons so everyone stays together. Only when the browser
-// wants a tap before it plays sound does the video take taps (then YouTube's own button works).
+// with everyone (watchSyncStep, twice a second). The frame itself can't be clicked: a click on
+// the video is Glofly's play / pause for everyone (0.7.1: with Glofly's own round button in the
+// middle while it's stopped; the site's own button under the shield did nothing). Only when the
+// browser wants a tap before it plays sound does the video take taps (then the site's own button
+// works).
 
 const ERRORS: Record<number, string> = {
-  2: "That link doesn't point to a video YouTube can play.",
+  2: "That link doesn't point to a video that can be played.",
   5: "This video can't be played here.",
   100: 'This video was removed or made private.',
   101: "This video can't be played outside YouTube.",
@@ -32,7 +36,10 @@ export default function WatchPlayer({
   volume,
   unmute,
   onInfo,
-  onDuration
+  onDuration,
+  canControl,
+  onToggle,
+  onRefused
 }: {
   playerUrl: string
   watch: WatchState
@@ -44,6 +51,12 @@ export default function WatchPlayer({
   onInfo: (info: PlayerInfo) => void
   /** YouTube said how long the video is (and its title) */
   onDuration: (videoId: string, durationSec: number, title: string) => void
+  /** May this person play and pause? */
+  canControl: boolean
+  /** A click on the video: play or pause for everyone */
+  onToggle: () => void
+  /** A click on the video by someone who may not play or pause it */
+  onRefused: () => void
 }): React.JSX.Element {
   const frame = useRef<HTMLIFrameElement>(null)
   const origin = new URL(playerUrl).origin
@@ -87,7 +100,7 @@ export default function WatchPlayer({
     const start = Math.floor(
       w.playing ? w.position + Math.max(0, clock.now() - w.at) / 1000 : w.position
     )
-    send({ cmd: 'load', videoId: w.videoId, start, play: w.playing })
+    send({ cmd: 'load', videoId: w.videoId, start, play: w.playing, site: w.site ?? 'youtube' })
   }
 
   /** One step: line the player up with everyone and say how it's going. */
@@ -167,7 +180,11 @@ export default function WatchPlayer({
           }
         }
       } else if (d.ev === 'error') {
-        p.error = ERRORS[Number(d.code)] ?? "YouTube couldn't play this video."
+        p.error =
+          ERRORS[Number(d.code)] ??
+          (watchRef.current.site && watchRef.current.site !== 'youtube'
+            ? "This video couldn't be played here."
+            : "YouTube couldn't play this video.")
         tick()
       }
     }
@@ -185,8 +202,7 @@ export default function WatchPlayer({
   // A new video, or play / pause / a skip from someone: act on it now rather than at the next step.
   useEffect(() => {
     loadCurrent()
-    page.current.mem.lastSeekAt = 0
-    page.current.mem.lastPlayAt = 0
+    noteWatchChange(page.current.mem, watchRef.current)
     tick()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watch.videoId, watch.seq])
@@ -215,8 +231,22 @@ export default function WatchPlayer({
         referrerPolicy="strict-origin"
         tabIndex={-1}
       />
-      {/* Clicks on the video go to Glofly's buttons, except when a tap is needed to start. */}
-      {!tapToStart && <div className="watch-player-shield" aria-hidden="true" />}
+      {/* Clicks on the video are Glofly's play / pause, except when a tap is needed to start. */}
+      {!tapToStart && (
+        <div
+          className={
+            canControl ? 'watch-player-shield watch-player-shield--can' : 'watch-player-shield'
+          }
+          aria-hidden="true"
+          onClick={() => (canControl ? onToggle() : onRefused())}
+        >
+          {!watch.playing && (
+            <span className="watch-center-play">
+              <PlayIcon size={30} />
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

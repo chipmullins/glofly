@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CONSTELLATION_THEME, ROLE_COLORS, TIMEOUT_LENGTHS } from '@glofly/shared/constellations'
+import {
+  CONSTELLATION_THEME,
+  ROLE_COLORS,
+  SETTINGS_PERMISSIONS,
+  TIMEOUT_LENGTHS
+} from '@glofly/shared/constellations'
 import type {
   ConstellationCard,
   ConstellationDetail,
@@ -528,12 +533,16 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   )
   const sections: { id: string; name: string | null; nebulas: Nebula[] }[] = [
     ...(loose.length ? [{ id: 'none', name: null, nebulas: loose }] : []),
-    ...categories.map((cat) => ({
-      id: cat.id,
-      name: cat.name,
-      nebulas: c.nebulas.filter((n) => n.categoryId === cat.id)
-    }))
+    ...categories
+      .map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        nebulas: c.nebulas.filter((n) => n.categoryId === cat.id)
+      }))
+      // 0.7.1: a category with no nebulas (or none you can see) isn't shown here
+      .filter((section) => section.nebulas.length > 0)
   ]
+  const settingsAllowed = SETTINGS_PERMISSIONS.some((p) => can(c, p))
   const myDot = myStatus.status === 'invisible' ? 'offline' : myStatus.status
   const roleDark = (ROLE_COLORS[myRole.color] ?? ROLE_COLORS.gray).dark
 
@@ -615,6 +624,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         <BannerStars id={c.id} color={c.color} width={264} />
         <div className="cx-side-banner-row">
           <h1>{c.name}</h1>
+          {settingsAllowed && (
+            <button
+              type="button"
+              className="cx-side-icon cx-side-settings"
+              aria-label={`${c.name} settings`}
+              title="Constellation settings"
+              onClick={() => props.onSettings('overview')}
+            >
+              <GearIcon />
+            </button>
+          )}
           <button
             type="button"
             className="cx-side-icon cx-side-head-toggle"

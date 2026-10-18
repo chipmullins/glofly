@@ -109,6 +109,9 @@ export function sectionsOf(c: ConstellationDetail): { id: string; name: string |
   const loose = c.nebulas.filter((n) => !n.categoryId || !c.categories.some((x) => x.id === n.categoryId)).sort(byPos)
   return [
     ...(loose.length ? [{ id: 'none', name: null, nebulas: loose }] : []),
-    ...categories.map((cat) => ({ id: cat.id, name: cat.name, nebulas: c.nebulas.filter((n) => n.categoryId === cat.id).sort(byPos) })),
+    ...categories
+      .map((cat) => ({ id: cat.id, name: cat.name, nebulas: c.nebulas.filter((n) => n.categoryId === cat.id).sort(byPos) }))
+      // 0.7.1: a category with no nebulas (or none you can see) isn't shown
+      .filter((s) => s.nebulas.length > 0),
   ]
 }

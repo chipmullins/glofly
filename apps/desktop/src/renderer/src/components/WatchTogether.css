@@ -67,6 +67,45 @@
 }
 .watch-player-shield {
   z-index: 1;
+  display: grid;
+  place-items: center;
+}
+.watch-player-shield--can {
+  cursor: pointer;
+}
+/* 0.7.1: Glofly's own play button in the middle of a stopped video (the site's button sat under
+   the shield and did nothing). */
+.watch-center-play {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  padding-left: 4px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(28, 18, 16, 0.62);
+  box-shadow:
+    0 0 0 2px rgba(255, 165, 74, 0.55),
+    0 0 26px rgba(255, 165, 74, 0.45);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+  pointer-events: none;
+}
+.watch-player-shield--can:hover .watch-center-play {
+  transform: scale(1.06);
+  background: rgba(28, 18, 16, 0.78);
+}
+/* 0.7.1: kept playing (and loaded) while the call shows someone big; just out of sight. */
+.watch--parked {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  left: -10px;
+  top: -10px;
 }
 
 .watch-tag {
@@ -791,4 +830,37 @@
     width: 50px;
     height: 50px;
   }
+}
+
+/* 0.7.1 */
+.watch-bar [aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.watch-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  padding: 0 10px;
+  height: 24px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #e5484d;
+}
+.watch-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+}
+.watch-start-streaming {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--glo-muted);
 }

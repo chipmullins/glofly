@@ -19,6 +19,7 @@ import { startConstellations } from '@/state/constellations'
 import { watchReduceMotion } from '@/constellations/motion'
 import { NightOverlay, useHomeAwayStyle } from '@/constellations/transition'
 import { HomeDock } from '@/constellations/HomeDock'
+import { InvitePopup } from '@/constellations/InvitePopup'
 
 // Everything after signing in: the live connection, push notifications and calls start here.
 
@@ -68,6 +69,7 @@ export default function MainLayout() {
       <NightOverlay />
       <CallOverlay />
       <FriendAlert />
+      <InvitePopup />
       <TeamNotice />
       {/* Last, so the floating call window covers everything. */}
       <CallPip />

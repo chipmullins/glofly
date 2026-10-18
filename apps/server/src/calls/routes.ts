@@ -28,6 +28,7 @@ import {
 import {
   controlWatch,
   previewVideo,
+  othersNeedUpdate,
   reactWatch,
   reportWatch,
   setWatchControl,
@@ -36,7 +37,7 @@ import {
   watchUpdate,
   type WatchProblem,
 } from "./watch";
-import { isWatchReaction, isYouTubeId, VOICE_NEBULA_MAX, youTubeIdFrom, youTubeStartFrom } from "@glofly/shared";
+import { isWatchReaction, VOICE_NEBULA_MAX, watchLinkFrom } from "@glofly/shared";
 import { isVoiceMuted } from "./voiceMutes";
 
 // Voice and video calls: 1-on-1 and group (up to 25 people).
@@ -486,15 +487,19 @@ async function callImIn(req: { params: Record<string, unknown> }, res: Response)
   return { ...found, user };
 }
 
-// GET /calls/watch/preview?link= — what a YouTube link is, for the Start dialog.
+/** 0.7.1 apps add ?sites=1: they can show Twitch, Vimeo and Dailymotion, not only YouTube. */
+const knowsSites = (req: { query: Record<string, unknown> }) => req.query.sites === "1";
+const NOT_A_LINK = "That doesn't look like a YouTube, Twitch, Vimeo or Dailymotion link.";
+
+// GET /calls/watch/preview?link= — what a link is, for the Start dialog.
 callsRouter.get("/watch/preview", previewLimiter, async (req, res) => {
   const link = typeof req.query.link === "string" ? req.query.link : "";
-  const videoId = youTubeIdFrom(link);
-  if (!videoId) {
-    res.status(400).json({ error: "invalid", message: "That doesn't look like a YouTube link." });
+  const found = watchLinkFrom(link);
+  if (!found || (found.site !== "youtube" && !knowsSites(req))) {
+    res.status(400).json({ error: "invalid", message: found ? "That doesn't look like a YouTube link." : NOT_A_LINK });
     return;
   }
-  const result = await previewVideo(videoId);
+  const result = await previewVideo(found.videoId, found.site, found.live);
   if (!result.ok) {
     res.status(result.status).json({ error: result.error, message: result.message });
     return;
@@ -510,7 +515,7 @@ callsRouter.get("/:id/watch", async (req, res) => {
     return;
   }
   res.set("Cache-Control", "no-store");
-  res.json(watchUpdate(found.row.id));
+  res.json(watchUpdate(found.row.id, knowsSites(req)));
 });
 
 // POST /calls/:id/watch  { link, control? } — start watching a YouTube video together (or change it).
@@ -522,14 +527,15 @@ callsRouter.post("/:id/watch", watchLimiter, async (req, res) => {
     res.status(400).json({ error: "invalid", message: "Paste a YouTube link." });
     return;
   }
-  const videoId = youTubeIdFrom(parsed.data.link);
-  if (!videoId) {
-    res.status(400).json({ error: "invalid", message: "That doesn't look like a YouTube link." });
+  const link = watchLinkFrom(parsed.data.link);
+  if (!link || (link.site !== "youtube" && !knowsSites(req))) {
+    res.status(400).json({ error: "invalid", message: link ? "That doesn't look like a YouTube link." : NOT_A_LINK });
     return;
   }
+  const videoId = link.videoId;
   const found = await callImIn(req, res);
   if (!found) return;
-  const preview = await previewVideo(videoId);
+  const preview = await previewVideo(videoId, link.site, link.live);
   if (!preview.ok) {
     res.status(preview.status).json({ error: preview.error, message: preview.message });
     return;
@@ -539,10 +545,12 @@ callsRouter.post("/:id/watch", watchLimiter, async (req, res) => {
     found.row.conversationId,
     found.user.id,
     {
+      site: link.site,
       videoId,
+      live: link.live,
       title: preview.preview.title,
       channel: preview.preview.channel,
-      startSec: youTubeStartFrom(parsed.data.link),
+      startSec: link.start,
       control: parsed.data.control,
     },
     firstNameOf,
@@ -563,7 +571,9 @@ callsRouter.post("/:id/watch", watchLimiter, async (req, res) => {
       console.error("Couldn't post the Watch Together line:", err);
     }
   }
-  res.status(201).json(watchUpdate(found.row.id));
+  // Someone in the call is on an app from before 0.7.1, which can only show YouTube.
+  const needsUpdate = await othersNeedUpdate(found.row.id, found.row.conversationId, found.user.id, link.site).catch(() => false);
+  res.status(201).json({ ...watchUpdate(found.row.id, knowsSites(req)), ...(needsUpdate ? { someoneNeedsUpdate: true } : {}) });
 });
 
 // POST /calls/:id/watch/control  { action, to? } — play, pause, skip, ±10 s for everyone.
@@ -585,7 +595,7 @@ callsRouter.post("/:id/watch/control", watchLimiter, async (req, res) => {
     problem(res, result);
     return;
   }
-  res.json(watchUpdate(found.row.id));
+  res.json(watchUpdate(found.row.id, knowsSites(req)));
 });
 
 // POST /calls/:id/watch/settings  { control } — whoever picked the video: Everyone or Only me.
@@ -602,14 +612,14 @@ callsRouter.post("/:id/watch/settings", watchLimiter, async (req, res) => {
     problem(res, result);
     return;
   }
-  res.json(watchUpdate(found.row.id));
+  res.json(watchUpdate(found.row.id, knowsSites(req)));
 });
 
 // POST /calls/:id/watch/report  { videoId, durationSec, title? } — a player found out how long it is.
 callsRouter.post("/:id/watch/report", watchLimiter, async (req, res) => {
   const parsed = z
     .object({
-      videoId: z.string().refine(isYouTubeId),
+      videoId: z.string().regex(/^[A-Za-z0-9_:-]{4,40}$/),
       durationSec: z.number().finite().positive().max(48 * 3600),
       title: z.string().max(300).optional(),
     })
@@ -646,5 +656,5 @@ callsRouter.delete("/:id/watch", watchLimiter, async (req, res) => {
     problem(res, result);
     return;
   }
-  res.json(watchUpdate(found.row.id));
+  res.json(watchUpdate(found.row.id, knowsSites(req)));
 });

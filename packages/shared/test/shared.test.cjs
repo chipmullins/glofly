@@ -182,6 +182,66 @@ test('watch together: a playing video is never muted for autoplay (Oct 17)', () 
   assert.equal(r.commands.some((c) => c.cmd === 'volume'), false)
 })
 
+test('watch together 0.7.1: skips apply at once, ended videos stay ended', () => {
+  const w = { callId: 'c', videoId: 'dQw4w9WgXcQ', playing: true, position: 30, at: 0, durationSec: 100, control: 'everyone', startedBy: 'a', last: { userId: 'a', action: 'back' }, seq: 3 }
+  // A skip back while YouTube still says "unstarted" (its state lagging): seek straight away.
+  const m = s.newSyncMemory()
+  s.watchSyncStep(w, 0, { state: 'unstarted', time: 40, duration: 100, muted: false }, m, 1_000)
+  s.noteWatchChange(m, w)
+  let r = s.watchSyncStep(w, 0, { state: 'unstarted', time: 40.1, duration: 100, muted: false }, m, 1_050)
+  assert.equal(r.commands[0].cmd, 'seek')
+  assert.ok(Math.abs(r.commands[0].to - 30.2) < 0.01)
+  // A step with no fresh report right after: a playing video isn't treated as stopped.
+  const m1 = s.newSyncMemory()
+  s.watchSyncStep(w, 0, { state: 'unstarted', time: 29.5, duration: 100, muted: false }, m1, 1_000)
+  s.watchSyncStep(w, 500, { state: 'unstarted', time: 30, duration: 100, muted: false }, m1, 1_500)
+  r = s.watchSyncStep(w, 520, { state: 'unstarted', time: 30, duration: 100, muted: false }, m1, 1_520)
+  assert.equal(r.commands.some((c) => c.cmd === 'play'), false)
+  // The video ended but the server never learned its length: no "play" and no seek (replay).
+  const noLen = { ...w, durationSec: null, position: 0, last: null }
+  const m2 = s.newSyncMemory()
+  for (let t = 0; t < 6; t++) {
+    r = s.watchSyncStep(noLen, 61_000 + t * 500, { state: 'ended', time: 60, duration: 60, muted: false }, m2, 5_000 + t * 2_000)
+    assert.deepEqual(r.commands, [])
+    assert.equal(r.status, 'ended')
+  }
+  // Server says ended (paused at the end): an ended player is never asked to seek.
+  const atEnd = { ...w, playing: false, position: 100, last: { userId: 'a', action: 'ended' } }
+  const m3 = s.newSyncMemory()
+  s.noteWatchChange(m3, atEnd)
+  r = s.watchSyncStep(atEnd, 0, { state: 'ended', time: 99.2, duration: 100, muted: false }, m3, 1_000)
+  assert.deepEqual(r.commands, [])
+  // Paused after the end at an earlier moment (someone pressed back): seek, then pause again.
+  const back = { ...w, playing: false, position: 90 }
+  const m4 = s.newSyncMemory()
+  s.noteWatchChange(m4, back)
+  r = s.watchSyncStep(back, 0, { state: 'ended', time: 100, duration: 100, muted: false }, m4, 1_000)
+  assert.deepEqual(r.commands.map((c) => c.cmd), ['seek', 'pause'])
+  // A live stream: only play and pause.
+  const live = { ...w, site: 'twitch', videoId: 'c:somechannel', live: true, durationSec: null }
+  r = s.watchSyncStep(live, 0, { state: 'paused', time: 1234, duration: 0, muted: false }, s.newSyncMemory(), 5_000)
+  assert.deepEqual(r.commands, [{ cmd: 'play' }])
+})
+
+test('watch together 0.7.1: links from other sites', () => {
+  assert.deepEqual(s.watchLinkFrom('https://www.twitch.tv/videos/2345678901?t=1h2m3s'), { site: 'twitch', videoId: 'v2345678901', live: false, start: 3723 })
+  assert.deepEqual(s.watchLinkFrom('twitch.tv/Some_Streamer'), { site: 'twitch', videoId: 'c:some_streamer', live: true, start: 0 })
+  assert.equal(s.watchLinkFrom('https://twitch.tv/directory'), null)
+  assert.deepEqual(s.watchLinkFrom('https://vimeo.com/76979871'), { site: 'vimeo', videoId: '76979871', live: false, start: 0 })
+  assert.deepEqual(s.watchLinkFrom('https://vimeo.com/76979871/1a2b3c4d5e#t=90'), { site: 'vimeo', videoId: '76979871:1a2b3c4d5e', live: false, start: 90 })
+  assert.deepEqual(s.watchLinkFrom('https://player.vimeo.com/video/76979871?h=abcdef12'), { site: 'vimeo', videoId: '76979871:abcdef12', live: false, start: 0 })
+  assert.deepEqual(s.watchLinkFrom('https://www.dailymotion.com/video/x8abcd1_some-title'), { site: 'dailymotion', videoId: 'x8abcd1', live: false, start: 0 })
+  assert.deepEqual(s.watchLinkFrom('https://dai.ly/x8abcd1'), { site: 'dailymotion', videoId: 'x8abcd1', live: false, start: 0 })
+  assert.equal(s.watchLinkFrom('https://www.youtube.com/watch?v=dQw4w9WgXcQ').site, 'youtube')
+  for (const bad of ['https://netflix.com/watch/123', 'https://evil.com/videos/12345', 'vimeo.com/abc', 'javascript:alert(1)']) assert.equal(s.watchLinkFrom(bad), null, bad)
+  // States: a Twitch one passes the check, one with a bad id doesn't; no site = YouTube.
+  const base = { callId: '7f8b5a3e-1c2d-4e5f-8a9b-0c1d2e3f4a5b', startedBy: '7f8b5a3e-1c2d-4e5f-8a9b-0c1d2e3f4a5c', control: 'everyone', playing: true, position: 0, at: 1, seq: 1, title: 't' }
+  assert.equal(s.cleanWatchState({ ...base, site: 'twitch', videoId: 'c:abc', live: true }).live, true)
+  assert.equal(s.cleanWatchState({ ...base, site: 'twitch', videoId: 'dQw4w9WgXcQ' }), null)
+  assert.equal(s.cleanWatchState({ ...base, videoId: 'dQw4w9WgXcQ' }).site, 'youtube')
+  assert.equal(s.cleanWatchState({ ...base, site: 'netflix', videoId: 'dQw4w9WgXcQ' }), null)
+})
+
 test('glows: brighten each day both write, dim on missed days, never reset', () => {
   const s = require('../dist/index.js')
   let g = { level: 0, days: 0, best: 0, lastDay: null }

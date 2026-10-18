@@ -1074,3 +1074,11 @@
   color: #ffb347;
   font-weight: 700;
 }
+
+/* 0.7.1: the settings gear beside the constellation's name (people who can change settings) */
+.cx-side-banner-row h1 {
+  flex: 1;
+}
+.cx-side-settings {
+  flex: none;
+}

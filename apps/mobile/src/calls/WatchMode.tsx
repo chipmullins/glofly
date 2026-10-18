@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Image, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { canControlWatch, eventText, videoTime, watchActionText, watchPositionAt, WATCH_REACTIONS, youTubeIdFrom, type PublicUser, type WatchControl, type WatchPreview, type WatchReaction, type WatchState } from '@glofly/shared'
+import { canControlWatch, eventText, videoTime, watchActionText, watchLinkFrom, watchPositionAt, WATCH_REACTIONS, WATCH_SITE_NAMES, type PublicUser, type WatchControl, type WatchPreview, type WatchReaction, type WatchState } from '@glofly/shared'
 import Svg, { Ellipse, Path } from 'react-native-svg'
 import * as api from '@/api/glofly'
 import { useStore, chatMessages } from '@/state/store'
@@ -38,7 +38,9 @@ export function StartWatchSheet({ changing, onClose }: { changing: boolean; onCl
   const [found, setFound] = useState<{ id: string; preview: WatchPreview | null; problem: string | null } | null>(null)
   const [startProblem, setStartProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const id = youTubeIdFrom(link)
+  const found0 = watchLinkFrom(link)
+  const id = found0 ? `${found0.site}:${found0.videoId}` : null
+  const siteName = WATCH_SITE_NAMES[found0?.site ?? 'youtube']
   const answer = found && found.id === id ? found : null
 
   useEffect(() => {
@@ -74,11 +76,11 @@ export function StartWatchSheet({ changing, onClose }: { changing: boolean; onCl
             {changing ? 'Change the video' : 'Watch together'}
           </Text>
           <Text tone="muted" size={15}>
-            Everyone in this call sees the same video at the same moment. Works with YouTube.
+            Everyone in this call sees the same video at the same moment. Works with YouTube, Twitch, Vimeo and Dailymotion.
           </Text>
         </View>
         <Field
-          label="YouTube link"
+          label="Video link"
           value={link}
           onChangeText={(t) => {
             setLink(t)
@@ -89,7 +91,7 @@ export function StartWatchSheet({ changing, onClose }: { changing: boolean; onCl
           autoCorrect={false}
           keyboardType="url"
           maxLength={500}
-          error={startProblem ?? answer?.problem ?? (link.trim() && !id ? 'Paste a link from YouTube (youtube.com or youtu.be).' : null)}
+          error={startProblem ?? answer?.problem ?? (link.trim() && !id ? 'Paste a link from YouTube, Twitch, Vimeo or Dailymotion.' : null)}
         />
         {id ? (
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: 14, backgroundColor: 'rgba(244,122,31,0.08)' }}>
@@ -98,10 +100,11 @@ export function StartWatchSheet({ changing, onClose }: { changing: boolean; onCl
             </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text weight="bold" size={15} numberOfLines={2}>
-                {answer?.preview?.title ?? (answer ? 'YouTube video' : 'Looking it up…')}
+                {answer?.preview?.title ?? (answer ? `${siteName} video` : 'Looking it up…')}
               </Text>
               <Text tone="muted" size={13} numberOfLines={1}>
-                {answer?.preview?.channel ?? 'YouTube'}
+                {answer?.preview?.channel ?? siteName}
+                {found0?.live ? ' · Live' : ''}
               </Text>
             </View>
           </View>
@@ -126,6 +129,9 @@ export function StartWatchSheet({ changing, onClose }: { changing: boolean; onCl
             </View>
           </View>
         ) : null}
+        <Text tone="muted" size={13}>
+          Netflix, Disney+, Hulu, Max, Prime Video and other streaming services can&apos;t be kept in sync here. Share your screen with sound from the Glofly desktop app to watch them together.
+        </Text>
         <Button label={busy ? 'Starting…' : changing ? 'Watch this instead' : 'Start watching'} disabled={!id} busy={busy} onPress={() => void start()} />
       </View>
     </BottomSheet>
@@ -206,18 +212,26 @@ function Fireflies({ w, h, nameOf }: { w: number; h: number; nameOf: (id: string
 // ---------------------------------------------------------------------------------------------
 // The video, the time line, the buttons
 
-function SeekBar({ position, duration, enabled, onSeek }: { position: number; duration: number; enabled: boolean; onSeek: (to: number) => void }) {
+function SeekBar({ position, duration, enabled, onSeek, onRefused }: { position: number; duration: number; enabled: boolean; onSeek: (to: number) => void; onRefused: () => void }) {
   const [w, setW] = useState(1)
   const [drag, setDrag] = useState<number | null>(null)
   const frac = duration ? Math.min(1, Math.max(0, (drag ?? position) / duration)) : 0
   const at = (x: number) => Math.min(1, Math.max(0, x / w)) * duration
-  const pan = Gesture.Pan()
-    .runOnJS(true)
-    .enabled(enabled && duration > 0)
-    .onBegin((e) => setDrag(at(e.x)))
-    .onUpdate((e) => setDrag(at(e.x)))
-    .onEnd((e) => onSeek(at(e.x)))
-    .onFinalize(() => setDrag(null))
+  // 0.7.1: a tap on the line seeks too (the pan only started after a drag, so taps did nothing),
+  // and someone who can't skip is told why.
+  const pan = enabled
+    ? Gesture.Pan()
+        .runOnJS(true)
+        .enabled(duration > 0)
+        .minDistance(0)
+        .shouldCancelWhenOutside(false)
+        .onBegin((e) => setDrag(at(e.x)))
+        .onUpdate((e) => setDrag(at(e.x)))
+        .onEnd((e) => onSeek(at(e.x)))
+        .onFinalize(() => setDrag(null))
+    : Gesture.Tap()
+        .runOnJS(true)
+        .onEnd(() => onRefused())
   return (
     <GestureDetector gesture={pan}>
       <View
@@ -253,7 +267,7 @@ function SyncPill({ state }: { state: PlayerState }) {
   )
 }
 
-function RoundButton({ icon, label, onPress, disabled, big, text }: { icon: string; label: string; onPress: () => void; disabled?: boolean; big?: boolean; text?: string }) {
+function RoundButton({ icon, label, onPress, disabled, dim, big, text }: { icon: string; label: string; onPress: () => void; disabled?: boolean; dim?: boolean; big?: boolean; text?: string }) {
   const size = big ? 56 : 44
   return (
     <Pressable
@@ -262,7 +276,7 @@ function RoundButton({ icon, label, onPress, disabled, big, text }: { icon: stri
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => ({ width: size, height: size, borderRadius: size / 2, backgroundColor: big ? ORANGE : '#2A1C17', alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.45 : pressed ? 0.8 : 1 })}
+      style={({ pressed }) => ({ width: size, height: size, borderRadius: size / 2, backgroundColor: big ? ORANGE : '#2A1C17', alignItems: 'center', justifyContent: 'center', opacity: disabled || dim ? 0.45 : pressed ? 0.8 : 1 })}
     >
       <Icon name={icon} size={big ? 22 : 20} color={big ? '#2A1406' : '#F5EDE6'} fill={big ? '#2A1406' : '#F5EDE6'} />
       {text ? (
@@ -280,54 +294,90 @@ function useWatchInfo(watch: WatchState) {
 }
 
 /** The controls: time line, −10 s, play / pause, +10 s, and whether you're in step. */
-function Controls({ watch, meId, state, compact }: { watch: WatchState; meId: string; state: PlayerState; compact?: boolean }) {
+function Controls({ watch, meId, state, compact, onRefused }: { watch: WatchState; meId: string; state: PlayerState; compact?: boolean; onRefused: () => void }) {
   const { position, duration } = useWatchInfo(watch)
   const can = canControlWatch(watch, meId)
+  // 0.7.1: a button someone can't use says why ("Only Jordan can pause and skip") instead of nothing.
+  const tryIt = (run: () => void) => (can ? run() : onRefused())
   return (
     <View style={{ gap: compact ? 4 : 8 }}>
-      <SeekBar position={position} duration={duration} enabled={can} onSeek={(to) => controlWatch('seek', to)} />
+      {watch.live ? null : <SeekBar position={position} duration={duration} enabled={can} onSeek={(to) => controlWatch('seek', to)} onRefused={onRefused} />}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text size={12} style={{ color: '#D9C2B1', fontVariant: ['tabular-nums'] }}>
-          {videoTime(position)} / {duration ? videoTime(duration) : '–:––'}
-        </Text>
+        {watch.live ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, height: 22, borderRadius: 11, backgroundColor: '#E5484D' }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFF' }} />
+            <Text size={11} weight="bold" style={{ color: '#FFF' }}>
+              LIVE
+            </Text>
+          </View>
+        ) : (
+          <Text size={12} style={{ color: '#D9C2B1', fontVariant: ['tabular-nums'] }}>
+            {videoTime(position)} / {duration ? videoTime(duration) : '–:––'}
+          </Text>
+        )}
         <View style={{ flex: 1 }} />
         <SyncPill state={state} />
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-        <RoundButton icon="back10" text="10" label="Back 10 seconds for everyone" disabled={!can} onPress={() => controlWatch('back')} />
-        <RoundButton big icon={watch.playing ? 'pause' : 'play'} label={watch.playing ? 'Pause for everyone' : 'Play for everyone'} disabled={!can} onPress={() => controlWatch(watch.playing ? 'pause' : 'play')} />
-        <RoundButton icon="forward10" text="10" label="Forward 10 seconds for everyone" disabled={!can} onPress={() => controlWatch('forward')} />
+        {watch.live ? null : <RoundButton icon="back10" text="10" label="Back 10 seconds for everyone" dim={!can} onPress={() => tryIt(() => controlWatch('back'))} />}
+        <RoundButton big icon={watch.playing ? 'pause' : 'play'} label={watch.playing ? 'Pause for everyone' : 'Play for everyone'} dim={!can} onPress={() => tryIt(() => controlWatch(watch.playing ? 'pause' : 'play'))} />
+        {watch.live ? null : <RoundButton icon="forward10" text="10" label="Forward 10 seconds for everyone" dim={!can} onPress={() => tryIt(() => controlWatch('forward'))} />}
       </View>
     </View>
   )
 }
 
-/** The video with its overlays (reactions, problems, "tap to start", what just happened). */
-function Video({ watch, w, h, nameOf, onState, state, onPress }: { watch: WatchState; w: number; h: number; nameOf: (id: string) => string; onState: (s: PlayerState) => void; state: PlayerState; onPress?: () => void }) {
-  const [unmute, setUnmute] = useState(0)
+/** "Jordan went back 10 seconds" for a few seconds after each change, or why a button didn't work. */
+function useSaid(watch: WatchState, nameOf: (id: string) => string, refusedAt: number, refusedText: string) {
   const [firstSeq] = useState(watch.seq)
   const [doneSeq, setDoneSeq] = useState<number | null>(null)
+  const [, setTick] = useState(0)
   const fresh = !!watch.last && watch.seq > firstSeq && doneSeq !== watch.seq && watch.last.action !== 'change'
   useEffect(() => {
     if (!fresh) return
     const t = setTimeout(() => setDoneSeq(watch.seq), 3500)
     return () => clearTimeout(t)
   }, [fresh, watch.seq])
-  const said = fresh && watch.last ? watchActionText(watch, nameOf(watch.last.userId)) : null
+  useEffect(() => {
+    if (!refusedAt) return
+    const t = setTimeout(() => setTick((n) => n + 1), 3600)
+    return () => clearTimeout(t)
+  }, [refusedAt])
+  if (refusedAt && Date.now() - refusedAt < 3500) return refusedText
+  return fresh && watch.last ? watchActionText(watch, nameOf(watch.last.userId)) : null
+}
+
+/**
+ * The video with its overlays (reactions, problems, "tap to start", what just happened, and
+ * Glofly's own play button in the middle while it's stopped). A tap: sound on if it's muted,
+ * otherwise play / pause for everyone (portrait) or show the controls (sideways).
+ */
+function Video({ watch, w, h, nameOf, onState, state, said, canControl, onTap, onPlayPause }: { watch: WatchState; w: number; h: number; nameOf: (id: string) => string; onState: (s: PlayerState) => void; state: PlayerState; said: string | null; canControl: boolean; onTap: () => void; onPlayPause: () => void }) {
+  const [unmute, setUnmute] = useState(0)
   return (
     <View style={{ width: w, height: h, backgroundColor: '#000' }}>
       <WatchView watch={watch} unmute={unmute} onState={onState} style={{ width: w, height: h }} />
-      {/* A tap on the video turns a muted video's sound on (and, sideways, shows the controls).
-          Not while it's "blocked": then the tap has to reach the player itself. */}
+      {/* Not while it's "blocked": then the tap has to reach the player itself. */}
       {state.status !== 'blocked' ? (
         <Pressable
           accessible={false}
           onPress={() => {
             if (state.muted) setUnmute((n) => n + 1)
-            onPress?.()
+            else onTap()
           }}
-          style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }}
-        />
+          style={{ position: 'absolute', top: 0, left: 0, width: w, height: h, alignItems: 'center', justifyContent: 'center' }}
+        >
+          {!watch.playing && !state.error && w > 40 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Play for everyone"
+              onPress={onPlayPause}
+              style={({ pressed }) => ({ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', paddingLeft: 4, backgroundColor: pressed ? 'rgba(28,18,16,0.85)' : 'rgba(28,18,16,0.62)', borderWidth: 2, borderColor: 'rgba(255,165,74,0.55)', boxShadow: '0 0 24px rgba(255,165,74,0.45)', opacity: canControl ? 1 : 0.7 })}
+            >
+              <Icon name="play" size={28} color="#FFF" fill="#FFF" />
+            </Pressable>
+          ) : null}
+        </Pressable>
       ) : null}
       <Fireflies w={w} h={h} nameOf={nameOf} />
       {said ? (
@@ -427,81 +477,123 @@ function CallChat({ conversationId, meId, nameOf }: { conversationId: string; me
 
 // ---------------------------------------------------------------------------------------------
 
-/** Upright: video, controls, people, chat (the call's own controls are drawn by the call screen). */
-export function WatchPortrait({ watch, meId, people, tiles, conversationId, top, bottom }: { watch: WatchState; meId: string; people: (id: string) => PublicUser; tiles: Tile[]; conversationId: string; top: number; bottom: number }) {
-  const { width } = useWindowDimensions()
-  const [state, setState] = useState<PlayerState>({ status: 'catching', error: null, muted: false })
-  const nameOf = useCallback((id: string) => (id === meId ? 'You' : firstOf(people(id))), [meId, people])
-  const starter = watch.startedBy === meId ? 'you' : nameOf(watch.startedBy)
-  return (
-    <View style={{ position: 'absolute', top, left: 0, right: 0, bottom, gap: 10 }}>
-      <Video watch={watch} w={width} h={(width * 9) / 16} nameOf={nameOf} onState={setState} state={state} />
-      <View style={{ paddingHorizontal: 16 }}>
-        <Controls watch={watch} meId={meId} state={state} />
-        <Text size={12} style={{ color: '#B8A699', textAlign: 'center', marginTop: 4 }} accessibilityLiveRegion="polite">
-          {watch.control === 'everyone' ? 'Anyone in the call can pause or skip.' : `Only ${starter} can pause or skip.`}
-          {watch.startedBy === meId ? (
-            <Text size={12} weight="bold" style={{ color: '#FFA96A' }} onPress={() => setWatchControl(watch.control === 'everyone' ? 'starter' : 'everyone')}>
-              {'  '}
-              {watch.control === 'everyone' ? 'Only me' : 'Let everyone'}
-            </Text>
-          ) : null}
-        </Text>
-        {canControlWatch(watch, meId) ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Stop watching, for everyone" onPress={() => void askStop()} style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#2A1C17', opacity: pressed ? 0.8 : 1 })}>
-            <Icon name="close" size={14} color="#F5EDE6" />
-            <Text size={13} weight="bold" style={{ color: '#F5EDE6' }}>
-              Stop watching
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-      <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 14, paddingHorizontal: 16, justifyContent: 'center', flexGrow: 1 }}>
-        {tiles.map((t) => {
-          const p = people(t.userId)
-          return (
-            <View key={t.userId} style={{ alignItems: 'center', gap: 4 }} accessibilityLabel={`${t.local ? 'You' : p.displayName}${t.speaking ? ', talking' : ''}${t.micMuted ? ', muted' : ''}`}>
-              <View style={{ borderRadius: 30, boxShadow: t.speaking ? '0 0 0 3px #FF9F43' : undefined }}>
-                <Avatar user={p} size={52} />
-              </View>
-              <Text size={12} style={{ color: '#F5EDE6' }}>
-                {t.local ? 'You' : firstOf(p)}
-              </Text>
-            </View>
-          )
-        })}
-      </ScrollView>
-      <CallChat conversationId={conversationId} meId={meId} nameOf={nameOf} />
-    </View>
-  )
-}
-
-/** Sideways: the video fills the screen; a tap shows the controls for a few seconds. */
-export function WatchLandscape({ watch, meId, people, tiles, onExit }: { watch: WatchState; meId: string; people: (id: string) => PublicUser; tiles: Tile[]; onExit: () => void }) {
+/**
+ * Watch Together in a call: upright (video, controls, people, chat), sideways full screen (the
+ * video fills the screen; a tap shows the controls for a few seconds), or sideways with the call
+ * showing (`parked`: the video keeps playing out of sight).
+ *
+ * 0.7.1: one component for all three, with the video at the same place inside it, so turning the
+ * phone no longer makes a new player (which reloaded the video and paused it).
+ */
+export function WatchScreen({
+  watch,
+  meId,
+  people,
+  tiles,
+  conversationId,
+  top,
+  bottom,
+  mode,
+  onExitFull,
+}: {
+  watch: WatchState
+  meId: string
+  people: (id: string) => PublicUser
+  tiles: Tile[]
+  conversationId: string
+  /** Upright: room above and below (the call's own bar and buttons) */
+  top: number
+  bottom: number
+  mode: 'portrait' | 'full' | 'parked'
+  onExitFull?: () => void
+}) {
   const { width, height } = useWindowDimensions()
   const [state, setState] = useState<PlayerState>({ status: 'catching', error: null, muted: false })
+  const [refusedAt, setRefusedAt] = useState(0)
   const [shown, setShown] = useState(true)
   const [picking, setPicking] = useState(false)
   const [changing, setChanging] = useState(false)
   const can = canControlWatch(watch, meId)
   const nameOf = useCallback((id: string) => (id === meId ? 'You' : firstOf(people(id))), [meId, people])
+  const starter = watch.startedBy === meId ? 'you' : nameOf(watch.startedBy)
+  const refuse = useCallback(() => setRefusedAt(Date.now()), [])
+  const said = useSaid(watch, nameOf, refusedAt, `Only ${starter} can pause and skip this video.`)
+  const playPause = () => (can ? controlWatch(watch.playing ? 'pause' : 'play') : refuse())
   useEffect(() => {
-    if (!shown || picking || changing) return
+    if (mode !== 'full' || !shown || picking || changing) return
     const t = setTimeout(() => setShown(false), 3500)
     return () => clearTimeout(t)
-  }, [shown, picking, changing, watch.seq])
-  // The video's box: 16:9 inside the screen.
-  const vw = Math.min(width, (height * 16) / 9)
-  const vh = (vw * 9) / 16
+  }, [mode, shown, picking, changing, watch.seq])
+  useEffect(() => {
+    if (mode === 'full') setShown(true)
+  }, [mode])
+
+  // Where the video goes
+  let box: { left: number; top: number; w: number; h: number }
+  if (mode === 'full') {
+    const vw = Math.min(width, (height * 16) / 9)
+    const vh = (vw * 9) / 16
+    box = { left: (width - vw) / 2, top: (height - vh) / 2, w: vw, h: vh }
+  } else if (mode === 'parked') box = { left: -4, top: -4, w: 2, h: 2 }
+  else box = { left: 0, top: 0, w: width, h: (width * 9) / 16 }
   const talking = tiles.filter((t) => t.speaking && !t.micMuted)
+
+  const container =
+    mode === 'full'
+      ? { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000' }
+      : mode === 'parked'
+        ? { position: 'absolute' as const, top: 0, left: 0, width: 1, height: 1, opacity: 0, overflow: 'hidden' as const }
+        : { position: 'absolute' as const, top, left: 0, right: 0, bottom }
+
   return (
-    <View style={{ position: 'absolute', inset: 0, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
-      {/* Tapping anywhere shows (or hides) the controls. Under the video, so the video's own taps
-          ("Turn on sound", "Tap the video to start it") still reach it. */}
-      <Pressable accessibilityLabel={shown ? 'Hide video controls' : 'Show video controls'} onPress={() => setShown((s) => !s)} style={{ position: 'absolute', inset: 0 }} />
-      <Video watch={watch} w={vw} h={vh} nameOf={nameOf} onState={setState} state={state} onPress={() => setShown((s) => !s)} />
-      {talking.length ? (
-        <View pointerEvents="none" style={{ position: 'absolute', top: 16, right: 16, gap: 6, alignItems: 'flex-end' }}>
+    <View style={container} pointerEvents={mode === 'parked' ? 'none' : 'box-none'}>
+      {/* Sideways: tapping anywhere shows (or hides) the controls. Under the video. */}
+      {mode === 'full' ? <Pressable key="backdrop" accessibilityLabel={shown ? 'Hide video controls' : 'Show video controls'} onPress={() => setShown((v) => !v)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} /> : null}
+      <View key="video" style={{ position: 'absolute', left: box.left, top: box.top, width: box.w, height: box.h }}>
+        <Video watch={watch} w={box.w} h={box.h} nameOf={nameOf} onState={setState} state={state} said={said} canControl={can} onTap={mode === 'full' ? () => setShown((v) => !v) : playPause} onPlayPause={playPause} />
+      </View>
+      {mode === 'portrait' ? (
+        <View key="portrait" style={{ position: 'absolute', top: box.h + 10, left: 0, right: 0, bottom: 0, gap: 10 }}>
+          <View style={{ paddingHorizontal: 16 }}>
+            <Controls watch={watch} meId={meId} state={state} onRefused={refuse} />
+            <Text size={12} style={{ color: '#B8A699', textAlign: 'center', marginTop: 4 }} accessibilityLiveRegion="polite">
+              {watch.control === 'everyone' ? 'Anyone in the call can pause or skip.' : `Only ${starter} can pause or skip.`}
+              {watch.startedBy === meId ? (
+                <Text size={12} weight="bold" style={{ color: '#FFA96A' }} onPress={() => setWatchControl(watch.control === 'everyone' ? 'starter' : 'everyone')}>
+                  {'  '}
+                  {watch.control === 'everyone' ? 'Only me' : 'Let everyone'}
+                </Text>
+              ) : null}
+            </Text>
+            {can ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Stop watching, for everyone" onPress={() => void askStop()} style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#2A1C17', opacity: pressed ? 0.8 : 1 })}>
+                <Icon name="close" size={14} color="#F5EDE6" />
+                <Text size={13} weight="bold" style={{ color: '#F5EDE6' }}>
+                  Stop watching
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 14, paddingHorizontal: 16, justifyContent: 'center', flexGrow: 1 }}>
+            {tiles.map((t) => {
+              const p = people(t.userId)
+              return (
+                <View key={t.userId} style={{ alignItems: 'center', gap: 4 }} accessibilityLabel={`${t.local ? 'You' : p.displayName}${t.speaking ? ', talking' : ''}${t.micMuted ? ', muted' : ''}`}>
+                  <View style={{ borderRadius: 30, boxShadow: t.speaking ? '0 0 0 3px #FF9F43' : undefined }}>
+                    <Avatar user={p} size={52} />
+                  </View>
+                  <Text size={12} style={{ color: '#F5EDE6' }}>
+                    {t.local ? 'You' : firstOf(p)}
+                  </Text>
+                </View>
+              )
+            })}
+          </ScrollView>
+          <CallChat conversationId={conversationId} meId={meId} nameOf={nameOf} />
+        </View>
+      ) : null}
+      {mode === 'full' && talking.length ? (
+        <View key="talking" pointerEvents="none" style={{ position: 'absolute', top: 16, right: 16, gap: 6, alignItems: 'flex-end' }}>
           {talking.slice(0, 3).map((t) => (
             <View key={t.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 3, paddingRight: 10, paddingVertical: 3, borderRadius: 999, backgroundColor: 'rgba(28,18,16,0.7)', borderWidth: 2, borderColor: '#FFA54A' }}>
               <Avatar user={people(t.userId)} size={24} />
@@ -512,8 +604,8 @@ export function WatchLandscape({ watch, meId, people, tiles, onExit }: { watch: 
           ))}
         </View>
       ) : null}
-      {shown ? (
-        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 28, paddingTop: 30, paddingBottom: 16, backgroundColor: 'rgba(0,0,0,0.55)', gap: 6 }}>
+      {mode === 'full' && shown ? (
+        <View key="controls" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 28, paddingTop: 30, paddingBottom: 16, backgroundColor: 'rgba(0,0,0,0.55)', gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Text size={15} weight="bold" numberOfLines={1} style={{ color: '#FFF', flex: 1 }}>
               {watch.title}
@@ -551,14 +643,21 @@ export function WatchLandscape({ watch, meId, people, tiles, onExit }: { watch: 
                 </Pressable>
               </>
             ) : null}
-            <Pressable accessibilityRole="button" accessibilityLabel="Leave full screen" onPress={onExit} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="minimize" size={22} color="#FFF" />
-            </Pressable>
+            {onExitFull ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Leave full screen" onPress={onExitFull} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="minimize" size={22} color="#FFF" />
+              </Pressable>
+            ) : null}
           </View>
-          <Controls watch={watch} meId={meId} state={state} compact />
+          <Controls watch={watch} meId={meId} state={state} compact onRefused={refuse} />
         </View>
       ) : null}
-      {changing ? <StartWatchSheet changing onClose={() => setChanging(false)} /> : null}
+      {changing ? <StartWatchSheet key="change" changing onClose={() => setChanging(false)} /> : null}
     </View>
   )
+}
+
+/** Upright only (a voice nebula on a phone): the same screen, never sideways. */
+export function WatchPortrait(props: { watch: WatchState; meId: string; people: (id: string) => PublicUser; tiles: Tile[]; conversationId: string; top: number; bottom: number }) {
+  return <WatchScreen {...props} mode="portrait" />
 }

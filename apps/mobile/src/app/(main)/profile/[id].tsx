@@ -9,6 +9,8 @@ import { useSession } from '@/state/session'
 import { refreshFriends } from '@/state/sync'
 import { openDmWith } from '@/lib/chatActions'
 import { GamesCard } from '@/constellations/games'
+import { flyIn } from '@/constellations/transition'
+import { cxAvailable } from '@/state/constellations'
 import { block, removeFriend } from '@/lib/friendActions'
 import { longDate } from '@/lib/format'
 import { startCallWith } from '@/calls/controller'
@@ -23,7 +25,15 @@ import { useTheme } from '@/ui/theme'
 // Message / Voice / Video, About me, when they joined, and Remove friend / Block / Report.
 
 export default function ProfileCard() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id, invite } = useLocalSearchParams<{ id: string; invite?: string }>()
+  // 0.7.1: a constellation invite's notification (glofly://profile/<inviter>?invite=<id>, so every
+  // phone build can open it) goes to your Constellations dashboard, where the invite waits.
+  useEffect(() => {
+    if (!invite || !/^[0-9a-f-]{36}$/i.test(invite) || !cxAvailable()) return
+    if (router.canGoBack()) router.back()
+    else router.replace('/chats')
+    setTimeout(() => flyIn(null), 80)
+  }, [invite])
   const { c } = useTheme()
   // A restricted (family-managed) account: their family removes friends.
   const meRestricted = useSession((s) => s.user?.restricted === true)

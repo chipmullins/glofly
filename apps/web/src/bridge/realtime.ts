@@ -50,7 +50,7 @@ export function cleanAnnouncement(a: unknown): Announcement | null {
 export function connectRealtime(onUnauthorized: () => void): void {
   disconnectRealtime()
   socket = io(API_URL, {
-    auth: { version: VERSION, platform: 'web', features: ['constellations', 'callMove'] },
+    auth: { version: VERSION, platform: 'web', features: ['constellations', 'callMove', 'watchSites'] },
     transports: ['websocket'],
     withCredentials: true,
     reconnectionDelayMax: 10_000 // keeps retrying if the connection drops

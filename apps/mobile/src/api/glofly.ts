@@ -157,16 +157,16 @@ export const leaveCall = async (callId: string) => none(await request('POST', `/
 
 // ---- Watch Together (0.5.0) ----
 
-export const watchGet = (callId: string) => request<WatchUpdate>('GET', `/calls/${callId}/watch`)
-export const watchPreview = (link: string) => request<WatchPreview>('GET', `/calls/watch/preview?link=${enc(link)}`)
-export const watchStart = (callId: string, link: string, control?: WatchControl) => request<WatchUpdate>('POST', `/calls/${callId}/watch`, { link, control })
+export const watchGet = (callId: string) => request<WatchUpdate>('GET', `/calls/${callId}/watch?sites=1`)
+export const watchPreview = (link: string) => request<WatchPreview>('GET', `/calls/watch/preview?sites=1&link=${enc(link)}`)
+export const watchStart = (callId: string, link: string, control?: WatchControl) => request<WatchUpdate>('POST', `/calls/${callId}/watch?sites=1`, { link, control })
 export const watchControl = (callId: string, action: 'play' | 'pause' | 'seek' | 'back' | 'forward', to?: number) =>
-  request<WatchUpdate>('POST', `/calls/${callId}/watch/control`, { action, to })
-export const watchSettings = (callId: string, control: WatchControl) => request<WatchUpdate>('POST', `/calls/${callId}/watch/settings`, { control })
+  request<WatchUpdate>('POST', `/calls/${callId}/watch/control?sites=1`, { action, to })
+export const watchSettings = (callId: string, control: WatchControl) => request<WatchUpdate>('POST', `/calls/${callId}/watch/settings?sites=1`, { control })
 export const watchReport = async (callId: string, videoId: string, durationSec: number, title?: string) =>
   none(await request('POST', `/calls/${callId}/watch/report`, { videoId, durationSec, title }))
 export const watchReact = async (callId: string, reaction: WatchReaction) => none(await request('POST', `/calls/${callId}/watch/react`, { reaction }))
-export const watchStop = (callId: string) => request<WatchUpdate>('DELETE', `/calls/${callId}/watch`)
+export const watchStop = (callId: string) => request<WatchUpdate>('DELETE', `/calls/${callId}/watch?sites=1`)
 
 // ---- Account ----
 

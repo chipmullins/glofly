@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ConstellationCard, ConstellationDetail, ConstellationInvite, Nebula, PinnedNebula, ServerEvent } from '@glofly/shared'
+import type { ConstellationCard, ConstellationDetail, ConstellationInvite, InvitePopup, Nebula, NebulaNews, PinnedNebula, ServerEvent } from '@glofly/shared'
 import { cx } from '@/api/constellations'
 import { onLive } from '@/api/realtime'
 import { onSignOut, useSession } from './session'
@@ -31,6 +31,10 @@ type State = {
   viewing: string | null
   /** A short message at the bottom of the night side ("You left Night Owls.") */
   toast: string | null
+  /** 0.7.1: nebulas with news for you, for the Chats list */
+  news: NebulaNews[]
+  /** 0.7.1: invites that just arrived (the pop-up), oldest first */
+  invitePopups: InvitePopup[]
 }
 
 const empty = (): State => ({
@@ -45,6 +49,8 @@ const empty = (): State => ({
   front: false,
   viewing: null,
   toast: null,
+  news: [],
+  invitePopups: [],
 })
 
 export const useCx = create<State>(() => empty())
@@ -113,6 +119,31 @@ export function setPins(pins: PinnedNebula[]) {
   const chats = { ...get().chats }
   for (const p of pins) chats[p.nebula.conversationId] = { constellationId: p.constellationId, nebulaId: p.nebula.id }
   set({ pins, chats })
+}
+
+let newsTimer: ReturnType<typeof setTimeout> | null = null
+/** 0.7.1: the Chats list's nebulas with news (soon: bursts of activity ask once). */
+export function refreshNews(soon = false) {
+  if (!cxAvailable()) return
+  if (newsTimer) return
+  newsTimer = setTimeout(
+    async () => {
+      newsTimer = null
+      const g = gen
+      const r = await cx.news()
+      if (g !== gen || !r.ok) return
+      const chats = { ...get().chats }
+      for (const n of r.data.news) chats[n.nebula.conversationId] = { constellationId: n.constellation.id, nebulaId: n.nebula.id }
+      rememberPeople(r.data.news.flatMap((n) => (n.last?.sender ? [n.last.sender] : [])))
+      set({ news: r.data.news, chats })
+    },
+    soon ? 600 : 0,
+  )
+}
+
+/** The invite pop-up was answered or closed. */
+export function dropInvitePopup(id: string) {
+  set({ invitePopups: get().invitePopups.filter((i) => i.id !== id) })
 }
 
 export async function refreshMentionCount(): Promise<void> {
@@ -214,6 +245,11 @@ function onEvent(e: ServerEvent) {
       refreshCardsSoon()
       void refreshPins()
       void refreshMentionCount()
+      refreshNews(true)
+      return
+    case 'constellation:invited':
+      set({ invitePopups: [...get().invitePopups.filter((i) => i.constellationId !== e.invite.constellationId), e.invite].slice(-4) })
+      rememberPeople([e.invite.by])
       return
     case 'constellation:updated':
       if (get().details[e.constellationId]) void loadDetail(e.constellationId)
@@ -224,6 +260,7 @@ function onEvent(e: ServerEvent) {
       loadDetailSoon(e.constellationId)
       if (e.mentions.includes(useSession.getState().user?.id ?? '')) void refreshMentionCount()
       if (get().pins.some((p) => p.constellationId === e.constellationId)) void refreshPins()
+      refreshNews(true)
       return
     case 'constellation:voice': {
       const d = get().details[e.constellationId]
@@ -259,6 +296,7 @@ export function startConstellations() {
       refreshCardsSoon()
       void refreshPins()
       void refreshMentionCount()
+      refreshNews()
       for (const id of Object.keys(get().details)) void loadDetail(id)
     }
   })

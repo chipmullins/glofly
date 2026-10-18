@@ -258,7 +258,7 @@ function VideoTile({
  * A voice message: play / pause, its waveform (click or drag along it to jump), and the
  * time (its length, or where it's at while playing).
  */
-function VoiceBubble({
+export function VoiceBubble({
   conversationId,
   attachment
 }: {

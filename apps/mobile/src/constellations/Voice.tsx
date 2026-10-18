@@ -10,6 +10,7 @@ import { firstName, timer } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
 import { hangUp, joinVoiceNebula, setCamera, setMic, useCall, type Tile } from '@/calls/controller'
 import { CallVideo } from '@/calls/media'
+import { ROUTE_ICON, ROUTE_LABEL, useAudioRoute } from '@/calls/audioRoute'
 import { featured } from '@/calls/CallPip'
 import { useWatchStore } from '@/calls/watch'
 import { StartWatchSheet, WatchPortrait } from '@/calls/WatchMode'
@@ -138,6 +139,7 @@ export function VoiceStage({ wide }: { wide?: boolean }) {
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const s = useCall()
+  const audio = useAudioRoute()
   const meId = useSession((x) => x.user?.id ?? '')
   const people = useStore((x) => x.people)
   const c = useCx((x) => (s.voice ? x.details[s.voice.constellationId] : undefined))
@@ -241,6 +243,8 @@ export function VoiceStage({ wide }: { wide?: boolean }) {
       <View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', justifyContent: wide ? 'center' : 'space-around', gap: wide ? 14 : 0, paddingTop: 14, paddingHorizontal: 10, paddingBottom: (wide ? 22 : Math.max(insets.bottom, 14) + 8) }, wide ? null : { backgroundColor: N.bg, borderTopWidth: 1, borderTopColor: N.line }]}>
         <StageButton icon={s.micOn && !modMuted ? 'mic' : 'micOff'} label="Mute" a11y={modMuted ? 'A moderator muted you' : s.micOn ? 'Mute microphone' : 'Unmute microphone'} disabled={modMuted} onPress={() => void setMic(!s.micOn)} wide={wide} />
         <StageButton icon={s.cameraOn ? 'video' : 'videoOff'} label="Camera" a11y={s.cameraOn ? 'Turn camera off' : 'Turn camera on'} onPress={() => void setCamera(!s.cameraOn)} wide={wide} />
+        {/* 0.7.1: where the voice plays (speaker, phone, Bluetooth), like the call screen's Audio */}
+        <StageButton icon={audio.route ? ROUTE_ICON[audio.route] : 'speaker'} label="Audio" a11y={`Audio: ${audio.route ? ROUTE_LABEL[audio.route] : 'choose where it plays'}`} onPress={() => void audio.pick()} wide={wide} />
         <StageButton icon="screen" label="Share" a11y="Share your screen (coming later on phones)" disabled dashed wide={wide} onPress={() => {}} />
         <StageButton icon="watch" label="Watch" a11y={watch ? (canWatchControl ? 'Watching together: change the video' : 'Watching together') : 'Watch a video together'} amber onPress={() => (watch ? canWatchControl && setWatchSheet('change') : setWatchSheet('start'))} wide={wide} />
         <StageButton icon="hangup" label="Leave" a11y={`Leave ${voice.nebulaName}`} red onPress={() => void leave()} wide={wide} />

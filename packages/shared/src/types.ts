@@ -516,6 +516,8 @@ export type ServerEvent =
   | { type: 'constellation:voice'; constellationId: string; voice: import('./constellations').VoiceNebulaState }
   /** It's gone for me (deleted, I was kicked or banned, or it was taken down) */
   | { type: 'constellation:removed'; constellationId: string; reason: 'kicked' | 'banned' | 'taken_down' | 'deleted' }
+  /** 0.7.1: someone invited you to a constellation (a pop-up with Join / Not now) */
+  | { type: 'constellation:invited'; invite: import('./constellations').InvitePopup }
   /** My games changed (on another device) */
   | { type: 'games:changed' }
 

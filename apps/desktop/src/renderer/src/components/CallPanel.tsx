@@ -1511,18 +1511,12 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       </>
     )
   } else if (layout === 'watch' && watch && playerUrl) {
-    // Watch Together: the video and its controls, everyone beside it (a shared screen too).
+    // Watch Together: the video and its controls (watchStage, below), everyone beside it (a
+    // shared screen too).
     const beside = tiles
     const two = beside.length <= 2 && !screen
     media = (
       <>
-        <WatchStage
-          me={me}
-          people={current?.chat.people ?? []}
-          talking={tiles.filter((t) => t.speaking && !t.muted).map((t) => t.person)}
-          api={watchApi}
-          playerUrl={playerUrl}
-        />
         <div className={two ? 'call-beside call-beside--column' : 'call-beside'}>
           {beside.map((t) => tileEl(t, two ? 64 : 40, 'call-tile--small'))}
           {screen && (
@@ -1584,6 +1578,21 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       </>
     )
   }
+
+  // 0.7.1: the video stays in the same place in the page whatever the call shows, so showing
+  // someone big (or full screen) no longer reloads it: it keeps playing, parked out of sight.
+  const watchStage =
+    watch && playerUrl ? (
+      <WatchStage
+        key="watch"
+        me={me}
+        people={current?.chat.people ?? []}
+        talking={tiles.filter((t) => t.speaking && !t.muted).map((t) => t.person)}
+        api={watchApi}
+        playerUrl={playerUrl}
+        parked={layout !== 'watch'}
+      />
+    ) : null
 
   const pinnedName =
     layout === 'pinned' && pinnedTile ? pinnedTile.label : screenFill && !full ? screenLabel : null
@@ -1739,6 +1748,7 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
           enterFull(layout === 'frame' ? null : (id ?? null))
         }}
       >
+        {watchStage}
         {media}
       </div>
 
@@ -1862,8 +1872,23 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       {watchDialog && (
         <StartWatchDialog
           changing={watchDialog === 'change'}
-          onStart={watchApi.start}
+          onStart={async (link, control) => {
+            const r = await watchApi.start(link, control)
+            if (r.ok && r.data.someoneNeedsUpdate) {
+              calls.showProblem('Someone in the call needs to update Glofly to see this video.')
+            }
+            return r
+          }}
           onClose={() => setWatchDialog(null)}
+          onShareScreen={
+            !isWeb || web?.screenShare
+              ? () => {
+                  setWatchDialog(null)
+                  if (isWeb) void calls.shareScreen('browser')
+                  else setPicking(true)
+                }
+              : undefined
+          }
         />
       )}
       {picking && (

@@ -75,6 +75,7 @@ const ACTION_WORDS: Record<string, string> = {
   role_changed: 'changed a role',
   role_deleted: 'deleted a role',
   nebula_deleted: 'deleted a nebula',
+  category_deleted: 'deleted a category',
   voice_muted: 'muted in voice',
   voice_unmuted: 'unmuted in voice',
   voice_disconnected: 'disconnected from voice',
@@ -102,7 +103,7 @@ export function moderationParts(e: ModerationEntry, meId: string): { actor: stri
   const extra =
     e.action === 'timed_out' && typeof d.length === 'string'
       ? ` for ${LENGTH_WORDS[d.length] ?? d.length}`
-      : (e.action.startsWith('role_') || e.action === 'nebula_deleted') && typeof d.name === 'string'
+      : (e.action.startsWith('role_') || (e.action === 'nebula_deleted' || e.action === 'category_deleted')) && typeof d.name === 'string'
         ? ` “${d.name}”`
         : e.action.startsWith('voice_') && typeof d.nebula === 'string'
           ? ` in ${d.nebula}`

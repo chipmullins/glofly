@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
-import { attachmentSummary, isConstellationColor, shortBody, type NebulaMention, type PinnedNebula } from "@glofly/shared";
+import { attachmentSummary, isConstellationColor, shortBody, type NebulaMention, type NebulaNews, type PinnedNebula } from "@glofly/shared";
 import { db } from "../db";
 import { attachments, constellationMembers, constellations, conversationMembers, messages, nebulaPins, nebulas } from "../db/schema";
 import { publicUsers, unreadFor } from "./views";
+import { alertFor } from "./activity";
 
 // The nebula dock on Glofly home (2.0, approved Oct 17 boards 9–14): nebulas you pinned there,
 // and every @mention of you across your constellations. Only constellations you're in and that
@@ -176,4 +177,92 @@ export async function readAllMentions(userId: string): Promise<string[]> {
       .where(and(eq(conversationMembers.userId, userId), inArray(conversationMembers.conversationId, ids)));
   }
   return [...new Set(chats.filter((c) => ids.includes(c.conversationId)).map((c) => c.constellationId))];
+}
+
+/**
+ * 0.7.1: nebulas with news for you, newest first (the phone's Chats list shows them): unread
+ * messages it would notify you about (its "Notify me about" setting or the constellation's, not
+ * while muted), or any unread @mention of you. At most 10.
+ */
+export async function newsFor(userId: string): Promise<NebulaNews[]> {
+  const chats = await db
+    .select({
+      conversationId: nebulas.conversationId,
+      nebulaId: nebulas.id,
+      nebulaName: nebulas.name,
+      constellationId: constellations.id,
+      constellationName: constellations.name,
+      color: constellations.color,
+      iconVersion: constellations.iconVersion,
+      level: conversationMembers.notifyLevel,
+      mutedUntil: conversationMembers.mutedUntil,
+      defaultLevel: constellationMembers.notify,
+      lastReadAt: conversationMembers.lastReadAt,
+    })
+    .from(nebulas)
+    .innerJoin(constellations, eq(constellations.id, nebulas.constellationId))
+    .innerJoin(
+      constellationMembers,
+      and(eq(constellationMembers.constellationId, constellations.id), eq(constellationMembers.userId, userId)),
+    )
+    .innerJoin(
+      conversationMembers,
+      and(eq(conversationMembers.conversationId, nebulas.conversationId), eq(conversationMembers.userId, userId)),
+    )
+    .where(and(isNull(constellations.takenDownAt), eq(nebulas.kind, "text")));
+  if (!chats.length) return [];
+  const unread = await unreadFor(userId, chats.map((c) => c.conversationId));
+  const now = Date.now();
+  const worth = chats.filter((c) => {
+    const u = unread.get(c.conversationId);
+    if (!u || !u.unread) return false;
+    const level = c.level ?? c.defaultLevel;
+    // An @mention always counts (like its notification); other messages follow your settings.
+    return u.mentions > 0 || !!alertFor(level, c.mutedUntil, false, now);
+  });
+  if (!worth.length) return [];
+  // The newest message in each (unread ones only)
+  const latest = await db
+    .selectDistinctOn([messages.conversationId], {
+      conversationId: messages.conversationId,
+      senderId: messages.senderId,
+      body: messages.body,
+      createdAt: messages.createdAt,
+      id: messages.id,
+    })
+    .from(messages)
+    .where(
+      and(
+        inArray(messages.conversationId, worth.map((c) => c.conversationId)),
+        isNull(messages.event),
+        isNull(messages.deletedAt),
+      ),
+    )
+    .orderBy(messages.conversationId, desc(messages.createdAt));
+  const byChat = new Map(latest.map((m) => [m.conversationId, m]));
+  const files = latest.length
+    ? await db
+        .select({ messageId: attachments.messageId, kind: attachments.kind, name: attachments.name, voice: attachments.voice })
+        .from(attachments)
+        .where(inArray(attachments.messageId, latest.map((m) => m.id)))
+    : [];
+  const people = await publicUsers([...new Set(latest.map((m) => m.senderId))]);
+  const out: NebulaNews[] = worth.map((c) => {
+    const m = byChat.get(c.conversationId);
+    const u = unread.get(c.conversationId)!;
+    const atts = m ? files.filter((f) => f.messageId === m.id) : [];
+    return {
+      constellation: { id: c.constellationId, name: c.constellationName, color: colorOf(c.color), iconVersion: c.iconVersion },
+      nebula: { id: c.nebulaId, name: c.nebulaName, conversationId: c.conversationId, unreadCount: u.unread, mentionCount: u.mentions },
+      last: m
+        ? {
+            text: (shortBody(m.body) || attachmentSummary(atts as never)).slice(0, 140),
+            sender: people.get(m.senderId) ?? null,
+            at: new Date(m.createdAt).toISOString(),
+          }
+        : null,
+    };
+  });
+  out.sort((a, b) => (b.last?.at ?? "").localeCompare(a.last?.at ?? ""));
+  return out.slice(0, 10);
 }

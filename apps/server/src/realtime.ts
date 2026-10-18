@@ -279,6 +279,13 @@ export async function appsKnow(userId: string, feature: string): Promise<"yes" |
   return sockets.some((s) => Array.isArray(s.data.features) && s.data.features.includes(feature)) ? "yes" : "no";
 }
 
+/** 0.7.1: does any app this person has open right now not know this feature (an older version)? */
+export async function someAppLacks(userId: string, feature: string): Promise<boolean> {
+  if (!io) return false;
+  const sockets = await io.in(userRoom(userId)).fetchSockets();
+  return sockets.some((s) => !(Array.isArray(s.data.features) && s.data.features.includes(feature)));
+}
+
 /**
  * Sends an event to every device the person is signed in on. `modernOnly` (2.0): only to devices
  * whose app knows Constellations (everything about constellations and nebulas).
@@ -286,6 +293,26 @@ export async function appsKnow(userId: string, feature: string): Promise<"yes" |
 export function emitToUser(userId: string, event: string, payload: unknown, modernOnly = false): void {
   // Their nicknames for people go in (loaded when their live connection opened).
   io?.to(modernOnly ? modernRoom(userId) : userRoom(userId)).emit(event, withNicknames(payload, userId, cachedNicknames(userId)));
+}
+
+/**
+ * 0.7.1: one event, two versions: devices whose app knows `feature` get `withFeature`, the rest
+ * get `without` (e.g. a Vimeo video for new apps, "nothing's on" for apps that only know YouTube).
+ */
+export async function emitToUserByFeature(
+  userId: string,
+  event: string,
+  feature: string,
+  withFeature: unknown,
+  without: unknown,
+  modernOnly = false,
+): Promise<void> {
+  if (!io) return;
+  const nicks = cachedNicknames(userId);
+  for (const socket of await io.in(modernOnly ? modernRoom(userId) : userRoom(userId)).fetchSockets()) {
+    const knows = Array.isArray(socket.data.features) && socket.data.features.includes(feature);
+    socket.emit(event, withNicknames(knows ? withFeature : without, userId, nicks));
+  }
 }
 
 /** Which of these people have Glofly open right now (any device). */

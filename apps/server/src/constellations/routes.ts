@@ -55,6 +55,7 @@ import {
 import { requireAuth } from "../auth/sessions";
 import { canMessage, deletionPending, isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
 import { emitToUser } from "../realtime";
+import { inBackground, notifyConstellationInvite } from "../push/notify";
 import { sendStream, storage } from "../storage";
 import { PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 import { removeFiles } from "../messages/attachments";
@@ -69,7 +70,7 @@ import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstella
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
 import { cardsFor, detailFor, entriesFor, publicUsers } from "./views";
 import { announceVoice, setSharing } from "./voice";
-import { mentionsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula } from "./home";
+import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula } from "./home";
 
 // Constellations (Glofly 2.0): communities with nebulas, categories, members and roles.
 // Every action is permission-checked here. Restricted (family) accounts can't use any of it.
@@ -428,6 +429,11 @@ constellationsRouter.get("/pins", async (_req, res) => {
 });
 
 // GET /constellations/mentions?before= — @mentions of me across my nebulas, newest first.
+// GET /constellations/news — 0.7.1: nebulas with news for you (the phone's Chats list).
+constellationsRouter.get("/news", async (_req, res) => {
+  res.json({ news: await newsFor(me(res).id) });
+});
+
 constellationsRouter.get("/mentions", async (req, res) => {
   const before = typeof req.query.before === "string" ? new Date(req.query.before) : undefined;
   res.json(await mentionsFor(me(res).id, before && !Number.isNaN(before.getTime()) ? before : undefined));
@@ -590,6 +596,9 @@ constellationsRouter.post("/links/:code/join", joinLimiter, async (req, res) => 
 });
 
 class LinkUsedUp extends Error {}
+
+/** Where a deleted category's nebulas go, and the new constellation's first category (0.7.1). */
+const GENERAL_CATEGORY = "General";
 
 // POST /constellations/invites/:inviteId/dismiss — "Not now".
 constellationsRouter.post("/invites/:inviteId/dismiss", async (req, res) => {
@@ -1011,16 +1020,57 @@ constellationsRouter.patch("/:id/categories/:cid", changeLimiter, async (req, re
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
 
-// DELETE …/categories/:cid — its nebulas stay, without a category.
+// DELETE …/categories/:cid — 0.7.1: its nebulas move to the "General" category (made if there
+// isn't one; if General itself is deleted they're left without a category), all in one
+// transaction, and it goes in the moderation log.
 constellationsRouter.delete("/:id/categories/:cid", changeLimiter, async (req, res) => {
   const s = await standingFor(req, res, "manageNebulas");
   if (!s) return;
   const cid = idParam.safeParse(req.params.cid);
   if (cid.success) {
-    await db
-      .delete(constellationCategories)
-      .where(and(eq(constellationCategories.id, cid.data), eq(constellationCategories.constellationId, s.constellationId)));
-    await constellationChanged(s.constellationId);
+    const done = await db.transaction(async (tx) => {
+      const cats = await tx
+        .select({ id: constellationCategories.id, name: constellationCategories.name, position: constellationCategories.position })
+        .from(constellationCategories)
+        .where(eq(constellationCategories.constellationId, s.constellationId))
+        .for("update");
+      const gone = cats.find((c) => c.id === cid.data);
+      if (!gone) return null;
+      const moving = await tx
+        .select({ id: nebulas.id })
+        .from(nebulas)
+        .where(and(eq(nebulas.constellationId, s.constellationId), eq(nebulas.categoryId, gone.id)));
+      let targetId: string | null = null;
+      let targetName: string | null = null;
+      if (moving.length && gone.name.trim().toLowerCase() !== GENERAL_CATEGORY.toLowerCase()) {
+        const general = cats.find((c) => c.id !== gone.id && c.name.trim().toLowerCase() === GENERAL_CATEGORY.toLowerCase());
+        if (general) {
+          targetId = general.id;
+          targetName = general.name;
+        } else {
+          const [made] = await tx
+            .insert(constellationCategories)
+            .values({ constellationId: s.constellationId, name: GENERAL_CATEGORY, position: gone.position })
+            .returning({ id: constellationCategories.id });
+          targetId = made.id;
+          targetName = GENERAL_CATEGORY;
+        }
+        await tx
+          .update(nebulas)
+          .set({ categoryId: targetId })
+          .where(and(eq(nebulas.constellationId, s.constellationId), eq(nebulas.categoryId, gone.id)));
+      }
+      await tx.delete(constellationCategories).where(eq(constellationCategories.id, gone.id));
+      await tx.insert(constellationAuditLog).values({
+        constellationId: s.constellationId,
+        actorId: s.userId,
+        action: "category_deleted",
+        targetUserId: null,
+        details: { name: gone.name, nebulas: moving.length, movedTo: targetName },
+      });
+      return true;
+    });
+    if (done) await constellationChanged(s.constellationId);
   }
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
@@ -1682,6 +1732,7 @@ constellationsRouter.post("/:id/invites", changeLimiter, async (req, res) => {
   }
   const members = new Set(await memberIdsOf(s.constellationId));
   let invited = 0;
+  const invitedIds: string[] = [];
   for (const id of new Set(parsed.data.userIds)) {
     if (members.has(id) || !(await canMessage(s.userId, id)) || (await isRestricted(id)) || (await isBanned(s.constellationId, id))) continue;
     await db
@@ -1692,9 +1743,23 @@ constellationsRouter.post("/:id/invites", changeLimiter, async (req, res) => {
         set: { inviterId: s.userId, createdAt: new Date(), dismissedAt: null },
       });
     emitToUser(id, "constellations:changed", {}, true);
+    invitedIds.push(id);
     invited++;
   }
   res.json({ invited });
+  // 0.7.1: it pops up for them live (newer apps only), and on their phones as a notification.
+  if (invitedIds.length) {
+    const [c] = await db.select({ name: constellations.name }).from(constellations).where(eq(constellations.id, s.constellationId));
+    const [by] = await db
+      .select({ id: users.id, displayName: users.displayName, avatarVersion: users.avatarVersion })
+      .from(users)
+      .where(eq(users.id, s.userId));
+    for (const id of invitedIds) {
+      const invite = (await myInvites(id)).find((i) => i.constellation.id === s.constellationId);
+      if (invite) emitToUser(id, "constellation:invited", { invite }, true);
+      if (c && by) inBackground(notifyConstellationInvite(id, by, { id: s.constellationId, name: c.name }));
+    }
+  }
 });
 
 function newCode(): string {

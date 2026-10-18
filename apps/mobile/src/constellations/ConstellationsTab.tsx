@@ -6,6 +6,8 @@ import { useCx } from '@/state/constellations'
 import { Text } from '@/ui/kit'
 import { useTheme } from '@/ui/theme'
 import { flyIn } from './transition'
+import { lastCxPlace, loadCxPlace, placePaths } from './nav'
+import { isWideNow } from '@/lib/layout'
 import { openHomeDock } from './HomeDock'
 import { useReduceMotion } from './motion'
 import { GalaxyIcon, N } from './ui'
@@ -27,8 +29,13 @@ export function ConstellationsTab() {
   }, [reduce, glow])
   const dot = useAnimatedStyle(() => ({ boxShadow: `0 0 ${6 + 8 * glow.value}px ${1 + 3 * glow.value}px rgba(255,179,71,${0.45 + 0.35 * glow.value})` }))
 
+  useEffect(() => {
+    void loadCxPlace()
+  }, [])
+  // 0.7.1: back to the nebula you had open last (a quick hop); the dashboard if there's none.
   const go = () => {
-    ref.current?.measureInWindow((x, y, w, h) => flyIn(w ? { x: x + w / 2, y: y + h / 2 } : null))
+    const place = lastCxPlace()
+    ref.current?.measureInWindow((x, y, w, h) => flyIn(w ? { x: x + w / 2, y: y + h / 2 } : null, place ? placePaths(place, isWideNow()) : undefined))
   }
   const gesture = Gesture.Race(
     Gesture.Fling()
@@ -45,7 +52,7 @@ export function ConstellationsTab() {
       <View
         accessible
         accessibilityRole="button"
-        accessibilityLabel={mentions ? `Constellations, ${mentions} mentions of you` : 'Constellations'}
+        accessibilityLabel={mentions ? `Constellations, ${mentions} ${mentions === 1 ? "mention" : "mentions"} of you` : 'Constellations'}
         accessibilityHint="Swipe up or hold for your constellations and pinned nebulas"
         accessibilityActions={[{ name: 'activate' }, { name: 'longpress', label: 'Nebula dock' }]}
         onAccessibilityAction={(e) => (e.nativeEvent.actionName === 'longpress' ? openHomeDock() : go())}

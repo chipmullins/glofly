@@ -22,6 +22,7 @@ import { MemberList, openMemberSheet } from '@/constellations/Members'
 import { VoiceLobby, VoiceStage } from '@/constellations/Voice'
 import { openDmDock } from '@/constellations/dock'
 import { flyHome } from '@/constellations/transition'
+import { rememberCxPlace } from '@/constellations/nav'
 import { haptic, useReduceMotion } from '@/constellations/motion'
 import { can, topRole, roleColor, STATUS_WORD } from '@/constellations/roles'
 import { Face, N, NightButton, NightCenter, SearchBox } from '@/constellations/ui'
@@ -49,6 +50,10 @@ export default function ConstellationHome() {
   useEffect(() => {
     void loadDetail(cid)
   }, [cid])
+  // 0.7.1: the Constellations tab brings you back here
+  useEffect(() => {
+    rememberCxPlace(cid, nebulaParam ?? null)
+  }, [cid, nebulaParam])
   useEffect(
     () =>
       onRemovedFrom((id) => {
@@ -174,6 +179,7 @@ function WideLayout({ c, nebulaParam, onAdd, sheet, closeSheet }: { c: Constella
   const open = (x: Nebula) => {
     haptic.select()
     lastOpen.set(c.id, x.id)
+    rememberCxPlace(c.id, x.id)
     setPicked(x.id)
   }
   const role = me ? topRole(c, me.id) : null

@@ -238,6 +238,16 @@ export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; 
   { id: 'manageConstellation', name: 'Edit constellation settings', what: 'Name, icon, color, description, who can join' },
 ]
 export const ALL_PERMISSIONS: readonly ConstellationPermission[] = PERMISSIONS.map((p) => p.id)
+/** Any of these opens Settings from the constellation's main view (0.7.1: the gear by its name). */
+export const SETTINGS_PERMISSIONS: readonly ConstellationPermission[] = [
+  'manageConstellation',
+  'manageNebulas',
+  'manageRoles',
+  'approveRequests',
+  'ban',
+  'timeoutKick',
+]
+
 export const isPermission = (x: unknown): x is ConstellationPermission =>
   typeof x === 'string' && (ALL_PERMISSIONS as readonly string[]).includes(x)
 
@@ -308,7 +318,7 @@ export const CONSTELLATION_TEMPLATES: readonly {
     id: 'blank',
     name: 'Start empty',
     what: 'Just a general nebula',
-    categories: [{ name: 'Text nebulas', nebulas: [{ name: 'general', kind: 'text' }] }],
+    categories: [{ name: 'General', nebulas: [{ name: 'general', kind: 'text' }] }],
   },
 ]
 
@@ -593,6 +603,7 @@ export const CONSTELLATION_EVENT_NAMES = [
   'constellation:activity',
   'constellation:voice',
   'constellation:removed',
+  'constellation:invited',
   'games:changed',
 ] as const
 
@@ -647,9 +658,44 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
         },
       }
     }
+    case 'constellation:invited': {
+      // 0.7.1: someone just invited you (the pop-up). Only the bits the pop-up shows.
+      const inv = (p.invite ?? {}) as Record<string, unknown>
+      const c = (inv.constellation ?? {}) as Record<string, unknown>
+      const by = (inv.by ?? {}) as Record<string, unknown>
+      if (!str(inv.id) || !str(c.id) || !str(by.id)) return null
+      return {
+        type: 'constellation:invited',
+        invite: {
+          id: inv.id,
+          constellationId: c.id,
+          name: text(c.name, 100) || 'A constellation',
+          color: isConstellationColor(c.color) ? c.color : 'ember',
+          iconVersion: str(c.iconVersion) ? c.iconVersion : null,
+          memberCount: typeof c.memberCount === 'number' && c.memberCount >= 0 ? Math.floor(c.memberCount) : 0,
+          by: {
+            id: by.id,
+            username: text(by.username, 40),
+            displayName: text(by.displayName, 100) || 'Someone',
+            avatarVersion: str(by.avatarVersion) ? by.avatarVersion : null,
+          },
+        },
+      }
+    }
     default:
       return null
   }
+}
+
+/** The pop-up for a new constellation invite (0.7.1). */
+export type InvitePopup = {
+  id: string
+  constellationId: string
+  name: string
+  color: ConstellationColor
+  iconVersion: string | null
+  memberCount: number
+  by: PublicUser
 }
 
 // ---- The nebula dock on Glofly home (2.0) ----
@@ -683,6 +729,17 @@ export type NebulaMention = {
   createdAt: string
   /** Newer than when you last read that nebula */
   unread: boolean
+}
+
+/**
+ * 0.7.1: a nebula with news for you (unread messages it would notify you about, or @mentions),
+ * for the phone's Chats list: a tap flies straight into it.
+ */
+export type NebulaNews = {
+  constellation: { id: string; name: string; color: ConstellationColor; iconVersion: string | null }
+  nebula: { id: string; name: string; conversationId: string; unreadCount: number; mentionCount: number }
+  /** The newest unread message as one line, and who sent it */
+  last: { text: string; sender: PublicUser | null; at: string } | null
 }
 
 /** How many nebulas one person can pin to the home dock. */

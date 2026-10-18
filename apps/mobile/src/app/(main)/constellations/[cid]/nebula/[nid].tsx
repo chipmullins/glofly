@@ -7,6 +7,7 @@ import { Spinner, Text } from '@/ui/kit'
 import { NebulaChat } from '@/constellations/NebulaChat'
 import { VoiceLobby } from '@/constellations/Voice'
 import { N, NightButton, NightCenter } from '@/constellations/ui'
+import { rememberCxPlace } from '@/constellations/nav'
 
 // One nebula on a phone: a text nebula's chat, or a voice nebula's lobby. On iPad the nebula opens
 // inside the constellation's layout instead.
@@ -21,6 +22,10 @@ export default function NebulaScreen() {
   useEffect(() => {
     if (!c) void loadDetail(cid)
   }, [cid, c])
+  // 0.7.1: the Constellations tab brings you back to this nebula
+  useEffect(() => {
+    rememberCxPlace(cid, nid)
+  }, [cid, nid])
   useEffect(
     () =>
       onRemovedFrom((id) => {

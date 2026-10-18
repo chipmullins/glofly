@@ -5,6 +5,7 @@ import Animated, { Easing, makeMutable, useAnimatedStyle, withDelay, withTiming 
 import { create } from 'zustand'
 import { StarField, Swarm } from './sky'
 import { haptic, reduceMotion } from './motion'
+import { quickHop } from './nav'
 
 // The starry swipe into Constellations and the firefly swarm home, at the approved desktop timings
 // sized for a phone (board 1 / 1b of the "Glofly 2.0 Mobile" canvas):
@@ -20,6 +21,8 @@ export type NightPhase = 'home' | 'in' | 'night' | 'out'
 
 type NightState = {
   phase: NightPhase
+  /** 0.7.1: this trip is a quick hop (no warp, no swarm) */
+  quick?: boolean
   /** Where the circle grows from (the tab), in window points */
   origin: { x: number; y: number }
 }
@@ -70,7 +73,9 @@ const go = (target: Href | Href[]) => {
  * Fly into Constellations from `origin` (the tab's middle), landing on the dashboard, or on
  * `target` (a constellation, then a nebula). Already up there: just go to the target.
  */
-export function flyIn(origin: { x: number; y: number } | null, target?: Href | Href[]) {
+export function flyIn(origin: { x: number; y: number } | null, target?: Href | Href[], opts: { quick?: boolean } = {}) {
+  // 0.7.1: quick whenever you're in a constellation already; the full swipe until you are.
+  opts = { quick: opts.quick ?? quickHop() }
   const { phase } = useNight.getState()
   if (phase === 'night' || phase === 'in') {
     if (target) go(target)
@@ -89,13 +94,27 @@ export function flyIn(origin: { x: number; y: number } | null, target?: Href | H
     go(landing)
     return
   }
-  useNight.setState({ phase: 'in', origin: origin ?? useNight.getState().origin })
+  useNight.setState({ phase: 'in', origin: origin ?? useNight.getState().origin, quick: !!opts.quick })
   nightReady.value = 0
   nightAway.value = 0
   circle.value = 0
   homeAway.value = 0
   warpClock.value = 0
   contentIn.value = 0
+  if (opts.quick) {
+    // 0.7.1: the quick hop (you're in a constellation already): the same circle and slide in
+    // about a third of the time, the stars already settled.
+    warpClock.value = 1500
+    homeAway.value = withTiming(1, { duration: 320, easing: EASE_AWAY })
+    circle.value = withTiming(1, { duration: 380, easing: EASE_CIRCLE })
+    contentIn.value = withDelay(380, withTiming(1, { duration: 240, easing: Easing.out(Easing.ease) }))
+    later(() => {
+      useNight.setState({ phase: 'night' })
+      go(landing)
+    }, 380)
+    later(() => haptic.soft(), 420)
+    return
+  }
   homeAway.value = withTiming(1, { duration: 800, easing: EASE_AWAY })
   circle.value = withTiming(1, { duration: 950, easing: EASE_CIRCLE })
   warpClock.value = withTiming(1500, { duration: 1500, easing: Easing.linear })
@@ -114,7 +133,8 @@ export function nightMounted() {
 }
 
 /** Back to Glofly home with the swarm; `then` runs once home is showing (open a chat, say). */
-export function flyHome(then?: () => void) {
+export function flyHome(then?: () => void, opts: { quick?: boolean } = {}) {
+  opts = { quick: opts.quick ?? quickHop() }
   const { phase } = useNight.getState()
   if (phase !== 'night') return
   clearTimers()
@@ -127,7 +147,22 @@ export function flyHome(then?: () => void) {
     if (then) setTimeout(then, 60)
     return
   }
-  useNight.setState({ phase: 'out' })
+  if (opts.quick) {
+    // 0.7.1: the quick hop home: no swarm, the slides about a third of the time.
+    useNight.setState({ phase: 'out', quick: true })
+    nightAway.value = withTiming(1, { duration: 340, easing: EASE_AWAY })
+    homeAway.value = withDelay(60, withTiming(0, { duration: 380, easing: EASE_BACK }))
+    later(() => {
+      exitNight?.()
+      if (then) setTimeout(then, 40)
+    }, 420)
+    later(() => {
+      nightAway.value = 0
+      useNight.setState({ phase: 'home', quick: false })
+    }, 520)
+    return
+  }
+  useNight.setState({ phase: 'out', quick: false })
   swarmClock.value = 0
   swarmClock.value = withTiming(2100, { duration: 2100, easing: Easing.linear })
   nightAway.value = withDelay(250, withTiming(1, { duration: 900, easing: EASE_AWAY }))
@@ -207,6 +242,7 @@ function Circle() {
 /** The circle of night on the way in, the swarm on the way home. */
 export function NightOverlay() {
   const phase = useNight((s) => s.phase)
+  const quick = useNight((s) => !!s.quick)
   const { width } = useWindowDimensions()
   useEffect(() => {
     screenW.value = width
@@ -224,6 +260,7 @@ export function NightOverlay() {
       </View>
     )
   }
+  if (phase === 'out' && quick) return null
   if (phase === 'out') {
     return (
       <View style={[StyleSheet.absoluteFill, { zIndex: 40 }]} pointerEvents="none">

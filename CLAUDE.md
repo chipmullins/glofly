@@ -98,3 +98,15 @@
   Notifications go to the overlay instead of Windows while it shows (`overlayNotification`). Keys
   are global shortcuts registered only while it's showing. Never inject into games (anti-cheat):
   exclusive full screen isn't supported, by design. Settings → Game overlay (`OverlaySettings.tsx`).
+- **0.7.1 (Oct 18, 2026)** (project doc `glofly-release-0.7.1.md`): Watch Together plays **Twitch,
+  Vimeo and Dailymotion** too (`WatchState.site`/`live`, shared `watchLinkFrom`; the player page drives
+  each site's postMessage protocol, still no third-party script on our address). Apps that know other
+  sites send the live feature `watchSites` and `?sites=1` on watch requests; older apps are told
+  "nothing's on" for a non-YouTube video (`emitToUserByFeature`). The server announces the end of a
+  video itself (`scheduleEnd`). Sync: `noteWatchChange` makes skips apply at once; an ended player is
+  never asked to seek. Desktop keeps the video mounted (parked) while a tile is shown big; phones keep
+  one `WatchScreen` through rotation. Constellations: live invite pop-up (`constellation:invited`,
+  modern-only) + push (sent as `friend_joined` with `userId` `<inviter>?invite=<id>` so every phone
+  build can open it), `GET /constellations/news` (the phone's Chats rows), deleting a category moves
+  its nebulas to "General" (one transaction, `category_deleted` in the log). The Constellations
+  button/tab goes back to your last constellation (quick hop once you're in one).

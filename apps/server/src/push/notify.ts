@@ -403,3 +403,50 @@ async function notifyNebula(message: NewMessage, memberIds: string[]): Promise<v
   }
   await deliver(out);
 }
+
+/**
+ * 0.7.1: someone invited you to a constellation. To phones whose Glofly knows Constellations
+ * ("constellations" feature), not the phone in use, not on Do not disturb. Sent as the friend
+ * alert type every phone build already shows; the link it opens (glofly://profile/<inviter>
+ * ?invite=<constellation>) takes the 0.7.1 app straight to your Constellations dashboard.
+ */
+export async function notifyConstellationInvite(
+  toUserId: string,
+  by: { id: string; displayName: string; avatarVersion: string | null },
+  constellation: { id: string; name: string },
+): Promise<void> {
+  if (!pushConfigured) return;
+  const devices = await db
+    .select({
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
+      status: users.statusPreference,
+    })
+    .from(pushDevices)
+    .innerJoin(users, eq(users.id, pushDevices.userId))
+    .where(and(eq(pushDevices.userId, toUserId), sql`'constellations' = any(${pushDevices.features})`));
+  if (!devices.length) return;
+  const live = (await liveSessions([toUserId])).get(toUserId);
+  const nicks = await nicknamesFor(toUserId).catch(() => undefined);
+  const name = nicks?.get(by.id) ?? by.displayName;
+  await deliver(
+    devices
+      .filter((d) => d.status !== "dnd" && !live?.has(d.sessionId))
+      .map((device) => ({
+        device,
+        ttl: 7 * 24 * 60 * 60,
+        data: {
+          type: "friend_joined",
+          // Becomes glofly://profile/<inviter>?invite=<constellation> on the phone.
+          userId: `${by.id}?invite=${constellation.id}`,
+          senderName: name,
+          senderAvatar: "",
+          title: name,
+          text: `invited you to ${constellation.name.slice(0, 60)} · Tap to see it`,
+        },
+      })),
+  );
+}

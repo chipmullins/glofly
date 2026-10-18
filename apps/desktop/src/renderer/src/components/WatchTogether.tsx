@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   canControlWatch,
-  isYouTubeId,
+  isWatchVideoId,
   videoTime,
   watchActionText,
+  watchLinkFrom,
   watchPositionAt,
   WATCH_REACTIONS,
-  youTubeIdFrom,
+  WATCH_SITE_NAMES,
   type WatchControl,
+  type WatchSite,
   type WatchPreview,
   type WatchReaction
 } from '@glofly/shared/watch'
@@ -53,12 +55,15 @@ const firstName = (p: PublicUser): string => p.displayName.trim().split(/\s+/)[0
 export function StartWatchDialog({
   changing,
   onStart,
-  onClose
+  onClose,
+  onShareScreen
 }: {
   /** Changing the video that's on (no "who controls it" choice then) */
   changing: boolean
   onStart: (link: string, control: WatchControl) => Promise<ApiResult<WatchUpdate>>
   onClose: () => void
+  /** 0.7.1: streaming services can't be synced; this shares a screen with sound instead */
+  onShareScreen?: () => void
 }): React.JSX.Element {
   const [link, setLink] = useState('')
   const [control, setControl] = useState<WatchControl>('everyone')
@@ -72,7 +77,10 @@ export function StartWatchDialog({
   const [startFailed, setStartFailed] = useState<{ id: string | null; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const input = useRef<HTMLInputElement>(null)
-  const id = youTubeIdFrom(link)
+  const found0 = watchLinkFrom(link)
+  /** The link's site and video, as one key */
+  const id = found0 ? `${found0.site}:${found0.videoId}` : null
+  const site: WatchSite = found0?.site ?? 'youtube'
   const answer = found && found.id === id ? found : null
   const preview = answer?.preview ?? null
   const looking = !!id && !answer
@@ -138,7 +146,10 @@ export function StartWatchDialog({
         <div className="dialog-head">
           <div>
             <h1 id="watch-start-title">{changing ? 'Change the video' : 'Watch together'}</h1>
-            <p>Everyone in this call sees the same video at the same moment. Works with YouTube.</p>
+            <p>
+              Everyone in this call sees the same video at the same moment. Works with YouTube,
+              Twitch, Vimeo and Dailymotion.
+            </p>
           </div>
           <button type="button" className="dialog-close" aria-label="Close" onClick={onClose}>
             <CloseIcon />
@@ -146,7 +157,7 @@ export function StartWatchDialog({
         </div>
 
         <label className="watch-start-field">
-          <span>YouTube link</span>
+          <span>Video link</span>
           <input
             ref={input}
             value={link}
@@ -154,7 +165,7 @@ export function StartWatchDialog({
               setLink(e.target.value)
               setStartFailed(null)
             }}
-            placeholder="https://youtu.be/…"
+            placeholder="https://youtu.be/… or a Twitch, Vimeo or Dailymotion link"
             maxLength={500}
             spellCheck={false}
             autoComplete="off"
@@ -162,7 +173,9 @@ export function StartWatchDialog({
           />
         </label>
         {link.trim() && !id && (
-          <p className="watch-start-hint">Paste a link from YouTube (youtube.com or youtu.be).</p>
+          <p className="watch-start-hint">
+            Paste a link from YouTube, Twitch, Vimeo or Dailymotion.
+          </p>
         )}
 
         {id && (
@@ -172,9 +185,16 @@ export function StartWatchDialog({
             </div>
             <div className="watch-start-meta">
               <strong>
-                {preview ? preview.title : looking ? 'Looking it up…' : 'YouTube video'}
+                {preview
+                  ? preview.title
+                  : looking
+                    ? 'Looking it up…'
+                    : `${WATCH_SITE_NAMES[site]} video`}
               </strong>
-              <span>{preview?.channel ?? (looking ? '' : 'YouTube')}</span>
+              <span>
+                {preview?.channel ?? (looking ? '' : WATCH_SITE_NAMES[site])}
+                {found0?.live ? ' · Live' : ''}
+              </span>
             </div>
           </div>
         )}
@@ -206,6 +226,22 @@ export function StartWatchDialog({
             {problem}
           </p>
         )}
+
+        <p className="watch-start-streaming">
+          Netflix, Disney+, Hulu, Max, Prime Video and other streaming services can&apos;t be kept
+          in sync here.
+          {onShareScreen ? (
+            <>
+              {' '}
+              <button type="button" className="watch-note-link" onClick={onShareScreen}>
+                Share your screen with sound
+              </button>{' '}
+              to watch them together.
+            </>
+          ) : (
+            ' Share your screen with sound from the Glofly desktop app to watch them together.'
+          )}
+        </p>
 
         <div className="confirm-actions">
           <button type="button" className="small-button small-button--quiet" onClick={onClose}>
@@ -319,6 +355,31 @@ function WatchFireflies({
   )
 }
 
+/** The little mark beside the title: each site's colours (0.7.1), never its logo. */
+function SiteMark({ site }: { site: WatchSite }): React.JSX.Element {
+  const fill =
+    site === 'twitch'
+      ? '#9146ff'
+      : site === 'vimeo'
+        ? '#17d5ff'
+        : site === 'dailymotion'
+          ? '#0d0d0d'
+          : '#ff3b30'
+  return (
+    <svg width="18" height="13" viewBox="0 0 18 13" aria-label={WATCH_SITE_NAMES[site]} role="img">
+      <rect
+        width="18"
+        height="13"
+        rx="3.5"
+        fill={fill}
+        stroke={site === 'dailymotion' ? '#fff' : 'none'}
+        strokeOpacity={0.5}
+      />
+      <path d="M7 3.6v5.8L12 6.5z" fill="#fff" />
+    </svg>
+  )
+}
+
 // ---------------------------------------------------------------------------------------------
 // The video with its controls.
 
@@ -327,7 +388,8 @@ export function WatchStage({
   people,
   talking,
   api,
-  playerUrl
+  playerUrl,
+  parked = false
 }: {
   me: PublicUser
   /** Everyone in the call's chat (not you) */
@@ -336,8 +398,17 @@ export function WatchStage({
   talking: PublicUser[]
   api: WatchValue
   playerUrl: string
+  /** 0.7.1: the call is showing something else big: keep playing, out of sight (no reload) */
+  parked?: boolean
 }): React.JSX.Element | null {
   const watch = api.watch
+  /** "Only Jordan can pause and skip": a few seconds after a refused click (0.7.1) */
+  const [refused, setRefused] = useState(0)
+  useEffect(() => {
+    if (!refused) return
+    const t = setTimeout(() => setRefused(0), 3500)
+    return () => clearTimeout(t)
+  }, [refused])
   const fullRef = useRef<HTMLDivElement>(null)
   const [full, setFull] = useState(false)
   const [info, setInfo] = useState<PlayerInfo>({
@@ -369,6 +440,12 @@ export function WatchStage({
     document.addEventListener('fullscreenchange', onChange)
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
+  // Parked: out of full screen.
+  useEffect(() => {
+    const el = fullRef.current
+    if (parked && el && document.fullscreenElement === el)
+      void document.exitFullscreen().catch(() => {})
+  }, [parked])
   // Leaving the video (it stopped, or the call ended) leaves full screen too.
   useEffect(() => {
     const el = fullRef.current
@@ -417,6 +494,13 @@ export function WatchStage({
   const duration = watch.durationSec ?? 0
   const shown = dragging ?? position
   const starter = watch.startedBy === me.id ? 'you' : nameOf(watch.startedBy)
+  const live = !!watch.live
+  const refusedText = `Only ${starter === 'you' ? 'you' : starter} can pause and skip this video.`
+  /** A button someone can't use explains why instead of doing nothing (0.7.1) */
+  const tryControl = (run: () => void): void => {
+    if (canControl) run()
+    else setRefused(Date.now())
+  }
 
   const setVolume = (v: number): void => {
     setVolumeState(v)
@@ -439,8 +523,8 @@ export function WatchStage({
     if (e.key === ' ' || e.key === 'k') {
       e.preventDefault()
       api.control(watch.playing ? 'pause' : 'play')
-    } else if (e.key === 'ArrowLeft' || e.key === 'j') api.control('back')
-    else if (e.key === 'ArrowRight' || e.key === 'l') api.control('forward')
+    } else if (!live && (e.key === 'ArrowLeft' || e.key === 'j')) api.control('back')
+    else if (!live && (e.key === 'ArrowRight' || e.key === 'l')) api.control('forward')
     wake()
   }
 
@@ -468,16 +552,18 @@ export function WatchStage({
 
   const bar = (
     <div className="watch-bar" role="group" aria-label="Video controls for everyone">
-      <button
-        type="button"
-        className="watch-skip"
-        aria-label={`Back ${10} seconds for everyone`}
-        title={canControl ? 'Back 10 seconds' : `Only ${starter} can skip`}
-        disabled={!canControl}
-        onClick={() => api.control('back')}
-      >
-        <BackTenIcon size={20} />
-      </button>
+      {!live && (
+        <button
+          type="button"
+          className="watch-skip"
+          aria-label={`Back ${10} seconds for everyone`}
+          title={canControl ? 'Back 10 seconds' : `Only ${starter} can skip`}
+          aria-disabled={!canControl}
+          onClick={() => tryControl(() => api.control('back'))}
+        >
+          <BackTenIcon size={20} />
+        </button>
+      )}
       <button
         type="button"
         className="watch-play"
@@ -489,51 +575,75 @@ export function WatchStage({
               : 'Play for everyone'
             : `Only ${starter} can pause`
         }
-        disabled={!canControl}
-        onClick={() => api.control(watch.playing ? 'pause' : 'play')}
+        aria-disabled={!canControl}
+        onClick={() => tryControl(() => api.control(watch.playing ? 'pause' : 'play'))}
       >
         {watch.playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
       </button>
-      <button
-        type="button"
-        className="watch-skip"
-        aria-label="Forward 10 seconds for everyone"
-        title={canControl ? 'Forward 10 seconds' : `Only ${starter} can skip`}
-        disabled={!canControl}
-        onClick={() => api.control('forward')}
-      >
-        <ForwardTenIcon size={20} />
-      </button>
-      <span className="watch-time">{videoTime(shown)}</span>
-      <input
-        type="range"
-        className="watch-seek"
-        aria-label="Where in the video, for everyone"
-        aria-valuetext={`${videoTime(shown)} of ${duration ? videoTime(duration) : 'unknown'}`}
-        min={0}
-        max={Math.max(1, Math.ceil(duration || position + 1))}
-        step={1}
-        value={Math.min(Math.round(shown), Math.max(1, Math.ceil(duration || position + 1)))}
-        disabled={!canControl || !duration}
-        style={
-          {
-            '--done': `${duration ? Math.min(100, (shown / duration) * 100) : 0}%`
-          } as React.CSSProperties
-        }
-        onChange={(e) => setDragging(Number(e.target.value))}
-        onPointerUp={() => {
-          if (dragging !== null) api.control('seek', dragging)
-          setDragging(null)
-        }}
-        onKeyUp={(e) => {
-          if (dragging !== null && e.key !== 'Tab') {
-            api.control('seek', dragging)
-            setDragging(null)
-          }
-        }}
-        onBlur={() => setDragging(null)}
-      />
-      <span className="watch-time">{duration ? videoTime(duration) : '–:––'}</span>
+      {!live && (
+        <button
+          type="button"
+          className="watch-skip"
+          aria-label="Forward 10 seconds for everyone"
+          title={canControl ? 'Forward 10 seconds' : `Only ${starter} can skip`}
+          aria-disabled={!canControl}
+          onClick={() => tryControl(() => api.control('forward'))}
+        >
+          <ForwardTenIcon size={20} />
+        </button>
+      )}
+      {live ? (
+        <span className="watch-live">
+          <span className="watch-live-dot" />
+          Live
+        </span>
+      ) : (
+        <>
+          <span className="watch-time">{videoTime(shown)}</span>
+          <input
+            type="range"
+            className="watch-seek"
+            aria-label="Where in the video, for everyone"
+            aria-valuetext={`${videoTime(shown)} of ${duration ? videoTime(duration) : 'unknown'}`}
+            min={0}
+            max={Math.max(1, Math.ceil(duration || position + 1))}
+            step={1}
+            value={Math.min(Math.round(shown), Math.max(1, Math.ceil(duration || position + 1)))}
+            aria-disabled={!canControl || !duration}
+            style={
+              {
+                '--done': `${duration ? Math.min(100, (shown / duration) * 100) : 0}%`
+              } as React.CSSProperties
+            }
+            onPointerDown={(e) => {
+              // 0.7.1: a click or drag anywhere on the line seeks for everyone, once let go.
+              if (!canControl) {
+                e.preventDefault()
+                setRefused(Date.now())
+                return
+              }
+              if (!duration) e.preventDefault()
+            }}
+            onChange={(e) => {
+              if (canControl && duration) setDragging(Number(e.target.value))
+            }}
+            onPointerUp={(e) => {
+              const at = dragging ?? Number((e.currentTarget as HTMLInputElement).value)
+              if (canControl && duration && Number.isFinite(at)) api.control('seek', at)
+              setDragging(null)
+            }}
+            onPointerCancel={() => setDragging(null)}
+            onKeyUp={(e) => {
+              if (dragging !== null && e.key !== 'Tab') {
+                api.control('seek', dragging)
+                setDragging(null)
+              }
+            }}
+            onBlur={() => setDragging(null)}
+          />
+          <span className="watch-time">{duration ? videoTime(duration) : '–:––'}</span>
+        </>
+      )}
       {pill}
       <label className="watch-volume" title="Video volume (voices stay the same)">
         <button
@@ -590,7 +700,12 @@ export function WatchStage({
   return (
     <div
       ref={fullRef}
-      className={['watch', full && 'watch--full', full && idle && 'watch--idle']
+      className={[
+        'watch',
+        full && 'watch--full',
+        full && idle && 'watch--idle',
+        parked && 'watch--parked'
+      ]
         .filter(Boolean)
         .join(' ')}
       onMouseMove={full ? wake : undefined}
@@ -598,7 +713,7 @@ export function WatchStage({
       onKeyDown={onKey}
     >
       <div className="watch-video">
-        {isYouTubeId(watch.videoId) && (
+        {isWatchVideoId(watch.site ?? 'youtube', watch.videoId) && (
           <WatchPlayer
             playerUrl={playerUrl}
             watch={watch}
@@ -607,22 +722,28 @@ export function WatchStage({
             unmute={unmute}
             onInfo={setInfo}
             onDuration={(videoId, d, title) => api.report(videoId, d, title || undefined)}
+            canControl={canControl}
+            onToggle={() => api.control(watch.playing ? 'pause' : 'play')}
+            onRefused={() => setRefused(Date.now())}
           />
         )}
         <span className="watch-tag watch-tag--title">
-          <svg width="18" height="13" viewBox="0 0 18 13" aria-hidden="true">
-            <rect width="18" height="13" rx="3.5" fill="#ff3b30" />
-            <path d="M7 3.6v5.8L12 6.5z" fill="#fff" />
-          </svg>
+          <SiteMark site={watch.site ?? 'youtube'} />
           <span>{watch.title}</span>
         </span>
         <span className="watch-tag watch-tag--by">
           Picked by {watch.startedBy === me.id ? 'you' : picker ? firstName(picker) : 'someone'}
         </span>
-        {said && (
-          <span key={seq} className="watch-said" role="status">
-            {said}
+        {refused ? (
+          <span key={`r${refused}`} className="watch-said" role="status">
+            {refusedText}
           </span>
+        ) : (
+          said && (
+            <span key={seq} className="watch-said" role="status">
+              {said}
+            </span>
+          )
         )}
         <WatchFireflies callId={watch.callId} nameOf={nameOf} />
         {info.error && (

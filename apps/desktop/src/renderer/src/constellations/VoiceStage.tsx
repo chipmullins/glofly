@@ -5,6 +5,7 @@ import { useCalls } from '../calls/callState'
 import { useWatch } from '../calls/useWatch'
 import { ScreenPicker, TrackVideo } from '../components/CallPanel'
 import { StartWatchDialog, WatchStage } from '../components/WatchTogether'
+import { CallAudioPanel, PersonVolumeMenu } from '../components/CallAudio'
 import { AvatarFace } from '../components/Avatar'
 import { colorsFor } from '../lib/avatarColors'
 import { isWeb, web } from '../lib/platform'
@@ -32,7 +33,16 @@ function videoOf(p: Participant | undefined, source: Track.Source): VideoTrack |
   return pub && !pub.isMuted && pub.track ? (pub.track as VideoTrack) : null
 }
 
-function TileFace({ tile, large }: { tile: Tile; large: boolean }): React.JSX.Element {
+function TileFace({
+  tile,
+  large,
+  onMenu
+}: {
+  tile: Tile
+  large: boolean
+  /** Right-click: this person's volume, just for you (0.7.1) */
+  onMenu?: (x: number, y: number) => void
+}): React.JSX.Element {
   const [bg, fg] = tile.me ? ['#f47a1f', '#2a1406'] : colorsFor(tile.person.id)
   const size = large ? 96 : 64
   return (
@@ -45,6 +55,14 @@ function TileFace({ tile, large }: { tile: Tile; large: boolean }): React.JSX.El
         .filter(Boolean)
         .join(' ')}
       aria-label={`${tile.me ? 'You' : tile.person.displayName}${tile.muted ? ', muted' : ''}${tile.speaking && !tile.muted ? ', talking' : ''}`}
+      onContextMenu={
+        onMenu
+          ? (e) => {
+              e.preventDefault()
+              onMenu(e.clientX, e.clientY)
+            }
+          : undefined
+      }
     >
       {tile.camera ? (
         <TrackVideo track={tile.camera} mirror={tile.me} />
@@ -117,6 +135,11 @@ export default function VoiceStage({
   void calls.tick // re-render as the room changes
   const [picking, setPicking] = useState(false)
   const [watchDialog, setWatchDialog] = useState<'start' | 'change' | null>(null)
+  // 0.7.1: the call's audio settings (mic, speakers, each person's volume, mute for me), as in a call
+  const [audioOpen, setAudioOpen] = useState(false)
+  const [volumeFor, setVolumeFor] = useState<{ person: PublicUser; x: number; y: number } | null>(
+    null
+  )
   const [playerUrl, setPlayerUrl] = useState<string | null>(null)
   const screenBox = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -304,7 +327,12 @@ export default function VoiceStage({
           }
         >
           {tiles.map((t) => (
-            <TileFace key={t.person.id} tile={t} large={!media} />
+            <TileFace
+              key={t.person.id}
+              tile={t}
+              large={!media}
+              onMenu={t.me ? undefined : (x, y) => setVolumeFor({ person: t.person, x, y })}
+            />
           ))}
         </div>
       </div>
@@ -366,6 +394,29 @@ export default function VoiceStage({
             <path d="m16 10 5-3v10l-5-3" />
           </svg>
         </button>
+        <span className="call-audio-wrap cx-audio-wrap">
+          <button
+            type="button"
+            className={
+              audioOpen
+                ? 'cx-control cx-control--on call-audio-button'
+                : 'cx-control call-audio-button'
+            }
+            aria-label="Voice audio: microphone, speakers and volume"
+            aria-expanded={audioOpen}
+            aria-haspopup="dialog"
+            title="Audio"
+            onClick={() => setAudioOpen((v) => !v)}
+          >
+            <SpeakerIcon size={22} color="currentColor" />
+          </button>
+          {audioOpen && (
+            <CallAudioPanel
+              people={tiles.filter((t) => !t.me).map((t) => t.person)}
+              onClose={() => setAudioOpen(false)}
+            />
+          )}
+        </span>
         {(!isWeb || web?.screenShare) && (
           <button
             type="button"
@@ -451,11 +502,34 @@ export default function VoiceStage({
           }}
         />
       )}
+      {volumeFor && (
+        <PersonVolumeMenu
+          person={volumeFor.person}
+          x={volumeFor.x}
+          y={volumeFor.y}
+          onClose={() => setVolumeFor(null)}
+        />
+      )}
       {watchDialog && (
         <StartWatchDialog
           changing={watchDialog === 'change'}
-          onStart={watchApi.start}
+          onStart={async (link, control) => {
+            const r = await watchApi.start(link, control)
+            if (r.ok && r.data.someoneNeedsUpdate) {
+              calls.showProblem('Someone here needs to update Glofly to see this video.')
+            }
+            return r
+          }}
           onClose={() => setWatchDialog(null)}
+          onShareScreen={
+            !isWeb || web?.screenShare
+              ? () => {
+                  setWatchDialog(null)
+                  if (isWeb) void calls.shareScreen('browser')
+                  else setPicking(true)
+                }
+              : undefined
+          }
         />
       )}
       <span className="cx-sr-only" aria-live="polite">

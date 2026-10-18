@@ -21,7 +21,7 @@ import { Button, Text } from '@/ui/kit'
 import { call as callColors, useTheme } from '@/ui/theme'
 import { canControlWatch } from '@glofly/shared'
 import { useWatchStore } from '@/calls/watch'
-import { StartWatchSheet, WatchLandscape, WatchPortrait } from '@/calls/WatchMode'
+import { StartWatchSheet, WatchScreen } from '@/calls/WatchMode'
 
 // The call screen, from the design: 1-on-1 video fills the screen with your camera on top (drag
 // it to any corner), voice calls show their photo with firefly glow rings, groups are a grid
@@ -138,7 +138,8 @@ export default function CallScreen() {
       {/* Main area */}
       <View style={{ flex: 1 }}>
         {watch && !landscape && call ? (
-          <WatchPortrait watch={watch} meId={meId} people={personOf} tiles={s.tiles} conversationId={call.conversationId} top={insets.top + 64} bottom={bottomSpace + 6} />
+          // The video itself is drawn by WatchScreen below (one player, whichever way the phone faces).
+          <View style={{ flex: 1 }} />
         ) : screenTile ? (
           <View style={{ flex: 1, paddingTop: landscape ? topSpace : insets.top + 60, paddingBottom: landscape ? bottomSpace - 8 : 0, ...sidePad }}>
             <View style={{ flex: 1, backgroundColor: '#000' }} accessibilityLabel={`${personOf(screenTile.userId).displayName}'s shared screen`}>
@@ -286,8 +287,21 @@ export default function CallScreen() {
         </View>
       </View>
 
-      {/* Watch Together sideways: the video fills the screen (over everything else). */}
-      {watchingFull && watch ? <WatchLandscape watch={watch} meId={meId} people={personOf} tiles={s.tiles} onExit={() => setWatchFull(false)} /> : null}
+      {/* 0.7.1: one Watch Together player for upright, sideways full screen and sideways with the
+          call showing (parked, still playing), so turning the phone doesn't reload the video. */}
+      {watch && call ? (
+        <WatchScreen
+          watch={watch}
+          meId={meId}
+          people={personOf}
+          tiles={s.tiles}
+          conversationId={call.conversationId}
+          top={insets.top + 64}
+          bottom={bottomSpace + 6}
+          mode={!landscape ? 'portrait' : watchingFull ? 'full' : 'parked'}
+          onExitFull={() => setWatchFull(false)}
+        />
+      ) : null}
 
       {watchSheet ? <StartWatchSheet changing={watchSheet === 'change'} onClose={() => setWatchSheet(null)} /> : null}
 

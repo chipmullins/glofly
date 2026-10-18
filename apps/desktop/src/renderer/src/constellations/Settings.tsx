@@ -82,6 +82,7 @@ const ACTION_WORDS: Record<string, string> = {
   role_changed: 'changed a role',
   role_deleted: 'deleted a role',
   nebula_deleted: 'deleted a nebula',
+  category_deleted: 'deleted a category',
   voice_muted: 'muted in voice',
   voice_unmuted: 'unmuted in voice',
   voice_disconnected: 'disconnected from voice',
@@ -100,7 +101,9 @@ function moderationLine(e: ModerationEntry, meId: string): string {
   const extra =
     e.action === 'timed_out' && typeof d.length === 'string'
       ? ` for ${d.length}`
-      : (e.action.startsWith('role_') || e.action === 'nebula_deleted') &&
+      : (e.action.startsWith('role_') ||
+            e.action === 'nebula_deleted' ||
+            e.action === 'category_deleted') &&
           typeof d.name === 'string'
         ? ` “${d.name}”`
         : e.action.startsWith('voice_') && typeof d.nebula === 'string'
@@ -514,6 +517,8 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
   const [newKind, setNewKind] = useState<'text' | 'voice'>('text')
   const [newCategory, setNewCategory] = useState<string>(c.categories[0]?.id ?? '')
   const [catName, setCatName] = useState('')
+  /** 0.7.1: "+ New category" picked in the new nebula's Category list: its name, typed in place */
+  const [inlineCat, setInlineCat] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState<{ name: string; topic: string; readOnly: boolean }>({
     name: '',
@@ -574,23 +579,26 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
         >
           <strong>New nebula</strong>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div className="cx-segment" role="radiogroup" aria-label="Kind of nebula">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={newKind === 'text'}
-                onClick={() => setNewKind('text')}
-              >
-                Text
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={newKind === 'voice'}
-                onClick={() => setNewKind('voice')}
-              >
-                Voice
-              </button>
+            <div className="cx-field" style={{ flex: '0 0 auto' }}>
+              <span id="cx-new-nebula-type">Type</span>
+              <div className="cx-segment" role="radiogroup" aria-labelledby="cx-new-nebula-type">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={newKind === 'text'}
+                  onClick={() => setNewKind('text')}
+                >
+                  Text
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={newKind === 'voice'}
+                  onClick={() => setNewKind('voice')}
+                >
+                  Voice
+                </button>
+              </div>
             </div>
             <label className="cx-field" style={{ minWidth: 180 }}>
               Name
@@ -602,17 +610,77 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                 onChange={(e) => setNewName(e.target.value)}
               />
             </label>
-            <label className="cx-field" style={{ flex: '0 0 180px' }}>
-              Category
-              <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
-                <option value="">None</option>
-                {cats.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {inlineCat === null ? (
+              <label className="cx-field" style={{ flex: '0 0 180px' }}>
+                Category
+                <select
+                  value={newCategory}
+                  onChange={(e) => {
+                    if (e.target.value === NEW_CATEGORY) setInlineCat('')
+                    else setNewCategory(e.target.value)
+                  }}
+                >
+                  <option value="">None</option>
+                  {cats.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                  <option value={NEW_CATEGORY}>+ New category</option>
+                </select>
+              </label>
+            ) : (
+              <label className="cx-field" style={{ flex: '1 1 260px', minWidth: 0 }}>
+                New category
+                <span style={{ display: 'flex', gap: 6, minWidth: 0 }}>
+                  <input
+                    type="text"
+                    style={{ flex: 1, minWidth: 0 }}
+                    value={inlineCat}
+                    autoFocus
+                    maxLength={CATEGORY_NAME_MAX}
+                    placeholder="Gaming"
+                    onChange={(e) => setInlineCat(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setInlineCat(null)
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault()
+                        ;(e.currentTarget.nextElementSibling as HTMLButtonElement | null)?.click()
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="cx-button"
+                    style={{ height: 46, flex: 'none' }}
+                    disabled={busy || !inlineCat.trim()}
+                    onClick={async () => {
+                      const before = new Set(c.categories.map((x) => x.id))
+                      const r = await api.addCategory(c.id, inlineCat)
+                      const ok = await run(() => Promise.resolve(r))
+                      if (!ok || !r.ok) return
+                      const made = r.data.constellation.categories.find((x) => !before.has(x.id))
+                      if (made) setNewCategory(made.id)
+                      setInlineCat(null)
+                    }}
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    className="cx-button"
+                    style={{ height: 46, width: 46, padding: 0, flex: 'none' }}
+                    aria-label="Cancel the new category"
+                    onClick={() => setInlineCat(null)}
+                  >
+                    <CloseIcon size={12} />
+                  </button>
+                </span>
+              </label>
+            )}
             <button
               type="submit"
               className="cx-button cx-button--primary"
@@ -668,7 +736,7 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                   <button
                     type="button"
                     aria-label={`Delete ${cat.name}`}
-                    title="Delete category (its nebulas stay)"
+                    title="Delete category (its nebulas move to General)"
                     onClick={() => void run(() => api.removeCategory(c.id, cat.id))}
                   >
                     <CloseIcon size={14} />
@@ -792,19 +860,57 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
         )
       })}
       {editable && (
-        <form
-          className="cx-settings-card"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            if (!catName.trim()) return
-            const ok = await run(() => api.addCategory(c.id, catName))
-            if (ok) setCatName('')
-          }}
-        >
-          <strong>New category</strong>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+        <section className="cx-settings-card" aria-labelledby="cx-cats-head">
+          <strong id="cx-cats-head">Categories</strong>
+          {cats.length === 0 && <p className="cx-settings-text">No categories yet.</p>}
+          {cats.map((cat, i) => (
+            <div key={cat.id} className="cx-settings-cat-row">
+              <CategoryName
+                name={cat.name}
+                onSave={(name) => void run(() => api.renameCategory(c.id, cat.id, name))}
+              />
+              <span className="cx-settings-cat-count">
+                {(() => {
+                  const count = ordered.filter((n) => n.categoryId === cat.id).length
+                  return `${count} ${count === 1 ? 'nebula' : 'nebulas'}`
+                })()}
+              </span>
+              <span className="cx-settings-group-actions">
+                <button
+                  type="button"
+                  aria-label={`Move ${cat.name} up`}
+                  disabled={i === 0}
+                  onClick={() => void run(() => moveCategory(cat.id, -1))}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Move ${cat.name} down`}
+                  disabled={i === cats.length - 1}
+                  onClick={() => void run(() => moveCategory(cat.id, 1))}
+                >
+                  ↓
+                </button>
+              </span>
+              <DeleteCategory
+                name={cat.name}
+                count={ordered.filter((n) => n.categoryId === cat.id).length}
+                onDelete={() => void run(() => api.removeCategory(c.id, cat.id))}
+              />
+            </div>
+          ))}
+          <form
+            style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}
+            onSubmit={async (e) => {
+              e.preventDefault()
+              if (!catName.trim()) return
+              const ok = await run(() => api.addCategory(c.id, catName))
+              if (ok) setCatName('')
+            }}
+          >
             <label className="cx-field">
-              Name
+              New category
               <input
                 type="text"
                 value={catName}
@@ -820,8 +926,8 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
             >
               Add category
             </button>
-          </div>
-        </form>
+          </form>
+        </section>
       )}
     </div>
   )
@@ -850,6 +956,45 @@ function CategoryName({
       onBlur={() => value.trim() && value.trim() !== name && onSave(value.trim())}
       onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
     />
+  )
+}
+
+/** The Category list's "+ New category" choice (0.7.1). */
+const NEW_CATEGORY = '__new_category__'
+
+function DeleteCategory({
+  name,
+  count,
+  onDelete
+}: {
+  name: string
+  count: number
+  onDelete: () => void
+}): React.JSX.Element {
+  const [sure, setSure] = useState(false)
+  const general = name.trim().toLowerCase() === 'general'
+  return sure ? (
+    <span className="cx-settings-confirm">
+      {count === 0
+        ? `Delete ${name}?`
+        : general
+          ? `Delete ${name}? Its nebulas won't be in a category.`
+          : `Delete ${name}? Its ${count === 1 ? 'nebula moves' : `${count} nebulas move`} to General.`}
+      <button type="button" className="cx-link-button cx-link-button--danger" onClick={onDelete}>
+        Delete
+      </button>
+      <button type="button" className="cx-link-button" onClick={() => setSure(false)}>
+        Keep
+      </button>
+    </span>
+  ) : (
+    <button
+      type="button"
+      className="cx-link-button cx-link-button--danger"
+      onClick={() => setSure(true)}
+    >
+      Delete
+    </button>
   )
 }
 

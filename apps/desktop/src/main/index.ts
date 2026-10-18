@@ -84,7 +84,7 @@ import {
   watchStop
 } from './calls'
 import { screenSoundSupport, startScreenSound, stopScreenSound } from './screenSound'
-import { isWatchReaction, isYouTubeId } from '@glofly/shared/watch'
+import { isWatchReaction } from '@glofly/shared/watch'
 import { looksLikeVideo } from '@glofly/shared/attachments'
 import { VIDEO_MAX_BYTES } from '@glofly/shared/rules'
 import {
@@ -1014,7 +1014,8 @@ function registerIpcHandlers(): void {
     (event, id: unknown, videoId: unknown, duration: unknown, title: unknown) =>
       fromApp(event) &&
       isUserId(id) &&
-      isYouTubeId(videoId) &&
+      typeof videoId === 'string' &&
+      /^[A-Za-z0-9_:-]{4,40}$/.test(videoId) &&
       isSeconds(duration) &&
       (title === undefined || (typeof title === 'string' && title.length <= 300))
         ? watchReport(id, videoId, duration, title)

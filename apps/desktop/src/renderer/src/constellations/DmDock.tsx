@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { attachmentSummary } from '@glofly/shared/attachments'
+import { VoiceBubble } from '../components/Attachments'
 import { shortBody } from '@glofly/shared/gifs'
 import type {
   ConversationSummary,
@@ -272,20 +273,28 @@ function MiniChat({
           if (m.event) return null
           const previous = messages[i - 1]
           const showName = c.kind === 'group' && !mine && previous?.senderId !== m.senderId
+          // 0.7.1: voice messages play right here (they used to show only "Voice message").
+          const voices = m.deleted ? [] : m.attachments.filter((a) => a.kind === 'file' && a.voice)
+          const others = m.attachments.filter((a) => !voices.includes(a))
           const text = m.deleted
             ? 'This message was deleted.'
             : m.gif || m.poll || m.game
               ? shortBody(m.body)
-              : m.body || attachmentSummary(m.attachments)
+              : m.body || (others.length ? attachmentSummary(others) : '')
           return (
             <div key={m.id} className={mine ? 'mini-msg mini-msg--mine' : 'mini-msg'}>
               {showName && <span className="mini-msg-name">{nameOf(m.senderId)}</span>}
-              <span className={m.deleted ? 'mini-bubble mini-bubble--deleted' : 'mini-bubble'}>
-                <EmojiText text={text} />
-                {!m.deleted && m.body && m.attachments.length > 0 && (
-                  <span className="mini-bubble-files">{attachmentSummary(m.attachments)}</span>
-                )}
-              </span>
+              {voices.map((a) => (
+                <VoiceBubble key={a.id} conversationId={m.conversationId} attachment={a} />
+              ))}
+              {(text || m.deleted) && (
+                <span className={m.deleted ? 'mini-bubble mini-bubble--deleted' : 'mini-bubble'}>
+                  <EmojiText text={text} />
+                  {!m.deleted && m.body && others.length > 0 && (
+                    <span className="mini-bubble-files">{attachmentSummary(others)}</span>
+                  )}
+                </span>
+              )}
             </div>
           )
         })}

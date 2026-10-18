@@ -76,7 +76,8 @@ import { HangToast, SocialActions, SocialStrip, YearInGlowDialog } from '../comp
 import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcast'
 import { stopLive, useMyBroadcast } from '../lib/broadcast'
 import ConstellationsScreen from '../constellations/ConstellationsScreen'
-import { useConstellationsPhase, viewingNebula } from '../constellations/phase'
+import InvitePopup from '../constellations/InvitePopup'
+import { lastPlaceIn, useConstellationsPhase, viewingNebula } from '../constellations/phase'
 import { GalaxyIcon } from '../constellations/sky'
 import { useConstellationCards, usePinnedNebulas } from '../lib/constellations'
 import HomeDock, { type HomeDockHandle } from '../constellations/HomeDock'
@@ -525,8 +526,17 @@ export default function MainScreen({
   const [hangPing, setHangPing] = useState<PublicUser | null>(null)
   const [yearOpen, setYearOpen] = useState(false)
   // Glofly 2.0: Constellations (the night side) and My games.
-  const cx = useConstellationsPhase()
+  // 0.4.0: a restricted (family-managed) account: Glofly Control can turn it on or off any time
+  // (account:changed), so it's asked again then.
+  const [restricted, setRestricted] = useState(user.restricted === true)
+  const cxCards = useConstellationCards(!restricted)
+  const cxQuickAllowed = cxCards.cards.length > 0
+  const cx = useConstellationsPhase(cxQuickAllowed)
   const cxNavRef = useRef<HTMLButtonElement>(null)
+  // 0.7.1: the window's fade-in plays once. It used to come back each time the night side
+  // finished flying home (the class swapped back to it), which flickered the whole screen.
+  const [cxUsed, setCxUsed] = useState(false)
+  if (cx.phase !== 'home' && !cxUsed) setCxUsed(true)
   /** Nebula chats seen in live news, so their notifications know where to open */
   const nebulaChats = useRef(new Map<string, { constellationId: string; nebulaId: string }>())
   const cxEnterRef = useRef((place: { constellationId: string; nebulaId: string }) =>
@@ -568,11 +578,7 @@ export default function MainScreen({
     })
   }, [])
   const openChatRef = useRef<string | null>(null)
-  // 0.4.0: a restricted (family-managed) account: Glofly Control can turn it on or off any time
-  // (account:changed), so it's asked again then.
-  const [restricted, setRestricted] = useState(user.restricted === true)
   // Family-managed (restricted) accounts can't use Constellations at all (the server refuses too).
-  const cxCards = useConstellationCards(!restricted)
   const cxPins = usePinnedNebulas(!restricted && cx.phase === 'home')
   const cxNew = cxCards.cards.some((c) => c.unreadCount > 0 || c.mentionCount > 0)
   const cxOpen = cx.phase !== 'home'
@@ -1468,7 +1474,11 @@ export default function MainScreen({
       controlsRef={callControls}
     >
       <div
-        className={['main', cx.homeClass || 'main--enter', narrowList ? 'main--narrow-list' : '']
+        className={[
+          'main',
+          cx.homeClass || (cxUsed ? '' : 'main--enter'),
+          narrowList ? 'main--narrow-list' : ''
+        ]
           .filter(Boolean)
           .join(' ')}
         style={
@@ -1582,7 +1592,17 @@ export default function MainScreen({
                 type="button"
                 className="nav-item cx-nav"
                 aria-label={cxNew ? 'Constellations, new activity' : 'Constellations'}
-                onClick={() => cx.enter(cxNavRef.current)}
+                onClick={() =>
+                  // 0.7.1: in a constellation already: a quick hop back to the one you had
+                  // open last. Not in any yet: the full swipe to the dashboard.
+                  cx.enter(
+                    cxNavRef.current,
+                    lastPlaceIn(
+                      user.id,
+                      cxCards.cards.map((c) => c.id)
+                    )
+                  )
+                }
               >
                 <GalaxyIcon />
                 Constellations
@@ -1807,6 +1827,7 @@ export default function MainScreen({
       />
       <ConstellationsScreen
         phase={cx.phase}
+        quick={cx.quick}
         origin={cx.origin}
         start={cx.start}
         me={user}
@@ -1859,6 +1880,16 @@ export default function MainScreen({
         onAppSettings={() => setSettingsOpen('general')}
         onSessionExpired={onSessionExpired}
       />
+
+      {!restricted && (
+        <InvitePopup
+          onJoined={(id) => {
+            cxCards.reload()
+            cx.enter(cxNavRef.current, { constellationId: id, nebulaId: null })
+          }}
+          onProblem={setToast}
+        />
+      )}
 
       {cx.phase === 'home' && !restricted && cxCards.cards.length > 0 && (
         <HomeDock

@@ -26,6 +26,7 @@ import { ReorderList, reorderActive } from '@/ui/Reorder'
 import { inform } from '@/ui/dialogs'
 import { Fab } from '@/ui/Fab'
 import { font, useTheme } from '@/ui/theme'
+import { ChatsNews } from '@/constellations/ChatsNews'
 
 type Item = { type: 'label'; key: string; label: string } | { type: 'chat'; key: string; chat: ConversationSummary } | { type: 'result'; key: string; result: ChatResult }
 
@@ -176,19 +177,25 @@ export default function Chats() {
           )
         }
         ListHeaderComponent={
-          pinned.length ? (
+          query ? null : (
             <View>
-              <SectionLabel>Pinned</SectionLabel>
-              {/* Hold a pinned chat and drag it to reorder; hold and let go for its menu. */}
-              <ReorderList
-                items={pinned}
-                keyOf={(x) => x.id}
-                renderItem={(chat) => <View style={{ backgroundColor: c.bg }}>{chatRow(chat)}</View>}
-                onReorder={(ids) => void reorderPins(ids)}
-                onHold={(chat) => void chatMenu(chat)}
-              />
+              {/* 0.7.1: nebulas with news for you; a tap flies straight in */}
+              <ChatsNews />
+              {pinned.length ? (
+                <View>
+                  <SectionLabel>Pinned</SectionLabel>
+                  {/* Hold a pinned chat and drag it to reorder; hold and let go for its menu. */}
+                  <ReorderList
+                    items={pinned}
+                    keyOf={(x) => x.id}
+                    renderItem={(chat) => <View style={{ backgroundColor: c.bg }}>{chatRow(chat)}</View>}
+                    onReorder={(ids) => void reorderPins(ids)}
+                    onHold={(chat) => void chatMenu(chat)}
+                  />
+                </View>
+              ) : null}
             </View>
-          ) : null
+          )
         }
         renderItem={({ item }) => {
           if (item.type === 'label') return <SectionLabel>{item.label}</SectionLabel>
