@@ -15,6 +15,7 @@ import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
 import AboutSettings from './AboutSettings'
 import VoiceVideoSettings from './VoiceVideoSettings'
+import OverlaySettings from './OverlaySettings'
 import {
   previewSound,
   setSoundSettings,
@@ -49,7 +50,7 @@ type SettingsDialogProps = {
   initialPage?: SettingsPage
 }
 
-export type SettingsPage = 'general' | 'voice' | 'account' | 'about'
+export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'about'
 type Page = SettingsPage
 
 type ToggleKey = 'readReceipts' | 'showLastSeen' | 'showTyping'
@@ -483,6 +484,26 @@ function AboutIcon({ active }: { active: boolean }): React.JSX.Element {
   )
 }
 
+function OverlayIcon({ active }: { active: boolean }): React.JSX.Element {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{ stroke: active ? 'var(--glo-link)' : 'currentColor' }}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2" y="4" width="20" height="14" rx="3" />
+      <rect x="5" y="7" width="7" height="5" rx="1.5" />
+      <path d="M8 21h8" />
+    </svg>
+  )
+}
+
 function VoiceIcon({ active }: { active: boolean }): React.JSX.Element {
   return (
     <svg
@@ -666,6 +687,22 @@ export default function SettingsDialog({
               <VoiceIcon active={page === 'voice'} />
               Voice &amp; video
             </button>
+            {/* 0.7.0: the game overlay is part of the Windows app */}
+            {window.glofly.overlay && window.glofly.platform === 'win32' && (
+              <button
+                type="button"
+                className={
+                  page === 'overlay'
+                    ? 'settings-nav-item settings-nav-item--active'
+                    : 'settings-nav-item'
+                }
+                aria-current={page === 'overlay' ? 'page' : undefined}
+                onClick={() => openPage('overlay')}
+              >
+                <OverlayIcon active={page === 'overlay'} />
+                Game overlay
+              </button>
+            )}
             <button
               type="button"
               className={
@@ -705,6 +742,8 @@ export default function SettingsDialog({
 
             {page === 'voice' ? (
               <VoiceVideoSettings />
+            ) : page === 'overlay' ? (
+              <OverlaySettings />
             ) : page === 'about' ? (
               <AboutSettings version={appSettings?.version ?? null} />
             ) : page === 'account' ? (

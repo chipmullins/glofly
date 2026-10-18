@@ -287,11 +287,96 @@ export type WebInfo = {
   }
 }
 
+/** 0.7.0 Game overlay (Windows): Settings → Game overlay. */
+export type OverlaySettings = {
+  enabled: boolean
+  /** Opens and closes it (an Electron accelerator from OverlayInfo.keys.open) */
+  openKey: string
+  /** Mutes your mic during a call (from OverlayInfo.keys.mute), or none */
+  muteKey: string | null
+  /** The voice widget while closed */
+  voice: 'full' | 'photos' | 'talking' | 'off'
+  corner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  /** How solid its panels are, 40–100 */
+  opacity: number
+  /** Pop-ups in game (instead of Windows notifications) */
+  popups: { messages: boolean; calls: boolean; constellations: boolean; friends: boolean }
+  /** Games it stays off in (names as Glofly knows them) */
+  offGames: string[]
+  /** A chat kept on screen in game */
+  pinnedChat: string | null
+}
+export type OverlayInfo = {
+  /** Windows only */
+  supported: boolean
+  settings: OverlaySettings
+  /** Games Glofly has seen you play (for the per-game switches) */
+  games: string[]
+  keys: { open: string[]; mute: string[] }
+}
+export type OverlayState = {
+  /** Showing over a game (or "Try it") */
+  visible: boolean
+  /** Opened with the key: takes clicks and typing */
+  open: boolean
+  /** "Try it" from Settings (over Glofly, no game) */
+  preview: boolean
+  game: string | null
+}
+/** The call you're in, as the main window sees it (sent to the overlay). */
+export type OverlayVoice = {
+  title: string
+  kind: 'dm' | 'group' | 'nebula'
+  people: {
+    id: string
+    displayName: string
+    avatarVersion: string | null
+    speaking: boolean
+    muted: boolean
+    me: boolean
+  }[]
+  micOn: boolean
+  sharing: boolean
+  /** In the call (not still ringing or connecting) */
+  connected: boolean
+}
+export type OverlayToast = {
+  key: string
+  kind: 'message' | 'call' | 'constellation' | 'friend'
+  conversationId: string | null
+  title: string
+  body: string
+  icon: string | null
+}
+/** Buttons in the overlay, carried out by the main window (where the call is). */
+export type OverlayCommand =
+  { cmd: 'mute' | 'leave' | 'answer' | 'decline' } | { cmd: 'share-game'; sourceId: string }
+
 export type GloflyApi = {
   /** 'win32' on Windows, 'darwin' on Mac, 'linux' on Linux, 'web' in a browser */
   platform: string
   /** Only in a browser (apps/web). */
   web?: WebInfo
+  /** 0.7.0 Game overlay (desktop app on Windows; missing in a browser). */
+  overlay?: {
+    info: () => Promise<OverlayInfo | null>
+    set: (changes: Partial<OverlaySettings>) => Promise<OverlayInfo | null>
+    /** Settings → "Try it": shows the overlay over Glofly for a little while */
+    preview: (on: boolean) => void
+    /** The overlay window: close (back to the game) */
+    close: () => void
+    /** The overlay window: a button that the main window carries out */
+    command: (command: { cmd: 'mute' | 'leave' | 'answer' | 'decline' | 'share-game' }) => void
+    /** The main window: the call you're in (or null) */
+    sendVoice: (voice: OverlayVoice | null) => void
+    onCommand: (listener: (command: OverlayCommand) => void) => () => void
+    onState: (listener: (state: OverlayState) => void) => () => void
+    onVoice: (listener: (voice: OverlayVoice | null) => void) => () => void
+    onToast: (listener: (toast: OverlayToast) => void) => () => void
+    onClearToast: (listener: (key: string) => void) => () => void
+    onSettings: (listener: (info: OverlayInfo) => void) => () => void
+    onProblem: (listener: (message: string) => void) => () => void
+  }
   auth: {
     login: (request: LoginRequest) => Promise<LoginResult>
     /** Creates an account and signs it in (kept signed in). */

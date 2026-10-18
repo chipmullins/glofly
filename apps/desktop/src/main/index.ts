@@ -114,6 +114,14 @@ import {
 } from './app-settings'
 import { connectRealtime, disconnectRealtime, sendTyping, shareActivity } from './realtime'
 import {
+  isOverlayWindow,
+  overlayClear,
+  overlayNotification,
+  overlaySignedIn,
+  overlaySignedOut,
+  startOverlay
+} from './overlay'
+import {
   addGame,
   cleanGameName,
   gameState,
@@ -267,6 +275,8 @@ function createWindow(): void {
   })
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null
+    // The game overlay goes with it (else an invisible window would keep Glofly running).
+    overlaySignedOut()
   })
 
   // Keep "(second window)" in the title so the two copies are easy to tell apart.
@@ -420,6 +430,7 @@ function isWindowTheme(value: unknown): value is WindowTheme {
 function goLive(): void {
   const token = getSessionToken()
   if (token) connectRealtime(API_URL, token, () => void endSessionLocally())
+  if (token) overlaySignedIn()
 }
 
 /** Runs an auth action, and opens the live connection if it signed someone in. */
@@ -1057,12 +1068,14 @@ function registerIpcHandlers(): void {
   // Windows notifications and the taskbar badge (the window decides when and what).
   ipcMain.on('notifications:show', (event, notification: unknown) => {
     if (isAppUrl(event.senderFrame?.url ?? '') && isShowNotification(notification)) {
-      showNotification(notification, icon)
+      // In game with the overlay showing: a pop-up there instead of a Windows notification.
+      if (!overlayNotification(notification)) showNotification(notification, icon)
     }
   })
   ipcMain.on('notifications:clear', (event, key: unknown) => {
     if (isAppUrl(event.senderFrame?.url ?? '') && typeof key === 'string' && key.length <= 60) {
       clearNotification(key)
+      overlayClear(key)
     }
   })
   ipcMain.on('notifications:badge', (event, count: unknown, image: unknown) => {
@@ -1154,6 +1167,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('auth:logout', (event) => {
     if (!fromApp(event)) return
     disconnectRealtime()
+    overlaySignedOut()
     clearAllNotifications()
     setBadge(BrowserWindow.fromWebContents(event.sender), 0, null)
     return logout()
@@ -1179,12 +1193,27 @@ app.whenReady().then(() => {
   setUpTray(() => mainWindow, isMac ? menuBarIcon : icon)
   startAutoUpdates()
   startGameWatch(shareActivity)
+  // 0.7.0 game overlay (Windows): the same app page as the main window, opened with #overlay.
+  startOverlay({
+    preload: join(__dirname, '../preload/index.js'),
+    load: (window) => {
+      if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+        void window.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#overlay`)
+      } else {
+        void window.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'overlay' })
+      }
+    },
+    mainWindow: () => mainWindow,
+    signedIn: () => !!getSessionToken(),
+    isAppUrl
+  })
 
   // Light ↔ dark (picked in Settings, or Windows changed with "Match system"):
   // the page follows by itself; the window background and buttons follow here.
   nativeTheme.on('updated', () => {
     sendAppearance()
     for (const window of BrowserWindow.getAllWindows()) {
+      if (isOverlayWindow(window)) continue // see-through, no title bar
       window.setBackgroundColor(isDark() ? '#1E1916' : '#FFFBF7')
       if (customTitleBar) {
         window.setTitleBarOverlay(titleBarOf(window))

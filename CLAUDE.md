@@ -89,3 +89,12 @@
   Drawn from the approved "Glofly 2.0 Mobile" canvas; keep it matching. JS-only (no native code).
   Server: `GET /constellations/chats/:conversationId`, `push_devices.features` (migration 0032):
   nebula pushes only go to phones that registered with `features: ['constellations']`.
+- **0.7.0 Game overlay (Windows desktop, Oct 18, 2026):** `src/main/overlay.ts` = a see-through,
+  always-on-top, click-through window over the game's screen while a game Glofly recognises
+  (games.ts `runningGame`, now detected even with "Show what I'm playing" off) is the foreground
+  window (koffi: GetForegroundWindow + process name). It's the same app page opened with `#overlay`
+  (`renderer/src/overlay/OverlayApp.tsx`); the call stays in the main window, which sends a voice
+  snapshot (`overlay:voice`, CallContext) and runs the overlay's buttons (`overlay:command`).
+  Notifications go to the overlay instead of Windows while it shows (`overlayNotification`). Keys
+  are global shortcuts registered only while it's showing. Never inject into games (anti-cheat):
+  exclusive full screen isn't supported, by design. Settings → Game overlay (`OverlaySettings.tsx`).

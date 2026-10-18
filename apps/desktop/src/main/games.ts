@@ -125,27 +125,42 @@ async function steamGame(): Promise<string | null> {
   return cleanGameName(name)
 }
 
-/** What's being played: your own games first, then known games, then Steam. */
-async function detect(): Promise<string | null> {
+/**
+ * What's being played: your own games first, then known games, then Steam. `shared` leaves out
+ * games you hid; `running` doesn't (0.7.0: the game overlay works in hidden games too).
+ */
+async function detect(): Promise<{ shared: string | null; running: string | null }> {
   const exes = await runningExes()
-  const found = matchGame(exes, saved.custom, KNOWN_GAMES, saved.hidden)
-  if (found) return found
-  if (exes.has('steam.exe')) {
-    const name = await steamGame()
-    if (name && !isHidden(name, saved.hidden)) return name
+  const all = matchGame(exes, saved.custom, KNOWN_GAMES, [])
+  const visible = matchGame(exes, saved.custom, KNOWN_GAMES, saved.hidden)
+  if (visible) return { shared: visible, running: all ?? visible }
+  const steam = exes.has('steam.exe') ? await steamGame() : null
+  return {
+    shared: steam && !isHidden(steam, saved.hidden) ? steam : null,
+    running: all ?? steam
   }
-  return null
 }
+
+/** The game running now, hidden or not (null when nothing is, or nobody asked to look). */
+let running: string | null = null
+/** 0.7.0: the game overlay wants to know about games even with "Show what I'm playing" off. */
+let overlayWants: () => boolean = () => false
+let onRunning: (name: string | null) => void = () => {}
 
 async function check(): Promise<void> {
   if (checking || !supported) return
   checking = true
   try {
-    const found = saved.enabled ? await detect() : null
-    if (found !== current) {
-      current = found
+    const found = saved.enabled || overlayWants() ? await detect() : { shared: null, running: null }
+    const shared = saved.enabled ? found.shared : null
+    if (shared !== current) {
+      current = shared
       onActivity(saved.enabled ? current : null)
       announce()
+    }
+    if (found.running !== running) {
+      running = found.running
+      onRunning(running)
     }
   } catch (err) {
     console.error('Game check failed', err)
@@ -153,6 +168,24 @@ async function check(): Promise<void> {
     checking = false
   }
 }
+
+/** 0.7.0 game overlay: told whenever the running game changes (looked for while `wants()`). */
+export function watchRunningGame(
+  wants: () => boolean,
+  listener: (name: string | null) => void
+): void {
+  overlayWants = wants
+  onRunning = listener
+}
+
+/** Asks again right away (say, the overlay was just turned on). */
+export const checkGamesNow = (): void => void check()
+
+export const runningGame = (): string | null => running
+
+/** Whether this program (lowercase file name) is the running game, as far as Glofly knows it. */
+export const isRunningGameExe = (exe: string): boolean =>
+  !!running && matchGame(new Set([exe.toLowerCase()]), saved.custom, KNOWN_GAMES, []) === running
 
 /** Starts watching for games. `share` sends the game (or null) to the server. */
 export function startGameWatch(share: (name: string | null) => void): void {

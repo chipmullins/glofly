@@ -1,0 +1,761 @@
+/* 0.7.0 Game overlay (OverlayApp.tsx), from the approved "Glofly Game Overlay" canvas. The window
+   is see-through: only the panels draw. Dark in every theme, like the call screens. */
+
+html.overlay,
+html.overlay body,
+html.overlay #root {
+  background: transparent !important;
+  overflow: hidden;
+  height: 100%;
+  margin: 0;
+}
+
+.ov-root {
+  --ov-accent: var(--glo-accent, #f47a1f);
+  --ov-panel: rgba(24, 19, 17, var(--ov-solid, 0.78));
+  --ov-panel-open: rgba(30, 25, 22, 0.94);
+  --ov-text: #fff6ec;
+  --ov-soft: #e8dccf;
+  --ov-muted: #c9b9aa;
+  --ov-line: rgba(255, 246, 236, 0.1);
+  --ov-chip: rgba(255, 246, 236, 0.12);
+  --ov-talk: #3bc97a;
+  --ov-red: #d9443a;
+  --ov-answer: #2e9e5b;
+  position: fixed;
+  inset: 0;
+  color: var(--ov-text);
+  font-family: var(--glo-font-body);
+  font-size: 15px;
+  user-select: none;
+  pointer-events: none;
+}
+.ov-root--open {
+  pointer-events: auto;
+  user-select: text;
+}
+.ov-root button,
+.ov-root input {
+  font-family: inherit;
+}
+.ov-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Avatars (the main window's styles live in MainScreen.css, which isn't loaded here). */
+.ov-root .avatar {
+  position: relative;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  overflow: hidden;
+}
+.ov-root .avatar-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.ov-face {
+  display: inline-flex;
+  border-radius: 50%;
+  transition: box-shadow 0.15s ease;
+}
+.ov-face--talking {
+  box-shadow:
+    0 0 0 2px #1e1916,
+    0 0 0 4px var(--ov-talk),
+    0 0 14px var(--ov-talk);
+}
+
+/* Key caps: Shift + ` */
+.ov-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ov-keys > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ov-keys kbd {
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.92em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--ov-chip);
+}
+.ov-keys-plus {
+  opacity: 0.8;
+}
+
+/* ---- Closed ---- */
+.ov-corner {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 340px;
+}
+.ov-corner--top-left {
+  top: 24px;
+  left: 24px;
+  align-items: flex-start;
+}
+.ov-corner--top-right {
+  top: 24px;
+  right: 24px;
+  align-items: flex-end;
+}
+.ov-corner--bottom-left {
+  bottom: 24px;
+  left: 24px;
+  align-items: flex-start;
+  flex-direction: column-reverse;
+}
+.ov-corner--bottom-right {
+  bottom: 24px;
+  right: 24px;
+  align-items: flex-end;
+  flex-direction: column-reverse;
+}
+
+.ov-voice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 12px;
+  border-radius: 16px;
+  background: var(--ov-panel);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  min-width: 200px;
+}
+.ov-voice--photos,
+.ov-voice--talking {
+  flex-direction: row;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 999px;
+  gap: 8px;
+}
+.ov-voice--talking {
+  padding-right: 14px;
+}
+.ov-voice-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ov-soft);
+  padding-bottom: 2px;
+}
+.ov-voice-head svg {
+  color: var(--ov-talk);
+}
+.ov-voice-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+.ov-voice-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+.ov-voice-name--muted {
+  color: var(--ov-muted);
+}
+.ov-muted-icon {
+  color: #ff8a7a;
+  display: inline-flex;
+}
+.ov-muted-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(140, 36, 28, 0.88);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ov-pinned {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 320px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(24, 19, 17, calc(var(--ov-solid, 0.78) * 0.7));
+  font-size: 14px;
+  line-height: 1.4;
+}
+.ov-pinned-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.ov-pinned-head svg {
+  color: var(--ov-accent);
+}
+.ov-pinned-line {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+.ov-pinned-line b {
+  color: #ffc69a;
+}
+
+/* Pop-ups */
+.ov-toasts {
+  position: absolute;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 360px;
+}
+.ov-toasts--right {
+  right: 24px;
+}
+.ov-toasts--left {
+  left: 24px;
+}
+/* Open: over the empty middle of the top bar, clear of the panels' controls. */
+.ov-root--open .ov-toasts {
+  top: 14px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+.ov-toast {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(24, 19, 17, max(var(--ov-solid, 0.78), 0.88));
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  animation: ov-in 0.22s ease-out;
+  pointer-events: auto;
+}
+.ov-root:not(.ov-root--open) .ov-toast {
+  pointer-events: none;
+}
+.ov-toast--constellation {
+  background: rgba(42, 30, 60, 0.94);
+  box-shadow:
+    inset 0 0 0 1px rgba(170, 120, 240, 0.45),
+    0 8px 30px rgba(0, 0, 0, 0.4);
+}
+.ov-toast--call {
+  box-shadow:
+    inset 0 0 0 2px rgba(244, 122, 31, 0.55),
+    0 8px 30px rgba(0, 0, 0, 0.4);
+}
+.ov-toast--problem {
+  display: block;
+  background: rgba(140, 36, 28, 0.92);
+  font-weight: 700;
+}
+.ov-toast-face {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.ov-toast-face--icon {
+  display: grid;
+  place-items: center;
+  background: var(--ov-chip);
+}
+.ov-toast-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ov-toast-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+.ov-toast-body {
+  font-size: 15px;
+  line-height: 1.35;
+  color: #f3e7da;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+.ov-toast-hint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #ffb37a;
+}
+.ov-toast-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ov-toast-actions .ov-btn {
+  height: 40px;
+  padding: 0 16px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.ov-link {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #ffb37a;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ov-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 12px;
+  border-radius: 999px;
+  background: rgba(24, 19, 17, 0.84);
+  font-size: 14px;
+  white-space: nowrap;
+  animation: ov-in 0.3s ease-out;
+}
+
+@keyframes ov-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.ov-hint {
+  animation-name: ov-hint-in;
+}
+@keyframes ov-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ov-toast,
+  .ov-hint {
+    animation: none;
+  }
+}
+
+/* ---- Open ---- */
+.ov-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 12, 10, 0.58);
+}
+.ov-top {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 20px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ov-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--glo-font-display);
+  font-size: 22px;
+  font-weight: 600;
+}
+.ov-playing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--ov-chip);
+  font-size: 14px;
+  color: var(--ov-soft);
+}
+.ov-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ov-talk);
+}
+.ov-spacer {
+  flex: 1;
+}
+.ov-back {
+  font-size: 13px;
+  color: var(--ov-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ov-round,
+.ov-square,
+.ov-btn,
+.ov-send,
+.ov-small {
+  border: 0;
+  cursor: pointer;
+  color: var(--ov-text);
+  background: var(--ov-chip);
+  display: grid;
+  place-items: center;
+}
+.ov-round {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+.ov-round:hover,
+.ov-square:hover,
+.ov-btn:hover:not(:disabled),
+.ov-small:hover {
+  background: rgba(255, 246, 236, 0.2);
+}
+.ov-root button:focus-visible,
+.ov-root input:focus-visible {
+  outline: 2px solid var(--ov-accent);
+  outline-offset: 2px;
+}
+
+.ov-columns {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 92px;
+  bottom: 24px;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 300px;
+  gap: 16px;
+}
+@media (max-width: 1100px) {
+  .ov-columns {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+  .ov-panel--list {
+    display: none;
+  }
+}
+.ov-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 20px;
+  background: var(--ov-panel-open);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+.ov-panel--voice,
+.ov-panel--list {
+  padding: 18px;
+  gap: 12px;
+}
+.ov-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ov-panel-title {
+  font-family: var(--glo-font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+.ov-panel-sub {
+  font-size: 13px;
+  color: var(--ov-muted);
+}
+.ov-voice-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ov-voice-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+.ov-voice-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 500;
+}
+.ov-voice-row-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ov-muted);
+}
+.ov-voice-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.ov-btn {
+  height: 48px;
+  border-radius: 14px;
+}
+.ov-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ov-btn--off {
+  background: #f3e9e0;
+  color: #1c1210;
+}
+.ov-btn--off:hover:not(:disabled) {
+  background: #ffffff;
+}
+.ov-btn--leave {
+  background: var(--ov-red);
+  color: #ffffff;
+}
+.ov-btn--leave:hover:not(:disabled) {
+  background: #b72e22;
+}
+.ov-btn--answer {
+  background: var(--ov-answer);
+  color: #ffffff;
+}
+.ov-btn--answer:hover:not(:disabled) {
+  background: #25864c;
+}
+.ov-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ov-muted);
+}
+.ov-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: var(--ov-muted);
+  line-height: 1.45;
+}
+
+.ov-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ov-line);
+}
+.ov-square {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--ov-soft);
+}
+.ov-square--on {
+  background: rgba(244, 122, 31, 0.2);
+  color: var(--ov-accent);
+}
+.ov-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+}
+.ov-messages > :first-child {
+  margin-top: auto;
+}
+.ov-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.ov-msg--mine {
+  align-items: flex-end;
+}
+.ov-msg-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ov-muted);
+  margin: 6px 0 0 6px;
+}
+.ov-bubble {
+  max-width: 72%;
+  padding: 9px 14px;
+  border-radius: 16px;
+  line-height: 1.4;
+  background: rgba(255, 246, 236, 0.1);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.ov-msg--mine .ov-bubble {
+  background: var(--ov-accent);
+  color: #1e1916;
+}
+.ov-bubble--deleted {
+  font-style: italic;
+  opacity: 0.7;
+}
+.ov-compose {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--ov-line);
+}
+.ov-compose input {
+  flex: 1;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 246, 236, 0.16);
+  background: rgba(255, 246, 236, 0.06);
+  color: var(--ov-text);
+  font-size: 15px;
+}
+.ov-compose input::placeholder {
+  color: var(--ov-muted);
+}
+.ov-send {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--ov-accent);
+  color: #1e1916;
+}
+.ov-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ov-label {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ov-muted);
+}
+.ov-chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.ov-chat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ov-text);
+  text-align: left;
+  cursor: pointer;
+}
+.ov-chat:hover {
+  background: rgba(255, 246, 236, 0.07);
+}
+.ov-chat--on {
+  background: rgba(244, 122, 31, 0.18);
+}
+.ov-chat-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.ov-chat-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-chat-last {
+  font-size: 12px;
+  color: var(--ov-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-badge {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 11px;
+  background: var(--ov-accent);
+  color: #1e1916;
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.ov-friend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 10px;
+}
+.ov-friend-game {
+  font-size: 12px;
+  color: #8fd9ae;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-small {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}

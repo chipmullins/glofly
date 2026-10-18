@@ -42,8 +42,30 @@ function accentFromArgs(): AccentChoice {
     : 'orange'
 }
 
+/** Listens on one channel until the returned function is called. */
+function listen<T>(channel: string, listener: (value: T) => void): () => void {
+  const handler = (_e: Electron.IpcRendererEvent, value: T): void => listener(value)
+  ipcRenderer.on(channel, handler)
+  return () => ipcRenderer.removeListener(channel, handler)
+}
+
 const glofly: GloflyApi = {
   platform: process.platform,
+  overlay: {
+    info: () => ipcRenderer.invoke('overlay:info'),
+    set: (changes) => ipcRenderer.invoke('overlay:set', changes),
+    preview: (on) => ipcRenderer.send('overlay:preview', on),
+    close: () => ipcRenderer.send('overlay:close'),
+    command: (command) => ipcRenderer.send('overlay:command', command),
+    sendVoice: (voice) => ipcRenderer.send('overlay:voice', voice),
+    onCommand: (listener) => listen('overlay:command', listener),
+    onState: (listener) => listen('overlay:state', listener),
+    onVoice: (listener) => listen('overlay:voice', listener),
+    onToast: (listener) => listen('overlay:toast', listener),
+    onClearToast: (listener) => listen('overlay:clear-toast', listener),
+    onSettings: (listener) => listen('overlay:settings', listener),
+    onProblem: (listener) => listen('overlay:problem', listener)
+  },
   auth: {
     login: (request: LoginRequest) => ipcRenderer.invoke('auth:login', request),
     register: (request: RegisterRequest) => ipcRenderer.invoke('auth:register', request),

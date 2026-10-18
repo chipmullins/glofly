@@ -1130,6 +1130,75 @@ export function CallProvider({
     if (controlsRef) controlsRef.current = value
   })
 
+  // 0.7.0 game overlay (Windows): what the overlay shows of this call, and its buttons, which
+  // run here (the call lives in this window).
+  const latest = useRef(value)
+  useEffect(() => {
+    latest.current = value
+  })
+  useEffect(() => {
+    const overlay = window.glofly.overlay
+    if (!overlay) return
+    if (!current) {
+      overlay.sendVoice(null)
+      return
+    }
+    const local = room?.localParticipant
+    const connected = current.phase === 'connected' || current.phase === 'reconnecting'
+    const byId = new Map(current.chat.people.map((p) => [p.id, p]))
+    const others = room
+      ? [...room.remoteParticipants.values()].map((p) => {
+          const person = byId.get(p.identity)
+          return {
+            id: p.identity,
+            displayName: person?.displayName ?? (p.name || 'Someone'),
+            avatarVersion: person?.avatarVersion ?? null,
+            speaking: p.isSpeaking,
+            muted: !p.isMicrophoneEnabled,
+            me: false
+          }
+        })
+      : current.chat.people.slice(0, 1).map((p) => ({
+          id: p.id,
+          displayName: p.displayName,
+          avatarVersion: p.avatarVersion,
+          speaking: false,
+          muted: false,
+          me: false
+        }))
+    overlay.sendVoice({
+      title: current.chat.title,
+      kind: current.chat.kind,
+      people: [
+        {
+          id: me.id,
+          displayName: me.displayName,
+          avatarVersion: me.avatarVersion,
+          speaking: !!local?.isSpeaking,
+          muted: connected && !local?.isMicrophoneEnabled,
+          me: true
+        },
+        ...others
+      ],
+      micOn: !!local?.isMicrophoneEnabled,
+      sharing: !!local?.isScreenShareEnabled,
+      connected
+    })
+  }, [current, room, tick, me])
+  useEffect(() => {
+    const overlay = window.glofly.overlay
+    if (!overlay) return
+    return overlay.onCommand((c) => {
+      const calls = latest.current
+      if (c.cmd === 'mute') {
+        if (calls.current) calls.toggleMic()
+      } else if (c.cmd === 'leave') calls.hangUp()
+      else if (c.cmd === 'answer') void calls.answer(false)
+      else if (c.cmd === 'decline') void calls.decline()
+      else if (c.cmd === 'share-game') void calls.shareScreen(c.sourceId, true)
+    })
+  }, [])
+
   return (
     <CallsContext.Provider value={value}>
       {children}

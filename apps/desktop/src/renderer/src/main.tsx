@@ -3,20 +3,26 @@ import './assets/main.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import OverlayApp from './overlay/OverlayApp'
 import { startAppearance } from './lib/appearance'
 import { startScrollbars } from './lib/scrollbars'
 import { startTitleBarColor } from './lib/titleBar'
 import { setSoundSettings } from './lib/sounds'
 import { setNotificationSettings } from './lib/notify'
 
+// 0.7.0: the game overlay's window is this same page opened with #overlay (src/main/overlay.ts).
+const isOverlay = window.location.hash === '#overlay' && !!window.glofly.overlay
+if (isOverlay) document.documentElement.classList.add('overlay')
+
 // On Windows the app draws its own top area (see MainScreen.css and LoginScreen.css).
-if (window.glofly.platform === 'win32') {
+if (window.glofly.platform === 'win32' && !isOverlay) {
   document.documentElement.classList.add('has-titlebar')
   // …and the window buttons take on whatever color is under them.
   startTitleBarColor()
 }
 // On a Mac too, with macOS's traffic-light buttons over the top-left corner.
-if (window.glofly.platform === 'darwin') document.documentElement.classList.add('mac-titlebar')
+if (window.glofly.platform === 'darwin' && !isOverlay)
+  document.documentElement.classList.add('mac-titlebar')
 
 // Light or dark theme and the accent color, set before anything is drawn.
 startAppearance()
@@ -36,7 +42,5 @@ for (const type of ['dragover', 'drop'] as const) {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
+  <StrictMode>{isOverlay ? <OverlayApp /> : <App />}</StrictMode>
 )
