@@ -189,9 +189,37 @@
   justify-content: center;
 }
 .cx-voice-big--watch {
+  /* 0.7.2: Watch Together sizes its video from --area-h. The stage measures itself and sets it
+     (VoiceStage.tsx); this is only the first frame's guess, so the video is never 0 wide. */
+  --area-h: calc(100vh - 260px);
   background: #120c0a;
   align-items: stretch;
   justify-content: stretch;
+  padding: 12px;
+  box-sizing: border-box;
+}
+/* Change video / Stop watching, in the voice header (as in a call's header) */
+.cx-voice-head-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f3e3d6;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cx-voice-head-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.cx-voice-head-button:focus-visible {
+  outline: 2px solid #ffb347;
+  outline-offset: 2px;
 }
 .cx-voice-big--watch > * {
   flex: 1;

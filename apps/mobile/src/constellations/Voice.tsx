@@ -212,9 +212,7 @@ export function VoiceStage({ wide }: { wide?: boolean }) {
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: wide ? 20 : 12, paddingTop: 14, paddingBottom: 140 + insets.bottom, gap: 10 }}>
         {watch ? (
-          <View style={{ height: bigH + 80 }}>
-            <WatchPortrait watch={watch} meId={meId} people={personOf} tiles={tiles} conversationId={s.call.conversationId} top={0} bottom={0} />
-          </View>
+          <WatchPortrait watch={watch} meId={meId} people={personOf} tiles={tiles} conversationId={s.call.conversationId} />
         ) : screen && screenTile ? (
           <View style={{ height: bigH, borderRadius: 16, overflow: 'hidden', backgroundColor: '#000' }}>
             <CallVideo track={screen} contain style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />

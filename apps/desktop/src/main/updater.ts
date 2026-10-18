@@ -1,5 +1,6 @@
-import { app, BrowserWindow } from 'electron'
+import { app, autoUpdater as nativeUpdater, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import { markQuitting } from './app-settings'
 
 // Automatic updates for the installed app.
 //
@@ -43,6 +44,8 @@ export function updateReady(): string | null {
 /** "Restart to update": closes Glofly, installs silently, and opens it again. */
 export function restartToUpdate(): void {
   if (!readyVersion) return
+  // 0.7.2: closing the window must really close it now (on a Mac it only hides otherwise).
+  markQuitting()
   autoUpdater.quitAndInstall(true, true)
 }
 
@@ -69,6 +72,9 @@ export function startAutoUpdates(): void {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.on('error', (err) => console.error('Update check failed:', err?.message ?? err))
+  // 0.7.2: macOS's updater (Electron's own, which electron-updater hands the install to) says
+  // "before-quit-for-update" instead of before-quit: let the windows really close so it installs.
+  nativeUpdater.on('before-quit-for-update', markQuitting)
   autoUpdater.on('update-downloaded', (info) => {
     readyVersion = info.version
     announce()

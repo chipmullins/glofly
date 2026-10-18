@@ -7,7 +7,10 @@ import {
   type PlayerReport,
   type ServerClock,
   type SyncStatus,
-  type WatchState
+  type WatchState,
+  type PlayerDiag,
+  watchDiagText,
+  watchErrorText
 } from '@glofly/shared/watch'
 import { isWeb } from '../lib/platform'
 import { PlayIcon } from './icons'
@@ -19,15 +22,16 @@ import { PlayIcon } from './icons'
 // browser wants a tap before it plays sound does the video take taps (then the site's own button
 // works).
 
-const ERRORS: Record<number, string> = {
-  2: "That link doesn't point to a video that can be played.",
-  5: "This video can't be played here.",
-  100: 'This video was removed or made private.',
-  101: "This video can't be played outside YouTube.",
-  150: "This video can't be played outside YouTube."
+export type PlayerInfo = {
+  status: SyncStatus
+  error: string | null
+  muted: boolean
+  time: number
+  /** 0.7.2: the site's player can't be talked to here; Glofly reloads it for skips */
+  limited?: boolean
+  /** 0.7.2: the diagnostics line */
+  diag?: string
 }
-
-export type PlayerInfo = { status: SyncStatus; error: string | null; muted: boolean; time: number }
 
 export default function WatchPlayer({
   playerUrl,
@@ -79,7 +83,9 @@ export default function WatchPlayer({
     reported: null as string | null,
     error: null as string | null,
     mem: newSyncMemory(),
-    unmutedAt: 0
+    unmutedAt: 0,
+    limited: false,
+    diag: null as PlayerDiag | null
   })
 
   const send = (c: PlayerCommand): void => {
@@ -94,6 +100,8 @@ export default function WatchPlayer({
     p.videoId = w.videoId
     p.ready = false
     p.error = null
+    p.limited = false
+    p.diag = null
     p.reported = null
     p.mem = newSyncMemory()
     p.report = { state: 'unstarted', time: 0, duration: 0, muted: false }
@@ -107,14 +115,24 @@ export default function WatchPlayer({
   const tick = (): void => {
     const p = page.current
     const w = watchRef.current
+    const diag = watchDiagText(p.diag, p.ready, p.report)
     if (p.error) {
-      cbRef.current.onInfo({ status: 'catching', error: p.error, muted: false, time: 0 })
+      cbRef.current.onInfo({ status: 'catching', error: p.error, muted: false, time: 0, diag })
       return
     }
     if (!p.ready || p.videoId !== w.videoId) {
-      cbRef.current.onInfo({ status: 'catching', error: null, muted: false, time: w.position })
+      cbRef.current.onInfo({
+        status: 'catching',
+        error: null,
+        muted: false,
+        time: w.position,
+        diag
+      })
       return
     }
+    // A limited player can't say how long the video is: pass on what the server knows.
+    if (p.limited && w.durationSec && !p.report.duration)
+      send({ cmd: 'duration', duration: w.durationSec })
     // The desktop app always lets videos play with sound: never mute it "for autoplay" there.
     const { commands, status } = watchSyncStep(w, clock.now(), p.report, p.mem, Date.now(), {
       neverMute: !isWeb
@@ -136,7 +154,9 @@ export default function WatchPlayer({
       status,
       error: null,
       muted: p.report.muted && volumeRef.current > 0,
-      time: p.report.time
+      time: p.report.time,
+      limited: p.limited,
+      diag
     })
   }
 
@@ -151,8 +171,11 @@ export default function WatchPlayer({
         p.loaded = true
         p.videoId = null
         loadCurrent()
+      } else if (d.ev === 'diag') {
+        if (d.diag && typeof d.diag === 'object') p.diag = d.diag as PlayerDiag
       } else if (d.ev === 'ready') {
         p.ready = true
+        p.limited = d.limited === true
         send({
           cmd: 'volume',
           volume: volumeRef.current,
@@ -168,6 +191,8 @@ export default function WatchPlayer({
           duration: typeof d.duration === 'number' && Number.isFinite(d.duration) ? d.duration : 0,
           muted: d.muted === true
         }
+        if (d.diag && typeof d.diag === 'object') p.diag = d.diag as PlayerDiag
+        if (typeof d.limited === 'boolean') p.limited = d.limited
         const w = watchRef.current
         if (p.report.duration > 0 && p.reported !== w.videoId && p.videoId === w.videoId) {
           p.reported = w.videoId
@@ -180,11 +205,7 @@ export default function WatchPlayer({
           }
         }
       } else if (d.ev === 'error') {
-        p.error =
-          ERRORS[Number(d.code)] ??
-          (watchRef.current.site && watchRef.current.site !== 'youtube'
-            ? "This video couldn't be played here."
-            : "YouTube couldn't play this video.")
+        p.error = watchErrorText(d.code, watchRef.current.site)
         tick()
       }
     }
@@ -232,7 +253,8 @@ export default function WatchPlayer({
         tabIndex={-1}
       />
       {/* Clicks on the video are Glofly's play / pause, except when a tap is needed to start. */}
-      {!tapToStart && (
+      {/* Dailymotion's new player can't be talked to: its own buttons stay usable (0.7.2). */}
+      {!tapToStart && watch.site !== 'dailymotion' && (
         <div
           className={
             canControl ? 'watch-player-shield watch-player-shield--can' : 'watch-player-shield'

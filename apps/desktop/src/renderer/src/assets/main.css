@@ -330,3 +330,36 @@ img.emoji {
     scrollbar-color: color-mix(in srgb, var(--glo-muted) 35%, transparent) transparent;
   }
 }
+
+/* 0.7.2: window drag areas (Windows title bar and Mac). A drag area swallows every click inside it
+   unless the element says no-drag, so the photo at the top of a chat (and the group's member count,
+   the nebula header's buttons on a Mac, …) did nothing in the desktop app while working in the
+   browser. One rule for every top bar: anything you can click or type in is never part of the drag
+   area, wherever it sits. A new top bar that drags only needs adding to this list. */
+:is(.has-titlebar, .mac-titlebar)
+  :is(
+    .chat-header,
+    .cx-voice-head,
+    .cx-dash-header,
+    .content-header,
+    .sidebar-top,
+    .update-bar,
+    .announcement-bar,
+    .brand
+  )
+  :is(
+    button,
+    a,
+    input,
+    select,
+    textarea,
+    label,
+    summary,
+    [role='button'],
+    [role='menu'],
+    [role='menuitem'],
+    [role='radiogroup'],
+    [tabindex]:not([tabindex='-1'])
+  ) {
+  -webkit-app-region: no-drag;
+}

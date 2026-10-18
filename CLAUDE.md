@@ -110,3 +110,16 @@
   build can open it), `GET /constellations/news` (the phone's Chats rows), deleting a category moves
   its nebulas to "General" (one transaction, `category_deleted` in the log). The Constellations
   button/tab goes back to your last constellation (quick hop once you're in one).
+- **0.7.2 (Oct 18, 2026)** (project doc `glofly-release-0.7.2.md`): the player page (`calls/player.ts`)
+  answers YouTube's `readyToListen` with `listening` and only counts the player as connected after
+  `initialDelivery`/`infoDelivery` (0.7.1 took `readyToListen` as the answer and stopped the handshake,
+  so the real YouTube never became controllable). It adds the params YouTube's own API sends (`forigin`,
+  `aoriginsup`, `aorigins`, `gporigin`). No answer in 8 s → one reload, then **"limited"**: play, pause and
+  skips reload the player at the right moment. Dailymotion's old embed is retired: the new
+  `geo.dailymotion.com/player.html` has no message API, so it's always limited (its own buttons usable).
+  Twitch in the desktop app (a file:// window) says why it can't play. Diagnostics: each report carries
+  `diag`; Alt-click the sync pill (desktop/web) or long-press it (phones) to show it. Wording shared:
+  `watchErrorText` / `watchDiagText` in shared `watch.ts`. Testing tip: a stand-in must send
+  `readyToListen` first and answer only after `listening`, like the real embed (0.7.1's stand-ins didn't).
+  Desktop: one global rule in `assets/main.css` makes every clickable in a window drag area `no-drag`;
+  `markQuitting()` on Electron's `before-quit-for-update` lets the Mac update install.

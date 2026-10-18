@@ -12,8 +12,8 @@ import { Avatar } from '@/ui/Avatar'
 import { Icon } from '@/ui/icons'
 import { Spinner, Text } from '@/ui/kit'
 import { haptic } from '@/constellations/motion'
-import { MemberList, openMemberSheet } from '@/constellations/Members'
-import { can, roleColor, topRole } from '@/constellations/roles'
+import { MemberList, openMemberSheet, RolesSheet } from '@/constellations/Members'
+import { can, outranks, roleColor, topRole } from '@/constellations/roles'
 import { runDetail, SettingsScreen, useSettingsDetail } from '@/constellations/settingsKit'
 import { Caps, Card, Glyph, N, NightButton, SearchBox, Segmented } from '@/constellations/ui'
 
@@ -38,6 +38,11 @@ function Members({ c }: { c: ConstellationDetail }) {
   const [requests, setRequests] = useState<JoinRequest[] | null>(null)
   const [bans, setBans] = useState<ConstellationBan[] | null>(null)
   const [q, setQ] = useState('')
+  // 0.7.2: give roles right from Settings (it used to be only in the member sheet)
+  const [rolesFor, setRolesFor] = useState<string | null>(null)
+  const assignable = c.roles.filter((r) => r.kind !== 'owner' && r.kind !== 'member' && (c.me.owner || r.position < c.me.rank))
+  const mayGiveRoles = (userId: string) => can(c, 'manageRoles') && assignable.length > 0 && (outranks(c, meId, userId) || (userId === meId && c.me.owner))
+  const rolesMember = rolesFor ? c.members.find((m) => m.user.id === rolesFor) : undefined
 
   useEffect(() => {
     if (canRequests) void cx.requests(c.id).then((r) => r.ok && setRequests(r.data.requests))
@@ -121,7 +126,23 @@ function Members({ c }: { c: ConstellationDetail }) {
       {tab === 'everyone' ? (
         <>
           <SearchBox value={q} onChange={setQ} placeholder="Search members" />
-          <MemberList c={c} query={q} onPick={(m) => openMemberSheet(c.id, m.user.id)} />
+          <MemberList
+            c={c}
+            query={q}
+            onPick={(m) => openMemberSheet(c.id, m.user.id)}
+            trailing={(m) => {
+              if (!mayGiveRoles(m.user.id)) return null
+              const n = m.roleIds.filter((id) => c.roles.some((r) => r.id === id && r.kind !== 'owner' && r.kind !== 'member')).length
+              return (
+                <Pressable accessibilityRole="button" accessibilityLabel={`Roles for ${m.user.displayName}`} hitSlop={6} onPress={() => setRolesFor(m.user.id)} style={({ pressed }) => ({ height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: N.edge2, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: pressed ? N.card2 : 'transparent' })}>
+                  <Glyph name="shield" size={14} />
+                  <Text size={13} weight="bold">
+                    Roles{n ? ` · ${n}` : ''}
+                  </Text>
+                </Pressable>
+              )
+            }}
+          />
         </>
       ) : null}
       {tab === 'bans' ? (
@@ -172,6 +193,7 @@ function Members({ c }: { c: ConstellationDetail }) {
           </Card>
         </>
       ) : null}
+      {rolesMember ? <RolesSheet c={c} m={rolesMember} onClose={() => setRolesFor(null)} /> : null}
     </SettingsScreen>
   )
 }

@@ -17,6 +17,7 @@ import type { ApiResult, PublicUser, WatchUpdate } from '../../../preload/api-ty
 import type { WatchValue } from '../calls/useWatch'
 import WatchPlayer, { type PlayerInfo } from './WatchPlayer'
 import Avatar from './Avatar'
+import { isWeb } from '../lib/platform'
 import {
   BackTenIcon,
   CloseIcon,
@@ -36,15 +37,19 @@ import './WatchTogether.css'
 // own, firefly reactions floating over it, and full screen just for you.
 
 const VOLUME_KEY = 'glofly.watchVolume'
-function savedVolume(): number {
+/** 0.7.2: the level before Mute, so unmuting goes back to it (it used to jump to 80) */
+const VOLUME_BEFORE_MUTE_KEY = 'glofly.watchVolumeBeforeMute'
+function storedLevel(key: string, fallback: number): number {
   try {
-    const v = Number(localStorage.getItem(VOLUME_KEY))
-    return Number.isFinite(v) && v >= 0 && v <= 100 && localStorage.getItem(VOLUME_KEY) !== null
-      ? v
-      : 80
+    const raw = localStorage.getItem(key)
+    const v = Number(raw)
+    return raw !== null && Number.isFinite(v) && v >= 0 && v <= 100 ? v : fallback
   } catch {
-    return 80
+    return fallback
   }
+}
+function savedVolume(): number {
+  return storedLevel(VOLUME_KEY, 80)
 }
 
 const firstName = (p: PublicUser): string => p.displayName.trim().split(/\s+/)[0] || p.username
@@ -175,6 +180,14 @@ export function StartWatchDialog({
         {link.trim() && !id && (
           <p className="watch-start-hint">
             Paste a link from YouTube, Twitch, Vimeo or Dailymotion.
+          </p>
+        )}
+        {/* 0.7.2: Twitch checks every page above its player, and the desktop app's window has no
+            web address, so Twitch refuses to play here. Others (browser, phones) still can. */}
+        {site === 'twitch' && id && !isWeb && (
+          <p className="watch-start-hint">
+            Twitch doesn&apos;t play in the desktop app. People on chat.glofly.app or a phone can
+            still watch it; you&apos;ll see a note instead of the video.
           </p>
         )}
 
@@ -418,7 +431,10 @@ export function WatchStage({
     time: 0
   })
   const [volume, setVolumeState] = useState(savedVolume)
+  const beforeMute = useRef<number | null>(null)
   const [unmute, setUnmute] = useState(0)
+  /** 0.7.2: Alt-click (Option-click) the sync pill: what the player is doing, to read out to Claude */
+  const [showDiag, setShowDiag] = useState(false)
   const [dragging, setDragging] = useState<number | null>(null)
   const [idle, setIdle] = useState(false)
   const [, setTick] = useState(0)
@@ -510,6 +526,21 @@ export function WatchStage({
       // storage off: just for now
     }
   }
+  /** The speaker button: mute, or back to the level from before muting */
+  const toggleMute = (): void => {
+    if (volume === 0) {
+      const before = beforeMute.current ?? storedLevel(VOLUME_BEFORE_MUTE_KEY, 80)
+      setVolume(before > 0 ? before : 80)
+      return
+    }
+    beforeMute.current = volume
+    try {
+      localStorage.setItem(VOLUME_BEFORE_MUTE_KEY, String(volume))
+    } catch {
+      // storage off: remembered until the call closes
+    }
+    setVolume(0)
+  }
 
   const toggleFull = (): void => {
     const el = fullRef.current
@@ -528,7 +559,7 @@ export function WatchStage({
     wake()
   }
 
-  const pill = info.error ? null : info.status === 'ended' ? (
+  const pillBody = info.error ? null : info.status === 'ended' ? (
     <span className="watch-pill watch-pill--quiet">Ended</span>
   ) : info.status === 'paused' ? (
     <span className="watch-pill watch-pill--quiet">
@@ -547,6 +578,22 @@ export function WatchStage({
       <span className="watch-pill-dot" />
       <span className="watch-pill-long">Catching up…</span>
       <span className="watch-pill-short">Catching up…</span>
+    </span>
+  )
+  const pill = (
+    <span
+      className="watch-pill-wrap"
+      title="Alt-click for player details"
+      onClick={(e) => {
+        if (e.altKey) setShowDiag((v) => !v)
+      }}
+    >
+      {pillBody ?? (
+        <span className="watch-pill watch-pill--quiet">
+          <span className="watch-pill-long">Problem</span>
+          <span className="watch-pill-short">Problem</span>
+        </span>
+      )}
     </span>
   )
 
@@ -645,12 +692,19 @@ export function WatchStage({
         </>
       )}
       {pill}
-      <label className="watch-volume" title="Video volume (voices stay the same)">
+      {/* 0.7.2: a group, not a <label>: a label re-sends a click on the speaker's icon to the button,
+          so Mute ran twice (80 → 0 → 80: nothing seemed to happen, or it jumped to 80). */}
+      <div
+        className="watch-volume"
+        role="group"
+        aria-label="Video volume"
+        title="Video volume (voices stay the same)"
+      >
         <button
           type="button"
           className="watch-volume-icon"
           aria-label={volume === 0 ? 'Turn the video sound on' : 'Mute the video (voices stay on)'}
-          onClick={() => setVolume(volume === 0 ? 80 : 0)}
+          onClick={toggleMute}
         >
           {volume === 0 ? <SpeakerOffIcon /> : <SpeakerIcon size={18} />}
         </button>
@@ -664,7 +718,7 @@ export function WatchStage({
           style={{ '--done': `${volume}%` } as React.CSSProperties}
           onChange={(e) => setVolume(Number(e.target.value))}
         />
-      </label>
+      </div>
       <button
         type="button"
         className="watch-full-button"
@@ -810,6 +864,18 @@ export function WatchStage({
             </p>
             {reactions}
           </div>
+          {info.limited && (
+            <p className="watch-note watch-note--limited">
+              {watch.site === 'dailymotion'
+                ? "Dailymotion's player can't be kept exactly in step: skips reload the video, and you may need to press play on it."
+                : "Glofly can't talk to the video player right now, so skips and pauses reload the video. Alt-click the pill above and tell Claude what it says."}
+            </p>
+          )}
+          {showDiag && (
+            <p className="watch-diag" role="status">
+              {info.diag ?? 'player: no details yet'}
+            </p>
+          )}
         </>
       )}
     </div>

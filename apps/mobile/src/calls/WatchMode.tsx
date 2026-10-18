@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Animated, Easing, Image, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
+import { Animated, Easing, Image, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { canControlWatch, eventText, videoTime, watchActionText, watchLinkFrom, watchPositionAt, WATCH_REACTIONS, WATCH_SITE_NAMES, type PublicUser, type WatchControl, type WatchPreview, type WatchReaction, type WatchState } from '@glofly/shared'
 import Svg, { Ellipse, Path } from 'react-native-svg'
@@ -253,17 +253,18 @@ function SeekBar({ position, duration, enabled, onSeek, onRefused }: { position:
   )
 }
 
-function SyncPill({ state }: { state: PlayerState }) {
+function SyncPill({ state, onLongPress }: { state: PlayerState; onLongPress?: () => void }) {
   if (state.error) return null
   const [label, bg, fg] =
     state.status === 'sync' ? ['In sync', '#1F3A2A', '#6FD39A'] : state.status === 'paused' ? ['Paused', '#3A2A22', '#D9C2B1'] : state.status === 'ended' ? ['Ended', '#3A2A22', '#D9C2B1'] : ['Catching up…', '#3A2C14', '#FFC86A']
+  // 0.7.2: a long press shows the player details (to read out to Claude).
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: bg }}>
+    <Pressable onLongPress={onLongPress} delayLongPress={600} accessibilityHint="Long press for player details" style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: bg }}>
       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: fg }} />
       <Text size={12} weight="bold" style={{ color: fg }}>
         {label}
       </Text>
-    </View>
+    </Pressable>
   )
 }
 
@@ -299,6 +300,7 @@ function Controls({ watch, meId, state, compact, onRefused }: { watch: WatchStat
   const can = canControlWatch(watch, meId)
   // 0.7.1: a button someone can't use says why ("Only Jordan can pause and skip") instead of nothing.
   const tryIt = (run: () => void) => (can ? run() : onRefused())
+  const [details, setDetails] = useState(false)
   return (
     <View style={{ gap: compact ? 4 : 8 }}>
       {watch.live ? null : <SeekBar position={position} duration={duration} enabled={can} onSeek={(to) => controlWatch('seek', to)} onRefused={onRefused} />}
@@ -316,8 +318,18 @@ function Controls({ watch, meId, state, compact, onRefused }: { watch: WatchStat
           </Text>
         )}
         <View style={{ flex: 1 }} />
-        <SyncPill state={state} />
+        <SyncPill state={state} onLongPress={() => setDetails((v) => !v)} />
       </View>
+      {state.limited && !compact ? (
+        <Text size={12} style={{ color: '#FFD7A6', textAlign: 'center' }}>
+          {watch.site === 'dailymotion' ? "Dailymotion's player can't be kept exactly in step: skips reload the video, and you may need to tap play on it." : "Glofly can't talk to the video player right now, so skips and pauses reload the video. Long-press the pill and tell Claude what it says."}
+        </Text>
+      ) : null}
+      {details ? (
+        <Text selectable size={11} style={{ color: '#F5EDE6', backgroundColor: 'rgba(0,0,0,0.45)', padding: 8, borderRadius: 8, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+          {state.diag ?? 'player: no details yet'}
+        </Text>
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
         {watch.live ? null : <RoundButton icon="back10" text="10" label="Back 10 seconds for everyone" dim={!can} onPress={() => tryIt(() => controlWatch('back'))} />}
         <RoundButton big icon={watch.playing ? 'pause' : 'play'} label={watch.playing ? 'Pause for everyone' : 'Play for everyone'} dim={!can} onPress={() => tryIt(() => controlWatch(watch.playing ? 'pause' : 'play'))} />
@@ -495,6 +507,7 @@ export function WatchScreen({
   bottom,
   mode,
   onExitFull,
+  embedded = false,
 }: {
   watch: WatchState
   meId: string
@@ -506,6 +519,8 @@ export function WatchScreen({
   bottom: number
   mode: 'portrait' | 'full' | 'parked'
   onExitFull?: () => void
+  /** 0.7.2: inside a voice nebula's stage, which has its own tiles: the video and its controls only, as wide as the stage */
+  embedded?: boolean
 }) {
   const { width, height } = useWindowDimensions()
   const [state, setState] = useState<PlayerState>({ status: 'catching', error: null, muted: false })
@@ -513,6 +528,7 @@ export function WatchScreen({
   const [shown, setShown] = useState(true)
   const [picking, setPicking] = useState(false)
   const [changing, setChanging] = useState(false)
+  const [boxW, setBoxW] = useState(0)
   const can = canControlWatch(watch, meId)
   const nameOf = useCallback((id: string) => (id === meId ? 'You' : firstOf(people(id))), [meId, people])
   const starter = watch.startedBy === meId ? 'you' : nameOf(watch.startedBy)
@@ -527,6 +543,54 @@ export function WatchScreen({
   useEffect(() => {
     if (mode === 'full') setShown(true)
   }, [mode])
+
+  const note = (
+    <Text size={12} style={{ color: '#B8A699', textAlign: 'center', marginTop: 4 }} accessibilityLiveRegion="polite">
+      {watch.control === 'everyone' ? 'Anyone in the call can pause or skip.' : `Only ${starter} can pause or skip.`}
+      {watch.startedBy === meId ? (
+        <Text size={12} weight="bold" style={{ color: '#FFA96A' }} onPress={() => setWatchControl(watch.control === 'everyone' ? 'starter' : 'everyone')}>
+          {'  '}
+          {watch.control === 'everyone' ? 'Only me' : 'Let everyone'}
+        </Text>
+      ) : null}
+    </Text>
+  )
+
+  // 0.7.2: a voice nebula's stage. The upright screen used to be squeezed into the stage's box, so
+  // Stop watching (and the controls) sat below the bottom where nobody could reach them.
+  if (embedded) {
+    const h = (boxW * 9) / 16
+    return (
+      <View onLayout={(e) => setBoxW(Math.round(e.nativeEvent.layout.width))} style={{ gap: 8 }}>
+        {boxW > 0 ? (
+          <View style={{ width: boxW, height: h, borderRadius: 16, overflow: 'hidden' }}>
+            <Video watch={watch} w={boxW} h={h} nameOf={nameOf} onState={setState} state={state} said={said} canControl={can} onTap={playPause} onPlayPause={playPause} />
+          </View>
+        ) : (
+          <View style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 16, backgroundColor: '#000' }} />
+        )}
+        <Controls watch={watch} meId={meId} state={state} onRefused={refuse} />
+        {note}
+        {can ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 2 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Change video" onPress={() => setChanging(true)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#2A1C17', opacity: pressed ? 0.8 : 1 })}>
+              <Icon name="swapVideo" size={16} color="#F5EDE6" />
+              <Text size={13} weight="bold" style={{ color: '#F5EDE6' }}>
+                Change video
+              </Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Stop watching, for everyone" onPress={() => void askStop()} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#2A1C17', opacity: pressed ? 0.8 : 1 })}>
+              <Icon name="close" size={14} color="#F5EDE6" />
+              <Text size={13} weight="bold" style={{ color: '#F5EDE6' }}>
+                Stop watching
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {changing ? <StartWatchSheet key="change" changing onClose={() => setChanging(false)} /> : null}
+      </View>
+    )
+  }
 
   // Where the video goes
   let box: { left: number; top: number; w: number; h: number }
@@ -556,15 +620,7 @@ export function WatchScreen({
         <View key="portrait" style={{ position: 'absolute', top: box.h + 10, left: 0, right: 0, bottom: 0, gap: 10 }}>
           <View style={{ paddingHorizontal: 16 }}>
             <Controls watch={watch} meId={meId} state={state} onRefused={refuse} />
-            <Text size={12} style={{ color: '#B8A699', textAlign: 'center', marginTop: 4 }} accessibilityLiveRegion="polite">
-              {watch.control === 'everyone' ? 'Anyone in the call can pause or skip.' : `Only ${starter} can pause or skip.`}
-              {watch.startedBy === meId ? (
-                <Text size={12} weight="bold" style={{ color: '#FFA96A' }} onPress={() => setWatchControl(watch.control === 'everyone' ? 'starter' : 'everyone')}>
-                  {'  '}
-                  {watch.control === 'everyone' ? 'Only me' : 'Let everyone'}
-                </Text>
-              ) : null}
-            </Text>
+            {note}
             {can ? (
               <Pressable accessibilityRole="button" accessibilityLabel="Stop watching, for everyone" onPress={() => void askStop()} style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#2A1C17', opacity: pressed ? 0.8 : 1 })}>
                 <Icon name="close" size={14} color="#F5EDE6" />
@@ -657,7 +713,7 @@ export function WatchScreen({
   )
 }
 
-/** Upright only (a voice nebula on a phone): the same screen, never sideways. */
-export function WatchPortrait(props: { watch: WatchState; meId: string; people: (id: string) => PublicUser; tiles: Tile[]; conversationId: string; top: number; bottom: number }) {
-  return <WatchScreen {...props} mode="portrait" />
+/** A voice nebula on a phone: the video and its controls (Change video, Stop watching) inside the voice stage, never sideways. */
+export function WatchPortrait(props: { watch: WatchState; meId: string; people: (id: string) => PublicUser; tiles: Tile[]; conversationId: string }) {
+  return <WatchScreen {...props} top={0} bottom={0} mode="portrait" embedded />
 }

@@ -406,6 +406,15 @@ export function setUpTray(window: () => BrowserWindow | null, icon: string): voi
   updateTray()
 }
 
+/**
+ * 0.7.2: Glofly is really quitting (an update is about to install). On a Mac, "Update to …" goes
+ * through macOS's updater, which closes the windows without the usual before-quit, so the window
+ * only hid itself (it looked closed), Glofly never quit, and the update never installed.
+ */
+export function markQuitting(): void {
+  quitting = true
+}
+
 /** Called from the window's close event. True means "hide it to the tray instead". */
 export function shouldHideOnClose(): boolean {
   // Mac: closing the window never quits, as with any Mac chat app. Glofly stays in the Dock

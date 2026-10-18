@@ -864,3 +864,26 @@
   line-height: 1.45;
   color: var(--glo-muted);
 }
+
+/* 0.7.2: the player details (Alt-click the sync pill) and the "limited player" note */
+.watch-pill-wrap {
+  display: inline-flex;
+}
+.watch > .watch-diag,
+.watch > .watch-note--limited {
+  width: var(--video-w);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.watch-diag {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #f3e3d6;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-word;
+  user-select: text;
+}
+.watch-note--limited {
+  color: #ffd7a6;
+}

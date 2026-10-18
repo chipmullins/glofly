@@ -10,6 +10,8 @@ import { AvatarFace } from '../components/Avatar'
 import { colorsFor } from '../lib/avatarColors'
 import { isWeb, web } from '../lib/platform'
 import { voiceLine } from '@glofly/shared/constellations'
+import { canControlWatch } from '@glofly/shared/watch'
+import { SwapVideoIcon } from '../components/icons'
 import { SpeakerIcon } from './bits'
 import './Voice.css'
 
@@ -142,12 +144,27 @@ export default function VoiceStage({
   )
   const [playerUrl, setPlayerUrl] = useState<string | null>(null)
   const screenBox = useRef<HTMLDivElement>(null)
+  // 0.7.2: the video's size comes from the height of the box it sits in (--area-h, as in a call).
+  // Without it the video had no width at all: a black box with only the controls showing.
+  const watchBox = useRef<HTMLDivElement>(null)
+  const [watchBoxH, setWatchBoxH] = useState(0)
   useEffect(() => {
     void window.glofly.watch.playerUrl().then(setPlayerUrl)
   }, [])
   const callId = joinedHere ? (current?.call?.id ?? null) : null
   const watchApi = useWatch(callId, calls.showProblem)
   const watch = playerUrl ? watchApi.watch : null
+  const watching = !!watch
+  useEffect(() => {
+    const el = watchBox.current
+    if (!watching || !el) return
+    const measure = (): void => setWatchBoxH(Math.round(el.getBoundingClientRect().height))
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [watching, joinedHere, room])
+  const canControl = !!watch && canControlWatch(watch, me.id)
 
   const header = (
     <header className="cx-voice-head">
@@ -155,6 +172,21 @@ export default function VoiceStage({
       <h2>{nebulaName}</h2>
       <span className="cx-voice-sub">Drop in any time · no ringing</span>
       <span style={{ flex: 1 }} />
+      {watch && joinedHere && canControl && (
+        <>
+          <button
+            type="button"
+            className="cx-voice-head-button"
+            onClick={() => setWatchDialog('change')}
+          >
+            <SwapVideoIcon size={16} />
+            Change video
+          </button>
+          <button type="button" className="cx-voice-head-button" onClick={watchApi.stop}>
+            Stop watching
+          </button>
+        </>
+      )}
       <button type="button" className="cx-link-button" onClick={onOpenChat}>
         Open chat
       </button>
@@ -257,7 +289,13 @@ export default function VoiceStage({
   let media: React.ReactNode
   if (watch && playerUrl) {
     media = (
-      <div className="cx-voice-big cx-voice-big--watch">
+      <div
+        className="cx-voice-big cx-voice-big--watch"
+        ref={watchBox}
+        style={
+          watchBoxH > 0 ? ({ '--area-h': `${watchBoxH - 24}px` } as React.CSSProperties) : undefined
+        }
+      >
         <WatchStage
           me={me}
           people={tiles.filter((t) => !t.me).map((t) => t.person)}
@@ -455,8 +493,12 @@ export default function VoiceStage({
             aria-label={
               watch ? 'Change the video you are watching together' : 'Watch a video together'
             }
-            title="Watch together"
-            disabled={!ready}
+            title={
+              watch && !canControl
+                ? 'Only the person who started the video can change it'
+                : 'Watch together'
+            }
+            disabled={!ready || (!!watch && !canControl)}
             onClick={() => setWatchDialog(watch ? 'change' : 'start')}
           >
             <svg

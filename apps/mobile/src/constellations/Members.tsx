@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
 import { router } from 'expo-router'
 import { create } from 'zustand'
@@ -36,7 +36,7 @@ function MemberFace({ m, size, ring }: { m: ConstellationMember; size: number; r
 }
 
 /** The list (phone page and the iPad column). `compact`: the iPad's narrower rows. */
-export function MemberList({ c, query, compact, onPick }: { c: ConstellationDetail; query: string; compact?: boolean; onPick: (m: ConstellationMember) => void }) {
+export function MemberList({ c, query, compact, onPick, trailing }: { c: ConstellationDetail; query: string; compact?: boolean; onPick: (m: ConstellationMember) => void; /** 0.7.2: something at the end of a row (Settings › Members: the Roles button) */ trailing?: (m: ConstellationMember) => ReactNode }) {
   const meId = useSession((s) => s.user?.id ?? '')
   const groups = memberGroups(c, query)
   if (!groups.length) {
@@ -92,6 +92,7 @@ export function MemberList({ c, query, compact, onPick }: { c: ConstellationDeta
                       </View>
                     ) : null}
                   </View>
+                  {trailing ? trailing(m) : null}
                 </Pressable>
               )
             })}
@@ -242,7 +243,7 @@ function BigButton({ icon, label, onPress, disabled }: { icon: IconName; label: 
 }
 
 /** Which roles they hold (only roles below yours can be given or taken). */
-function RolesSheet({ c, m, onClose }: { c: ConstellationDetail; m: ConstellationMember; onClose: () => void }) {
+export function RolesSheet({ c, m, onClose }: { c: ConstellationDetail; m: ConstellationMember; onClose: () => void }) {
   const [picked, setPicked] = useState<string[]>(m.roleIds)
   const [busy, setBusy] = useState(false)
   const roles = c.roles.filter((r) => r.kind !== 'owner' && r.kind !== 'member').sort((a, b) => b.position - a.position)

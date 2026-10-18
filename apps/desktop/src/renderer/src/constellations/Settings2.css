@@ -821,3 +821,67 @@
   opacity: 0.35;
   cursor: default;
 }
+
+/* 0.7.2: roles on each member in Settings → Members (as chips), and the Roles picker under the row */
+.cx-settings-member {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cx-role-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.cx-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--glo-panel);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--glo-ink);
+}
+.cx-role-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 56px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px dashed var(--glo-line);
+}
+.cx-role-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cx-role-option--on {
+  border-color: var(--glo-accent);
+  background: color-mix(in srgb, var(--glo-accent) 14%, var(--glo-surface));
+}
+.cx-role-option:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.cx-role-option-check {
+  font-size: 12px;
+}
+/* A field directly in a settings page keeps its own height (".cx-field" grows in rows elsewhere,
+   which in this column pushed the member list to the bottom of the page). */
+.cx-settings-body > .cx-field {
+  flex: none;
+}

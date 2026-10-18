@@ -1208,6 +1208,18 @@ function MembersPage({
   const [bans, setBans] = useState<ConstellationBan[] | null>(null)
   const [query, setQuery] = useState('')
   const [transferTo, setTransferTo] = useState<PublicUser | null>(null)
+  /** 0.7.2: whose Roles picker is open (roles from Settings, not only the member list's menu) */
+  const [rolesFor, setRolesFor] = useState<string | null>(null)
+  /** Roles you can give: below your own (the Owner can give any), never Owner or Member */
+  const assignable = c.roles
+    .filter(
+      (r) => r.kind !== 'owner' && r.kind !== 'member' && (c.me.owner || r.position < c.me.rank)
+    )
+    .sort((a, b) => b.position - a.position)
+  const mayGiveRoles = (userId: string): boolean =>
+    can(c, 'manageRoles') &&
+    assignable.length > 0 &&
+    (outranks(c, me.id, userId) || (userId === me.id && c.me.owner))
   useEffect(() => {
     if (can(c, 'approveRequests'))
       void api.requests(c.id).then((r) => r.ok && setRequests(r.data.requests))
@@ -1282,52 +1294,121 @@ function MembersPage({
         <h2>Members · {c.members.length}</h2>
         {shown.map((m) => {
           const role = topRole(c, m.user.id)
+          const theirRoles = c.roles
+            .filter((r) => m.roleIds.includes(r.id) && r.kind !== 'owner' && r.kind !== 'member')
+            .sort((a, b) => b.position - a.position)
+          const giving = mayGiveRoles(m.user.id)
+          const open = rolesFor === m.user.id && giving
           return (
-            <div key={m.user.id} className="cx-settings-item">
-              <Face person={m.user} />
-              <span className="cx-settings-item-text">
-                <strong
-                  style={{
-                    color:
-                      role.kind === 'member'
-                        ? undefined
-                        : (ROLE_COLORS[role.color] ?? ROLE_COLORS.gray).light
-                  }}
+            <div key={m.user.id} className="cx-settings-member">
+              <div className="cx-settings-item">
+                <Face person={m.user} />
+                <span className="cx-settings-item-text">
+                  <strong
+                    style={{
+                      color:
+                        role.kind === 'member'
+                          ? undefined
+                          : (ROLE_COLORS[role.color] ?? ROLE_COLORS.gray).light
+                    }}
+                  >
+                    {m.user.displayName}
+                    {m.user.id === me.id ? ' (you)' : ''}
+                  </strong>
+                  <span>
+                    {role.name} · joined{' '}
+                    {new Date(m.joinedAt).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                    {m.timedOutUntil ? ' · timed out' : ''}
+                  </span>
+                  {theirRoles.length > 0 && (
+                    <span className="cx-role-chips" aria-label="Roles">
+                      {theirRoles.map((r) => (
+                        <span key={r.id} className="cx-role-chip">
+                          <span
+                            className="cx-role-dot"
+                            style={{ background: (ROLE_COLORS[r.color] ?? ROLE_COLORS.gray).dot }}
+                          />
+                          {r.name}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </span>
+                {giving && (
+                  <span className="cx-settings-item-actions">
+                    <button
+                      type="button"
+                      className="cx-link-button"
+                      aria-expanded={open}
+                      onClick={() => setRolesFor(open ? null : m.user.id)}
+                    >
+                      Roles
+                    </button>
+                  </span>
+                )}
+                {c.me.owner && m.user.id !== me.id && (
+                  <span className="cx-settings-item-actions">
+                    <button
+                      type="button"
+                      className="cx-link-button"
+                      onClick={() => setTransferTo(m.user)}
+                    >
+                      Make Owner
+                    </button>
+                  </span>
+                )}
+                {!c.me.owner && outranks(c, me.id, m.user.id) && can(c, 'timeoutKick') && (
+                  <span className="cx-settings-item-actions">
+                    <button
+                      type="button"
+                      className="cx-link-button cx-link-button--danger"
+                      onClick={() => void run(() => api.kick(c.id, m.user.id))}
+                    >
+                      Kick
+                    </button>
+                  </span>
+                )}
+              </div>
+              {open && (
+                <div
+                  className="cx-role-picker"
+                  role="group"
+                  aria-label={`Roles for ${m.user.displayName}`}
                 >
-                  {m.user.displayName}
-                  {m.user.id === me.id ? ' (you)' : ''}
-                </strong>
-                <span>
-                  {role.name} · joined{' '}
-                  {new Date(m.joinedAt).toLocaleDateString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
+                  {assignable.map((r) => {
+                    const has = m.roleIds.includes(r.id)
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={has}
+                        className={has ? 'cx-role-option cx-role-option--on' : 'cx-role-option'}
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() =>
+                            api.setMemberRoles(
+                              c.id,
+                              m.user.id,
+                              has ? m.roleIds.filter((x) => x !== r.id) : [...m.roleIds, r.id]
+                            )
+                          )
+                        }
+                      >
+                        <span
+                          className="cx-role-dot"
+                          style={{ background: (ROLE_COLORS[r.color] ?? ROLE_COLORS.gray).dot }}
+                        />
+                        {r.name}
+                        {has && <span className="cx-role-option-check">✓</span>}
+                      </button>
+                    )
                   })}
-                  {m.timedOutUntil ? ' · timed out' : ''}
-                </span>
-              </span>
-              {c.me.owner && m.user.id !== me.id && (
-                <span className="cx-settings-item-actions">
-                  <button
-                    type="button"
-                    className="cx-link-button"
-                    onClick={() => setTransferTo(m.user)}
-                  >
-                    Make Owner
-                  </button>
-                </span>
-              )}
-              {!c.me.owner && outranks(c, me.id, m.user.id) && can(c, 'timeoutKick') && (
-                <span className="cx-settings-item-actions">
-                  <button
-                    type="button"
-                    className="cx-link-button cx-link-button--danger"
-                    onClick={() => void run(() => api.kick(c.id, m.user.id))}
-                  >
-                    Kick
-                  </button>
-                </span>
+                </div>
               )}
             </div>
           )

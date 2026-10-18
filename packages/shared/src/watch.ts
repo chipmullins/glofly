@@ -439,6 +439,8 @@ export type PlayerCommand =
   | { cmd: 'pause' }
   | { cmd: 'seek'; to: number }
   | { cmd: 'volume'; volume?: number; muted?: boolean }
+  /** 0.7.2: a "limited" player can't say how long the video is; the app passes on what it knows */
+  | { cmd: 'duration'; duration: number }
 
 /** How this player is doing, for the pill under the video. */
 export type SyncStatus = 'sync' | 'catching' | 'paused' | 'blocked' | 'ended'
@@ -622,3 +624,71 @@ export function watchSyncStep(
   }
   return { commands, status: mem.playTries >= 3 && !player.muted && !opts.neverMute && !mem.heardSound ? 'blocked' : 'catching' }
 }
+
+// ---------------------------------------------------------------------------------------------
+// 0.7.2: what the apps say about the player page (its problems, and the diagnostics line).
+
+const WATCH_ERRORS: Record<number, string> = {
+  2: "That link doesn't point to a video that can be played.",
+  5: "This video can't be played here.",
+  100: 'This video was removed or made private.',
+  101: "This video can't be played outside YouTube.",
+  150: "This video can't be played outside YouTube."
+}
+
+const SITE_NAMES: Record<string, string> = {
+  youtube: 'YouTube',
+  twitch: 'Twitch',
+  vimeo: 'Vimeo',
+  dailymotion: 'Dailymotion'
+}
+
+/** 0.7.2: what to say when the player page reports a problem (codes are YouTube's, or our own words) */
+export function watchErrorText(code: unknown, site: string | undefined): string {
+  const name = SITE_NAMES[site ?? 'youtube'] ?? 'The video site'
+  if (code === 'twitch-app')
+    return "Twitch can't play in the desktop app. It plays in the browser version (chat.glofly.app) and on phones."
+  if (code === 'noload')
+    return site === 'vimeo'
+      ? "Vimeo didn't load here. Its owner may only allow it on certain websites."
+      : `${name} didn't load here.`
+  return (
+    WATCH_ERRORS[Number(code)] ??
+    (site && site !== 'youtube' ? "This video couldn't be played here." : "YouTube couldn't play this video.")
+  )
+}
+
+/** What the player page last said about itself (Alt-click the sync pill to see it) */
+export type PlayerDiag = {
+  site?: string
+  mode?: string
+  from?: string
+  ago?: number
+  count?: number
+  listens?: number
+  reloads?: number
+  since?: number
+}
+
+/** One line for the diagnostics: "player: ready (api) · YouTube said infoDelivery 0.3 s ago · …" */
+export function watchDiagText(
+  d: PlayerDiag | null,
+  ready: boolean,
+  report: { state: string; time: number; duration: number }
+): string {
+  if (!d) return `player: ${ready ? 'ready' : 'not ready'} · no word from the player page yet`
+  const site = SITE_NAMES[d.site ?? 'youtube'] ?? 'site'
+  const heard =
+    d.from && (d.ago ?? -1) >= 0
+      ? `${site} last said "${d.from}" ${d.ago} s ago (${d.count ?? 0} messages)`
+      : `nothing from ${site} in ${d.since ?? 0} s`
+  const parts = [
+    `player: ${ready ? 'ready' : 'not ready'} (${d.mode ?? '?'})`,
+    heard,
+    `listening sent ${d.listens ?? 0}×`,
+    d.reloads ? `reloaded ${d.reloads}×` : '',
+    `state ${report.state}, ${report.time.toFixed(1)} s${report.duration ? ` of ${Math.round(report.duration)} s` : ''}`
+  ]
+  return parts.filter(Boolean).join(' · ')
+}
+
