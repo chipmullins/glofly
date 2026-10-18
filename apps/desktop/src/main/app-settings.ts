@@ -37,9 +37,10 @@ const saved: Saved = {
     dndSilence: true,
     volume: 100,
     callVolume: 100,
-    message: 'chime',
-    friendRequest: 'chime',
-    friendOnline: 'dewdrop',
+    message: 'lowComet',
+    constellationMessage: 'skyLantern',
+    friendRequest: 'nightBreeze',
+    friendOnline: 'hollowWood',
     login: 'hello',
     logout: 'goodnight',
     callConnected: 'glowOn',
@@ -74,6 +75,21 @@ const ALERT_SOUNDS: AlertSound[] = [
   'pebble',
   'pluck',
   'fade',
+  'comet',
+  'lowComet',
+  'twinStars',
+  'constellation',
+  'nebula',
+  'starlightPing',
+  'moonrise',
+  'hollowWood',
+  'nightBreeze',
+  'ember',
+  'orbit',
+  'stardust',
+  'aurora',
+  'skyLantern',
+  'deepSpace',
   'none'
 ]
 // Keep in step with SOUND_FILES in the window (renderer/src/lib/sounds.ts).
@@ -113,8 +129,10 @@ const CALL_SOUNDS: CallSound[] = [
  * 0.2.2 changed the default ringing sounds (Glow ring → Firefly dance, Glofly jingle → Synth
  * arp). Settings saved before that still hold the old defaults, so they move over once; anyone
  * who had picked something else keeps it. Bumped only when defaults change.
+ * 3 (0.7.0): the message sound's default became Low comet (Firefly chime before).
+ * 4 (0.7.0): friend online became Hollow wood (Dewdrop before), friend request Night breeze (Firefly chime).
  */
-const SOUND_DEFAULTS_VERSION = 2
+const SOUND_DEFAULTS_VERSION = 4
 
 /** Checks a sound setting (from the window or the saved file) before using it. */
 function soundSettingOk(key: string, value: unknown): boolean {
@@ -126,6 +144,7 @@ function soundSettingOk(key: string, value: unknown): boolean {
     case 'callVolume':
       return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100
     case 'message':
+    case 'constellationMessage':
     case 'friendRequest':
     case 'friendOnline':
     case 'login':
@@ -177,6 +196,13 @@ export function loadAppSettings(): void {
       if ((value.soundDefaultsVersion ?? 1) < SOUND_DEFAULTS_VERSION) {
         if (saved.sounds.ringtone === 'ring') saved.sounds.ringtone = 'fireflyDance'
         if (saved.sounds.outgoing === 'jingle') saved.sounds.outgoing = 'synthArp'
+      }
+      if ((value.soundDefaultsVersion ?? 1) < 3 && saved.sounds.message === 'chime') {
+        saved.sounds.message = 'lowComet'
+      }
+      if ((value.soundDefaultsVersion ?? 1) < 4) {
+        if (saved.sounds.friendOnline === 'dewdrop') saved.sounds.friendOnline = 'hollowWood'
+        if (saved.sounds.friendRequest === 'chime') saved.sounds.friendRequest = 'nightBreeze'
       }
     }
     if (isNotificationChanges(value.notifications)) {

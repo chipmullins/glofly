@@ -887,6 +887,33 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   // ---- The members panel ----
   const membersPanel = membersOpen && (
     <aside aria-label="Members" className="cx-members">
+      {/* Oct 17: invite right from here, for anyone who can invite (no trip into Settings). */}
+      <div className="cx-members-head">
+        <span>Members · {c.members.length}</span>
+        {can(c, 'invite') && (
+          <button
+            type="button"
+            className="cx-members-invite"
+            aria-label="Invite people"
+            title="Invite people"
+            onClick={props.onInvite}
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M2.5 19.5a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6M12.5 8a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z" />
+            </svg>
+          </button>
+        )}
+      </div>
       {groups.map((g) => (
         <div key={g.key}>
           <h2 style={{ color: g.color }}>

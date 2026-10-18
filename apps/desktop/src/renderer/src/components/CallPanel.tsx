@@ -2171,9 +2171,12 @@ function useFloatHidden(): string | null {
  */
 export function CallFloat({
   openChatId,
+  night = false,
   onOpenChat
 }: {
   openChatId: string | null
+  /** Constellations is open (a voice nebula shows its own stage and dock there instead) */
+  night?: boolean
   onOpenChat: (conversationId: string) => void
 }): React.JSX.Element | null {
   const calls = useCalls()
@@ -2212,6 +2215,7 @@ export function CallFloat({
   }, [callChatOpen])
 
   if (!current || current.conversationId === openChatId) return null
+  if (night && current.chat.kind === 'nebula') return null
   const callKey = current.call?.id ?? current.conversationId
   if (hiddenFor === callKey) return null
 

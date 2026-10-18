@@ -17,6 +17,21 @@ import sparkTrailFile from '../assets/sounds/spark-trail.ogg'
 import dewdropFile from '../assets/sounds/dewdrop.ogg'
 import starfallFile from '../assets/sounds/starfall.ogg'
 import pebbleFile from '../assets/sounds/pebble.ogg'
+import cometFile from '../assets/sounds/comet.ogg'
+import lowCometFile from '../assets/sounds/low-comet.ogg'
+import twinStarsFile from '../assets/sounds/twin-stars.ogg'
+import constellationFile from '../assets/sounds/constellation.ogg'
+import nebulaFile from '../assets/sounds/nebula.ogg'
+import starlightPingFile from '../assets/sounds/starlight-ping.ogg'
+import moonriseFile from '../assets/sounds/moonrise.ogg'
+import hollowWoodFile from '../assets/sounds/hollow-wood.ogg'
+import nightBreezeFile from '../assets/sounds/night-breeze.ogg'
+import emberFile from '../assets/sounds/ember.ogg'
+import orbitFile from '../assets/sounds/orbit.ogg'
+import stardustFile from '../assets/sounds/stardust.ogg'
+import auroraFile from '../assets/sounds/aurora.ogg'
+import skyLanternFile from '../assets/sounds/sky-lantern.ogg'
+import deepSpaceFile from '../assets/sounds/deep-space.ogg'
 import ringOutSynthArpFile from '../assets/sounds/ring-out-synth-arp.ogg'
 import ringOutLanternFile from '../assets/sounds/ring-out-lantern.ogg'
 import ringOutFireflyFile from '../assets/sounds/ring-out-firefly.ogg'
@@ -65,6 +80,7 @@ import pttSparkUpFile from '../assets/sounds/ptt-spark-up.ogg'
 
 export type SoundName =
   | 'message' // a message arrives
+  | 'constellationMessage' // a message in a constellation's nebula (0.7.0)
   | 'friendRequest' // someone sends you a friend request
   | 'friendOnline' // a friend you asked about comes online
   | 'login' // the firefly takeoff finishes
@@ -107,6 +123,25 @@ export const SOUND_FILES: Record<
   // 0.2.2, from the "no answer" round: offered for any short sound.
   pluck: { label: 'Pluck', url: pluckFile },
   fade: { label: 'Fade', url: fadeFile },
+  // Oct 17 (0.7.0): a quick upward whoosh into a chime.
+  comet: { label: 'Comet', url: cometFile },
+  // 0.7.0: the new default message sound (a gentle low whoosh into a mellow bell).
+  lowComet: { label: 'Low comet', url: lowCometFile },
+  // Oct 17 (0.7.0): the night-sky set. Hollow wood and Night breeze are the friend online and
+  // friend request defaults, Lantern the constellation message default.
+  twinStars: { label: 'Twin stars', url: twinStarsFile },
+  constellation: { label: 'Constellation', url: constellationFile },
+  nebula: { label: 'Nebula', url: nebulaFile },
+  starlightPing: { label: 'Starlight ping', url: starlightPingFile },
+  moonrise: { label: 'Moonrise', url: moonriseFile },
+  hollowWood: { label: 'Hollow wood', url: hollowWoodFile },
+  nightBreeze: { label: 'Night breeze', url: nightBreezeFile },
+  ember: { label: 'Ember', url: emberFile },
+  orbit: { label: 'Orbit', url: orbitFile },
+  stardust: { label: 'Stardust', url: stardustFile },
+  aurora: { label: 'Aurora', url: auroraFile },
+  skyLantern: { label: 'Lantern', url: skyLanternFile },
+  deepSpace: { label: 'Deep space', url: deepSpaceFile },
   // 0.2.2 ringing sounds (tools/sounds/ring.py, ring2.py). Each file is ONE loop cycle `loop`
   // seconds long (its echo is folded onto the start), so it repeats with no gap.
   synthArp: { label: 'Synth arp', url: ringOutSynthArpFile, ring: 'out', loop: 4.0 },
@@ -142,9 +177,10 @@ let settings: SoundSettings = {
   dndSilence: true,
   volume: 100,
   callVolume: 100,
-  message: 'chime',
-  friendRequest: 'chime',
-  friendOnline: 'dewdrop',
+  message: 'lowComet',
+  constellationMessage: 'skyLantern',
+  friendRequest: 'nightBreeze',
+  friendOnline: 'hollowWood',
   login: 'hello',
   logout: 'goodnight',
   callConnected: 'glowOn',
@@ -184,7 +220,8 @@ export function volumeFor(name: SoundName): number {
 /** Plays the sound picked for this moment, unless sounds are off or you're in Do not disturb. */
 export function playSound(name: SoundName): void {
   if (!settings.enabled || (quiet && settings.dndSilence)) return
-  const choice = settings[name]
+  // Settings saved before 0.7.0 have no constellation sound yet: Lantern.
+  const choice = settings[name] ?? (name === 'constellationMessage' ? 'skyLantern' : undefined)
   if (!choice || choice === 'none' || !(choice in SOUND_FILES)) return
   // A burst of messages makes one sound, not a pile-up.
   const now = Date.now()

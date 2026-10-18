@@ -1517,7 +1517,8 @@
   position: fixed;
   right: 24px;
   bottom: 24px;
-  z-index: 40;
+  /* Above Constellations' night layer (45), below dialogs (50). */
+  z-index: 47;
   width: 300px;
   border-radius: 16px;
   overflow: hidden;

@@ -177,6 +177,7 @@ export function Segmented<T extends string>({
 
 type SoundKey =
   | 'message'
+  | 'constellationMessage'
   | 'friendRequest'
   | 'friendOnline'
   | 'login'
@@ -192,6 +193,12 @@ type SoundKey =
 // from every short sound, the ringing rows from the long ones.
 const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' | 'call' }[] = [
   { key: 'message', label: 'Message sound', kind: 'alert' },
+  {
+    key: 'constellationMessage',
+    label: 'Constellation message sound',
+    desc: 'Plays for messages in your constellations.',
+    kind: 'alert'
+  },
   { key: 'friendRequest', label: 'Friend request sound', kind: 'alert' },
   {
     key: 'friendOnline',
@@ -239,6 +246,7 @@ const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' |
   }
 ]
 const ALERT_CHOICES: AlertSound[] = [
+  'lowComet',
   'chime',
   'sparkTrail',
   'dewdrop',
@@ -252,6 +260,20 @@ const ALERT_CHOICES: AlertSound[] = [
   'blinkOut',
   'pluck',
   'fade',
+  'comet',
+  'twinStars',
+  'constellation',
+  'nebula',
+  'starlightPing',
+  'moonrise',
+  'hollowWood',
+  'nightBreeze',
+  'ember',
+  'orbit',
+  'stardust',
+  'aurora',
+  'skyLantern',
+  'deepSpace',
   'none'
 ]
 /** Ringing rows: that row's own set first (incoming for the ringtone, outgoing for the other),

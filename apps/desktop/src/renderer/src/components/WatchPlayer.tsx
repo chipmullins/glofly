@@ -8,6 +8,7 @@ import {
   type SyncStatus,
   type WatchState
 } from '@glofly/shared/watch'
+import { isWeb } from '../lib/platform'
 
 // The shared video itself: the server's player page (/watch/player) in a frame, kept in step
 // with everyone (watchSyncStep, twice a second). The frame can't be clicked: play, pause and
@@ -64,7 +65,8 @@ export default function WatchPlayer({
     report: { state: 'unstarted', time: 0, duration: 0, muted: false } as PlayerReport,
     reported: null as string | null,
     error: null as string | null,
-    mem: newSyncMemory()
+    mem: newSyncMemory(),
+    unmutedAt: 0
   })
 
   const send = (c: PlayerCommand): void => {
@@ -100,13 +102,27 @@ export default function WatchPlayer({
       cbRef.current.onInfo({ status: 'catching', error: null, muted: false, time: w.position })
       return
     }
-    const { commands, status } = watchSyncStep(w, clock.now(), p.report, p.mem)
+    // The desktop app always lets videos play with sound: never mute it "for autoplay" there.
+    const { commands, status } = watchSyncStep(w, clock.now(), p.report, p.mem, Date.now(), {
+      neverMute: !isWeb
+    })
     for (const c of commands) send(c)
+    // Muted without Glofly asking (YouTube muting itself): turn the sound back on (every few seconds at most).
+    if (
+      p.report.muted &&
+      !p.mem.mutedForAutoplay &&
+      volumeRef.current > 0 &&
+      status === 'sync' &&
+      Date.now() - p.unmutedAt > 3000
+    ) {
+      p.unmutedAt = Date.now()
+      send({ cmd: 'volume', volume: volumeRef.current, muted: false })
+    }
     setTapToStart(status === 'blocked')
     cbRef.current.onInfo({
       status,
       error: null,
-      muted: p.report.muted && p.mem.mutedForAutoplay,
+      muted: p.report.muted && volumeRef.current > 0,
       time: p.report.time
     })
   }

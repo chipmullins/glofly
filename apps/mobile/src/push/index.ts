@@ -144,6 +144,6 @@ onLive((event, payload) => {
   const now = Date.now()
   if (now - lastSound < 1500) return
   lastSound = now
-  if (p.sounds) playSound('message')
+  if (p.sounds) playSound('constellation')
   if (p.vibrate) vibrate()
 })

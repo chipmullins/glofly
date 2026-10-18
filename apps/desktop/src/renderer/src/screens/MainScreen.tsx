@@ -897,7 +897,7 @@ export default function MainScreen({
           const looking =
             viewingNebula.conversationId === event.conversationId && document.hasFocus()
           if (looking) break
-          playSound('message')
+          playSound('constellationMessage')
           if (shouldNotify()) {
             const where = `#${event.nebulaName ?? ''}`
             void notify(
@@ -1659,7 +1659,6 @@ export default function MainScreen({
             onChangeEmail={() => setSettingsOpen('account')}
             onSessionExpired={onSessionExpired}
           />
-          <CallFloat openChatId={openChatId} onOpenChat={openFromCall} />
           {watchingId && friendsById.get(watchingId) && (
             <BroadcastViewer
               person={friendsById.get(watchingId)!}
@@ -1799,6 +1798,13 @@ export default function MainScreen({
         </main>
       </div>
 
+      {/* The floating call video, over Glofly home and (Oct 17) over Constellations too: it sits
+          outside the home layer, which slides away when the night side opens. */}
+      <CallFloat
+        openChatId={cxOpen ? null : openChatId}
+        night={cxOpen}
+        onOpenChat={(id) => (cxOpen ? homeThen(() => openFromCall(id)) : openFromCall(id))}
+      />
       <ConstellationsScreen
         phase={cx.phase}
         origin={cx.origin}

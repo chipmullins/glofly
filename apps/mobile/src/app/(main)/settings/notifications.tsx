@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppState, Platform, View } from 'react-native'
 import { router } from 'expo-router'
-import { phoneMessageSound, phoneRingtone } from '@glofly/shared'
+import { DEFAULT_PHONE_CONSTELLATION_SOUND, PHONE_MESSAGE_SOUNDS, phoneMessageSound, phoneRingtone } from '@glofly/shared'
 import { usePhonePrefs, setPhonePref } from '@/state/prefs'
 import { notificationStatus, openNotificationSettings, fullScreenCallsAllowed, openFullScreenCallSettings, requestNotifications, type PermissionState } from '@/push/permissions'
 import { refreshPush } from '@/push'
@@ -82,6 +82,7 @@ export default function NotificationSettings() {
       <SettingsRow label="Sounds in Glofly" detail="Message sound while the app is open" toggle={{ value: p.sounds, onChange: (v) => void setPhonePref('sounds', v) }} />
       <SettingsRow label="Vibrate" toggle={{ value: p.vibrate, onChange: (v) => void setPhonePref('vibrate', v) }} />
       <SettingsRow label="Message sound" value={phoneMessageSound(p.messageSound).label} onPress={() => router.push({ pathname: '/settings/sound', params: { kind: 'message' } })} />
+      <SettingsRow label="Constellation sound" value={(PHONE_MESSAGE_SOUNDS.find((s) => s.id === p.constellationSound) ?? phoneMessageSound(DEFAULT_PHONE_CONSTELLATION_SOUND)).label} onPress={() => router.push({ pathname: '/settings/sound', params: { kind: 'constellation' } })} />
       <SettingsRow label="Ringtone" value={phoneRingtone(p.ringtone).label} onPress={() => router.push({ pathname: '/settings/sound', params: { kind: 'ringtone' } })} />
       <Text size={13} tone="muted" style={{ paddingHorizontal: 20, paddingVertical: 12, lineHeight: 19 }}>
         In Do not disturb you get no message notifications; calls still show, silently. Muted chats only notify you when someone @mentions you.

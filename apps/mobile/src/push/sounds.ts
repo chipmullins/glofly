@@ -2,7 +2,7 @@ import { Platform } from 'react-native'
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio'
 import * as Haptics from 'expo-haptics'
 import * as Native from 'glofly-native'
-import { phoneMessageSound, phoneRingtone } from '@glofly/shared'
+import { DEFAULT_PHONE_CONSTELLATION_SOUND, phoneMessageSound, phoneRingtone } from '@glofly/shared'
 import { usePhonePrefs } from '@/state/prefs'
 
 // Glofly's sounds inside the app (the same files as the desktop app): the message chime, the
@@ -21,6 +21,21 @@ const MESSAGE_FILES: Record<string, number> = {
   glowOn: require('../../assets/sounds/glow-on.ogg'),
   blinkIn: require('../../assets/sounds/blink-in.ogg'),
   hello: require('../../assets/sounds/login.ogg'),
+  comet: require('../../assets/sounds/comet.ogg'),
+  lowComet: require('../../assets/sounds/low-comet.ogg'),
+  twinStars: require('../../assets/sounds/twin-stars.ogg'),
+  constellation: require('../../assets/sounds/constellation.ogg'),
+  nebula: require('../../assets/sounds/nebula.ogg'),
+  starlightPing: require('../../assets/sounds/starlight-ping.ogg'),
+  moonrise: require('../../assets/sounds/moonrise.ogg'),
+  hollowWood: require('../../assets/sounds/hollow-wood.ogg'),
+  nightBreeze: require('../../assets/sounds/night-breeze.ogg'),
+  ember: require('../../assets/sounds/ember.ogg'),
+  orbit: require('../../assets/sounds/orbit.ogg'),
+  stardust: require('../../assets/sounds/stardust.ogg'),
+  aurora: require('../../assets/sounds/aurora.ogg'),
+  skyLantern: require('../../assets/sounds/sky-lantern.ogg'),
+  deepSpace: require('../../assets/sounds/deep-space.ogg'),
 }
 const RINGTONE_FILES: Record<string, number> = {
   fireflyDance: require('../../assets/sounds/ring-in-firefly.ogg'),
@@ -40,6 +55,7 @@ const RINGTONE_FILES: Record<string, number> = {
 
 const FILES = {
   message: MESSAGE_FILES.chime,
+  constellation: MESSAGE_FILES.skyLantern,
   ringtone: RINGTONE_FILES.fireflyDance,
   outgoing: require('../../assets/sounds/ring-out-synth-arp.ogg'),
   connected: require('../../assets/sounds/glow-on.ogg'),
@@ -50,6 +66,12 @@ const FILES = {
 } as const
 
 export type SoundName = keyof typeof FILES
+
+/** The constellation message sound picked in Settings (Lantern unless changed). */
+function constellationSound() {
+  const id = usePhonePrefs.getState().constellationSound
+  return phoneMessageSound(MESSAGE_FILES[id] ? id : DEFAULT_PHONE_CONSTELLATION_SOUND)
+}
 
 const players = new Map<string, AudioPlayer>()
 let modeSet = false
@@ -67,6 +89,10 @@ function fileFor(name: SoundName): { key: string; file: number } {
   if (name === 'message') {
     const id = phoneMessageSound(p.messageSound).id
     return { key: `message:${id}`, file: MESSAGE_FILES[id] ?? FILES.message }
+  }
+  if (name === 'constellation') {
+    const id = constellationSound().id
+    return { key: `message:${id}`, file: MESSAGE_FILES[id] ?? FILES.constellation }
   }
   if (name === 'ringtone') {
     const id = phoneRingtone(p.ringtone).id
@@ -101,9 +127,14 @@ function player(name: SoundName): AudioPlayer | null {
  * Settings: plays a message sound or ringtone so you can hear it before picking it. iPhone plays it
  * natively (after setSounds), like every other Glofly sound there.
  */
-export function previewSound(kind: 'message' | 'ringtone', id: string): void {
-  if (Platform.OS === 'ios' && Native.playCallTone(kind, false, 1)) return
-  const file = kind === 'message' ? MESSAGE_FILES[id] : RINGTONE_FILES[id]
+export function previewSound(kind: 'message' | 'ringtone' | 'constellation', id: string): void {
+  if (Platform.OS === 'ios') {
+    stopPreview()
+    // The constellation sound by its file name (0.7.0 builds); the others are the picked ones (after setSounds).
+    const name = kind === 'constellation' ? phoneMessageSound(id).native : kind
+    if (Native.playCallTone(name, false, 1)) return
+  }
+  const file = kind === 'ringtone' ? RINGTONE_FILES[id] : MESSAGE_FILES[id]
   if (!file) return
   stopPreview()
   const p = playerFor(`${kind}:${id}`, file)
@@ -130,6 +161,11 @@ export function stopPreview(): void {
 }
 
 export function playSound(name: SoundName, volume = 1): void {
+  if (name === 'constellation' && Platform.OS === 'ios') {
+    // iPhone plays it natively by its file name (0.7.0 builds); older builds play the message sound.
+    if (Native.playCallTone(constellationSound().native, false, volume)) return
+    if (Native.playCallTone('message', false, volume)) return
+  }
   if (iphoneTone(name) && Native.playCallTone(name, false, volume)) return
   const p = player(name)
   if (!p) return

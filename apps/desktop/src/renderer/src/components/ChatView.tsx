@@ -1299,14 +1299,22 @@ export default function ChatView({
       ) : (
         <header className="chat-header">
           {partner ? (
-            <Avatar
-              id={partner.id}
-              name={partner.displayName}
-              avatarVersion={partner.avatarVersion}
-              status={partnerPresence?.status}
-              mobile={onMobile(partnerPresence ?? undefined)}
-              ring="var(--glo-bg)"
-            />
+            <button
+              type="button"
+              className="chat-header-face"
+              aria-label={`View ${partner.displayName}'s profile`}
+              title="View profile"
+              onClick={() => onViewProfile(partner)}
+            >
+              <Avatar
+                id={partner.id}
+                name={partner.displayName}
+                avatarVersion={partner.avatarVersion}
+                status={partnerPresence?.status}
+                mobile={onMobile(partnerPresence ?? undefined)}
+                ring="var(--glo-bg)"
+              />
+            </button>
           ) : (
             <button
               type="button"

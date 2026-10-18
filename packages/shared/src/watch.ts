@@ -338,9 +338,16 @@ export type SyncMemory = {
   playTries: number
   /** Started muted, because the browser wouldn't play it with sound */
   mutedForAutoplay: boolean
+  /** The player's time at the last step (seconds; -1 = none yet), to see it moving on its own */
+  lastTime: number
+  /** It has played with sound once: the browser allows sound, so it's never muted for autoplay */
+  heardSound: boolean
 }
 
-export const newSyncMemory = (): SyncMemory => ({ lastSeekAt: 0, lastPlayAt: 0, playTries: 0, mutedForAutoplay: false })
+export const newSyncMemory = (): SyncMemory => ({ lastSeekAt: 0, lastPlayAt: 0, playTries: 0, mutedForAutoplay: false, lastTime: -1, heardSound: false })
+
+/** How a player may behave. `neverMute`: a place that always lets videos play with sound (the desktop app). */
+export type SyncOptions = { neverMute?: boolean }
 
 /**
  * One step (twice a second): compares the player with where everyone is and says what to do.
@@ -353,10 +360,19 @@ export function watchSyncStep(
   serverNow: number,
   player: PlayerReport,
   mem: SyncMemory,
-  now: number = Date.now()
+  now: number = Date.now(),
+  opts: SyncOptions = {}
 ): { commands: PlayerCommand[]; status: SyncStatus } {
   const expected = watchPositionAt(watch, serverNow)
   const commands: PlayerCommand[] = []
+  // Oct 17: YouTube's player doesn't always say "playing" right away (its state can lag behind
+  // for seconds while the video already plays). A time that moves forward on its own means it's
+  // playing: without this, "play" counted as failed three times and the video was muted "for the
+  // browser's autoplay rules" a second after its sound started (for everyone in the call).
+  const moving = mem.lastTime >= 0 && player.time > mem.lastTime + 0.15 && player.time - mem.lastTime < 3
+  mem.lastTime = player.time
+  const playing = player.state === 'playing' || (moving && player.state !== 'paused' && player.state !== 'ended')
+  if (playing && !player.muted) mem.heardSound = true
   const drift = player.time - expected
   const far = Math.abs(drift) > WATCH_DRIFT_SEC
   const ended = !!watch.durationSec && expected >= watch.durationSec - 0.25
@@ -377,7 +393,7 @@ export function watchSyncStep(
     return { commands, status: ended ? 'ended' : 'paused' }
   }
 
-  if (player.state === 'playing') {
+  if (playing) {
     mem.playTries = 0
     if (far && now - mem.lastSeekAt > 2500) {
       commands.push({ cmd: 'seek', to: expected + (drift < 0 ? 0.4 : 0) })
@@ -396,12 +412,12 @@ export function watchSyncStep(
     }
     mem.playTries += 1
     // Twice without starting: the browser wants a tap before sound. Muted always may play.
-    if (mem.playTries >= 3 && !mem.mutedForAutoplay) {
+    if (mem.playTries >= 3 && !mem.mutedForAutoplay && !opts.neverMute && !mem.heardSound) {
       mem.mutedForAutoplay = true
       commands.push({ cmd: 'volume', muted: true })
     }
     commands.push({ cmd: 'play' })
     mem.lastPlayAt = now
   }
-  return { commands, status: mem.playTries >= 3 && !player.muted ? 'blocked' : 'catching' }
+  return { commands, status: mem.playTries >= 3 && !player.muted && !opts.neverMute && !mem.heardSound ? 'blocked' : 'catching' }
 }

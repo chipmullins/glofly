@@ -2,6 +2,26 @@
 .mg-anchor {
   position: relative;
 }
+/* A profile card with My games beside it (the panel sits next to the card, not inside it). */
+.profile-wrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 1154px;
+  max-height: 100%;
+}
+.profile-wrap > .profile-dialog {
+  flex: 1 1 800px;
+  min-width: 0;
+}
+@media (min-width: 1101px) {
+  .profile-wrap > .mg-panel {
+    position: static;
+    flex: none;
+  }
+}
 .mg-panel {
   position: absolute;
   top: 0;

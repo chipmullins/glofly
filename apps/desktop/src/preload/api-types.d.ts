@@ -141,6 +141,24 @@ export type AlertSound =
   /** 0.2.2: from the "no answer" round, offered for any short sound */
   | 'pluck'
   | 'fade'
+  /** 0.7.0 */
+  | 'comet'
+  /** 0.7.0: the default message sound */
+  | 'lowComet'
+  /** 0.7.0: the night-sky set (Hollow wood, Night breeze and Lantern are defaults) */
+  | 'twinStars'
+  | 'constellation'
+  | 'nebula'
+  | 'starlightPing'
+  | 'moonrise'
+  | 'hollowWood'
+  | 'nightBreeze'
+  | 'ember'
+  | 'orbit'
+  | 'stardust'
+  | 'aurora'
+  | 'skyLantern'
+  | 'deepSpace'
   | 'none'
 /** Ringing sounds (they loop). 0.2.2 adds the in- and out- sets; ring and jingle are Chip's originals. */
 export type CallSound = 'ring' | 'jingle' | OutgoingSound | IncomingSound | 'none'
@@ -184,6 +202,8 @@ export type SoundSettings = {
   /** "Ringtone & jingle volume": the ringtone and outgoing call jingle, 0–100 */
   callVolume: number
   message: AlertSound
+  /** A message in a constellation's nebula (0.7.0; older saved settings don't have it) */
+  constellationMessage?: AlertSound
   friendRequest: AlertSound
   /** A friend you asked about comes online (0.3.0; older saved settings don't have it) */
   friendOnline?: AlertSound

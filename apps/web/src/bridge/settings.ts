@@ -35,9 +35,10 @@ const saved: Saved = {
     dndSilence: true,
     volume: 100,
     callVolume: 100,
-    message: 'chime',
-    friendRequest: 'chime',
-    friendOnline: 'dewdrop',
+    message: 'lowComet',
+    constellationMessage: 'skyLantern',
+    friendRequest: 'nightBreeze',
+    friendOnline: 'hollowWood',
     login: 'hello',
     logout: 'goodnight',
     callConnected: 'glowOn',
@@ -64,6 +65,21 @@ const ALERT_SOUNDS: AlertSound[] = [
   'pebble',
   'pluck',
   'fade',
+  'comet',
+  'lowComet',
+  'twinStars',
+  'constellation',
+  'nebula',
+  'starlightPing',
+  'moonrise',
+  'hollowWood',
+  'nightBreeze',
+  'ember',
+  'orbit',
+  'stardust',
+  'aurora',
+  'skyLantern',
+  'deepSpace',
   'none'
 ]
 // Keep in step with SOUND_FILES in the window (renderer/src/lib/sounds.ts).
@@ -111,6 +127,7 @@ function soundSettingOk(key: string, value: unknown): boolean {
     case 'callVolume':
       return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100
     case 'message':
+    case 'constellationMessage':
     case 'friendRequest':
     case 'friendOnline':
     case 'login':
@@ -143,6 +160,12 @@ function load(): void {
     for (const [k, v] of Object.entries(value.sounds)) {
       if (soundSettingOk(k, v)) (saved.sounds as Record<string, unknown>)[k] = v
     }
+    // 0.7.0: Low comet is the new default message sound; the old default (Firefly chime) moves over once.
+    const v = (value as { soundDefaults?: number }).soundDefaults ?? 1
+    if (v < 3 && saved.sounds.message === 'chime') saved.sounds.message = 'lowComet'
+    // Then Hollow wood for friend online (Dewdrop before) and Night breeze for friend requests (Firefly chime).
+    if (v < 4 && saved.sounds.friendOnline === 'dewdrop') saved.sounds.friendOnline = 'hollowWood'
+    if (v < 4 && saved.sounds.friendRequest === 'chime') saved.sounds.friendRequest = 'nightBreeze'
   }
   const n = value.notifications as Partial<NotificationSettings> | undefined
   if (n && typeof n === 'object') {
@@ -153,7 +176,7 @@ function load(): void {
 
 function save(): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(saved))
+    localStorage.setItem(KEY, JSON.stringify({ ...saved, soundDefaults: 4 }))
   } catch {
     // Storage blocked: the change lasts until the page is closed.
   }

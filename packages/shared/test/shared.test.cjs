@@ -156,6 +156,32 @@ test('watch together: keeping a player in step', () => {
   assert.equal(r.status, 'blocked')
 })
 
+test('watch together: a playing video is never muted for autoplay (Oct 17)', () => {
+  const w = { callId: 'c', videoId: 'dQw4w9WgXcQ', playing: true, position: 0, at: 0, durationSec: 100, control: 'everyone', startedBy: 'a' }
+  // YouTube still says "unstarted" but the time moves on: it's playing, so no mute.
+  const m = s.newSyncMemory()
+  let muted = false
+  for (let i = 0; i < 12; i++) {
+    const r = s.watchSyncStep(w, i * 500, { state: 'unstarted', time: i * 0.5, duration: 100, muted: false }, m, 1000 + i * 500)
+    if (r.commands.some((c) => c.cmd === 'volume' && c.muted)) muted = true
+  }
+  assert.equal(muted, false)
+  // The desktop app never mutes, however long it takes to start.
+  const m2 = s.newSyncMemory()
+  const stuck = { state: 'unstarted', time: 0, duration: 100, muted: false }
+  for (let t = 2_000; t <= 12_000; t += 2_000) {
+    const r = s.watchSyncStep(w, 0, stuck, m2, t, { neverMute: true })
+    assert.equal(r.commands.some((c) => c.cmd === 'volume'), false)
+    assert.notEqual(r.status, 'blocked')
+  }
+  // Once it has played with sound, a later stall doesn't mute it either.
+  const m3 = s.newSyncMemory()
+  s.watchSyncStep(w, 0, { state: 'playing', time: 0, duration: 100, muted: false }, m3, 1_000)
+  let r
+  for (let t = 3_000; t <= 9_000; t += 2_000) r = s.watchSyncStep(w, 0, { state: 'paused', time: 0, duration: 100, muted: false }, m3, t)
+  assert.equal(r.commands.some((c) => c.cmd === 'volume'), false)
+})
+
 test('glows: brighten each day both write, dim on missed days, never reset', () => {
   const s = require('../dist/index.js')
   let g = { level: 0, days: 0, best: 0, lastDay: null }

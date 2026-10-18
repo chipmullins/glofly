@@ -138,17 +138,18 @@ export function GalaxyIcon({
       strokeLinecap="round"
       aria-hidden="true"
     >
-      <circle cx="12" cy="12" r="1.8" fill={color} stroke="none" />
-      <path d="M12 12c0-4 3-6.5 6.5-5.5" />
-      <path d="M12 12c0 4-3 6.5-6.5 5.5" />
-      <path d="M12 12c4 0 6.5 3 5.5 6.5" />
-      <path d="M12 12c-4 0-6.5-3-5.5-6.5" />
-      {sparkles && (
-        <>
-          <circle cx="20" cy="4" r=".8" fill={color} stroke="none" />
-          <circle cx="3.5" cy="20" r=".7" fill={color} stroke="none" />
-        </>
-      )}
+      {/* A few stars joined, ending in a bright one (Oct 17: replaces the four-armed galaxy). */}
+      <path
+        d="M3.5 19 8.5 12.5 13 16 17.5 8.5"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+        opacity="0.75"
+      />
+      <circle cx="3.5" cy="19" r="1.6" fill={color} stroke="none" />
+      <circle cx="8.5" cy="12.5" r="1.5" fill={color} stroke="none" />
+      <circle cx="13" cy="16" r="1.5" fill={color} stroke="none" />
+      <path d="M18.5 2.5l1.1 3 3 1.1-3 1.1-1.1 3-1.1-3-3-1.1 3-1.1z" fill={color} stroke="none" />
+      {sparkles && <circle cx="21" cy="20" r=".8" fill={color} stroke="none" />}
     </svg>
   )
 }

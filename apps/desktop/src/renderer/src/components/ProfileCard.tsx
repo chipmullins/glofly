@@ -157,14 +157,182 @@ export default function ProfileCard({
 
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${shown.displayName} profile`}
-        className="dialog profile-dialog mg-anchor"
-        tabIndex={-1}
-      >
+      {/* The card and (2.0) My games side by side. My games used to sit inside the card, whose
+          scrolling cut off anything beside it, so it never showed. */}
+      <div className="profile-wrap" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${shown.displayName} profile`}
+          className="dialog profile-dialog"
+          tabIndex={-1}
+        >
+          <ProfileHero
+            sparks={['a', 'b']}
+            flies={[
+              { left: '50%', top: 44, size: 'big', rotate: -12 },
+              { left: '84%', top: 56, size: 'small', rotate: 14 }
+            ]}
+            closeLabel="Close profile"
+            onClose={onClose}
+          />
+
+          <div className="profile-body">
+            <div className="profile-side">
+              <Avatar
+                id={shown.id}
+                name={shown.displayName}
+                avatarVersion={shown.avatarVersion}
+                size={156}
+                status={presence?.status}
+                mobile={onMobile(presence ?? undefined)}
+                ring="var(--glo-surface)"
+                className="profile-photo"
+              />
+
+              {presence && (
+                <div className={`status-pill status-pill--${presence.status}`}>
+                  {mobileLabel(presence) ?? STATUS_LABEL[presence.status]}
+                </div>
+              )}
+
+              <div className="profile-actions">
+                {isFriend && onRemove && (
+                  <button type="button" className="profile-action" onClick={onRemove}>
+                    <RemoveFriendIcon size={15} strokeWidth={2} />
+                    Remove
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="profile-action profile-action--danger"
+                  onClick={onBlock}
+                >
+                  <BlockIcon size={15} strokeWidth={2} />
+                  Block
+                </button>
+              </div>
+              {onReport && (
+                <button type="button" className="profile-report" onClick={onReport}>
+                  <FlagIcon size={14} />
+                  Report @{person.username}
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="profile-games"
+                aria-expanded={gamesOpen}
+                onClick={() => setGamesOpen((v) => !v)}
+              >
+                <GameIcon size={16} />
+                My games
+              </button>
+
+              {shown.joinedAt && (
+                <div className="profile-joined">
+                  <CalendarIcon size={15} strokeWidth={2} />
+                  Joined Glofly {shortDate(shown.joinedAt)}
+                </div>
+              )}
+            </div>
+
+            <div className="profile-main">
+              <div className="profile-names">
+                <h2>{shown.displayName}</h2>
+                <span>
+                  @{shown.username}
+                  {shown.realName && <> · their name is {shown.realName}</>}
+                </span>
+              </div>
+              <NicknameRow
+                userId={person.id}
+                nickname={shown.realName ? shown.displayName : null}
+                placeholder={shown.realName ?? shown.displayName}
+              />
+
+              {game && (
+                <div className="profile-playing">
+                  <GameIcon size={18} />
+                  <span>
+                    Playing <strong>{game.name}</strong>
+                    <span className="profile-playing-time"> · {playedFor(game)}</span>
+                  </span>
+                </div>
+              )}
+
+              {statusText && (
+                <div className="profile-status-text">
+                  <ChatIcon size={18} strokeWidth={2} />
+                  <EmojiText text={statusText} />
+                </div>
+              )}
+
+              {shown.bio && (
+                <div className="profile-about">
+                  <span className="profile-about-label">About me</span>
+                  <p>
+                    <EmojiText text={shown.bio} />
+                  </p>
+                </div>
+              )}
+
+              {error && (
+                <p className="dialog-message" role="alert">
+                  {error}
+                </p>
+              )}
+
+              {isFriend && (
+                <div className="profile-buttons">
+                  <button type="button" className="profile-message" onClick={onMessage}>
+                    <ChatIcon size={18} strokeWidth={2} />
+                    Message
+                  </button>
+                  {onCall && (
+                    <>
+                      <button
+                        type="button"
+                        className="profile-call"
+                        aria-label={`Voice call ${shown.displayName}`}
+                        title="Voice call"
+                        onClick={() => onCall(false)}
+                      >
+                        <PhoneIcon size={19} />
+                      </button>
+                      <button
+                        type="button"
+                        className="profile-call"
+                        aria-label={`Video call ${shown.displayName}`}
+                        title="Video call"
+                        onClick={() => onCall(true)}
+                      >
+                        <VideoIcon size={20} />
+                      </button>
+                    </>
+                  )}
+                  {onlineAlert !== undefined && onOnlineAlert && (
+                    <button
+                      type="button"
+                      className={onlineAlert ? 'profile-call profile-call--on' : 'profile-call'}
+                      aria-pressed={onlineAlert}
+                      aria-label={`Notify me when ${shown.displayName} comes online`}
+                      title={
+                        onlineAlert
+                          ? 'You’ll be notified when they come online (click to stop)'
+                          : 'Notify me when they come online'
+                      }
+                      onClick={() => onOnlineAlert(!onlineAlert)}
+                    >
+                      {onlineAlert ? <BellIcon size={19} /> : <BellOffIcon size={19} />}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
         {gamesOpen && (
           <MyGamesPanel
             userId={person.id}
@@ -173,170 +341,6 @@ export default function ProfileCard({
             onClose={() => setGamesOpen(false)}
           />
         )}
-        <ProfileHero
-          sparks={['a', 'b']}
-          flies={[
-            { left: '50%', top: 44, size: 'big', rotate: -12 },
-            { left: '84%', top: 56, size: 'small', rotate: 14 }
-          ]}
-          closeLabel="Close profile"
-          onClose={onClose}
-        />
-
-        <div className="profile-body">
-          <div className="profile-side">
-            <Avatar
-              id={shown.id}
-              name={shown.displayName}
-              avatarVersion={shown.avatarVersion}
-              size={156}
-              status={presence?.status}
-              mobile={onMobile(presence ?? undefined)}
-              ring="var(--glo-surface)"
-              className="profile-photo"
-            />
-
-            {presence && (
-              <div className={`status-pill status-pill--${presence.status}`}>
-                {mobileLabel(presence) ?? STATUS_LABEL[presence.status]}
-              </div>
-            )}
-
-            <div className="profile-actions">
-              {isFriend && onRemove && (
-                <button type="button" className="profile-action" onClick={onRemove}>
-                  <RemoveFriendIcon size={15} strokeWidth={2} />
-                  Remove
-                </button>
-              )}
-              <button
-                type="button"
-                className="profile-action profile-action--danger"
-                onClick={onBlock}
-              >
-                <BlockIcon size={15} strokeWidth={2} />
-                Block
-              </button>
-            </div>
-            {onReport && (
-              <button type="button" className="profile-report" onClick={onReport}>
-                <FlagIcon size={14} />
-                Report @{person.username}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="profile-games"
-              aria-expanded={gamesOpen}
-              onClick={() => setGamesOpen((v) => !v)}
-            >
-              <GameIcon size={16} />
-              My games
-            </button>
-
-            {shown.joinedAt && (
-              <div className="profile-joined">
-                <CalendarIcon size={15} strokeWidth={2} />
-                Joined Glofly {shortDate(shown.joinedAt)}
-              </div>
-            )}
-          </div>
-
-          <div className="profile-main">
-            <div className="profile-names">
-              <h2>{shown.displayName}</h2>
-              <span>
-                @{shown.username}
-                {shown.realName && <> · their name is {shown.realName}</>}
-              </span>
-            </div>
-            <NicknameRow
-              userId={person.id}
-              nickname={shown.realName ? shown.displayName : null}
-              placeholder={shown.realName ?? shown.displayName}
-            />
-
-            {game && (
-              <div className="profile-playing">
-                <GameIcon size={18} />
-                <span>
-                  Playing <strong>{game.name}</strong>
-                  <span className="profile-playing-time"> · {playedFor(game)}</span>
-                </span>
-              </div>
-            )}
-
-            {statusText && (
-              <div className="profile-status-text">
-                <ChatIcon size={18} strokeWidth={2} />
-                <EmojiText text={statusText} />
-              </div>
-            )}
-
-            {shown.bio && (
-              <div className="profile-about">
-                <span className="profile-about-label">About me</span>
-                <p>
-                  <EmojiText text={shown.bio} />
-                </p>
-              </div>
-            )}
-
-            {error && (
-              <p className="dialog-message" role="alert">
-                {error}
-              </p>
-            )}
-
-            {isFriend && (
-              <div className="profile-buttons">
-                <button type="button" className="profile-message" onClick={onMessage}>
-                  <ChatIcon size={18} strokeWidth={2} />
-                  Message
-                </button>
-                {onCall && (
-                  <>
-                    <button
-                      type="button"
-                      className="profile-call"
-                      aria-label={`Voice call ${shown.displayName}`}
-                      title="Voice call"
-                      onClick={() => onCall(false)}
-                    >
-                      <PhoneIcon size={19} />
-                    </button>
-                    <button
-                      type="button"
-                      className="profile-call"
-                      aria-label={`Video call ${shown.displayName}`}
-                      title="Video call"
-                      onClick={() => onCall(true)}
-                    >
-                      <VideoIcon size={20} />
-                    </button>
-                  </>
-                )}
-                {onlineAlert !== undefined && onOnlineAlert && (
-                  <button
-                    type="button"
-                    className={onlineAlert ? 'profile-call profile-call--on' : 'profile-call'}
-                    aria-pressed={onlineAlert}
-                    aria-label={`Notify me when ${shown.displayName} comes online`}
-                    title={
-                      onlineAlert
-                        ? 'You’ll be notified when they come online (click to stop)'
-                        : 'Notify me when they come online'
-                    }
-                    onClick={() => onOnlineAlert(!onlineAlert)}
-                  >
-                    {onlineAlert ? <BellIcon size={19} /> : <BellOffIcon size={19} />}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   )

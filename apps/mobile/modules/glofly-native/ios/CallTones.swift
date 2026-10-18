@@ -31,7 +31,9 @@ final class CallTones {
   func play(_ name: String, repeat repeating: Bool, volume: Float) -> Bool {
     // The message sound and ringtone are the ones picked in Settings (ToneChoices).
     let picked = name == "message" ? ToneChoices.message() : name == "ringtone" ? ToneChoices.ringtone() : nil
-    guard let file = picked ?? CallTones.files[name],
+    // 0.7.0: a message sound's own file name (the constellation message sound) plays as itself.
+    let named = name.hasPrefix("glofly_msg_") ? name : nil
+    guard let file = picked ?? CallTones.files[name] ?? named,
           let url = Bundle.main.url(forResource: file, withExtension: "caf"),
           let player = try? AVAudioPlayer(contentsOf: url)
     else { return false }

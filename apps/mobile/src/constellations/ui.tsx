@@ -68,13 +68,15 @@ export function roleNight(color: RoleColor | undefined, owner = false) {
 
 // ───────────── Glyphs ─────────────
 
-/** The galaxy, redrawn with two spiral arms so it reads cleanly at tab size. */
-export function GalaxyIcon({ size = 24, color = N.amber, strokeWidth = 1.9, star = true }: { size?: number; color?: string; strokeWidth?: number; star?: boolean }) {
+/** Constellations: a few stars joined, ending in a bright one (Oct 17: replaces the spiral galaxy). */
+export function GalaxyIcon({ size = 24, color = N.amber, strokeWidth = 1.3, star = true }: { size?: number; color?: string; strokeWidth?: number; star?: boolean }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round">
-      <Path d="M12 12c0-4 4-5.5 7-3.5s1 7.5-3 8M12 12c0 4-4 5.5-7 3.5s-1-7.5 3-8" />
-      <Circle cx={12} cy={12} r={1.8} fill={color} stroke="none" />
-      {star ? <Circle cx={20} cy={4} r={1} fill={color} stroke="none" /> : null}
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3.5 19 8.5 12.5 13 16 17.5 8.5" opacity={0.75} />
+      <Circle cx={3.5} cy={19} r={1.6} fill={color} stroke="none" />
+      <Circle cx={8.5} cy={12.5} r={1.5} fill={color} stroke="none" />
+      <Circle cx={13} cy={16} r={1.5} fill={color} stroke="none" />
+      {star ? <Path d="M18.5 2.5l1.1 3 3 1.1-3 1.1-1.1 3-1.1-3-3-1.1 3-1.1z" fill={color} stroke="none" /> : <Circle cx={17.5} cy={8.5} r={1.5} fill={color} stroke="none" />}
     </Svg>
   )
 }

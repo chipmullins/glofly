@@ -15,6 +15,8 @@ export type PhoneSound = {
 }
 
 export const PHONE_MESSAGE_SOUNDS: readonly PhoneSound[] = [
+  // 0.7.0: the default. Its lock-screen copy comes with the next phone build (older builds play Firefly chime).
+  { id: 'lowComet', label: 'Low comet', file: 'low-comet', native: 'glofly_msg_low_comet' },
   { id: 'chime', label: 'Firefly chime', file: 'message', native: 'glofly_message' },
   { id: 'dewdrop', label: 'Dewdrop', file: 'dewdrop', native: 'glofly_msg_dewdrop' },
   { id: 'pebble', label: 'Pebble', file: 'pebble', native: 'glofly_msg_pebble' },
@@ -25,6 +27,22 @@ export const PHONE_MESSAGE_SOUNDS: readonly PhoneSound[] = [
   { id: 'glowOn', label: 'Glow on', file: 'glow-on', native: 'glofly_msg_glow_on' },
   { id: 'blinkIn', label: 'Blink in', file: 'blink-in', native: 'glofly_msg_blink_in' },
   { id: 'hello', label: 'Glofly hello', file: 'login', native: 'glofly_msg_hello' },
+  // 0.7.0. Its lock-screen copy comes with the next phone build (older builds play the default).
+  { id: 'comet', label: 'Comet', file: 'comet', native: 'glofly_msg_comet' },
+  // 0.7.0: the night-sky set (also the constellation message sound; Lantern is its default).
+  { id: 'twinStars', label: 'Twin stars', file: 'twin-stars', native: 'glofly_msg_twin_stars' },
+  { id: 'constellation', label: 'Constellation', file: 'constellation', native: 'glofly_msg_constellation' },
+  { id: 'nebula', label: 'Nebula', file: 'nebula', native: 'glofly_msg_nebula' },
+  { id: 'starlightPing', label: 'Starlight ping', file: 'starlight-ping', native: 'glofly_msg_starlight_ping' },
+  { id: 'moonrise', label: 'Moonrise', file: 'moonrise', native: 'glofly_msg_moonrise' },
+  { id: 'hollowWood', label: 'Hollow wood', file: 'hollow-wood', native: 'glofly_msg_hollow_wood' },
+  { id: 'nightBreeze', label: 'Night breeze', file: 'night-breeze', native: 'glofly_msg_night_breeze' },
+  { id: 'ember', label: 'Ember', file: 'ember', native: 'glofly_msg_ember' },
+  { id: 'orbit', label: 'Orbit', file: 'orbit', native: 'glofly_msg_orbit' },
+  { id: 'stardust', label: 'Stardust', file: 'stardust', native: 'glofly_msg_stardust' },
+  { id: 'aurora', label: 'Aurora', file: 'aurora', native: 'glofly_msg_aurora' },
+  { id: 'skyLantern', label: 'Lantern', file: 'sky-lantern', native: 'glofly_msg_sky_lantern' },
+  { id: 'deepSpace', label: 'Deep space', file: 'deep-space', native: 'glofly_msg_deep_space' },
 ]
 
 export const PHONE_RINGTONES: readonly PhoneSound[] = [
@@ -43,12 +61,15 @@ export const PHONE_RINGTONES: readonly PhoneSound[] = [
   { id: 'ring', label: 'Glow ring', file: 'ringtone', native: 'glofly_ring_glow' },
 ]
 
-export const DEFAULT_PHONE_MESSAGE_SOUND = 'chime'
+export const DEFAULT_PHONE_MESSAGE_SOUND = 'lowComet'
 export const DEFAULT_PHONE_RINGTONE = 'fireflyDance'
+/** 0.7.0: messages in constellations have their own sound, picked from the message sounds. */
+export const DEFAULT_PHONE_CONSTELLATION_SOUND = 'skyLantern'
 
 /** The message sound with this id (the default for unknown or missing ids). */
 export function phoneMessageSound(id: string | null | undefined): PhoneSound {
-  return PHONE_MESSAGE_SOUNDS.find((s) => s.id === id) ?? PHONE_MESSAGE_SOUNDS[0]
+  // A phone that never said (an older app) keeps Firefly chime, which every build has.
+  return PHONE_MESSAGE_SOUNDS.find((s) => s.id === id) ?? PHONE_MESSAGE_SOUNDS.find((s) => s.id === 'chime')!
 }
 
 /** The ringtone with this id (the default for unknown or missing ids). */

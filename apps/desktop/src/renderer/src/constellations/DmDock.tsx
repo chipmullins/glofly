@@ -970,6 +970,25 @@ export default function DmDock({
     setAllOpen(false)
   }
 
+  // An open mini chat folds back into the dock (its little pill) on a click anywhere else
+  // (Oct 17: before, only its own buttons closed it). The dock, the pills, All chats and the
+  // emoji picker don't count.
+  useEffect(() => {
+    if (!expanded) return
+    const fold = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement
+      if (
+        target.closest?.(
+          '.mini-chat-wrap, .mini-pills, .dock, .dock-edge, .dock-peek, .all-chats, .emoji-picker, [role="dialog"], [role="menu"]'
+        )
+      )
+        return
+      setExpanded(null)
+    }
+    document.addEventListener('mousedown', fold)
+    return () => document.removeEventListener('mousedown', fold)
+  }, [expanded])
+
   // "All chats" sits above its button; Escape or a click anywhere else closes it.
   useLayoutEffect(() => {
     if (!allOpen) return
