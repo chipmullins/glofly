@@ -6,6 +6,8 @@ import type {
   ChatGameKind,
   ChatGameMove,
   ConstellationMethod,
+  ErrorReport,
+  TwoStepMethod,
   FireflyEmoji,
   GloflyApi,
   GameState,
@@ -68,6 +70,12 @@ const glofly: GloflyApi = {
   },
   auth: {
     login: (request: LoginRequest) => ipcRenderer.invoke('auth:login', request),
+    loginCode: (challenge: string, code: string) =>
+      ipcRenderer.invoke('auth:login-code', challenge, code),
+    loginResend: (challenge: string, method?: TwoStepMethod) =>
+      ipcRenderer.invoke('auth:login-resend', challenge, method),
+    qrStart: (keepSignedIn: boolean) => ipcRenderer.invoke('auth:qr-start', keepSignedIn),
+    qrPoll: (id: string, secret: string) => ipcRenderer.invoke('auth:qr-poll', id, secret),
     register: (request: RegisterRequest) => ipcRenderer.invoke('auth:register', request),
     checkUsername: (username: string) => ipcRenderer.invoke('auth:check-username', username),
     signupMode: () => ipcRenderer.invoke('auth:signup-mode'),
@@ -116,6 +124,12 @@ const glofly: GloflyApi = {
     signOutDevice: (sessionId: string) => ipcRenderer.invoke('account:sign-out-device', sessionId),
     signOutOtherDevices: () => ipcRenderer.invoke('account:sign-out-other-devices')
   },
+  tools: {
+    request: (method: ConstellationMethod, path: string, body?: unknown) =>
+      ipcRenderer.invoke('tools:request', method, path, body)
+  },
+  reportError: (report: ErrorReport) => ipcRenderer.send('errors:report', report),
+  setErrorReports: (on: boolean) => ipcRenderer.send('errors:enabled', on),
   status: {
     get: () => ipcRenderer.invoke('status:get'),
     set: (changes: Partial<MyStatus>) => ipcRenderer.invoke('status:set', changes)

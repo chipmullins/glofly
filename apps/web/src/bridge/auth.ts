@@ -1,7 +1,12 @@
 import type {
   ForgotPasswordResult,
+  ApiResult,
   LoginRequest,
-  LoginResult,
+  LoginStepResult,
+  LoginTwoStep,
+  QrLoginStart,
+  QrPollResult,
+  TwoStepMethod,
   RegisterRequest,
   RegisterResult,
   SignedInUser,
@@ -17,6 +22,7 @@ import { notePaused, noteUpdateRequired } from './appStatus'
 // in memory only. "Keep me signed in" decides whether the cookie outlives the browser.
 
 type SignInBody = {
+  twoStep?: LoginTwoStep['twoStep']
   user?: SignedInUser
   csrf?: string
   error?: string
@@ -36,19 +42,110 @@ async function post(path: string, body: unknown): Promise<Response> {
   })
 }
 
-export async function login(request: LoginRequest): Promise<LoginResult> {
+export async function login(request: LoginRequest): Promise<LoginStepResult> {
   let response: Response
   try {
-    response = await post('/auth/login', { ...request, deviceName: DEVICE_NAME })
+    // twoStepAware (0.7.3): this app can ask for a two-step code.
+    response = await post('/auth/login', {
+      ...request,
+      deviceName: DEVICE_NAME,
+      twoStepAware: true
+    })
   } catch {
     return { ok: false, reason: 'unreachable', message: UNREACHABLE }
   }
+  return signInAnswer(response)
+}
+
+/** 0.7.3: the two-step code (or a backup code). The cookie comes with the answer. */
+export async function loginCode(challenge: string, code: string): Promise<LoginStepResult> {
+  let response: Response
+  try {
+    response = await post('/auth/login/code', { challenge, code })
+  } catch {
+    return { ok: false, reason: 'unreachable', message: UNREACHABLE }
+  }
+  return signInAnswer(response)
+}
+
+export async function loginResend(
+  challenge: string,
+  method?: TwoStepMethod
+): Promise<ApiResult<LoginTwoStep['twoStep']>> {
+  try {
+    const response = await post('/auth/login/resend', { challenge, method })
+    const body = (await response.json().catch(() => null)) as SignInBody | null
+    if (response.ok && body?.twoStep) return { ok: true, data: body.twoStep }
+    return {
+      ok: false,
+      error: 'invalid',
+      message: body?.message ?? 'Something went wrong. Try again.'
+    }
+  } catch {
+    return { ok: false, error: 'unreachable', message: UNREACHABLE }
+  }
+}
+
+/** 0.7.3 QR code sign-in. */
+export async function qrStart(keepSignedIn: boolean): Promise<ApiResult<QrLoginStart>> {
+  try {
+    const response = await post('/auth/qr', { deviceName: DEVICE_NAME, keepSignedIn })
+    const body = (await response.json().catch(() => null)) as
+      (QrLoginStart & { error?: string; message?: string }) | null
+    if (response.ok && body?.id && body.secret && body.url) return { ok: true, data: body }
+    if (response.status === 426 && body?.error === 'update_required') noteUpdateRequired(body)
+    return {
+      ok: false,
+      error: 'invalid',
+      message: body?.message ?? "Couldn't make a QR code right now. Try again in a moment."
+    }
+  } catch {
+    return { ok: false, error: 'unreachable', message: UNREACHABLE }
+  }
+}
+
+export async function qrPoll(id: string, secret: string): Promise<QrPollResult> {
+  if (!/^[A-Za-z0-9_-]{22}$/.test(id)) return { state: 'expired' }
+  try {
+    const response = await post(`/auth/qr/${id}/poll`, { secret })
+    const body = (await response.json().catch(() => null)) as
+      | (SignInBody & {
+          state?: string
+          by?: { id: string; displayName: string; avatarVersion: string | null }
+        })
+      | null
+    if (response.ok && body?.user && typeof body.csrf === 'string') {
+      startSession(body.csrf)
+      return { state: 'signed-in', user: body.user }
+    }
+    if (body?.state === 'scanned' && body.by) return { state: 'scanned', by: body.by }
+    if (body?.state === 'waiting' || body?.state === 'declined' || body?.state === 'expired')
+      return { state: body.state }
+    return { state: 'error', message: body?.message ?? 'Something went wrong. Try again.' }
+  } catch {
+    return { state: 'error', message: UNREACHABLE }
+  }
+}
+
+async function signInAnswer(response: Response): Promise<LoginStepResult> {
   const body = (await response.json().catch(() => null)) as SignInBody | null
 
   if (response.ok && body?.user && typeof body.csrf === 'string') {
     startSession(body.csrf)
     return { ok: true, user: body.user }
   }
+  if (response.ok && body?.twoStep)
+    return { ok: false, reason: 'two_step', message: '', twoStep: body.twoStep }
+  if (body?.error === 'wrong_code')
+    return { ok: false, reason: 'wrong_code', message: body.message ?? "That code isn't right." }
+  if (response.status === 410 || body?.error === 'expired')
+    return {
+      ok: false,
+      reason: 'code_expired',
+      message: body?.message ?? 'That took too long. Sign in again.'
+    }
+  if (response.status === 502 && body?.message)
+    return { ok: false, reason: 'server_error', message: body.message }
   if (response.status === 426 && body?.error === 'update_required') {
     return { ok: false, reason: 'update_required', message: noteUpdateRequired(body).message }
   }

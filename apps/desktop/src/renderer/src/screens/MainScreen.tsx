@@ -82,6 +82,8 @@ import { GalaxyIcon } from '../constellations/sky'
 import { useConstellationCards, usePinnedNebulas } from '../lib/constellations'
 import HomeDock, { type HomeDockHandle } from '../constellations/HomeDock'
 import MyGamesPanel from '../components/MyGames'
+import { setQuietHours } from '../lib/quiet'
+import { quietHours as quietHoursApi } from '../lib/tools'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -594,6 +596,19 @@ export default function MainScreen({
       }),
     []
   )
+  // 0.7.3 quiet hours: loaded at start and whenever the account changes on another device.
+  useEffect(() => {
+    const load = (): void =>
+      void quietHoursApi.get().then((r) => r.ok && setQuietHours(r.data.quietHours))
+    load()
+    const off = window.glofly.onEvent((event) => {
+      if (event.type === 'account:changed') load()
+    })
+    return () => {
+      off()
+      setQuietHours(null)
+    }
+  }, [])
   const onUserChangeRef = useRef(onUserChange)
   useEffect(() => {
     onUserChangeRef.current = onUserChange
@@ -802,6 +817,10 @@ export default function MainScreen({
           break
         }
         case 'conversations:changed':
+          void refreshConversations()
+          break
+        // 0.7.3: marked unread (here or on another device): its count comes back.
+        case 'conversation:unread':
           void refreshConversations()
           break
         case 'profile:changed':
@@ -1713,6 +1732,10 @@ export default function MainScreen({
               onRead={markedRead}
               onViewProfile={viewPerson}
               onGroupSettings={() => setSettingsFor(openChat.id)}
+              onLeave={() => {
+                setOpenChatId(null)
+                void refreshConversations()
+              }}
               onTogglePin={() => void togglePin(openChat)}
               onSessionExpired={onSessionExpired}
               onSearch={() => searchThisChat(openChat.id)}

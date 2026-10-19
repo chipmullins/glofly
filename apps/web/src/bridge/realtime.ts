@@ -50,7 +50,11 @@ export function cleanAnnouncement(a: unknown): Announcement | null {
 export function connectRealtime(onUnauthorized: () => void): void {
   disconnectRealtime()
   socket = io(API_URL, {
-    auth: { version: VERSION, platform: 'web', features: ['constellations', 'callMove', 'watchSites'] },
+    auth: {
+      version: VERSION,
+      platform: 'web',
+      features: ['constellations', 'callMove', 'watchSites']
+    },
     transports: ['websocket'],
     withCredentials: true,
     reconnectionDelayMax: 10_000 // keeps retrying if the connection drops
@@ -117,6 +121,23 @@ export function connectRealtime(onUnauthorized: () => void): void {
   })
 
   // Only these events are passed on, and only their expected fields.
+  // 0.7.3: pins, marked unread, send later (ids only; the screens ask for the rest).
+  socket.on('pins:changed', (p) => {
+    if (typeof p?.conversationId === 'string')
+      forward({ type: 'pins:changed', conversationId: p.conversationId })
+  })
+  socket.on('scheduled:changed', (p) => {
+    if (typeof p?.conversationId === 'string')
+      forward({ type: 'scheduled:changed', conversationId: p.conversationId })
+  })
+  socket.on('conversation:unread', (p) => {
+    if (typeof p?.conversationId === 'string' && typeof p?.lastReadAt === 'string')
+      forward({
+        type: 'conversation:unread',
+        conversationId: p.conversationId,
+        lastReadAt: p.lastReadAt
+      })
+  })
   socket.on('message:new', (payload) => {
     if (payload?.message?.id) {
       const people = Array.isArray(payload.people) ? payload.people : undefined

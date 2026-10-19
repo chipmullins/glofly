@@ -190,7 +190,12 @@ export function useVoiceRecorder(
 
 const decoded = new Map<string, AudioBuffer>()
 let context: AudioContext | null = null
-let playing: { url: string; source: AudioBufferSourceNode; stop: () => void } | null = null
+let playing: {
+  url: string
+  source: AudioBufferSourceNode
+  stop: () => void
+  setRate: (rate: number) => void
+} | null = null
 
 async function bufferFor(url: string): Promise<AudioBuffer> {
   const known = decoded.get(url)
@@ -206,6 +211,26 @@ async function bufferFor(url: string): Promise<AudioBuffer> {
 }
 
 /** Stops whichever voice message is playing. */
+// 0.7.3: playback speed for voice messages (1×, 1.5×, 2×), remembered on this device.
+export const VOICE_RATES = [1, 1.5, 2] as const
+const RATE_KEY = 'glofly.voiceRate'
+export function voiceRate(): number {
+  try {
+    const v = Number(localStorage.getItem(RATE_KEY))
+    return (VOICE_RATES as readonly number[]).includes(v) ? v : 1
+  } catch {
+    return 1
+  }
+}
+export function setVoiceRate(rate: number): void {
+  try {
+    localStorage.setItem(RATE_KEY, String(rate))
+  } catch {
+    // storage off: just for now
+  }
+  if (playing) playing.setRate(rate)
+}
+
 export function stopVoice(): void {
   playing?.stop()
 }
@@ -232,9 +257,14 @@ export async function playVoice(
   const source = ctx.createBufferSource()
   source.buffer = buffer
   source.connect(ctx.destination)
-  const begunAt = ctx.currentTime - start
+  // Where it's at: changes of speed while playing restart the count from that point.
+  let rate = voiceRate()
+  source.playbackRate.value = rate
+  let anchorTime = ctx.currentTime
+  let anchorPos = start
+  const position = (): number => anchorPos + (ctx.currentTime - anchorTime) * rate
   let done = false
-  const timer = setInterval(() => onTick(Math.min(buffer.duration, ctx.currentTime - begunAt)), 100)
+  const timer = setInterval(() => onTick(Math.min(buffer.duration, position())), 100)
   const end = (reached: boolean): void => {
     if (done) return
     done = true
@@ -242,10 +272,16 @@ export async function playVoice(
     if (playing?.source === source) playing = null
     onEnd(reached)
   }
-  source.onended = () => end(ctx.currentTime - begunAt >= buffer.duration - 0.1)
+  source.onended = () => end(position() >= buffer.duration - 0.1)
   playing = {
     url,
     source,
+    setRate: (next: number) => {
+      anchorPos = position()
+      anchorTime = ctx.currentTime
+      rate = next
+      source.playbackRate.value = next
+    },
     stop: () => {
       try {
         source.stop()

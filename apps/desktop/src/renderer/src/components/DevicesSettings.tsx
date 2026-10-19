@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SignedInDevice } from '../../../preload/api-types'
 import { timeAgo } from '../lib/presence'
+import { deviceAppName } from '@glofly/shared/security'
 
 // Settings → Account → Where you're signed in: every device with a Glofly sign-in, and a way
 // to sign any of them out (say, a computer you no longer use, or one you don't recognise).
@@ -114,6 +115,13 @@ export default function DevicesSettings({
                   )}{' '}
                   · Signed in {signedInOn(d.createdAt)}
                 </span>
+                {/* 0.7.3: which app, and its version (older servers don't say) */}
+                {'platform' in d && (
+                  <span className="settings-row-desc acct-device-app">
+                    {deviceAppName(d.platform)}
+                    {d.appVersion ? ` · version ${d.appVersion}` : ''}
+                  </span>
+                )}
               </div>
               {!d.current && (
                 <button

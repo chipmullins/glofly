@@ -4,6 +4,7 @@ import { missingRule, STRENGTH_LABELS, strengthOf } from '../lib/passwords'
 import Avatar from './Avatar'
 import EmailSettings from './EmailSettings'
 import DevicesSettings from './DevicesSettings'
+import TwoStepSettings from './TwoStepSettings'
 
 type AccountSettingsProps = {
   user: SignedInUser
@@ -236,6 +237,13 @@ export default function AccountSettings({
           onSessionExpired={onSessionExpired}
         />
       </section>
+
+      {!details?.restricted && (
+        <section className="settings-section">
+          <h2>Two-step sign-in</h2>
+          <TwoStepSettings onSessionExpired={onSessionExpired} />
+        </section>
+      )}
 
       <section className="settings-section">
         <h2>Where you’re signed in</h2>

@@ -3,6 +3,8 @@ import './assets/main.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import ErrorBoundary from './components/ErrorBoundary'
+import { startErrorReports } from './lib/errorReports'
 import OverlayApp from './overlay/OverlayApp'
 import { startAppearance } from './lib/appearance'
 import { startScrollbars } from './lib/scrollbars'
@@ -41,6 +43,13 @@ for (const type of ['dragover', 'drop'] as const) {
   window.addEventListener(type, (e) => e.preventDefault())
 }
 
+// 0.7.3: anything that breaks is reported (Settings → Privacy → Send error reports).
+startErrorReports()
+
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>{isOverlay ? <OverlayApp /> : <App />}</StrictMode>
+  <StrictMode>
+    <ErrorBoundary where={isOverlay ? 'overlay' : 'app'}>
+      {isOverlay ? <OverlayApp /> : <App />}
+    </ErrorBoundary>
+  </StrictMode>
 )

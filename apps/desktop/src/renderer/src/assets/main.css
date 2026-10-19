@@ -363,3 +363,27 @@ img.emoji {
   ) {
   -webkit-app-region: no-drag;
 }
+
+/* 0.7.3: the "Something went wrong" screen (components/ErrorBoundary.tsx) */
+.app-broken {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--glo-bg);
+  color: var(--glo-ink);
+  z-index: 1000;
+}
+.app-broken-card {
+  max-width: 360px;
+  padding: 28px;
+  text-align: center;
+}
+.app-broken-card h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+.app-broken-card p {
+  margin: 0 0 18px;
+  color: var(--glo-muted);
+}

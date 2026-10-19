@@ -57,6 +57,29 @@ import { saveAttachment } from './files'
 import { checkNow, onUpdateReady, reload, startUpdateChecks, updateReady } from './updates'
 import { startIdleWatch } from './idle'
 import { startLongPress } from './touch'
+import { reportError } from './errors'
+
+/** 0.7.3: the "tools" gateway's routes (desktop: main/api.ts isToolsRequest). */
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+const TOOL_PATHS = [
+  /^\/account\/two-step(\/(start|confirm|off|remove-phone|backup-codes))?$/,
+  /^\/account\/quiet-hours$/,
+  /^\/conversations\/scheduled$/,
+  new RegExp(`^/conversations/${UUID}/(pins|unread|scheduled)$`, 'i'),
+  new RegExp(`^/conversations/${UUID}/scheduled/${UUID}(/send)?$`, 'i'),
+  new RegExp(`^/conversations/${UUID}/messages/${UUID}/pin$`, 'i')
+]
+function isToolsPath(method: unknown, path: unknown, body: unknown): boolean {
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method as string)) return false
+  if (typeof path !== 'string' || path.length > 200 || !TOOL_PATHS.some((r) => r.test(path)))
+    return false
+  if (body === undefined || body === null) return true
+  try {
+    return typeof body === 'object' && JSON.stringify(body).length <= 20_000
+  } catch {
+    return false
+  }
+}
 
 /** 2.0: a request allowed through the constellations gateway (desktop: main/api.ts). */
 function isConstellationPath(method: unknown, path: unknown, body: unknown): boolean {
@@ -176,6 +199,17 @@ export function createBridge(): GloflyApi {
     },
     auth: {
       login: (r) => thenGoLive(auth.login(r)),
+      loginCode: (challenge, code) =>
+        typeof code === 'string' && code.length <= 20
+          ? thenGoLive(auth.loginCode(challenge, code))
+          : Promise.resolve({ ok: false, reason: 'invalid', message: 'Enter the code.' }),
+      loginResend: auth.loginResend,
+      qrStart: auth.qrStart,
+      qrPoll: async (id, secret) => {
+        const r = await auth.qrPoll(id, secret)
+        if (r.state === 'signed-in') goLive()
+        return r
+      },
       register: (r) => thenGoLive(auth.register(r)),
       checkUsername: auth.checkUsername,
       signupMode: auth.signupMode,
@@ -559,14 +593,19 @@ export function createBridge(): GloflyApi {
       get: (id) => badId(id) ?? request<WatchUpdate>('GET', `/calls/${id}/watch?sites=1`),
       preview: (link) =>
         typeof link === 'string' && link.length > 0 && link.length <= 500
-          ? request<WatchPreview>('GET', `/calls/watch/preview?sites=1&link=${encodeURIComponent(link)}`)
+          ? request<WatchPreview>(
+              'GET',
+              `/calls/watch/preview?sites=1&link=${encodeURIComponent(link)}`
+            )
           : Promise.resolve(invalid),
       start: (id, link, control) =>
         badId(id) ?? request<WatchUpdate>('POST', `/calls/${id}/watch?sites=1`, { link, control }),
       control: (id, action, to) =>
-        badId(id) ?? request<WatchUpdate>('POST', `/calls/${id}/watch/control?sites=1`, { action, to }),
+        badId(id) ??
+        request<WatchUpdate>('POST', `/calls/${id}/watch/control?sites=1`, { action, to }),
       settings: (id, control) =>
-        badId(id) ?? request<WatchUpdate>('POST', `/calls/${id}/watch/settings?sites=1`, { control }),
+        badId(id) ??
+        request<WatchUpdate>('POST', `/calls/${id}/watch/settings?sites=1`, { control }),
       report: (id, videoId, durationSec, title) =>
         badId(id) ??
         (typeof videoId === 'string' && /^[A-Za-z0-9_:-]{4,40}$/.test(videoId)
@@ -600,6 +639,15 @@ export function createBridge(): GloflyApi {
       send: (report) => request('POST', '/reports', report)
     },
     // 2.0 Constellations and My games (the same limits as the desktop app's gateway).
+    // 0.7.3: two-step settings, quiet hours, pins, mark unread, send later.
+    tools: {
+      request: <T>(method: ConstellationMethod, path: string, body?: unknown) =>
+        isToolsPath(method, path, body)
+          ? request<T>(method, path, body ?? undefined)
+          : Promise.resolve(invalid as ApiResult<T>)
+    },
+    reportError: (report) => reportError(report),
+    setErrorReports: () => undefined, // (the page's own setting decides; nothing else runs here)
     constellations: {
       request: <T>(method: ConstellationMethod, path: string, body?: unknown) =>
         isConstellationPath(method, path, body)

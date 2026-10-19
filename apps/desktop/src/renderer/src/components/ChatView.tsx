@@ -1,5 +1,5 @@
 import { shortBody } from '@glofly/shared/gifs'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
   Attachment,
   ChatGameKind,
@@ -36,6 +36,20 @@ import {
 import CallPanel, { JoinCallBar, RingSomeDialog } from './CallPanel'
 import { useCalls } from '../calls/callState'
 import MessageItem, { type ShownMessage } from './MessageItem'
+import {
+  ClockIcon,
+  PinnedMessagesIcon,
+  PinsPanel,
+  ScheduledPanel,
+  ScheduledStrip,
+  SendLaterMenu
+} from './ChatTools'
+import {
+  markUnread as markUnreadApi,
+  pins as pinsApi,
+  scheduled as scheduledApi
+} from '../lib/tools'
+import type { PinnedMessage, ScheduledMessage } from '../../../preload/api-types'
 import { PinIcon } from './ChatList'
 import EmojiPicker from './EmojiPicker'
 import EmojiText from './EmojiText'
@@ -89,6 +103,8 @@ type ChatViewProps = {
   onReport?: (message: Message) => void
   /** 2.0: this chat is a constellation's nebula (its own header, role badges, moderators) */
   nebula?: NebulaMode
+  /** 0.7.3: after "Mark unread", leave the chat (so it isn't read again straight away) */
+  onLeave?: () => void
 }
 
 /** How a nebula's chat differs from a group chat (2.0, Constellation.dc.html). */
@@ -126,6 +142,9 @@ type Pending = {
 const TYPING_SEND_EVERY_MS = 3000 // how often we tell the other person we're typing
 const TYPING_SHOW_FOR_MS = 4500 // how long "is typing…" stays after their last keystroke
 const MESSAGE_MAX = 4000
+/** 0.7.3 long chats: messages drawn at first, and how many more each time you reach the top */
+const WINDOW = 150
+const WINDOW_STEP = 100
 const FILES_PER_MESSAGE = 10
 const FILE_MAX_BYTES = 25 * 1024 * 1024
 const VIDEO_MAX_BYTES = 64 * 1024 * 1024
@@ -304,7 +323,8 @@ export default function ChatView({
   jumpRequest,
   onMute,
   onReport,
-  nebula
+  nebula,
+  onLeave
 }: ChatViewProps): React.JSX.Element {
   const partner = conversation.partner
   const isGroup = conversation.kind === 'group'
@@ -367,6 +387,25 @@ export default function ChatView({
   const closeGames = useCallback(() => setGameAnchor(null), [])
   const uploadsRef = useRef<Upload[]>([])
   const chatOpen = useRef(true)
+  // ---- 0.7.3: pins, mark unread, send later ----
+  const [pinList, setPinList] = useState<PinnedMessage[]>([])
+  const [canPin, setCanPin] = useState(false)
+  const [pinsOpen, setPinsOpen] = useState(false)
+  const [laterList, setLaterList] = useState<ScheduledMessage[]>([])
+  const [laterOpen, setLaterOpen] = useState(false)
+  const [laterMenu, setLaterMenu] = useState<{ x: number; y: number } | null>(null)
+  /** A jump from the pins panel (same as one from search) */
+  const [localJump, setLocalJump] = useState<{ messageId: string; nonce: number } | null>(null)
+  /** "Mark unread": this chat isn't marked read again until it's opened again */
+  const holdRead = useRef(false)
+  /** Long chats: how many of the newest messages are drawn (grows as you scroll up) */
+  const [windowSize, setWindowSize] = useState(WINDOW)
+  const windowStartRef = useRef(0)
+  const windowSizeRef = useRef(WINDOW)
+  /** A jump is drawing a long way back: don't shrink the window meanwhile */
+  const drawingBackUntil = useRef(0)
+  windowSizeRef.current = windowSize
+  const shownCount = useRef(0)
 
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -427,7 +466,7 @@ export default function ChatView({
 
   // Mark read when the window is in front and this chat is open.
   const markRead = useCallback(async () => {
-    if (!document.hasFocus()) return
+    if (!document.hasFocus() || holdRead.current) return
     const result = await window.glofly.conversations.markRead(conversation.id)
     if (result.ok) parentCallbacks.current.onRead(conversation.id)
   }, [conversation.id])
@@ -525,7 +564,7 @@ export default function ChatView({
     } else if (stickToBottom.current) {
       list.scrollTop = list.scrollHeight
     }
-  }, [messages, pending, someoneTyping, replyingTo, conversation.partnerReadAt])
+  }, [messages, pending, someoneTyping, replyingTo, conversation.partnerReadAt, windowSize])
 
   async function loadOlder(): Promise<void> {
     if (loadingOlder || !hasMore || messages.length === 0) return
@@ -538,6 +577,8 @@ export default function ChatView({
       ...result.data.messages.filter((m) => !list.some((x) => x.id === m.id)),
       ...list
     ])
+    // The older ones show too (the window counts from the newest).
+    setWindowSize((w) => w + result.data.messages.length)
     setHasMore(result.data.hasMore)
     rememberPeople(result.data.people)
   }
@@ -546,7 +587,22 @@ export default function ChatView({
     const list = listRef.current
     if (!list) return
     stickToBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 120
-    if (list.scrollTop < 80) void loadOlder()
+    // Back at the newest: what's far above stops being drawn (it's still loaded).
+    if (
+      stickToBottom.current &&
+      windowSizeRef.current > WINDOW * 2 &&
+      Date.now() > drawingBackUntil.current
+    )
+      setWindowSize(WINDOW)
+    if (list.scrollTop < 80) {
+      // Loaded but not drawn yet: draw more first; only then ask the server for older ones.
+      if (windowStartRef.current > 0) {
+        if (keepScrollFrom.current === null) {
+          keepScrollFrom.current = list.scrollHeight
+          setWindowSize((w) => w + WINDOW_STEP)
+        }
+      } else void loadOlder()
+    }
   }
 
   async function deliver(item: Pending): Promise<void> {
@@ -968,15 +1024,39 @@ export default function ChatView({
     hasMoreRef.current = hasMore
   }, [messages, hasMore])
   const revealing = useRef(0)
+  // The newest jump asked for: from search (the parent) or from the pins panel.
+  // (A new search jump replaces a pins jump, worked out while drawing rather than in an effect.)
+  const [seenJumpRequest, setSeenJumpRequest] = useState(jumpRequest)
+  if (jumpRequest !== seenJumpRequest) {
+    setSeenJumpRequest(jumpRequest)
+    setLocalJump(null)
+  }
+  const activeJump = localJump ?? jumpRequest
   useEffect(() => {
-    if (!jumpRequest || loading) return
+    if (!activeJump || loading) return
     const attempt = ++revealing.current
-    const id = jumpRequest.messageId
+    const id = activeJump.messageId
     const nextFrame = (): Promise<void> =>
       new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
     void (async () => {
-      for (let page = 0; page < 40; page++) {
+      // 0.7.3: up to ~3,000 back (pins can be old). Pages only load here; drawing waits.
+      for (let page = 0; page < 120; page++) {
         if (attempt !== revealing.current) return // another jump started
+        // Loaded but outside the drawn window: draw back to it first.
+        const at = messagesRef.current.findIndex((m) => m.id === id)
+        if (at >= 0 && at < windowStartRef.current) {
+          // Not "at the newest" any more, so the window isn't shrunk back while drawing.
+          stickToBottom.current = false
+          drawingBackUntil.current = Date.now() + 8000
+          const need = shownCount.current - at + 20
+          setWindowSize((w) => Math.max(w, need))
+          // Drawing a long way back can take a moment: wait for it (up to ~5 seconds).
+          for (let f = 0; f < 150; f++) {
+            await nextFrame()
+            if (attempt !== revealing.current) return
+            if (listRef.current?.querySelector(`[data-message-id="${id}"]`)) break
+          }
+        }
         const el = listRef.current?.querySelector(`[data-message-id="${id}"]`)
         if (el) {
           stickToBottom.current = false
@@ -993,6 +1073,7 @@ export default function ChatView({
           ...result.data.messages.filter((m) => !list.some((x) => x.id === m.id)),
           ...list
         ])
+        // (Not drawn yet: only once it's found, everything from it down is drawn.)
         setHasMore(result.data.hasMore)
         rememberPeople(result.data.people)
         await nextFrame()
@@ -1001,7 +1082,91 @@ export default function ChatView({
         setNotice("Couldn't find that message. It may have been deleted.")
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per jump request
-  }, [jumpRequest, loading])
+  }, [activeJump, loading])
+
+  // Long chats: a new chat starts with the newest WINDOW drawn. New messages arriving while
+  // you're reading further up don't push what you're reading out of the drawn window.
+  const [windowChat, setWindowChat] = useState(conversation.id)
+  if (windowChat !== conversation.id) {
+    setWindowChat(conversation.id)
+    setWindowSize(WINDOW)
+  }
+  const lastCount = useRef(0)
+  useEffect(() => {
+    const n = messages.length + pending.length
+    const added = n - lastCount.current
+    lastCount.current = n
+    if (added > 0 && added < 25 && !stickToBottom.current) setWindowSize((w) => w + added)
+  }, [messages.length, pending.length])
+
+  // 0.7.3: this chat's pins and my messages waiting to be sent, kept up to date live.
+  const loadPins = useCallback(() => {
+    void pinsApi.list(conversation.id).then((r) => {
+      if (!r.ok) return
+      setPinList(r.data.pins)
+      setCanPin(r.data.canPin)
+    })
+  }, [conversation.id])
+  const loadLater = useCallback(() => {
+    void scheduledApi.list(conversation.id).then((r) => r.ok && setLaterList(r.data.scheduled))
+  }, [conversation.id])
+  useEffect(() => {
+    holdRead.current = false
+    loadPins()
+    loadLater()
+    return window.glofly.onEvent((event) => {
+      if (event.type === 'pins:changed' && event.conversationId === conversation.id) loadPins()
+      if (event.type === 'scheduled:changed' && event.conversationId === conversation.id)
+        loadLater()
+      if (event.type === 'connection' && event.connected) {
+        loadPins()
+        loadLater()
+      }
+    })
+  }, [conversation.id, loadPins, loadLater])
+  const pinnedIds = new Set(pinList.map((p) => p.message.id))
+
+  async function setPinned(m: Message, pin: boolean): Promise<void> {
+    const r = await pinsApi.set(conversation.id, m.id, pin)
+    if (!r.ok) return handleFailure(r.error, r.message)
+    setPinList(r.data.pins)
+  }
+
+  async function markUnreadFrom(m: Message): Promise<void> {
+    holdRead.current = true
+    const r = await markUnreadApi(conversation.id, m.id)
+    if (!r.ok) {
+      holdRead.current = false
+      return handleFailure(r.error, r.message)
+    }
+    onLeave?.()
+  }
+
+  /** Send later: the text in the box (and the reply), at that time. */
+  async function sendLater(at: Date): Promise<void> {
+    setLaterMenu(null)
+    const body = draft.trim()
+    if (!body) {
+      setNotice('Type a message first, then pick when to send it.')
+      return
+    }
+    const r = await scheduledApi.add(conversation.id, body, at, replyingTo?.id ?? null)
+    if (!r.ok) return handleFailure(r.error, r.message)
+    setDraft('')
+    setReplyingTo(null)
+    setMention(null)
+    setLaterList((list) =>
+      [...list.filter((x) => x.id !== r.data.scheduled.id), r.data.scheduled].sort((a, b) =>
+        a.sendAt.localeCompare(b.sendAt)
+      )
+    )
+  }
+  const laterBlocked =
+    uploads.length > 0
+      ? 'Send later works for text only. Send or remove the files first.'
+      : lantern
+        ? "Lantern messages can't be scheduled."
+        : null
 
   // Ctrl+F (⌘F on a Mac) searches this chat.
   useEffect(() => {
@@ -1238,6 +1403,184 @@ export default function ChatView({
       </div>
     ) : null
 
+  // 0.7.3 long chats: only a window of the newest messages is drawn (it grows as you scroll up,
+  // and to reach a message you jump to), and the list isn't redrawn on every keystroke.
+  const windowStart = Math.max(0, shown.length - windowSize)
+  windowStartRef.current = windowStart
+  shownCount.current = shown.length
+  const messageRows = useMemo(
+    () =>
+      shown.slice(windowStart).map((item, j) => {
+        const i = windowStart + j
+        const m = item.message
+        const previous = shown[i - 1]?.message
+        const newDay = !previous || !isSameDay(previous.createdAt, m.createdAt)
+        const divider = newDay && (
+          <div className="day-divider">
+            <span>{dayLabel(m.createdAt)}</span>
+          </div>
+        )
+        // Calls get a line with an arrow, like the design ("Chip started a video call").
+        if (m.event?.type === 'call') {
+          const missed =
+            m.senderId !== me.id && (m.event.status === 'missed' || m.event.status === 'declined')
+          return (
+            <div key={item.key}>
+              {divider}
+              <div
+                className={
+                  missed
+                    ? 'chat-event chat-event--call chat-event--missed'
+                    : 'chat-event chat-event--call'
+                }
+                data-message-id={m.id}
+              >
+                <span className="chat-event-icon">
+                  <CallLineIcon missed={missed} />
+                </span>
+                <span>{eventText(m.event, m.senderId, me.id, nameOf)}</span>
+                <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
+              </div>
+            </div>
+          )
+        }
+        // Watch Together started in the call (0.5.0): a line with the Watch icon.
+        if (m.event?.type === 'watch') {
+          return (
+            <div key={item.key}>
+              {divider}
+              <div className="chat-event chat-event--call chat-event--watch" data-message-id={m.id}>
+                <span className="chat-event-icon">
+                  <WatchIcon size={16} />
+                </span>
+                <span>
+                  <EmojiText text={eventText(m.event, m.senderId, me.id, nameOf)} />
+                </span>
+                <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
+              </div>
+            </div>
+          )
+        }
+        // Group events ("Chip added Maya") are a quiet line, not a message.
+        if (m.event) {
+          return (
+            <div key={item.key}>
+              {divider}
+              <div className="chat-event" data-message-id={m.id}>
+                <span>
+                  <EmojiText text={eventText(m.event, m.senderId, me.id, nameOf)} />
+                </span>
+                <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
+              </div>
+            </div>
+          )
+        }
+        const sender = personOf(m.senderId)
+        // A reply always shows its name, so the quote is clearly attached to it.
+        const grouped = !newDay && !m.replyTo && !previous?.event && continuesGroup(previous, m)
+        return (
+          <div key={item.key}>
+            {divider}
+            <MessageItem
+              item={item}
+              grouped={grouped}
+              meId={me.id}
+              authorName={nameOf(m.senderId)}
+              authorRole={nebula ? nebula.roleOf(m.senderId) : null}
+              canDeleteOthers={!!nebula && m.senderId !== me.id && nebula.canDelete(m.senderId)}
+              extra={nebula && !m.deleted && !m.event ? voiceCardFor(nebula, m.body) : null}
+              avatar={
+                m.senderId === me.id ? (
+                  <span className="avatar avatar--mine" aria-hidden="true">
+                    <AvatarFace id={me.id} name={me.displayName} avatarVersion={me.avatarVersion} />
+                  </span>
+                ) : sender ? (
+                  // Anyone else's photo opens their profile card (DMs too since Oct 13, like the phone app).
+                  <button
+                    type="button"
+                    className="message-face"
+                    aria-label={`View ${sender.displayName}'s profile`}
+                    onClick={() => onViewProfile(sender)}
+                  >
+                    <Avatar
+                      id={sender.id}
+                      name={sender.displayName}
+                      avatarVersion={sender.avatarVersion}
+                      size={40}
+                    />
+                  </button>
+                ) : (
+                  <Avatar id={m.senderId} name="?" avatarVersion={null} size={40} />
+                )
+              }
+              time={clockTime(m.createdAt)}
+              nameOf={nameOf}
+              canAct={conversation.canMessage}
+              editing={editingId === m.id}
+              highlighted={highlightId === m.id}
+              onReact={(emoji) => void toggleReaction(m, emoji)}
+              onReply={() => startReply(m)}
+              onEdit={() => setEditingId(m.id)}
+              onSaveEdit={(body) => void saveEdit(m, body)}
+              onCancelEdit={() => {
+                setEditingId(null)
+                inputRef.current?.focus()
+              }}
+              onDelete={() => setDeleting(m)}
+              onJumpTo={jumpTo}
+              onRetry={() => retry(item.key)}
+              onDiscard={() => {
+                const discarded = pending.find((x) => x.tempId === item.key)
+                setPending((p) => p.filter((x) => x.tempId !== item.key))
+                for (const a of discarded?.attachments ?? []) {
+                  void window.glofly.conversations.removeUpload(conversation.id, a.id)
+                }
+              }}
+              people={mentionPeople}
+              onMentionClick={(u) => onViewProfile(u)}
+              onReport={onReport && !item.pending ? () => onReport(m) : undefined}
+              memberIds={memberIds}
+              onUpdated={upsert}
+              onFailure={handleFailure}
+              onFireflies={
+                conversation.canMessage ? (emoji) => void sendFireflies(m, emoji) : undefined
+              }
+              onRemovePreview={() => void removePreview(m)}
+              pinned={canPin && !item.pending ? pinnedIds.has(m.id) : null}
+              onPin={canPin ? (pin) => void setPinned(m, pin) : undefined}
+              onMarkUnread={!item.pending ? () => void markUnreadFrom(m) : undefined}
+              attachments={
+                m.attachments.length > 0 ? (
+                  <MessageAttachments
+                    conversationId={conversation.id}
+                    attachments={m.attachments}
+                    onOpenPhoto={(photos, index) => setViewing({ photos, index })}
+                    onFailure={handleFailure}
+                  />
+                ) : null
+              }
+            />
+          </div>
+        )
+      }),
+    // Everything the rows show; the composer's draft isn't one of them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      messages,
+      pending,
+      windowStart,
+      editingId,
+      highlightId,
+      pinList,
+      canPin,
+      conversation,
+      me,
+      nebula,
+      formerPeople,
+      onLeave
+    ]
+  )
+
   return (
     <div
       className="chat"
@@ -1269,6 +1612,41 @@ export default function ChatView({
           >
             <SearchIcon size={19} />
           </button>
+
+          {/* 0.7.3: pinned messages */}
+          <span className="pins-wrap">
+            <button
+              type="button"
+              className={
+                pinsOpen ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
+              }
+              aria-label={
+                pinList.length ? `Pinned messages (${pinList.length})` : 'Pinned messages'
+              }
+              aria-expanded={pinsOpen}
+              title="Pinned messages"
+              onClick={() => setPinsOpen((v) => !v)}
+            >
+              <PinnedMessagesIcon size={20} />
+              {pinList.length > 0 && <span className="pins-count">{pinList.length}</span>}
+            </button>
+            {pinsOpen && (
+              <PinsPanel
+                pins={pinList}
+                canPin={canPin}
+                nameOf={nameOf}
+                onJump={(id) => {
+                  setPinsOpen(false)
+                  setLocalJump({ messageId: id, nonce: Date.now() })
+                }}
+                onUnpin={(id) => {
+                  const m = pinList.find((p) => p.message.id === id)?.message
+                  if (m) void setPinned(m, false)
+                }}
+                onClose={() => setPinsOpen(false)}
+              />
+            )}
+          </span>
           {nebula.headerExtra}
           <button
             type="button"
@@ -1366,6 +1744,40 @@ export default function ChatView({
             )}
           </div>
           <div className="chat-header-actions">
+            {/* 0.7.3: pinned messages */}
+            <span className="pins-wrap">
+              <button
+                type="button"
+                className={
+                  pinsOpen ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
+                }
+                aria-label={
+                  pinList.length ? `Pinned messages (${pinList.length})` : 'Pinned messages'
+                }
+                aria-expanded={pinsOpen}
+                title="Pinned messages"
+                onClick={() => setPinsOpen((v) => !v)}
+              >
+                <PinnedMessagesIcon size={20} />
+                {pinList.length > 0 && <span className="pins-count">{pinList.length}</span>}
+              </button>
+              {pinsOpen && (
+                <PinsPanel
+                  pins={pinList}
+                  canPin={canPin}
+                  nameOf={nameOf}
+                  onJump={(id) => {
+                    setPinsOpen(false)
+                    setLocalJump({ messageId: id, nonce: Date.now() })
+                  }}
+                  onUnpin={(id) => {
+                    const m = pinList.find((p) => p.message.id === id)?.message
+                    if (m) void setPinned(m, false)
+                  }}
+                  onClose={() => setPinsOpen(false)}
+                />
+              )}
+            </span>
             {
               <>
                 <button
@@ -1582,162 +1994,7 @@ export default function ChatView({
           </div>
         )}
 
-        {shown.map((item, i) => {
-          const m = item.message
-          const previous = shown[i - 1]?.message
-          const newDay = !previous || !isSameDay(previous.createdAt, m.createdAt)
-          const divider = newDay && (
-            <div className="day-divider">
-              <span>{dayLabel(m.createdAt)}</span>
-            </div>
-          )
-          // Calls get a line with an arrow, like the design ("Chip started a video call").
-          if (m.event?.type === 'call') {
-            const missed =
-              m.senderId !== me.id && (m.event.status === 'missed' || m.event.status === 'declined')
-            return (
-              <div key={item.key}>
-                {divider}
-                <div
-                  className={
-                    missed
-                      ? 'chat-event chat-event--call chat-event--missed'
-                      : 'chat-event chat-event--call'
-                  }
-                  data-message-id={m.id}
-                >
-                  <span className="chat-event-icon">
-                    <CallLineIcon missed={missed} />
-                  </span>
-                  <span>{eventText(m.event, m.senderId, me.id, nameOf)}</span>
-                  <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
-                </div>
-              </div>
-            )
-          }
-          // Watch Together started in the call (0.5.0): a line with the Watch icon.
-          if (m.event?.type === 'watch') {
-            return (
-              <div key={item.key}>
-                {divider}
-                <div
-                  className="chat-event chat-event--call chat-event--watch"
-                  data-message-id={m.id}
-                >
-                  <span className="chat-event-icon">
-                    <WatchIcon size={16} />
-                  </span>
-                  <span>
-                    <EmojiText text={eventText(m.event, m.senderId, me.id, nameOf)} />
-                  </span>
-                  <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
-                </div>
-              </div>
-            )
-          }
-          // Group events ("Chip added Maya") are a quiet line, not a message.
-          if (m.event) {
-            return (
-              <div key={item.key}>
-                {divider}
-                <div className="chat-event" data-message-id={m.id}>
-                  <span>
-                    <EmojiText text={eventText(m.event, m.senderId, me.id, nameOf)} />
-                  </span>
-                  <time dateTime={m.createdAt}>{clockTime(m.createdAt)}</time>
-                </div>
-              </div>
-            )
-          }
-          const sender = personOf(m.senderId)
-          // A reply always shows its name, so the quote is clearly attached to it.
-          const grouped = !newDay && !m.replyTo && !previous?.event && continuesGroup(previous, m)
-          return (
-            <div key={item.key}>
-              {divider}
-              <MessageItem
-                item={item}
-                grouped={grouped}
-                meId={me.id}
-                authorName={nameOf(m.senderId)}
-                authorRole={nebula ? nebula.roleOf(m.senderId) : null}
-                canDeleteOthers={!!nebula && m.senderId !== me.id && nebula.canDelete(m.senderId)}
-                extra={nebula && !m.deleted && !m.event ? voiceCardFor(nebula, m.body) : null}
-                avatar={
-                  m.senderId === me.id ? (
-                    <span className="avatar avatar--mine" aria-hidden="true">
-                      <AvatarFace
-                        id={me.id}
-                        name={me.displayName}
-                        avatarVersion={me.avatarVersion}
-                      />
-                    </span>
-                  ) : sender ? (
-                    // Anyone else's photo opens their profile card (DMs too since Oct 13, like the phone app).
-                    <button
-                      type="button"
-                      className="message-face"
-                      aria-label={`View ${sender.displayName}'s profile`}
-                      onClick={() => onViewProfile(sender)}
-                    >
-                      <Avatar
-                        id={sender.id}
-                        name={sender.displayName}
-                        avatarVersion={sender.avatarVersion}
-                        size={40}
-                      />
-                    </button>
-                  ) : (
-                    <Avatar id={m.senderId} name="?" avatarVersion={null} size={40} />
-                  )
-                }
-                time={clockTime(m.createdAt)}
-                nameOf={nameOf}
-                canAct={conversation.canMessage}
-                editing={editingId === m.id}
-                highlighted={highlightId === m.id}
-                onReact={(emoji) => void toggleReaction(m, emoji)}
-                onReply={() => startReply(m)}
-                onEdit={() => setEditingId(m.id)}
-                onSaveEdit={(body) => void saveEdit(m, body)}
-                onCancelEdit={() => {
-                  setEditingId(null)
-                  inputRef.current?.focus()
-                }}
-                onDelete={() => setDeleting(m)}
-                onJumpTo={jumpTo}
-                onRetry={() => retry(item.key)}
-                onDiscard={() => {
-                  const discarded = pending.find((x) => x.tempId === item.key)
-                  setPending((p) => p.filter((x) => x.tempId !== item.key))
-                  for (const a of discarded?.attachments ?? []) {
-                    void window.glofly.conversations.removeUpload(conversation.id, a.id)
-                  }
-                }}
-                people={mentionPeople}
-                onMentionClick={(u) => onViewProfile(u)}
-                onReport={onReport && !item.pending ? () => onReport(m) : undefined}
-                memberIds={memberIds}
-                onUpdated={upsert}
-                onFailure={handleFailure}
-                onFireflies={
-                  conversation.canMessage ? (emoji) => void sendFireflies(m, emoji) : undefined
-                }
-                onRemovePreview={() => void removePreview(m)}
-                attachments={
-                  m.attachments.length > 0 ? (
-                    <MessageAttachments
-                      conversationId={conversation.id}
-                      attachments={m.attachments}
-                      onOpenPhoto={(photos, index) => setViewing({ photos, index })}
-                      onFailure={handleFailure}
-                    />
-                  ) : null
-                }
-              />
-            </div>
-          )
-        })}
+        {messageRows}
         {seenLine}
       </div>
 
@@ -1769,6 +2026,8 @@ export default function ChatView({
             </button>
           </p>
         )}
+
+        <ScheduledStrip list={laterList} onOpen={() => setLaterOpen(true)} />
 
         {conversation.canMessage ? (
           <div
@@ -1995,14 +2254,36 @@ export default function ChatView({
               >
                 {recording && !holding ? <SendIcon /> : <MicIcon size={20} />}
               </button>
+              {!recording && draft.trim().length > 0 && (
+                <button
+                  type="button"
+                  className="composer-later"
+                  aria-label="Send later"
+                  aria-haspopup="menu"
+                  title="Send later"
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect()
+                    setLaterMenu({ x: r.right, y: r.top })
+                  }}
+                >
+                  <ClockIcon size={19} />
+                </button>
+              )}
               {!recording && (
                 <button
                   type="button"
                   className="send-button"
                   aria-label="Send message"
-                  title={uploading ? 'Waiting for files to upload…' : undefined}
+                  title={
+                    uploading ? 'Waiting for files to upload…' : 'Send (right-click: send later)'
+                  }
                   disabled={!canSend}
                   onClick={send}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    if (!draft.trim()) return
+                    setLaterMenu({ x: e.clientX, y: e.clientY })
+                  }}
                 >
                   <SendIcon />
                 </button>
@@ -2019,6 +2300,23 @@ export default function ChatView({
           </p>
         )}
       </div>
+
+      {laterMenu && (
+        <SendLaterMenu
+          anchor={laterMenu}
+          disabledReason={laterBlocked}
+          onPick={(at) => void sendLater(at)}
+          onClose={() => setLaterMenu(null)}
+        />
+      )}
+      {laterOpen && (
+        <ScheduledPanel
+          conversationId={conversation.id}
+          list={laterList}
+          onProblem={setNotice}
+          onClose={() => setLaterOpen(false)}
+        />
+      )}
 
       {dragging && (
         <div className="drop-overlay" aria-hidden="true">

@@ -14,6 +14,8 @@ import ActivitySettings from './ActivitySettings'
 import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
 import AboutSettings from './AboutSettings'
+import QuietHoursSettings from './QuietHoursSettings'
+import { errorReportsOn, setErrorReportsOn } from '../lib/errorReports'
 import VoiceVideoSettings from './VoiceVideoSettings'
 import OverlaySettings from './OverlaySettings'
 import {
@@ -96,6 +98,30 @@ function BirthdayRow(): React.JSX.Element {
             if (!r.ok) patchSocial({ shareBirthday: !on })
             void refreshSocial()
           })
+        }}
+      />
+    </div>
+  )
+}
+
+/** 0.7.3: Settings → Privacy → Send error reports (kept on this device). */
+function ErrorReportsRow(): React.JSX.Element {
+  const [on, setOn] = useState(errorReportsOn)
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <span className="settings-row-label">Send error reports</span>
+        <span className="settings-row-desc">
+          When something breaks, Glofly tells its team what broke and where. Never your messages or
+          anything personal.
+        </span>
+      </div>
+      <Toggle
+        on={on}
+        label="Send error reports"
+        onChange={(v) => {
+          setErrorReportsOn(v)
+          setOn(v)
         }}
       />
     </div>
@@ -863,6 +889,7 @@ export default function SettingsDialog({
                         <option value="nobody">No one</option>
                       </select>
                     </div>
+                    <ErrorReportsRow />
                   </div>
                 </section>
 
@@ -1005,6 +1032,7 @@ export default function SettingsDialog({
                         <span className="toggle toggle--loading" aria-hidden="true" />
                       )}
                     </div>
+                    <QuietHoursSettings />
                   </div>
                 </section>
 

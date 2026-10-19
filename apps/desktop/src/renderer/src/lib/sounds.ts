@@ -1,3 +1,4 @@
+import { inQuiet } from './quiet'
 // Glofly's sounds (Chip's sound files, in assets/sounds/).
 //
 // Which sound plays for what is set in Settings → Notifications & sounds and saved on this
@@ -206,6 +207,12 @@ export function setQuiet(value: boolean): void {
 export const isSilenced = (): boolean => quiet && settings.dndSilence
 
 const lastPlayed = new Map<SoundName, number>()
+const QUIET_SOUNDS = new Set<SoundName>([
+  'message',
+  'constellationMessage',
+  'friendRequest',
+  'friendOnline'
+])
 
 /** 0–100 from Settings → 0–1 for an audio element (older saved settings have no volume yet). */
 const level = (percent: number | undefined): number =>
@@ -220,6 +227,8 @@ export function volumeFor(name: SoundName): number {
 /** Plays the sound picked for this moment, unless sounds are off or you're in Do not disturb. */
 export function playSound(name: SoundName): void {
   if (!settings.enabled || (quiet && settings.dndSilence)) return
+  // 0.7.3 quiet hours: nothing that arrives makes a sound (your own actions still do).
+  if (QUIET_SOUNDS.has(name) && inQuiet()) return
   // Settings saved before 0.7.0 have no constellation sound yet: Lantern.
   const choice = settings[name] ?? (name === 'constellationMessage' ? 'skyLantern' : undefined)
   if (!choice || choice === 'none' || !(choice in SOUND_FILES)) return
@@ -243,6 +252,7 @@ export function playSound(name: SoundName): void {
  */
 export function startLoop(name: 'ringtone' | 'outgoing'): () => void {
   if (!settings.enabled || (quiet && settings.dndSilence)) return () => {}
+  if (name === 'ringtone' && inQuiet(true)) return () => {}
   const choice = settings[name]
   if (!choice || choice === 'none' || !(choice in SOUND_FILES)) return () => {}
   return loopSound(choice as SoundFile, volumeFor(name))

@@ -63,6 +63,13 @@ type MessageItemProps = {
   canDeleteOthers?: boolean
   /** Shown under the message (a voice nebula's Join card) */
   extra?: React.ReactNode
+  // ---- 0.7.3 ----
+  /** Pinned in this chat (null: pins aren't known / can't be changed here) */
+  pinned?: boolean | null
+  /** Pin or unpin (only when this person may) */
+  onPin?: (pin: boolean) => void
+  /** "Mark unread from here" (others' messages) */
+  onMarkUnread?: () => void
 }
 
 const HOLD_FOR_FIREFLIES_MS = 450
@@ -232,7 +239,10 @@ export default function MessageItem({
   onRemovePreview,
   authorRole,
   canDeleteOthers,
-  extra
+  extra,
+  pinned = null,
+  onPin,
+  onMarkUnread
 }: MessageItemProps): React.JSX.Element {
   const m = item.message
   const mine = m.senderId === meId
@@ -634,6 +644,42 @@ export default function MessageItem({
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                   </Icon>
                   Copy text
+                </button>
+              )}
+              {onPin && pinned !== null && !m.deleted && !item.pending && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="menu-item"
+                  onClick={() => {
+                    setPopup(null)
+                    onPin(!pinned)
+                  }}
+                >
+                  <Icon>
+                    <path d="M9 4h6l-1 6 4 4H6l4-4z" />
+                    <path d="M12 14v7" />
+                    {pinned && <path d="M4 4l16 16" />}
+                  </Icon>
+                  {pinned ? 'Unpin message' : 'Pin message'}
+                </button>
+              )}
+              {onMarkUnread && !mine && !item.pending && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="menu-item"
+                  onClick={() => {
+                    setPopup(null)
+                    onMarkUnread()
+                  }}
+                >
+                  <Icon>
+                    <path d="M4 6h16v12H4z" />
+                    <path d="M4 7l8 6 8-6" />
+                    <circle cx="19" cy="6" r="3" fill="currentColor" />
+                  </Icon>
+                  Mark unread from here
                 </button>
               )}
               {onFireflies && !m.deleted && (

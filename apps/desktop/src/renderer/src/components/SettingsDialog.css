@@ -964,3 +964,71 @@
   line-height: 1.45;
   color: var(--glo-muted);
 }
+
+/* ---------- 0.7.3: two-step sign-in, device app line, quiet hours ---------- */
+.twostep-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--glo-panel);
+  color: var(--glo-muted);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.twostep-badge--on {
+  background: color-mix(in srgb, var(--glo-good, #2e9e5b) 18%, transparent);
+  color: var(--glo-good, #2e9e5b);
+}
+.twostep-warn {
+  color: var(--glo-danger-text, #c0122f);
+}
+.twostep-dialog {
+  width: min(440px, calc(100vw - 32px));
+}
+.twostep-code-input {
+  font-size: 22px;
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.twostep-codes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 18px;
+  margin: 10px 0;
+  padding: 14px 14px 14px 36px;
+  border-radius: 12px;
+  background: var(--glo-panel);
+  font:
+    15px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  user-select: text;
+}
+.twostep-backup-actions {
+  display: flex;
+  gap: 8px;
+}
+.acct-device-app {
+  display: block;
+  margin-top: 1px;
+}
+.quiet-times {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.quiet-times input[type='time'] {
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+}

@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import fireflyImg from '../assets/firefly.png'
 import wordmarkImg from '../assets/glofly-wordmark.png'
+import type { SignedInUser } from '../../../preload/api-types'
+import { QrSignIn, TwoStepForm, type TwoStepInfo } from './LoginExtras'
 import './LoginScreen.css'
 
 export type LoginDetails = {
@@ -12,12 +14,18 @@ export type LoginDetails = {
 }
 
 /** Why a login didn't go through: a message, or an account that's set to be deleted. */
-export type LoginProblem = { message: string } | { deleteAfter: string }
+export type LoginProblem =
+  | { message: string }
+  | { deleteAfter: string }
+  /** 0.7.3: the password was right; a two-step code was sent */
+  | { twoStep: TwoStepInfo }
 
 type LoginScreenProps = {
   /** Resolves to null on success, or what went wrong. */
   onLogin: (details: LoginDetails) => Promise<LoginProblem | null>
   onCreateAccount: () => void
+  /** 0.7.3: signed in by a two-step code or a QR code */
+  onSignedIn: (user: SignedInUser) => void
   busy?: boolean
   /** Shown above the form, e.g. after deleting an account. */
   notice?: string | null
@@ -191,9 +199,13 @@ function ForgotPasswordForm({
 export default function LoginScreen({
   onLogin,
   onCreateAccount,
+  onSignedIn,
   busy = false,
   notice = null
 }: LoginScreenProps): React.JSX.Element {
+  /** 0.7.3: waiting for a two-step code / showing the QR code */
+  const [twoStep, setTwoStep] = useState<TwoStepInfo | null>(null)
+  const [qr, setQr] = useState(false)
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -233,6 +245,10 @@ export default function LoginScreen({
     })
     setSubmitting(false)
     if (!problem) return
+    if ('twoStep' in problem) {
+      setTwoStep(problem.twoStep)
+      return
+    }
     if ('deleteAfter' in problem) {
       setRestoreBy(problem.deleteAfter)
       return
@@ -286,7 +302,23 @@ export default function LoginScreen({
 
       <section className="form-panel">
         <div className="titlebar-drag" aria-hidden="true" />
-        {forgot ? (
+        {twoStep ? (
+          <TwoStepForm
+            info={twoStep}
+            onSignedIn={onSignedIn}
+            onBack={(message) => {
+              setTwoStep(null)
+              setPassword('')
+              setError(message ?? null)
+            }}
+          />
+        ) : qr ? (
+          <QrSignIn
+            keepSignedIn={keepSignedIn}
+            onSignedIn={onSignedIn}
+            onBack={() => setQr(false)}
+          />
+        ) : forgot ? (
           <ForgotPasswordForm
             initialIdentifier={identifier.trim()}
             onBack={(typed) => {
@@ -401,6 +433,33 @@ export default function LoginScreen({
 
             <button type="submit" className="login-submit" disabled={locked} aria-busy={submitting}>
               Log in
+            </button>
+
+            <button
+              type="button"
+              className="login-qr-button"
+              disabled={locked}
+              onClick={() => {
+                setError(null)
+                setQr(true)
+              }}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                <path d="M14 14h3v3M21 14v.01M14 21h7M21 17v4" />
+              </svg>
+              Sign in with your phone
             </button>
 
             <p className="login-footer">

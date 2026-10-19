@@ -3,7 +3,12 @@ import type {
   ForgotPasswordResult,
   SignupMode,
   LoginRequest,
-  LoginResult,
+  ApiResult,
+  LoginStepResult,
+  LoginTwoStep,
+  QrLoginStart,
+  QrPollResult,
+  TwoStepMethod,
   RegisterRequest,
   RegisterResult,
   SignedInUser,
@@ -69,33 +74,128 @@ export { API_URL }
 
 const UNREACHABLE = "Can't reach Glofly right now. Check your connection and try again."
 
-export async function login(request: LoginRequest): Promise<LoginResult> {
-  let response: Response
+/** "Keep me signed in" from the password step, for the two-step code that finishes it (0.7.3). */
+let pendingKeep = false
+
+async function postAuth(path: string, body: unknown): Promise<Response | null> {
   try {
-    response = await fetch(`${API_URL}/auth/login`, {
+    return await fetch(`${API_URL}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...VERSION_HEADER },
-      body: JSON.stringify({ ...request, deviceName: DEVICE_NAME }),
-      signal: AbortSignal.timeout(10_000)
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000)
     })
   } catch {
-    return { ok: false, reason: 'unreachable', message: UNREACHABLE }
+    return null
   }
+}
 
+export async function login(request: LoginRequest): Promise<LoginStepResult> {
+  pendingKeep = request.keepSignedIn
+  // twoStepAware (0.7.3): this app can ask for a two-step code.
+  const response = await postAuth('/auth/login', {
+    ...request,
+    deviceName: DEVICE_NAME,
+    twoStepAware: true
+  })
+  if (!response) return { ok: false, reason: 'unreachable', message: UNREACHABLE }
+  return signInAnswer(response, request.keepSignedIn)
+}
+
+/** 0.7.3: the two-step code (or a backup code). */
+export async function loginCode(challenge: string, code: string): Promise<LoginStepResult> {
+  const response = await postAuth('/auth/login/code', { challenge, code })
+  if (!response) return { ok: false, reason: 'unreachable', message: UNREACHABLE }
+  return signInAnswer(response, pendingKeep)
+}
+
+/** 0.7.3: another code (optionally the other way). */
+export async function loginResend(
+  challenge: string,
+  method?: TwoStepMethod
+): Promise<ApiResult<LoginTwoStep['twoStep']>> {
+  const response = await postAuth('/auth/login/resend', { challenge, method })
+  if (!response) return { ok: false, error: 'unreachable', message: UNREACHABLE }
+  const body = (await response.json().catch(() => null)) as
+    (Partial<LoginTwoStep> & { error?: string; message?: string }) | null
+  if (response.ok && body?.twoStep) return { ok: true, data: body.twoStep }
+  return {
+    ok: false,
+    error: (body?.error as 'invalid') ?? 'invalid',
+    message: body?.message ?? 'Something went wrong. Try again.'
+  }
+}
+
+/** 0.7.3 QR code sign-in: a new code to show. */
+let qrKeep = true
+export async function qrStart(keepSignedIn: boolean): Promise<ApiResult<QrLoginStart>> {
+  qrKeep = keepSignedIn
+  const response = await postAuth('/auth/qr', { deviceName: DEVICE_NAME, keepSignedIn })
+  if (!response) return { ok: false, error: 'unreachable', message: UNREACHABLE }
+  const body = (await response.json().catch(() => null)) as
+    (QrLoginStart & { error?: string; message?: string }) | null
+  if (response.ok && body?.id && body.secret && body.url) return { ok: true, data: body }
+  if (response.status === 426 && body?.error === 'update_required') noteUpdateRequired(body)
+  return {
+    ok: false,
+    error: 'invalid',
+    message: body?.message ?? "Couldn't make a QR code right now. Try again in a moment."
+  }
+}
+
+/** 0.7.3: how the QR code is doing. Approved: signed in here (token kept like a login's). */
+export async function qrPoll(id: string, secret: string): Promise<QrPollResult> {
+  const response = await postAuth(`/auth/qr/${id}/poll`, { secret })
+  if (!response) return { state: 'error', message: UNREACHABLE }
+  const body = (await response.json().catch(() => null)) as {
+    token?: string
+    user?: SignedInUser
+    state?: string
+    by?: { id: string; displayName: string; avatarVersion: string | null }
+    message?: string
+  } | null
+  if (response.ok && body?.token && body.user) {
+    sessionToken = body.token
+    if (qrKeep) await saveToken(body.token)
+    else await clearToken()
+    return { state: 'signed-in', user: body.user }
+  }
+  if (body?.state === 'scanned' && body.by) return { state: 'scanned', by: body.by }
+  if (body?.state === 'waiting' || body?.state === 'declined' || body?.state === 'expired')
+    return { state: body.state }
+  return { state: 'error', message: body?.message ?? 'Something went wrong. Try again.' }
+}
+
+/** What the server said to a sign-in (password, code): signed in, a code needed, or why not. */
+async function signInAnswer(response: Response, keepSignedIn: boolean): Promise<LoginStepResult> {
   const body = (await response.json().catch(() => null)) as {
     token?: string
     user?: SignedInUser
     error?: string
     message?: string
     deleteAfter?: string
+    twoStep?: LoginTwoStep['twoStep']
   } | null
 
   if (response.ok && body?.token && body.user) {
     sessionToken = body.token
-    if (request.keepSignedIn) await saveToken(body.token)
+    if (keepSignedIn) await saveToken(body.token)
     else await clearToken()
     return { ok: true, user: body.user }
   }
+  if (response.ok && body?.twoStep) {
+    return { ok: false, reason: 'two_step', message: '', twoStep: body.twoStep }
+  }
+  if (body?.error === 'wrong_code')
+    return { ok: false, reason: 'wrong_code', message: body.message ?? "That code isn't right." }
+  if (response.status === 410 || body?.error === 'expired')
+    return {
+      ok: false,
+      reason: 'code_expired',
+      message: body?.message ?? 'That took too long. Sign in again.'
+    }
+  if (response.status === 502 && body?.message)
+    return { ok: false, reason: 'server_error', message: body.message }
 
   if (response.status === 426 && body?.error === 'update_required') {
     return { ok: false, reason: 'update_required', message: noteUpdateRequired(body).message }

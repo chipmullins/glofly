@@ -7,6 +7,15 @@
 
 export type * from '@glofly/shared/types'
 export type * from '@glofly/shared/constellations'
+export type * from '@glofly/shared/security'
+export type * from '@glofly/shared/chatTools'
+import type {
+  ErrorReport,
+  LoginTwoStep,
+  QrLoginStart,
+  QrLoginState,
+  TwoStepMethod
+} from '@glofly/shared/security'
 import type {
   AccountDetails,
   ActiveCall,
@@ -252,8 +261,22 @@ export type WatchControlAction = 'play' | 'pause' | 'seek' | 'back' | 'forward'
 /** 2.0: the methods the constellations gateway allows. */
 export type ConstellationMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
+/** 0.7.3: a sign-in step's answer: signed in, a two-step code is needed, or what went wrong. */
+export type LoginStepResult =
+  | LoginResult
+  | { ok: false; reason: 'two_step'; message: string; twoStep: LoginTwoStep['twoStep'] }
+  | { ok: false; reason: 'code_expired' | 'wrong_code'; message: string }
+
+/** 0.7.3: the QR code sign-in's answer while it waits (or signed in once the phone approves). */
+export type QrPollResult =
+  QrLoginState | { state: 'signed-in'; user: SignedInUser } | { state: 'error'; message: string }
+
 export type GloflyEvent =
   | ServerEvent
+  /** 0.7.3: pins changed in a chat; my own devices: marked unread / send-later list changed */
+  | { type: 'pins:changed'; conversationId: string }
+  | { type: 'conversation:unread'; conversationId: string; lastReadAt: string }
+  | { type: 'scheduled:changed'; conversationId: string }
   /** Push to talk: the chosen key went down or came up */
   | { type: 'ptt'; down: boolean }
   | { type: 'connection'; connected: boolean }
@@ -378,7 +401,19 @@ export type GloflyApi = {
     onProblem: (listener: (message: string) => void) => () => void
   }
   auth: {
-    login: (request: LoginRequest) => Promise<LoginResult>
+    /** 0.7.3: may answer reason 'two_step' (a code was sent: finish with loginCode). */
+    login: (request: LoginRequest) => Promise<LoginStepResult>
+    /** 0.7.3: the two-step code (or a backup code) for a sign-in that asked for one. */
+    loginCode: (challenge: string, code: string) => Promise<LoginStepResult>
+    /** 0.7.3: another code, or by the other way ("by email instead"). */
+    loginResend: (
+      challenge: string,
+      method?: TwoStepMethod
+    ) => Promise<ApiResult<LoginTwoStep['twoStep']>>
+    /** 0.7.3: a QR code to sign in with a phone (keepSignedIn as the checkbox says). */
+    qrStart: (keepSignedIn: boolean) => Promise<ApiResult<QrLoginStart>>
+    /** 0.7.3: how the QR code is doing; signed in once the phone approves. */
+    qrPoll: (id: string, secret: string) => Promise<QrPollResult>
     /** Creates an account and signs it in (kept signed in). */
     register: (request: RegisterRequest) => Promise<RegisterResult>
     /** Live "Available" check. Null if the server can't be reached. */
@@ -446,6 +481,21 @@ export type GloflyApi = {
     /** Signs out every device except this one. */
     signOutOtherDevices: () => Promise<ApiResult<{ signedOut: number }>>
   }
+  /**
+   * 0.7.3: two-step settings, quiet hours, pins, mark unread and send later: one gateway for
+   * those routes only (lib/tools.ts wraps them with their types).
+   */
+  tools: {
+    request: <T = unknown>(
+      method: ConstellationMethod,
+      path: string,
+      body?: unknown
+    ) => Promise<ApiResult<T>>
+  }
+  /** 0.7.3: an error report (Control → Errors). Fire and forget. */
+  reportError: (report: ErrorReport) => void
+  /** 0.7.3: Settings → Privacy "Send error reports" (the main process's own errors follow it). */
+  setErrorReports: (on: boolean) => void
   status: {
     get: () => Promise<ApiResult<MyStatus>>
     /** Change your status and/or custom status (empty text clears it). */
