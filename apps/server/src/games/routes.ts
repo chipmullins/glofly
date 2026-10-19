@@ -1,3 +1,4 @@
+import { isRestricted } from "../friends/rules";
 import { Router, type Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -129,7 +130,9 @@ myGamesRouter.get("/user/:userId", async (req, res) => {
     res.json({ visibility: await visibilityOf(myId), games: await gamesOf(myId, false), shared: true });
     return;
   }
-  const visibility = await visibilityOf(id.data);
+  // 0.7.3: a family-managed (restricted) account's games are only ever shown to its friends,
+  // whatever its setting says.
+  const visibility = (await isRestricted(id.data)) ? (await visibilityOf(id.data)) === "only_me" ? "only_me" : "friends" : await visibilityOf(id.data);
   const shared =
     !(await blockedEitherWay(myId, id.data)) &&
     (visibility === "everyone" || (visibility === "friends" && (await areFriends(myId, id.data))));

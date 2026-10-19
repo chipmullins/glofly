@@ -2,7 +2,8 @@ import { Router } from "express";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { conversationMembers, conversations, friendInvites, friendships, users } from "../db/schema";
+import { constellationMembers, constellations, conversationMembers, conversations, friendInvites, friendships, users } from "../db/schema";
+import { removeMember } from "../constellations/members";
 import { emitToUser } from "../realtime";
 import { announcePresence } from "../presence";
 import { endCallsBetween } from "../calls/service";
@@ -95,6 +96,18 @@ familyRouter.put("/accounts/:id/restricted", async (req, res) => {
   let leftGroups: string[] = [];
   let cancelled = 0;
   if (on) {
+    // 0.7.3: out of every constellation they joined (they're locked out of them anyway; this way
+    // they're no longer listed as a member). Ones they own stay, for the admin to sort out.
+    const joined = await db
+      .select({ id: constellationMembers.constellationId, ownerId: constellations.ownerId })
+      .from(constellationMembers)
+      .innerJoin(constellations, eq(constellations.id, constellationMembers.constellationId))
+      .where(eq(constellationMembers.userId, user.id));
+    for (const c of joined) {
+      if (c.ownerId === user.id) continue;
+      await removeMember(c.id, user.id);
+      emitToUser(user.id, "constellation:removed", { constellationId: c.id, reason: "kicked" }, true);
+    }
     // Friend requests waiting either way, and invites they sent that nobody used yet, go away.
     const pending = await db
       .delete(friendships)

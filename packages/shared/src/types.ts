@@ -437,6 +437,9 @@ export type SignedInDevice = {
   current: boolean
   /** Glofly is open and connected on that device right now */
   online: boolean
+  /** 0.7.3: which app ("android" / "ios" / "web"; null = desktop), and its version */
+  platform?: string | null
+  appVersion?: string | null
 }
 
 /** Forgot password: the server answers the same whether or not the account exists. */

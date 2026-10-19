@@ -100,7 +100,7 @@ const searchLimiter = rateLimit({
 });
 
 const idParam = z.uuid();
-const messageFields = {
+export const messageFields = {
   id: messages.id,
   conversationId: messages.conversationId,
   senderId: messages.senderId,
@@ -174,7 +174,7 @@ const emojiParam = z
  * Adds everything the app shows with a message: the message it replies to, and reactions.
  * Deleted messages are sent without their text.
  */
-async function hydrate(rows: MessageRow[]) {
+export async function hydrate(rows: MessageRow[]) {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const replyIds = [...new Set(rows.map((r) => r.replyToId).filter((x): x is string => !!x))];
@@ -1513,6 +1513,62 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
 class AttachmentGone extends Error {}
 
 /**
+ * 0.7.3 "Send later": posts a text message as if it was typed now (the server's sweep calls this
+ * at its time). The same steps as sending: checks, the chat moves up, everyone gets it live,
+ * phones get a notification. Returns why it couldn't be sent instead of throwing.
+ */
+export async function postScheduledText(
+  conversationId: string,
+  myId: string,
+  text: string,
+  replyToId: string | null,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const chat = await access(conversationId, myId);
+  if (!chat) return { ok: false, reason: "You're no longer in this chat." };
+  if (!(await canPost(chat, myId))) return { ok: false, reason: await cantPostMessage(chat, myId) };
+  let reply = replyToId;
+  if (reply) {
+    const original = await findMessage(conversationId, reply);
+    if (!original || original.deletedAt || original.event) reply = null; // send it anyway, without the reply
+  }
+  const mentions = chat.kind !== "dm" ? await mentionsIn(text, chat.memberIds, myId) : [];
+  const inserted = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(messages)
+      .values({ conversationId, senderId: myId, body: text, replyToId: reply, mentions })
+      .returning(messageFields);
+    await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));
+    await tx
+      .update(conversationMembers)
+      .set({ lastReadAt: row.createdAt })
+      .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, myId)));
+    return row;
+  });
+  const [message] = await hydrate([inserted]);
+  for (const userId of chat.memberIds)
+    emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  if (chat.kind === "nebula") inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, mentions, nebulaPreview(message)));
+  if (chat.partner) await shareReadPosition(conversationId, myId, chat.partner, inserted.createdAt);
+  inBackground(notifyMessage(message, chat));
+  inBackground(addLinkPreview(inserted.id, conversationId, text, myId));
+  if (chat.partner) inBackground(noteGlow(myId, chat.partner));
+  return { ok: true };
+}
+
+/** 0.7.3 Mark as unread: everything from this message on counts as unread again (for me only). */
+export async function markUnreadFrom(conversationId: string, myId: string, messageId: string): Promise<Date | null> {
+  const found = await findMessage(conversationId, messageId);
+  if (!found) return null;
+  const readAt = new Date(found.createdAt.getTime() - 1);
+  const updated = await db
+    .update(conversationMembers)
+    .set({ lastReadAt: readAt })
+    .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, myId)))
+    .returning({ c: conversationMembers.conversationId });
+  return updated.length ? readAt : null;
+}
+
+/**
  * 0.5.0: posts a special message (a poll, a game) the way sending does: the chat moves to the
  * top, it counts as read for the sender, everyone gets it live, phones get a notification.
  */
@@ -1892,7 +1948,7 @@ conversationsRouter.post(
       voice
         ? { kind: "file", data }
         : looked && container
-          ? { kind: "file", data, video: { info: { ...looked.info, mime: container }, poster: looked.poster } }
+          ? { kind: "file", data: looked.clean, video: { info: { ...looked.info, mime: container }, poster: looked.poster } }
           : await processUpload(data),
       voice,
     );

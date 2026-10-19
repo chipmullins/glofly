@@ -142,6 +142,8 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   res.locals.sessionId = found.session.id;
   res.locals.viaCookie = viaCookie;
   res.locals.persistent = found.session.persistent;
+  // 0.7.3: which app this request comes from ("android" / "ios" / "web"; null = desktop)
+  res.locals.sessionPlatform = platform;
   // A phone doing something (sending, replying from a notification) while Glofly isn't open on it.
   if (isPhonePlatform(platform) && req.method !== "GET") {
     await phoneActed(found.user.id, found.session.id).catch(() => undefined);

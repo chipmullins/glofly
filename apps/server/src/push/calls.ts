@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { listNames } from "@glofly/shared";
 import { db } from "../db";
 import { conversationMembers, conversations, pushDevices, users } from "../db/schema";
+import { quietOrDnd } from "./quiet";
 import { liveSessions } from "../realtime";
 import { pushConfigured, sendPush, type DeviceSounds, type PushData } from "./fcm";
 import { forgetTokens } from "./devices";
@@ -45,6 +46,7 @@ async function devicesOf(userIds: string[]) {
       messageSound: pushDevices.messageSound,
       ringtone: pushDevices.ringtone,
       status: users.statusPreference,
+      quiet: users.quietHours,
     })
     .from(pushDevices)
     .innerJoin(users, eq(users.id, pushDevices.userId))
@@ -126,7 +128,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
         sounds: { messageSound: d.messageSound, ringtone: d.ringtone },
         // iPhone with lock-screen calls: a VoIP push (never in Do not disturb: iOS would ring anyway,
         // since every VoIP push must show a call; those get the silent notification instead).
-        voip: d.platform === "ios" && d.voipToken && voipConfigured && d.status !== "dnd" ? d.voipToken : undefined,
+        voip: d.platform === "ios" && d.voipToken && voipConfigured && !quietOrDnd(d, true) ? d.voipToken : undefined,
         ttl: Math.max(1, Math.ceil((new Date(until).getTime() - Date.now()) / 1000)),
         data: {
           type: "call_ring",
@@ -137,7 +139,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
           group: title ? "1" : "0",
           chatTitle: title,
           ringingUntil: until,
-          dnd: d.status === "dnd" ? "1" : "0",
+          dnd: quietOrDnd(d, true) ? "1" : "0",
         },
       });
     } else if (missedBy.includes(d.userId)) {
@@ -156,7 +158,7 @@ export async function syncCallPushes(call: CallInfo, caller: Caller): Promise<vo
           chatTitle: title,
           title: title ? `${callerName} · ${title}` : callerName,
           text: `Missed ${call.video ? "video" : "voice"} call`,
-          dnd: d.status === "dnd" ? "1" : "0",
+          dnd: quietOrDnd(d, true) ? "1" : "0",
         },
       });
     } else if (stopped.includes(d.userId)) {

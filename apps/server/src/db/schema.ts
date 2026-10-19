@@ -113,6 +113,15 @@ export const users = pgTable(
     // ---- 2.0 ----
     // My games: who can see the games they've played ("everyone" / "friends" / "only_me").
     myGamesVisibility: text("my_games_visibility").notNull().default("friends"),
+    // ---- 0.7.3 ----
+    // Two-step sign-in: after the password, a 6-digit code by email (and by text once a phone is
+    // confirmed). Off unless turned on in Settings → Account.
+    twoStep: boolean("two_step").notNull().default(false),
+    // The phone number codes can go to (E.164, e.g. +15025550123), once confirmed with a code.
+    twoStepPhone: text("two_step_phone"),
+    // Quiet hours: no notification sounds or phone notifications between `from` and `to`
+    // ("22:00" → "08:00") in their time zone. Null = off.
+    quietHours: jsonb("quiet_hours").$type<QuietHoursSetting>(),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -1148,4 +1157,114 @@ export const nebulaPins = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.nebulaId] })],
+);
+
+// ---------------------------------------------------------------------------------------------
+// 0.7.3
+
+export type QuietHoursSetting = {
+  /** "HH:MM", 24-hour */
+  from: string
+  to: string
+  /** IANA time zone, e.g. "America/New_York" */
+  tz: string
+  /** Calls still ring during quiet hours */
+  calls: boolean
+}
+
+// Two-step sign-in backup codes (one-time, for when email and texts can't be reached). Only the
+// hash of each code is kept. A new set replaces the old one.
+export const twoStepBackupCodes = pgTable(
+  "two_step_backup_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("two_step_backup_codes_user_idx").on(t.userId)],
+);
+
+// Devices an account has signed in from (a hash of the device's name and app), so "New sign-in to
+// your Glofly account" is only emailed for a device not seen before.
+export const knownDevices = pgTable(
+  "known_devices",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceKey: text("device_key").notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.deviceKey] })],
+);
+
+// Pinned messages in a chat (a DM, a group or a nebula), newest pin first.
+export const pinnedMessages = pgTable(
+  "pinned_messages",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    pinnedBy: uuid("pinned_by").references(() => users.id, { onDelete: "set null" }),
+    pinnedAt: timestamp("pinned_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.conversationId, t.messageId] })],
+);
+
+// "Send later": a text message waiting for its time. Sent by the server's sweep (scheduled.ts)
+// exactly as if typed then; only its writer sees it before that.
+export const scheduledMessages = pgTable(
+  "scheduled_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    replyToId: uuid("reply_to_id").references(() => messages.id, { onDelete: "set null" }),
+    sendAt: timestamp("send_at", { withTimezone: true }).notNull(),
+    // Why it couldn't be sent at its time (no longer allowed in that chat). Null = waiting.
+    failed: text("failed"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("scheduled_messages_due_idx").on(t.sendAt).where(sql`${t.failed} is null`),
+    index("scheduled_messages_sender_idx").on(t.senderId, t.conversationId),
+  ],
+);
+
+// Error reports from the apps (Control → Errors). One row per distinct problem and app version;
+// the same error again only bumps its count. No message text, no passwords: just what broke, where.
+export const appErrors = pgTable(
+  "app_errors",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Hash of app + version + the error's first line + where it happened.
+    fingerprint: text("fingerprint").notNull().unique(),
+    app: text("app").notNull(), // "desktop" / "web" / "android" / "ios" / "server" / "control"
+    appVersion: text("app_version"),
+    os: text("os"),
+    message: text("message").notNull(),
+    stack: text("stack"),
+    // Which screen or action ("chat", "call", "watch"…)
+    where: text("where"),
+    count: integer("count").notNull().default(1),
+    // How many different accounts hit it (approximate: the last few are remembered)
+    userIds: uuid("user_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    firstAt: timestamp("first_at", { withTimezone: true }).notNull().defaultNow(),
+    lastAt: timestamp("last_at", { withTimezone: true }).notNull().defaultNow(),
+    // Marked fixed in Control. Happening again in a newer version opens it again.
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [index("app_errors_last_idx").on(t.lastAt)],
 );

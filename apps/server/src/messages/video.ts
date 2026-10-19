@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
@@ -59,11 +59,16 @@ type Probe = { streams?: { codec_type?: string; width?: number; height?: number;
 /**
  * Looks at a video: its length and size (as it shows, so a phone video filmed upright is tall),
  * and a poster picture (WebP). Null if it isn't a video ffmpeg can read, or is too long.
+ *
+ * 0.7.3: also `clean`, the same video without its hidden details. Phones write where a video was
+ * filmed (GPS) and on what device into the file; those are dropped (the picture and sound are
+ * copied untouched, so it's quick, and the "filmed upright" turn is kept). Photos already lose
+ * theirs by being re-saved (attachments.ts).
  */
 export async function examineVideo(
   data: Buffer,
   container: VideoInfo["mime"],
-): Promise<{ info: Omit<VideoInfo, "mime">; poster: Buffer } | null> {
+): Promise<{ info: Omit<VideoInfo, "mime">; poster: Buffer; clean: Buffer } | null> {
   // ffmpeg reads it only as the container its first bytes say (never guessing some other format,
   // like a playlist that points at other files).
   const demuxer = container === "video/webm" ? "matroska" : "mov";
@@ -104,7 +109,24 @@ export async function examineVideo(
       .resize(POSTER_SIZE, POSTER_SIZE, { fit: "inside", withoutEnlargement: true })
       .webp({ quality: 78 })
       .toBuffer();
-    return { info: { durationMs: Math.min(durationMs, VIDEO_MAX_MS), width, height }, poster };
+    // Without its hidden details: every stream copied as is, the file's own details (location,
+    // device, dates) left out, each stream's own (its turn) kept.
+    const out = join(dir, container === "video/webm" ? "clean.webm" : "clean.mov");
+    const outFormat = container === "video/webm" ? "webm" : container === "video/quicktime" ? "mov" : "mp4";
+    const cleaned = await run(
+      FFMPEG,
+      [
+        "-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "file", "-f", demuxer, "-i", file,
+        "-map", "0", "-map_metadata", "-1", "-map_metadata:s", "0:s", "-map_chapters", "-1", "-c", "copy",
+        ...(outFormat === "webm" ? [] : ["-movflags", "+faststart"]),
+        "-f", outFormat, out,
+      ],
+      1024,
+    );
+    if (!cleaned) return null; // couldn't be cleaned: not sent as a video (its details would go with it)
+    const clean = await readFile(out);
+    if (!clean.length) return null;
+    return { info: { durationMs: Math.min(durationMs, VIDEO_MAX_MS), width, height }, poster, clean };
   } catch {
     return null;
   } finally {

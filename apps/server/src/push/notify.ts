@@ -3,6 +3,7 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { attachmentSummary, listNames, shortBody, type Attachment } from "@glofly/shared";
 import { db } from "../db";
 import { constellationMembers, constellations, conversationMembers, pushDevices, users } from "../db/schema";
+import { quietOrDnd } from "./quiet";
 import { blockedEitherWay } from "../friends/rules";
 import { liveSessions } from "../realtime";
 import { pushConfigured, sendPush, type PushData } from "./fcm";
@@ -69,6 +70,7 @@ export async function notifyMessage(
       platform: pushDevices.platform,
       messageSound: pushDevices.messageSound,
       status: users.statusPreference,
+      quiet: users.quietHours,
       mutedUntil: conversationMembers.mutedUntil,
     })
     .from(pushDevices)
@@ -101,7 +103,7 @@ export async function notifyMessage(
     const mention = !!message.mentions?.includes(d.userId);
     const muted = d.mutedUntil !== null && d.mutedUntil.getTime() > now;
     if (muted && !mention) continue;
-    if (d.status === "dnd") continue;
+    if (quietOrDnd(d)) continue;
     if (chat.kind === "group") {
       // Inside a shared group, someone you blocked (or who blocked you) doesn't reach you.
       if (!blocked.has(d.userId)) blocked.set(d.userId, await blockedEitherWay(d.userId, message.senderId));
@@ -169,6 +171,7 @@ export async function notifyFriendRequest(
       platform: pushDevices.platform,
       messageSound: pushDevices.messageSound,
       status: users.statusPreference,
+      quiet: users.quietHours,
     })
     .from(pushDevices)
     .innerJoin(users, eq(users.id, pushDevices.userId))
@@ -176,7 +179,7 @@ export async function notifyFriendRequest(
   const live = (await liveSessions([toUserId])).get(toUserId);
   await deliver(
     devices
-      .filter((d) => d.status !== "dnd" && !live?.has(d.sessionId))
+      .filter((d) => !quietOrDnd(d) && !live?.has(d.sessionId))
       .map((device) => ({
         device,
         data: {
@@ -249,6 +252,7 @@ export async function notifyFriendJoined(
       platform: pushDevices.platform,
       messageSound: pushDevices.messageSound,
       status: users.statusPreference,
+      quiet: users.quietHours,
     })
     .from(pushDevices)
     .innerJoin(users, eq(users.id, pushDevices.userId))
@@ -256,7 +260,7 @@ export async function notifyFriendJoined(
   const live = (await liveSessions([toUserId])).get(toUserId);
   await deliver(
     devices
-      .filter((d) => d.status !== "dnd" && !live?.has(d.sessionId))
+      .filter((d) => !quietOrDnd(d) && !live?.has(d.sessionId))
       .map((device) => ({
         device,
         data: {
@@ -292,6 +296,7 @@ export async function notifyFriendNews(
       platform: pushDevices.platform,
       messageSound: pushDevices.messageSound,
       status: users.statusPreference,
+      quiet: users.quietHours,
     })
     .from(pushDevices)
     .innerJoin(users, eq(users.id, pushDevices.userId))
@@ -302,7 +307,7 @@ export async function notifyFriendNews(
   const name = nicks?.get(who.id) ?? who.displayName;
   await deliver(
     devices
-      .filter((d) => d.status !== "dnd" && !live?.has(d.sessionId))
+      .filter((d) => !quietOrDnd(d) && !live?.has(d.sessionId))
       .map((device) => ({
         device,
         ttl: lasts === "soon" ? 30 * 60 : 12 * 60 * 60,
@@ -340,6 +345,7 @@ async function notifyNebula(message: NewMessage, memberIds: string[]): Promise<v
       platform: pushDevices.platform,
       messageSound: pushDevices.messageSound,
       status: users.statusPreference,
+      quiet: users.quietHours,
       level: conversationMembers.notifyLevel,
       mutedUntil: conversationMembers.mutedUntil,
       defaultLevel: constellationMembers.notify,
@@ -369,7 +375,7 @@ async function notifyNebula(message: NewMessage, memberIds: string[]): Promise<v
   const out: { device: Device; data: PushData }[] = [];
   for (const d of devices) {
     if (live.get(d.userId)?.has(d.sessionId)) continue;
-    if (d.status === "dnd") continue;
+    if (quietOrDnd(d)) continue;
     const mention = !!message.mentions?.includes(d.userId);
     if (!alertFor(d.level ?? d.defaultLevel, d.mutedUntil, mention, now)) continue;
     if (!blocked.has(d.userId)) blocked.set(d.userId, await blockedEitherWay(d.userId, message.senderId));
@@ -424,6 +430,7 @@ export async function notifyConstellationInvite(
       platform: pushDevices.platform,
       messageSound: pushDevices.messageSound,
       status: users.statusPreference,
+      quiet: users.quietHours,
     })
     .from(pushDevices)
     .innerJoin(users, eq(users.id, pushDevices.userId))
@@ -434,7 +441,7 @@ export async function notifyConstellationInvite(
   const name = nicks?.get(by.id) ?? by.displayName;
   await deliver(
     devices
-      .filter((d) => d.status !== "dnd" && !live?.has(d.sessionId))
+      .filter((d) => !quietOrDnd(d) && !live?.has(d.sessionId))
       .map((device) => ({
         device,
         ttl: 7 * 24 * 60 * 60,

@@ -3,6 +3,10 @@ import express, { type ErrorRequestHandler } from "express";
 import helmet from "helmet";
 import { sql } from "drizzle-orm";
 import { db, pool } from "./db";
+import { qrAccountRouter, qrAuthRouter, qrPageRouter } from "./auth/qr";
+import { twoStepRouter } from "./auth/twoStep";
+import { errorReportsRouter, recordServerError } from "./errors";
+import { chatToolsRouter, sendDueMessages } from "./messages/chatTools";
 import { authRouter } from "./auth/routes";
 import { accountRouter } from "./account/routes";
 import { purgeDeletedAccounts } from "./account/deletion";
@@ -87,13 +91,23 @@ app.get("/status", async (_req, res) => {
 // While paused, everything below answers 503 "paused" (except Control).
 app.use(refuseWhilePaused(pausedPage));
 
+app.use("/auth/qr", qrAuthRouter);
 app.use("/auth", authRouter);
+// 0.7.3: two-step sign-in settings and approving a QR code sign-in (from a phone).
+app.use("/account/two-step", twoStepRouter);
+app.use("/account/qr", qrAccountRouter);
 app.use("/account", accountRouter);
+// 0.7.3: what a phone's camera opens from a sign-in QR code.
+app.use("/qr", qrPageRouter);
+// 0.7.3: the apps' error reports (Control → Errors).
+app.use("/errors", errorReportsRouter);
 app.use("/users", usersRouter);
 app.use("/users", profileRouter);
 app.use("/avatars", avatarsRouter);
 app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
+// 0.7.3: pins, mark as unread, send later (before conversationsRouter: /conversations/scheduled).
+app.use("/conversations", chatToolsRouter);
 app.use("/conversations", conversationsRouter);
 // 0.5.0: polls, mini games, link preview pictures, firefly swarms (messages/extras.ts); GIFs.
 app.use("/conversations", extrasRouter);
@@ -125,7 +139,10 @@ app.use((_req, res) => {
 // never to the user, so internal information doesn't leak.
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   const status = typeof err?.status === "number" && err.status < 500 ? err.status : 500;
-  if (status === 500) console.error(err);
+  if (status === 500) {
+    console.error(err);
+    recordServerError(err, `${_req.method} ${_req.route?.path ?? _req.baseUrl ?? ""}`.slice(0, 60));
+  }
   if (status === 413) {
     res.status(413).json({ error: "too_large", message: "That file is too big." });
     return;
@@ -193,6 +210,8 @@ connectRedis()
     every(60_000, "Hang check", sweepHangs);
     every(60_000, "Birthday check", () => sweepBirthdays());
     every(5_000, "Lantern check", sweepLanterns);
+    // 0.7.3 Send later: messages whose time has come.
+    every(15_000, "Send later", async () => void (await sendDueMessages()));
     // 2.0 My games: a minute of playtime for everyone playing something right now.
     every(60_000, "Playtime", sweepPlaytime);
     // Files added to a chat but never sent are cleared out after an hour.

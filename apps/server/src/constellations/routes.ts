@@ -65,7 +65,7 @@ import { joinDetails } from "../calls/routes";
 import { livekitConfigured, removeFromRoom, setMicrophoneAllowed } from "../calls/livekit";
 import { setVoiceMuted } from "../calls/voiceMutes";
 import { nebulaOfChat, rememberNebulaChat } from "./chats";
-import { can, OWNER_RANK, outranks, standingOf, type Standing } from "./perms";
+import { can, OWNER_RANK, outranks, ranksOf, standingOf, type Standing } from "./perms";
 import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstellations } from "./members";
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
 import { cardsFor, detailFor, entriesFor, publicUsers } from "./views";
@@ -808,6 +808,20 @@ constellationsRouter.post("/:id/transfer", changeLimiter, async (req, res) => {
   if (!t) return;
   if (t.userId === s.userId) {
     bad(res, "You're already the Owner.");
+    return;
+  }
+  // 0.7.3: the new Owner must be able to own it (not leaving Glofly, not a family account, under the limit).
+  if (await deletionPending(t.userId)) {
+    bad(res, "Their account is set to be deleted, so they can't own it.", 409);
+    return;
+  }
+  if (await isRestricted(t.userId)) {
+    bad(res, "A family-managed account can't own a constellation.", 409);
+    return;
+  }
+  const theirs = await db.$count(constellations, and(eq(constellations.ownerId, t.userId), isNull(constellations.takenDownAt)));
+  if (theirs >= CONSTELLATIONS_OWNED_MAX) {
+    bad(res, `They already own ${CONSTELLATIONS_OWNED_MAX} constellations, the most anyone can.`, 409);
     return;
   }
   await transferOwnership(s.constellationId, s.userId, t.userId);
@@ -1630,6 +1644,18 @@ constellationsRouter.delete("/:id/bans/:uid", changeLimiter, async (req, res) =>
   if (!s) return;
   const uid = idParam.safeParse(req.params.uid);
   if (uid.success) {
+    // 0.7.3: a ban by someone ranked at or above you stays (only they, or higher, can lift it).
+    const [ban] = await db
+      .select({ bannedBy: constellationBans.bannedBy })
+      .from(constellationBans)
+      .where(and(eq(constellationBans.constellationId, s.constellationId), eq(constellationBans.userId, uid.data)));
+    if (ban?.bannedBy && ban.bannedBy !== s.userId && !s.owner) {
+      const bannerRank = ban.bannedBy === s.ownerId ? OWNER_RANK : ((await ranksOf(s.constellationId, [ban.bannedBy])).get(ban.bannedBy) ?? -1);
+      if (bannerRank >= s.rank) {
+        bad(res, "Someone ranked at or above you banned them, so only they (or someone higher) can unban.", 403);
+        return;
+      }
+    }
     await db.delete(constellationBans).where(and(eq(constellationBans.constellationId, s.constellationId), eq(constellationBans.userId, uid.data)));
     await logModeration(s.constellationId, s.userId, "unbanned", uid.data);
   }

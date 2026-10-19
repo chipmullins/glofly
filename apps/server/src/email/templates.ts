@@ -247,3 +247,41 @@ export const friendInviteExistingEmail = (
     ],
     footnotes: ["Don't know them? Just ignore this email. They haven't been told you have an account."],
   });
+
+// ---- 0.7.3 ----
+
+export const twoStepCodeEmail = (user: Person, code: string, purpose: "sign-in" | "setup"): Email =>
+  render({
+    to: user.email,
+    subject: purpose === "sign-in" ? `${code} is your Glofly sign-in code` : `${code} is your Glofly code`,
+    heading: purpose === "sign-in" ? "Your sign-in code" : "Confirm two-step sign-in",
+    paragraphs: [
+      `Hi ${user.displayName},`,
+      purpose === "sign-in"
+        ? `Someone (hopefully you) entered the right password for @${user.username}. To finish signing in, enter this code:`
+        : `To turn on two-step sign-in for @${user.username}, enter this code in Glofly:`,
+      code.split("").join(" "),
+    ],
+    footnotes: [
+      "The code works for 10 minutes. Glofly will never ask you for it in a message or call.",
+      purpose === "sign-in"
+        ? "Not you? Someone knows your password: change it in Settings → Account right away."
+        : "Didn't ask for this? You can ignore this email.",
+    ],
+  });
+
+export const newSignInEmail = (user: Person, device: string, when: Date): Email =>
+  render({
+    to: user.email,
+    subject: "New sign-in to your Glofly account",
+    heading: "New sign-in",
+    paragraphs: [
+      `Hi ${user.displayName},`,
+      `@${user.username} was just signed in on a device Glofly hasn't seen before:`,
+      `${device} · ${when.toUTCString()}`,
+    ],
+    footnotes: [
+      "This was you? Nothing else to do.",
+      "Not you? Open Glofly → Settings → Devices, sign that device out, then change your password and turn on two-step sign-in.",
+    ],
+  });

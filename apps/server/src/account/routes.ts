@@ -17,6 +17,7 @@ import {
 import { connectedSessionIds, disconnectSession, disconnectSessions, emitToUser } from "../realtime";
 import { scheduleDeletion } from "./deletion";
 import { isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
+import { isTimeOfDay } from "@glofly/shared";
 
 // Settings → Account: email (confirm, change), where you're signed in, change password, delete account.
 export const accountRouter = Router();
@@ -251,6 +252,9 @@ accountRouter.get("/sessions", async (_req, res) => {
       persistent: sessions.persistent,
       createdAt: sessions.createdAt,
       lastUsedAt: sessions.lastUsedAt,
+      // 0.7.3: which app and version (older apps ignore these)
+      platform: sessions.platform,
+      appVersion: sessions.appVersion,
     })
     .from(sessions)
     .where(and(eq(sessions.userId, myId), gt(sessions.expiresAt, new Date())))
@@ -302,4 +306,43 @@ accountRouter.delete("/sessions", async (_req, res) => {
   await disconnectSessions(myId, thisSession);
   emitToUser(myId, "account:changed", {});
   res.json({ ok: true, signedOut: removed.length });
+});
+
+// ---- 0.7.3 Quiet hours (Settings → Notifications) ----
+
+// GET /account/quiet-hours → { quietHours: QuietHours | null }
+accountRouter.get("/quiet-hours", async (_req, res) => {
+  const [row] = await db.select({ q: users.quietHours }).from(users).where(eq(users.id, me(res).id));
+  res.json({ quietHours: row?.q ?? null });
+});
+
+const quietBody = z
+  .object({
+    from: z.string().refine(isTimeOfDay, "Pick a start time."),
+    to: z.string().refine(isTimeOfDay, "Pick an end time."),
+    tz: z.string().min(1).max(64).refine(knownTimeZone, "Unknown time zone."),
+    calls: z.boolean().default(false),
+  })
+  .nullable();
+
+function knownTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// PUT /account/quiet-hours  { from: "22:00", to: "08:00", tz, calls } or null (off)
+accountRouter.put("/quiet-hours", async (req, res) => {
+  const parsed = quietBody.safeParse(req.body?.quietHours ?? null);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid", message: parsed.error.issues[0]?.message ?? "Pick the hours." });
+    return;
+  }
+  await db.update(users).set({ quietHours: parsed.data }).where(eq(users.id, me(res).id));
+  // Your other devices follow at once (desktop sounds, phone notifications).
+  emitToUser(me(res).id, "account:changed", {});
+  res.json({ quietHours: parsed.data });
 });

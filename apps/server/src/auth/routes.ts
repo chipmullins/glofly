@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
+import { redis } from "../redis";
 import { requireCurrentApp } from "../app-version";
 import { users } from "../db/schema";
 import { hashPassword, verifyPassword } from "./passwords";
@@ -34,6 +35,17 @@ import {
   recordInviteUse,
   usernameHeldByInvite,
 } from "../admin/signups";
+import { finishSignIn, signedIn } from "./finish";
+import { noteSignIn } from "./signInAlert";
+import {
+  checkLoginCode,
+  CODE_NOT_SENT,
+  resendLoginCode,
+  startLoginChallenge,
+  TWO_STEP_NEEDS_UPDATE,
+  type PendingLogin,
+} from "./twoStep";
+import { inBackground } from "../push/notify";
 import { fieldErrors, forgotPasswordSchema, loginSchema, registerSchema, usernameSchema } from "./validation";
 
 export const authRouter = Router();
@@ -97,23 +109,6 @@ function webSignIn(req: Request, res: Response): "web" | null | false {
     return false;
   }
   return "web";
-}
-
-/** The answer to a sign-in: the apps get the token; the browser gets it as a cookie it can't read. */
-function signedIn(
-  res: Response,
-  web: "web" | null,
-  session: { token: string; expiresAt: Date },
-  persistent: boolean,
-  user: Record<string, unknown>,
-  status = 200,
-) {
-  if (web) {
-    setSessionCookie(res, session.token, persistent, session.expiresAt);
-    res.status(status).json({ expiresAt: session.expiresAt.toISOString(), user, csrf: csrfFor(session.token) });
-    return;
-  }
-  res.status(status).json({ token: session.token, expiresAt: session.expiresAt.toISOString(), user });
 }
 
 // GET /auth/username-available?username=chipm
@@ -235,6 +230,7 @@ authRouter.post("/register", requireCurrentApp, registerLimiter, async (req, res
     // "Confirm your email": sent in the background so signing up stays quick.
     sendVerification(user.id).catch((err) => console.error("Couldn't send the confirm email", err));
     signedIn(res, web, session, true, user, 201);
+    inBackground(noteSignIn(user.id, input.deviceName ?? null, web ?? platformColumn(req.headers["x-glofly-platform"])));
   } catch (err) {
     // Two people grabbing the same name at the same instant: the database still catches it.
     const field = duplicateField(err);
@@ -263,7 +259,7 @@ authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
     res.status(400).json({ error: "invalid", message: "Enter your username or email and password." });
     return;
   }
-  const { identifier, password, keepSignedIn, deviceName, restore } = parsed.data;
+  const { identifier, password, keepSignedIn, deviceName, restore, twoStepAware } = parsed.data;
 
   const column = identifier.includes("@") ? users.email : users.username;
   const [user] = await db
@@ -277,6 +273,7 @@ authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
       suspendedAt: users.suspendedAt,
       suspendReason: users.suspendReason,
       restricted: users.restricted,
+      twoStep: users.twoStep,
     })
     .from(users)
     .where(eq(lower(column), identifier.toLowerCase()))
@@ -317,24 +314,81 @@ authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
       });
       return;
     }
-    await cancelDeletion(user.id);
   }
 
-  const session = await createSession(
-    user.id,
+  const login: PendingLogin = {
     keepSignedIn,
-    deviceName ?? null,
-    appVersionFrom(req.headers["x-glofly-version"]),
-    web ?? platformColumn(req.headers["x-glofly-platform"]),
-  );
-  signedIn(res, web, session, keepSignedIn, {
-    id: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    avatarVersion: user.avatarVersion,
-    // 0.4.0: a family-managed account (the apps hide Add friend). Older apps ignore it.
-    ...(user.restricted ? { restricted: true } : {}),
-  });
+    deviceName: deviceName ?? null,
+    appVersion: appVersionFrom(req.headers["x-glofly-version"]),
+    platform: web ?? platformColumn(req.headers["x-glofly-platform"]),
+    web,
+  };
+
+  // 0.7.3 two-step sign-in: the password was right, now a code (sent by text or email).
+  if (user.twoStep) {
+    if (!twoStepAware) {
+      res.status(401).json(TWO_STEP_NEEDS_UPDATE);
+      return;
+    }
+    try {
+      const challenge = await startLoginChallenge(user.id, login);
+      if (!challenge) {
+        res.status(401).json({ error: "wrong_details", message: WRONG_DETAILS });
+        return;
+      }
+      // Restoring an account set to be deleted happens once the code is right.
+      if (user.deleteAfter && restore) await redis.set(`twostep:restore:${challenge.twoStep.challenge}`, "1", { EX: 600 });
+      res.json(challenge);
+    } catch (err) {
+      console.error("Two-step code couldn't be sent", err);
+      res.status(502).json(CODE_NOT_SENT);
+    }
+    return;
+  }
+
+  if (user.deleteAfter) await cancelDeletion(user.id);
+  await finishSignIn(res, user.id, login);
+});
+
+// POST /auth/login/code  { challenge, code }: the code from the text or email (or a backup code).
+authRouter.post("/login/code", requireCurrentApp, loginLimiter, async (req, res) => {
+  const web = webSignIn(req, res);
+  if (web === false) return;
+  const challenge = String(req.body?.challenge ?? "");
+  const r = await checkLoginCode(challenge, String(req.body?.code ?? ""));
+  if (!r.ok) {
+    res.status(r.status).json({ error: r.error, message: r.message });
+    return;
+  }
+  // The same kind of app that typed the password (a code from the browser can't sign in an app).
+  if (r.login.web !== web) {
+    res.status(403).json({ error: "forbidden", message: "Sign in again." });
+    return;
+  }
+  const [u] = await db.select({ deleteAfter: users.deleteAfter, suspendedAt: users.suspendedAt }).from(users).where(eq(users.id, r.userId));
+  if (!u || u.suspendedAt) {
+    res.status(401).json({ error: "wrong_details", message: WRONG_DETAILS });
+    return;
+  }
+  if (u.deleteAfter) {
+    if (!(await redis.getDel(`twostep:restore:${challenge}`))) {
+      res.status(403).json({ error: "deletion_scheduled", deleteAfter: u.deleteAfter.toISOString(), message: "This account is set to be deleted." });
+      return;
+    }
+    await cancelDeletion(r.userId);
+  }
+  await finishSignIn(res, r.userId, r.login);
+});
+
+// POST /auth/login/resend  { challenge, method? }: another code, or the other way ("by email instead").
+authRouter.post("/login/resend", requireCurrentApp, loginLimiter, async (req, res) => {
+  const method = req.body?.method === "sms" || req.body?.method === "email" ? (req.body.method as "sms" | "email") : undefined;
+  const r = await resendLoginCode(String(req.body?.challenge ?? ""), method);
+  if (!r.ok) {
+    res.status(r.status).json({ error: r.error, message: r.message });
+    return;
+  }
+  res.json(r.result);
 });
 
 // Forgot password: a handful per IP. Each account also gets at most a few reset emails an hour.

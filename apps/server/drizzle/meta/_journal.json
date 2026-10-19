@@ -232,6 +232,13 @@
       "when": 1792262348580,
       "tag": "0032_push_device_features",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792431125915,
+      "tag": "0033_two_step_pins_scheduled_errors",
+      "breakpoints": true
     }
   ]
 }

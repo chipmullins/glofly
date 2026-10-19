@@ -78,6 +78,8 @@ export const loginSchema = z.object({
   deviceName: z.string().trim().max(60).optional(),
   // Logging in to an account that's set to be deleted: true restores it.
   restore: z.boolean().default(false),
+  // 0.7.3: this app can ask for a two-step code (older apps can't: they're told to update)
+  twoStepAware: z.boolean().default(false),
 });
 
 export const forgotPasswordSchema = z.object({
