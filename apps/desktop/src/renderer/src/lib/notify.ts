@@ -9,6 +9,7 @@ import { colorsFor } from './avatarColors'
 import { initials } from './names'
 import { avatarUrl } from './media'
 import { isSilenced } from './sounds'
+import { inQuiet } from './quiet'
 import { isWeb } from './platform'
 
 let settings: NotificationSettings = { enabled: true, preview: true }
@@ -22,7 +23,7 @@ export const previewsOn = (): boolean => settings.preview
 
 /** Worth a notification right now? (You're elsewhere, they're on, not Do not disturb.) */
 export function shouldNotify(): boolean {
-  return settings.enabled && !isSilenced() && !document.hasFocus()
+  return settings.enabled && !isSilenced() && !inQuiet() && !document.hasFocus()
 }
 
 const FACE = 96

@@ -75,13 +75,20 @@ export default function App(): React.JSX.Element {
   async function handleLogin(details: LoginDetails): Promise<LoginProblem | null> {
     const result = await window.glofly.auth.login(details)
     if (!result.ok) {
-      return result.reason === 'deletion_scheduled' && result.deleteAfter
+      if (result.reason === 'two_step') return { twoStep: result.twoStep }
+      return result.reason === 'deletion_scheduled' && 'deleteAfter' in result && result.deleteAfter
         ? { deleteAfter: result.deleteAfter }
         : { message: result.message }
     }
     setScreen({ name: 'takeoff', form: 'login', user: result.user, isNew: false })
     return null
   }
+
+  // 0.7.3: signed in with a two-step code or a QR code.
+  const handleSignedIn = useCallback(
+    (user: SignedInUser) => setScreen({ name: 'takeoff', form: 'login', user, isNew: false }),
+    []
+  )
 
   async function handleRegister(
     request: RegisterRequest,
@@ -157,6 +164,7 @@ export default function App(): React.JSX.Element {
             <LoginScreen
               onLogin={handleLogin}
               onCreateAccount={showForm('register')}
+              onSignedIn={handleSignedIn}
               busy={flying}
               notice={screen.name === 'auth' ? screen.notice : null}
             />

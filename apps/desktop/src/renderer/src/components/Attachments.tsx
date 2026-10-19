@@ -9,7 +9,7 @@ import {
   voiceUrl
 } from '../lib/attachments'
 import { isWeb } from '../lib/platform'
-import { playVoice, stopVoice, voiceTime } from '../lib/voice'
+import { playVoice, setVoiceRate, stopVoice, voiceRate, VOICE_RATES, voiceTime } from '../lib/voice'
 import { ChevronIcon, CloseIcon, DownloadIcon, FileIcon, PhotoIcon } from './icons'
 import './Attachments.css'
 
@@ -271,6 +271,8 @@ export function VoiceBubble({
   const [at, setAt] = useState(0) // seconds
   const [length, setLength] = useState(voice.durationMs / 1000)
   const [failed, setFailed] = useState(false)
+  // 0.7.3: 1× → 1.5× → 2× (remembered on this device, for every voice message)
+  const [rate, setRate] = useState(voiceRate)
   const url = voiceUrl(conversationId, attachment.id)
 
   // Stops when the message scrolls away for good (chat closed).
@@ -357,6 +359,22 @@ export function VoiceBubble({
       <span className="voice-time">
         {failed ? "Couldn't play" : voiceTime((playing || at > 0 ? at : length) * 1000)}
       </span>
+      <button
+        type="button"
+        className={rate !== 1 ? 'voice-rate voice-rate--on' : 'voice-rate'}
+        aria-label={`Playback speed ${rate}×`}
+        title="Playback speed"
+        onClick={() => {
+          const next =
+            VOICE_RATES[
+              (VOICE_RATES.indexOf(rate as (typeof VOICE_RATES)[number]) + 1) % VOICE_RATES.length
+            ]
+          setVoiceRate(next)
+          setRate(next)
+        }}
+      >
+        {rate}×
+      </button>
     </div>
   )
 }

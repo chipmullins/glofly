@@ -116,3 +116,30 @@ export function isConstellationRequest(
     return false
   }
 }
+
+/** 0.7.3: the routes the "tools" gateway passes on (two-step settings, quiet hours, pins, mark
+ *  unread, send later): those exact shapes only, plain ids, small JSON bodies. */
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+const TOOL_PATHS = [
+  /^\/account\/two-step(\/(start|confirm|off|remove-phone|backup-codes))?$/,
+  /^\/account\/quiet-hours$/,
+  /^\/conversations\/scheduled$/,
+  new RegExp(`^/conversations/${UUID}/(pins|unread|scheduled)$`, 'i'),
+  new RegExp(`^/conversations/${UUID}/scheduled/${UUID}(/send)?$`, 'i'),
+  new RegExp(`^/conversations/${UUID}/messages/${UUID}/pin$`, 'i')
+]
+export function isToolsRequest(
+  method: unknown,
+  path: unknown,
+  body: unknown
+): method is 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' {
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method as string)) return false
+  if (typeof path !== 'string' || path.length > 200 || !TOOL_PATHS.some((r) => r.test(path)))
+    return false
+  if (body === undefined || body === null) return true
+  try {
+    return typeof body === 'object' && JSON.stringify(body).length <= 20_000
+  } catch {
+    return false
+  }
+}

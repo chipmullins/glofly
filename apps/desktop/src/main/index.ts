@@ -21,11 +21,16 @@ import {
   forgotPassword,
   getSessionToken,
   login,
+  loginCode,
+  loginResend,
   logout,
+  qrPoll,
+  qrStart,
   register,
   restore,
   signupMode
 } from './auth'
+import { reportError, setErrorReports, watchMainErrors } from './errors'
 import {
   deleteMessage,
   editMessage,
@@ -134,7 +139,7 @@ import {
   startGameWatch
 } from './games'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
-import { isConstellationRequest, isUserId } from './api'
+import { isConstellationRequest, isToolsRequest, isUserId } from './api'
 import { checkPausedNow, configurePauseChecks, getPaused, getUpdateRequired } from './app-status'
 import { isReportRequest, listNotices, noticeSeen, sendReport } from './safety'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
@@ -1153,6 +1158,52 @@ function registerIpcHandlers(): void {
     return thenGoLive(login(request))
   })
 
+  // 0.7.3 two-step sign-in and QR code sign-in.
+  const isChallenge = (v: unknown): v is string =>
+    typeof v === 'string' && /^[A-Za-z0-9_-]{32}$/.test(v)
+  ipcMain.handle('auth:login-code', (event, challenge: unknown, code: unknown) => {
+    if (!fromApp(event) || !isChallenge(challenge) || typeof code !== 'string' || code.length > 20)
+      return { ok: false, reason: 'invalid', message: 'Enter the code.' }
+    return thenGoLive(loginCode(challenge, code))
+  })
+  ipcMain.handle('auth:login-resend', (event, challenge: unknown, method: unknown) => {
+    if (!fromApp(event) || !isChallenge(challenge)) return invalid
+    return loginResend(challenge, method === 'sms' || method === 'email' ? method : undefined)
+  })
+  ipcMain.handle('auth:qr-start', (event, keep: unknown) =>
+    fromApp(event) ? qrStart(keep !== false) : invalid
+  )
+  ipcMain.handle('auth:qr-poll', (event, id: unknown, secret: unknown) => {
+    if (
+      !fromApp(event) ||
+      typeof id !== 'string' ||
+      !/^[A-Za-z0-9_-]{22}$/.test(id) ||
+      typeof secret !== 'string' ||
+      secret.length > 100
+    )
+      return { state: 'expired' }
+    return thenGoLive(qrPoll(id, secret))
+  })
+  // 0.7.3: two-step settings, quiet hours, pins, mark unread, send later.
+  ipcMain.handle('tools:request', (event, method: unknown, path: unknown, body: unknown) => {
+    if (!fromApp(event) || !isToolsRequest(method, path, body)) return invalid
+    return apiRequest(method, path as string, body ?? undefined)
+  })
+  // 0.7.3 error reports.
+  ipcMain.on('errors:report', (event, report: unknown) => {
+    const r = report as Record<string, unknown> | null
+    if (!fromApp(event) || !r || typeof r.message !== 'string') return
+    reportError({
+      message: r.message,
+      stack: typeof r.stack === 'string' ? r.stack : undefined,
+      where: typeof r.where === 'string' ? r.where : undefined,
+      os: typeof r.os === 'string' ? r.os : undefined
+    })
+  })
+  ipcMain.on('errors:enabled', (event, on: unknown) => {
+    if (fromApp(event)) setErrorReports(on !== false)
+  })
+
   ipcMain.handle('auth:forgot-password', (event, identifier: unknown) => {
     if (
       !fromApp(event) ||
@@ -1174,6 +1225,8 @@ function registerIpcHandlers(): void {
     return logout()
   })
 }
+
+watchMainErrors()
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.glofly.app')

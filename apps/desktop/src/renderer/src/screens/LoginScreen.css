@@ -489,3 +489,94 @@
   font-weight: 600;
   word-break: break-all;
 }
+
+/* ---------- 0.7.3: two-step code, QR code sign-in ---------- */
+.login-code-input {
+  font-size: 24px;
+  letter-spacing: 0.35em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.login-twostep-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  font-size: 14px;
+}
+.login-twostep-links .link-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.login-qr-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 46px;
+  margin-top: -6px;
+  border: 1px solid var(--glo-border, #e7d8cc);
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.login-qr-button:hover:not(:disabled) {
+  background: rgba(244, 122, 31, 0.08);
+}
+.login-qr-box {
+  display: grid;
+  place-items: center;
+  min-height: 236px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid #eaddd1;
+  box-shadow: 0 6px 24px rgba(36, 23, 15, 0.08);
+  align-self: center;
+  width: 236px;
+  box-sizing: border-box;
+}
+.login-qr-code {
+  display: block;
+  border-radius: 6px;
+}
+.login-qr-wait {
+  color: #6b5547;
+  font-size: 14px;
+}
+.login-qr-scanned {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  color: #24170f;
+}
+.login-qr-scanned > span:not(.login-qr-face) {
+  color: #6b5547;
+  font-size: 14px;
+}
+.login-qr-face {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: #f47a1f;
+  color: #2a1406;
+  font-size: 24px;
+  font-weight: 700;
+}
+.login-qr-steps {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--glo-muted, #6b5547);
+  font-size: 13px;
+  line-height: 1.7;
+}

@@ -123,3 +123,18 @@
   `readyToListen` first and answer only after `listening`, like the real embed (0.7.1's stand-ins didn't).
   Desktop: one global rule in `assets/main.css` makes every clickable in a window drag area `no-drag`;
   `markQuitting()` on Electron's `before-quit-for-update` lets the Mac update install.
+- **0.7.3 (Oct 19, 2026)** (project doc `glofly-release-0.7.3.md`, migration 0033): **two-step sign-in** by
+  email or text code (`auth/twoStep.ts`; texts via SNS `auth/sms.ts`, off until `SMS_ORIGINATION_NUMBER` is
+  set; `SMS_TRANSPORT=print` prints them while developing). Login answers `{ twoStep }` only to apps sending
+  `twoStepAware: true`; older apps get 401 "update Glofly". `finishSignIn` (`auth/finish.ts`) is the one way
+  a session is made after a password, a code or a QR approval. **QR sign-in** (`auth/qr.ts`): computer
+  POST /auth/qr + poll with its secret; QR = `${server}/qr/<id>` (a no-script page opening
+  `glofly://qr-login/<id>`); only phone sessions (`res.locals.sessionPlatform`) may approve. "New sign-in"
+  emails (`signInAlert.ts`, `known_devices`; the key formula is also in migration 0033). Videos are re-saved
+  without their metadata (`examineVideo` → `clean`). **Error reports** POST /errors (`errors.ts`, scrubbed
+  with shared `scrubError`, grouped by fingerprint) → Control → Errors; server 500s are recorded too.
+  **Chat tools** (`messages/chatTools.ts`, mounted before conversationsRouter): pins, mark unread, send later
+  (sweep every 15 s via `postScheduledText`). **Quiet hours** (`users.quiet_hours`): phones' pushes treat
+  them like Do not disturb (`push/quiet.ts`); desktop/web/phone apps silence sounds themselves. Desktop:
+  one allow-listed gateway `window.glofly.tools.request` for these routes; the chat view draws only the
+  newest 150 messages (more on scroll up) and has scroll anchoring off.
