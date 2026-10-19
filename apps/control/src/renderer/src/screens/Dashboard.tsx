@@ -23,6 +23,8 @@ export function Dashboard({
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [find, setFind] = useState('')
+  /** 0.7.3: errors reported in the last 24 hours (null: older server, no card) */
+  const [errorsLastDay, setErrorsLastDay] = useState<number | null>(null)
 
   const load = useCallback(() => {
     void api.dashboard().then((result) => {
@@ -31,6 +33,9 @@ export function Dashboard({
         setError(null)
       } else setError(result.message)
     })
+    void api
+      .errors('open')
+      .then((result) => setErrorsLastDay(result.ok ? result.data.lastDay : null))
   }, [])
 
   useEffect(() => {
@@ -86,17 +91,26 @@ export function Dashboard({
       )}
       {!data && !error && <p className="loading">Loading…</p>}
 
-      {data && <DashboardBody data={data} onOpenAccount={onOpenAccount} onPage={onPage} />}
+      {data && (
+        <DashboardBody
+          data={data}
+          errorsLastDay={errorsLastDay}
+          onOpenAccount={onOpenAccount}
+          onPage={onPage}
+        />
+      )}
     </>
   )
 }
 
 function DashboardBody({
   data,
+  errorsLastDay,
   onOpenAccount,
   onPage
 }: {
   data: DashboardData
+  errorsLastDay: number | null
   onOpenAccount: (id: string) => void
   onPage: (page: Page) => void
 }): JSX.Element {
@@ -202,6 +216,15 @@ function DashboardBody({
             <span className={`note${stat.quiet ? ' note--quiet' : ''}`}>{stat.note}</span>
           </div>
         ))}
+        {errorsLastDay !== null && (
+          <button type="button" className="card stat" onClick={() => onPage('errors')}>
+            <span className="label">Errors · last 24 h</span>
+            <span className="value">{errorsLastDay.toLocaleString('en-US')}</span>
+            <span className={`note${errorsLastDay ? ' note--bad' : ' note--quiet'}`}>
+              {errorsLastDay ? 'Open Errors →' : 'All quiet'}
+            </span>
+          </button>
+        )}
       </section>
 
       <div className="grid-2">

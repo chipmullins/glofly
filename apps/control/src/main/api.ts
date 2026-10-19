@@ -209,7 +209,11 @@ const ALLOWED: [string, RegExp][] = [
   // 2.0: Constellations (list, take down, restore, delete)
   ['GET', new RegExp(`^/admin/constellations${QUERY}$`)],
   ['GET', new RegExp(`^/admin/constellations/${ID}$`)],
-  ['POST', new RegExp(`^/admin/constellations/${ID}/(take-down|restore|delete)$`)]
+  ['POST', new RegExp(`^/admin/constellations/${ID}/(take-down|restore|delete)$`)],
+  // 0.7.3: Errors (the apps' error reports)
+  ['GET', new RegExp(`^/admin/errors${QUERY}$`)],
+  ['POST', new RegExp(`^/admin/errors/${ID}/(resolve|reopen)$`)],
+  ['DELETE', new RegExp(`^/admin/errors$`)]
 ]
 
 export function isAllowedCall(method: unknown, path: unknown): boolean {
@@ -230,6 +234,38 @@ export async function call(method: string, path: string, body?: unknown): Promis
   if (raw && raw.status >= 200 && raw.status < 300) return { ok: true, data: raw.json ?? {} }
   if (raw?.status === 401) forget('ended')
   return failure(raw)
+}
+
+// 0.7.3: Control's own unexpected errors, sent like the apps' (POST /errors). At most 20 per
+// launch, each different error once a minute. Nothing about accounts goes with it.
+let errorsSent = 0
+const lastSent = new Map<string, number>()
+export function reportError(
+  report: { message: string; stack?: string; where?: string },
+  version: string
+): void {
+  const key = report.message.slice(0, 120)
+  const now = Date.now()
+  if (errorsSent >= 20 || now - (lastSent.get(key) ?? 0) < 60_000) return
+  errorsSent++
+  lastSent.set(key, now)
+  void fetch(`${SERVER_URL}/errors`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Glofly-Platform': 'control',
+      'X-Glofly-Version': version
+    },
+    body: JSON.stringify({
+      message: report.message.slice(0, 300),
+      stack: report.stack?.slice(0, 4000),
+      // The server files Control's reports under Desktop for now; "control:" marks them.
+      where: `control: ${report.where ?? 'window'}`.slice(0, 60),
+      os:
+        process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux'
+    }),
+    signal: AbortSignal.timeout(10_000)
+  }).catch(() => undefined)
 }
 
 /** The audit log as CSV text (the window then offers where to save it). */

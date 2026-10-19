@@ -43,6 +43,7 @@ export const ICONS = {
   refresh: 'M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5',
   server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
   pause: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM10 9v6M14 9v6',
+  errors: 'M12 3l9.5 17h-19zM12 10v4M12 17h.01',
   family:
     'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 20a6 6 0 0 1 12 0M14.5 15.5A5 5 0 0 1 21 20'
 } as const

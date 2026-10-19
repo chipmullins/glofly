@@ -98,7 +98,9 @@ errorReportsRouter.post("/", reportLimiter, async (req, res) => {
     return;
   }
   const { found } = await sessionFor(req).catch(() => ({ found: null }));
-  const platform = found?.session.platform ?? platformFrom(req.headers["x-glofly-platform"]);
+  // Glofly Control says so itself (it has no app session of its own).
+  const saysControl = String(req.headers["x-glofly-platform"] ?? "").toLowerCase() === "control";
+  const platform = saysControl ? "control" : (found?.session.platform ?? platformFrom(req.headers["x-glofly-platform"]));
   const app = platform === "desktop" || !platform ? "desktop" : String(platform);
   await recordError({
     app: APPS.has(app) ? app : "desktop",

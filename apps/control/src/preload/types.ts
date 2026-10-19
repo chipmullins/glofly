@@ -30,10 +30,16 @@ export type ControlApi = {
     code: (kind: 'code' | 'backupCode', value: string) => Promise<SignInCodeResult>
     signOut: () => Promise<void>
   }
-  call: (method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown) => Promise<CallResult>
+  call: (
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    path: string,
+    body?: unknown
+  ) => Promise<CallResult>
   exportAudit: () => Promise<{ ok: true; saved: boolean } | { ok: false; message: string }>
   copy: (text: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
   setScreen: (screen: 'signin' | 'app') => void
   onSignedOut: (callback: (reason: 'expired' | 'ended') => void) => () => void
+  /** 0.7.3: Control's own unexpected errors go to the server's error reports */
+  reportError: (report: { message: string; stack?: string; where?: string }) => void
 }

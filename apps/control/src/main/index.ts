@@ -18,6 +18,7 @@ import {
   call,
   fetchAuditCsv,
   isAllowedCall,
+  reportError,
   SERVER_URL,
   signInCode,
   signInPassword,
@@ -148,7 +149,8 @@ function setUpIpc(): void {
   })
   ipcMain.handle('control:copy', async (event, value: unknown) => {
     // Electron 44: writeText answers with a promise (it used to be instant).
-    if (fromApp(event) && text(value, 200)) await clipboard.writeText(value).catch(() => undefined)
+    // (0.7.3: up to 5,000 characters, so an error's whole stack can be copied.)
+    if (fromApp(event) && text(value, 5000)) await clipboard.writeText(value).catch(() => undefined)
   })
   ipcMain.handle('control:open-external', (event, url: unknown) => {
     if (
@@ -158,6 +160,19 @@ function setUpIpc(): void {
     ) {
       void shell.openExternal(url)
     }
+  })
+  ipcMain.on('control:report-error', (event, report: unknown) => {
+    if (!fromApp(event) || typeof report !== 'object' || report === null) return
+    const r = report as Record<string, unknown>
+    if (!text(r.message, 2000)) return
+    reportError(
+      {
+        message: r.message,
+        stack: typeof r.stack === 'string' ? r.stack.slice(0, 8000) : undefined,
+        where: typeof r.where === 'string' ? r.where.slice(0, 40) : undefined
+      },
+      app.getVersion()
+    )
   })
   ipcMain.on('control:screen', (event, screen: unknown) => {
     if (!fromApp(event) || !customTitleBar || (screen !== 'signin' && screen !== 'app')) return

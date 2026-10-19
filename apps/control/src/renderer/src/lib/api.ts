@@ -6,7 +6,7 @@ export type { Failure }
 export type Result<T> = { ok: true; data: T } | Failure
 
 async function call<T>(
-  method: 'GET' | 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown
 ): Promise<Result<T>> {
@@ -23,6 +23,24 @@ const q = (params: Record<string, string | undefined>): string => {
 }
 
 // ───────────── Shapes ─────────────
+
+/** 0.7.3: an error report from the apps (one row per problem and app version) */
+export type ErrorApp = 'desktop' | 'web' | 'android' | 'ios' | 'server' | 'control'
+export type ErrorRow = {
+  id: string
+  app: ErrorApp
+  appVersion: string | null
+  os: string | null
+  message: string
+  stack: string | null
+  where: string | null
+  count: number
+  /** Different accounts that hit it (up to 20 are remembered) */
+  people: number
+  firstAt: string
+  lastAt: string
+  resolvedAt: string | null
+}
 
 /** 2.0: Constellations, as Control sees them */
 export type ConstellationStatus = 'all' | 'live' | 'taken_down'
@@ -428,9 +446,20 @@ export const api = {
     call<Done>('POST', `/admin/accounts/${id}/friends`, { username, note }),
   removeFamilyFriend: (id: string, friendId: string, note: string) =>
     call<Done>('POST', `/admin/accounts/${id}/friends/${friendId}/remove`, { note }),
+  errors: (show: 'open' | 'fixed', app?: ErrorApp) =>
+    call<{ errors: ErrorRow[]; lastDay: number }>('GET', `/admin/errors${q({ show, app })}`),
+  errorAction: (id: string, action: 'resolve' | 'reopen') =>
+    call<Done>('POST', `/admin/errors/${id}/${action}`),
+  clearFixedErrors: () => call<{ removed: number }>('DELETE', '/admin/errors'),
   audit: (search: string, before?: string) =>
     call<{ entries: AuditEntry[]; hasMore: boolean }>(
       'GET',
       `/admin/audit${q({ q: search.trim() || undefined, before })}`
     )
+}
+
+/** Open errors last seen in the last 24 hours (the sidebar's badge). */
+export function openLastDay(rows: ErrorRow[]): number {
+  const since = Date.now() - 24 * 60 * 60 * 1000
+  return rows.filter((r) => !r.resolvedAt && new Date(r.lastAt).getTime() > since).length
 }

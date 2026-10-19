@@ -8,6 +8,7 @@ export type Page =
   | 'accounts'
   | 'signups'
   | 'reports'
+  | 'errors'
   | 'constellations'
   | 'announcements'
   | 'server'
@@ -22,6 +23,7 @@ const ITEMS: {
   { id: 'accounts', label: 'Accounts', icon: ICONS.accounts },
   { id: 'signups', label: 'Sign-ups', icon: ICONS.signups },
   { id: 'reports', label: 'Reports', icon: ICONS.reports },
+  { id: 'errors', label: 'Errors', icon: ICONS.errors },
   { id: 'constellations', label: 'Constellations', icon: ICONS.constellations },
   { id: 'announcements', label: 'Announcements', icon: ICONS.announcements },
   { id: 'server', label: 'Server', icon: ICONS.server },
@@ -44,6 +46,7 @@ export function Sidebar({
   admin,
   expiresAt,
   openReports,
+  newErrors = 0,
   paused,
   onSignOut
 }: {
@@ -53,6 +56,8 @@ export function Sidebar({
   expiresAt: string
   /** Reports waiting for review (a count next to Reports) */
   openReports: number
+  /** 0.7.3: open errors seen in the last 24 hours (a count next to Errors) */
+  newErrors?: number
   /** Glofly is paused (Server → Pause Glofly): a red "Paused" next to Server */
   paused: boolean
   onSignOut: () => void
@@ -81,6 +86,11 @@ export function Sidebar({
             <span className="label">{item.label}</span>
             {item.id === 'server' && paused && (
               <span className="nav-count nav-count--paused">Paused</span>
+            )}
+            {item.id === 'errors' && newErrors > 0 && (
+              <span className="nav-count" aria-label={`${newErrors} in the last day`}>
+                {newErrors > 99 ? '99+' : newErrors}
+              </span>
             )}
             {item.id === 'reports' && openReports > 0 && (
               <span className="nav-count" aria-label={`${openReports} open`}>

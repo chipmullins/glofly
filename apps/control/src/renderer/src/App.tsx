@@ -9,7 +9,8 @@ import { Reports } from './screens/Reports'
 import { Announcements } from './screens/Announcements'
 import { Server } from './screens/Server'
 import { Constellations } from './screens/Constellations'
-import { api } from './lib/api'
+import { Errors } from './screens/Errors'
+import { api, openLastDay } from './lib/api'
 import { Sidebar, type Page } from './components/Sidebar'
 import { Toast } from './components/common'
 import type { AdminUser } from '../../preload/types'
@@ -26,6 +27,7 @@ export default function App(): JSX.Element {
   const [toast, setToast] = useState<{ message: string; bad?: boolean } | null>(null)
   const [refresh, setRefresh] = useState(0)
   const [openReports, setOpenReports] = useState(0)
+  const [newErrors, setNewErrors] = useState(0)
   // Glofly is paused (Server → Pause Glofly): a banner on every page and "Paused" in the sidebar.
   const [paused, setPaused] = useState(false)
 
@@ -34,6 +36,8 @@ export default function App(): JSX.Element {
     if (!session) return
     const check = (): void => {
       void api.reports('open').then((r) => r.ok && setOpenReports(r.data.counts.open))
+      // 0.7.3 (older servers answer 404: no badge)
+      void api.errors('open').then((r) => r.ok && setNewErrors(openLastDay(r.data.errors)))
       // Older servers don't have this (404): just never paused.
       void api.server().then((r) => r.ok && setPaused(r.data.pause.paused))
     }
@@ -100,6 +104,7 @@ export default function App(): JSX.Element {
         admin={session.admin}
         expiresAt={session.expiresAt}
         openReports={openReports}
+        newErrors={newErrors}
         paused={paused}
         onSignOut={() => {
           void window.control.signIn.signOut().then(() => {
@@ -145,6 +150,7 @@ export default function App(): JSX.Element {
             onCountChange={setOpenReports}
           />
         )}
+        {page === 'errors' && <Errors toast={showToast} onCountChange={setNewErrors} />}
         {page === 'constellations' && (
           <Constellations toast={showToast} onOpenAccount={(id) => openAccounts('', id)} />
         )}

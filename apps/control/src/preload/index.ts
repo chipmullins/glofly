@@ -17,6 +17,7 @@ const control: ControlApi = {
   copy: (text) => ipcRenderer.invoke('control:copy', text),
   openExternal: (url) => ipcRenderer.invoke('control:open-external', url),
   setScreen: (screen) => ipcRenderer.send('control:screen', screen),
+  reportError: (report) => ipcRenderer.send('control:report-error', report),
   onSignedOut: (callback) => {
     const listener = (_event: unknown, reason: 'expired' | 'ended'): void => callback(reason)
     ipcRenderer.on('control:signed-out', listener)
