@@ -11,6 +11,7 @@ import { useStore } from '@/state/store'
 import { useCx } from '@/state/constellations'
 import { notificationStatus, requestNotifications } from './permissions'
 import { playSound, vibrate } from './sounds'
+import { isQuietNow } from '@/state/quiet'
 
 // Push notifications on this phone: the Firebase token goes to the server (tied to this
 // sign-in), Glofly's native code shows the notifications, and while the app is open it plays the
@@ -108,7 +109,7 @@ onLive((event, payload) => {
   if (event !== 'message:new') return
   const { message, counts } = payload as { message: Message; counts: boolean }
   if (!counts || !isAppActive()) return
-  if (useStore.getState().myStatus?.status === 'dnd') return
+  if (useStore.getState().myStatus?.status === 'dnd' || isQuietNow()) return
   const chat = useStore.getState().conversations[message.conversationId]
   const me = useSession.getState().user?.id ?? ''
   if (chat && isMuted(chat) && !mentionsMe(message, me)) return
@@ -129,7 +130,7 @@ onLive((event, payload) => {
   if (!isAppActive()) return
   const me = useSession.getState().user?.id ?? ''
   if (message.senderId === me || message.event) return
-  if (useStore.getState().myStatus?.status === 'dnd') return
+  if (useStore.getState().myStatus?.status === 'dnd' || isQuietNow()) return
   const cx = useCx.getState()
   if (cx.viewing === message.conversationId) return
   const place = cx.chats[message.conversationId]

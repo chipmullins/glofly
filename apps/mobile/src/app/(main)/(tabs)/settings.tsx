@@ -13,6 +13,7 @@ import { chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { SectionLabel, Text } from '@/ui/kit'
 import { SettingsRow } from '@/ui/SettingsRow'
 import { refreshSocial, useSocial } from '@/state/social'
+import { setPhonePref, usePhonePrefs } from '@/state/prefs'
 import { ACCENTS, useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
 
 const THEMES: { key: ThemeChoice; label: string }[] = [
@@ -29,6 +30,7 @@ export default function Settings() {
   const theme = useThemeChoice((s) => s.choice)
   const accent = useThemeChoice((s) => s.accent)
   const [privacy, setPrivacy] = useState<PrivacySettings | null>(null)
+  const phonePrefs = usePhonePrefs()
   const shareBirthday = useSocial((x) => x.shareBirthday)
 
   useEffect(() => {
@@ -130,6 +132,12 @@ export default function Settings() {
             })
           },
         }}
+      />
+      <SettingsRow
+        icon="flag"
+        label="Send error reports"
+        detail="When something breaks, Glofly tells us what and where (never your messages) so it gets fixed"
+        toggle={{ value: phonePrefs.errorReports, onChange: (v) => void setPhonePref('errorReports', v) }}
       />
 
       <SectionLabel>Fun</SectionLabel>

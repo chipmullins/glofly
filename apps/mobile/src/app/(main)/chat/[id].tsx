@@ -29,7 +29,7 @@ import { chatMenu } from '@/lib/chatActions'
 import { firstName } from '@/lib/format'
 import { useListNow } from '@/lib/hooks'
 import { QUICK_REACTIONS } from '@/lib/emoji'
-import { startCallIn, joinCallIn } from '@/calls/controller'
+import { startCallIn, joinCallIn, useCall } from '@/calls/controller'
 import { RingSomeSheet } from '@/calls/RingSome'
 import { Composer, type ComposerHandle } from '@/chat/Composer'
 import { MessageRow, type RowInfo } from '@/chat/MessageRow'
@@ -48,6 +48,7 @@ import { Icon } from '@/ui/icons'
 import { IconButton, Spinner, Text } from '@/ui/kit'
 import { openReport, pickEmoji } from '@/ui/sheets'
 import { useTheme } from '@/ui/theme'
+import { markUnread, PinnedBar, PinsSheet, ScheduledSheet, ScheduledStrip, SendLaterSheet, usePins, useScheduled } from '@/chat/chatTools'
 
 /** A GIF, poll or game: its text is only the plain version for older apps. */
 const special = (m: Message) => !!(m.gif || m.poll || m.game)
@@ -75,6 +76,8 @@ export default function ChatScreen() {
   const allPresence = useStore((s) => s.presence)
   const typing = useStore((s) => s.typing[id])
   const call = useStore((s) => s.calls[id])
+  // 0.7.3: a call is starting (e.g. the microphone prompt is up): Call can't be pressed again
+  const startingCall = useCall((s) => s.connecting && !s.call)
   // 0.5.0: your glow with this friend, and their birthday.
   const partnerGlow = useSocial((s) => (chat?.kind === 'dm' ? s.glows[chat.partner.id] : undefined))
   const partnerBirthday = useSocial((s) => chat?.kind === 'dm' && s.birthdays.includes(chat.partner.id))
@@ -104,6 +107,12 @@ export default function ChatScreen() {
   // Ticks only while "typing…" can run out (it redrew the whole chat every 3 seconds).
   const now = useListNow(typing ? { [id]: typing } : {})
   const uploads = useUploads(id)
+  // 0.7.3: pinned messages, send later
+  const pinsApi = usePins(id)
+  const scheduled = useScheduled(id)
+  const [pinsOpen, setPinsOpen] = useState(false)
+  const [scheduledOpen, setScheduledOpen] = useState(false)
+  const [laterText, setLaterText] = useState<string | null>(null)
   const voice = useVoice(id)
 
   // Load and keep it read while it's on screen.
@@ -311,6 +320,17 @@ export default function ChatScreen() {
       case 'report':
         void openReport({ userId: m.senderId, name: people[m.senderId]?.displayName ?? 'them', messageId: m.id, conversationId: id })
         return
+      case 'pin':
+      case 'unpin':
+        void pinsApi.setPinned(m, action === 'pin')
+        return
+      case 'unread':
+        // Leaves the chat, so it isn't read again straight away.
+        if (await markUnread(id, m)) {
+          if (router.canGoBack()) router.back()
+          else router.replace('/chats')
+        }
+        return
       case 'more': {
         const e = await pickEmoji()
         if (e) void react(m, e)
@@ -445,8 +465,8 @@ export default function ChatScreen() {
             ) : (
               <>
                 {/* Groups (0.5.2): long-press to choose who to ring. */}
-                <IconButton name="phone" label="Voice call" accessibilityHint={ringSomeHint} box={44} onPress={() => void startCallIn(id, false)} onLongPress={canRingSome ? () => setRingSome(true) : undefined} disabled={!!inCall} />
-                <IconButton name="video" label="Video call" accessibilityHint={ringSomeHint} box={44} size={24} onPress={() => void startCallIn(id, true)} onLongPress={canRingSome ? () => setRingSome(true) : undefined} disabled={!!inCall} />
+                <IconButton name="phone" label="Voice call" accessibilityHint={ringSomeHint} box={44} onPress={() => void startCallIn(id, false)} onLongPress={canRingSome ? () => setRingSome(true) : undefined} disabled={!!inCall || startingCall} />
+                <IconButton name="video" label="Video call" accessibilityHint={ringSomeHint} box={44} size={24} onPress={() => void startCallIn(id, true)} onLongPress={canRingSome ? () => setRingSome(true) : undefined} disabled={!!inCall || startingCall} />
               </>
             )
           ) : null}
@@ -455,6 +475,7 @@ export default function ChatScreen() {
         </View>
       </View>
 
+      <PinnedBar pins={pinsApi.pins} onOpen={() => setPinsOpen(true)} />
       <View style={{ flex: 1 }}>
       <FlatList
         ref={list}
@@ -509,6 +530,7 @@ export default function ChatScreen() {
           onAttach={() => void plusMenu()}
           topSlot={
             <>
+              <ScheduledStrip items={scheduled.items} onOpen={() => setScheduledOpen(true)} />
               {lantern ? <LanternBar onOff={() => setLantern(false)} /> : null}
               <UploadTray uploads={uploads} />
             </>
@@ -516,6 +538,7 @@ export default function ChatScreen() {
           canSendEmpty={uploads.items.length > 0}
           voice={voice.recording ? <VoiceRecorderBar voice={voice} /> : undefined}
           recordButton={<RecordButton voice={voice} />}
+          onSendLater={uploads.items.length || lantern ? undefined : (t) => setLaterText(t)}
         />
       ) : (
         <View style={{ padding: 16, paddingBottom: insets.bottom + 16, backgroundColor: c.barBg, borderTopWidth: 0.5, borderTopColor: c.line }}>
@@ -574,6 +597,8 @@ export default function ChatScreen() {
                 { key: 'edit', label: 'Edit', icon: 'pencil' as const, show: actionsFor.senderId === meId && !!actionsFor.body && canMessage && !special(actionsFor) },
                 { key: 'unpreview', label: 'Remove link preview', icon: 'link' as const, show: actionsFor.senderId === meId && !!actionsFor.linkPreview && canMessage },
                 { key: 'delete', label: 'Delete', icon: 'trash' as const, show: actionsFor.senderId === meId, danger: true },
+                { key: pinsApi.isPinned(actionsFor.id) ? 'unpin' : 'pin', label: pinsApi.isPinned(actionsFor.id) ? 'Unpin' : 'Pin', icon: (pinsApi.isPinned(actionsFor.id) ? 'unpin' : 'pin') as 'pin', show: pinsApi.canPin && !actionsFor.deleted && !actionsFor.event },
+                { key: 'unread', label: 'Mark unread', icon: 'bell' as const, show: actionsFor.senderId !== meId && !actionsFor.event },
                 { key: 'report', label: 'Report message', icon: 'flag' as const, show: actionsFor.senderId !== meId, danger: true },
               ]
                 .filter((a) => a.show)
@@ -606,6 +631,35 @@ export default function ChatScreen() {
         />
       ) : null}
       {pollOpen ? <PollSheet conversationId={id} onDone={() => setPollOpen(false)} /> : null}
+      {pinsOpen ? (
+        <PinsSheet
+          pins={pinsApi.pins}
+          canPin={pinsApi.canPin}
+          nameOf={nameOf}
+          onClose={() => setPinsOpen(false)}
+          onUnpin={(m) => void pinsApi.setPinned(m, false)}
+          onJump={(mid) => {
+            setPinsOpen(false)
+            void jumpTo(mid)
+          }}
+        />
+      ) : null}
+      {scheduledOpen ? <ScheduledSheet conversationId={id} items={scheduled.items} onChanged={scheduled.load} onClose={() => setScheduledOpen(false)} /> : null}
+      {laterText !== null ? (
+        <SendLaterSheet
+          preview={laterText}
+          onClose={() => setLaterText(null)}
+          onPick={(at) => {
+            const text = laterText
+            setLaterText(null)
+            void scheduled.schedule(text, at, reply?.id).then((ok) => {
+              if (!ok) return
+              composer.current?.clear()
+              setReply(null)
+            })
+          }}
+        />
+      ) : null}
       {ringSome && canRingSome ? <RingSomeSheet chat={chat} onClose={() => setRingSome(false)} /> : null}
       {viewer ? <PhotoViewer state={viewer} onClose={() => setViewer(null)} /> : null}
       {searching ? (

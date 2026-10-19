@@ -15,6 +15,7 @@ import { useNow } from '@/lib/hooks'
 import { QUICK_REACTIONS } from '@/lib/emoji'
 import { joinVoiceNebula, useCall } from '@/calls/controller'
 import { Composer, type ComposerHandle } from '@/chat/Composer'
+import { markUnread, PinnedBar, PinsSheet, ScheduledSheet, ScheduledStrip, SendLaterSheet, usePins, useScheduled } from '@/chat/chatTools'
 import { TypingBubble } from '@/chat/TypingBubble'
 import { discard, isLocal, retry, sendText } from '@/chat/send'
 import { attachMenu, UploadTray, useUploads } from '@/chat/uploads'
@@ -22,7 +23,7 @@ import { RecordButton, VoiceRecorderBar, useVoice } from '@/chat/voice'
 import { PhotoViewer, type ViewerState } from '@/chat/PhotoViewer'
 import { ChatFireflies, GAMES, GifSheet, PollSheet } from '@/chat/Extras'
 import { SearchPanel } from '@/chat/SearchPanel'
-import { cxSay } from '@/state/constellations'
+import { cxSay, loadDetail, refreshCardsSoon, refreshNews } from '@/state/constellations'
 import { chooseFrom, confirm } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Spinner, Text } from '@/ui/kit'
@@ -86,6 +87,12 @@ export function NebulaChat({
   const composer = useRef<ComposerHandle>(null)
   const list = useRef<FlatList<NebulaRowInfo>>(null)
   const uploads = useUploads(n.conversationId)
+  // 0.7.3: pinned messages (pinning: people who can manage messages here), send later
+  const pinsApi = usePins(n.conversationId)
+  const scheduled = useScheduled(n.conversationId)
+  const [pinsOpen, setPinsOpen] = useState(false)
+  const [scheduledOpen, setScheduledOpen] = useState(false)
+  const [laterText, setLaterText] = useState<string | null>(null)
   const voice = useVoice(n.conversationId)
   const blocked = cantPost(c, n)
   const timedOut = blocked?.kind === 'timeout'
@@ -198,6 +205,8 @@ export function NebulaChat({
       ...(mine && m.body && canAct && !special(m) ? [{ key: 'edit', label: 'Edit', icon: <Icon name="pencil" size={18} color={N.ink} /> }] : []),
       ...(mine && m.linkPreview && canAct ? [{ key: 'unpreview', label: 'Remove link preview', icon: <Icon name="link" size={18} color={N.ink} /> }] : []),
       ...(mine ? [{ key: 'delete', label: 'Delete', icon: <Icon name="trash" size={18} color={N.redText} />, danger: true }] : []),
+      ...(pinsApi.canPin && !m.deleted && !m.event ? [{ key: pinsApi.isPinned(m.id) ? 'unpin' : 'pin', label: pinsApi.isPinned(m.id) ? 'Unpin' : 'Pin', icon: <Icon name={pinsApi.isPinned(m.id) ? 'unpin' : 'pin'} size={18} color={N.ink} /> }] : []),
+      ...(!mine && !m.event ? [{ key: 'unread', label: 'Mark unread', icon: <Icon name="bell" size={18} color={N.ink} /> }] : []),
       ...(!mine ? [{ key: 'report', label: 'Report', icon: <Icon name="flag" size={18} color={N.ink} /> }] : []),
     ]
     const mod: MenuItem[] = [
@@ -249,6 +258,25 @@ export function NebulaChat({
         return
       case 'report':
         void openReport({ userId: m.senderId, name: sender?.displayName ?? 'them', messageId: m.id, conversationId: n.conversationId })
+        return
+      case 'pin':
+      case 'unpin':
+        void pinsApi.setPinned(m, pick === 'pin')
+        return
+      case 'unread':
+        if (await markUnread(n.conversationId, m)) {
+          cxSay('Marked unread.')
+          // Its unread count comes with the constellation (and the dashboard's cards).
+          setTimeout(() => {
+            void loadDetail(c.id)
+            refreshCardsSoon()
+            refreshNews(true)
+          }, 300)
+          if (!wide) {
+            if (router.canGoBack()) router.back()
+            else router.replace({ pathname: '/constellations/[cid]', params: { cid: c.id } })
+          }
+        }
         return
     }
   }
@@ -348,6 +376,7 @@ export function NebulaChat({
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: N.bg }} behavior={Platform.OS === 'ios' && !wide ? 'padding' : undefined}>
       {header}
+      <PinnedBar pins={pinsApi.pins} onOpen={() => setPinsOpen(true)} night />
       <GestureDetector gesture={membersSwipe}>
       <View style={{ flex: 1 }}>
         <FlatList
@@ -467,13 +496,48 @@ export function NebulaChat({
           onSend={onSend}
           onTyping={() => sendTyping(n.conversationId)}
           onAttach={() => void plusMenu()}
-          topSlot={<UploadTray uploads={uploads} />}
+          topSlot={
+            <>
+              <ScheduledStrip items={scheduled.items} onOpen={() => setScheduledOpen(true)} />
+              <UploadTray uploads={uploads} />
+            </>
+          }
+          onSendLater={uploads.items.length ? undefined : (t) => setLaterText(t)}
           canSendEmpty={uploads.items.length > 0}
           voice={voice.recording ? <VoiceRecorderBar voice={voice} /> : undefined}
           recordButton={<RecordButton voice={voice} />}
         />
       )}
 
+      {pinsOpen ? (
+        <PinsSheet
+          pins={pinsApi.pins}
+          canPin={pinsApi.canPin}
+          nameOf={nameOf}
+          onClose={() => setPinsOpen(false)}
+          onUnpin={(m) => void pinsApi.setPinned(m, false)}
+          onJump={(mid) => {
+            setPinsOpen(false)
+            void jumpTo(mid)
+          }}
+        />
+      ) : null}
+      {scheduledOpen ? <ScheduledSheet conversationId={n.conversationId} items={scheduled.items} onChanged={scheduled.load} onClose={() => setScheduledOpen(false)} /> : null}
+      {laterText !== null ? (
+        <SendLaterSheet
+          preview={laterText}
+          onClose={() => setLaterText(null)}
+          onPick={(at) => {
+            const text = laterText
+            setLaterText(null)
+            void scheduled.schedule(text, at, reply?.id).then((ok) => {
+              if (!ok) return
+              composer.current?.clear()
+              setReply(null)
+            })
+          }}
+        />
+      ) : null}
       {gifOpen ? (
         <GifSheet
           onPick={(g) => {

@@ -178,6 +178,17 @@ function connect() {
     void refreshConversations()
     emit('profile:changed', p?.userId)
   })
+  // 0.7.3: pins changed in a chat; a chat marked unread on another device; send-later list changed.
+  s.on('pins:changed', (p: { conversationId?: string }) => {
+    if (typeof p?.conversationId === 'string') emit('pins:changed', p.conversationId)
+  })
+  s.on('conversation:unread', (p: { conversationId?: string }) => {
+    void refreshConversations()
+    if (typeof p?.conversationId === 'string') emit('conversation:unread', p.conversationId)
+  })
+  s.on('scheduled:changed', (p: { conversationId?: string }) => {
+    if (typeof p?.conversationId === 'string') emit('scheduled:changed', p.conversationId)
+  })
   s.on('account:changed', () => {
     void refreshAccount()
     void refreshMe() // 0.4.0: "Restricted" turned on or off in Glofly Control

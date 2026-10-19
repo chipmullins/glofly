@@ -5,7 +5,7 @@ import * as api from '@/api/glofly'
 import { isAppActive } from '@/api/realtime'
 import { useSession } from '@/state/session'
 import { useStore } from '@/state/store'
-import { loadLatest } from '@/state/sync'
+import { loadLatest, readHeld } from '@/state/sync'
 import { patchNebula, refreshCardsSoon, refreshPins, useCx } from '@/state/constellations'
 import { useOutbox } from '@/chat/send'
 import { chatOpened } from '@/push'
@@ -16,6 +16,7 @@ import type { NebulaRowInfo } from './NebulaRow'
 
 /** Marks a nebula read (here, on your other devices, and in the dock's counts). */
 export async function markNebulaRead(constellationId: string, nebula: Pick<Nebula, 'id' | 'conversationId'>) {
+  if (readHeld(nebula.conversationId)) return // 0.7.3: just marked unread
   patchNebula(constellationId, nebula.id, { unreadCount: 0, mentionCount: 0 })
   await api.markRead(nebula.conversationId)
   refreshCardsSoon()

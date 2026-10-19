@@ -11,7 +11,7 @@ import { font, useTheme } from '@/ui/theme'
 // The message box: reply / edit bar, @mention suggestions, + (photos and files), emoji, and
 // Send (which becomes the voice-message mic while the box is empty).
 
-export type ComposerHandle = { focus: () => void; setText: (t: string) => void }
+export type ComposerHandle = { focus: () => void; setText: (t: string) => void; clear: () => void }
 
 type Props = {
   placeholder: string
@@ -31,10 +31,12 @@ type Props = {
   topSlot?: ReactNode
   /** Photos or files are ready, so Send works with an empty box. */
   canSendEmpty?: boolean
+  /** 0.7.3: hold Send to send the text later (the box keeps it until it's scheduled) */
+  onSendLater?: (text: string) => void
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot, canSendEmpty },
+  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot, canSendEmpty, onSendLater },
   ref,
 ) {
   const { c } = useTheme()
@@ -54,6 +56,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     setText: (t) => {
       setText(t)
       setSelection({ start: t.length, end: t.length })
+    },
+    clear: () => {
+      setText('')
+      setSelection({ start: 0, end: 0 })
     },
   }))
 
@@ -178,7 +184,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={editing ? 'Save edit' : 'Send'}
+              accessibilityHint={onSendLater && !editing && text.trim() ? 'Hold to send it later' : undefined}
               onPress={send}
+              onLongPress={onSendLater && !editing && text.trim() ? () => onSendLater(text.trim()) : undefined}
+              delayLongPress={450}
               style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 16px ${c.glow}` }}
             >
               <Icon name={editing ? 'check' : 'send'} size={20} color={c.accentInk} strokeWidth={2.2} />

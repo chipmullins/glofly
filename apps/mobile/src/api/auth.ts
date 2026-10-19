@@ -9,6 +9,8 @@ import type {
   SignedInUser,
   SignupMode,
   UsernameCheck,
+  LoginTwoStep,
+  TwoStepMethod,
 } from '@glofly/shared'
 import { request, requestRaw } from './http'
 import { endSessionLocally, startSession, useSession } from '@/state/session'
@@ -22,8 +24,12 @@ export function deviceName(): string {
 
 const UNREACHABLE = "Can't reach Glofly right now. Check your connection and try again."
 
-export async function login(req: LoginRequest): Promise<LoginResult> {
-  const answer = await requestRaw('POST', '/auth/login', { ...req, deviceName: deviceName() })
+/** 0.7.3: the password was right, but the account uses two-step sign-in: a code was sent. */
+export type TwoStepAsk = LoginTwoStep['twoStep']
+export type PhoneLoginResult = LoginResult | { ok: false; reason: 'two_step'; message: string; twoStep: TwoStepAsk }
+
+export async function login(req: LoginRequest): Promise<PhoneLoginResult> {
+  const answer = await requestRaw('POST', '/auth/login', { ...req, deviceName: deviceName(), twoStepAware: true })
   if (!answer) return { ok: false, reason: 'unreachable', message: UNREACHABLE }
   const { status, json } = answer
   if (status === 200 && json && typeof json.token === 'string') {
@@ -31,14 +37,45 @@ export async function login(req: LoginRequest): Promise<LoginResult> {
     await startSession(json.token, user, req.keepSignedIn)
     return { ok: true, user }
   }
+  if (status === 200 && json?.twoStep && typeof json.twoStep === 'object') {
+    return { ok: false, reason: 'two_step', message: '', twoStep: json.twoStep as TwoStepAsk }
+  }
+  return loginFailure(status, json)
+}
+
+function loginFailure(status: number, json: Record<string, unknown> | null): LoginResult & { ok: false } {
   const message = typeof json?.message === 'string' ? json.message : 'Something went wrong. Try again.'
   if (status === 426) return { ok: false, reason: 'update_required', message }
+  if (status === 502) return { ok: false, reason: 'server_error', message }
   if (status === 403 && json?.error === 'deletion_scheduled')
     return { ok: false, reason: 'deletion_scheduled', message, deleteAfter: String(json.deleteAfter ?? '') }
   if (status === 401) return { ok: false, reason: 'wrong_details', message }
   if (status === 400) return { ok: false, reason: 'invalid', message }
   if (status === 429) return { ok: false, reason: 'too_many_requests', message }
   return { ok: false, reason: 'server_error', message }
+}
+
+/** 0.7.3: the code from the text or email (or a backup code) finishes signing in. */
+export async function loginWithCode(challenge: string, code: string, keepSignedIn: boolean): Promise<LoginResult & { expired?: boolean }> {
+  const answer = await requestRaw('POST', '/auth/login/code', { challenge, code })
+  if (!answer) return { ok: false, reason: 'unreachable', message: UNREACHABLE }
+  const { status, json } = answer
+  if (status === 200 && json && typeof json.token === 'string') {
+    const user = json.user as SignedInUser
+    await startSession(json.token, user, keepSignedIn)
+    return { ok: true, user }
+  }
+  const failed = loginFailure(status, json)
+  return { ...failed, expired: status === 410 || json?.error === 'expired' }
+}
+
+/** Another code, or the other way ("Send it by email instead"). */
+export async function resendLoginCode(challenge: string, method?: TwoStepMethod): Promise<{ ok: true; twoStep: TwoStepAsk } | { ok: false; message: string; expired: boolean }> {
+  const answer = await requestRaw('POST', '/auth/login/resend', { challenge, ...(method ? { method } : {}) })
+  if (!answer) return { ok: false, message: UNREACHABLE, expired: false }
+  const { status, json } = answer
+  if (status === 200 && json?.twoStep) return { ok: true, twoStep: json.twoStep as TwoStepAsk }
+  return { ok: false, message: typeof json?.message === 'string' ? json.message : 'Something went wrong. Try again.', expired: status === 410 }
 }
 
 export async function register(req: RegisterRequest): Promise<RegisterResult> {

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { STRENGTH_LABELS, passwordProblem, strengthOf, type SignedInDevice } from '@glofly/shared'
+import { STRENGTH_LABELS, deviceAppName, passwordProblem, strengthOf, type SignedInDevice } from '@glofly/shared'
+import { TwoStepSection } from '@/ui/TwoStepSettings'
 import * as api from '@/api/glofly'
 import { request } from '@/api/http'
 import { logout } from '@/api/auth'
@@ -80,6 +81,19 @@ export default function Account() {
         <SettingsRow label="Change email" onPress={() => setSheet('email')} />
       )}
       <SettingsRow icon="key" label="Change password" onPress={() => setSheet('password')} />
+      <SettingsRow
+        icon="screen"
+        label="Sign in on a computer"
+        detail="No password needed: scan a code with this phone"
+        onPress={() =>
+          void inform(
+            'Sign in on a computer',
+            "On the computer, open Glofly (the app or chat.glofly.app) and choose Sign in with your phone. Then point this phone's camera at the code on the screen and tap the link. Glofly opens here and asks you to approve.",
+          )
+        }
+      />
+
+      <TwoStepSection restricted={account?.restricted} />
 
       <SectionLabel>Devices</SectionLabel>
       <Text size={13} tone="muted" style={{ paddingHorizontal: 20, paddingBottom: 6 }}>
@@ -89,7 +103,7 @@ export default function Account() {
         <SettingsRow
           key={d.id}
           label={d.current ? `This phone${d.deviceName ? ` · ${d.deviceName}` : ''}` : (d.deviceName ?? 'Unknown device')}
-          detail={d.online ? 'Online now' : `Active ${listTime(d.lastUsedAt)}`}
+          detail={[deviceAppName(d.platform), d.appVersion ? `version ${d.appVersion}` : null, d.online ? 'Online now' : `Active ${listTime(d.lastUsedAt)}`].filter(Boolean).join(' · ')}
           right={d.current ? undefined : <Button label="Sign out" kind="secondary" compact onPress={() => void signOutDevice(d)} />}
         />
       ))}

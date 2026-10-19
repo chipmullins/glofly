@@ -20,6 +20,7 @@ import { watchReduceMotion } from '@/constellations/motion'
 import { NightOverlay, useHomeAwayStyle } from '@/constellations/transition'
 import { HomeDock } from '@/constellations/HomeDock'
 import { InvitePopup } from '@/constellations/InvitePopup'
+import { startQuietHours } from '@/state/quiet'
 
 // Everything after signing in: the live connection, push notifications and calls start here.
 
@@ -41,6 +42,7 @@ export default function MainLayout() {
     startCalls()
     startWatch()
     startUpdates()
+    startQuietHours()
   }, [])
   return (
     <>

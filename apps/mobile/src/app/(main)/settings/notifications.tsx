@@ -10,6 +10,12 @@ import { inform } from '@/ui/dialogs'
 import { Notice, SectionLabel, Text } from '@/ui/kit'
 import { Screen } from '@/ui/Screen'
 import { SettingsRow } from '@/ui/SettingsRow'
+import { BottomSheet } from '@/ui/dialogs'
+import { Button } from '@/ui/kit'
+import { TimePicker } from '@/ui/TimePicker'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { QUIET_DEFAULT, inQuietHours, timeOfDayLabel, type QuietHours } from '@glofly/shared'
+import { deviceTimeZone, refreshQuietHours, saveQuietHours, useQuietHours } from '@/state/quiet'
 
 // Settings → Notifications & sounds (this phone).
 
@@ -78,6 +84,7 @@ export default function NotificationSettings() {
           />
         </>
       ) : null}
+      <QuietHoursSection />
       <SectionLabel>Sounds</SectionLabel>
       <SettingsRow label="Sounds in Glofly" detail="Message sound while the app is open" toggle={{ value: p.sounds, onChange: (v) => void setPhonePref('sounds', v) }} />
       <SettingsRow label="Vibrate" toggle={{ value: p.vibrate, onChange: (v) => void setPhonePref('vibrate', v) }} />
@@ -99,5 +106,73 @@ export default function NotificationSettings() {
         </>
       )}
     </Screen>
+  )
+}
+
+/** 0.7.3: quiet hours (on every device; off until turned on). */
+function QuietHoursSection() {
+  const quiet = useQuietHours((s) => s.quiet)
+  const loaded = useQuietHours((s) => s.loaded)
+  const [editing, setEditing] = useState<'from' | 'to' | null>(null)
+  useEffect(() => {
+    void refreshQuietHours()
+  }, [])
+  async function save(next: QuietHours | null) {
+    const problem = await saveQuietHours(next)
+    if (problem) void inform("Couldn't change quiet hours", problem)
+  }
+  if (!loaded) return null
+  const on = !!quiet
+  const nowQuiet = quiet ? inQuietHours(quiet) : false
+  return (
+    <>
+      <SectionLabel>Quiet hours</SectionLabel>
+      <SettingsRow
+        icon="moon"
+        label="Quiet hours"
+        detail={on ? `${timeOfDayLabel(quiet.from)} to ${timeOfDayLabel(quiet.to)} every day${nowQuiet ? ' · on now' : ''}` : 'No notification sounds or alerts overnight. On every device.'}
+        toggle={{
+          value: on,
+          onChange: (v) => void save(v ? { from: QUIET_DEFAULT.from, to: QUIET_DEFAULT.to, tz: deviceTimeZone(), calls: false } : null),
+        }}
+      />
+      {quiet ? (
+        <>
+          <SettingsRow label="Starts" value={timeOfDayLabel(quiet.from)} onPress={() => setEditing('from')} />
+          <SettingsRow label="Ends" value={timeOfDayLabel(quiet.to)} onPress={() => setEditing('to')} />
+          <SettingsRow label="Let calls ring" detail="Off: calls show silently, like Do not disturb" toggle={{ value: quiet.calls, onChange: (v) => void save({ ...quiet, calls: v }) }} />
+          <Text size={13} tone="muted" style={{ paddingHorizontal: 20, paddingVertical: 8, lineHeight: 19 }}>
+            Messages still arrive; you just aren't alerted until quiet hours end. Times are in {quiet.tz.replace(/_/g, ' ')}.
+          </Text>
+          {editing ? (
+            <QuietTimeSheet
+              title={editing === 'from' ? 'Quiet hours start' : 'Quiet hours end'}
+              value={editing === 'from' ? quiet.from : quiet.to}
+              onClose={() => setEditing(null)}
+              onSave={(v) => {
+                setEditing(null)
+                void save({ ...quiet, [editing]: v, tz: deviceTimeZone() })
+              }}
+            />
+          ) : null}
+        </>
+      ) : null}
+    </>
+  )
+}
+
+function QuietTimeSheet({ title, value, onSave, onClose }: { title: string; value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const insets = useSafeAreaInsets()
+  const [v, setV] = useState(value)
+  return (
+    <BottomSheet onClose={onClose}>
+      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 20, gap: 20 }}>
+        <Text display size={22}>
+          {title}
+        </Text>
+        <TimePicker value={v} onChange={setV} minuteStep={15} />
+        <Button label="Save" onPress={() => onSave(v)} />
+      </View>
+    </BottomSheet>
   )
 }

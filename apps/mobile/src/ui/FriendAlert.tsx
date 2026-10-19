@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import type { PublicUser } from '@glofly/shared'
 import { onLive, isAppActive } from '@/api/realtime'
 import { playSound, vibrate } from '@/push/sounds'
+import { isQuietNow } from '@/state/quiet'
 import { usePhonePrefs } from '@/state/prefs'
 import { useStore } from '@/state/store'
 import { Avatar } from './Avatar'
@@ -26,8 +27,10 @@ const SHOW_MS = 4500
 
 function show(user: PublicUser, text: string, hang = false) {
   if (!isAppActive()) return
+  // 0.7.3: quiet hours: no banners or sounds
+  if (isQuietNow()) return
   // The server already skips Do not disturb for "is online"; keep the app quiet too.
-  const dnd = useStore.getState().myStatus?.status === 'dnd'
+  const dnd = useStore.getState().myStatus?.status === 'dnd' || isQuietNow()
   const p = usePhonePrefs.getState()
   if (!dnd && p.sounds) playSound('message')
   if (!dnd && p.vibrate) vibrate()

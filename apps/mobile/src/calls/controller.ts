@@ -12,6 +12,7 @@ import { refreshConversations } from '@/state/sync'
 import { firstName } from '@/lib/format'
 import { confirm, inform } from '@/ui/dialogs'
 import { playSound, startLoop } from '@/push/sounds'
+import { isQuietNow } from '@/state/quiet'
 import { usePhonePrefs } from '@/state/prefs'
 import { audioEngineInfo, setupWebRTC, startCallAudio, stopCallAudio } from './media'
 import { APP_SETTINGS } from '@/lib/config'
@@ -289,9 +290,30 @@ function cleanup(message?: string) {
   if (message) toast(message)
 }
 
+/**
+ * 0.7.3: one start at a time. A second tap on Call while the first was still waiting on the
+ * microphone permission prompt used to start a second call (two ringing calls).
+ */
+let entering = false
+
 async function enter(request: () => ReturnType<typeof api.startCall>, video: boolean, outgoing: boolean, voice: VoiceNebula | null = null) {
+  if (entering) return
+  entering = true
+  try {
+    await enterOnce(request, video, outgoing, voice)
+  } finally {
+    entering = false
+  }
+}
+
+async function enterOnce(request: () => ReturnType<typeof api.startCall>, video: boolean, outgoing: boolean, voice: VoiceNebula | null) {
   if (useCall.getState().call) return void inform("You're already in a call", 'Hang up first to start another.')
-  if (!(await permissions(video))) return
+  // Buttons show it's starting (and can't be pressed again) while the permission prompt is up.
+  useCall.setState({ connecting: true })
+  if (!(await permissions(video))) {
+    if (!useCall.getState().call) useCall.setState({ connecting: false })
+    return
+  }
   useCall.setState({ connecting: true, cameraOn: video, micOn: true, voice })
   keepConnected('call', true)
   const r = await request()
@@ -510,7 +532,7 @@ export function showIncoming(call: Call, caller: PublicUser | null) {
   const already = useCall.getState().incoming?.call.id === call.id
   useCall.setState({ incoming: { call, caller: caller ?? useStore.getState().callers[call.id] ?? null } })
   if (already) return
-  const silent = useStore.getState().myStatus?.status === 'dnd' || !usePhonePrefs.getState().sounds
+  const silent = useStore.getState().myStatus?.status === 'dnd' || !usePhonePrefs.getState().sounds || isQuietNow(true)
   stopRinging()
   if (!silent) stopRing = startLoop('ringtone')
   ringTimer = setTimeout(() => {

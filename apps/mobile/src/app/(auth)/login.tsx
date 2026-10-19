@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View, type TextInput } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { login } from '@/api/auth'
+import { login, type TwoStepAsk } from '@/api/auth'
+import { TwoStepCode } from '@/ui/TwoStepCode'
 import { AuthHero, LoginHeroContent } from '@/ui/AuthHero'
 import { Button, Checkbox, Field, Notice, Text } from '@/ui/kit'
 import { confirm } from '@/ui/dialogs'
@@ -20,6 +21,8 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const passwordRef = useRef<TextInput>(null)
+  // 0.7.3: the account uses two-step sign-in: the code step
+  const [ask, setAsk] = useState<TwoStepAsk | null>(null)
 
   async function submit(restore = false) {
     if (!identifier.trim() || !password) {
@@ -31,6 +34,10 @@ export default function Login() {
     const result = await login({ identifier: identifier.trim(), password, keepSignedIn: keep, restore })
     setBusy(false)
     if (result.ok) return // the layout moves to the app
+    if (result.reason === 'two_step') {
+      setAsk(result.twoStep)
+      return
+    }
     if (result.reason === 'deletion_scheduled') {
       const when = result.deleteAfter ? longDate(result.deleteAfter) : 'soon'
       const ok = await confirm({
@@ -50,6 +57,18 @@ export default function Login() {
         <AuthHero tall>
           <LoginHeroContent />
         </AuthHero>
+        {ask ? (
+          <View style={{ paddingHorizontal: 24, paddingTop: 26 }}>
+            <TwoStepCode
+              ask={ask}
+              keepSignedIn={keep}
+              onBack={() => {
+                setAsk(null)
+                setPassword('')
+              }}
+            />
+          </View>
+        ) : (
         <View style={{ paddingHorizontal: 24, paddingTop: 26, gap: 18 }}>
           <View style={{ gap: 4 }}>
             <Text display size={28} accessibilityRole="header">
@@ -102,6 +121,7 @@ export default function Login() {
             </Text>
           </Text>
         </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   )

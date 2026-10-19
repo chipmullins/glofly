@@ -146,10 +146,21 @@ export async function loadLatest(id: string): Promise<boolean> {
     return r.error === 'not_found' || r.error === 'forbidden'
   }
   rememberPeople(r.data.people)
-  const known = new Map(chatMessages(id).list.map((m) => [m.id, m]))
-  for (const m of r.data.messages) known.set(m.id, m)
+  const before = chatMessages(id).list
+  // 0.7.3: after a long time away more than a page of messages may have come in. Then the newest
+  // page doesn't reach back to what's already shown, and merging the two left a silent gap in
+  // the middle. In that case the older messages go (scrolling up loads them again, in order) and
+  // the chat starts again from the newest page. Messages still being sent stay.
+  const saved = before.filter((m) => !m.id.startsWith('local-'))
+  const page = r.data.messages
+  const pageIds = new Set(page.map((m) => m.id))
+  const oldestInPage = page.reduce<string | null>((o, m) => (!o || m.createdAt < o ? m.createdAt : o), null)
+  const newestSaved = saved.reduce<string | null>((n, m) => (!n || m.createdAt > n ? m.createdAt : n), null)
+  const gap = r.data.hasMore && saved.length > 0 && !!oldestInPage && !!newestSaved && newestSaved < oldestInPage && !saved.some((m) => pageIds.has(m.id))
+  const known = new Map((gap ? before.filter((m) => m.id.startsWith('local-')) : before).map((m) => [m.id, m]))
+  for (const m of page) known.set(m.id, m)
   const list = [...known.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-  setChatMessages(id, { list, loading: false, loaded: true, hasMore: current.loaded ? current.hasMore : r.data.hasMore })
+  setChatMessages(id, { list, loading: false, loaded: true, hasMore: gap || !current.loaded ? r.data.hasMore : current.hasMore })
   return true
 }
 
@@ -239,8 +250,17 @@ export function updateMessage(m: Message) {
   if (c?.lastMessage?.id === m.id) patchConversation(m.conversationId, { lastMessage: m })
 }
 
+// 0.7.3 Mark unread: the chat that was just marked unread is still on screen for a moment while
+// it closes; it mustn't read itself again in that time.
+const heldUnread = new Map<string, number>()
+export function holdUnread(id: string): void {
+  heldUnread.set(id, Date.now())
+}
+export const readHeld = (id: string): boolean => Date.now() - (heldUnread.get(id) ?? 0) < 4000
+
 /** Marks a chat read here and on the server (which clears it on other devices too). */
 export async function markChatRead(id: string): Promise<void> {
+  if (readHeld(id)) return
   const c = useStore.getState().conversations[id]
   if (c && (c.unreadCount > 0 || (c.mentionCount ?? 0) > 0)) patchConversation(id, { unreadCount: 0, mentionCount: 0 })
   await api.markRead(id)

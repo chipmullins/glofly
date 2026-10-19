@@ -20,6 +20,11 @@ import { prefs } from '@/lib/storage'
 import { loadPhonePrefs } from '@/state/prefs'
 import { setupWebRTC } from '@/calls/media'
 import { lockPortrait } from '@/lib/orientation'
+import { installErrorReports } from '@/lib/errorReports'
+import { ErrorBoundary } from '@/ui/ErrorBoundary'
+
+// 0.7.3: errors nothing caught are reported (Settings → Privacy can turn it off).
+installErrorReports()
 
 // LiveKit needs WebRTC's globals before anything uses it.
 setupWebRTC()
@@ -64,14 +69,18 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: c.bg }}>
       <SafeAreaProvider>
         <StatusBar style={dark ? 'light' : 'dark'} />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'slide_from_right' }}>
-          <Stack.Protected guard={signedIn}>
-            <Stack.Screen name="(main)" />
-          </Stack.Protected>
-          <Stack.Protected guard={!signedIn}>
-            <Stack.Screen name="(auth)" />
-          </Stack.Protected>
-        </Stack>
+        <ErrorBoundary bg={c.bg}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'slide_from_right' }}>
+            <Stack.Protected guard={signedIn}>
+              <Stack.Screen name="(main)" />
+            </Stack.Protected>
+            <Stack.Protected guard={!signedIn}>
+              <Stack.Screen name="(auth)" />
+            </Stack.Protected>
+            {/* 0.7.3: a computer's sign-in QR code (glofly://qr-login/<id>), signed in or not */}
+            <Stack.Screen name="qr-login/[id]" />
+          </Stack>
+        </ErrorBoundary>
         <OverlayHosts />
         <PhotoCropperHost />
         <Paused />

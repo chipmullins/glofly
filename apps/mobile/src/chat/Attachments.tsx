@@ -141,6 +141,21 @@ function FileCard({ conversationId, a, mine, onLongPress }: { conversationId: st
 
 // Only one voice message plays at a time.
 let playing: AudioPlayer | null = null
+// 0.7.3: voice message speed (1× → 1.5× → 2×), the same for every voice message until changed.
+const SPEEDS = [1, 1.5, 2] as const
+let voiceSpeed: number = 1
+const speedLabel = (r: number) => `${r}×`
+function applySpeed(player: AudioPlayer, rate: number) {
+  try {
+    player.setPlaybackRate(rate, 'high')
+  } catch {
+    try {
+      player.playbackRate = rate
+    } catch {
+      // this player can't change speed
+    }
+  }
+}
 
 function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId: string; a: Attachment; mine: boolean; onLongPress: () => void }) {
   const { c } = useTheme()
@@ -149,6 +164,7 @@ function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId:
   const status = useAudioPlayerStatus(player)
   const width = useRef(0)
   const wantPlay = useRef(false)
+  const [speed, setSpeed] = useState(voiceSpeed)
   const peaks = a.voice?.peaks?.length ? a.voice.peaks : [20]
   const duration = (a.voice?.durationMs ?? 0) / 1000
   const progress = duration ? Math.min(1, status.currentTime / (status.duration || duration)) : 0
@@ -164,8 +180,13 @@ function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId:
       // sounds respect it again once it ends).
       if (Platform.OS === 'ios') void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'doNotMix' }).catch(() => {})
       player.play()
+      applySpeed(player, voiceSpeed)
     }
   }, [status.isLoaded, player])
+  // A speed picked on another voice message (or here) applies the next time this one plays.
+  useEffect(() => {
+    if (status.isLoaded) applySpeed(player, speed)
+  }, [speed, status.isLoaded, player])
 
   useEffect(() => {
     if (!status.didJustFinish) return
@@ -199,8 +220,16 @@ function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId:
       // iPhone: voice messages play even with the ring/silent switch on silent (Glofly's other
       // sounds respect it again once it ends).
       if (Platform.OS === 'ios') void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'doNotMix' }).catch(() => {})
+      setSpeed(voiceSpeed)
       player.play()
+      applySpeed(player, voiceSpeed)
     }
+  }
+
+  const changeSpeed = () => {
+    const next = SPEEDS[(SPEEDS.indexOf(speed as (typeof SPEEDS)[number]) + 1) % SPEEDS.length]
+    voiceSpeed = next
+    setSpeed(next)
   }
 
   const seek = (x: number) => {
@@ -234,6 +263,17 @@ function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId:
       <Text size={12} weight="medium" style={{ color: ink, minWidth: 30 }}>
         {voiceTime(status.playing || status.currentTime > 0 ? status.currentTime * 1000 : (a.voice?.durationMs ?? 0))}
       </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Playback speed ${speedLabel(speed)}. Change speed`}
+        onPress={changeSpeed}
+        hitSlop={8}
+        style={{ minWidth: 34, height: 24, paddingHorizontal: 6, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: mine ? 'rgba(42,20,6,0.14)' : c.surface }}
+      >
+        <Text size={11} weight="bold" style={{ color: ink }}>
+          {speedLabel(speed)}
+        </Text>
+      </Pressable>
     </Pressable>
   )
 }
