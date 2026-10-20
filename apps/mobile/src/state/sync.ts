@@ -214,7 +214,14 @@ export function setNebulaCheck(fn: (conversationId: string) => boolean) {
 }
 
 /** A new message (live, or one this phone just sent): into its chat and the chats list. */
+/** 0.7.5: called for every message that arrives (the outbox settles its own copies). */
+const receiveHooks: ((m: Message) => void)[] = []
+export function onReceive(hook: (m: Message) => void): void {
+  receiveHooks.push(hook)
+}
+
 export function receiveMessage(m: Message, opts: { appActive: boolean }): { counts: boolean } {
+  for (const hook of receiveHooks) hook(m)
   putMessage(m)
   const c = useStore.getState().conversations[m.conversationId]
   if (!c && isNebula(m.conversationId)) return { counts: false }

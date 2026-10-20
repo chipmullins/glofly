@@ -16,7 +16,10 @@ function placeOrigin(menu: HTMLElement): void {
   if (!r.width) return
   const up = r.top + r.height / 2 > window.innerHeight * 0.6
   const right = r.left + r.width / 2 > window.innerWidth / 2
-  menu.style.setProperty('--glo-menu-origin', `${up ? 'bottom' : 'top'} ${right ? 'right' : 'left'}`)
+  menu.style.setProperty(
+    '--glo-menu-origin',
+    `${up ? 'bottom' : 'top'} ${right ? 'right' : 'left'}`
+  )
   menu.style.setProperty('--glo-menu-dy', up ? '6px' : '-6px')
 }
 
@@ -59,10 +62,13 @@ function rise(row: HTMLElement, startedAt: number): void {
   row.dataset.riseStart = String(startedAt)
   row.style.animationDelay = elapsed > 0 ? `${-Math.round(elapsed)}ms` : ''
   row.classList.add('msg-rise')
-  window.setTimeout(() => {
-    row.classList.remove('msg-rise')
-    row.style.animationDelay = ''
-  }, RISE_MS - elapsed + 40)
+  window.setTimeout(
+    () => {
+      row.classList.remove('msg-rise')
+      row.style.animationDelay = ''
+    },
+    RISE_MS - elapsed + 40
+  )
 }
 
 function messages(records: MutationRecord[]): void {
@@ -72,7 +78,8 @@ function messages(records: MutationRecord[]): void {
     for (const node of record.removedNodes) {
       if (!(node instanceof HTMLElement)) continue
       const row = messageIn(node)
-      if (row?.dataset.riseStart) carry = { parent: record.target, startedAt: Number(row.dataset.riseStart) }
+      if (row?.dataset.riseStart)
+        carry = { parent: record.target, startedAt: Number(row.dataset.riseStart) }
     }
   }
   for (const record of records) {

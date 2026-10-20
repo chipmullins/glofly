@@ -1403,7 +1403,7 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
       const [row] = await db.select(messageFields).from(messages).where(and(eq(messages.id, first), eq(messages.conversationId, id.data), eq(messages.senderId, myId))).limit(1);
       if (row) {
         const [message] = await hydrate([row]);
-        res.status(200).json({ message });
+        res.status(200).json({ message: { ...message, clientId } });
         return;
       }
       // The first one is gone (deleted for good): send again.
@@ -1535,12 +1535,17 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
 
   if (dedupeKey) await redis.set(dedupeKey, inserted.id, { EX: CLIENT_ID_SECONDS }).catch(() => {});
   const [message] = await hydrate([inserted]);
-  // Instantly to everyone in the chat (all their signed-in devices).
-  for (const userId of chat.memberIds) emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  // Instantly to everyone in the chat (all their signed-in devices). Your own copy carries the
+  // clientId it was sent with (0.7.5), so your apps can match it to the one waiting to send.
+  const mineCopy = clientId ? { ...message, clientId } : message;
+  for (const userId of chat.memberIds) {
+    const m = userId === myId ? mineCopy : message;
+    emitToUser(userId, "message:new", modernOnly(chat) ? { message: m, nebula: true } : { message: m }, modernOnly(chat));
+  }
   if (chat.kind === "nebula") inBackground(nebulaActivity(id.data, myId, inserted.createdAt, mentions, nebulaPreview(message)));
   // Replying means you've read everything before it ("Seen" is for DMs).
   if (chat.partner) await shareReadPosition(id.data, myId, chat.partner, inserted.createdAt);
-  res.status(201).json({ message });
+  res.status(201).json({ message: mineCopy });
   // Phones: a notification for everyone else, and this chat's notification cleared on your others.
   // A lantern message's words stay in the chat (the notification just says there's one).
   inBackground(notifyMessage(lantern ? { ...message, body: "🏮 Lantern message", attachments: [] } : message, chat));

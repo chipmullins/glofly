@@ -16,7 +16,12 @@ const WAVE = '👋'
 const SPARKS = Array.from({ length: 18 }, (_, i) => {
   const a = (i / 18) * Math.PI * 2 + (((i * 37) % 11) - 5) * 0.03
   const d = 70 + ((i * 53) % 100)
-  return { x: Math.round(Math.cos(a) * d * 1.6), y: Math.round(Math.sin(a) * d * 0.7), t: 1.2 + ((i * 7) % 8) / 10, delay: ((i * 13) % 25) / 100 }
+  return {
+    x: Math.round(Math.cos(a) * d * 1.6),
+    y: Math.round(Math.sin(a) * d * 0.7),
+    t: 1.2 + ((i * 7) % 8) / 10,
+    delay: ((i * 13) % 25) / 100
+  }
 })
 
 function reducedMotion(): boolean {
@@ -64,7 +69,8 @@ export function CxJoinLine({
       </span>
       <span>
         <b>{who}</b> joined <EmojiText text={place} />
-        {mine ? '' : '. Say hi!'} <time dateTime={message.createdAt}>{clockTime(message.createdAt)}</time>
+        {mine ? '' : '. Say hi!'}{' '}
+        <time dateTime={message.createdAt}>{clockTime(message.createdAt)}</time>
       </span>
       {!mine && canWave && (
         <button
@@ -78,7 +84,10 @@ export function CxJoinLine({
             onWave()
           }}
         >
-          <span className={justWaved ? 'cx-wave-hand cx-wave-hand--go' : 'cx-wave-hand'} aria-hidden="true">
+          <span
+            className={justWaved ? 'cx-wave-hand cx-wave-hand--go' : 'cx-wave-hand'}
+            aria-hidden="true"
+          >
             {WAVE}
           </span>
           {waved ? 'You waved' : 'Say hi'}
@@ -103,9 +112,12 @@ export function CxMilestoneCard({
     Date.now() - new Date(message.createdAt).getTime() < 2 * 60_000 && !reducedMotion() ? 1 : 0
   )
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current)
+    },
+    []
+  )
   if (!event) return <></>
   const name = event.name
   const big = event.years ? `turns ${event.years} today!` : `${event.members ?? 0} members!`
@@ -150,8 +162,11 @@ export function CxMilestoneCard({
             <span className="cx-milestone-big">{big}</span>
           </strong>
           <span>
-            Thanks for making it glow. {today ? 'Today' : when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })},{' '}
-            {clockTime(message.createdAt)}
+            Thanks for making it glow.{' '}
+            {today
+              ? 'Today'
+              : when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            , {clockTime(message.createdAt)}
           </span>
         </span>
         <button type="button" className="cx-milestone-replay" onClick={replay}>

@@ -204,6 +204,12 @@ export type Message = {
   id: string
   conversationId: string
   senderId: string
+  /**
+   * 0.7.5: only on the sender's own copy of a message they just sent (the live event and the
+   * answer): the clientId their app sent it with, so a copy waiting in its outbox (say, one whose
+   * answer got lost) is recognised and replaced. Older apps ignore it.
+   */
+  clientId?: string
   /** Empty when deleted */
   body: string
   /** ISO date */

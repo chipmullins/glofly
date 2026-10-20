@@ -180,7 +180,10 @@ export default function WelcomeFlow({
 
   const note = (n: Note): React.ReactNode =>
     n && (
-      <p className={n.kind === 'good' ? 'wf-note wf-note--good' : 'wf-note wf-note--bad'} role="status">
+      <p
+        className={n.kind === 'good' ? 'wf-note wf-note--good' : 'wf-note wf-note--bad'}
+        role="status"
+      >
         {n.text}
       </p>
     )
@@ -350,7 +353,9 @@ export default function WelcomeFlow({
             <div className="wf-cards">
               <div className="wf-card">
                 <strong>Not on Glofly yet?</strong>
-                <span>Send your invite link. You’ll automatically be friends as soon as they join.</span>
+                <span>
+                  Send your invite link. You’ll automatically be friends as soon as they join.
+                </span>
                 {inviteOpen ? (
                   <form className="wf-invite" onSubmit={(e) => void invite(e)}>
                     <label htmlFor="wf-email" className="visually-hidden">

@@ -97,8 +97,25 @@ export function onSendFailed(
   return () => failListeners.delete(listener)
 }
 
+// Your own message arriving live with its clientId (0.7.5 servers): the copy waiting here (one
+// whose answer got lost, say) is the same message, so it's settled at once, no Retry needed.
+let listening = false
+function listen(): void {
+  if (listening) return
+  listening = true
+  window.glofly.onEvent((event) => {
+    if (event.type !== 'message:new' || !event.message.clientId) return
+    const m = event.message
+    const item = byChat[m.conversationId]?.find((x) => x.clientId === m.clientId)
+    if (!item) return
+    update(m.conversationId, (list) => list.filter((x) => x.tempId !== item.tempId))
+    for (const l of sentListeners) l(item, m)
+  })
+}
+
 /** Shows a new message straight away and sends it. */
 export function enqueue(conversationId: string, message: NewPending): Pending {
+  listen()
   counter += 1
   const item: Pending = {
     ...message,

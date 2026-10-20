@@ -3,7 +3,7 @@ import type { Attachment, Message, ReplyPreview } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { onSignOut, useSession } from '@/state/session'
 import { chatMessages, putMessage, setChatMessages, useStore } from '@/state/store'
-import { receiveMessage } from '@/state/sync'
+import { onReceive, receiveMessage } from '@/state/sync'
 import { tap } from '@/lib/haptics'
 
 // Sending: the message shows straight away, and is swapped for the server's copy when it lands.
@@ -122,6 +122,17 @@ export function retry(localId: string) {
   setItem(localId, next)
   void deliver(localId, next)
 }
+
+// Your own message arriving live with its clientId (0.7.5 servers): the copy waiting here (one
+// whose answer got lost, say) is that same message, so it's settled at once, no retry needed.
+onReceive((m) => {
+  if (!m.clientId) return
+  for (const [localId, item] of Object.entries(useOutbox.getState().items)) {
+    if (item.clientId !== m.clientId) continue
+    dropLocal(item.conversationId, localId)
+    setItem(localId, null)
+  }
+})
 
 // Back online: messages that failed while the connection was down go again (once).
 useStore.subscribe((state, prev) => {

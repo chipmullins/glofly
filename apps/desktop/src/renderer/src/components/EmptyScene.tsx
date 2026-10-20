@@ -157,11 +157,13 @@ function Art({ kind }: { kind: SceneKind }): React.JSX.Element {
         <>
           {defs}
           <rect x="40" y="46" width="90" height="70" rx="12" className="es-fill" strokeWidth="4" />
-          <path d="M58 70h54M58 88h36" className="es-stroke" strokeWidth="5" strokeLinecap="round" />
           <path
-            d="M118 30l14 14-8 4-10 10 2 10-4 4-22-22 4-4 10 2 10-10z"
-            className="es-lid"
+            d="M58 70h54M58 88h36"
+            className="es-stroke"
+            strokeWidth="5"
+            strokeLinecap="round"
           />
+          <path d="M118 30l14 14-8 4-10 10 2 10-4 4-22-22 4-4 10 2 10-10z" className="es-lid" />
           <Firefly x={36} y={36} r={14} glow={glow} />
           <Firefly x={140} y={112} r={10} glow={glow} variant={2} />
         </>
@@ -185,7 +187,12 @@ function Art({ kind }: { kind: SceneKind }): React.JSX.Element {
             className="es-fill"
             strokeWidth="4"
           />
-          <path d="M54 82v14M47 89h14" className="es-stroke" strokeWidth="5" strokeLinecap="round" />
+          <path
+            d="M54 82v14M47 89h14"
+            className="es-stroke"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
           <circle cx="112" cy="84" r="4" className="es-lid" />
           <circle cx="124" cy="94" r="4" className="es-lid" />
           <Firefly x={85} y={30} r={15} glow={glow} />
@@ -218,12 +225,7 @@ export default function EmptyScene({
       className={`empty-scene empty-scene--${layout}${night ? ' empty-scene--night' : ''}`}
       role="status"
     >
-      <svg
-        className="empty-scene-art"
-        viewBox="0 0 170 150"
-        aria-hidden="true"
-        focusable="false"
-      >
+      <svg className="empty-scene-art" viewBox="0 0 170 150" aria-hidden="true" focusable="false">
         <Art kind={kind} />
       </svg>
       <div className="empty-scene-words">

@@ -446,3 +446,33 @@ test('0.7.5 quick switcher matching', () => {
   assert.ok(s.matchScore('jose', 'José') > 0) // accents don't matter
   assert.equal(s.matchScore('', 'anything'), 1)
 })
+
+test('0.7.5 constellation community: milestones, join lines, accents, playing time', () => {
+  assert.equal(s.milestoneReached(9, 10), 10)
+  assert.equal(s.milestoneReached(10, 11), null)
+  assert.equal(s.milestoneReached(49, 100), 100)
+  const joined = { type: 'cxJoined', name: 'Firefly Guild' }
+  const ms = { type: 'cxMilestone', name: 'Firefly Guild', members: 100, years: null }
+  assert.equal(s.eventField(joined), 'eventLine4')
+  assert.equal(s.eventField(ms), 'eventLine4')
+  assert.equal(s.eventField({ type: 'callAdd', callId: 'c', userIds: [], names: [], movedTo: null }), 'eventLine3')
+  assert.equal(s.legacyEventBody(joined), 'joined Firefly Guild 👋')
+  assert.equal(s.legacyEventBody(ms), '🎉 Firefly Guild just reached 100 members!')
+  assert.equal(s.milestoneText({ name: 'X', members: null, years: 2 }), '🎂 X turns 2 today!')
+  const msg = { event: null, body: 'joined Firefly Guild 👋', eventLine4: joined }
+  s.upgradeEvents(msg)
+  assert.deepEqual(msg.event, joined)
+  assert.equal('eventLine4' in msg, false)
+  assert.equal(s.eventText(joined, 'u1', 'me', () => 'Priya'), 'Priya joined Firefly Guild. Say hi!')
+  assert.equal(s.eventText(joined, 'me', 'me', () => 'Priya'), 'You joined Firefly Guild')
+  assert.equal(s.accentOf({}).color, '#ffb347')
+  assert.equal(s.accentOf({ accent: 'lagoon' }).legacy, 'lagoon')
+  assert.equal(s.accentOf({ accent: 'nope' }).name, 'Firefly gold')
+  assert.equal(s.isConstellationAccent('rose'), true)
+  const now = Date.parse('2026-10-20T20:00:00Z')
+  assert.equal(s.playingFor('2026-10-20T19:18:00Z', now), '42 min')
+  assert.equal(s.playingFor('2026-10-20T18:48:00Z', now), '1 h 12 min')
+  assert.equal(s.playingFor('2026-10-20T18:00:00Z', now), '2 h')
+  assert.equal(s.gameInitials('Rocket League'), 'RL')
+  assert.equal(s.gameInitials('Valorant'), 'VAL')
+})

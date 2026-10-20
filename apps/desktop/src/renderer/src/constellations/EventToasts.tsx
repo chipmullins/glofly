@@ -76,7 +76,10 @@ export default function EventToasts({
               {
                 key: `event:${toast.eventId}`,
                 conversationId: toast.conversationId,
-                title: phase === 'started' ? `📅 ${toast.title} is starting` : `📅 ${toast.title} starts in 15 min`,
+                title:
+                  phase === 'started'
+                    ? `📅 ${toast.title} is starting`
+                    : `📅 ${toast.title} starts in ${Math.max(1, Math.round((Date.parse(e.startsAt) - Date.now()) / 60_000))} min`,
                 body:
                   phase === 'started'
                     ? toast.voiceName
@@ -104,7 +107,8 @@ export default function EventToasts({
     ? new Date(t.startsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     : ''
   const others = Math.max(0, t.inVoice - 1)
-  const title = t.phase === 'started' ? `${t.title} is starting` : `${t.title} starts in 15 min`
+  const mins = t.startsAt ? Math.max(1, Math.round((Date.parse(t.startsAt) - Date.now()) / 60_000)) : 15
+  const title = t.phase === 'started' ? `${t.title} is starting` : `${t.title} starts in ${mins} min`
   const text =
     t.phase === 'started'
       ? t.voiceName
