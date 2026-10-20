@@ -34,6 +34,7 @@ import { friendIdsOf, presenceOf } from "../presence";
 import { connectedUserIds } from "../realtime";
 import { can, OWNER_RANK, standingOf, type Standing } from "./perms";
 import { voiceStatesFor, voiceStatesOf } from "./voice";
+import { seesAllNebulas, unlocksFor, visibleChats } from "./access";
 
 // What the apps get about constellations (2.0): dashboard cards, directory entries, and the whole
 // constellation when it's open.
@@ -141,7 +142,13 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
   const allNebulas = await db
     .select({ id: nebulas.id, constellationId: nebulas.constellationId, conversationId: nebulas.conversationId, name: nebulas.name, kind: nebulas.kind, position: nebulas.position, categoryId: nebulas.categoryId })
     .from(nebulas)
-    .where(inArray(nebulas.constellationId, ids));
+    .where(inArray(nebulas.constellationId, ids))
+    // 0.8.0: only the nebulas I can see (role-only ones need the role): no star, count or voice
+    // face gives a hidden one away.
+    .then(async (rows) => {
+      const seen = await visibleChats(userId, rows.map((r) => r.conversationId));
+      return rows.filter((r) => seen.has(r.conversationId));
+    });
   const unread = await unreadFor(userId, allNebulas.map((n) => n.conversationId));
   // My nebula notification settings: "none" nebulas don't count toward the card's "new".
   const settings = await db
@@ -213,7 +220,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
   const categoryPosition = new Map(categoryRows.map((c) => [c.id, c.position]));
   const chatting = await chattingIn(allNebulas.filter((n) => n.kind === "text").map((n) => n.conversationId));
   for (const card of cards) {
-    const states = voiceByCard.get(card.id) ?? [];
+    const states = (voiceByCard.get(card.id) ?? []).filter((s) => allNebulas.some((n) => n.id === s.nebulaId));
     const cardNotify = notifyLevel(mine.find((m) => m.c.id === card.id)?.notify) ?? "all";
     card.sky = allNebulas
       .filter((n) => n.constellationId === card.id)
@@ -322,11 +329,23 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
   const [c] = await db.select().from(constellations).where(eq(constellations.id, constellationId));
   if (!c) return null;
   const categories = await db
-    .select({ id: constellationCategories.id, name: constellationCategories.name, position: constellationCategories.position })
+    .select({
+      id: constellationCategories.id,
+      name: constellationCategories.name,
+      position: constellationCategories.position,
+      visibility: constellationCategories.visibility,
+      roleIds: constellationCategories.roleIds,
+    })
     .from(constellationCategories)
     .where(eq(constellationCategories.constellationId, constellationId))
     .orderBy(constellationCategories.position);
-  const nebulaRows = await db.select().from(nebulas).where(eq(nebulas.constellationId, constellationId)).orderBy(nebulas.position);
+  const allNebulaRows = await db.select().from(nebulas).where(eq(nebulas.constellationId, constellationId)).orderBy(nebulas.position);
+  // 0.8.0 role-only nebulas: only the ones I can see (members of their conversation). People who
+  // manage nebulas see all of them, with who each is for; a category whose nebulas are all hidden
+  // from me (or that is itself role-only and not for me) isn't shown either.
+  const seen = await visibleChats(userId, allNebulaRows.map((n) => n.conversationId));
+  const nebulaRows = allNebulaRows.filter((n) => seen.has(n.conversationId));
+  const manager = seesAllNebulas(me);
   const unread = await unreadFor(userId, nebulaRows.map((n) => n.conversationId));
   const chatting = await chattingIn(nebulaRows.filter((n) => n.kind === "text").map((n) => n.conversationId));
   const mySettings = nebulaRows.length
@@ -399,7 +418,19 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
     type: isConstellationType(c.type) ? c.type : null,
     tags: c.tags,
     createdAt: c.createdAt.toISOString(),
-    categories,
+    categories: categories
+      .filter((cat) => {
+        if (manager) return true;
+        if (cat.visibility === "roles" && !cat.roleIds.some((id) => me.roleIds.includes(id))) return false;
+        const inside = allNebulaRows.filter((n) => n.categoryId === cat.id);
+        return !inside.length || inside.some((n) => seen.has(n.conversationId));
+      })
+      .map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        position: cat.position,
+        ...(manager ? { visibility: cat.visibility === "roles" ? ("roles" as const) : ("everyone" as const), roleIds: cat.roleIds } : {}),
+      })),
     nebulas: nebulaRows.map((n) => ({
       id: n.id,
       kind: n.kind,
@@ -415,6 +446,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       mutedUntil: activeMute(mySettings.find((s) => s.conversationId === n.conversationId)?.mutedUntil),
       lastReadAt: mySettings.find((s) => s.conversationId === n.conversationId)?.lastReadAt?.toISOString() ?? null,
       chatting: chatting.get(n.conversationId) ?? 0,
+      ...(manager ? { visibility: n.visibility === "roles" ? ("roles" as const) : ("everyone" as const), roleIds: n.roleIds } : {}),
     })),
     roles,
     members: memberRows
@@ -433,7 +465,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
         };
       })
       .filter((m) => !!m.user),
-    voice: await voiceStatesOf(constellationId),
+    voice: (await voiceStatesOf(constellationId)).filter((v) => nebulaRows.some((n) => n.id === v.nebulaId)),
     me: {
       owner: me.owner,
       permissions: me.owner ? [...ALL_PERMISSIONS] : [...me.permissions],
@@ -447,5 +479,6 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
     welcome: welcomeOf(c.welcome),
     welcomedAt: myRow?.welcomedAt?.toISOString() ?? null,
     rulesAgreedAt: myRow?.rulesAgreedAt?.toISOString() ?? null,
+    unlocks: roleRows.some((r) => r.selfAssign && r.kind === "custom") ? Object.fromEntries(await unlocksFor(constellationId, userId)) : {},
   };
 }

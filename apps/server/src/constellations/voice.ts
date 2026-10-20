@@ -1,10 +1,10 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { VoiceNebulaState } from "@glofly/shared";
 import { db } from "../db";
-import { calls, nebulas } from "../db/schema";
+import { calls, conversationMembers, nebulas } from "../db/schema";
 import { onNebulaCallChange, peopleInCall } from "../calls/service";
 import { voiceMutedIn } from "../calls/voiceMutes";
-import { tellMembers } from "./activity";
+import { emitToUser } from "../realtime";
 
 // Who's in each voice nebula (2.0). A voice nebula's room is a call on its conversation
 // (calls/service.ts joinVoiceRoom). Screen sharing is reported by the apps in the room (LiveKit
@@ -66,7 +66,10 @@ export async function announceVoice(conversationId: string): Promise<void> {
     .where(eq(nebulas.conversationId, conversationId));
   if (!n) return;
   const state = (await voiceStatesOf(n.constellationId)).find((v) => v.nebulaId === n.id);
-  if (state) await tellMembers(n.constellationId, "constellation:voice", { constellationId: n.constellationId, voice: state });
+  if (!state) return;
+  // 0.8.0: only people who can see it (role-only voice nebulas): its conversation's members.
+  const viewers = await db.select({ userId: conversationMembers.userId }).from(conversationMembers).where(eq(conversationMembers.conversationId, conversationId));
+  for (const v of viewers) emitToUser(v.userId, "constellation:voice", { constellationId: n.constellationId, voice: state }, true);
 }
 
 // Calls in voice nebulas changed (someone joined or left, the room closed).

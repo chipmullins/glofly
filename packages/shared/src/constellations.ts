@@ -278,52 +278,150 @@ export const TIMEOUT_LENGTHS: readonly { id: TimeoutLength; name: string; ms: nu
 // ───────────── Templates ─────────────
 
 export type ConstellationTemplate = 'friends' | 'gaming' | 'study' | 'blank'
+
+/** 0.8.0: a role a template starts with. Members pick these themselves (labels, never permissions). */
+export type TemplateRole = { name: string; color: RoleColor; selfAssign: boolean }
+/** A template's nebula. `roles`: only people with one of these (template role names) see it. */
+export type TemplateNebula = { name: string; kind: NebulaKind; topic?: string; roles?: string[] }
+
+/**
+ * What a new constellation starts with. 0.8.0 (approved Templates board): besides nebulas, the
+ * starter roles members can pick, house rules, the welcome text (the about new members see, also
+ * the description), and an accent. Older apps send only the id and get all of it.
+ */
 export const CONSTELLATION_TEMPLATES: readonly {
   id: ConstellationTemplate
   name: string
   what: string
-  categories: { name: string; nebulas: { name: string; kind: NebulaKind; topic?: string }[] }[]
+  categories: { name: string; nebulas: TemplateNebula[] }[]
+  /** 0.8.0 (missing from older apps' copy) */
+  accent: ConstellationAccent
+  roles: TemplateRole[]
+  rules: string[]
+  /** The about new members see on the welcome screen (null = they write it themselves) */
+  welcome: string | null
 }[] = [
+  {
+    id: 'blank',
+    name: 'Start empty',
+    what: 'Just a general nebula',
+    categories: [{ name: 'General', nebulas: [{ name: 'general', kind: 'text' }] }],
+    accent: 'gold',
+    roles: [],
+    rules: [],
+    welcome: null,
+  },
   {
     id: 'friends',
     name: 'Friends hangout',
-    what: 'general, clips · voice: Campfire',
+    what: 'Chill spot for your crew',
     categories: [
-      { name: 'Hangout', nebulas: [{ name: 'general', kind: 'text', topic: 'Say hi!' }, { name: 'clips', kind: 'text' }] },
+      {
+        name: 'Hangout',
+        nebulas: [
+          { name: 'general', kind: 'text', topic: 'Say hi!' },
+          { name: 'clips', kind: 'text' },
+          { name: 'memes', kind: 'text' },
+        ],
+      },
       { name: 'Voice nebulas', nebulas: [{ name: 'Campfire', kind: 'voice' }] },
     ],
+    // The board's "Glow Orange" is closest to the firefly gold accent.
+    accent: 'gold',
+    roles: [
+      { name: 'Night owl', color: 'violet', selfAssign: true },
+      { name: 'Early bird', color: 'ember', selfAssign: true },
+    ],
+    rules: ['Be kind. This is a hangout, not a debate club.', 'Keep it fun for everyone in the room.', "Ask before sharing someone's photo."],
+    welcome: 'Welcome to the hangout! Say hi in #general and tell us what you’re up to.',
   },
   {
     id: 'gaming',
     name: 'Gaming squad',
-    what: 'general, looking-for-group · 2 voice nebulas',
+    what: 'Find teammates, hop in voice',
     categories: [
       {
         name: 'Hangout',
         nebulas: [
           { name: 'general', kind: 'text', topic: "Say hi, share what you're playing" },
           { name: 'looking-for-group', kind: 'text' },
+          { name: 'clips', kind: 'text' },
+        ],
+      },
+      {
+        name: 'Games',
+        nebulas: [
+          { name: 'rocket-league', kind: 'text', roles: ['Rocket League'] },
+          { name: 'valorant', kind: 'text', roles: ['Valorant'] },
+          { name: 'minecraft', kind: 'text', roles: ['Minecraft'] },
         ],
       },
       { name: 'Voice nebulas', nebulas: [{ name: 'Campfire', kind: 'voice' }, { name: 'Squad Up', kind: 'voice' }] },
     ],
+    accent: 'violet',
+    roles: [
+      { name: 'Rocket League', color: 'lagoon', selfAssign: true },
+      { name: 'Valorant', color: 'red', selfAssign: true },
+      { name: 'Minecraft', color: 'green', selfAssign: true },
+    ],
+    rules: ['Be a good teammate. No flaming.', 'No cheats, hacks or selling accounts.', 'Put spoilers and clips in the right nebula.'],
+    welcome: 'Welcome to the squad! Pick the games you play and their nebulas show up for you.',
   },
   {
     id: 'study',
     name: 'Study group',
-    what: 'resources, homework-help · voice: Study room',
+    what: 'Share notes, study together',
     categories: [
-      { name: 'Study', nebulas: [{ name: 'resources', kind: 'text' }, { name: 'homework-help', kind: 'text' }] },
+      {
+        name: 'Study',
+        nebulas: [
+          { name: 'resources', kind: 'text' },
+          { name: 'homework-help', kind: 'text' },
+          { name: 'off-topic', kind: 'text' },
+        ],
+      },
       { name: 'Voice nebulas', nebulas: [{ name: 'Study room', kind: 'voice' }] },
     ],
-  },
-  {
-    id: 'blank',
-    name: 'Start empty',
-    what: 'Just a general nebula',
-    categories: [{ name: 'General', nebulas: [{ name: 'general', kind: 'text' }] }],
+    accent: 'lagoon',
+    roles: [
+      { name: 'Math', color: 'ember', selfAssign: true },
+      { name: 'Science', color: 'green', selfAssign: true },
+      { name: 'Writing', color: 'violet', selfAssign: true },
+    ],
+    rules: ["Help each other understand. Don't just post answers.", 'Keep #homework-help for questions.', 'Quiet in the Study room unless everyone agrees.'],
+    welcome: 'Welcome to the study group! Drop useful links in #resources and ask anything in #homework-help.',
   },
 ]
+
+// ───────────── Role-only nebulas (0.8.0) ─────────────
+
+/**
+ * Who can see a nebula or a category: everyone in the constellation, or only people with one of
+ * `roleIds` (roles members pick themselves count too, though they never give permissions). The
+ * Owner and anyone whose roles can manage nebulas always see everything. A nebula in a role-only
+ * category needs both: one of the category's roles AND its own setting.
+ */
+export type NebulaVisibility = 'everyone' | 'roles'
+export type VisibilityGate = { visibility?: NebulaVisibility | null; roleIds?: readonly string[] | null }
+
+/** Does someone holding `held` (role ids) get through this gate? Missing / "everyone" = yes. */
+export function gateOpen(gate: VisibilityGate | null | undefined, held: ReadonlySet<string>): boolean {
+  if (!gate || gate.visibility !== 'roles') return true
+  return (gate.roleIds ?? []).some((id) => held.has(id))
+}
+
+/** Can someone see this nebula? `seesAll`: the Owner, or roles that can manage nebulas. */
+export function canSeeNebula(
+  seesAll: boolean,
+  held: ReadonlySet<string>,
+  nebula: VisibilityGate,
+  category: VisibilityGate | null | undefined,
+): boolean {
+  return seesAll || (gateOpen(category, held) && gateOpen(nebula, held))
+}
+
+/** A nebula's name as people type it: "#valorant" for text, "Campfire" for voice. */
+export const nebulaLabel = (n: { kind: NebulaKind; name: string }): string => (n.kind === 'text' ? `#${n.name}` : n.name)
 
 // ───────────── What the API sends ─────────────
 
@@ -435,7 +533,14 @@ export type ConstellationRole = {
   selfAssign?: boolean
 }
 
-export type ConstellationCategory = { id: string; name: string; position: number }
+export type ConstellationCategory = {
+  id: string
+  name: string
+  position: number
+  /** 0.8.0 role-only: sent only to people who can manage nebulas (missing = everyone) */
+  visibility?: NebulaVisibility
+  roleIds?: string[]
+}
 
 export type Nebula = {
   id: string
@@ -458,6 +563,9 @@ export type Nebula = {
   lastReadAt?: string | null
   /** 0.7.5: how many people posted in it in the last few minutes (the sky's "chatting" pulse) */
   chatting?: number
+  /** 0.8.0 role-only: sent only to people who can manage nebulas (missing = everyone) */
+  visibility?: NebulaVisibility
+  roleIds?: string[]
 }
 
 /** 0.7.5 living sky: one star per nebula, in sidebar order (dashboard cards). */
@@ -533,6 +641,11 @@ export type ConstellationDetail = {
   /** 0.7.5: you saw the welcome (null = show it now) and agreed to the rules */
   welcomedAt?: string | null
   rulesAgreedAt?: string | null
+  /**
+   * 0.8.0: for each role you can pick yourself, the role-only nebulas picking it would show you
+   * ("You'll see: #valorant"). Only roles that unlock something are listed.
+   */
+  unlocks?: Record<string, string[]>
 }
 
 /** 0.7.5: a constellation's welcome settings (Settings → Overview → Welcome). */

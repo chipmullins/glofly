@@ -476,3 +476,32 @@ test('0.7.5 constellation community: milestones, join lines, accents, playing ti
   assert.equal(s.gameInitials('Rocket League'), 'RL')
   assert.equal(s.gameInitials('Valorant'), 'VAL')
 })
+
+test('0.8.0 role-only nebulas and templates', () => {
+  const held = new Set(['val'])
+  assert.equal(s.gateOpen(undefined, held), true)
+  assert.equal(s.gateOpen({ visibility: 'everyone', roleIds: ['x'] }, held), true)
+  assert.equal(s.gateOpen({ visibility: 'roles', roleIds: ['val', 'rl'] }, held), true)
+  assert.equal(s.gateOpen({ visibility: 'roles', roleIds: [] }, held), false)
+  const valorant = { visibility: 'roles', roleIds: ['val'] }
+  assert.equal(s.canSeeNebula(false, held, valorant, null), true)
+  assert.equal(s.canSeeNebula(false, new Set(), valorant, null), false)
+  assert.equal(s.canSeeNebula(true, new Set(), valorant, { visibility: 'roles', roleIds: ['rl'] }), true)
+  // A role-only category gates everything inside it
+  assert.equal(s.canSeeNebula(false, held, valorant, { visibility: 'roles', roleIds: ['rl'] }), false)
+  assert.equal(s.canSeeNebula(false, new Set(['val', 'rl']), valorant, { visibility: 'roles', roleIds: ['rl'] }), true)
+  assert.equal(s.nebulaLabel({ kind: 'text', name: 'valorant' }), '#valorant')
+  assert.equal(s.nebulaLabel({ kind: 'voice', name: 'Campfire' }), 'Campfire')
+  const ids = s.CONSTELLATION_TEMPLATES.map((t) => t.id)
+  assert.deepEqual(ids, ['blank', 'friends', 'gaming', 'study'])
+  const gaming = s.CONSTELLATION_TEMPLATES.find((t) => t.id === 'gaming')
+  assert.equal(gaming.accent, 'violet')
+  assert.deepEqual(gaming.roles.map((r) => r.name), ['Rocket League', 'Valorant', 'Minecraft'])
+  const games = gaming.categories.find((c) => c.name === 'Games')
+  for (const n of games.nebulas) assert.equal(gaming.roles.some((r) => r.name === n.roles[0]), true)
+  for (const t of s.CONSTELLATION_TEMPLATES) {
+    assert.equal(s.isConstellationAccent(t.accent), true)
+    for (const r of t.roles) assert.equal(s.ROLE_COLOR_CHOICES.includes(r.color) || r.color === 'ember', true)
+    assert.equal(t.rules.length <= s.RULES_MAX, true)
+  }
+})

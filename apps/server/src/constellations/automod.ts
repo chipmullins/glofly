@@ -255,7 +255,7 @@ export async function automodLog(constellationId: string, limit = 30) {
 /** Nebulas of a constellation (for the slow-mode list). */
 export async function nebulasOf(constellationId: string) {
   return db
-    .select({ id: nebulas.id, name: nebulas.name, kind: nebulas.kind, position: nebulas.position, categoryId: nebulas.categoryId })
+    .select({ id: nebulas.id, name: nebulas.name, kind: nebulas.kind, position: nebulas.position, categoryId: nebulas.categoryId, conversationId: nebulas.conversationId })
     .from(nebulas)
     .where(eq(nebulas.constellationId, constellationId));
 }
