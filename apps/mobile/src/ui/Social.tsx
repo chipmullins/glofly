@@ -20,6 +20,9 @@ import { font, useTheme } from './theme'
 // live (a row of faces at the top of Chats), and birthday confetti in a friend's chat.
 
 const GLOW = '#FFC65A'
+// Ringed circle (60) + gap + name (17) + padding, plus room for the "free · 12m" / "🎂 today" line.
+const STRIP_HEIGHT = 92
+const STRIP_HEIGHT_TWO_LINES = 106
 const LIVE = '#D33A2C'
 
 /** The little firefly by a friend's name: brighter each day you both write. */
@@ -87,7 +90,8 @@ export function SocialStrip() {
 
   return (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 10, gap: 6 }} style={{ flexGrow: 0 }}>
+      {/* A fixed height (circle + name + a second line) so iOS never clips the names at the bottom. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 2, paddingBottom: 8, gap: 6, alignItems: 'flex-start' }} style={{ flexGrow: 0, height: hanging.length || birthdays.length ? STRIP_HEIGHT_TWO_LINES : STRIP_HEIGHT }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={mine ? `Free to hang for ${minutesLeft(mine.until, now)} more minutes. Tap to stop` : 'Want to hang? Tell friends you are free for a call'}
