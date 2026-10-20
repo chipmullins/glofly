@@ -14,6 +14,7 @@ import type {
   Message,
   MuteDuration,
   MyStatus,
+  MyStatusChanges,
   Nebula,
   NotifyLevel,
   Presence,
@@ -167,7 +168,7 @@ export type ConstellationViewProps = {
   me: SignedInUser
   myStatus: MyStatus
   /** Change your status (the same as Glofly's own status menu) */
-  onChangeStatus: (changes: Partial<MyStatus>) => Promise<boolean>
+  onChangeStatus: (changes: MyStatusChanges) => Promise<boolean>
   /** Friends' presence (for the profile card) */
   presence: Record<string, Presence>
   friendIds: Set<string>

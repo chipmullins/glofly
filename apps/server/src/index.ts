@@ -40,6 +40,7 @@ import { getPause, refuseWhilePaused } from "./admin/pause";
 import { emailKind } from "./email/send";
 import { sweepEmailTokens } from "./email/tokens";
 import { controlRouter } from "./admin";
+import { sweepExpiredStatuses } from "./statusSweep";
 import { devicesRouter } from "./push/devices";
 import { pushKind } from "./push/fcm";
 import { voipKind } from "./push/apns";
@@ -223,6 +224,8 @@ connectRedis()
     every(15_000, "Send later", async () => void (await sendDueMessages()));
     // 2.0 My games: a minute of playtime for everyone playing something right now.
     every(60_000, "Playtime", sweepPlaytime);
+    // 0.8.0: custom statuses whose "Clear after" time has come (cheap: a partial index).
+    every(15_000, "Status clear", async () => void (await sweepExpiredStatuses()));
     // 0.7.5: constellations' birthdays ("Firefly Guild turns 1 today!").
     every(10 * 60_000, "Constellation birthdays", () => sweepConstellationBirthdays());
     // 0.8.0: event reminders (15 minutes before) and starts.

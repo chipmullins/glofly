@@ -21,7 +21,7 @@ import {
 } from "../db/schema";
 import { redis } from "../redis";
 import { connectedSessionIds, connectedSummary, disconnectSessions, emitToUser } from "../realtime";
-import { announcePresence } from "../presence";
+import { announcePresence, liveStatusText } from "../presence";
 import { endCallsFor } from "../calls/service";
 import { livekitConfigured } from "../calls/livekit";
 import { emailKind, failedKey } from "../email/send";
@@ -356,6 +356,7 @@ adminRouter.get("/accounts/:id", async (req, res) => {
       createdAt: users.createdAt,
       lastSeenAt: users.lastSeenAt,
       statusText: users.statusText,
+      statusTextExpiresAt: users.statusTextExpiresAt,
       suspendedAt: users.suspendedAt,
       suspendReason: users.suspendReason,
       deleteAfter: users.deleteAfter,
@@ -421,7 +422,7 @@ adminRouter.get("/accounts/:id", async (req, res) => {
       createdAt: u.createdAt,
       lastSeenAt: u.lastSeenAt,
       online: live.userIds.has(id),
-      statusText: u.statusText,
+      statusText: liveStatusText(u.statusText, u.statusTextExpiresAt),
       isAdmin: u.isAdmin,
       restricted: u.restricted,
       status: accountStatus(u),

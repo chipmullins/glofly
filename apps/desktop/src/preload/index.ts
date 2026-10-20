@@ -14,7 +14,7 @@ import type {
   GloflyEvent,
   LoginRequest,
   MuteDuration,
-  MyStatus,
+  MyStatusChanges,
   PhotoType,
   PrivacySettings,
   ProfileChanges,
@@ -132,7 +132,7 @@ const glofly: GloflyApi = {
   setErrorReports: (on: boolean) => ipcRenderer.send('errors:enabled', on),
   status: {
     get: () => ipcRenderer.invoke('status:get'),
-    set: (changes: Partial<MyStatus>) => ipcRenderer.invoke('status:set', changes)
+    set: (changes: MyStatusChanges) => ipcRenderer.invoke('status:set', changes)
   },
   profile: {
     getMine: () => ipcRenderer.invoke('profile:get-mine'),

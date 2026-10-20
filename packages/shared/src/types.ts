@@ -2,6 +2,7 @@
 // and the server. Moved here from apps/desktop/src/preload/api-types.d.ts (Oct 11, 2026).
 
 import type { WatchReactionEvent, WatchUpdate } from './watch'
+import type { StatusClearAfter } from './statusClear'
 // Watch Together's shapes live in watch.ts; re-exported so `@glofly/shared/types` has them too.
 export type {
   WatchAction,
@@ -123,7 +124,24 @@ export type Activity = { name: string; since: string }
 
 /** The status you pick for yourself. */
 export type MyStatusChoice = 'online' | 'away' | 'dnd' | 'invisible'
-export type MyStatus = { status: MyStatusChoice; statusText: string | null }
+export type MyStatus = {
+  status: MyStatusChoice
+  statusText: string | null
+  /**
+   * 0.8.0: when the custom status clears itself (ISO), null = stays until you change it. Only sent
+   * to you, never to friends; missing on older servers.
+   */
+  statusTextEndsAt?: string | null
+}
+/** PATCH /users/me/status. Text without `statusClearAfter` = Never (what older apps send). */
+export type MyStatusChanges = {
+  status?: MyStatusChoice
+  statusText?: string | null
+  /** 0.8.0: '30m' | '1h' | '4h' | 'today' | 'week' | 'never' (StatusClearAfter). */
+  statusClearAfter?: StatusClearAfter
+  /** 0.8.0: your IANA time zone, for "Today" and "This week". */
+  timeZone?: string
+}
 
 /** `since` is when you became friends, the request was sent, or you blocked them (ISO date). */
 export type FriendEntry = PublicUser & {

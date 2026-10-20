@@ -1,11 +1,11 @@
 import { powerMonitor } from 'electron'
-import type { ApiResult, MyStatus, PrivacySettings } from '../preload/api-types'
+import type { ApiResult, MyStatus, MyStatusChanges, PrivacySettings } from '../preload/api-types'
 import { request } from './api'
 import { reconnectRealtime, setIdle } from './realtime'
 
 export const getMyStatus = (): Promise<ApiResult<MyStatus>> => request('GET', '/users/me/status')
 
-export const setMyStatus = (changes: Partial<MyStatus>): Promise<ApiResult<MyStatus>> =>
+export const setMyStatus = (changes: MyStatusChanges): Promise<ApiResult<MyStatus>> =>
   request('PATCH', '/users/me/status', changes)
 
 export const getSettings = (): Promise<ApiResult<PrivacySettings>> =>

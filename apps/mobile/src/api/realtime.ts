@@ -11,6 +11,7 @@ import {
   refreshConversations,
   refreshFriends,
   refreshNotices,
+  refreshStatus,
   setCall,
   stopRefreshing,
   updateMessage,
@@ -144,7 +145,12 @@ function connect() {
       activity: a && typeof a.name === 'string' && typeof a.since === 'string' ? { name: a.name, since: a.since } : null,
       mobile: p.mobile === true,
     })
-    if (p.userId === useSession.getState().user?.id) emit('presence:me', p)
+    if (p.userId === useSession.getState().user?.id) {
+      emit('presence:me', p)
+      // 0.8.0: your custom status changed elsewhere or cleared itself on time: fetch it again.
+      const mine = useStore.getState().myStatus
+      if (mine?.statusText && (p.statusText ?? null) !== mine.statusText) void refreshStatus()
+    }
   })
   s.on('conversation:read', (p: { conversationId?: string; userId?: string; readAt?: string }) => {
     if (typeof p?.conversationId !== 'string' || typeof p?.userId !== 'string' || typeof p?.readAt !== 'string') return
