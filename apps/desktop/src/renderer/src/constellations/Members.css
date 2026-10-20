@@ -1,0 +1,268 @@
+/* 0.7.5: the members list with life and the member card (the approved Members board). */
+
+.cx-inside .cx-members {
+  width: 270px;
+}
+.cx-member--open {
+  background: #fde9d7;
+}
+.cx-member-sub--row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.cx-member-game {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-game-tile {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.cx-member--offline .cx-status-dot,
+.cx-member--offline [class*='status-dot'] {
+  filter: grayscale(1);
+}
+.cx-members-fold {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glo-faint);
+  cursor: pointer;
+}
+.cx-members-fold:hover {
+  background: var(--glo-hover);
+}
+.cx-members-fold svg {
+  transition: transform 160ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+.cx-members-fold--closed svg {
+  transform: rotate(-90deg);
+}
+
+/* The member card: a light card (the old dark menu's actions live under ⋯). */
+.cx-menu.cx-member-card {
+  position: fixed;
+  width: 330px;
+  max-height: calc(100vh - 24px);
+  padding: 0;
+  border-radius: 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #ffffff;
+  color: #24170f;
+  border: 1px solid #eaddd1;
+  box-shadow: 0 24px 60px rgba(36, 23, 15, 0.26);
+  animation: cx-mcard-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+@keyframes cx-mcard-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cx-menu.cx-member-card {
+    animation: none;
+  }
+}
+.cx-mcard-banner {
+  height: 76px;
+  flex: none;
+}
+.cx-mcard-body {
+  padding: 0 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cx-mcard-face {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin-top: -36px;
+  border-radius: 50%;
+  border: 4px solid #ffffff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  cursor: pointer;
+  padding: 0;
+  box-sizing: content-box;
+}
+.cx-mcard-face img {
+  border-radius: 50%;
+}
+.cx-mcard-name {
+  font-family: Outfit, 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+}
+.cx-mcard-handle {
+  font-size: 14px;
+  color: #6b5547;
+}
+.cx-mcard-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cx-mcard-role {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f7f0e9;
+  color: #24170f;
+}
+.cx-mcard-role > span {
+  width: 9px;
+  height: 9px;
+  border-radius: 5px;
+}
+.cx-mcard-playing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  background: #fbf5ef;
+  border: 1px solid #eaddd1;
+}
+.cx-mcard-playing > span:last-child {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cx-mcard-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #2e9e5b;
+}
+.cx-mcard-playing b {
+  font-size: 15px;
+}
+.cx-mcard-time {
+  font-size: 12px;
+  color: #6b5547;
+}
+.cx-mcard-mutual {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #6b5547;
+}
+.cx-mcard-faces {
+  display: flex;
+  padding-left: 6px;
+  flex: none;
+}
+.cx-mcard-faces .cx-face {
+  margin-left: -6px;
+  box-shadow: 0 0 0 2px #ffffff;
+  font-size: 9px;
+}
+.cx-mcard-since {
+  font-size: 13px;
+  color: #6b5547;
+}
+.cx-mcard-actions {
+  display: flex;
+  gap: 8px;
+}
+.cx-mcard-message,
+.cx-mcard-call,
+.cx-mcard-more {
+  min-height: 44px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cx-mcard-message {
+  flex: 1;
+  border: 0;
+  background: #f47a1f;
+  color: #2a1406;
+}
+.cx-mcard-message:hover {
+  background: #ff8a2e;
+}
+.cx-mcard-call,
+.cx-mcard-more {
+  padding: 0 14px;
+  border: 1px solid #dcc8b8;
+  background: #ffffff;
+  color: #24170f;
+}
+.cx-mcard-call--wide {
+  flex: 1;
+}
+.cx-mcard-more {
+  width: 44px;
+  padding: 0;
+}
+.cx-mcard-call:hover,
+.cx-mcard-more:hover,
+.cx-mcard-more--on {
+  border-color: #f47a1f;
+  background: #fde9d7;
+}
+.cx-mcard-message:focus-visible,
+.cx-mcard-call:focus-visible,
+.cx-mcard-more:focus-visible,
+.cx-mcard-face:focus-visible {
+  outline: 3px solid rgba(244, 122, 31, 0.45);
+  outline-offset: 2px;
+}
+/* ⋯: the moderation and role actions, on the light card */
+.cx-mcard-more-list {
+  border-top: 1px solid #efe4da;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.cx-mcard-more-list .cx-menu-item {
+  color: #24170f;
+}
+.cx-mcard-more-list .cx-menu-item:hover:not(:disabled),
+.cx-mcard-more-list .cx-menu-item:focus-visible {
+  background: #f7f0e9;
+}
+.cx-mcard-more-list .cx-menu-item--danger {
+  color: #b3132f;
+}
+.cx-mcard-more-list .cx-menu-sub {
+  color: #8f7868;
+}
+.cx-mcard-more-list .cx-menu-check {
+  color: #b8430a;
+}

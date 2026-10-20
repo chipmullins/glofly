@@ -316,6 +316,7 @@ function Space(props: Props): React.JSX.Element {
             reloadCards()
           }}
           onOpenConstellation={(id) => open(id)}
+          onOpenPlace={(id, nebulaId) => open(id, nebulaId)}
           onCreate={() => setDialog({ kind: 'create', tab: 'create' })}
           onSettings={(page) => setDialog({ kind: 'settings', page })}
           onAppSettings={props.onAppSettings}

@@ -16,6 +16,12 @@ export const groupPhotoUrl = (conversationId: string, version: string): string =
     ? `${server}/conversations/${conversationId}/photo/${version}`
     : `glofly-media://groups/${conversationId}/${version}`
 
+/** 0.7.5: a constellation's banner photo. */
+export const constellationBannerUrl = (constellationId: string, version: string): string =>
+  server
+    ? `${server}/constellations/${constellationId}/banner/${version}`
+    : `glofly-media://constellation-banners/${constellationId}/${version}`
+
 /** 2.0: a constellation's icon photo. */
 export const constellationIconUrl = (constellationId: string, version: string): string =>
   server

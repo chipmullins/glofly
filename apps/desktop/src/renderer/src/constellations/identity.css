@@ -1,0 +1,76 @@
+/* 0.7.5 Constellations identity (the approved Identity board): a picked accent tints only that
+   constellation. Without one (.cx-accented missing) everything stays as approved before. */
+
+.cx-accented .cx-neb--current,
+.cx-accented .cx-neb--current:hover {
+  background: rgba(var(--cxa-rgb), 0.24);
+}
+.cx-accented .cx-neb--current svg {
+  color: var(--cxa);
+  fill: var(--cxa);
+}
+.cx-accented .cx-neb-badge {
+  background: var(--cxa);
+  color: var(--cxa-on);
+}
+.cx-accented .cx-neb-badge--mention {
+  box-shadow: 0 0 8px rgba(var(--cxa-rgb), 0.55);
+}
+.cx-accented .cx-nebula-header > svg:first-child {
+  fill: var(--cxa);
+}
+.cx-accented .cx-nebula-header .cx-members-toggle--on,
+.cx-accented .cx-nebula-header .cx-members-toggle--on:hover:not(:disabled) {
+  background: var(--cxa-soft);
+  color: var(--cxa-ink);
+}
+.cx-accented .cx-voice-card-join {
+  background: var(--cxa);
+  color: var(--cxa-on);
+}
+.cx-accented .cx-voice-card-join:hover {
+  filter: brightness(1.06);
+  background: var(--cxa);
+}
+.cx-accented .composer:focus-within {
+  border-color: var(--cxa);
+  box-shadow: 0 0 0 4px rgba(var(--cxa-rgb), 0.18);
+}
+.cx-accented .cx-side {
+  background-image: linear-gradient(180deg, rgba(var(--cxa-rgb), 0.09), transparent 60%);
+}
+
+/* The banner photo at the top of the sidebar, with the icon on it. */
+.cx-side-photo {
+  position: relative;
+  height: 112px;
+  flex: none;
+  border-bottom: 1px solid #3a2a22;
+}
+.cx-side-photo-icon {
+  position: absolute;
+  left: 14px;
+  bottom: -22px;
+  z-index: 2;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  border: 3px solid #1c1210;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-weight: 700;
+  font-size: 18px;
+  box-sizing: border-box;
+  box-shadow: 0 0 16px rgba(var(--cxa-rgb, 255, 165, 74), 0.45);
+}
+.cx-side-photo-icon .cx-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cx-side-banner.cx-side-banner--under-photo {
+  height: auto;
+  padding-top: 30px;
+}

@@ -22,6 +22,9 @@ import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
 import { MessageAttachments, UploadTray, type Upload } from './Attachments'
 import ChatPhotoViewer from './ChatPhotoViewer'
+import { CxJoinLine, CxMilestoneCard } from './CxEventLine'
+import InviteCard, { inviteCodeIn } from '../constellations/InviteCard'
+import { NebulaPinsChip, NebulaPinsPopover } from './NebulaPins'
 import { attachmentSummary, looksLikeVideo } from '../lib/attachments'
 import {
   CallLineIcon,
@@ -72,6 +75,8 @@ import {
 import { isShortcutKey, shortcutLabel } from '../lib/platform'
 import { useVoiceRecorder, voiceTime, VOICE_MAX_MS, type Recorded } from '../lib/voice'
 import { MessagesSkeleton } from './Skeleton'
+import EmptyScene from './EmptyScene'
+import * as outbox from '../lib/outbox'
 import { ArrowDownIcon, ChevronIcon, MicIcon, WatchIcon } from './icons'
 import {
   isMuted,
@@ -128,19 +133,17 @@ export type NebulaMode = {
   headerExtra?: React.ReactNode
   /** Voice nebulas with people in them: a message naming one gets its Join card */
   voiceCards: { name: string; line: string; onJoin: (() => void) | null }[]
+  /** 0.7.5: a line to draw before this message (the "New since you left" line), or null */
+  lineBefore?: (m: Message, previous: Message | undefined) => React.ReactNode
+  /** 0.7.5: the constellation's icon (on its milestone cards) */
+  constellationIcon?: React.ReactNode
+  /** 0.8.0: the header's search button searches the whole constellation (Ctrl+F: this nebula) */
+  onSearchAll?: () => void
+  /** 0.8.0 events: a card under a message (an event's), and the text shown in its place */
+  cardFor?: (m: Message) => React.ReactNode
+  bodyFor?: (m: Message) => string | null
 }
 
-/** A message still on its way, or one that didn't send. */
-type Pending = {
-  tempId: string
-  body: string
-  createdAt: string
-  failed: boolean
-  replyTo: ReplyPreview | null
-  attachments: Attachment[]
-  /** 0.5.0: fades once everyone else has read it */
-  lantern: boolean
-}
 
 const TYPING_SEND_EVERY_MS = 3000 // how often we tell the other person we're typing
 const TYPING_SHOW_FOR_MS = 4500 // how long "is typing…" stays after their last keystroke
@@ -348,7 +351,8 @@ export default function ChatView({
   const partnerPresence = partner ? presence[partner.id] : undefined
   const title = chatTitle(conversation)
   const [messages, setMessages] = useState<Message[]>([])
-  const [pending, setPending] = useState<Pending[]>([])
+  // 0.7.5: messages on their way live in the outbox, so they keep going when you switch chats.
+  const pending = outbox.useOutbox(conversation.id)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -613,9 +617,39 @@ export default function ChatView({
     rememberPeople(result.data.people)
   }
 
+  // 0.7.5 sticky day: while you scroll, a small pill at the top says which day you're in.
+  const [floatDay, setFloatDay] = useState<string | null>(null)
+  const [floatDayOn, setFloatDayOn] = useState(false)
+  const lastUserScroll = useRef(0)
+  const floatDayTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (floatDayTimer.current) clearTimeout(floatDayTimer.current)
+    },
+    []
+  )
+  const noteUserScroll = (): void => {
+    lastUserScroll.current = Date.now()
+  }
+  function updateFloatDay(list: HTMLDivElement): void {
+    if (Date.now() - lastUserScroll.current > 1500) return // only for scrolling you do
+    const top = list.getBoundingClientRect().top
+    let label: string | null = null
+    // The last day line that has gone above the top edge is the day at the top.
+    for (const el of list.querySelectorAll<HTMLElement>('.day-divider')) {
+      if (el.getBoundingClientRect().top < top + 4) label = el.textContent
+      else break
+    }
+    setFloatDay(label)
+    setFloatDayOn(!!label)
+    if (floatDayTimer.current) clearTimeout(floatDayTimer.current)
+    floatDayTimer.current = setTimeout(() => setFloatDayOn(false), 1200)
+  }
+
   function onScroll(): void {
     const list = listRef.current
     if (!list) return
+    updateFloatDay(list)
     const fromBottom = list.scrollHeight - list.scrollTop - list.clientHeight
     stickToBottom.current = fromBottom < 120
     setFarUp(fromBottom > list.clientHeight)
@@ -642,24 +676,21 @@ export default function ChatView({
     }
   }
 
-  async function deliver(item: Pending): Promise<void> {
-    const result = await window.glofly.conversations.send(
-      conversation.id,
-      item.body,
-      item.replyTo?.id,
-      item.attachments.map((a) => a.id),
-      item.lantern ? { lantern: true } : undefined
-    )
-    if (result.ok) {
-      const sent = result.data
-      setPending((p) => p.filter((x) => x.tempId !== item.tempId))
+  // The outbox tells this chat when one of its messages lands (or fails).
+  useEffect(() => {
+    const offSent = outbox.onSent((item, sent) => {
+      if (item.conversationId !== conversation.id) return
       setMessages((list) => (list.some((x) => x.id === sent.id) ? list : [...list, sent]))
       setNotice(null)
-    } else {
-      setPending((p) => p.map((x) => (x.tempId === item.tempId ? { ...x, failed: true } : x)))
-      handleFailure(result.error, result.message)
+    })
+    const offFailed = outbox.onSendFailed((item, error, message) => {
+      if (item.conversationId === conversation.id) handleFailure(error, message)
+    })
+    return () => {
+      offSent()
+      offFailed()
     }
-  }
+  }, [conversation.id, handleFailure])
 
   // Leaving the chat with files still in the box: tidy them away on the server.
   useEffect(() => {
@@ -763,19 +794,8 @@ export default function ChatView({
       r.voice
     )
     if (!up.ok) return handleFailure(up.error, up.message)
-    tempCounter.current += 1
-    const item: Pending = {
-      tempId: `pending-${tempCounter.current}`,
-      body: '',
-      createdAt: new Date().toISOString(),
-      failed: false,
-      replyTo,
-      attachments: [up.data],
-      lantern: false
-    }
     stickToBottom.current = true
-    setPending((p) => [...p, item])
-    void deliver(item)
+    outbox.enqueue(conversation.id, { body: '', replyTo, attachments: [up.data], lantern: false })
   }
 
   function send(): void {
@@ -785,24 +805,18 @@ export default function ChatView({
       setNotice(`Messages can be up to ${MESSAGE_MAX.toLocaleString()} characters.`)
       return
     }
-    tempCounter.current += 1
-    const item: Pending = {
-      tempId: `pending-${tempCounter.current}`,
+    stickToBottom.current = true
+    outbox.enqueue(conversation.id, {
       body,
-      createdAt: new Date().toISOString(),
-      failed: false,
       replyTo: replyingTo ? preview(replyingTo) : null,
       attachments: readyFiles,
       lantern
-    }
-    stickToBottom.current = true
-    setPending((p) => [...p, item])
+    })
     setDraft('')
     setMention(null)
     setReplyingTo(null)
     setUploads([]) // sent ones go with the message; failed ones are dropped
     setLantern(false) // one lantern at a time
-    void deliver(item)
   }
 
   // ---- 0.5.0 extras ----
@@ -996,10 +1010,7 @@ export default function ChatView({
   }
 
   function retry(tempId: string): void {
-    const item = pending.find((x) => x.tempId === tempId)
-    if (!item) return
-    setPending((p) => p.map((x) => (x.tempId === tempId ? { ...x, failed: false } : x)))
-    void deliver({ ...item, failed: false })
+    outbox.retry(conversation.id, tempId)
   }
 
   async function saveEdit(m: Message, body: string): Promise<void> {
@@ -1024,6 +1035,19 @@ export default function ChatView({
     const result = await window.glofly.conversations.remove(conversation.id, m.id)
     if (result.ok) upsert(result.data)
     else handleFailure(result.error, result.message)
+  }
+
+  /** 0.7.5: Say hi on a constellation's join line: a 👋 on the line and a 👋 in the chat. */
+  async function waveAt(m: Message): Promise<void> {
+    if (!conversation.canMessage) return
+    const result = await window.glofly.conversations.react(conversation.id, m.id, '👋', true)
+    if (!result.ok) {
+      handleFailure(result.error, result.message)
+      return
+    }
+    upsert(result.data)
+    const sent = await window.glofly.conversations.send(conversation.id, '👋')
+    if (sent.ok) upsert(sent.data)
   }
 
   async function toggleReaction(m: Message, emoji: string): Promise<void> {
@@ -1376,7 +1400,7 @@ export default function ChatView({
         event: null,
         lantern: p.lantern
       },
-      pending: { failed: p.failed }
+      pending: { failed: p.failed, slow: p.slow }
     }))
   ]
 
@@ -1504,6 +1528,29 @@ export default function ChatView({
             </div>
           )
         }
+        // 0.7.5 Constellations: "Priya joined. Say hi!" (with its wave button) and milestones.
+        if (m.event?.type === 'cxJoined') {
+          return (
+            <div key={item.key}>
+              {divider}
+              <CxJoinLine
+                message={m}
+                meId={me.id}
+                nameOf={nameOf}
+                canWave={conversation.canMessage}
+                onWave={() => void waveAt(m)}
+              />
+            </div>
+          )
+        }
+        if (m.event?.type === 'cxMilestone') {
+          return (
+            <div key={item.key}>
+              {divider}
+              <CxMilestoneCard message={m} icon={nebula?.constellationIcon} />
+            </div>
+          )
+        }
         // Group events ("Chip added Maya") are a quiet line, not a message.
         if (m.event) {
           return (
@@ -1520,18 +1567,33 @@ export default function ChatView({
         }
         const sender = personOf(m.senderId)
         // A reply always shows its name, so the quote is clearly attached to it.
-        const grouped = !newDay && !m.replyTo && !previous?.event && continuesGroup(previous, m)
+        // 0.7.5 nebulas: the "New since you left" line goes right before the first new message.
+        const newLine = nebula?.lineBefore?.(m, previous) ?? null
+        const grouped =
+          !newLine && !newDay && !m.replyTo && !previous?.event && continuesGroup(previous, m)
         return (
           <div key={item.key}>
             {divider}
+            {newLine}
             <MessageItem
-              item={item}
+              item={
+                nebula?.bodyFor && !m.deleted && nebula.bodyFor(m) !== null
+                  ? { ...item, message: { ...m, body: nebula.bodyFor(m)! } }
+                  : item
+              }
               grouped={grouped}
               meId={me.id}
               authorName={nameOf(m.senderId)}
               authorRole={nebula ? nebula.roleOf(m.senderId) : null}
               canDeleteOthers={!!nebula && m.senderId !== me.id && nebula.canDelete(m.senderId)}
-              extra={nebula && !m.deleted && !m.event ? voiceCardFor(nebula, m.body) : null}
+              extra={
+                m.deleted || m.event
+                  ? null
+                  : ((nebula?.cardFor?.(m) ?? null) ??
+                    (nebula ? voiceCardFor(nebula, m.body) : null) ??
+                    // 0.7.5: a constellation invite link becomes a card (any chat).
+                    (inviteCodeIn(m.body) ? <InviteCard code={inviteCodeIn(m.body)!} onProblem={setNotice} /> : null))
+              }
               avatar={
                 m.senderId === me.id ? (
                   <span className="avatar avatar--mine" aria-hidden="true">
@@ -1573,8 +1635,7 @@ export default function ChatView({
               onJumpTo={jumpTo}
               onRetry={() => retry(item.key)}
               onDiscard={() => {
-                const discarded = pending.find((x) => x.tempId === item.key)
-                setPending((p) => p.filter((x) => x.tempId !== item.key))
+                const discarded = outbox.discard(conversation.id, item.key)
                 for (const a of discarded?.attachments ?? []) {
                   void window.glofly.conversations.removeUpload(conversation.id, a.id)
                 }
@@ -1664,51 +1725,81 @@ export default function ChatView({
               <EmojiText text={nebula.topic} />
             </div>
           )}
+          {/* 0.7.5: "📌 3" next to the topic opens the pins right there */}
+          {pinList.length > 0 && (
+            <span className="cx-pins-anchor">
+              <NebulaPinsChip
+                count={pinList.length}
+                open={pinsOpen}
+                onToggle={() => setPinsOpen((v) => !v)}
+              />
+              {pinsOpen && (
+                <NebulaPinsPopover
+                  nebulaName={nebula.name}
+                  pins={pinList}
+                  canPin={canPin}
+                  personOf={personOf}
+                  onJump={(id) => {
+                    setPinsOpen(false)
+                    setLocalJump({ messageId: id, nonce: Date.now() })
+                  }}
+                  onUnpin={(id) => {
+                    const m = pinList.find((p) => p.message.id === id)?.message
+                    if (m) void setPinned(m, false)
+                  }}
+                  onClose={() => setPinsOpen(false)}
+                />
+              )}
+            </span>
+          )}
           <span style={{ flex: 1 }} />
           <button
             type="button"
             className="chat-header-button"
-            aria-label="Search this nebula"
-            title={`Search messages (${shortcutLabel('F')})`}
-            onClick={onSearch}
+            aria-label={nebula.onSearchAll ? 'Search the whole constellation' : 'Search this nebula'}
+            title={
+              nebula.onSearchAll
+                ? `Search every nebula (${shortcutLabel('F')} searches this one)`
+                : `Search messages (${shortcutLabel('F')})`
+            }
+            onClick={nebula.onSearchAll ?? onSearch}
           >
             <SearchIcon size={19} />
           </button>
 
-          {/* 0.7.3: pinned messages */}
-          <span className="pins-wrap">
-            <button
-              type="button"
-              className={
-                pinsOpen ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
-              }
-              aria-label={
-                pinList.length ? `Pinned messages (${pinList.length})` : 'Pinned messages'
-              }
-              aria-expanded={pinsOpen}
-              title="Pinned messages"
-              onClick={() => setPinsOpen((v) => !v)}
-            >
-              <PinnedMessagesIcon size={20} />
-              {pinList.length > 0 && <span className="pins-count">{pinList.length}</span>}
-            </button>
-            {pinsOpen && (
-              <PinsPanel
-                pins={pinList}
-                canPin={canPin}
-                nameOf={nameOf}
-                onJump={(id) => {
-                  setPinsOpen(false)
-                  setLocalJump({ messageId: id, nonce: Date.now() })
-                }}
-                onUnpin={(id) => {
-                  const m = pinList.find((p) => p.message.id === id)?.message
-                  if (m) void setPinned(m, false)
-                }}
-                onClose={() => setPinsOpen(false)}
-              />
-            )}
-          </span>
+          {/* 0.7.3: pinned messages (0.7.5: with pins, the chip by the topic opens them) */}
+          {pinList.length === 0 && (
+            <span className="pins-wrap">
+              <button
+                type="button"
+                className={
+                  pinsOpen ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
+                }
+                aria-label="Pinned messages"
+                aria-expanded={pinsOpen}
+                title="Pinned messages"
+                onClick={() => setPinsOpen((v) => !v)}
+              >
+                <PinnedMessagesIcon size={20} />
+              </button>
+              {pinsOpen && (
+                <PinsPanel
+                  pins={pinList}
+                  canPin={canPin}
+                  nameOf={nameOf}
+                  onJump={(id) => {
+                    setPinsOpen(false)
+                    setLocalJump({ messageId: id, nonce: Date.now() })
+                  }}
+                  onUnpin={(id) => {
+                    const m = pinList.find((p) => p.message.id === id)?.message
+                    if (m) void setPinned(m, false)
+                  }}
+                  onClose={() => setPinsOpen(false)}
+                />
+              )}
+            </span>
+          )}
           {nebula.headerExtra}
           <button
             type="button"
@@ -2063,12 +2154,23 @@ export default function ChatView({
         />
       )}
 
+      <div className="chat-day-anchor" aria-hidden="true">
+        {floatDay && (
+          <span className={floatDayOn ? 'chat-day-pill chat-day-pill--on' : 'chat-day-pill'}>
+            {floatDay}
+          </span>
+        )}
+      </div>
       <div
         className="chat-messages"
         ref={listRef}
         onScroll={onScroll}
+        onWheel={noteUserScroll}
+        onPointerDown={noteUserScroll}
+        onTouchMove={noteUserScroll}
         tabIndex={-1}
         onKeyDown={(e) => {
+          noteUserScroll()
           if (e.key === 'End' && e.target === e.currentTarget && farUp) {
             e.preventDefault()
             jumpToLatest()
@@ -2096,7 +2198,47 @@ export default function ChatView({
             </p>
           </div>
         )}
-        {!loading && !hasMore && !nebula && (
+        {/* 0.7.5: a brand-new chat says hi with a wave instead of an empty page */}
+        {!loading && !hasMore && !nebula && messages.length === 0 && pending.length === 0 && (
+          <EmptyScene
+            kind={partner ? 'hello' : 'group'}
+            title={
+              partner ? (
+                <>
+                  Say hi to <EmojiText text={partner.displayName.split(/\s+/)[0]} /> 👋
+                </>
+              ) : (
+                <>
+                  <EmojiText text={title} /> is all set
+                </>
+              )
+            }
+            text={
+              partner
+                ? `This is the start of your messages with @${partner.username}.`
+                : 'This is the beginning of the group. Say hello to everyone!'
+            }
+          >
+            {conversation.canMessage && (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  stickToBottom.current = true
+                  outbox.enqueue(conversation.id, {
+                    body: '👋',
+                    replyTo: null,
+                    attachments: [],
+                    lantern: false
+                  })
+                }}
+              >
+                Wave 👋
+              </button>
+            )}
+          </EmptyScene>
+        )}
+        {!loading && !hasMore && !nebula && (messages.length > 0 || pending.length > 0) && (
           <div className="chat-start">
             {partner ? (
               <Avatar

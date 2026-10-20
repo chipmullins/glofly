@@ -13,7 +13,8 @@ import { startCallWith } from '@/calls/controller'
 import { Avatar } from '@/ui/Avatar'
 import { inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
-import { IconButton, SectionLabel, Text, webNoOutline } from '@/ui/kit'
+import { Button, IconButton, SectionLabel, Text, webNoOutline } from '@/ui/kit'
+import { EmptyScene } from '@/ui/EmptyScene'
 import { Skeleton } from '@/ui/Skeleton'
 import { font, useTheme } from '@/ui/theme'
 
@@ -142,17 +143,29 @@ export default function Friends() {
           !synced && !lists.friends.length && !query ? (
             <Skeleton kind="friends" />
           ) : (
+          query.trim() ? (
+            // 0.7.5: a search that finds no friend offers to look the name up on Glofly.
+            <EmptyScene kind="search" small title={`No friend called “${query.trim()}”`} text={restricted ? 'Check the spelling. Your family adds new friends for you.' : 'Check the spelling, or look them up by their username to send a friend request.'}>
+              {!restricted && /^@?[a-z0-9._-]{2,}$/i.test(query.trim()) ? (
+                <Button compact label={`Find @${query.trim().replace(/^@/, '')}`} onPress={() => router.push({ pathname: '/add-friend', params: { q: query.trim().replace(/^@/, '') } })} />
+              ) : null}
+            </EmptyScene>
+          ) : !lists.friends.length && filter !== 'blocked' && filter !== 'pending' ? (
+            restricted ? (
+              <EmptyScene kind="friends" title="No friends yet" text="Your family adds your friends for you. They’ll show up here." />
+            ) : (
+              <EmptyScene kind="friends" title="Every glow starts with one friend" text="Add someone by their username, or invite them by email. You’ll automatically be friends as soon as they join.">
+                <Button compact label="Add a friend" icon="addPerson" onPress={() => router.push('/add-friend')} />
+              </EmptyScene>
+            )
+          ) : (
           <View style={{ padding: 32, alignItems: 'center', gap: 8 }}>
             <Icon name="friends" size={40} color={c.faint} />
             <Text display size={20}>
-              {filter === 'pending' ? 'No requests' : filter === 'blocked' ? 'Nobody blocked' : filter === 'online' && lists.friends.length ? 'Nobody online right now' : 'No friends yet'}
+              {filter === 'pending' ? 'No requests' : filter === 'blocked' ? 'Nobody blocked' : 'Nobody online right now'}
             </Text>
-            {filter !== 'blocked' && !lists.friends.length ? (
-              <Text tone="muted" style={{ textAlign: 'center' }}>
-                {restricted ? 'Your family adds your friends for you.' : 'Add friends by their username.'}
-              </Text>
-            ) : null}
           </View>
+          )
           )
         }
         renderItem={({ item }) => {

@@ -1,4 +1,5 @@
 import { Platform } from 'react-native'
+import { startWelcome } from '@/lib/welcome'
 import * as Device from 'expo-device'
 import type {
   ForgotPasswordResult,
@@ -84,6 +85,8 @@ export async function register(req: RegisterRequest): Promise<RegisterResult> {
   const { status, json } = answer
   if (status === 201 && json && typeof json.token === 'string') {
     const user = json.user as SignedInUser
+    // 0.7.5: the welcome flow shows once Glofly opens (photo, look, friends).
+    await startWelcome(user.id)
     // New accounts stay signed in (like the desktop app).
     await startSession(json.token, user, true)
     return { ok: true, user }

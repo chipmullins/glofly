@@ -1,32 +1,40 @@
-// 0.7.4: what the welcome card (components/WelcomeCard.tsx) remembers on this computer.
+// 0.7.5: the welcome flow (components/WelcomeFlow.tsx) for a brand-new account. It's marked
+// "waiting" on this device when the account is made (App.tsx, after Register), so it shows once,
+// survives closing the app halfway, and never shows for people who already had an account.
+// (0.7.4's welcome card used the "invited someone" note; kept for the Add friend dialog.)
 
 const invitedKey = (userId: string): string => `glofly.invitedSomeone.${userId}`
-const hiddenKey = (userId: string): string => `glofly.welcomeHidden.${userId}`
+const flowKey = (userId: string): string => `glofly.welcomeFlow.${userId}`
 
-function stored(key: string): boolean {
+function read(key: string): string | null {
   try {
-    return localStorage.getItem(key) === '1'
+    return localStorage.getItem(key)
   } catch {
-    return false
+    return null
   }
 }
-function store(key: string): void {
+function write(key: string, value: string): void {
   try {
-    localStorage.setItem(key, '1')
+    localStorage.setItem(key, value)
   } catch {
     // just for now
   }
 }
 
 /** This person sent an invite from this computer (the server doesn't say). */
-export const invitedSomeone = (userId: string): boolean => stored(invitedKey(userId))
+export const invitedSomeone = (userId: string): boolean => read(invitedKey(userId)) === '1'
 
-/** Remembers an invite went out, and tells the welcome card. */
+/** Remembers an invite went out. */
 export function noteInvited(userId: string): void {
-  store(invitedKey(userId))
+  write(invitedKey(userId), '1')
   window.dispatchEvent(new Event('glofly:invited'))
 }
 
-/** Hidden by the person (only offered once they have friends). */
-export const welcomeHidden = (userId: string): boolean => stored(hiddenKey(userId))
-export const hideWelcome = (userId: string): void => store(hiddenKey(userId))
+/** A new account was just made here: the welcome flow shows when the app opens. */
+export const startWelcomeFlow = (userId: string): void => write(flowKey(userId), 'waiting')
+
+/** Shows the welcome flow (made here, not finished or skipped yet). */
+export const welcomeFlowPending = (userId: string): boolean => read(flowKey(userId)) === 'waiting'
+
+/** Finished or skipped: never again on this device. */
+export const finishWelcomeFlow = (userId: string): void => write(flowKey(userId), 'done')

@@ -76,6 +76,7 @@ export function useNebulaChat(detail: ConstellationDetail | null, nebula: Nebula
         day: !prev || !sameDay ? dayLabel(m.createdAt) : null,
         mentionsMe: mentionsMe(m, meId) && m.senderId !== meId,
         outgoing: outbox[m.id]?.status ?? null,
+        slow: !!outbox[m.id]?.slow,
       })
     }
     return out.reverse()

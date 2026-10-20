@@ -16,6 +16,8 @@ type AddFriendDialogProps = {
   startAt?: 'search' | 'invite'
   /** 0.7.4: an invite went out (the welcome card ticks "Invite friends") */
   onInvited?: () => void
+  /** 0.7.5: "Find @name" from an empty search starts with that name typed */
+  initialQuery?: string
 }
 
 function Highlight({ text, query }: { text: string; query: string }): React.JSX.Element {
@@ -36,9 +38,10 @@ export default function AddFriendDialog({
   onSessionExpired,
   onMessage,
   startAt = 'search',
-  onInvited
+  onInvited,
+  initialQuery = ''
 }: AddFriendDialogProps): React.JSX.Element {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [answer, setAnswer] = useState<{ query: string; results: SearchResult[] } | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)

@@ -13,11 +13,13 @@ import { useWide } from '@/lib/layout'
 import { setMic, useCall } from '@/calls/controller'
 import { Icon } from '@/ui/icons'
 import { Spinner, Text } from '@/ui/kit'
+import { EmptyScene } from '@/ui/EmptyScene'
 import { NightSky } from '@/constellations/sky'
 import { NightTabBar } from '@/constellations/NightTabBar'
 import { CreateJoinSheet } from '@/constellations/CreateJoin'
 import { ConstellationBanner, IconStrip, NebulaList, SideBanner, SideStrip, useStripList } from '@/constellations/Inside'
 import { NebulaChat } from '@/constellations/NebulaChat'
+import { WelcomeSheet } from '@/constellations/community'
 import { MemberList, openMemberSheet } from '@/constellations/Members'
 import { VoiceLobby, VoiceStage } from '@/constellations/Voice'
 import { openDmDock } from '@/constellations/dock'
@@ -83,10 +85,16 @@ export default function ConstellationHome() {
     )
   }
 
-  return wide ? (
-    <WideLayout c={c} nebulaParam={nebulaParam ?? null} onAdd={() => setSheet(true)} sheet={sheet} closeSheet={() => setSheet(false)} />
-  ) : (
-    <PhoneLayout c={c} onAdd={() => setSheet(true)} sheet={sheet} closeSheet={() => setSheet(false)} />
+  return (
+    <>
+      {wide ? (
+        <WideLayout c={c} nebulaParam={nebulaParam ?? null} onAdd={() => setSheet(true)} sheet={sheet} closeSheet={() => setSheet(false)} />
+      ) : (
+        <PhoneLayout c={c} onAdd={() => setSheet(true)} sheet={sheet} closeSheet={() => setSheet(false)} />
+      )}
+      {/* 0.7.5: the welcome, once, right after you join (about, rules, pick your roles) */}
+      <WelcomeSheet c={c} />
+    </>
   )
 }
 
@@ -150,6 +158,13 @@ function PhoneLayout({ c, onAdd, sheet, closeSheet }: { c: ConstellationDetail; 
             <View style={{ paddingTop: 14, paddingHorizontal: 12 }}>
               <NebulaList c={c} onOpen={openNebula} />
             </View>
+            {/* 0.7.5: a constellation with just you in it says what to do next */}
+            {c.members.length === 1 && (can(c, 'invite') || can(c, 'manageNebulas')) ? (
+              <EmptyScene kind="constellation" small night title="Your constellation is ready" text="It’s quiet with just you. Invite a few friends, then add a voice nebula to hang out in.">
+                {can(c, 'invite') ? <NightButton label="Invite friends" onPress={() => router.push({ pathname: '/constellations/[cid]/settings/invites', params: { cid: c.id } })} /> : null}
+                {can(c, 'manageNebulas') ? <NightButton kind="outline" label="Add a nebula" onPress={() => router.push({ pathname: '/constellations/[cid]/settings/nebulas', params: { cid: c.id } })} /> : null}
+              </EmptyScene>
+            ) : null}
           </ScrollView>
         </Animated.View>
       </GestureDetector>

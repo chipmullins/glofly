@@ -14,7 +14,7 @@ export type ShownMessage = {
   key: string
   message: Message
   /** Set while a message you sent is still on its way (or failed). */
-  pending: { failed: boolean } | null
+  pending: { failed: boolean; slow?: boolean } | null
 }
 
 type MessageItemProps = {
@@ -314,10 +314,14 @@ export default function MessageItem({
   if (m.lantern && !m.deleted) classes.push('message--lantern')
   if (m.lantern && m.lanternFadeAt && !m.deleted) classes.push('message--lantern-fading')
 
+  // 0.7.5: a message on its way looks sent right away; it only fades (with "Sending…") when the
+  // server takes more than a moment.
   const bodyClass = item.pending
     ? item.pending.failed
       ? 'message-body message-body--failed'
-      : 'message-body message-body--sending'
+      : item.pending.slow
+        ? 'message-body message-body--sending'
+        : 'message-body'
     : 'message-body'
   const jumbo = !item.pending && !m.deleted && isJumbo(m.body)
 
@@ -325,13 +329,25 @@ export default function MessageItem({
     <div
       className={classes.join(' ')}
       data-message-id={m.id}
+      // 0.7.5: lib/motion.ts lets a message you just sent rise into place
+      data-pending={item.pending ? (item.pending.failed ? 'failed' : 'sending') : undefined}
       ref={wrapRef}
       style={m.lantern && !m.deleted ? lanternStyle(m.lanternFadeAt) : undefined}
     >
       {!grouped && avatar}
+      {grouped && !item.pending && (
+        // 0.7.5: the exact time shows in the left margin on hover (Discord-style).
+        <time
+          className="message-gutter-time"
+          dateTime={m.createdAt}
+          title={new Date(m.createdAt).toLocaleString()}
+        >
+          {time}
+        </time>
+      )}
       <div
         className={
-          item.pending && !item.pending.failed
+          item.pending && !item.pending.failed && item.pending.slow
             ? 'message-content message-content--sending'
             : 'message-content'
         }
@@ -453,6 +469,11 @@ export default function MessageItem({
 
         {m.lantern && !m.deleted && !item.pending && <LanternTag fadeAt={m.lanternFadeAt} />}
 
+        {item.pending && !item.pending.failed && item.pending.slow && (
+          <span className="message-sending" role="status">
+            Sending…
+          </span>
+        )}
         {item.pending?.failed && (
           <span className="message-failed">
             Not sent ·{' '}

@@ -1,4 +1,5 @@
-import { View } from 'react-native'
+import { useEffect, useRef } from 'react'
+import { Animated, View } from 'react-native'
 import { Image } from 'expo-image'
 import { colorsFor, initials, type ConversationSummary, type PresenceStatus, type PublicUser } from '@glofly/shared'
 import { authHeaders, url } from '@/api/http'
@@ -45,21 +46,38 @@ export function Avatar({ user, size = 40, status, ring, mobile }: { user: Person
   )
 }
 
+/** 0.7.5: when a status changes (not when it first shows), the new dot pops in gently. */
+function useStatusPop(key: string): Animated.Value {
+  const scale = useRef(new Animated.Value(1)).current
+  const shown = useRef<string | null>(null)
+  useEffect(() => {
+    const first = shown.current === null
+    shown.current = key
+    if (first) return
+    scale.setValue(0.4)
+    const a = Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 18, bounciness: 8 })
+    a.start()
+    return () => a.stop()
+  }, [key, scale])
+  return scale
+}
+
 export function StatusDot({ status, size = 12, ring, style, mobile }: { status: PresenceStatus; size?: number; ring?: string; style?: object; mobile?: boolean }) {
   const { c } = useTheme()
+  const pop = useStatusPop(`${status}${mobile ? '-m' : ''}`)
   const color = status === 'online' ? c.online : status === 'away' ? c.away : status === 'dnd' ? c.dnd : c.faint
   if (mobile && status !== 'offline') {
     // "Active on mobile": a small phone in the status color (0.3.0).
     const w = Math.round(size * 0.78)
     const h = Math.round(size * 1.18)
     return (
-      <View style={[{ width: w, height: h, borderRadius: 3, backgroundColor: color, outlineWidth: 2, outlineColor: ring ?? c.bg }, style, { bottom: -2 }]}>
+      <Animated.View style={[{ width: w, height: h, borderRadius: 3, backgroundColor: color, outlineWidth: 2, outlineColor: ring ?? c.bg }, style, { bottom: -2, transform: [{ scale: pop }] }]}>
         <View style={{ position: 'absolute', left: w * 0.18, right: w * 0.18, top: h * 0.14, bottom: h * 0.26, borderRadius: 1, backgroundColor: ring ?? c.bg }} />
-      </View>
+      </Animated.View>
     )
   }
   return (
-    <View
+    <Animated.View
       style={[
         {
           width: size,
@@ -74,13 +92,14 @@ export function StatusDot({ status, size = 12, ring, style, mobile }: { status: 
           justifyContent: 'center',
         },
         style,
+        { transform: [{ scale: pop }] },
       ]}
     >
       {status === 'dnd' ? <View style={{ width: size * 0.55, height: Math.max(2, size * 0.16), borderRadius: 1, backgroundColor: ring ?? c.bg }} /> : null}
       {status === 'away' ? (
         <View style={{ position: 'absolute', left: -size * 0.12, top: -size * 0.12, width: size * 0.7, height: size * 0.7, borderRadius: size, backgroundColor: ring ?? c.bg }} />
       ) : null}
-    </View>
+    </Animated.View>
   )
 }
 

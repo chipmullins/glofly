@@ -21,9 +21,17 @@ import type {
   NebulaKind,
   NotifyLevel,
   RoleColor,
-  TimeoutLength
+  TimeoutLength,
+  VoicePreviewPass
 } from '../../../preload/api-types'
-import type { NebulaMention, PinnedNebula } from '@glofly/shared/constellations'
+import type {
+  ConstellationAccent,
+  InvitePreview,
+  MemberCardInfo,
+  NebulaMention,
+  PinnedNebula,
+  WelcomeSettings
+} from '@glofly/shared/constellations'
 
 // Glofly 2.0: Constellations and My games, as the screens call them. Every request goes through
 // window.glofly.constellations.request (the main process / web bridge only lets /constellations/…
@@ -80,8 +88,7 @@ export const api = {
       `/constellations/directory${qs ? `?${qs}` : ''}`
     )
   },
-  linkPreview: (code: string) =>
-    call<{ constellation: DirectoryEntry }>('GET', `/constellations/links/${code}`),
+  linkPreview: (code: string) => call<InvitePreview>('GET', `/constellations/links/${code}`),
   joinLink: (code: string) => call<Detail>('POST', `/constellations/links/${code}/join`),
   dismissInvite: (inviteId: string) =>
     call<null>('POST', `/constellations/invites/${inviteId}/dismiss`),
@@ -95,8 +102,24 @@ export const api = {
       visibility: ConstellationVisibility
       type: ConstellationType | null
       tags: string[]
+      // 0.7.5
+      accent: ConstellationAccent | null
+      rules: string[]
+      welcome: Partial<WelcomeSettings>
     }>
   ) => call<Detail>('PATCH', base(id), changes),
+  // 0.7.5 community and identity
+  setBanner: (
+    id: string,
+    data: ArrayBuffer,
+    type: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+  ) => window.glofly.constellations.setIcon(id, data, type, 'banner'),
+  removeBanner: (id: string) => call<{ bannerVersion: null }>('DELETE', `${base(id)}/banner`),
+  welcomeDone: (id: string, agreed: boolean, roleIds: string[]) =>
+    call<Detail>('POST', `${base(id)}/welcome`, { agreed, roleIds }),
+  myRoles: (id: string, roleIds: string[]) => call<Detail>('PUT', `${base(id)}/me/roles`, { roleIds }),
+  memberCard: (id: string, userId: string) =>
+    call<MemberCardInfo>('GET', `${base(id)}/members/${userId}/card`),
   setIcon: (
     id: string,
     data: ArrayBuffer,
@@ -155,14 +178,27 @@ export const api = {
     call<null>('POST', `${base(id)}/nebulas/${nebulaId}/voice/mute`, { userId, muted }),
   voiceDisconnect: (id: string, nebulaId: string, userId: string) =>
     call<null>('POST', `${base(id)}/nebulas/${nebulaId}/voice/disconnect`, { userId }),
+  /** 0.7.5: a watch-only pass to peek at a screen share before joining */
+  voicePreview: (id: string, nebulaId: string) =>
+    call<VoicePreviewPass>('POST', `${base(id)}/nebulas/${nebulaId}/voice/preview`),
   addRole: (
     id: string,
-    values: { name: string; color: RoleColor; permissions: ConstellationPermission[] }
+    values: {
+      name: string
+      color: RoleColor
+      permissions: ConstellationPermission[]
+      selfAssign?: boolean
+    }
   ) => call<Detail>('POST', `${base(id)}/roles`, values),
   updateRole: (
     id: string,
     roleId: string,
-    changes: Partial<{ name: string; color: RoleColor; permissions: ConstellationPermission[] }>
+    changes: Partial<{
+      name: string
+      color: RoleColor
+      permissions: ConstellationPermission[]
+      selfAssign: boolean
+    }>
   ) => call<Detail>('PATCH', `${base(id)}/roles/${roleId}`, changes),
   removeRole: (id: string, roleId: string) => call<Detail>('DELETE', `${base(id)}/roles/${roleId}`),
   orderRoles: (id: string, ids: string[]) =>
@@ -215,11 +251,14 @@ function encodeKey(key: string): string {
   return [...new TextEncoder().encode(key)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** The highest role someone has in a constellation (Owner first, Member last). */
+/**
+ * The highest role someone has in a constellation (Owner first, Member last). Roles people pick
+ * themselves (0.7.5) are labels: they never count here.
+ */
 export function topRole(c: ConstellationDetail, userId: string): ConstellationRole {
   if (c.ownerId === userId) return c.roles[0]
   const held = c.members.find((m) => m.user.id === userId)?.roleIds ?? []
-  const roles = c.roles.filter((r) => r.kind === 'member' || held.includes(r.id))
+  const roles = c.roles.filter((r) => r.kind === 'member' || (held.includes(r.id) && !r.selfAssign))
   return roles.sort((a, b) => b.position - a.position)[0] ?? c.roles[c.roles.length - 1]
 }
 

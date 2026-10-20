@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { EmptyScene } from '@/ui/EmptyScene'
 import { AppState, FlatList, Pressable, TextInput, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated'
@@ -32,7 +33,7 @@ import { chatOpened } from '@/push'
 import { ChatAvatar } from '@/ui/Avatar'
 import { FriendPicker } from '@/ui/FriendPicker'
 import { Icon } from '@/ui/icons'
-import { Text, webNoOutline } from '@/ui/kit'
+import { Button, Text, webNoOutline } from '@/ui/kit'
 import { ThemeOverride, font, useTheme } from '@/ui/theme'
 import { useCx } from '@/state/constellations'
 import { InlineSheet, NightModal, Handle } from './sheet'
@@ -256,7 +257,16 @@ export function AllChats({ onClose, popover }: { onClose: () => void; popover?: 
         data={shown}
         keyExtractor={(x) => x.id}
         keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={<Text size={14} tone="muted" style={{ textAlign: 'center', padding: 24 }}>{q ? 'No chats match.' : 'No chats here.'}</Text>}
+        ListEmptyComponent={
+          filter === 'unread' && !q.trim() && chats.length ? (
+            // 0.7.5: an empty Unread is good news.
+            <EmptyScene kind="caughtUp" small night title="You’re all caught up" text="Every message is read. Your fireflies are safe in the jar for now.">
+              <Button compact kind="secondary" label="Back to all chats" onPress={() => setFilter('all')} />
+            </EmptyScene>
+          ) : (
+            <Text size={14} tone="muted" style={{ textAlign: 'center', padding: 24 }}>{q ? 'No chats match.' : 'No chats here.'}</Text>
+          )
+        }
         renderItem={({ item }) => <ChatLine chat={item} meId={meId} nameOf={nameOf} status={item.kind === 'dm' ? (presence[item.partner.id]?.status ?? null) : null} onPress={() => openMini(item.id)} />}
       />
     </View>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { EmptyScene } from '@/ui/EmptyScene'
 import { Pressable, ScrollView, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -74,9 +75,12 @@ function FriendGames({ userId }: { userId: string }) {
             <Stat value={String(games.length)} label={games.length === 1 ? 'game played' : 'games played'} />
           </View>
           {!games.length ? (
-            <Text tone="muted" style={{ paddingVertical: 16 }}>
-              No games yet.
-            </Text>
+            <EmptyScene
+              kind="games"
+              small
+              title="No games yet"
+              text={person ? `${name} hasn't played anything Glofly has seen yet.` : 'When Glofly on your computer sees you playing something, its time adds up here.'}
+            />
           ) : null}
           {favorites.length ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>

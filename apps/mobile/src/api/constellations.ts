@@ -23,6 +23,8 @@ import type { NebulaNews,
   RoleColor,
   TimeoutLength,
   CallJoin,
+  InvitePreview,
+  MemberCardInfo,
 } from '@glofly/shared'
 import { request, upload, type Upload } from './http'
 
@@ -62,7 +64,8 @@ export const cx = {
   },
   /** Which nebula a nebula chat belongs to (a notification opens glofly://chat/<conversationId>). */
   chatOf: (conversationId: string) => request<{ constellationId: string; nebulaId: string; kind: NebulaKind }>('GET', `/constellations/chats/${conversationId}`),
-  linkPreview: (code: string) => request<{ constellation: DirectoryEntry }>('GET', `/constellations/links/${code}`),
+  /** 0.7.5: also who made the link and when it runs out (the invite card) */
+  linkPreview: (code: string) => request<InvitePreview>('GET', `/constellations/links/${code}`),
   joinLink: (code: string) => request<Detail>('POST', `/constellations/links/${code}/join`),
   dismissInvite: (inviteId: string) => request<null>('POST', `/constellations/invites/${inviteId}/dismiss`),
   get: (id: string) => request<Detail>('GET', base(id)),
@@ -72,6 +75,10 @@ export const cx = {
   ) => request<Detail>('PATCH', base(id), changes),
   setIcon: (id: string, file: Upload) => upload<{ iconVersion: string }>('PUT', `${base(id)}/icon`, file),
   removeIcon: (id: string) => request<{ iconVersion: null }>('DELETE', `${base(id)}/icon`),
+  // 0.7.5 community and identity
+  welcomeDone: (id: string, agreed: boolean, roleIds: string[]) => request<Detail>('POST', `${base(id)}/welcome`, { agreed, roleIds }),
+  myRoles: (id: string, roleIds: string[]) => request<Detail>('PUT', `${base(id)}/me/roles`, { roleIds }),
+  memberCard: (id: string, userId: string) => request<MemberCardInfo>('GET', `${base(id)}/members/${userId}/card`),
   remove: (id: string, name: string) => request<null>('DELETE', base(id), { name }),
   transfer: (id: string, userId: string) => request<Detail>('POST', `${base(id)}/transfer`, { userId }),
   join: (id: string, note?: string) =>

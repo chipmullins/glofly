@@ -885,3 +885,90 @@
 .cx-settings-body > .cx-field {
   flex: none;
 }
+
+/* 0.7.5 Overview: accent, banner, house rules (SettingsIdentity.tsx) */
+.cx-settings-hint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.cx-accents {
+  align-items: center;
+}
+.cx-accent {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  border: 3px solid var(--glo-surface);
+  box-shadow: 0 0 0 1px var(--glo-line);
+  cursor: pointer;
+}
+.cx-accent--on {
+  box-shadow: 0 0 0 3px var(--glo-ink);
+}
+.cx-accent:focus-visible {
+  outline: 3px solid rgba(244, 122, 31, 0.45);
+  outline-offset: 3px;
+}
+.cx-accent-name {
+  margin-left: 4px;
+  font-size: 14px;
+  color: var(--glo-muted);
+}
+.cx-banner-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cx-banner-preview {
+  border-radius: 14px;
+  overflow: hidden;
+  max-width: 440px;
+}
+.cx-banner-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cx-rules-edit {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cx-rules-edit li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cx-rules-n {
+  width: 18px;
+  flex: none;
+  text-align: right;
+  font-weight: 700;
+  color: #e2650f;
+}
+.cx-rules-edit input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--glo-line);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+}
+.cx-rules-edit input:focus {
+  outline: none;
+  border-color: var(--glo-orange);
+}
+.cx-self-assign {
+  margin-bottom: 12px;
+  border: 1px solid var(--glo-line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}

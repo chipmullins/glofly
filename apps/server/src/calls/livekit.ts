@@ -179,3 +179,24 @@ export async function setMicrophoneAllowed(callId: string, userId: string, allow
     return false;
   }
 }
+
+/**
+ * 0.7.5 LIVE preview: a watch-only pass to peek at a screen share in a voice nebula before joining.
+ * It can't send anything (no microphone, camera, screen or data), it's hidden from everyone in the
+ * room, and its identity isn't the person's user id, so it never counts as them being in voice.
+ */
+export async function previewToken(room: string, identity: string, name: string): Promise<string> {
+  const token = new AccessToken(apiKey, apiSecret, { identity, name, ttl: "2m" });
+  token.addGrant({
+    room,
+    roomJoin: true,
+    canSubscribe: true,
+    canPublish: false,
+    canPublishSources: [],
+    canPublishData: false,
+    canUpdateOwnMetadata: false,
+    hidden: true,
+  });
+  return token.toJwt();
+}
+

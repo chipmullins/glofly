@@ -12,6 +12,7 @@ import { listTime } from '@/lib/format'
 import type { Call } from '@glofly/shared'
 import { useStore } from '@/state/store'
 import { useWide } from '@/lib/layout'
+import { RowGlow, RowTypingDots } from './RowLife'
 
 // One row in the Chats or Groups list, from the design canvas.
 
@@ -29,9 +30,11 @@ type Props = {
   onLongPress: (chat: ConversationSummary) => void
   onJoin?: (chat: ConversationSummary) => void
   now: number
+  /** 0.7.5: bumped to the top by a new message: glows once (a new number = a new glow) */
+  glowKey?: number
 }
 
-export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typing, call, subtitle, onPress, onLongPress, onJoin, now }: Props) {
+export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typing, call, subtitle, onPress, onLongPress, onJoin, now, glowKey = 0 }: Props) {
   const { c } = useTheme()
   // iPad (two panes): the chat open on the right is highlighted in the list.
   const wide = useWide()
@@ -80,6 +83,7 @@ export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typ
         ...(wide ? { marginHorizontal: 8, paddingHorizontal: 8, borderRadius: 14 } : {}),
       })}
     >
+      <RowGlow glowKey={glowKey} />
       <ChatAvatar chat={chat} size={54} status={chat.kind === 'dm' ? (presence?.status ?? null) : null} mobile={onMobile(presence ?? undefined)} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
@@ -110,9 +114,12 @@ export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typ
               ) : null}
             </>
           ) : typingText ? (
-            <Text size={14} weight="medium" tone="accent" numberOfLines={1} style={{ flex: 1 }}>
-              {typingText}
-            </Text>
+            <>
+              <RowTypingDots />
+              <Text size={14} weight="medium" tone="accent" numberOfLines={1} style={{ flex: 1 }}>
+                {typingText}
+              </Text>
+            </>
           ) : (
             <>
               {preview.missed ? <Icon name="phone" size={14} color={c.dnd} /> : null}

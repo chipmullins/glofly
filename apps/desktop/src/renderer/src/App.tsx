@@ -7,6 +7,7 @@ import FireflyTakeoff from './components/FireflyTakeoff'
 import UpdateRequiredScreen from './components/UpdateRequired'
 import PausedScreen from './components/Paused'
 import { playSound } from './lib/sounds'
+import { startWelcomeFlow } from './lib/welcome'
 
 type AuthScreen = 'login' | 'register'
 
@@ -96,6 +97,8 @@ export default function App(): React.JSX.Element {
   ): Promise<{ fields: Record<string, string>; message?: string } | null> {
     const result = await window.glofly.auth.register(request)
     if (!result.ok) return { fields: result.fields, message: result.message }
+    // 0.7.5: the welcome flow shows once the app opens (photo, look, friends).
+    startWelcomeFlow(result.user.id)
     setScreen({ name: 'takeoff', form: 'register', user: result.user, isNew: true })
     // The photo picked on the Register screen goes up while the firefly flies. If it doesn't
     // make it, the account is fine: they can add a photo later in Edit profile.

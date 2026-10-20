@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import EmptyScene from '../components/EmptyScene'
 import {
   CONSTELLATION_THEME,
   ROLE_COLORS,
@@ -25,11 +26,9 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import StatusMenu from '../components/StatusMenu'
 import { AvatarFace } from '../components/Avatar'
 import StatusDot from '../components/StatusDot'
-import { colorsFor } from '../lib/avatarColors'
 import { useCalls } from '../calls/callState'
 import { api, can, outranks, topRole } from '../lib/constellations'
 import {
-  BannerStars,
   ChevronDown,
   ConstellationIcon,
   GearIcon,
@@ -41,6 +40,22 @@ import {
 import { hexA } from './colors'
 import { FireflyMark, GalaxyIcon } from './sky'
 import VoiceStage from './VoiceStage'
+import { BannerArt, accentStyle, hasAccent } from './identity'
+import { MemberCardTop, MembersPanel } from './Members'
+import WelcomeDialog, { YourRolesDialog, needsWelcome } from './WelcomeDialog'
+import NebulaSky from './NebulaSky'
+import { sidebarOrder, starsOf } from './nebulaSky'
+import { scrollToNewLine, useNewSince } from './newSinceState'
+import { NewSincePill } from './NewSinceParts'
+import { layoutFromRows, layoutOf, rowsOf, sameRows, stepNebula, type Row } from './sidebarOrder'
+import { useRowsGlide, useSidebarDrag } from './useSidebarDrag'
+import { InVoiceCount, LivePreview, VoiceFaces } from './VoiceFaces'
+// 0.8.0 community tools: events, constellation search, the Inbox
+import { eventPhase, type ConstellationEvent } from '@glofly/shared'
+import { requestJump, takeJump, useConstellationEvents } from '../lib/community'
+import { EventCard, EventDialog, EventsChip } from './Events'
+import CxSearch from './CxSearch'
+import { InboxStripButton } from './Inbox'
 import './Inside.css'
 
 // Inside a constellation (Constellation.dc.html, approved): the far-left strip (Home at the top,
@@ -75,35 +90,6 @@ function saveCollapsed(id: string, list: string[]): void {
 }
 
 /** A small round face (voice nebula lists, member rows). */
-function Face({
-  person,
-  size,
-  ring,
-  me = false
-}: {
-  person: PublicUser
-  size: number
-  ring?: string
-  me?: boolean
-}): React.JSX.Element {
-  const [bg, fg] = me ? ['#f47a1f', '#2a1406'] : colorsFor(person.id)
-  return (
-    <span
-      className="cx-face"
-      aria-hidden="true"
-      style={{
-        width: size,
-        height: size,
-        background: bg,
-        color: fg,
-        fontSize: Math.round(size * 0.42),
-        boxShadow: ring
-      }}
-    >
-      <AvatarFace id={person.id} name={person.displayName} avatarVersion={person.avatarVersion} />
-    </span>
-  )
-}
 
 /** The mute lengths (the same as Glofly's own chats). */
 const MUTE_CHOICES: { duration: MuteDuration; label: string }[] = [
@@ -132,6 +118,27 @@ function muteTitle(n: Nebula): string {
   if (isQuiet(n)) return `Muted ${mutedUntilText(n.mutedUntil!)} (@mentions still come through)`
   return 'Notifications off for this nebula'
 }
+
+/** The six-dot handle on rows you can drag (0.7.5). */
+function GripDots(): React.JSX.Element {
+  return (
+    <svg className="cx-neb-grip" width="10" height="16" viewBox="0 0 10 16" aria-hidden="true">
+      <g fill="#8f7868">
+        <circle cx="2.5" cy="3" r="1.4" />
+        <circle cx="7.5" cy="3" r="1.4" />
+        <circle cx="2.5" cy="8" r="1.4" />
+        <circle cx="7.5" cy="8" r="1.4" />
+        <circle cx="2.5" cy="13" r="1.4" />
+        <circle cx="7.5" cy="13" r="1.4" />
+      </g>
+    </svg>
+  )
+}
+
+/** A row being dragged: it follows the pointer, a little bigger and tilted (board 10). */
+const liftStyle = (dy: number): React.CSSProperties => ({
+  transform: `translateY(${dy}px) scale(1.04) rotate(-1.2deg)`
+})
 
 /** A small crossed-out bell (muted nebulas). */
 function BellOffLine(): React.JSX.Element {
@@ -185,10 +192,12 @@ export type ConstellationViewProps = {
   /** Nebulas pinned to the dock on Glofly home */
   pinnedIds: Set<string>
   onTogglePin: (nebula: Nebula) => void
+  /** 0.8.0: open a nebula in any constellation (the Inbox) */
+  onOpenPlace?: (constellationId: string, nebulaId: string | null) => void
 }
 
 export type SettingsPageName =
-  'overview' | 'nebulas' | 'roles' | 'members' | 'invites' | 'moderation' | 'delete'
+  'overview' | 'nebulas' | 'roles' | 'members' | 'invites' | 'moderation' | 'automod' | 'delete'
 
 export default function ConstellationView(props: ConstellationViewProps): React.JSX.Element {
   const { me, myStatus, detail: c, cards, nebulaId, now } = props
@@ -198,6 +207,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const [collapsed, setCollapsed] = useState<string[]>(() => readCollapsed(c.id))
   const [membersOpen, setMembersOpen] = useState(true)
   const [menu, setMenu] = useState<MenuState>(null)
+  /** 0.7.5: the member card whose ⋯ (more actions) is open */
+  const [memberMore, setMemberMore] = useState<string | null>(null)
   const [headMenu, setHeadMenu] = useState(false)
   /** Right-click on a nebula in the sidebar: its notification and mute menu */
   const [nebMenu, setNebMenu] = useState<{ nebula: Nebula; x: number; y: number } | null>(null)
@@ -211,6 +222,10 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [voiceChatOpen, setVoiceChatOpen] = useState(false)
+  /** 0.7.5: the welcome screen was closed for this constellation (it shows once) */
+  const [welcomeShownFor, setWelcomeShownFor] = useState<string | null>(null)
+  /** 0.7.5: "Your roles" (the roles you can pick yourself) */
+  const [rolesOpen, setRolesOpen] = useState(false)
   const headRef = useRef<HTMLDivElement>(null)
   // Another constellation: its own collapsed categories; another nebula: its chat closed.
   const [shownFor, setShownFor] = useState({ id: c.id, nebulaId })
@@ -240,6 +255,182 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, inVoiceHere, calls.tick, me.id])
   const onlineCount = c.members.filter((m) => m.status !== 'offline').length
+  // 0.7.5 living sky: the banner's stars are this constellation's nebulas
+  const skyStars = useMemo(() => starsOf(c, nebula?.id ?? null), [c, nebula?.id])
+  // 0.7.5 "New since you left": the glowing line and its pill
+  const newSince = useNewSince(c, nebulaId, me.id)
+  // ---- 0.8.0 community tools: events, search across the constellation ----
+  const cxEvents = useConstellationEvents(c.id)
+  const [eventDialog, setEventDialog] = useState<{ editing: ConstellationEvent | null } | null>(null)
+  const [searchAll, setSearchAll] = useState(false)
+  const liveEventVoice = useMemo(
+    () =>
+      new Set(
+        cxEvents.events
+          .filter((e) => e.voiceNebulaId && eventPhase(e, now) === 'live')
+          .map((e) => e.voiceNebulaId!)
+      ),
+    [cxEvents.events, now]
+  )
+  const eventsByMessage = useMemo(
+    () => new Map(cxEvents.events.filter((e) => e.messageId).map((e) => [e.messageId!, e])),
+    [cxEvents.events]
+  )
+  const canPlan = can(c, 'events') && !c.me.timedOutUntil
+  // A message the Inbox or search asked for, once its nebula is on screen
+  const shownNebulaId = c.nebulas.find((n) => n.id === nebulaId)?.id ?? null
+  useEffect(() => {
+    const id = takeJump(shownNebulaId)
+    if (id) setJump((j) => ({ messageId: id, nonce: (j?.nonce ?? 0) + 1 }))
+  }, [shownNebulaId])
+  /** Show a message in a nebula of this constellation (another nebula: once it's open). */
+  const showMessage = (targetNebulaId: string, messageId: string): void => {
+    if (targetNebulaId === shownNebulaId) setJump((j) => ({ messageId, nonce: (j?.nonce ?? 0) + 1 }))
+    else {
+      requestJump(targetNebulaId, messageId)
+      props.onSelectNebula(targetNebulaId)
+    }
+  }
+
+  // ---- 0.7.5 smooth reordering: the sidebar as rows you can drag ----
+  const canArrange = can(c, 'manageNebulas')
+  const serverRows = useMemo(() => rowsOf(layoutOf(c)), [c])
+  const [movedRows, setMovedRows] = useState<{ rows: Row[]; detail: ConstellationDetail } | null>(
+    null
+  )
+  const rows = movedRows && movedRows.detail === c ? movedRows.rows : serverRows
+  const saveRows = useCallback(
+    async (next: Row[]): Promise<void> => {
+      setMovedRows({ rows: next, detail: c })
+      const layout = layoutFromRows(next, layoutOf(c))
+      const r = await api.layout(c.id, layout.categories, layout.nebulas)
+      if (!r.ok) {
+        setMovedRows(null)
+        props.onProblem(r.message)
+      } else props.onChanged(r.data.constellation)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [c]
+  )
+  const { listRef: sideListRef, ...drag } = useSidebarDrag({
+    enabled: canArrange,
+    rows,
+    onCommit: (next) => void saveRows(next)
+  })
+  useRowsGlide(
+    sideListRef,
+    rows.map((r) => (r.kind === 'cat' ? `#${r.id}` : `${r.id}@${r.categoryId}`)).join(',')
+  )
+  /** A nebula with news you'd be told about (not the one you're reading) */
+  const hasNews = (n: Nebula): boolean =>
+    n.kind === 'text' &&
+    n.id !== nebula?.id &&
+    (n.mentionCount > 0 || (n.unreadCount > 0 && (n.notify ?? c.me.notify) !== 'none'))
+
+  // ---- 0.7.5 LIVE preview (hover or click LIVE under a voice nebula) ----
+  const [livePeek, setLivePeek] = useState<{
+    nebula: Nebula
+    sharer: PublicUser
+    anchor: DOMRect
+    how: 'hover' | 'click'
+  } | null>(null)
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const peekOver = useRef(false)
+  const clearPeekTimer = (): void => {
+    if (peekTimer.current) clearTimeout(peekTimer.current)
+    peekTimer.current = null
+  }
+  useEffect(() => clearPeekTimer, [])
+  function showLive(
+    n: Nebula,
+    sharer: PublicUser,
+    anchor: HTMLElement,
+    how: 'hover' | 'click'
+  ): void {
+    clearPeekTimer()
+    // In the voice nebula already: LIVE just shows it.
+    if (inVoiceHere?.id === n.id) {
+      props.onSelectNebula(n.id)
+      return
+    }
+    const rect = anchor.getBoundingClientRect()
+    if (how === 'click') {
+      setLivePeek((p) =>
+        p && p.sharer.id === sharer.id && p.how === 'click'
+          ? null
+          : { nebula: n, sharer, anchor: rect, how }
+      )
+      return
+    }
+    // Hover: a short wait so passing the mouse over it doesn't start a connection.
+    peekTimer.current = setTimeout(
+      () => setLivePeek((p) => (p?.how === 'click' ? p : { nebula: n, sharer, anchor: rect, how })),
+      300
+    )
+  }
+  function leaveLive(): void {
+    clearPeekTimer()
+    peekTimer.current = setTimeout(() => {
+      if (!peekOver.current) setLivePeek((p) => (p?.how === 'hover' ? null : p))
+    }, 250)
+  }
+  // The person stopped sharing, or left: the peek closes.
+  const peekState = livePeek ? c.voice.find((v) => v.nebulaId === livePeek.nebula.id) : undefined
+  if (livePeek && !peekState?.sharing.includes(livePeek.sharer.id)) setLivePeek(null)
+
+  const saveRowsRef = useRef(saveRows)
+  useLayoutEffect(() => {
+    saveRowsRef.current = saveRows
+  })
+
+  // ---- 0.7.5 keyboard: Alt+↑/↓ between nebulas, Alt+Shift+↑/↓ the next one with news (or,
+  // on a focused nebula you can arrange, moves it), Esc marks this one read ----
+  const keys = useRef({ c, nebulaId: nebula?.id ?? null, rows, canArrange, hasNews, newSince })
+  useLayoutEffect(() => {
+    keys.current = { c, nebulaId: nebula?.id ?? null, rows, canArrange, hasNews, newSince }
+  })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey) return
+      if (document.querySelector('.cx-dialog-backdrop, .dialog-backdrop, .cx-menu')) return
+      const k = keys.current
+      if (e.key === 'Escape' && !e.altKey) {
+        if (k.newSince.info && !document.querySelector('.cx-pins-pop, .cx-livepop, .pins-panel')) {
+          k.newSince.clear()
+        }
+        return
+      }
+      if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+      const dir = e.key === 'ArrowUp' ? -1 : 1
+      const focused = (document.activeElement as HTMLElement | null)?.closest?.<HTMLElement>(
+        '[data-nebula-id]'
+      )
+      if (e.shiftKey && focused && k.canArrange) {
+        e.preventDefault()
+        const id = focused.dataset.nebulaId!
+        const next = stepNebula(k.rows, id, dir)
+        if (!sameRows(next, k.rows)) {
+          void saveRowsRef.current(next)
+          requestAnimationFrame(() =>
+            document.querySelector<HTMLElement>(`[data-nebula-id="${id}"]`)?.focus()
+          )
+        }
+        return
+      }
+      const order = sidebarOrder(k.c)
+      const at = order.findIndex((n) => n.id === k.nebulaId)
+      for (let step = 1; step <= order.length; step++) {
+        const n = order[(at + dir * step + order.length * 2) % order.length]
+        if (e.shiftKey && !k.hasNews(n)) continue
+        e.preventDefault()
+        props.onSelectNebula(n.id)
+        return
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Close the menus on Escape or a click elsewhere.
   useEffect(() => {
@@ -287,7 +478,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     [c, people]
   )
 
-  function joinVoice(n: Nebula): void {
+  function joinVoice(n: Nebula, show = true): void {
     if (c.me.timedOutUntil) {
       props.onProblem("You're timed out for now, so you can't join voice.")
       return
@@ -298,7 +489,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       people: c.members.map((m) => m.user).filter((u) => u.id !== me.id),
       nebula: { constellationId: c.id, nebulaId: n.id }
     })
-    props.onSelectNebula(n.id)
+    if (show) props.onSelectNebula(n.id)
   }
 
   // The chat of the open nebula, as the chat screen expects it.
@@ -433,21 +624,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     return out
   }, [c])
 
-  function activityOf(m: ConstellationMember): { text: string; voice: boolean } | null {
-    const v = c.voice.find((x) => x.userIds.includes(m.user.id))
-    if (v) {
-      const n = c.nebulas.find((x) => x.id === v.nebulaId)
-      if (v.sharing.includes(m.user.id))
-        return { text: `Streaming in ${n?.name ?? 'voice'}`, voice: false }
-      return { text: `In ${n?.name ?? 'voice'}`, voice: true }
-    }
-    return m.activity ? { text: m.activity, voice: false } : null
-  }
 
-  const nameColor = (userId: string): string | undefined => {
-    const role = topRole(c, userId)
-    return role.kind === 'member' ? undefined : (ROLE_COLORS[role.color] ?? ROLE_COLORS.gray).light
-  }
+
+
 
   // ---- The far-left strip ----
   const strip = (
@@ -465,6 +644,18 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         <span className="cx-home-label">Home</span>
       </button>
       <span className="cx-strip-line" aria-hidden="true" />
+      <InboxStripButton
+        onOpen={(constellationId, targetNebulaId, messageId) => {
+          if (constellationId === c.id) {
+            if (messageId) showMessage(targetNebulaId, messageId)
+            else props.onSelectNebula(targetNebulaId)
+            return
+          }
+          if (messageId) requestJump(targetNebulaId, messageId)
+          if (props.onOpenPlace) props.onOpenPlace(constellationId, targetNebulaId)
+          else props.onOpenConstellation(constellationId)
+        }}
+      />
       <button
         type="button"
         className="cx-strip-galaxy"
@@ -527,21 +718,25 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   )
 
   // ---- The nebula sidebar ----
-  const categories = [...c.categories].sort((a, b) => a.position - b.position)
-  const loose = c.nebulas.filter(
-    (n) => !n.categoryId || !c.categories.some((x) => x.id === n.categoryId)
-  )
-  const sections: { id: string; name: string | null; nebulas: Nebula[] }[] = [
-    ...(loose.length ? [{ id: 'none', name: null, nebulas: loose }] : []),
-    ...categories
-      .map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        nebulas: c.nebulas.filter((n) => n.categoryId === cat.id)
-      }))
-      // 0.7.1: a category with no nebulas (or none you can see) isn't shown here
-      .filter((section) => section.nebulas.length > 0)
-  ]
+  // 0.7.5: the sidebar as rows (your drag shows at once, before the server confirms it)
+  const sections: { id: string; name: string | null; nebulas: Nebula[] }[] = []
+  {
+    const byId = new Map(c.nebulas.map((n) => [n.id, n]))
+    for (const r of rows) {
+      if (r.kind === 'cat') {
+        sections.push({
+          id: r.id,
+          name: c.categories.find((x) => x.id === r.id)?.name ?? '',
+          nebulas: []
+        })
+        continue
+      }
+      const n = byId.get(r.id)
+      if (!n) continue
+      if (!sections.length) sections.push({ id: 'none', name: null, nebulas: [] })
+      sections[sections.length - 1].nebulas.push({ ...n, categoryId: r.categoryId })
+    }
+  }
   const settingsAllowed = SETTINGS_PERMISSIONS.some((p) => can(c, p))
   const myDot = myStatus.status === 'invisible' ? 'offline' : myStatus.status
   const roleDark = (ROLE_COLORS[myRole.color] ?? ROLE_COLORS.gray).dark
@@ -620,8 +815,26 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           <GearIcon />
         </button>
       </div>
-      <div className="cx-side-banner" style={{ background: theme.sideBanner }} ref={headRef}>
-        <BannerStars id={c.id} color={c.color} width={264} />
+      {/* 0.7.5 identity: its banner photo, with the icon on it (the approved Identity board) */}
+      {c.bannerVersion && (
+        <div className="cx-side-photo">
+          <BannerArt c={c} width={264} height={112} />
+          <ConstellationIcon
+            id={c.id}
+            name={c.name}
+            color={c.color}
+            iconVersion={c.iconVersion}
+            className="cx-side-photo-icon"
+            style={c.iconVersion ? undefined : { background: '#120c0a', color: 'var(--cxa)' }}
+          />
+        </div>
+      )}
+      <div
+        className={c.bannerVersion ? 'cx-side-banner cx-side-banner--under-photo' : 'cx-side-banner'}
+        style={{ background: theme.sideBanner }}
+        ref={headRef}
+      >
+        <NebulaSky id={c.id} stars={skyStars} scale={0.55} />
         <div className="cx-side-banner-row">
           <h1>{c.name}</h1>
           {settingsAllowed && (
@@ -701,6 +914,19 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 Create a nebula
               </button>
             )}
+            {canPlan && (
+              <button
+                type="button"
+                role="menuitem"
+                className="cx-menu-item"
+                onClick={() => {
+                  setHeadMenu(false)
+                  setEventDialog({ editing: null })
+                }}
+              >
+                Plan an event
+              </button>
+            )}
             <span className="cx-menu-sub">Notifications</span>
             {(['all', 'mentions', 'none'] as const).map((level) => (
               <button
@@ -736,6 +962,19 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             >
               Mark everything read
             </button>
+            {c.roles.some((r) => r.selfAssign) && (
+              <button
+                type="button"
+                role="menuitem"
+                className="cx-menu-item"
+                onClick={() => {
+                  setHeadMenu(false)
+                  setRolesOpen(true)
+                }}
+              >
+                Your roles
+              </button>
+            )}
             {!c.me.owner && (
               <button
                 type="button"
@@ -753,20 +992,48 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         )}
       </div>
 
-      <div className="cx-side-list">
+      <EventsChip
+        events={cxEvents.events}
+        now={now}
+        onPlan={canPlan ? () => setEventDialog({ editing: null }) : null}
+        onOpen={(e) => {
+          if (e.messageId) showMessage(e.nebulaId, e.messageId)
+          else props.onSelectNebula(e.nebulaId)
+        }}
+      />
+      <div
+        className={drag.drag ? 'cx-side-list cx-side-list--dragging' : 'cx-side-list'}
+        ref={sideListRef}
+      >
         {sections.map((section) => {
           const closed = collapsed.includes(section.id)
+          const catKey = `cat:${section.id}`
+          const catLifted = drag.drag?.key === catKey
+          const withNews = section.nebulas.filter((n) => hasNews(n)).length
           return (
             <div key={section.id} className="cx-side-section">
               {section.name !== null && (
                 <button
                   type="button"
-                  className={closed ? 'cx-cat cx-cat--closed' : 'cx-cat'}
+                  data-row={catKey}
+                  className={['cx-cat', closed && 'cx-cat--closed', catLifted && 'cx-cat--lifted']
+                    .filter(Boolean)
+                    .join(' ')}
+                  style={catLifted ? liftStyle(drag.drag!.dy) : undefined}
                   aria-expanded={!closed}
-                  onClick={() => toggleCategory(section.id)}
+                  onPointerDown={(e) => drag.onPointerDown(e, { kind: 'cat', id: section.id })}
+                  onClick={() => {
+                    if (drag.takeClick()) return
+                    toggleCategory(section.id)
+                  }}
                 >
                   <ChevronDown />
                   {section.name}
+                  {closed && (
+                    <span className={withNews ? 'cx-cat-hint cx-cat-hint--news' : 'cx-cat-hint'}>
+                      {withNews ? `• ${withNews} with news` : 'folded'}
+                    </span>
+                  )}
                 </button>
               )}
               {section.nebulas.map((n) => {
@@ -781,11 +1048,21 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 const inIt = (v?.userIds ?? [])
                   .map((id) => people.get(id))
                   .filter((p): p is PublicUser => !!p)
-                if (closed && !current && !unread && !mention && !inIt.length) return null
+                // 0.7.5: a folded category keeps only the nebula you're in and voice with people in
+                // it (its header counts the news)
+                if (closed && !current && !inIt.length) return null
+                const rowKey = `neb:${n.id}`
+                const lifted = drag.drag?.key === rowKey
                 return (
-                  <div key={n.id}>
+                  <div
+                    key={n.id}
+                    data-row={rowKey}
+                    className={lifted ? 'cx-neb-row cx-neb-row--lifted' : 'cx-neb-row'}
+                    style={lifted ? liftStyle(drag.drag!.dy) : undefined}
+                  >
                     <button
                       type="button"
+                      data-nebula-id={n.id}
                       className={[
                         'cx-neb',
                         current && 'cx-neb--current',
@@ -794,7 +1071,13 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                         .filter(Boolean)
                         .join(' ')}
                       aria-current={current ? 'page' : undefined}
-                      onClick={() => props.onSelectNebula(n.id)}
+                      onPointerDown={(e) =>
+                        drag.onPointerDown(e, { kind: 'neb', id: n.id, categoryId: n.categoryId })
+                      }
+                      onClick={() => {
+                        if (drag.takeClick()) return
+                        props.onSelectNebula(n.id)
+                      }}
                       onContextMenu={(e) => {
                         e.preventDefault()
                         setMenu(null)
@@ -805,12 +1088,14 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                         n.kind === 'voice' && inVoiceHere?.id !== n.id && joinVoice(n)
                       }
                     >
+                      {canArrange && <GripDots />}
                       {n.kind === 'text' ? (
                         <StarIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
                       ) : (
                         <SpeakerIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
                       )}
                       <span className="cx-neb-name">{n.name}</span>
+                      {liveEventVoice.has(n.id) && <span className="ev-event-badge">EVENT</span>}
                       {(isQuiet(n) || n.notify === 'none') && (
                         <span
                           className="cx-neb-muted"
@@ -828,39 +1113,28 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                         <span className="cx-neb-badge">
                           {n.unreadCount > 99 ? '99+' : n.unreadCount}
                         </span>
-                      ) : n.kind === 'voice' && inIt.length > 0 && current ? (
-                        <span className="cx-neb-count">{inIt.length}</span>
+                      ) : n.kind === 'voice' && inIt.length > 0 ? (
+                        <InVoiceCount count={inIt.length} />
                       ) : null}
                     </button>
-                    {inIt.length > 0 && (
-                      <div className="cx-neb-voice">
-                        {inIt.map((p) => (
-                          <div key={p.id} className="cx-neb-voice-person">
-                            <Face
-                              person={p}
-                              size={22}
-                              me={p.id === me.id}
-                              ring={speakingIds.has(p.id) ? '0 0 0 2px #ffb347' : undefined}
-                            />
-                            <span className="cx-neb-voice-name">
-                              {p.id === me.id ? `${firstName(p)} (you)` : firstName(p)}
-                            </span>
-                            {v?.muted.includes(p.id) && (
-                              <span className="cx-neb-voice-muted" title="Muted by a moderator">
-                                <MicIconLine size={13} muted />
-                              </span>
-                            )}
-                            {v?.sharing.includes(p.id) && <span className="cx-live">LIVE</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <VoiceFaces
+                      people={inIt}
+                      state={v}
+                      meId={me.id}
+                      inThisVoice={inVoiceHere?.id === n.id}
+                      speakingIds={speakingIds}
+                      onLive={(sharer, anchor, how) => showLive(n, sharer, anchor, how)}
+                      onLiveLeave={leaveLive}
+                    />
                   </div>
                 )
               })}
             </div>
           )
         })}
+        {drag.drag && drag.drag.lineTop !== null && (
+          <div className="cx-drop-line" style={{ top: drag.drag.lineTop }} aria-hidden="true" />
+        )}
         {c.nebulas.length === 0 && <p className="cx-side-empty">No nebulas yet.</p>}
       </div>
 
@@ -934,48 +1208,42 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           </button>
         )}
       </div>
-      {groups.map((g) => (
-        <div key={g.key}>
-          <h2 style={{ color: g.color }}>
-            {g.title} · {g.members.length}
-          </h2>
-          {g.members.map((m) => {
-            const a = activityOf(m)
-            return (
-              <button
-                key={m.user.id}
-                type="button"
-                className={m.status === 'offline' ? 'cx-member cx-member--offline' : 'cx-member'}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect()
-                  setMenu({ member: m, x: rect.left - 8, y: rect.top })
-                }}
-                aria-haspopup="menu"
-              >
-                <span style={{ position: 'relative', display: 'inline-flex' }}>
-                  <Face person={m.user} size={32} me={m.user.id === me.id} />
-                  {m.status !== 'offline' && (
-                    <StatusDot status={m.status} ring="var(--glo-subtle)" size={11} />
-                  )}
-                </span>
-                <span className="cx-member-text">
-                  <span className="cx-member-name" style={{ color: nameColor(m.user.id) }}>
-                    {m.user.id === me.id ? `${firstName(m.user)} (you)` : m.user.displayName}
-                  </span>
-                  {(a || m.timedOutUntil) && (
-                    <span className="cx-member-sub">{m.timedOutUntil ? 'Timed out' : a?.text}</span>
-                  )}
-                </span>
-                {a?.voice && (
-                  <span aria-label={a.text}>
-                    <SpeakerIcon size={14} color="var(--glo-muted)" waves={false} />
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      ))}
+      {/* 0.7.5: a constellation with just you in it says what to do next */}
+      {c.members.length === 1 && (can(c, 'invite') || can(c, 'manageNebulas')) && (
+        <EmptyScene
+          kind="constellation"
+          layout="small"
+          title="Your constellation is ready"
+          text="It’s quiet with just you. Invite a few friends, then add a voice nebula to hang out in."
+        >
+          {can(c, 'invite') && (
+            <button type="button" className="primary-button" onClick={props.onInvite}>
+              Invite friends
+            </button>
+          )}
+          {can(c, 'manageNebulas') && (
+            <button
+              type="button"
+              className="scene-button"
+              onClick={() => props.onSettings('nebulas')}
+            >
+              Add a nebula
+            </button>
+          )}
+        </EmptyScene>
+      )}
+      {/* 0.7.5: members list with life (the approved Members board) */}
+      <MembersPanel
+        c={c}
+        me={me}
+        groups={groups}
+        now={now}
+        openId={menu?.member.user.id ?? null}
+        onOpen={(m, rect) => {
+          setMemberMore(null)
+          setMenu(menu?.member.user.id === m.user.id ? null : { member: m, x: rect.left - 8, y: rect.top })
+        }}
+      />
     </aside>
   )
 
@@ -1120,24 +1388,41 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       const roles = c.roles.filter(
         (r) => r.kind !== 'owner' && r.kind !== 'member' && (c.me.owner || r.position < c.me.rank)
       )
+      // 0.7.5: the member card (the approved Members board); its ⋯ shows the old menu's actions.
+      const more = memberMore === m.user.id
       return (
         <div
-          role="menu"
-          className="cx-menu cx-member-menu"
+          role="dialog"
+          aria-label={m.user.displayName}
+          className="cx-menu cx-member-card"
           style={{
-            top: Math.min(menu.y, window.innerHeight - 420),
-            left: Math.max(12, menu.x - 260)
+            top: Math.max(12, Math.min(menu.y - 40, window.innerHeight - (more ? 620 : 470))),
+            left: Math.max(12, menu.x - 340)
           }}
         >
-          <div className="cx-member-menu-head">
-            <Face person={m.user} size={40} me={mine} />
-            <span>
-              <strong>{m.user.displayName}</strong>
-              <span>
-                @{m.user.username} · {topRole(c, m.user.id).name}
-              </span>
-            </span>
-          </div>
+          <MemberCardTop
+            c={c}
+            m={m}
+            me={me}
+            now={now}
+            friend={props.friendIds.has(m.user.id)}
+            more={more}
+            onMore={() => setMemberMore(more ? null : m.user.id)}
+            onMessage={() => {
+              setMenu(null)
+              props.onMessage(m.user)
+            }}
+            onCall={() => {
+              setMenu(null)
+              window.dispatchEvent(new CustomEvent('glofly:call-person', { detail: { userId: m.user.id } }))
+            }}
+            onViewProfile={() => {
+              setMenu(null)
+              props.onViewProfile(m.user)
+            }}
+          />
+          {more && (
+          <div className="cx-mcard-more-list" role="menu" aria-label={`More for ${m.user.displayName}`}>
           <button
             type="button"
             role="menuitem"
@@ -1149,19 +1434,6 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           >
             View profile
           </button>
-          {!mine && props.friendIds.has(m.user.id) && (
-            <button
-              type="button"
-              role="menuitem"
-              className="cx-menu-item"
-              onClick={() => {
-                setMenu(null)
-                props.onMessage(m.user)
-              }}
-            >
-              Message
-            </button>
-          )}
           {can(c, 'manageRoles') && (above || (mine && c.me.owner)) && roles.length > 0 && (
             <>
               <span className="cx-menu-sub">Roles</span>
@@ -1281,6 +1553,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               Ban {firstName(m.user)}
             </button>
           )}
+          </div>
+          )}
         </div>
       )
     })()
@@ -1345,6 +1619,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           jumpRequest={jump}
           nebula={{
             name: chatNebula.name,
+            // 0.7.5: on its milestone cards
+            constellationIcon: (
+              <ConstellationIcon
+                id={c.id}
+                name={c.name}
+                color={c.color}
+                iconVersion={c.iconVersion}
+                className="cx-milestone-cicon"
+                style={c.iconVersion ? undefined : { background: '#120c0a', color: 'var(--cxa)' }}
+              />
+            ),
             topic: chatNebula.topic,
             cantPost,
             roleOf: roleBadge,
@@ -1353,6 +1638,35 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             membersOpen,
             onToggleMembers: () => setMembersOpen((v) => !v),
             voiceCards,
+            lineBefore:
+              newSince.info?.nebulaId === chatNebula.id ? newSince.lineBefore : undefined,
+            // 0.8.0: the search button searches the whole constellation (Ctrl+F: this nebula)
+            onSearchAll: () => setSearchAll(true),
+            // 0.8.0 events: a card under its "made an event 📅" message
+            bodyFor: (m) => (eventsByMessage.has(m.id) ? 'made an event 📅' : null),
+            cardFor: (m) => {
+              const e = eventsByMessage.get(m.id)
+              if (!e) return null
+              const vs = e.voiceNebulaId ? c.voice.find((v) => v.nebulaId === e.voiceNebulaId) : null
+              return (
+                <EventCard
+                  event={e}
+                  constellation={c}
+                  now={now}
+                  inVoice={vs?.userIds.length ?? 0}
+                  onChanged={cxEvents.setEvent}
+                  onEdit={(ev) => setEventDialog({ editing: ev })}
+                  onJoinVoice={(id) => {
+                    const v = c.nebulas.find((n) => n.id === id)
+                    if (v) {
+                      props.onSelectNebula(v.id)
+                      if (inVoiceHere?.id !== v.id) joinVoice(v)
+                    }
+                  }}
+                  onProblem={props.onProblem}
+                />
+              )
+            },
             headerExtra: (
               <NotifyButton
                 level={chatNebula.notify}
@@ -1362,6 +1676,21 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             )
           }}
         />
+        {newSince.info?.nebulaId === chatNebula.id && !voiceChatOpen && (
+          <NewSincePill
+            info={newSince.info}
+            onJump={() => {
+              if (!scrollToNewLine())
+                document
+                  .querySelector('.cx-main [data-message-id]')
+                  ?.scrollIntoView({ block: 'start' })
+            }}
+            onMarkRead={() => {
+              newSince.clear()
+              void window.glofly.conversations.markRead(chatNebula.conversationId)
+            }}
+          />
+        )}
         {searching && (
           <SearchPanel
             me={me}
@@ -1381,18 +1710,94 @@ export default function ConstellationView(props: ConstellationViewProps): React.
 
   return (
     <div
-      className="cx-inside"
+      className={hasAccent(c) ? 'cx-inside cx-accented' : 'cx-inside'}
       style={{
         ['--cx-accent' as string]: theme.accent,
-        ['--cx-glow' as string]: hexA(theme.glow, 0.45)
+        ['--cx-glow' as string]: hexA(theme.glow, 0.45),
+        ...accentStyle(c)
       }}
     >
       {strip}
       {sidebar}
       {main}
-      {nebula && (nebula.kind === 'text' || voiceChatOpen) && membersPanel}
+      {/* 0.7.5: the welcome screen, once, right after you join (about, rules, pick your roles) */}
+      {needsWelcome(c) && welcomeShownFor !== c.id && (
+        <WelcomeDialog
+          detail={c}
+          me={me}
+          friendIds={props.friendIds}
+          onDone={(next) => {
+            setWelcomeShownFor(c.id)
+            if (next) props.onChanged(next)
+          }}
+          onProblem={props.onProblem}
+        />
+      )}
+      {eventDialog && (
+        <EventDialog
+          constellation={c}
+          nebulaId={nebula?.kind === 'text' ? nebula.id : null}
+          editing={eventDialog.editing}
+          onClose={() => setEventDialog(null)}
+          onSaved={(e) => {
+            setEventDialog(null)
+            cxEvents.reload()
+            if (e?.messageId && !eventDialog.editing) showMessage(e.nebulaId, e.messageId)
+          }}
+        />
+      )}
+      {rolesOpen && (
+        <YourRolesDialog
+          detail={c}
+          me={me}
+          onClose={() => setRolesOpen(false)}
+          onChanged={props.onChanged}
+          onProblem={props.onProblem}
+        />
+      )}
+      {searchAll ? (
+        <CxSearch
+          constellation={c}
+          onClose={() => setSearchAll(false)}
+          onJump={(targetNebulaId, messageId) => showMessage(targetNebulaId, messageId)}
+        />
+      ) : (
+        nebula && (nebula.kind === 'text' || voiceChatOpen) && membersPanel
+      )}
       {menuEl}
       {nebMenuEl}
+      {livePeek && (
+        <LivePreview
+          key={`${livePeek.nebula.id}:${livePeek.sharer.id}`}
+          constellationId={c.id}
+          nebulaId={livePeek.nebula.id}
+          nebulaName={livePeek.nebula.name}
+          sharer={livePeek.sharer}
+          game={
+            c.members
+              .find((m) => m.user.id === livePeek.sharer.id)
+              ?.activity?.replace(/^Playing /, '') ?? null
+          }
+          watching={Math.max(0, (peekState?.userIds.length ?? 1) - 1)}
+          anchor={livePeek.anchor}
+          onJoinAndWatch={() => {
+            const n = livePeek.nebula
+            setLivePeek(null)
+            joinVoice(n)
+          }}
+          onJustJoin={() => {
+            const n = livePeek.nebula
+            setLivePeek(null)
+            joinVoice(n, false)
+          }}
+          onClose={() => setLivePeek(null)}
+          onHoverChange={(over) => {
+            peekOver.current = over
+            if (over) clearPeekTimer()
+            else leaveLive()
+          }}
+        />
+      )}
       {confirm &&
         (confirm.kind === 'leave' ? (
           <ConfirmDialog

@@ -50,8 +50,11 @@ type SettingsDialogProps = {
   onAccountDeleted: (deleteAfter: string) => void
   /** Which page to open on (General unless said otherwise). */
   initialPage?: SettingsPage
-  /** Scrolled into view once open (the Jump List / Dock menu's "Quiet hours") */
-  scrollTo?: 'quiet-hours'
+  /**
+   * Scrolled into view once open: a row's id without "settings-" (the Jump List / Dock menu's
+   * "quiet-hours") or a section's heading as shown ("Privacy"; the Ctrl+K quick switcher).
+   */
+  scrollTo?: string
 }
 
 export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'about'
@@ -566,8 +569,13 @@ export default function SettingsDialog({
     if (!scrollTo) return
     // The row is there once the page has drawn (its settings load first).
     const timer = setTimeout(() => {
-      const row = document.getElementById(`settings-${scrollTo}`)
-      row?.scrollIntoView({ block: 'center' })
+      const row =
+        document.getElementById(`settings-${scrollTo}`) ??
+        Array.from(document.querySelectorAll<HTMLElement>('.settings-content h2')).find(
+          (h) => h.textContent?.trim() === scrollTo
+        )?.parentElement ??
+        null
+      row?.scrollIntoView({ block: row.id ? 'center' : 'start' })
       row?.classList.add('settings-row--flash')
     }, 350)
     return () => clearTimeout(timer)

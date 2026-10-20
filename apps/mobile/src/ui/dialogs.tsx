@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native'
+import Animated from 'react-native-reanimated'
+import { riseIn } from './motion'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { create } from 'zustand'
 import { Icon, type IconName } from './icons'
@@ -134,7 +136,7 @@ export function DialogHost() {
 type Shown = { visible: boolean; onDismiss: () => void }
 
 function ConfirmDialog({ o, visible, onDismiss }: { o: Extract<Overlay, { kind: 'confirm' }> } & Shown) {
-  const { c } = useTheme()
+  const { c, dark: isDark } = useTheme()
   const done = (ok: boolean) => {
     if (o.closing) return
     pop()
@@ -144,7 +146,8 @@ function ConfirmDialog({ o, visible, onDismiss }: { o: Extract<Overlay, { kind: 
   return (
     <Modal visible={visible} onDismiss={onDismiss} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => done(false)}>
       <Pressable accessibilityLabel="Close" onPress={() => cancelLabel !== null && done(false)} style={{ flex: 1, backgroundColor: c.backdrop, alignItems: 'center', justifyContent: 'center', padding: 28 }}>
-        <Pressable accessibilityRole="alert" style={{ width: '100%', maxWidth: 360, backgroundColor: c.sheet, borderRadius: 28, padding: 24, gap: 14 }}>
+        <Animated.View entering={riseIn} style={{ width: '100%', maxWidth: 360 }}>
+        <Pressable accessibilityRole="alert" style={{ width: '100%', backgroundColor: c.sheet, borderRadius: 28, padding: 24, gap: 14, borderWidth: isDark ? 1 : 0, borderColor: 'rgba(255,255,255,0.07)' }}>
           <Text display size={22}>
             {title}
           </Text>
@@ -172,6 +175,7 @@ function ConfirmDialog({ o, visible, onDismiss }: { o: Extract<Overlay, { kind: 
             </Pressable>
           </View>
         </Pressable>
+        </Animated.View>
       </Pressable>
     </Modal>
   )
@@ -229,16 +233,18 @@ export const SHEET_MAX_WIDTH = 560
 export function BottomSheet({ onClose, children, visible = true, onDismiss }: { onClose: () => void; children: ReactNode; visible?: boolean; onDismiss?: () => void }) {
   const { c } = useTheme()
   return (
-    <Modal visible={visible} onDismiss={onDismiss} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+    // 0.7.5 motion: the backdrop fades and the sheet rises 40 px into place (ui/motion.tsx).
+    <Modal visible={visible} onDismiss={onDismiss} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable accessibilityLabel="Close" onPress={onClose} style={{ position: 'absolute', inset: 0, backgroundColor: c.backdrop }} />
-        <View
+        <Animated.View
+          entering={riseIn}
           // iPad (and other wide screens): a sheet stays a comfortable width, centered.
           style={{ backgroundColor: c.sheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 10, width: '100%', maxWidth: SHEET_MAX_WIDTH, alignSelf: 'center' }}
         >
           <View style={{ alignSelf: 'center', width: 32, height: 4, borderRadius: 2, backgroundColor: c.faint, opacity: 0.6, marginBottom: 10 }} />
           {children}
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   )

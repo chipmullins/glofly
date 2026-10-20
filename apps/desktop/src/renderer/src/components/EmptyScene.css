@@ -1,0 +1,186 @@
+/* 0.7.5 empty screens (components/EmptyScene.tsx, EmptyStates.dc.html) */
+
+.empty-scene {
+  --es-fill: #fdf1e6;
+  --es-stroke: #e8d3c0;
+  --es-dash: #f0dccb;
+  --es-lid: #ecd8c6;
+  --es-line: #d9c4b2;
+  --es-star: #b8a08c;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  color: var(--glo-ink);
+}
+:root[data-theme='dark'] .empty-scene,
+.empty-scene--night {
+  --es-fill: #2a221e;
+  --es-stroke: #4a3e36;
+  --es-dash: #574a41;
+  --es-lid: #4a3e36;
+  --es-line: #5a4a40;
+  --es-star: #c9b8ab;
+}
+.empty-scene--page {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px 24px 80px;
+  text-align: center;
+}
+.empty-scene--card {
+  padding: 22px 26px;
+}
+.empty-scene--small {
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 12px;
+  text-align: center;
+}
+.empty-scene-art {
+  flex: none;
+  width: 170px;
+  height: 150px;
+}
+.empty-scene--small .empty-scene-art {
+  width: 110px;
+  height: 97px;
+}
+.empty-scene-words {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.empty-scene--page .empty-scene-words,
+.empty-scene--small .empty-scene-words {
+  align-items: center;
+}
+.empty-scene-title {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.25;
+}
+.empty-scene--small .empty-scene-title {
+  font-size: 17px;
+}
+.empty-scene-text {
+  margin: 0;
+  max-width: 360px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--glo-muted);
+}
+.empty-scene--small .empty-scene-text {
+  font-size: 14px;
+}
+.empty-scene--night .empty-scene-title {
+  color: #f5ede6;
+}
+.empty-scene--night .empty-scene-text {
+  color: #c9b8ab;
+}
+.empty-scene-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.empty-scene--page .empty-scene-actions,
+.empty-scene--small .empty-scene-actions {
+  justify-content: center;
+}
+/* The quiet second button: outlined in the accent */
+.scene-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--glo-accent);
+  background: transparent;
+  color: var(--glo-link);
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+.scene-button:hover {
+  background: var(--glo-accent-tint);
+}
+.empty-scene--night .scene-button {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #f5ede6;
+}
+.empty-scene--night .scene-button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.empty-scene .es-fill {
+  fill: var(--es-fill);
+  stroke: var(--es-stroke);
+}
+.empty-scene .es-stroke {
+  stroke: var(--es-stroke);
+}
+.empty-scene .es-dash {
+  stroke: var(--es-dash);
+}
+.empty-scene .es-lid {
+  fill: var(--es-lid);
+}
+.empty-scene .es-line {
+  stroke: var(--es-line);
+}
+.empty-scene .es-star {
+  fill: var(--es-star);
+}
+.empty-scene .es-speck {
+  fill: var(--es-star);
+  opacity: 0.6;
+}
+
+/* The fireflies drift and blink, each on its own beat */
+.es-fly {
+  transform-box: fill-box;
+  animation:
+    es-float 4s ease-in-out infinite,
+    es-blink 2.6s ease-in-out infinite;
+}
+.es-fly2 {
+  animation:
+    es-float 5s ease-in-out 0.8s infinite,
+    es-blink 3.1s ease-in-out 0.4s infinite;
+}
+.es-fly3 {
+  animation:
+    es-float 4.6s ease-in-out 1.6s infinite,
+    es-blink 2.2s ease-in-out 1s infinite;
+}
+@keyframes es-float {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(3px, -6px);
+  }
+}
+@keyframes es-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .es-fly {
+    animation: none;
+  }
+}

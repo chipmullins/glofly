@@ -7,6 +7,7 @@ import { firstName } from '@/lib/format'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { measure } from './ContextMenu'
+import { BannerArt } from './community'
 import { haptic } from './motion'
 import { nebulaMenu } from './nebulaActions'
 import { isQuiet, sectionsOf } from './roles'
@@ -100,7 +101,14 @@ export function ConstellationBanner({ c, width, onInvite, onSettings }: { c: Con
   return (
     <View>
       <View style={{ marginHorizontal: 12, height: 104, borderRadius: 20, backgroundColor: t.banner, overflow: 'hidden' }}>
-        <BannerStars id={c.id} color={c.color} width={width - 24} />
+        {/* 0.7.5 identity: its banner photo (or the sky in its accent once it picked one) */}
+        {c.bannerVersion || (c.accent && c.accent !== 'gold') ? (
+          <View style={{ position: 'absolute', inset: 0 } as object}>
+            <BannerArt c={c} width={width - 24} height={104} />
+          </View>
+        ) : (
+          <BannerStars id={c.id} color={c.color} width={width - 24} />
+        )}
         <View style={{ position: 'absolute', right: 10, top: 10, flexDirection: 'row', gap: 6 }}>
           {onInvite ? <BannerButton label="Invite people" icon="addPerson" onPress={onInvite} /> : null}
           <BannerButton label={`${c.name} settings`} icon="gear" onPress={onSettings} />
@@ -135,7 +143,13 @@ export function SideBanner({ c }: { c: ConstellationDetail }) {
   const online = c.members.filter((m) => m.status !== 'offline').length
   return (
     <View style={{ marginHorizontal: 12, height: 92, borderRadius: 18, backgroundColor: t.banner, overflow: 'hidden' }}>
-      <BannerStars id={c.id} color={c.color} width={276} />
+      {c.bannerVersion || (c.accent && c.accent !== 'gold') ? (
+        <View style={{ position: 'absolute', inset: 0, opacity: 0.85 } as object}>
+          <BannerArt c={c} width={276} height={92} />
+        </View>
+      ) : (
+        <BannerStars id={c.id} color={c.color} width={276} />
+      )}
       <Text display size={21} numberOfLines={1} style={{ position: 'absolute', left: 16, right: 90, bottom: 12 }} accessibilityRole="header">
         {c.name}
       </Text>

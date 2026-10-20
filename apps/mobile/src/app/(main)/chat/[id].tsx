@@ -35,6 +35,9 @@ import { Composer, type ComposerHandle } from '@/chat/Composer'
 import { MessageRow, type RowInfo } from '@/chat/MessageRow'
 import { TypingBubble } from '@/chat/TypingBubble'
 import { discard, isLocal, retry, sendText, setViewing, useOutbox } from '@/chat/send'
+import { tap } from '@/lib/haptics'
+import { DayPill, useDayPill } from '@/chat/DayPill'
+import { ReconnectingStrip } from '@/ui/Reconnecting'
 import { chatOpened } from '@/push'
 import { attachMenu, UploadTray, useUploads } from '@/chat/uploads'
 import { VoiceRecorderBar, RecordButton, useVoice } from '@/chat/voice'
@@ -45,7 +48,8 @@ import { useSocial } from '@/state/social'
 import { ChatAvatar } from '@/ui/Avatar'
 import { BottomSheet, chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
-import { IconButton, Spinner, Text } from '@/ui/kit'
+import { Button, IconButton, Spinner, Text } from '@/ui/kit'
+import { EmptyScene } from '@/ui/EmptyScene'
 import { Skeleton } from '@/ui/Skeleton'
 import { JumpToLatestButton, useJumpToLatest } from '@/chat/JumpToLatest'
 import { openReport, pickEmoji } from '@/ui/sheets'
@@ -200,6 +204,7 @@ export default function ChatScreen() {
         receipt,
         mentionsMe: isGroup && mentionsMe(m, meId) && m.senderId !== meId,
         outgoing: o ? o.status : null,
+        slow: !!o?.slow,
       })
     }
     return out.reverse()
@@ -207,6 +212,7 @@ export default function ChatScreen() {
   // Scrolled up more than a screen: a "Jump to latest" button (with "N new").
   const newestFirst = useMemo(() => rows.map((r) => r.message), [rows])
   const jumper = useJumpToLatest(newestFirst, meId, id, list, () => void markChatRead(id))
+  const dayPill = useDayPill<RowInfo>()
 
   const memberIds = useMemo(() => [meId, ...members.map((p) => p.id)], [meId, members])
   const canMessage = !!chat?.canMessage
@@ -275,6 +281,7 @@ export default function ChatScreen() {
 
   async function react(m: Message, emoji: string) {
     const on = !m.reactions.find((r) => r.emoji === emoji)?.userIds.includes(meId)
+    if (on) tap.light()
     // Shows right away; the server's copy replaces it.
     const reactions = m.reactions.map((r) => ({ ...r, userIds: [...r.userIds] }))
     const found = reactions.find((r) => r.emoji === emoji)
@@ -373,7 +380,9 @@ export default function ChatScreen() {
   const latest = useRef({ react, jumpTo })
   latest.current = { react, jumpTo }
   const onRowLongPress = useCallback((m: Message) => {
-    if (!isLocal(m)) setActionsFor(m)
+    if (isLocal(m)) return
+    tap.light()
+    setActionsFor(m)
   }, [])
   const onRowReact = useCallback((m: Message, e: string) => void latest.current.react(m, e), [])
   const onQuotePress = useCallback((mid: string) => void latest.current.jumpTo(mid), [])
@@ -480,6 +489,7 @@ export default function ChatScreen() {
         </View>
       </View>
 
+      <ReconnectingStrip />
       <PinnedBar pins={pinsApi.pins} onOpen={() => setPinsOpen(true)} />
       <View style={{ flex: 1 }}>
       <FlatList
@@ -498,6 +508,17 @@ export default function ChatScreen() {
             <View style={{ padding: 16 }}>
               <Spinner />
             </View>
+          ) : messages?.loaded && !messages.hasMore && !messages.list.length ? (
+            // 0.7.5: a brand-new chat says hi with a wave instead of an empty page.
+            <View>
+              <EmptyScene
+                kind={isGroup ? 'group' : 'hello'}
+                title={isGroup ? `${title} is all set` : `Say hi to ${chat.kind === 'dm' ? firstName(chat.partner.displayName) : ''} 👋`}
+                text={isGroup ? 'This is the beginning of the group. Say hello to everyone!' : `This is the start of your chat with ${chat.kind === 'dm' ? `@${chat.partner.username}` : ''}.`}
+              >
+                {canMessage ? <Button compact label="Wave 👋" onPress={() => sendText(id, '👋', null)} /> : null}
+              </EmptyScene>
+            </View>
           ) : messages?.loaded && !messages.hasMore ? (
             <View style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
               <ChatAvatar chat={chat} size={72} />
@@ -512,8 +533,10 @@ export default function ChatScreen() {
         }
         ListEmptyComponent={!messages?.loaded ? <View style={{ transform: [{ scaleY: -1 }] }}><Skeleton kind="messages" /></View> : null}
         renderItem={renderRow}
+        {...dayPill.listProps}
         {...jumper.listProps}
       />
+      <DayPill label={dayPill.label} visible={dayPill.visible} />
       <JumpToLatestButton visible={jumper.away} count={jumper.count} onPress={jumper.jump} />
       <ChatFireflies conversationId={id} meId={meId} nameOf={nameOf} />
       {partnerBirthday && chat.kind === 'dm' ? <BirthdayConfetti userId={chat.partner.id} name={chat.partner.displayName} /> : null}

@@ -1,6 +1,10 @@
 import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   ALL_PERMISSIONS,
+  CHATTING_PEOPLE,
+  CHATTING_WINDOW_MS,
+  DEFAULT_WELCOME,
+  isConstellationAccent,
   isConstellationColor,
   isConstellationType,
   isPermission,
@@ -11,6 +15,7 @@ import {
   type DirectoryEntry,
   type NotifyLevel,
   type PublicUser,
+  type WelcomeSettings,
 } from "@glofly/shared";
 import { db } from "../db";
 import {
@@ -46,6 +51,17 @@ export async function publicUsers(ids: string[]): Promise<Map<string, PublicUser
 const activeMute = (d: Date | null | undefined): string | null => (d && d.getTime() > Date.now() ? d.toISOString() : null);
 const notifyLevel = (x: string | null | undefined): NotifyLevel | null => (x === "all" || x === "mentions" || x === "none" ? x : null);
 const colorOf = (x: string) => (isConstellationColor(x) ? x : "ember");
+/** 0.7.5 identity fields every view carries. */
+export const identityOf = (c: { accent: string | null; bannerVersion: string | null }) => ({
+  accent: isConstellationAccent(c.accent) ? c.accent : null,
+  bannerVersion: c.bannerVersion,
+});
+/** 0.7.5: a constellation's welcome settings (stored ones over the defaults). */
+export function welcomeOf(raw: unknown): WelcomeSettings {
+  const w = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof WelcomeSettings, unknown>>;
+  const flag = (k: keyof WelcomeSettings) => (typeof w[k] === "boolean" ? (w[k] as boolean) : DEFAULT_WELCOME[k]);
+  return { screen: flag("screen"), joinLines: flag("joinLines"), milestones: flag("milestones"), preview: flag("preview") };
+}
 
 /** Unread and @mention counts per nebula conversation for one person. */
 export async function unreadFor(userId: string, conversationIds: string[]) {
@@ -76,6 +92,26 @@ export async function unreadFor(userId: string, conversationIds: string[]) {
   return out;
 }
 
+/** 0.7.5 living sky: how many different people posted in each of these nebulas in the last few minutes. */
+export async function chattingIn(conversationIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!conversationIds.length) return out;
+  const rows = await db
+    .select({ conversationId: messages.conversationId, people: sql<number>`count(distinct ${messages.senderId})::int` })
+    .from(messages)
+    .where(
+      and(
+        inArray(messages.conversationId, conversationIds),
+        isNull(messages.event),
+        isNull(messages.deletedAt),
+        gt(messages.createdAt, new Date(Date.now() - CHATTING_WINDOW_MS)),
+      ),
+    )
+    .groupBy(messages.conversationId);
+  for (const r of rows) out.set(r.conversationId, r.people);
+  return out;
+}
+
 /** Which of these people show as online right now: connected, and not set to invisible. */
 async function visiblyOnline(userIds: string[]): Promise<Set<string>> {
   if (!userIds.length) return new Set();
@@ -103,7 +139,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
     .from(constellationMembers)
     .where(inArray(constellationMembers.constellationId, ids));
   const allNebulas = await db
-    .select({ id: nebulas.id, constellationId: nebulas.constellationId, conversationId: nebulas.conversationId, name: nebulas.name, kind: nebulas.kind })
+    .select({ id: nebulas.id, constellationId: nebulas.constellationId, conversationId: nebulas.conversationId, name: nebulas.name, kind: nebulas.kind, position: nebulas.position, categoryId: nebulas.categoryId })
     .from(nebulas)
     .where(inArray(nebulas.constellationId, ids));
   const unread = await unreadFor(userId, allNebulas.map((n) => n.conversationId));
@@ -163,13 +199,40 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
       lastMention: null,
       activityAt: c.lastActivityAt.toISOString(),
       position,
+      ...identityOf(c),
     });
   }
 
   // The busiest voice nebula on each card, and the latest mention of me.
   const voiceByCard = await voiceStatesFor(cards.map((c) => c.id));
+  // 0.7.5 living sky: each nebula as a star, in the sidebar's order (categories, then nebulas).
+  const categoryRows = await db
+    .select({ id: constellationCategories.id, position: constellationCategories.position })
+    .from(constellationCategories)
+    .where(inArray(constellationCategories.constellationId, ids));
+  const categoryPosition = new Map(categoryRows.map((c) => [c.id, c.position]));
+  const chatting = await chattingIn(allNebulas.filter((n) => n.kind === "text").map((n) => n.conversationId));
   for (const card of cards) {
     const states = voiceByCard.get(card.id) ?? [];
+    const cardNotify = notifyLevel(mine.find((m) => m.c.id === card.id)?.notify) ?? "all";
+    card.sky = allNebulas
+      .filter((n) => n.constellationId === card.id)
+      .sort((a, b) => {
+        // Nebulas outside any category come first, like the sidebar.
+        const ca = a.categoryId && categoryPosition.has(a.categoryId) ? categoryPosition.get(a.categoryId)! : -1;
+        const cb = b.categoryId && categoryPosition.has(b.categoryId) ? categoryPosition.get(b.categoryId)! : -1;
+        return ca - cb || a.position - b.position;
+      })
+      .map((n) => {
+        const u = unread.get(n.conversationId);
+        const level = notifyLevel(settings.find((s) => s.conversationId === n.conversationId)?.level) ?? cardNotify;
+        return {
+          kind: n.kind,
+          news: n.kind === "text" && !!u && (u.mentions > 0 || (u.unread > 0 && level !== "none")),
+          chatting: (chatting.get(n.conversationId) ?? 0) >= CHATTING_PEOPLE,
+          voice: states.find((s) => s.nebulaId === n.id)?.userIds.length ?? 0,
+        };
+      });
     const busiest = states.filter((s) => s.userIds.length).sort((a, b) => b.userIds.length - a.userIds.length)[0];
     if (busiest) {
       const people = await publicUsers(busiest.userIds.slice(0, 3));
@@ -241,6 +304,7 @@ export async function entriesFor(viewerId: string, ids: string[]): Promise<Direc
       friends: memberIds.filter((id) => friends.has(id)).slice(0, 3).map((id) => people.get(id)!).filter(Boolean),
       joined: memberIds.includes(viewerId),
       requested: requests.some((q) => q.constellationId === r.id),
+      ...identityOf(r),
     };
   });
   // Keep the order asked for.
@@ -264,19 +328,28 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
     .orderBy(constellationCategories.position);
   const nebulaRows = await db.select().from(nebulas).where(eq(nebulas.constellationId, constellationId)).orderBy(nebulas.position);
   const unread = await unreadFor(userId, nebulaRows.map((n) => n.conversationId));
+  const chatting = await chattingIn(nebulaRows.filter((n) => n.kind === "text").map((n) => n.conversationId));
   const mySettings = nebulaRows.length
     ? await db
         .select({
           conversationId: conversationMembers.conversationId,
           level: conversationMembers.notifyLevel,
           mutedUntil: conversationMembers.mutedUntil,
+          lastReadAt: conversationMembers.lastReadAt,
         })
         .from(conversationMembers)
         .where(and(eq(conversationMembers.userId, userId), inArray(conversationMembers.conversationId, nebulaRows.map((n) => n.conversationId))))
     : [];
   const roleRows = await db.select().from(constellationRoles).where(eq(constellationRoles.constellationId, constellationId));
   const memberRows = await db
-    .select({ userId: constellationMembers.userId, joinedAt: constellationMembers.joinedAt, timedOutUntil: constellationMembers.timedOutUntil, notify: constellationMembers.notify })
+    .select({
+      userId: constellationMembers.userId,
+      joinedAt: constellationMembers.joinedAt,
+      timedOutUntil: constellationMembers.timedOutUntil,
+      notify: constellationMembers.notify,
+      welcomedAt: constellationMembers.welcomedAt,
+      rulesAgreedAt: constellationMembers.rulesAgreedAt,
+    })
     .from(constellationMembers)
     .where(eq(constellationMembers.constellationId, constellationId));
   const assignments = await db
@@ -306,6 +379,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
         position: r.position,
         permissions: r.permissions.filter(isPermission),
         memberCount: r.kind === "member" ? memberRows.length : assignments.filter((a) => a.roleId === r.id).length,
+        selfAssign: r.kind === "custom" && r.selfAssign,
       }))
       .sort((a, b) => b.position - a.position),
   ];
@@ -339,6 +413,8 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       mentionCount: unread.get(n.conversationId)?.mentions ?? 0,
       notify: notifyLevel(mySettings.find((s) => s.conversationId === n.conversationId)?.level),
       mutedUntil: activeMute(mySettings.find((s) => s.conversationId === n.conversationId)?.mutedUntil),
+      lastReadAt: mySettings.find((s) => s.conversationId === n.conversationId)?.lastReadAt?.toISOString() ?? null,
+      chatting: chatting.get(n.conversationId) ?? 0,
     })),
     roles,
     members: memberRows
@@ -352,6 +428,8 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
           status: p?.status ?? "offline",
           // Only the game they're playing (custom statuses stay for friends).
           activity: p?.activity ? `Playing ${p.activity.name}` : null,
+          playing: p?.activity ? { name: p.activity.name, since: p.activity.since } : null,
+          lastSeenAt: p?.lastSeenAt ?? null,
         };
       })
       .filter((m) => !!m.user),
@@ -364,5 +442,10 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       notify: notifyLevel(myRow?.notify) ?? "all",
     },
     pendingRequests,
+    ...identityOf(c),
+    rules: c.rules,
+    welcome: welcomeOf(c.welcome),
+    welcomedAt: myRow?.welcomedAt?.toISOString() ?? null,
+    rulesAgreedAt: myRow?.rulesAgreedAt?.toISOString() ?? null,
   };
 }

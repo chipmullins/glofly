@@ -16,6 +16,7 @@ import { haptic } from './motion'
 import { endTimeout, kickOrBan, pickTimeout, voiceDisconnect, voiceMute } from './moderation'
 import { activityOf, can, memberGroups, outranks, roleColor, STATUS_WORD } from './roles'
 import { NightModal } from './sheet'
+import { MemberExtras } from './community'
 import { Card, Face, Glyph, N, Row, SpeakerGlyph } from './ui'
 
 // Members, grouped by role (canvas board 4), and the member actions sheet (you outrank them).
@@ -181,6 +182,8 @@ export function MemberSheetHost() {
             </View>
           ) : null}
         </View>
+        {/* 0.7.5: what they're playing and the friends you both have (the Members board) */}
+        <MemberExtras c={c} userId={m.user.id} playing={m.playing} />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {!me ? (
             <>

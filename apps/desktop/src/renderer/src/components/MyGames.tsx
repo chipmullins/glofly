@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import EmptyScene from './EmptyScene'
 import {
   MY_GAMES_VISIBILITY,
   playtimeLabel,
@@ -178,11 +179,16 @@ export default function MyGamesPanel({
         </p>
       )}
       {games !== null && shared && games.length === 0 && (
-        <p className="mg-note">
-          {isMe
-            ? 'No games yet. When Glofly sees you playing something (Settings → General → Show what I’m playing), its time adds up here.'
-            : `${first} hasn't played anything Glofly has seen yet.`}
-        </p>
+        <EmptyScene
+          kind="games"
+          layout="small"
+          title="No games yet"
+          text={
+            isMe
+              ? 'When Glofly sees you playing something (Settings → General → Show what I’m playing), its time adds up here.'
+              : `${first} hasn't played anything Glofly has seen yet.`
+          }
+        />
       )}
       {favorites.length > 0 && (
         <>

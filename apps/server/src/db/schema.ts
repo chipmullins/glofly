@@ -38,6 +38,10 @@ export type ChatEvent =
   // it, so it travels as `eventLine3`. `names` are for older apps' plain text; `movedTo` (in a
   // 1-on-1 chat) is the new group the call moved to.
   | { type: "callAdd"; callId: string; userIds: string[]; names: string[]; movedTo: string | null }
+  // 0.7.5 Constellations: someone joined (the "Say hi" line) and member milestones / birthdays.
+  // Older apps don't know them, so they travel as `eventLine4` with a plain-text body.
+  | { type: "cxJoined"; name: string }
+  | { type: "cxMilestone"; name: string; members: number | null; years: number | null }
   // A call. The line changes as the call goes: ringing → ongoing → ended (or missed / declined).
   | { type: "call"; callId: string; video: boolean; status: CallStatus; durationSec: number | null };
 
@@ -911,6 +915,16 @@ export const constellations = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     // The newest message in any of its nebulas (the dashboard's "Quiet since yesterday").
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),
+    // 0.7.5 identity: @glofly/shared ConstellationAccent (null = firefly gold) and the banner
+    // photo's version (null = the drawn sky). `color` stays set to the nearest older color.
+    accent: text("accent"),
+    bannerVersion: text("banner_version"),
+    // 0.7.5 welcome: the house rules, and @glofly/shared WelcomeSettings (null = the defaults).
+    rules: text("rules").array().notNull().default(sql`'{}'::text[]`),
+    welcome: jsonb("welcome"),
+    // 0.7.5 celebrations already posted: the highest member milestone and birthday year.
+    celebratedMembers: integer("celebrated_members").notNull().default(0),
+    celebratedYears: integer("celebrated_years").notNull().default(0),
   },
   (t) => [
     index("constellations_owner_idx").on(t.ownerId),
@@ -938,6 +952,8 @@ export const constellationRoles = pgTable(
     position: integer("position").notNull(),
     // @glofly/shared ConstellationPermission ids
     permissions: text("permissions").array().notNull().default(sql`'{}'::text[]`),
+    // 0.7.5: members can give themselves this role (welcome screen, "Your roles").
+    selfAssign: boolean("self_assign").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("constellation_roles_constellation_idx").on(t.constellationId)],
@@ -959,6 +975,10 @@ export const constellationMembers = pgTable(
     notify: text("notify").notNull().default("all"),
     // Where they dragged it on the dashboard / icon strip (null = never moved).
     position: integer("position"),
+    // 0.7.5: they saw the welcome screen (null = show it; set for everyone already in) and
+    // agreed to the house rules.
+    welcomedAt: timestamp("welcomed_at", { withTimezone: true }),
+    rulesAgreedAt: timestamp("rules_agreed_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.constellationId, t.userId] }),
@@ -1268,3 +1288,122 @@ export const appErrors = pgTable(
   },
   (t) => [index("app_errors_last_idx").on(t.lastAt)],
 );
+
+// ---------------------------------------------------------------------------------------------
+// 0.8.0 Constellations community tools (approved Oct 20 boards 13, 14, 15)
+
+// AutoMod lite: one row per constellation that turned something on (no row = all off).
+export const constellationAutomod = pgTable("constellation_automod", {
+  constellationId: uuid("constellation_id")
+    .primaryKey()
+    .references(() => constellations.id, { onDelete: "cascade" }),
+  wordsOn: boolean("words_on").notNull().default(false),
+  // Stored as cleaned by @glofly/shared cleanBlockedWord (lower case, `*` = any letters).
+  words: text("words").array().notNull().default(sql`'{}'::text[]`),
+  linkGuardOn: boolean("link_guard_on").notNull().default(false),
+  slowModeOn: boolean("slow_mode_on").notNull().default(false),
+  // nebulaId → seconds between someone's messages there
+  slowMode: jsonb("slow_mode").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+  // New members can post after this many minutes (0 = off)
+  newMemberWaitMinutes: integer("new_member_wait_minutes").notNull().default(0),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Messages AutoMod held back (a blocked word, or link spam). Nobody sees them unless a moderator
+// presses Undo in the moderation log, which posts them as the sender would have.
+export const automodHeld = pgTable(
+  "automod_held",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    replyToId: uuid("reply_to_id").references(() => messages.id, { onDelete: "set null" }),
+    // "word" or "links"; `detail` = the blocked word, or which rule the links broke
+    reason: text("reason").notNull(),
+    detail: text("detail"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Undo: let through by a moderator (the message it became), or null while held
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    releasedBy: uuid("released_by").references(() => users.id, { onDelete: "set null" }),
+    releasedMessageId: uuid("released_message_id").references(() => messages.id, { onDelete: "set null" }),
+  },
+  (t) => [index("automod_held_constellation_idx").on(t.constellationId, t.createdAt)],
+);
+
+// Events with RSVP. The card is a message in a text nebula (its plain text works in older apps);
+// the event itself lives here, with who's going.
+export const constellationEvents = pgTable(
+  "constellation_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
+    voiceNebulaId: uuid("voice_nebula_id").references(() => nebulas.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    // IANA zone it was planned in ("8:30 PM Eastern" in the plain-text card)
+    timeZone: text("time_zone"),
+    hostId: uuid("host_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    // The sweep's marks: reminder sent 15 minutes before; started
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("constellation_events_constellation_idx").on(t.constellationId, t.startsAt),
+    index("constellation_events_due_idx").on(t.startsAt).where(sql`${t.cancelledAt} is null and ${t.startedAt} is null`),
+  ],
+);
+
+export const constellationEventRsvps = pgTable(
+  "constellation_event_rsvps",
+  {
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => constellationEvents.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // "going" / "maybe" / "no"
+    answer: text("answer").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.eventId, t.userId] }), index("constellation_event_rsvps_user_idx").on(t.userId)],
+);
+
+// The Inbox: items someone marked read one by one, and when they last pressed "Mark all read".
+export const inboxReads = pgTable(
+  "inbox_reads",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    itemKey: text("item_key").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.itemKey] })],
+);
+
+export const inboxState = pgTable("inbox_state", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  clearedAt: timestamp("cleared_at", { withTimezone: true }).notNull().defaultNow(),
+});

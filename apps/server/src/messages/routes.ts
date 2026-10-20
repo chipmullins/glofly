@@ -4,6 +4,7 @@ import { rateLimit } from "express-rate-limit";
 import { and, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
+import { redis } from "../redis";
 import { alias } from "drizzle-orm/pg-core";
 import {
   attachments,
@@ -47,6 +48,7 @@ import { emitToUser } from "../realtime";
 import { isNebulaChat } from "../constellations/chats";
 import { canModerateNebula, canPostInNebula, nebulaChatOpen, whyCantPostInNebula } from "../constellations/perms";
 import { logModeration, nebulaActivity } from "../constellations/activity";
+import { automodGate, automodWordInEdit } from "../constellations/automod";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
 import { voiceAsM4a } from "./voiceM4a";
@@ -1381,11 +1383,40 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     : (attachmentIds.length ? captionBody : messageBody).safeParse(req.body?.body);
   const replyTo = z.uuid().optional().safeParse(req.body?.replyToId ?? undefined);
   const myId = me(res).id;
+  // 0.7.5: apps send a clientId with each new message; a retry of the same message (the first
+  // try reached us, its answer didn't reach them) gets the first one back instead of a copy.
+  const clientId = clientIdOf(req.body?.clientId);
 
   if (!id.success) {
     res.status(404).json({ error: "not_found" });
     return;
   }
+  let dedupeKey: string | null = null;
+  if (clientId) {
+    dedupeKey = `sendclient:${myId}:${id.data}:${clientId}`;
+    const first = await claimClientId(dedupeKey);
+    if (first !== "new") {
+      if (first === "busy") {
+        res.status(409).json({ error: "in_flight", message: "Still sending that message. Try again in a moment." });
+        return;
+      }
+      const [row] = await db.select(messageFields).from(messages).where(and(eq(messages.id, first), eq(messages.conversationId, id.data), eq(messages.senderId, myId))).limit(1);
+      if (row) {
+        const [message] = await hydrate([row]);
+        res.status(200).json({ message });
+        return;
+      }
+      // The first one is gone (deleted for good): send again.
+      await redis.set(dedupeKey, "pending", { EX: CLIENT_ID_PENDING_SECONDS }).catch(() => {});
+    }
+  }
+  // Anything below that answers without sending lets the same clientId try again later.
+  const releaseClientId = (): void => {
+    if (dedupeKey) void redis.del(dedupeKey).catch(() => {});
+  };
+  res.on("finish", () => {
+    if (res.statusCode >= 400) releaseClientId();
+  });
   if (!files.success) {
     res.status(400).json({
       error: "invalid",
@@ -1442,6 +1473,15 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   }
   const text = gif ? gifFallback(gif) : body.data;
 
+  // 0.8.0 AutoMod lite (nebulas): new-member wait, slow mode, blocked words, link spam.
+  if (chat.kind === "nebula") {
+    const refused = await automodGate(id.data, myId, text, replyToId);
+    if (refused) {
+      res.status(refused.status).json({ error: refused.error, message: refused.message });
+      return;
+    }
+  }
+
   // Groups and nebulas: who this @mentions (only people in it right now).
   const mentions = chat.kind !== "dm" && !gif ? await mentionsIn(text, chat.memberIds, myId) : [];
 
@@ -1493,6 +1533,7 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     throw err;
   }
 
+  if (dedupeKey) await redis.set(dedupeKey, inserted.id, { EX: CLIENT_ID_SECONDS }).catch(() => {});
   const [message] = await hydrate([inserted]);
   // Instantly to everyone in the chat (all their signed-in devices).
   for (const userId of chat.memberIds) emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
@@ -1512,6 +1553,33 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
 
 class AttachmentGone extends Error {}
 
+/** How long a sent message's clientId is remembered (retries happen within minutes). */
+const CLIENT_ID_SECONDS = 24 * 60 * 60;
+/** A send in progress holds its clientId this long at most (a crash mid-send frees it). */
+const CLIENT_ID_PENDING_SECONDS = 60;
+
+/** A clientId is 8–64 letters, digits, - or _ (apps use a random UUID); anything else is ignored. */
+function clientIdOf(value: unknown): string | null {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(value) ? value : null;
+}
+
+/**
+ * Claims a clientId for this send. "new": go ahead. "busy": the same message is being sent
+ * right now. Otherwise the id of the message already sent with it. Redis being down never
+ * stops a message: it just isn't deduplicated.
+ */
+async function claimClientId(key: string): Promise<"new" | "busy" | string> {
+  try {
+    const set = await redis.set(key, "pending", { NX: true, EX: CLIENT_ID_PENDING_SECONDS });
+    if (set) return "new";
+    const value = await redis.get(key);
+    if (!value) return "new";
+    return value === "pending" ? "busy" : value;
+  } catch {
+    return "new";
+  }
+}
+
 /**
  * 0.7.3 "Send later": posts a text message as if it was typed now (the server's sweep calls this
  * at its time). The same steps as sending: checks, the chat moves up, everyone gets it live,
@@ -1526,6 +1594,11 @@ export async function postScheduledText(
   const chat = await access(conversationId, myId);
   if (!chat) return { ok: false, reason: "You're no longer in this chat." };
   if (!(await canPost(chat, myId))) return { ok: false, reason: await cantPostMessage(chat, myId) };
+  // 0.8.0 AutoMod lite runs on scheduled nebula messages too.
+  if (chat.kind === "nebula") {
+    const refused = await automodGate(conversationId, myId, text, replyToId);
+    if (refused) return { ok: false, reason: refused.message };
+  }
   let reply = replyToId;
   if (reply) {
     const original = await findMessage(conversationId, reply);
@@ -1628,15 +1701,17 @@ export async function messageIn(conversationId: string, messageId: string) {
 }
 
 /** Shared checks for changing a message: it exists in a chat you're in, and messaging is allowed. */
-async function loadForChange(conversationIdRaw: unknown, messageIdRaw: unknown, myId: string) {
+async function loadForChange(conversationIdRaw: unknown, messageIdRaw: unknown, myId: string, wave?: unknown) {
   const conversationId = idParam.safeParse(conversationIdRaw);
   const messageId = idParam.safeParse(messageIdRaw);
   if (!conversationId.success || !messageId.success) return { status: 404 as const };
   const chat = await access(conversationId.data, myId);
   if (chat === null) return { status: 404 as const };
   const message = await findMessage(conversationId.data, messageId.data);
-  // Group events ("Chip renamed the group") can't be edited, deleted or reacted to.
-  if (!message || message.event) return { status: 404 as const };
+  // Group events ("Chip renamed the group") can't be edited, deleted or reacted to. 0.7.5: except
+  // a 👋 on a constellation's "Priya joined. Say hi!" line (its Say hi button).
+  const waving = message?.event?.type === "cxJoined" && wave === "👋";
+  if (!message || (message.event && !waving)) return { status: 404 as const };
   return { status: 200 as const, message, chat, conversationId: conversationId.data };
 }
 
@@ -1676,6 +1751,14 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
       message: `Messages can be 1 to ${MESSAGE_MAX.toLocaleString()} characters.`,
     });
     return;
+  }
+  // 0.8.0 AutoMod lite: an edit can't sneak in a blocked word (nebulas).
+  if (chat.kind === "nebula" && body.data !== message.body) {
+    const word = await automodWordInEdit(conversationId, myId, body.data);
+    if (word) {
+      res.status(403).json({ error: "forbidden", message: word });
+      return;
+    }
   }
   if (body.data !== message.body) {
     // Mentions follow the new text (an edit doesn't notify anyone again).
@@ -1762,7 +1845,7 @@ export async function removeMessageForGood(messageId: string): Promise<boolean> 
 // PUT /conversations/:id/messages/:messageId/reactions/:emoji — add your reaction.
 conversationsRouter.put("/:id/messages/:messageId/reactions/:emoji", sendLimiter, async (req, res) => {
   const myId = me(res).id;
-  const found = await loadForChange(req.params.id, req.params.messageId, myId);
+  const found = await loadForChange(req.params.id, req.params.messageId, myId, req.params.emoji);
   const emoji = emojiParam.safeParse(req.params.emoji);
   if (found.status !== 200 || found.message.deletedAt) {
     res.status(404).json({ error: "not_found" });
@@ -1797,7 +1880,7 @@ conversationsRouter.put("/:id/messages/:messageId/reactions/:emoji", sendLimiter
 // DELETE /conversations/:id/messages/:messageId/reactions/:emoji — remove your reaction.
 conversationsRouter.delete("/:id/messages/:messageId/reactions/:emoji", async (req, res) => {
   const myId = me(res).id;
-  const found = await loadForChange(req.params.id, req.params.messageId, myId);
+  const found = await loadForChange(req.params.id, req.params.messageId, myId, req.params.emoji);
   if (found.status !== 200) {
     res.status(404).json({ error: "not_found" });
     return;

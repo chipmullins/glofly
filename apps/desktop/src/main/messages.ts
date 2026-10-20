@@ -103,14 +103,15 @@ export async function sendMessage(
   body: string,
   replyToId?: string,
   attachmentIds?: string[],
-  options?: { lantern?: boolean }
+  options?: { lantern?: boolean; clientId?: string }
 ): Promise<ApiResult<Message>> {
   return unwrap(
     await request('POST', `/conversations/${conversationId}/messages`, {
       body,
       replyToId,
       ...(attachmentIds?.length ? { attachmentIds } : {}),
-      ...(options?.lantern ? { lantern: true } : {})
+      ...(options?.lantern ? { lantern: true } : {}),
+      ...(options?.clientId ? { clientId: options.clientId } : {})
     })
   )
 }

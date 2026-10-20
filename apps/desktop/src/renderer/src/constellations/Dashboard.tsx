@@ -22,6 +22,7 @@ import {
   StarIcon
 } from './bits'
 import { DashboardSky, FireflyMark } from './sky'
+import NebulaSky from './NebulaSky'
 import './Discover.css'
 
 // The Constellations dashboard (Dashboard.dc.html, approved): the night sky, "Back to Glofly" top
@@ -111,7 +112,15 @@ function Card({
       {...dragProps}
     >
       <div className="cx-banner" style={{ background: t.banner }}>
-        <BannerStars id={card.id} color={card.color} />
+        {card.sky?.length ? (
+          <NebulaSky
+            id={card.id}
+            stars={card.sky.map((star, i) => ({ ...star, key: String(i), label: '' }))}
+            scale={0.6}
+          />
+        ) : (
+          <BannerStars id={card.id} color={card.color} />
+        )}
         {badge && (
           <span
             className="cx-card-badge"

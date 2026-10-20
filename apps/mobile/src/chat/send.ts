@@ -4,9 +4,13 @@ import * as api from '@/api/glofly'
 import { onSignOut, useSession } from '@/state/session'
 import { chatMessages, putMessage, setChatMessages, useStore } from '@/state/store'
 import { receiveMessage } from '@/state/sync'
+import { tap } from '@/lib/haptics'
 
-// Sending: the message shows straight away (dimmed while it's on its way), and is swapped for
-// the server's copy when it lands. If it fails it stays, with "Didn't send · Tap to try again".
+// Sending: the message shows straight away, and is swapped for the server's copy when it lands.
+// 0.7.5: it only dims, with a quiet "Sending…", if the server takes more than 1.5 s. If it fails
+// it stays, with "Not sent · Retry · Delete". Every message carries a clientId that its retries
+// reuse, so the server hands back the first copy instead of making a second one. Failures from
+// the connection being down are retried once by themselves when Glofly reconnects.
 
 type Outgoing = {
   conversationId: string
@@ -17,6 +21,24 @@ type Outgoing = {
   lantern?: boolean
   status: 'sending' | 'failed'
   error?: string
+  /** 0.7.5: the same on every retry (the server's duplicate guard) */
+  clientId: string
+  /** Still waiting after 1.5 s: "Sending…" */
+  slow?: boolean
+  /** Failed because the connection was down: retried once on reconnect */
+  offline?: boolean
+}
+
+/** How long before a message still on its way says "Sending…". */
+export const SLOW_AFTER_MS = 1500
+
+function newClientId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  } catch {
+    // fall through
+  }
+  return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
 }
 
 export const useOutbox = create<{ items: Record<string, Outgoing> }>(() => ({ items: {} }))
@@ -60,30 +82,54 @@ export function sendText(conversationId: string, body: string, reply: Message | 
     lantern,
   }
   if (!chatMessages(conversationId).loaded) setChatMessages(conversationId, { loaded: true })
+  // 0.7.5: a light tap as it goes (follows the phone's own vibration setting).
+  tap.light()
   putMessage(local)
-  const item: Outgoing = { conversationId, body, replyToId: reply?.id, attachmentIds: attachments.map((a) => a.id), lantern, status: 'sending' }
+  const item: Outgoing = { conversationId, body, replyToId: reply?.id, attachmentIds: attachments.map((a) => a.id), lantern, status: 'sending', clientId: newClientId() }
   setItem(localId, item)
   void deliver(localId, item)
 }
 
-async function deliver(localId: string, item: Outgoing) {
-  const r = await api.sendMessage(item.conversationId, item.body, item.replyToId, item.attachmentIds, item.lantern)
+async function deliver(localId: string, item: Outgoing, attempt = 0) {
+  const slow = setTimeout(() => {
+    const now = useOutbox.getState().items[localId]
+    if (now && now.status === 'sending') setItem(localId, { ...now, slow: true })
+  }, SLOW_AFTER_MS)
+  const r = await api.sendMessage(item.conversationId, item.body, item.replyToId, item.attachmentIds, item.lantern, item.clientId)
+  clearTimeout(slow)
+  const current = useOutbox.getState().items[localId]
+  if (!current) return // deleted meanwhile
   if (r.ok) {
     dropLocal(item.conversationId, localId)
     setItem(localId, null)
     receiveMessage(r.data, { appActive: true })
+  } else if (r.error === 'conflict' && attempt < 5) {
+    // The first try is still being saved on the server: ask again in a moment.
+    setItem(localId, { ...current, slow: true })
+    setTimeout(() => {
+      const still = useOutbox.getState().items[localId]
+      if (still && still.status === 'sending') void deliver(localId, still, attempt + 1)
+    }, 2000)
   } else {
-    setItem(localId, { ...item, status: 'failed', error: r.message })
+    setItem(localId, { ...current, status: 'failed', slow: false, error: r.message, offline: r.error === 'unreachable' })
   }
 }
 
 export function retry(localId: string) {
   const item = useOutbox.getState().items[localId]
   if (!item) return
-  const next = { ...item, status: 'sending' as const, error: undefined }
+  const next = { ...item, status: 'sending' as const, error: undefined, slow: false, offline: false }
   setItem(localId, next)
   void deliver(localId, next)
 }
+
+// Back online: messages that failed while the connection was down go again (once).
+useStore.subscribe((state, prev) => {
+  if (!state.connected || prev.connected) return
+  for (const [localId, item] of Object.entries(useOutbox.getState().items)) {
+    if (item.status === 'failed' && item.offline) retry(localId)
+  }
+})
 
 export function discard(localId: string) {
   const item = useOutbox.getState().items[localId]

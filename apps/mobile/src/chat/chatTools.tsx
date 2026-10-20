@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { EmptyScene } from '@/ui/EmptyScene'
 import { Pressable, ScrollView, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SCHEDULE_MIN_MS, attachmentSummary, sendLaterChoices, shortBody, type Message, type PinnedMessage, type ScheduledMessage } from '@glofly/shared'
@@ -105,9 +106,7 @@ export function PinsSheet({
           Pinned messages
         </Text>
         {!pins.length ? (
-          <Text tone="muted" style={{ paddingHorizontal: 24, paddingVertical: 12 }}>
-            Nothing pinned. Long-press a message and choose Pin.
-          </Text>
+          <EmptyScene kind="pins" small title="Nothing pinned yet" text="Long-press a message and choose Pin to keep it handy here." />
         ) : null}
         <ScrollView>
           {pins.map((p) => (
@@ -458,9 +457,7 @@ export function ScheduledSheet({ conversationId, items, onChanged, onClose }: { 
           Only you can see these until they're sent.
         </Text>
         {!items.length ? (
-          <Text tone="muted" style={{ paddingHorizontal: 24, paddingVertical: 12 }}>
-            Nothing scheduled. Hold the Send button to send a message later.
-          </Text>
+          <EmptyScene kind="scheduled" small title="Nothing waiting to be sent" text="Hold the Send button to pick a time, and the message waits here until then." />
         ) : null}
         <ScrollView keyboardShouldPersistTaps="handled">
           {items.map((s) => (

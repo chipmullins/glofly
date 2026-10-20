@@ -29,6 +29,7 @@ import { Icon } from '@/ui/icons'
 import { Spinner, Text } from '@/ui/kit'
 import { Skeleton } from '@/ui/Skeleton'
 import { JumpToLatestButton, useJumpToLatest } from '@/chat/JumpToLatest'
+import { ReconnectingStrip } from '@/ui/Reconnecting'
 import { openReport, pickEmoji } from '@/ui/sheets'
 import { measure, openContextMenu, type MenuItem } from './ContextMenu'
 import { openDmDock } from './dock'
@@ -159,6 +160,7 @@ export function NebulaChat({
 
   async function react(m: Message, emoji: string) {
     const on = !m.reactions.find((r) => r.emoji === emoji)?.userIds.includes(meId)
+    if (on) haptic.light()
     const reactions = m.reactions.map((r) => ({ ...r, userIds: [...r.userIds] }))
     const found = reactions.find((r) => r.emoji === emoji)
     if (on) {
@@ -381,6 +383,7 @@ export function NebulaChat({
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: N.bg }} behavior={Platform.OS === 'ios' && !wide ? 'padding' : undefined}>
       {header}
+      <ReconnectingStrip night />
       <PinnedBar pins={pinsApi.pins} onOpen={() => setPinsOpen(true)} night />
       <GestureDetector gesture={membersSwipe}>
       <View style={{ flex: 1 }}>

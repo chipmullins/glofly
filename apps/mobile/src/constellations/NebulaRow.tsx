@@ -8,6 +8,7 @@ import { firstName } from '@/lib/format'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { Face, N } from './ui'
+import { CxJoinLine, CxMilestone, InviteCard, inviteCodeIn } from './community'
 
 // One message in a nebula, drawn like the "Glofly 2.0 Mobile" canvas (board 4): a face, the name
 // in its role's color with the role's badge, the time, and the text, with @you rows washed in amber.
@@ -20,6 +21,8 @@ export type NebulaRowInfo = {
   day: string | null
   mentionsMe: boolean
   outgoing: 'sending' | 'failed' | null
+  /** 0.7.5: still on its way after 1.5 s (dims, "Sending…") */
+  slow?: boolean
 }
 
 export type RoleLook = { name: string | null; color: string; badgeBg: string } | null
@@ -107,6 +110,21 @@ export const NebulaRow = memo(function NebulaRow({
     </View>
   ) : null
 
+  // 0.7.5: "Priya joined. Say hi!" and member milestones; other lines stay hidden here.
+  if (m.event?.type === 'cxJoined')
+    return (
+      <View>
+        {day}
+        <CxJoinLine m={m} meId={meId} nameOf={nameOf} canAct={canAct && !compact} onReact={onReact} />
+      </View>
+    )
+  if (m.event?.type === 'cxMilestone')
+    return (
+      <View>
+        {day}
+        <CxMilestone m={m} />
+      </View>
+    )
   if (m.event) return day
   const label = `${name}${role?.name ? `, ${role.name}` : ''}: ${m.deleted ? 'Message deleted' : shortBody(m.body) || 'attachment'}, ${clockTime(m.createdAt)}${m.editedAt ? ', edited' : ''}`
 
@@ -120,7 +138,7 @@ export const NebulaRow = memo(function NebulaRow({
         accessibilityLabel={label}
         accessibilityHint={!m.deleted && onLongPress ? 'Hold for reactions and more' : undefined}
         style={[
-          { flexDirection: 'row', gap: 10, opacity: row.outgoing === 'sending' ? 0.6 : 1, borderRadius: 14 },
+          { flexDirection: 'row', gap: 10, opacity: row.outgoing === 'sending' && row.slow ? 0.6 : 1, borderRadius: 14 },
           row.mentionsMe ? { backgroundColor: 'rgba(255,179,71,0.10)', padding: 8, marginHorizontal: -8 } : null,
           highlight ? { backgroundColor: N.raised, padding: 8, marginHorizontal: -8 } : null,
         ]}
@@ -206,6 +224,8 @@ export const NebulaRow = memo(function NebulaRow({
                   <LinkCard message={m} preview={m.linkPreview} mine={false} />
                 </View>
               ) : null}
+              {/* 0.7.5: a constellation invite link becomes a card */}
+              {!m.deleted && inviteCodeIn(m.body) ? <InviteCard code={inviteCodeIn(m.body)!} /> : null}
             </>
           )}
           {m.reactions.length ? (
@@ -234,7 +254,11 @@ export const NebulaRow = memo(function NebulaRow({
           ) : null}
           {row.outgoing === 'failed' ? (
             <Text size={12} weight="bold" style={{ color: N.redText, marginTop: 3 }}>
-              Didn't send · Tap to try again
+              Not sent · Tap to retry or delete
+            </Text>
+          ) : row.outgoing === 'sending' && row.slow ? (
+            <Text size={12} style={{ color: N.faint, marginTop: 3 }} accessibilityLiveRegion="polite">
+              Sending…
             </Text>
           ) : m.editedAt && !m.deleted ? (
             <Text size={11} style={{ color: N.faint, marginTop: 2 }}>

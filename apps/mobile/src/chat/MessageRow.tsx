@@ -12,11 +12,14 @@ import {
 import { Avatar } from '@/ui/Avatar'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
+import { SwipeTime } from './SwipeTime'
 import { useTheme } from '@/ui/theme'
+import { Rise } from '@/ui/motion'
 import { isJumbo } from '@/lib/emoji'
 import { firstName } from '@/lib/format'
 import { Attachments } from './Attachments'
 import { GameCard, GifView, LanternTag, LinkCard, PollCard, useLanternFade } from './Extras'
+import { InviteCard, inviteCodeIn } from '@/constellations/community'
 
 // One message in a chat, drawn like the design canvas: bubbles (yours in Glow Orange), reply
 // quotes, reactions, @mentions, event lines, "Seen", and the failed-to-send state.
@@ -32,6 +35,8 @@ export type RowInfo = {
   receipt: string | null
   mentionsMe: boolean
   outgoing: 'sending' | 'failed' | null
+  /** 0.7.5: still on its way after 1.5 s (dims, "Sending…") */
+  slow?: boolean
 }
 
 type Props = {
@@ -138,8 +143,10 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
   const label = `${mine ? 'You' : (sender?.displayName ?? 'Someone')}: ${m.deleted ? 'Message deleted' : shortBody(m.body) || 'attachment'}, ${clockTime(m.createdAt)}${m.editedAt ? ', edited' : ''}`
 
   return (
+    <Rise conversationId={m.conversationId} body={m.body} sending={row.outgoing === 'sending'} mine={mine}>
     <View style={{ marginTop: row.joinedAbove ? 2 : 8 }}>
       {day}
+      <SwipeTime time={clockTime(m.createdAt)}>
       <View
         style={[
           { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 12 },
@@ -170,7 +177,7 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
             onPress={row.outgoing === 'failed' ? () => onRetry(m) : undefined}
             accessibilityLabel={label}
             accessibilityHint={m.deleted ? undefined : 'Long press for reactions and more'}
-            style={{ opacity: row.outgoing === 'sending' ? 0.6 : 1 }}
+            style={{ opacity: row.outgoing === 'sending' && row.slow ? 0.6 : 1 }}
           >
             {special && m.gif && !m.replyTo ? (
               <GifView gif={m.gif} onLongPress={() => onLongPress(m)} />
@@ -232,6 +239,12 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
             )}
           </Pressable>
           </Animated.View>
+          {/* 0.7.5: a constellation invite link becomes a card */}
+          {!m.deleted && inviteCodeIn(m.body) ? (
+            <View style={{ alignSelf: mine ? 'flex-end' : 'flex-start' }}>
+              <InviteCard code={inviteCodeIn(m.body)!} />
+            </View>
+          ) : null}
           {lantern && row.outgoing === null ? <LanternTag fadeAt={m.lanternFadeAt} /> : null}
           {m.reactions.length ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: -4, [mine ? 'marginRight' : 'marginLeft']: 10 } as object}>
@@ -257,7 +270,11 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
           ) : null}
           {row.outgoing === 'failed' ? (
             <Text size={12} tone="danger" weight="bold" style={{ marginTop: 3 }}>
-              Didn't send · Tap to try again
+              Not sent · Tap to retry or delete
+            </Text>
+          ) : row.outgoing === 'sending' && row.slow ? (
+            <Text size={12} tone="muted" style={{ marginTop: 3 }} accessibilityLiveRegion="polite">
+              Sending…
             </Text>
           ) : m.editedAt && !m.deleted ? (
             <Text size={11} tone="faint" style={{ marginTop: 2, marginHorizontal: 6 }}>
@@ -274,6 +291,8 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
           ) : null}
         </View>
       </View>
+      </SwipeTime>
     </View>
+    </Rise>
   )
 })

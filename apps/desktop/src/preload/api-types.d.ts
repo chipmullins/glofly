@@ -610,11 +610,13 @@ export type GloflyApi = {
       path: string,
       body?: unknown
     ) => Promise<ApiResult<T>>
+    /** The icon photo, or (0.7.5) the banner photo with `which: 'banner'` */
     setIcon: (
       constellationId: string,
       data: ArrayBuffer,
-      type: PhotoType
-    ) => Promise<ApiResult<{ iconVersion: string }>>
+      type: PhotoType,
+      which?: 'icon' | 'banner'
+    ) => Promise<ApiResult<{ iconVersion?: string; bannerVersion?: string }>>
   }
   social: {
     get: () => Promise<ApiResult<SocialToday>>
@@ -843,7 +845,11 @@ export type GloflyApi = {
   }
 }
 
-export type SendOptions = { lantern?: boolean }
+export type SendOptions = {
+  lantern?: boolean
+  /** 0.7.5: the same id on a retry, so the server never makes a copy */
+  clientId?: string
+}
 export type GifPage = { gifs: GifInfo[]; next: number | null }
 export type ChatGameKind = 'tictactoe' | 'wordguess' | 'trivia'
 export type ChatGameMove =
