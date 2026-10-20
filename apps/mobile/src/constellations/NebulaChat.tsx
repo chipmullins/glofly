@@ -42,6 +42,8 @@ import { can, cantPost, isQuiet, outranks, roleLook } from './roles'
 import { markNebulaRead, useNebulaChat } from './useNebula'
 import { openNebulaSheet } from './nebulaActions'
 import { CountBadge, FireflyMark, Glyph, N, SpeakerGlyph, StarGlyph } from './ui'
+// 0.8.0 community tools: event cards, search across the constellation
+import { EventCard, takeJump, useEventMessages } from './communityTools'
 
 // A text nebula (canvas boards 4 and 4b): the chat with role colors and badges, @you rows,
 // polls, the voice Join card, and the read-only / timed-out states. Messages go through the same
@@ -110,6 +112,8 @@ export function NebulaChat({
   const others = useMemo(() => members.filter((p) => p.id !== meId), [members, meId])
   const online = c.members.filter((m) => m.status !== 'offline').length
   const memberIds = useMemo(() => members.map((p) => p.id), [members])
+  // 0.8.0 events: a card under each event's "made an event 📅" message
+  const eventCards = useEventMessages(c.id)
 
   // A voice nebula with people in it, that you could drop into (the Join card).
   const dropIn = useMemo(() => {
@@ -319,13 +323,31 @@ export function NebulaChat({
   const onPhoto = useCallback((m: Message, index: number) => setViewer({ message: m, index }), [])
   const onFace = useCallback((uid: string) => openMemberSheet(c.id, uid), [c.id])
   const renderRow = useCallback(
-    ({ item }: { item: NebulaRowInfo }) => item.message.id === firstNew && newSince ? (
+    ({ item: raw }: { item: NebulaRowInfo }) => {
+      const ev = eventCards.get(raw.message.id)
+      const item = ev && !raw.message.deleted ? { ...raw, message: { ...raw.message, body: 'made an event 📅' } } : raw
+      const row = item.message.id === firstNew && newSince ? (
       <View>
         <NewSinceLine since={newSince.since} />
         <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />
       </View>
-    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />,
-    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds, firstNew, newSince],
+    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />
+      if (!ev || raw.message.deleted) return row
+      return (
+        <View>
+          {row}
+          <EventCard
+            event={ev}
+            c={c}
+            onJoinVoice={(vid) => {
+              const vn = c.nebulas.find((x) => x.id === vid)
+              if (vn) void joinVoiceNebula({ constellationId: c.id, nebulaId: vn.id, nebulaName: vn.name, constellationName: c.name })
+            }}
+          />
+        </View>
+      )
+    },
+    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds, firstNew, newSince, eventCards],
   )
 
   // Phones: swipe left on the chat for the members (the canvas's other way in, besides the button).
@@ -353,7 +375,7 @@ export function NebulaChat({
       <HeaderButton label={`${n.name} notifications`} onPress={() => openNebulaSheet(c.id, n.id)}>
         <Icon name="bell" size={19} color={N.ink2} />
       </HeaderButton>
-      <HeaderButton label="Search this nebula" onPress={() => setSearching(true)}>
+      <HeaderButton label={`Search ${c.name}`} onPress={() => router.push({ pathname: '/constellations/[cid]/search', params: { cid: c.id } })}>
         <Icon name="search" size={19} color={N.ink2} />
       </HeaderButton>
       <HeaderButton label={wide.membersShown ? 'Hide members' : 'Show members'} onPress={wide.toggleMembers} on={wide.membersShown}>
@@ -387,6 +409,9 @@ export function NebulaChat({
         <FireflyMark size={22} />
         <CountBadge count={dmUnread} style={{ position: 'absolute', right: -3, top: -3 }} />
       </Pressable>
+      <HeaderButton label={`Search ${c.name}`} onPress={() => router.push({ pathname: '/constellations/[cid]/search', params: { cid: c.id } })}>
+        <Icon name="search" size={20} color={N.ink2} />
+      </HeaderButton>
       <HeaderButton label="Members" onPress={() => router.push({ pathname: '/constellations/[cid]/members', params: { cid: c.id } })}>
         <Icon name="friends" size={20} color={N.ink2} />
       </HeaderButton>

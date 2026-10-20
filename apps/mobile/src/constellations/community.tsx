@@ -5,7 +5,7 @@ import Svg, { Circle, Path } from 'react-native-svg'
 import {
   ROLE_COLORS,
   accentOf,
-  gameInitials,
+  firstName as sharedFirstName,
   milestoneText,
   playingFor,
   type ConstellationDetail,
@@ -19,7 +19,7 @@ import { cx } from '@/api/constellations'
 import { sendText } from '@/chat/send'
 import { isWideNow } from '@/lib/layout'
 import { useSession } from '@/state/session'
-import { putDetail, refreshCards, useCx, useCxAvailable } from '@/state/constellations'
+import { putDetail, refreshCards, useCxAvailable } from '@/state/constellations'
 import { Text } from '@/ui/kit'
 import { haptic, useReduceMotion } from './motion'
 import { placePaths } from './nav'
@@ -33,6 +33,7 @@ import { ConstellationIcon, Face, N } from './ui'
 // "playing now" and mutual friends.
 
 const first = (u: Pick<PublicUser, 'displayName' | 'username'>) => u.displayName.trim().split(/\s+/)[0] || u.username
+void sharedFirstName
 
 // ───────────── Identity ─────────────
 
@@ -154,7 +155,7 @@ export function InviteCard({ code, width = 280, onProblem }: { code: string; wid
             <Text size={10} weight="bold" style={{ color: N.muted, letterSpacing: 0.9 }}>
               INVITE TO A CONSTELLATION
             </Text>
-            <Text display size={18} numberOfLines={1} style={{ color: N.ink }}>
+            <Text display size={18} numberOfLines={1}>
               {c.name}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -197,7 +198,7 @@ export function CxJoinLine({ m, meId, nameOf, canAct, onReact }: { m: Message; m
   const others = wavers.filter((id) => id !== meId)
   const names = [...(waved ? ['You'] : []), ...others.slice(0, 1).map(nameOf)]
   const rest = wavers.length - names.length
-  const wavedText = !others.length ? null : rest > 0 ? `${names.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'} waved` : names.length === 2 ? `${names[0]} and ${names[1]} waved` : `${names[0]} waved`
+  const wavedText = !wavers.length ? null : rest > 0 ? `${names.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'} waved` : names.length === 2 ? `${names[0]} and ${names[1]} waved` : `${names[0]} waved`
   const who = mine ? 'You' : nameOf(m.senderId)
   return (
     <View style={{ marginTop: 10, marginLeft: 48, gap: 6 }} accessibilityLabel={`${who} joined ${event?.name ?? 'the constellation'}${wavedText ? `. ${wavedText}` : ''}`}>
@@ -246,12 +247,6 @@ const SPARKS = Array.from({ length: 14 }, (_, i) => {
   const d = 50 + ((i * 53) % 70)
   return { x: Math.round(Math.cos(a) * d * 1.4), y: Math.round(Math.sin(a) * d * 0.7), delay: ((i * 13) % 25) * 10 }
 })
-
-/** The milestone card, finding its constellation (for the icon) from the nebula's chat. */
-export function CxMilestone({ m }: { m: Message }) {
-  const c = useCx((s) => Object.values(s.details).find((d) => d.nebulas.some((n) => n.conversationId === m.conversationId)) ?? null)
-  return <CxMilestoneCard m={m} c={c} />
-}
 
 /** "Firefly Guild just reached 100 members!" with a firefly burst (Replay). */
 export function CxMilestoneCard({ m, c }: { m: Message; c: ConstellationDetail | null }) {
@@ -521,7 +516,7 @@ export function MemberExtras({ c, userId, playing }: { c: ConstellationDetail; u
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14, backgroundColor: N.bg, borderWidth: 1, borderColor: N.line2 }}>
           <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: gameTileColor(playing.name), alignItems: 'center', justifyContent: 'center' }}>
             <Text size={12} weight="bold" style={{ color: '#ffffff' }}>
-              {gameInitials(playing.name)}
+              {gameCode(playing.name)}
             </Text>
           </View>
           <View style={{ flex: 1 }}>
@@ -561,4 +556,9 @@ function gameTileColor(name: string): string {
   let h = 0
   for (const ch of name.toLowerCase()) h = (h * 31 + (ch.codePointAt(0) ?? 0)) >>> 0
   return GAME_TILES[h % GAME_TILES.length]
+}
+function gameCode(name: string): string {
+  const words = name.trim().split(/[\s:]+/).filter(Boolean)
+  if (words.length >= 2) return words.slice(0, 3).map((w) => [...w][0]?.toUpperCase() ?? '').join('')
+  return (words[0] ?? '?').slice(0, 3).toUpperCase()
 }
