@@ -5,6 +5,8 @@ import PhotoCropper from './PhotoCropper'
 import { QrImage } from '../screens/LoginExtras'
 import { PHOTO_TYPES, readPhoto, type PickedPhoto } from '../lib/photoPick'
 import { noteInvited } from '../lib/welcome'
+import { copyFriendLink, useFriendLink } from '../lib/friendLink'
+import { FRIEND_LINK_PITCH, friendLinkText } from '@glofly/shared/friendLinks'
 import './WelcomeFlow.css'
 
 // 0.7.5 welcome flow (Welcome.dc.html, approved Oct 20): a brand-new account gets three short
@@ -81,6 +83,21 @@ export default function WelcomeFlow({
   const [inviting, setInviting] = useState(false)
   const [inviteNote, setInviteNote] = useState<Note>(null)
   const [qrOpen, setQrOpen] = useState(false)
+  // 0.8.0: "Copy your invite link" (the link is made when step 3 shows)
+  const myLink = useFriendLink(user.id, step === 3)
+  const [linkCopied, setLinkCopied] = useState(false)
+  async function copyLink(): Promise<void> {
+    if (!myLink.link) {
+      setInviteNote({ kind: 'bad', text: myLink.problem ?? 'Your link is still being made.' })
+      return
+    }
+    if (await copyFriendLink(myLink.link.code)) {
+      noteInvited(user.id)
+      setInviteNote(null)
+      setLinkCopied(true)
+      window.setTimeout(() => setLinkCopied(false), 1600)
+    } else setInviteNote({ kind: 'bad', text: "Couldn't copy the link." })
+  }
 
   // Each step starts at its heading, for keyboards and screen readers.
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -353,9 +370,18 @@ export default function WelcomeFlow({
             <div className="wf-cards">
               <div className="wf-card">
                 <strong>Not on Glofly yet?</strong>
-                <span>
-                  Send your invite link. You’ll automatically be friends as soon as they join.
-                </span>
+                <span>{FRIEND_LINK_PITCH.replace("'", '’')}</span>
+                <button
+                  type="button"
+                  className={linkCopied ? 'wf-outline wf-outline--done' : 'wf-outline'}
+                  onClick={() => void copyLink()}
+                  title={myLink.link ? `https://${friendLinkText(myLink.link.code)}` : undefined}
+                >
+                  {linkCopied ? 'Copied!' : 'Copy your invite link'}
+                </button>
+                {myLink.link && (
+                  <span className="wf-link-text">{friendLinkText(myLink.link.code)}</span>
+                )}
                 {inviteOpen ? (
                   <form className="wf-invite" onSubmit={(e) => void invite(e)}>
                     <label htmlFor="wf-email" className="visually-hidden">
@@ -378,8 +404,8 @@ export default function WelcomeFlow({
                     </button>
                   </form>
                 ) : (
-                  <button type="button" className="wf-outline" onClick={() => setInviteOpen(true)}>
-                    Email an invite link
+                  <button type="button" className="wf-link" onClick={() => setInviteOpen(true)}>
+                    Email an invite instead
                   </button>
                 )}
                 {note(inviteNote)}

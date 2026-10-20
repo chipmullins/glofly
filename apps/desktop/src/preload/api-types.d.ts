@@ -9,6 +9,13 @@ export type * from '@glofly/shared/types'
 export type * from '@glofly/shared/constellations'
 export type * from '@glofly/shared/security'
 export type * from '@glofly/shared/chatTools'
+export type * from '@glofly/shared/friendLinks'
+import type {
+  FriendLinkAccepted,
+  FriendLinkInfo,
+  FriendLinkPreview,
+  MyFriendLink
+} from '@glofly/shared/friendLinks'
 import type {
   ErrorReport,
   LoginTwoStep,
@@ -272,6 +279,9 @@ export type LoginStepResult =
 export type QrPollResult =
   QrLoginState | { state: 'signed-in'; user: SignedInUser } | { state: 'error'; message: string }
 
+/** 0.8.0: a glofly:// link Glofly was opened with: a friend's invite link or a constellation invite. */
+export type DeepLink = { kind: 'friend'; code: string } | { kind: 'constellation'; code: string }
+
 /** What a Jump List task or Dock menu item asks for (see `shortcuts`). */
 export type ShortcutAction =
   'new-message' | 'status:online' | 'status:away' | 'status:dnd' | 'quiet-hours'
@@ -283,6 +293,8 @@ export type GloflyEvent =
   | { type: 'conversation:unread'; conversationId: string; lastReadAt: string }
   /** Jump List / Dock menu: call `shortcuts.take()` and do what it returns */
   | { type: 'shortcut'; action: ShortcutAction }
+  /** 0.8.0: Glofly was opened with a glofly:// link: call `links.take()` */
+  | { type: 'deep-link' }
   | { type: 'scheduled:changed'; conversationId: string }
   /** Push to talk: the chosen key went down or came up */
   | { type: 'ptt'; down: boolean }
@@ -434,6 +446,8 @@ export type GloflyApi = {
     logout: () => Promise<void>
     /** Emails a reset link if the username or email belongs to an account. */
     forgotPassword: (identifier: string) => Promise<ForgotPasswordResult>
+    /** 0.8.0: whose friend invite link this is (no sign-in needed). Null: it doesn't work. */
+    friendLinkInfo: (code: string) => Promise<FriendLinkInfo | null>
   }
   friends: {
     list: () => Promise<ApiResult<FriendLists>>
@@ -450,6 +464,14 @@ export type GloflyApi = {
     setOnlineAlert: (userId: string, on: boolean) => Promise<ApiResult<{ on: boolean }>>
     /** "Invite your friends": emails them a link to join Glofly (0.3.0) */
     invite: (email: string) => Promise<ApiResult<null>>
+    /** 0.8.0: your invite link (made the first time) and how many joined from it */
+    myLink: () => Promise<ApiResult<MyFriendLink>>
+    /** 0.8.0: a new invite link; the old one stops working right away */
+    resetLink: () => Promise<ApiResult<MyFriendLink>>
+    /** 0.8.0: whose invite link this is and what they are to you */
+    previewLink: (code: string) => Promise<ApiResult<FriendLinkPreview>>
+    /** 0.8.0: become friends with the link's owner */
+    acceptLink: (code: string) => Promise<ApiResult<FriendLinkAccepted>>
   }
   settings: {
     get: () => Promise<ApiResult<PrivacySettings>>
@@ -796,6 +818,13 @@ export type GloflyApi = {
    */
   shortcuts: {
     take: () => Promise<ShortcutAction | null>
+  }
+  /**
+   * 0.8.0: glofly:// links (a friend's invite link, a constellation invite). On a `deep-link`
+   * event, and once at startup, call take(): null means there's nothing waiting.
+   */
+  links: {
+    take: () => Promise<DeepLink | null>
   }
   /** Subscribe to live updates. Returns a function that unsubscribes. */
   onEvent: (listener: (event: GloflyEvent) => void) => () => void

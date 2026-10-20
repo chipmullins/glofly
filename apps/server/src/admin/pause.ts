@@ -65,7 +65,7 @@ export const pausedBody = (state: PauseState) => ({ error: "paused", message: st
 // Paths that keep working while paused.
 const OPEN = /^\/(admin(\/|$)|health$|status$)/;
 // The pages people open from emails; they show the pause message as a page.
-const PAGES = /^\/(reset|confirm|welcome|join)$/;
+const PAGES = /^\/(reset|confirm|welcome|join|i\/[^/]+)$/;
 
 /**
  * In front of every route: refuses everything but Control while paused. `pausedPage` draws the

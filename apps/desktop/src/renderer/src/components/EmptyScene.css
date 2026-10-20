@@ -112,6 +112,22 @@
 .scene-button:hover {
   background: var(--glo-accent-tint);
 }
+/* 0.8.0: a quiet text link under the buttons ("Email an invite instead") */
+.scene-link {
+  flex-basis: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--glo-link);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.scene-link:hover {
+  color: var(--glo-link-hover);
+}
 .empty-scene--night .scene-button {
   border-color: rgba(255, 255, 255, 0.18);
   color: #f5ede6;

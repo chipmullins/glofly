@@ -16,13 +16,15 @@ export function signedIn(
   persistent: boolean,
   user: Record<string, unknown>,
   status = 200,
+  /** More fields for the answer (0.8.0 sign-up: `linkedFriend`). Older apps ignore them. */
+  extra: Record<string, unknown> = {},
 ) {
   if (web) {
     setSessionCookie(res, session.token, persistent, session.expiresAt);
-    res.status(status).json({ expiresAt: session.expiresAt.toISOString(), user, csrf: csrfFor(session.token) });
+    res.status(status).json({ expiresAt: session.expiresAt.toISOString(), user, csrf: csrfFor(session.token), ...extra });
     return;
   }
-  res.status(status).json({ token: session.token, expiresAt: session.expiresAt.toISOString(), user });
+  res.status(status).json({ token: session.token, expiresAt: session.expiresAt.toISOString(), user, ...extra });
 }
 
 /** Signs in: a new session for this device, its token (or cookie), and the "new device" email. */

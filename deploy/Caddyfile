@@ -28,8 +28,9 @@
 	# The pages people open from Glofly's emails (choose a new password, confirm an email,
 	# finish setting up an account made in Glofly Control, join from a friend's invite) come
 	# from the Glofly server, with its own security headers. Since 0.7.4 so do constellation invite
-	# pages (glofly.app/c/<code>) and their pictures.
-	@account path /reset /confirm /welcome /join /c/*
+	# pages (glofly.app/c/<code>) and their pictures, and since 0.8.0 friend invite links
+	# (glofly.app/i/<code>, with the photo and link preview picture).
+	@account path /reset /confirm /welcome /join /c/* /i/*
 	handle @account {
 		reverse_proxy server:4000
 	}

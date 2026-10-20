@@ -51,6 +51,8 @@ COPY --from=build /app/apps/server/dist ./dist
 COPY apps/server/drizzle ./drizzle
 # The small background-removal model for custom stickers (0.5.0, src/stickers/cutout.ts).
 COPY apps/server/models ./models
+# Outfit Bold for the initials on friend invite link previews (0.8.0, src/friends/linkPreview.ts).
+COPY apps/server/fonts ./fonts
 
 # Never run as root inside the container.
 USER node

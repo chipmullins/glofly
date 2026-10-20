@@ -10,9 +10,11 @@ import { Button, Field, Notice, Spinner, Text } from '@/ui/kit'
 import { Screen } from '@/ui/Screen'
 import { useTheme } from '@/ui/theme'
 import { useSession } from '@/state/session'
+import { InviteLinkCard } from '@/ui/InviteLink'
 
-// Add friend: search by username or name, then send a request. Below: "Invite your friends"
-// (0.3.0) emails someone a link to join Glofly; joining from it makes you friends right away.
+// Add friend: search by username or name, then send a request. Below: your invite link (0.8.0,
+// "Share your invite link"), and "Email an invite instead" (0.3.0) emails someone a link to join
+// Glofly; joining from either makes you friends right away.
 
 export default function AddFriend() {
   const { c } = useTheme()
@@ -24,6 +26,7 @@ export default function AddFriend() {
   const [note, setNote] = useState<{ tone: 'good' | 'danger'; text: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const restricted = useSession((s) => s.user?.restricted === true)
+  const [emailOpen, setEmailOpen] = useState(false)
 
   useEffect(() => {
     const q = query.trim().replace(/^@/, '')
@@ -124,7 +127,19 @@ export default function AddFriend() {
           )}
         </View>
       ))}
-      <InviteFriends />
+      <View style={{ marginTop: 10 }}>
+        <InviteLinkCard />
+      </View>
+      {emailOpen ? (
+        <InviteFriends />
+      ) : (
+        <Text size={13} tone="faint" style={{ textAlign: 'center' }}>
+          Prefer email?{' '}
+          <Text size={13} weight="bold" tone="accent" accessibilityRole="link" onPress={() => setEmailOpen(true)}>
+            Email an invite instead
+          </Text>
+        </Text>
+      )}
     </Screen>
   )
 }

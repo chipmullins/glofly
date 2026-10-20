@@ -79,6 +79,8 @@ export default function RootLayout() {
             </Stack.Protected>
             {/* 0.7.3: a computer's sign-in QR code (glofly://qr-login/<id>), signed in or not */}
             <Stack.Screen name="qr-login/[id]" />
+            {/* 0.8.0: a friend's invite link (glofly://i/<code>), signed in or not */}
+            <Stack.Screen name="i/[code]" />
           </Stack>
         </ErrorBoundary>
         <OverlayHosts />
