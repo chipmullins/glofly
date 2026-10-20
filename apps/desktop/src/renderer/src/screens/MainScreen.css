@@ -962,6 +962,83 @@
   font-weight: 700;
   cursor: pointer;
 }
+.custom-status-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 0.8.0 Clear after: chips, the "Clears at…" line and Save. The menu scrolls if the window
+   is too short for it (StatusMenu sets max-height). */
+.status-menu {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.status-clear {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 2px 0;
+}
+.status-clear-title {
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--glo-ink);
+}
+.status-clear-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.status-clear-chip {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--glo-line-strong);
+  border-radius: 999px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.status-clear-chip:hover {
+  border-color: var(--glo-orange);
+}
+.status-clear-chip:focus-visible {
+  outline: 2px solid var(--glo-orange);
+  outline-offset: 2px;
+}
+.status-clear-chip--on,
+.status-clear-chip--on:hover {
+  border-color: var(--glo-orange);
+  background: var(--glo-orange);
+  color: var(--glo-on-accent);
+}
+.status-clear-ends {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 4px 0;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.status-clear-ends svg {
+  flex: none;
+  color: var(--glo-link);
+}
+.status-menu-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 2px 2px;
+}
+.status-menu-actions .custom-status-save {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 14px;
+}
 
 /* Dark theme: badges use the accent, like the design */
 :root[data-theme='dark'] .badge {

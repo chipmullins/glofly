@@ -75,6 +75,9 @@ export const users = pgTable(
     statusPreference: userStatus("status_preference").notNull().default("online"),
     // Custom status, e.g. "Grinding ranked tonight". Shown to friends while not offline.
     statusText: text("status_text"),
+    // 0.8.0: when the custom status clears itself (null = stays until they change it). Cleared
+    // by the status sweep (index.ts) and ignored once past wherever status is read for others.
+    statusTextExpiresAt: timestamp("status_text_expires_at", { withTimezone: true }),
     // Profile photo: a new random version each upload, so apps never show a stale cached photo.
     avatarVersion: text("avatar_version"),
     // "About me" on their profile, up to 190 characters.
@@ -137,6 +140,10 @@ export const users = pgTable(
     // "Chip" and "chip" count as the same username / email.
     uniqueIndex("users_username_lower_idx").on(sql`lower(${t.username})`),
     uniqueIndex("users_email_lower_idx").on(sql`lower(${t.email})`),
+    // 0.8.0: the status sweep only looks at statuses that have an end.
+    index("users_status_text_expires_idx")
+      .on(t.statusTextExpiresAt)
+      .where(sql`${t.statusTextExpiresAt} is not null`),
   ],
 );
 

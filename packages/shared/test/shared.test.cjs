@@ -476,3 +476,49 @@ test('0.7.5 constellation community: milestones, join lines, accents, playing ti
   assert.equal(s.gameInitials('Rocket League'), 'RL')
   assert.equal(s.gameInitials('Valorant'), 'VAL')
 })
+
+test('status clear after (0.8.0)', () => {
+  const chi = 'America/Chicago'
+  // Tuesday Oct 20, 2026, 1:10 PM in Chicago (CDT, UTC-5).
+  const now = new Date('2026-10-20T18:10:00Z')
+  assert.equal(s.statusClearEndsAt('never', now, chi), null)
+  assert.equal(s.statusClearEndsAt('30m', now, chi).toISOString(), '2026-10-20T18:40:00.000Z')
+  assert.equal(s.statusClearEndsAt('4h', now, chi).toISOString(), '2026-10-20T22:10:00.000Z')
+  assert.equal(s.statusClearEndsAt('today', now, chi).toISOString(), '2026-10-21T05:00:00.000Z')
+  assert.equal(s.statusClearEndsAt('week', now, chi).toISOString(), '2026-10-26T05:00:00.000Z')
+  // Same moment in Tokyo is already Wednesday 3:10 AM.
+  assert.equal(s.statusClearEndsAt('today', now, 'Asia/Tokyo').toISOString(), '2026-10-21T15:00:00.000Z')
+  assert.equal(s.statusClearEndsAt('week', now, 'Asia/Tokyo').toISOString(), '2026-10-25T15:00:00.000Z')
+  // Sunday evening: "This week" is tonight.
+  const sun = new Date('2026-10-25T23:00:00Z') // 6 PM Sunday in Chicago
+  assert.equal(s.statusClearEndsAt('week', sun, chi).toISOString(), '2026-10-26T05:00:00.000Z')
+  // Across the clock change (Nov 1, 2026: CDT → CST): Saturday night's week ends at CST midnight.
+  const sat = new Date('2026-10-31T20:00:00Z')
+  assert.equal(s.statusClearEndsAt('week', sat, chi).toISOString(), '2026-11-02T06:00:00.000Z')
+  assert.equal(s.statusClearEndsAt('today', sat, chi).toISOString(), '2026-11-01T05:00:00.000Z')
+  // A zone whose midnight is skipped (Santiago springs forward at 00:00 → 01:00 on Sep 6, 2026).
+  const santiago = s.statusClearEndsAt('today', new Date('2026-09-05T20:00:00Z'), 'America/Santiago')
+  assert.equal(santiago.toISOString(), '2026-09-06T04:00:00.000Z')
+  // Half-hour zone.
+  assert.equal(s.statusClearEndsAt('today', now, 'Asia/Kolkata').toISOString(), '2026-10-20T18:30:00.000Z')
+
+  const o = { timeZone: chi, locale: 'en-US' }
+  assert.equal(s.statusEndsLine(null, now, o), 'Stays until you change it')
+  assert.equal(s.statusEndsLine('2026-10-20T22:10:00Z', now, o), 'Clears at 5:10 PM (in 4 hours)')
+  assert.equal(s.statusEndsLine('2026-10-20T18:40:00Z', now, o), 'Clears at 1:40 PM (in 30 minutes)')
+  assert.equal(s.statusEndsLine('2026-10-20T19:10:00Z', now, o), 'Clears at 2:10 PM (in 1 hour)')
+  assert.equal(s.statusEndsLine('2026-10-20T20:40:00Z', now, o), 'Clears at 3:40 PM (in about 3 hours)')
+  assert.equal(s.statusEndsLine('2026-10-21T05:00:00Z', now, o), 'Clears tonight at midnight')
+  assert.equal(s.statusEndsLine('2026-10-26T05:00:00Z', now, o), 'Clears Sunday night at midnight')
+  assert.equal(s.statusEndsLine('2026-10-22T05:00:00Z', now, o), 'Clears Wednesday night at midnight')
+
+  assert.equal(s.statusClearChoiceFor(null, now, chi), 'never')
+  assert.equal(s.statusClearChoiceFor('2026-10-21T05:00:00Z', now, chi), 'today')
+  assert.equal(s.statusClearChoiceFor('2026-10-26T05:00:00Z', now, chi), 'week')
+  assert.equal(s.statusClearChoiceFor('2026-10-20T18:30:00Z', now, chi), '30m')
+  assert.equal(s.statusClearChoiceFor('2026-10-20T21:00:00Z', now, chi), '4h')
+  assert.equal(s.isTimeZone('Europe/Berlin'), true)
+  assert.equal(s.isTimeZone('Mars/Base'), false)
+  assert.equal(s.isStatusClearAfter('week'), true)
+  assert.equal(s.isStatusClearAfter('2h'), false)
+})

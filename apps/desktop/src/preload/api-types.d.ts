@@ -38,6 +38,7 @@ import type {
   MessageSearchPage,
   MuteDuration,
   MyStatus,
+  MyStatusChanges,
   PhotoType,
   PrivacySettings,
   Profile,
@@ -504,8 +505,11 @@ export type GloflyApi = {
   setErrorReports: (on: boolean) => void
   status: {
     get: () => Promise<ApiResult<MyStatus>>
-    /** Change your status and/or custom status (empty text clears it). */
-    set: (changes: Partial<MyStatus>) => Promise<ApiResult<MyStatus>>
+    /**
+     * Change your status and/or custom status (empty text clears it). 0.8.0: `statusClearAfter`
+     * + `timeZone` make the custom status clear itself.
+     */
+    set: (changes: MyStatusChanges) => Promise<ApiResult<MyStatus>>
   }
   profile: {
     /** Your own profile, for Edit profile. */

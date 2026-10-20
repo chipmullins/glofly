@@ -4,6 +4,7 @@ import type {
   ApiResult,
   ConversationSummary,
   MyStatus,
+  MyStatusChanges,
   Presence,
   FriendEntry,
   FriendLists,
@@ -1344,7 +1345,7 @@ export default function MainScreen({
     })
   }, [])
 
-  async function changeStatus(changes: Partial<MyStatus>): Promise<boolean> {
+  async function changeStatus(changes: MyStatusChanges): Promise<boolean> {
     const result = await window.glofly.status.set(changes)
     if (result.ok) {
       setMyStatus(result.data)

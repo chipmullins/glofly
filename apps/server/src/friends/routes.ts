@@ -7,11 +7,12 @@ import { blocks, friendships, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { emitToUser } from "../realtime";
 import { endCallsBetween } from "../calls/service";
-import { announcePresence, presenceOf } from "../presence";
+import { announcePresence, liveStatusText, presenceOf } from "../presence";
 import { blockedEitherWay, chatPartnersOf, isRestricted, MANAGED_BY_FAMILY, pair, pairIs } from "./rules";
 
 export { chatPartnersOf };
-import { STATUS_TEXT_MAX } from "@glofly/shared";
+import { STATUS_CLEAR_AFTER, STATUS_TEXT_MAX, isTimeZone, statusClearEndsAt } from "@glofly/shared";
+import { TIME_ZONE } from "../social/glows";
 import { inBackground, notifyFriendRequest } from "../push/notify";
 import { alertTargetsOf, clearOnlineAlerts, setOnlineAlert } from "./online-alerts";
 import { FRIEND_INVITES_PER_DAY, sendFriendInvite } from "./invites";
@@ -74,14 +75,31 @@ const statusSchema = z.object({
     .transform((t) => (t === "" ? null : t))
     .nullable()
     .optional(),
+  // 0.8.0: when the custom status clears itself; the end time is worked out here, never trusted
+  // from the app. Older apps don't send it: their text stays until changed (as before).
+  statusClearAfter: z.enum(STATUS_CLEAR_AFTER).optional(),
+  // 0.8.0: the app's IANA time zone, for "Today" and "This week" (Glofly's own zone if missing).
+  timeZone: z.string().max(64).refine(isTimeZone, "That isn't a time zone.").optional(),
 });
 
 async function myStatus(userId: string) {
   const [row] = await db
-    .select({ status: users.statusPreference, statusText: users.statusText })
+    .select({
+      status: users.statusPreference,
+      statusText: users.statusText,
+      statusTextExpiresAt: users.statusTextExpiresAt,
+    })
     .from(users)
     .where(eq(users.id, userId));
-  return row;
+  if (!row) return row;
+  // A status past its end (the sweep hasn't reached it yet) is already gone.
+  const expired = !!row.statusText && !liveStatusText(row.statusText, row.statusTextExpiresAt);
+  return {
+    status: row.status,
+    statusText: expired ? null : row.statusText,
+    // 0.8.0: only ever sent to you (friends just see the text).
+    statusTextEndsAt: !expired && row.statusText ? (row.statusTextExpiresAt?.toISOString() ?? null) : null,
+  };
 }
 
 // GET /users/me/status — the status you picked and your custom status.
@@ -89,20 +107,39 @@ usersRouter.get("/me/status", async (_req, res) => {
   res.json(await myStatus(me(res).id));
 });
 
-// PATCH /users/me/status  { status?, statusText? } — change them. Friends see it instantly.
+// PATCH /users/me/status  { status?, statusText?, statusClearAfter?, timeZone? } — change them.
+// Friends see it instantly.
 usersRouter.patch("/me/status", searchLimiter, async (req, res) => {
   const parsed = statusSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid", message: parsed.error.issues[0].message });
     return;
   }
-  const { status, statusText } = parsed.data;
-  const changes: { statusPreference?: typeof status; statusText?: string | null } = {};
+  const { status, statusText, statusClearAfter, timeZone } = parsed.data;
+  const changes: {
+    statusPreference?: typeof status;
+    statusText?: string | null;
+    statusTextExpiresAt?: Date | null;
+  } = {};
   if (status !== undefined) changes.statusPreference = status;
-  if (statusText !== undefined) changes.statusText = statusText;
+  if (statusText !== undefined) {
+    changes.statusText = statusText;
+    // New text without a "Clear after" = Never; clearing the text clears its end too.
+    changes.statusTextExpiresAt = statusText
+      ? statusClearEndsAt(statusClearAfter ?? "never", new Date(), timeZone ?? TIME_ZONE)
+      : null;
+  } else if (statusClearAfter !== undefined) {
+    // Only the "Clear after" changed: it applies to the text you have now (if any), from now.
+    const [row] = await db.select({ statusText: users.statusText }).from(users).where(eq(users.id, me(res).id));
+    changes.statusTextExpiresAt = row?.statusText
+      ? statusClearEndsAt(statusClearAfter, new Date(), timeZone ?? TIME_ZONE)
+      : null;
+  }
   if (Object.keys(changes).length) {
     await db.update(users).set(changes).where(eq(users.id, me(res).id));
-    await announcePresence(me(res).id, emitToUser);
+    // A change of end time alone looks the same to friends, but your other devices refresh
+    // your status when they hear your own presence, so it's sent anyway.
+    await announcePresence(me(res).id, emitToUser, "statusTextExpiresAt" in changes);
   }
   res.json(await myStatus(me(res).id));
 });

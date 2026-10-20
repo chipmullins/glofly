@@ -1,11 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import type { MyStatus, MyStatusChoice } from '../../../preload/api-types'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  STATUS_CLEAR_AFTER,
+  STATUS_CLEAR_LABEL,
+  statusClearChoiceFor,
+  statusClearEndsAt,
+  statusEndsLine,
+  type StatusClearAfter
+} from '@glofly/shared/statusClear'
+import type { MyStatus, MyStatusChanges, MyStatusChoice } from '../../../preload/api-types'
 import { dotFor, STATUS_LABEL } from '../lib/presence'
 import StatusDot from './StatusDot'
 
 type StatusMenuProps = {
   current: MyStatus
-  onChange: (changes: Partial<MyStatus>) => Promise<boolean>
+  onChange: (changes: MyStatusChanges) => Promise<boolean>
   onClose: () => void
 }
 
@@ -18,14 +26,48 @@ const CHOICES: { id: MyStatusChoice; hint: string }[] = [
 
 const CUSTOM_STATUS_MAX = 80
 
+/** This device's time zone, sent so "Today" and "This week" end at your own midnight. */
+function localTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
+  } catch {
+    return undefined
+  }
+}
+
 export default function StatusMenu({
   current,
   onChange,
   onClose
 }: StatusMenuProps): React.JSX.Element {
   const [text, setText] = useState(current.statusText ?? '')
+  // 0.8.0 Clear after: the one in use if your status has an end, else Never.
+  const startClear = current.statusText
+    ? statusClearChoiceFor(current.statusTextEndsAt)
+    : ('never' as StatusClearAfter)
+  const [clear, setClear] = useState<StatusClearAfter>(startClear)
+  const [now, setNow] = useState(() => new Date())
   const [saving, setSaving] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // "(in 4 hours)" stays true while the menu is open.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // The menu is taller than the space below it in a small window: it scrolls instead of being cut off.
+  useLayoutEffect(() => {
+    const fit = (): void => {
+      const el = menuRef.current
+      if (!el) return
+      const top = el.getBoundingClientRect().top
+      el.style.maxHeight = `${Math.max(160, window.innerHeight - top - 12)}px`
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [])
 
   // Close when clicking elsewhere or pressing Escape. Uses the latest onClose without re-running.
   const closeRef = useRef(onClose)
@@ -54,12 +96,24 @@ export default function StatusMenu({
 
   async function saveText(value: string): Promise<void> {
     setSaving(true)
-    const ok = await onChange({ statusText: value.trim() })
+    const trimmed = value.trim()
+    const ok = await onChange(
+      trimmed
+        ? { statusText: trimmed, statusClearAfter: clear, timeZone: localTimeZone() }
+        : { statusText: '' }
+    )
     setSaving(false)
     if (ok) onClose()
   }
 
   const textChanged = text.trim() !== (current.statusText ?? '')
+  const clearChanged = clear !== startClear
+  const canSave = textChanged || (clearChanged && !!text.trim())
+  // What the line under the chips says: the real end while nothing changed, else a preview.
+  const endsAt =
+    !textChanged && !clearChanged && current.statusText
+      ? (current.statusTextEndsAt ?? null)
+      : statusClearEndsAt(clear, now, localTimeZone() ?? 'UTC')
 
   return (
     <div className="menu status-menu" ref={menuRef} role="dialog" aria-label="Set your status">
@@ -134,18 +188,55 @@ export default function StatusMenu({
           <span>
             {text.length}/{CUSTOM_STATUS_MAX}
           </span>
-          {textChanged && (
-            <button
-              type="button"
-              className="custom-status-save"
-              disabled={saving}
-              onClick={() => void saveText(text)}
-            >
-              Save
-            </button>
-          )}
         </span>
       </label>
+
+      <div className="status-clear" role="group" aria-labelledby="status-clear-title">
+        <span className="status-clear-title" id="status-clear-title">
+          Clear after
+        </span>
+        <div className="status-clear-chips">
+          {STATUS_CLEAR_AFTER.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={
+                clear === id ? 'status-clear-chip status-clear-chip--on' : 'status-clear-chip'
+              }
+              aria-pressed={clear === id}
+              onClick={() => setClear(id)}
+            >
+              {STATUS_CLEAR_LABEL[id]}
+            </button>
+          ))}
+        </div>
+        <p className="status-clear-ends" aria-live="polite">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+          <span>{statusEndsLine(endsAt, now)}</span>
+        </p>
+      </div>
+      <div className="status-menu-actions">
+        <button
+          type="button"
+          className="custom-status-save"
+          disabled={saving || !canSave}
+          onClick={() => void saveText(text)}
+        >
+          Save
+        </button>
+      </div>
     </div>
   )
 }

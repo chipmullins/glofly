@@ -17,6 +17,7 @@ import type {
   MessageSearchPage,
   MuteDuration,
   MyStatus,
+  MyStatusChanges,
   PrivacySettings,
   Profile,
   ProfileChanges,
@@ -53,7 +54,7 @@ export const setNickname = (userId: string, nickname: string | null) => request<
 export const setAvatar = (file: Upload) => upload<{ avatarVersion: string }>('PUT', '/users/me/avatar', file)
 export const removeAvatar = () => request<{ avatarVersion: null }>('DELETE', '/users/me/avatar')
 export const getMyStatus = () => request<MyStatus>('GET', '/users/me/status')
-export const setMyStatus = (changes: Partial<MyStatus>) => request<MyStatus>('PATCH', '/users/me/status', changes)
+export const setMyStatus = (changes: MyStatusChanges) => request<MyStatus>('PATCH', '/users/me/status', changes)
 export const getPrivacy = () => request<PrivacySettings>('GET', '/users/me/settings')
 export const setPrivacy = (changes: Partial<PrivacySettings>) => request<PrivacySettings>('PATCH', '/users/me/settings', changes)
 
