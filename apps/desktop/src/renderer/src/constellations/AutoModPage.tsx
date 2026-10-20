@@ -39,8 +39,8 @@ function Switch({
   )
 }
 
-const ago = (iso: string): string => {
-  const s = (Date.now() - Date.parse(iso)) / 1000
+const ago = (iso: string, now: number): string => {
+  const s = (now - Date.parse(iso)) / 1000
   if (s < 60) return 'just now'
   if (s < 3600) return `${Math.floor(s / 60)} min ago`
   if (s < 86_400) return `${Math.floor(s / 3600)} h ago`
@@ -51,11 +51,14 @@ const ago = (iso: string): string => {
 function LogEntry({
   item,
   meId,
+  now,
   busy,
   onUndo
 }: {
   item: AutoModLogItem
   meId: string
+  /** When the page last loaded (for "can post in 6 minutes") */
+  now: number
   busy: boolean
   onUndo: () => void
 }): React.JSX.Element {
@@ -73,7 +76,7 @@ function LogEntry({
       ? `From ${who}${d.nebulaName ? ` in #${d.nebulaName}` : ''} · blocked word "${d.word ?? ''}"`
       : item.action === 'automod_links'
         ? `${d.rule === 'repeat' ? 'Same link in 3 nebulas' : 'Lots of links at once'} from ${who}${d.nebulaName ? ` in #${d.nebulaName}` : ''}`
-        : `${name} can post ${d.until && Date.parse(d.until) > Date.now() ? `in ${Math.max(1, Math.ceil((Date.parse(d.until) - Date.now()) / 60_000))} minutes` : 'now'} (new members wait)`
+        : `${name} can post ${d.until && Date.parse(d.until) > now ? `in ${Math.max(1, Math.ceil((Date.parse(d.until) - now) / 60_000))} minutes` : 'now'} (new members wait)`
   const undoneBy = item.undone
     ? item.undone.by?.id === meId
       ? 'you'
@@ -86,13 +89,17 @@ function LogEntry({
           {item.action === 'automod_hidden' ? '⛨' : item.action === 'automod_links' ? '🔗' : '⏳'}
         </span>
         <b>{head}</b>
-        <span className="am-log-when">{ago(item.createdAt)}</span>
+        <span className="am-log-when">{ago(item.createdAt, now)}</span>
       </div>
       <div className="am-log-line">{line}</div>
-      {d.preview && item.action !== 'automod_wait' && <div className="am-log-quote">{d.preview}</div>}
+      {d.preview && item.action !== 'automod_wait' && (
+        <div className="am-log-quote">{d.preview}</div>
+      )}
       {undoneBy ? (
         <div className="am-log-done">
-          {item.action === 'automod_wait' ? `Let in early by ${undoneBy}` : `Restored by ${undoneBy}`}
+          {item.action === 'automod_wait'
+            ? `Let in early by ${undoneBy}`
+            : `Restored by ${undoneBy}`}
         </div>
       ) : (
         item.canUndo && (
@@ -114,7 +121,14 @@ export default function AutoModPage({
   meId: string
   onProblem: (message: string) => void
 }): React.JSX.Element {
-  const [data, setData] = useState<AutoModPageData | null>(null)
+  const [data, setDataRaw] = useState<AutoModPageData | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  const setData = (
+    next: AutoModPageData | null | ((d: AutoModPageData | null) => AutoModPageData | null)
+  ): void => {
+    setDataRaw(next)
+    setNow(Date.now())
+  }
   const [adding, setAdding] = useState(false)
   const [word, setWord] = useState('')
   const [wordProblem, setWordProblem] = useState<string | null>(null)
@@ -129,7 +143,12 @@ export default function AutoModPage({
   useEffect(() => {
     if (adding) addRef.current?.focus()
   }, [adding])
-  if (!data) return <div className="cx-settings-body"><p className="cx-settings-text">Loading…</p></div>
+  if (!data)
+    return (
+      <div className="cx-settings-body">
+        <p className="cx-settings-text">Loading…</p>
+      </div>
+    )
   const s = data.settings
   const edit = data.canEdit && !busy
   async function change(changes: Partial<AutoModSettings>): Promise<boolean> {
@@ -181,7 +200,10 @@ export default function AutoModPage({
       <div className="am-cols">
         <div className="am-left">
           {!data.canEdit && (
-            <p className="cx-settings-text">Only people who can edit constellation settings can change AutoMod. You can see what it did and undo it.</p>
+            <p className="cx-settings-text">
+              Only people who can edit constellation settings can change AutoMod. You can see what
+              it did and undo it.
+            </p>
           )}
           <section className="am-card">
             <div className="am-card-head">
@@ -189,14 +211,24 @@ export default function AutoModPage({
                 <h3>Blocked words</h3>
                 <p>Messages with these are hidden before anyone sees them.</p>
               </div>
-              <Switch on={s.wordsOn} label="Blocked words" disabled={!edit} onChange={(on) => void change({ wordsOn: on })} />
+              <Switch
+                on={s.wordsOn}
+                label="Blocked words"
+                disabled={!edit}
+                onChange={(on) => void change({ wordsOn: on })}
+              />
             </div>
             <div className="am-words">
               {s.words.map((w) => (
                 <span key={w} className="am-word">
                   {w}
                   {data.canEdit && (
-                    <button type="button" aria-label={`Remove ${w}`} disabled={!edit} onClick={() => void change({ words: s.words.filter((x) => x !== w) })}>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${w}`}
+                      disabled={!edit}
+                      onClick={() => void change({ words: s.words.filter((x) => x !== w) })}
+                    >
                       ×
                     </button>
                   )}
@@ -235,7 +267,12 @@ export default function AutoModPage({
                     </button>
                   </form>
                 ) : (
-                  <button type="button" className="am-add" disabled={!edit} onClick={() => setAdding(true)}>
+                  <button
+                    type="button"
+                    className="am-add"
+                    disabled={!edit}
+                    onClick={() => setAdding(true)}
+                  >
                     + Add a word
                   </button>
                 ))}
@@ -250,9 +287,17 @@ export default function AutoModPage({
             <div className="am-card-head">
               <div>
                 <h3>Link-spam guard</h3>
-                <p>More than 3 links in 10 seconds, or the same link in 3 nebulas, is held for a moderator.</p>
+                <p>
+                  More than 3 links in 10 seconds, or the same link in 3 nebulas, is held for a
+                  moderator.
+                </p>
               </div>
-              <Switch on={s.linkGuardOn} label="Link-spam guard" disabled={!edit} onChange={(on) => void change({ linkGuardOn: on })} />
+              <Switch
+                on={s.linkGuardOn}
+                label="Link-spam guard"
+                disabled={!edit}
+                onChange={(on) => void change({ linkGuardOn: on })}
+              />
             </div>
           </section>
 
@@ -262,7 +307,12 @@ export default function AutoModPage({
                 <h3>Slow mode</h3>
                 <p>How long people wait between messages, per nebula.</p>
               </div>
-              <Switch on={s.slowModeOn} label="Slow mode" disabled={!edit} onChange={(on) => void change({ slowModeOn: on })} />
+              <Switch
+                on={s.slowModeOn}
+                label="Slow mode"
+                disabled={!edit}
+                onChange={(on) => void change({ slowModeOn: on })}
+              />
             </div>
             {s.slowModeOn && (
               <div className="am-slow">
@@ -271,10 +321,16 @@ export default function AutoModPage({
                   return (
                     <div key={n.id} className="am-slow-row">
                       <span className="am-slow-name">
-                        <span aria-hidden="true" className="am-spark">✦</span>
+                        <span aria-hidden="true" className="am-spark">
+                          ✦
+                        </span>
                         {n.name}
                       </span>
-                      <span className="am-seg" role="radiogroup" aria-label={`Slow mode in ${n.name}`}>
+                      <span
+                        className="am-seg"
+                        role="radiogroup"
+                        aria-label={`Slow mode in ${n.name}`}
+                      >
                         {SLOW_MODE_CHOICES.map((choice) => (
                           <button
                             key={choice.seconds}
@@ -313,7 +369,9 @@ export default function AutoModPage({
                       aria-label="How long new members wait"
                       value={s.newMemberWaitMinutes || 10}
                       disabled={!edit}
-                      onChange={(e) => void change({ newMemberWaitMinutes: Number(e.target.value) })}
+                      onChange={(e) =>
+                        void change({ newMemberWaitMinutes: Number(e.target.value) })
+                      }
                     >
                       {NEW_MEMBER_WAIT_CHOICES.map((m) => (
                         <option key={m} value={m}>
@@ -343,9 +401,20 @@ export default function AutoModPage({
             <h3>Moderation log</h3>
             <span>Everything AutoMod does lands here</span>
           </div>
-          {data.log.length === 0 && <p className="cx-settings-text">Nothing yet. When AutoMod holds a message, it shows up here.</p>}
+          {data.log.length === 0 && (
+            <p className="cx-settings-text">
+              Nothing yet. When AutoMod holds a message, it shows up here.
+            </p>
+          )}
           {data.log.map((item) => (
-            <LogEntry key={item.id} item={item} meId={meId} busy={busy} onUndo={() => void undo(item)} />
+            <LogEntry
+              key={item.id}
+              item={item}
+              meId={meId}
+              now={now}
+              busy={busy}
+              onUndo={() => void undo(item)}
+            />
           ))}
         </div>
       </div>

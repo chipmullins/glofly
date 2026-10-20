@@ -53,7 +53,12 @@ const whenLabel = (iso: string): string => {
   const days = (Date.now() - d.getTime()) / 86_400_000
   return days < 6
     ? d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-    : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      })
 }
 
 export default function CxSearch({
@@ -69,19 +74,20 @@ export default function CxSearch({
   const [filters, setFilters] = useState<Omit<CxSearchFilters, 'q'>>({})
   const [picker, setPicker] = useState<Picker>(null)
   const [who, setWho] = useState('')
-  const [results, setResults] = useState<CxSearchResult[] | null>(null)
+  const [found, setResults] = useState<CxSearchResult[] | null>(null)
   const [hasMore, setHasMore] = useState(false)
-  const [problem, setProblem] = useState<string | null>(null)
+  const [failed, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const seq = useRef(0)
   useEffect(() => inputRef.current?.focus(), [])
 
   const ready = q.trim().length >= 2 || !!filters.from || !!filters.has || !!filters.in
+  const results = ready ? found : null
+  const problem = ready ? failed : null
   useEffect(() => {
     if (!ready) {
-      setResults(null)
-      setProblem(null)
+      seq.current++
       return
     }
     const n = ++seq.current
@@ -115,17 +121,27 @@ export default function CxSearch({
     const t = who.trim().toLowerCase()
     return c.members
       .map((m) => m.user)
-      .filter((u) => !t || u.displayName.toLowerCase().includes(t) || u.username.toLowerCase().includes(t))
+      .filter(
+        (u) => !t || u.displayName.toLowerCase().includes(t) || u.username.toLowerCase().includes(t)
+      )
       .sort((a, b) => a.displayName.localeCompare(b.displayName))
       .slice(0, 8)
   }, [c.members, who])
 
   const textNebulas = c.nebulas.filter((n) => n.kind === 'text')
   const chips: { id: Exclude<Picker, null>; label: string; on: string | null }[] = [
-    { id: 'from', label: 'from:', on: filters.from ? `from: ${filters.from.displayName.split(/\s+/)[0]}` : null },
+    {
+      id: 'from',
+      label: 'from:',
+      on: filters.from ? `from: ${filters.from.displayName.split(/\s+/)[0]}` : null
+    },
     { id: 'in', label: 'in:', on: filters.in ? `in: #${filters.in.name}` : null },
     { id: 'has', label: 'has:', on: filters.has ? `has: ${filters.has}` : null },
-    { id: 'before', label: 'before:', on: filters.before ? `before: ${filters.before.label}` : null }
+    {
+      id: 'before',
+      label: 'before:',
+      on: filters.before ? `before: ${filters.before.label}` : null
+    }
   ]
   const clear = (id: Exclude<Picker, null>): void => setFilters((f) => ({ ...f, [id]: null }))
   const pick = <K extends keyof typeof filters>(key: K, value: (typeof filters)[K]): void => {
@@ -147,7 +163,10 @@ export default function CxSearch({
     if (!last) return
     const r = await community.search(c.id, { q, ...filters }, last.message.id)
     if (r.ok) {
-      setResults((list) => [...(list ?? []), ...r.data.results.filter((x) => !list?.some((y) => y.message.id === x.message.id))])
+      setResults((list) => [
+        ...(list ?? []),
+        ...r.data.results.filter((x) => !list?.some((y) => y.message.id === x.message.id))
+      ])
       setHasMore(r.data.hasMore)
     }
   }
@@ -167,7 +186,15 @@ export default function CxSearch({
       <div className="cxs-top">
         <div className="cxs-box">
           <span className="cxs-icon" aria-hidden="true">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
               <circle cx="11" cy="11" r="7" />
               <path d="m20 20-3.5-3.5" />
             </svg>
@@ -224,29 +251,64 @@ export default function CxSearch({
                         onChange={(e) => setWho(e.target.value)}
                       />
                       {members.map((u: PublicUser) => (
-                        <button key={u.id} type="button" role="option" aria-selected={false} className="cxs-pop-item" onClick={() => pick('from', u)}>
-                          <Avatar id={u.id} name={u.displayName} avatarVersion={u.avatarVersion} size={24} />
+                        <button
+                          key={u.id}
+                          type="button"
+                          role="option"
+                          aria-selected={false}
+                          className="cxs-pop-item"
+                          onClick={() => pick('from', u)}
+                        >
+                          <Avatar
+                            id={u.id}
+                            name={u.displayName}
+                            avatarVersion={u.avatarVersion}
+                            size={24}
+                          />
                           {u.displayName}
                         </button>
                       ))}
-                      {members.length === 0 && <span className="cxs-pop-none">Nobody by that name here.</span>}
+                      {members.length === 0 && (
+                        <span className="cxs-pop-none">Nobody by that name here.</span>
+                      )}
                     </>
                   )}
                   {x.id === 'in' &&
                     textNebulas.map((n) => (
-                      <button key={n.id} type="button" role="option" aria-selected={false} className="cxs-pop-item" onClick={() => pick('in', { id: n.id, name: n.name })}>
+                      <button
+                        key={n.id}
+                        type="button"
+                        role="option"
+                        aria-selected={false}
+                        className="cxs-pop-item"
+                        onClick={() => pick('in', { id: n.id, name: n.name })}
+                      >
                         <SparkSmall /># {n.name}
                       </button>
                     ))}
                   {x.id === 'has' &&
                     SEARCH_HAS.map((h) => (
-                      <button key={h.id} type="button" role="option" aria-selected={false} className="cxs-pop-item" onClick={() => pick('has', h.id as SearchHas)}>
+                      <button
+                        key={h.id}
+                        type="button"
+                        role="option"
+                        aria-selected={false}
+                        className="cxs-pop-item"
+                        onClick={() => pick('has', h.id as SearchHas)}
+                      >
                         {h.id === 'image' ? '🖼️' : h.id === 'link' ? '🔗' : '📎'} {h.name}
                       </button>
                     ))}
                   {x.id === 'before' &&
                     beforeChoices().map((b) => (
-                      <button key={b.label} type="button" role="option" aria-selected={false} className="cxs-pop-item" onClick={() => pick('before', b)}>
+                      <button
+                        key={b.label}
+                        type="button"
+                        role="option"
+                        aria-selected={false}
+                        className="cxs-pop-item"
+                        onClick={() => pick('before', b)}
+                      >
                         {b.label}
                       </button>
                     ))}
@@ -261,7 +323,11 @@ export default function CxSearch({
       </div>
       <div className="cxs-results">
         {groups.map((g) => (
-          <section key={g.nebula.id} className="cxs-group" aria-label={`${g.nebula.name}, ${g.items.length} results`}>
+          <section
+            key={g.nebula.id}
+            className="cxs-group"
+            aria-label={`${g.nebula.name}, ${g.items.length} results`}
+          >
             <h3 className="cxs-group-head">
               <SparkSmall />
               {g.nebula.name} · {g.items.length} {g.items.length === 1 ? 'result' : 'results'}
@@ -273,7 +339,12 @@ export default function CxSearch({
               const name = r.sender?.displayName ?? 'Someone'
               return (
                 <div key={m.id} className="cxs-hit">
-                  <Avatar id={m.senderId} name={name} avatarVersion={r.sender?.avatarVersion ?? null} size={32} />
+                  <Avatar
+                    id={m.senderId}
+                    name={name}
+                    avatarVersion={r.sender?.avatarVersion ?? null}
+                    size={32}
+                  />
                   <div className="cxs-hit-main">
                     <div className="cxs-hit-who">
                       <b>{name.split(/\s+/)[0]}</b>
@@ -289,11 +360,19 @@ export default function CxSearch({
                         className="cxs-hit-photo"
                         alt={photo.name}
                         src={photoUrl(m.conversationId, photo.id, 'preview')}
-                        style={photo.width && photo.height ? { aspectRatio: `${photo.width} / ${photo.height}` } : undefined}
+                        style={
+                          photo.width && photo.height
+                            ? { aspectRatio: `${photo.width} / ${photo.height}` }
+                            : undefined
+                        }
                       />
                     )}
                   </div>
-                  <button type="button" className="cxs-jump" onClick={() => onJump(r.nebula.id, m.id)}>
+                  <button
+                    type="button"
+                    className="cxs-jump"
+                    onClick={() => onJump(r.nebula.id, m.id)}
+                  >
                     Jump
                   </button>
                 </div>
@@ -303,7 +382,9 @@ export default function CxSearch({
         ))}
         {ready && results?.length === 0 && !busy && (
           <p className="cxs-none">
-            {Object.values(filters).some(Boolean) ? 'Nothing matches all those filters. Try removing one.' : 'Nothing found. Try other words.'}
+            {Object.values(filters).some(Boolean)
+              ? 'Nothing matches all those filters. Try removing one.'
+              : 'Nothing found. Try other words.'}
           </p>
         )}
         {hasMore && (

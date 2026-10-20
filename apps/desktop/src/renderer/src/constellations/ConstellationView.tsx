@@ -283,7 +283,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const shownNebulaId = c.nebulas.find((n) => n.id === nebulaId)?.id ?? null
   useEffect(() => {
     const id = takeJump(shownNebulaId)
-    if (id) setJump((j) => ({ messageId: id, nonce: (j?.nonce ?? 0) + 1 }))
+    if (!id) return
+    const t = setTimeout(() => setJump((j) => ({ messageId: id, nonce: (j?.nonce ?? 0) + 1 })), 0)
+    return () => clearTimeout(t)
   }, [shownNebulaId])
   /** Show a message in a nebula of this constellation (another nebula: once it's open). */
   const showMessage = (targetNebulaId: string, messageId: string): void => {

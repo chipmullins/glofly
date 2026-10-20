@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   EVENT_DESCRIPTION_MAX,
   EVENT_TITLE_MAX,
@@ -126,11 +126,7 @@ export function EventCard({
             ))}
             <span style={{ flex: 1 }} />
             {phase === 'live' && voice ? (
-              <button
-                type="button"
-                className="ev-link"
-                onClick={() => onJoinVoice(voice.id)}
-              >
+              <button type="button" className="ev-link" onClick={() => onJoinVoice(voice.id)}>
                 Join {voice.name}
               </button>
             ) : (
@@ -153,7 +149,13 @@ export function EventCard({
           {e.faces.length > 0 && (
             <span className="ev-faces" aria-hidden="true">
               {e.faces.map((f) => (
-                <Avatar key={f.id} id={f.id} name={f.displayName} avatarVersion={f.avatarVersion} size={26} />
+                <Avatar
+                  key={f.id}
+                  id={f.id}
+                  name={f.displayName}
+                  avatarVersion={f.avatarVersion}
+                  size={26}
+                />
               ))}
             </span>
           )}
@@ -240,7 +242,8 @@ export function EventsChip({
 }
 
 const pad = (n: number): string => String(n).padStart(2, '0')
-const localDate = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const localDate = (d: Date): string =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const localTime = (d: Date): string => `${pad(d.getHours())}:${pad(d.getMinutes())}`
 
 /** Plan an event, or change one. */
@@ -260,26 +263,30 @@ export function EventDialog({
 }): React.JSX.Element {
   const textNebulas = c.nebulas.filter((n) => n.kind === 'text' && !n.readOnly)
   const voiceNebulas = c.nebulas.filter((n) => n.kind === 'voice')
-  const start = useMemo(() => {
+  const [start] = useState(() => {
     if (editing) return new Date(editing.startsAt)
     const d = new Date(Date.now() + 24 * 3_600_000)
     d.setHours(20, 0, 0, 0)
     return d
-  }, [editing])
+  })
   const [title, setTitle] = useState(editing?.title ?? '')
   const [description, setDescription] = useState(editing?.description ?? '')
   const [date, setDate] = useState(localDate(start))
   const [time, setTime] = useState(localTime(start))
   const [hours, setHours] = useState(() =>
     editing?.endsAt
-      ? String(Math.round((Date.parse(editing.endsAt) - Date.parse(editing.startsAt)) / 1_800_000) / 2)
+      ? String(
+          Math.round((Date.parse(editing.endsAt) - Date.parse(editing.startsAt)) / 1_800_000) / 2
+        )
       : '3'
   )
   const [where, setWhere] = useState(
     editing?.nebulaId ??
       (textNebulas.some((n) => n.id === nebulaId) ? nebulaId! : (textNebulas[0]?.id ?? ''))
   )
-  const [voice, setVoice] = useState(editing ? (editing.voiceNebulaId ?? '') : (voiceNebulas[0]?.id ?? ''))
+  const [voice, setVoice] = useState(
+    editing ? (editing.voiceNebulaId ?? '') : (voiceNebulas[0]?.id ?? '')
+  )
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
@@ -340,7 +347,10 @@ export function EventDialog({
   }
 
   return (
-    <div className="cx-dialog-backdrop" onMouseDown={(ev) => ev.target === ev.currentTarget && onClose()}>
+    <div
+      className="cx-dialog-backdrop"
+      onMouseDown={(ev) => ev.target === ev.currentTarget && onClose()}
+    >
       <form
         className="cx-dialog ev-dialog"
         role="dialog"
@@ -358,7 +368,7 @@ export function EventDialog({
           </button>
         </header>
         <label className="ev-field">
-          <span>What's happening?</span>
+          <span>What&apos;s happening?</span>
           <input
             ref={titleRef}
             value={title}
@@ -427,7 +437,7 @@ export function EventDialog({
           </label>
         </div>
         <p className="ev-hint">
-          Times show in each person's own time zone. Going and Maybe get a reminder 15 minutes
+          Times show in each person&apos;s own time zone. Going and Maybe get a reminder 15 minutes
           before{voice ? ', and the voice nebula shows EVENT when it starts' : ''}.
         </p>
         {error && (
@@ -438,11 +448,20 @@ export function EventDialog({
         <footer className="ev-dialog-foot">
           {editing &&
             (confirmCancel ? (
-              <button type="button" className="ev-danger" disabled={busy} onClick={() => void cancelIt()}>
+              <button
+                type="button"
+                className="ev-danger"
+                disabled={busy}
+                onClick={() => void cancelIt()}
+              >
                 Yes, cancel it
               </button>
             ) : (
-              <button type="button" className="ev-quiet-danger" onClick={() => setConfirmCancel(true)}>
+              <button
+                type="button"
+                className="ev-quiet-danger"
+                onClick={() => setConfirmCancel(true)}
+              >
                 Cancel event
               </button>
             ))}
@@ -450,7 +469,11 @@ export function EventDialog({
           <button type="button" className="cx-button" onClick={onClose}>
             Close
           </button>
-          <button type="submit" className="cx-button cx-button--primary" disabled={busy || !title.trim() || !where}>
+          <button
+            type="submit"
+            className="cx-button cx-button--primary"
+            disabled={busy || !title.trim() || !where}
+          >
             {editing ? 'Save' : 'Post event'}
           </button>
         </footer>

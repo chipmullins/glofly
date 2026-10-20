@@ -87,15 +87,24 @@ export const community = {
     call<{ events: ConstellationEvent[] }>('GET', `${base(constellationId)}/events`),
   createEvent: (constellationId: string, values: EventValues) =>
     call<{ event: ConstellationEvent }>('POST', `${base(constellationId)}/events`, values),
-  updateEvent: (constellationId: string, eventId: string, values: Partial<Omit<EventValues, 'nebulaId'>>) =>
-    call<{ event: ConstellationEvent }>('PATCH', `${base(constellationId)}/events/${eventId}`, values),
+  updateEvent: (
+    constellationId: string,
+    eventId: string,
+    values: Partial<Omit<EventValues, 'nebulaId'>>
+  ) =>
+    call<{ event: ConstellationEvent }>(
+      'PATCH',
+      `${base(constellationId)}/events/${eventId}`,
+      values
+    ),
   cancelEvent: (constellationId: string, eventId: string) =>
     call<null>('DELETE', `${base(constellationId)}/events/${eventId}`),
   rsvp: (constellationId: string, eventId: string, answer: RsvpAnswer | null) =>
     call<{ event: ConstellationEvent }>('PUT', `${base(constellationId)}/events/${eventId}/rsvp`, {
       answer
     }),
-  automod: (constellationId: string) => call<AutoModPageData>('GET', `${base(constellationId)}/automod`),
+  automod: (constellationId: string) =>
+    call<AutoModPageData>('GET', `${base(constellationId)}/automod`),
   setAutomod: (constellationId: string, changes: Partial<AutoModSettings>) =>
     call<AutoModPageData>('PUT', `${base(constellationId)}/automod`, changes),
   releaseHeld: (constellationId: string, heldId: string) =>
@@ -181,7 +190,8 @@ export function useInboxCounts(enabled: boolean): {
     const stop = window.glofly.onEvent((event) => {
       if (event.type === 'inbox:changed' || event.type === 'constellation:event') later()
       // Someone mentioned or replied to me, or asked to join somewhere I let people in.
-      else if (event.type === 'constellation:activity' || event.type === 'constellation:updated') later()
+      else if (event.type === 'constellation:activity' || event.type === 'constellation:updated')
+        later()
       else if (event.type === 'connection' && event.connected) later()
     })
     return () => {

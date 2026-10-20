@@ -21,11 +21,22 @@ type Toast = {
   conversationId: string | null
   inVoice: number
   startsAt: string | null
+  /** When it arrived (for "starts in 14 min") */
+  at: number
 }
 
 function Mark(): React.JSX.Element {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffb347" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#ffb347"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
       <path d="M5 7l6 3 3 7 5-4" />
       <circle cx="5" cy="7" r="1.6" fill="#ffb347" />
       <circle cx="11" cy="10" r="1.3" fill="#ffb347" />
@@ -67,7 +78,8 @@ export default function EventToasts({
             nebulaId: event.nebulaId ?? null,
             conversationId: event.conversationId ?? null,
             inVoice: event.inVoice ?? 0,
-            startsAt: e.startsAt
+            startsAt: e.startsAt,
+            at: Date.now()
           }
           playSound('friendOnline')
           setQueue((q) => [...q.filter((t) => t.eventId !== toast.eventId), toast].slice(-3))
@@ -107,8 +119,9 @@ export default function EventToasts({
     ? new Date(t.startsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     : ''
   const others = Math.max(0, t.inVoice - 1)
-  const mins = t.startsAt ? Math.max(1, Math.round((Date.parse(t.startsAt) - Date.now()) / 60_000)) : 15
-  const title = t.phase === 'started' ? `${t.title} is starting` : `${t.title} starts in ${mins} min`
+  const mins = t.startsAt ? Math.max(1, Math.round((Date.parse(t.startsAt) - t.at) / 60_000)) : 15
+  const title =
+    t.phase === 'started' ? `${t.title} is starting` : `${t.title} starts in ${mins} min`
   const text =
     t.phase === 'started'
       ? t.voiceName
@@ -145,7 +158,8 @@ export default function EventToasts({
             onClick={() => {
               done()
               // "Remind me at 8:30": the "is starting" toast comes then anyway.
-              if (t.phase === 'started') onOpen({ constellationId: t.constellationId, nebulaId: t.nebulaId })
+              if (t.phase === 'started')
+                onOpen({ constellationId: t.constellationId, nebulaId: t.nebulaId })
             }}
           >
             {t.phase === 'started' ? 'Open event' : `Remind me at ${at}`.replace(/ at $/, '')}
