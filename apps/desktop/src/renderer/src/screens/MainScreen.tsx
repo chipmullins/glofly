@@ -22,8 +22,9 @@ import ChatView from '../components/ChatView'
 import { ListSkeleton } from '../components/Skeleton'
 import ConfirmDialog from '../components/ConfirmDialog'
 import EditProfileDialog from '../components/EditProfileDialog'
-import WelcomeCard from '../components/WelcomeCard'
-import { noteInvited, welcomeHidden } from '../lib/welcome'
+import EmptyScene from '../components/EmptyScene'
+import WelcomeFlow from '../components/WelcomeFlow'
+import { noteInvited, welcomeFlowPending, finishWelcomeFlow } from '../lib/welcome'
 import ProfileCard from '../components/ProfileCard'
 import {
   AddFriendIcon,
@@ -81,6 +82,8 @@ import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcas
 import { stopLive, useMyBroadcast } from '../lib/broadcast'
 import ConstellationsScreen from '../constellations/ConstellationsScreen'
 import InvitePopup from '../constellations/InvitePopup'
+import EventToasts from '../constellations/EventToasts'
+import { InviteJoinDialog } from '../constellations/InviteJoinDialog'
 import { lastPlaceIn, useConstellationsPhase, viewingNebula } from '../constellations/phase'
 import { GalaxyIcon } from '../constellations/sky'
 import { useConstellationCards, usePinnedNebulas } from '../lib/constellations'
@@ -88,6 +91,10 @@ import HomeDock, { type HomeDockHandle } from '../constellations/HomeDock'
 import MyGamesPanel from '../components/MyGames'
 import { setQuietHours } from '../lib/quiet'
 import { quietHours as quietHoursApi } from '../lib/tools'
+import { clearOutbox, retryOffline } from '../lib/outbox'
+import QuickSwitcher from '../components/QuickSwitcher'
+import ShortcutSheet from '../components/ShortcutSheet'
+import { noteRecent } from '../lib/quickSwitch'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -474,8 +481,14 @@ export default function MainScreen({
   const [search, setSearch] = useState('')
   /** Add friend dialog: open at the search, or (0.7.4 welcome card) at "Invite your friends" */
   const [adding, setAdding] = useState<false | 'search' | 'invite'>(false)
-  /** 0.7.4: the small welcome card above the friends list, hidden by the person */
-  const [welcomeOff, setWelcomeOff] = useState(() => welcomeHidden(user.id))
+  /** 0.7.5: "Find @name" from an empty friends search starts the Add friend search with it */
+  const [addQuery, setAddQuery] = useState('')
+  /** 0.7.5: the welcome flow, once, for an account made on this device (lib/welcome.ts) */
+  const [welcoming, setWelcoming] = useState(() => welcomeFlowPending(user.id))
+  const endWelcome = useCallback(() => {
+    finishWelcomeFlow(user.id)
+    setWelcoming(false)
+  }, [user.id])
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
@@ -497,13 +510,22 @@ export default function MainScreen({
     if (openChatId) setNarrowList(false)
   }
   const [connected, setConnected] = useState(true)
+  // 0.7.5: "Reconnecting…" only once it's been down for a couple of seconds (a blip stays quiet).
+  const [showReconnecting, setShowReconnecting] = useState(false)
+  useEffect(() => {
+    if (connected) return
+    const t = setTimeout(() => setShowReconnecting(true), 2000)
+    return () => clearTimeout(t)
+  }, [connected])
+  // Signing out (this screen goes away): nothing waits to be sent for the next person.
+  useEffect(() => () => clearOutbox(), [])
   const [presence, setPresence] = useState<Record<string, Presence>>({})
   const [myStatus, setMyStatus] = useState<MyStatus>({ status: 'online', statusText: null })
   const [statusOpen, setStatusOpen] = useState(false)
   /** Settings, and the page it opens on (false = closed). */
   const [settingsOpen, setSettingsOpen] = useState<false | SettingsPage>(false)
   /** Settings opened for one thing (the Jump List's "Quiet hours"): scrolled to it */
-  const [settingsFocus, setSettingsFocus] = useState<'quiet-hours' | undefined>(undefined)
+  const [settingsFocus, setSettingsFocus] = useState<string | undefined>(undefined)
   /** Message search: one chat (chatId) or all chats (null) */
   const [messageSearch, setMessageSearch] = useState<{
     chatId: string | null
@@ -911,6 +933,8 @@ export default function MainScreen({
         case 'connection':
           setConnected(event.connected)
           if (event.connected) {
+            setShowReconnecting(false)
+            retryOffline() // messages that failed while the connection was down go again
             void refresh() // catch up on anything missed while offline
             void refreshNotices()
           }
@@ -1011,18 +1035,30 @@ export default function MainScreen({
     setOpenChatId(conversation.id)
   }
 
-  // Ctrl+K (⌘K on a Mac) jumps to "Find a friend or chat" from anywhere.
+  // 0.7.5: Ctrl+K (⌘K on a Mac) opens the quick switcher from anywhere (in a browser too: the
+  // page takes the key before the browser's own search), and Ctrl+/ the shortcut sheet.
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (isShortcutKey(e) && e.key.toLowerCase() === 'k') {
+      if (!isShortcutKey(e) || e.altKey) return
+      if (e.key.toLowerCase() === 'k' && !e.shiftKey) {
         e.preventDefault()
-        chatSearchRef.current?.focus()
-        chatSearchRef.current?.select()
+        setShortcutsOpen(false)
+        setQuickOpen((open) => !open)
+      } else if (e.key === '/' || e.code === 'Slash') {
+        e.preventDefault()
+        setQuickOpen(false)
+        setShortcutsOpen((open) => !open)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+  // Recent places for the quick switcher: the chats you open.
+  useEffect(() => {
+    if (openChatId) noteRecent(user.id, { kind: 'chat', id: openChatId })
+  }, [openChatId, user.id])
 
   const chatResults = findChats(chatQuery, conversations, lists?.friends ?? [])
 
@@ -1201,6 +1237,56 @@ export default function MainScreen({
     cx.leave()
     then?.()
   }
+  // 0.7.5 Constellations polish: an invite card's Join / Open shows that constellation, the
+  // member card's Call calls them, and Glofly in a browser opened from an invite page's "use it
+  // in your browser" (?join=<code>) shows that invite.
+  const cxEventsRef = useRef<{ cxOpen: (id: string) => void; call: (id: string) => void } | null>(
+    null
+  )
+  useEffect(() => {
+    cxEventsRef.current = {
+      cxOpen: (id) => {
+        cxCards.reload()
+        cx.enter(cxNavRef.current, { constellationId: id, nebulaId: null })
+      },
+      call: (id) => homeThen(() => void callFriend(id, false))
+    }
+  })
+  useEffect(() => {
+    const open = (e: Event): void => {
+      const id = (e as CustomEvent<{ constellationId?: unknown }>).detail?.constellationId
+      if (typeof id === 'string') cxEventsRef.current?.cxOpen(id)
+    }
+    const call = (e: Event): void => {
+      const id = (e as CustomEvent<{ userId?: unknown }>).detail?.userId
+      if (typeof id === 'string') cxEventsRef.current?.call(id)
+    }
+    window.addEventListener('glofly:cx-open', open)
+    window.addEventListener('glofly:call-person', call)
+    return () => {
+      window.removeEventListener('glofly:cx-open', open)
+      window.removeEventListener('glofly:call-person', call)
+    }
+  }, [])
+  const [joinCode, setJoinCode] = useState<string | null>(() => {
+    try {
+      const code = new URLSearchParams(window.location.search).get('join')
+      return code && /^[A-Za-z0-9]{6,16}$/.test(code) ? code : null
+    } catch {
+      return null
+    }
+  })
+  useEffect(() => {
+    if (!joinCode) return
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('join')
+      window.history.replaceState(null, '', url.toString())
+    } catch {
+      /* not a page with an address (the desktop app) */
+    }
+  }, [joinCode])
+
   /** A call bar was clicked: a nebula's voice opens Constellations, anything else its chat. */
   const openFromCall = (conversationId: string): void => {
     const current = callControls.current?.current
@@ -1363,10 +1449,40 @@ export default function MainScreen({
         />
       ))
 
+    // 0.7.5: a search that finds no friend offers to look the name up on Glofly.
+    const noMatch = (): React.ReactNode => {
+      const name = search.trim().replace(/^@/, '')
+      return (
+        <EmptyScene
+          kind="search"
+          layout="small"
+          title={`No friend called “${search.trim()}”`}
+          text={
+            restricted
+              ? 'Check the spelling. Your family adds new friends for you.'
+              : 'Check the spelling, or look them up by their username to send a friend request.'
+          }
+        >
+          {!restricted && /^[a-z0-9._-]{2,}$/i.test(name) && (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => {
+                setAddQuery(name)
+                setAdding('search')
+              }}
+            >
+              Find @{name}
+            </button>
+          )}
+        </EmptyScene>
+      )
+    }
+
     if (filter === 'online' || filter === 'offline') {
       const people = filter === 'online' ? onlineFriends : offlineFriends
       if (people.length === 0) {
-        if (searching) return <p className="list-empty">No friends match “{search.trim()}”.</p>
+        if (searching) return noMatch()
         return filter === 'online' ? (
           <EmptyState
             title="Nobody online right now"
@@ -1394,44 +1510,34 @@ export default function MainScreen({
     }
 
     if (filter === 'all') {
-      // 0.7.4: a new account gets the welcome card (photo, a friend, invite friends) instead of
-      // "No friends yet"; with friends but no photo yet, a smaller one above the list.
-      const welcome = (compact: boolean): React.ReactNode => (
-        <WelcomeCard
-          userId={user.id}
-          firstName={user.displayName.trim().split(/\s+/)[0] || user.username}
-          hasPhoto={!!user.avatarVersion}
-          hasFriend={lists.friends.length > 0}
-          hasPendingRequest={lists.outgoing.length > 0}
-          compact={compact}
-          onPhoto={() => setEditingProfile(true)}
-          onAddFriend={() => setAdding('search')}
-          onInvite={() => setAdding('invite')}
-          onHide={() => setWelcomeOff(true)}
-        />
-      )
-      const showWelcome =
-        !restricted && !searching && !(user.avatarVersion && lists.friends.length > 0)
-      if (lists.friends.length === 0 && showWelcome) return welcome(false)
+      // 0.7.5: no friends yet: a firefly waiting for a friend, with Add a friend and invite.
       if (lists.friends.length === 0) {
-        return (
-          <EmptyState
+        return restricted ? (
+          <EmptyScene
+            kind="friends"
             title="No friends yet"
-            text={
-              restricted
-                ? 'Your family adds your friends for you. They’ll show up here.'
-                : "Add friends by their username and they'll show up here."
-            }
-            onAdd={openAdd}
+            text="Your family adds your friends for you. They’ll show up here."
           />
+        ) : (
+          <EmptyScene
+            kind="friends"
+            title="Every glow starts with one friend"
+            text="Add someone by their username, or invite them by email. You’ll automatically be friends as soon as they join."
+          >
+            <button type="button" className="primary-button" onClick={openAdd}>
+              <AddFriendIcon />
+              Add a friend
+            </button>
+            <button type="button" className="scene-button" onClick={() => setAdding('invite')}>
+              Invite by email
+            </button>
+          </EmptyScene>
         )
       }
-      if (friends.length === 0)
-        return <p className="list-empty">No friends match “{search.trim()}”.</p>
+      if (friends.length === 0) return noMatch()
       // Grouped like the design: "Online — 3", then "Offline — 2".
       return (
         <>
-          {showWelcome && !welcomeOff && welcome(true)}
           {onlineFriends.length > 0 && (
             <section className="friend-group">
               <h2>Online — {onlineFriends.length}</h2>
@@ -1581,7 +1687,7 @@ export default function MainScreen({
                 className="search-input"
                 aria-label="Find a friend or chat"
                 placeholder="Find a friend or chat"
-                title={`Find a friend or chat (${shortcutLabel('K')})`}
+                title={`Find a friend or chat. ${shortcutLabel('K')} jumps anywhere`}
                 role="combobox"
                 aria-expanded={chatQuery.trim().length > 0}
                 aria-controls="chat-search-results"
@@ -1742,6 +1848,14 @@ export default function MainScreen({
             }}
             onNewGroup={() => setGroupPicker({ groupId: null })}
             onSearchMessages={(q) => setMessageSearch({ chatId: null, query: q })}
+            onFindUsername={
+              restricted
+                ? undefined
+                : (name) => {
+                    setAddQuery(name)
+                    setAdding('search')
+                  }
+            }
           />
         </aside>
 
@@ -1784,8 +1898,9 @@ export default function MainScreen({
               }}
             />
           )}
-          {!connected && (
+          {showReconnecting && !connected && (
             <div className="connection-banner" role="status">
+              <span className="connection-banner-dot" aria-hidden="true" />
               Reconnecting to Glofly…
             </div>
           )}
@@ -1971,6 +2086,15 @@ export default function MainScreen({
         onSessionExpired={onSessionExpired}
       />
 
+      {!restricted && joinCode && (
+        <InviteJoinDialog code={joinCode} onClose={() => setJoinCode(null)} onProblem={setToast} />
+      )}
+
+      {/* 0.8.0: "Game Night starts in 15 min" / "is starting · Join Campfire" */}
+      {!restricted && (
+        <EventToasts meId={user.id} onOpen={(place) => cx.enter(cxNavRef.current, place)} />
+      )}
+
       {!restricted && (
         <InvitePopup
           onJoined={(id) => {
@@ -2013,11 +2137,24 @@ export default function MainScreen({
             </div>
           </div>
         )}
+        {welcoming && !restricted && (
+          <WelcomeFlow
+            user={user}
+            onUserChange={onUserChange}
+            onFriendsChanged={refresh}
+            onSessionExpired={onSessionExpired}
+            onDone={endWelcome}
+          />
+        )}
         {adding && (
           <AddFriendDialog
             startAt={adding}
+            initialQuery={addQuery}
             onInvited={() => noteInvited(user.id)}
-            onClose={() => setAdding(false)}
+            onClose={() => {
+              setAdding(false)
+              setAddQuery('')
+            }}
             onChanged={refresh}
             onSessionExpired={onSessionExpired}
             onMessage={(userId) => {
@@ -2073,6 +2210,40 @@ export default function MainScreen({
             onCancel={() => setLeaving(null)}
           />
         )}
+        {quickOpen && (
+          <QuickSwitcher
+            me={user}
+            conversations={conversations}
+            friends={lists?.friends ?? []}
+            presence={presence}
+            cards={restricted ? [] : cxCards.cards}
+            now={now}
+            onClose={() => setQuickOpen(false)}
+            onOpenChat={(id) => {
+              if (cx.phase !== 'home') cx.leave()
+              setOpenChatId(id)
+            }}
+            onOpenFriend={(id) => {
+              if (cx.phase !== 'home') cx.leave()
+              void openChatWith(id)
+            }}
+            onOpenConstellation={(constellationId, nebulaId) => {
+              noteRecent(user.id, { kind: 'constellation', id: constellationId })
+              cx.enter(cxNavRef.current, { constellationId, nebulaId })
+            }}
+            onMiniNebula={
+              cx.phase === 'home' && !restricted && cxCards.cards.length > 0
+                ? (constellationId, nebulaId) =>
+                    homeDock.current?.openNebula(constellationId, nebulaId)
+                : null
+            }
+            onOpenSettings={(page, focus) => {
+              setSettingsFocus(focus)
+              setSettingsOpen(page)
+            }}
+          />
+        )}
+        {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}
         {settingsOpen && (
           <SettingsDialog
             user={user}

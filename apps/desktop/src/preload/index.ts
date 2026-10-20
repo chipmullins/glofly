@@ -340,8 +340,12 @@ const glofly: GloflyApi = {
   constellations: {
     request: (method: ConstellationMethod, path: string, body?: unknown) =>
       ipcRenderer.invoke('constellations:request', method, path, body ?? null),
-    setIcon: (constellationId: string, data: ArrayBuffer, type: PhotoType) =>
-      ipcRenderer.invoke('constellations:set-icon', constellationId, data, type)
+    setIcon: (
+      constellationId: string,
+      data: ArrayBuffer,
+      type: PhotoType,
+      which?: 'icon' | 'banner'
+    ) => ipcRenderer.invoke('constellations:set-icon', constellationId, data, type, which ?? 'icon')
   },
   notices: {
     list: () => ipcRenderer.invoke('notices:list'),

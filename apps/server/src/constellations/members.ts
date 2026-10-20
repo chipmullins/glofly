@@ -16,6 +16,7 @@ import { removeFiles } from "../messages/attachments";
 import { removeFromChatCall } from "../calls/service";
 import { emitToUser } from "../realtime";
 import { constellationChanged } from "./activity";
+import { celebrateJoin } from "./community";
 
 // Joining and leaving (2.0). A constellation's members are also members of each of its nebulas'
 // conversations (so every chat feature works there); these keep the two in step.
@@ -23,8 +24,11 @@ import { constellationChanged } from "./activity";
 export class ConstellationFull extends Error {}
 export class TooManyConstellations extends Error {}
 
-/** Adds someone (inside a transaction that locked the constellation row). */
-export async function addMember(tx: Tx, constellationId: string, userId: string): Promise<boolean> {
+/**
+ * Adds someone (inside a transaction that locked the constellation row). `welcomed`: they don't
+ * need the welcome screen (the Owner who just made it).
+ */
+export async function addMember(tx: Tx, constellationId: string, userId: string, opts: { welcomed?: boolean } = {}): Promise<boolean> {
   const [already] = await tx
     .select({ userId: constellationMembers.userId })
     .from(constellationMembers)
@@ -35,7 +39,7 @@ export async function addMember(tx: Tx, constellationId: string, userId: string)
   const mine = await tx.$count(constellationMembers, eq(constellationMembers.userId, userId));
   if (mine >= CONSTELLATIONS_JOINED_MAX) throw new TooManyConstellations();
   const now = new Date();
-  await tx.insert(constellationMembers).values({ constellationId, userId, joinedAt: now });
+  await tx.insert(constellationMembers).values({ constellationId, userId, joinedAt: now, welcomedAt: opts.welcomed ? now : null });
   const chats = await tx.select({ id: nebulas.conversationId }).from(nebulas).where(eq(nebulas.constellationId, constellationId));
   if (chats.length) {
     // Everything already there counts as read (a newcomer doesn't start with 500 unread).
@@ -58,6 +62,8 @@ export async function addMember(tx: Tx, constellationId: string, userId: string)
 export async function afterJoin(constellationId: string, userId: string): Promise<void> {
   await constellationChanged(constellationId);
   emitToUser(userId, "constellations:changed", {}, true);
+  // 0.7.5: "Priya joined. Say hi!" and member milestones (never stops the join if it fails).
+  await celebrateJoin(constellationId, userId).catch((err) => console.error("Join line failed", err));
 }
 
 /**

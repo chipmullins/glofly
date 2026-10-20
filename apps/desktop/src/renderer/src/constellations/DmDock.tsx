@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import EmptyScene from '../components/EmptyScene'
 import { attachmentSummary } from '@glofly/shared/attachments'
 import { VoiceBubble } from '../components/Attachments'
 import { shortBody } from '@glofly/shared/gifs'
@@ -842,7 +843,24 @@ function AllChats({
         })}
         {shown.length === 0 && (
           <li className="all-chats-empty">
-            {chats.length === 0 ? 'No chats yet' : 'Nothing matches'}
+            {filter === 'unread' && !query.trim() && chats.length > 0 ? (
+              // 0.7.5: an empty Unread is good news.
+              <EmptyScene
+                kind="caughtUp"
+                layout="small"
+                night
+                title="You’re all caught up"
+                text="Every message is read. Your fireflies are safe in the jar for now."
+              >
+                <button type="button" className="scene-button" onClick={() => setFilter('all')}>
+                  Back to all chats
+                </button>
+              </EmptyScene>
+            ) : chats.length === 0 ? (
+              'No chats yet'
+            ) : (
+              'Nothing matches'
+            )}
           </li>
         )}
       </ul>

@@ -359,7 +359,8 @@ export function createBridge(): GloflyApi {
             body,
             replyToId,
             ...(attachmentIds?.length ? { attachmentIds } : {}),
-            ...(options?.lantern ? { lantern: true } : {})
+            ...(options?.lantern ? { lantern: true } : {}),
+            ...(options?.clientId ? { clientId: options.clientId } : {})
           }),
           'message'
         ),
@@ -655,8 +656,12 @@ export function createBridge(): GloflyApi {
         isConstellationPath(method, path, body)
           ? request<T>(method, path, body ?? undefined)
           : Promise.resolve(invalid as ApiResult<T>),
-      setIcon: (id, data, type) =>
-        badId(id) ?? request('PUT', `/constellations/${id}/icon`, undefined, { data, type })
+      setIcon: (id, data, type, which) =>
+        badId(id) ??
+        request('PUT', `/constellations/${id}/${which === 'banner' ? 'banner' : 'icon'}`, undefined, {
+          data,
+          type
+        })
     },
     notices: {
       list: async () => {

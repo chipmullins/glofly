@@ -21,6 +21,10 @@ import { stickersRouter } from "./stickers/routes";
 import { broadcastsRouter, sweepBroadcasts } from "./broadcasts/routes";
 import { callsRouter } from "./calls/routes";
 import { constellationsRouter } from "./constellations/routes";
+import { invitePageRouter, sweepConstellationBirthdays } from "./constellations/community";
+// 0.8.0 community tools: search, events with RSVP, AutoMod lite, the Inbox.
+import { communityToolsRouter } from "./constellations/communityTools";
+import { sweepEvents } from "./constellations/events";
 import { myGamesRouter, sweepPlaytime } from "./games/routes";
 import { watchPageRouter } from "./calls/player";
 import { sweepCalls } from "./calls/service";
@@ -118,8 +122,13 @@ app.use("/stickers", stickersRouter);
 app.use("/broadcasts", broadcastsRouter);
 app.use("/calls", callsRouter);
 // 2.0: Constellations (communities with nebulas, roles, voice rooms) and My games.
+// 0.8.0: /constellations/inbox and the community tools (before the main router, so "inbox" isn't
+// taken for a constellation id).
+app.use("/constellations", communityToolsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
+// 0.7.5: a constellation invite link's page (glofly.app/c/<code>; Caddy sends /c/* here).
+app.use("/c", invitePageRouter);
 // Watch Together's video player page (the apps show the shared YouTube video through it).
 app.use("/watch", watchPageRouter);
 app.use("/reports", reportsRouter);
@@ -214,6 +223,10 @@ connectRedis()
     every(15_000, "Send later", async () => void (await sendDueMessages()));
     // 2.0 My games: a minute of playtime for everyone playing something right now.
     every(60_000, "Playtime", sweepPlaytime);
+    // 0.7.5: constellations' birthdays ("Firefly Guild turns 1 today!").
+    every(10 * 60_000, "Constellation birthdays", () => sweepConstellationBirthdays());
+    // 0.8.0: event reminders (15 minutes before) and starts.
+    every(30_000, "Constellation events", () => sweepEvents());
     // Files added to a chat but never sent are cleared out after an hour.
     every(10 * 60 * 1000, "Upload cleanup", sweepUnsentUploads);
     // Deleted accounts are removed for good once their 30 days are up (checked hourly).

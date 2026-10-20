@@ -225,6 +225,7 @@ export type ConstellationPermission =
   | 'approveRequests'
   | 'manageRoles'
   | 'manageConstellation'
+  | 'events'
 
 export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; what: string | null }[] = [
   { id: 'deleteMessages', name: 'Delete messages', what: "Anyone's, in every nebula" },
@@ -236,6 +237,8 @@ export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; 
   { id: 'approveRequests', name: 'Approve join requests', what: 'When people ask to join from the directory' },
   { id: 'manageRoles', name: 'Manage roles below this one', what: null },
   { id: 'manageConstellation', name: 'Edit constellation settings', what: 'Name, icon, color, description, who can join' },
+  // 0.8.0: everyone can by default (approved board 13: "anyone allowed to post can make an event").
+  { id: 'events', name: 'Create events', what: 'Plan events with RSVP in nebulas they can post in' },
 ]
 export const ALL_PERMISSIONS: readonly ConstellationPermission[] = PERMISSIONS.map((p) => p.id)
 /** Any of these opens Settings from the constellation's main view (0.7.1: the gear by its name). */
@@ -258,9 +261,9 @@ export const DEFAULT_ROLES: readonly { kind: 'admin' | 'moderator' | 'member'; n
     kind: 'moderator',
     name: 'Moderator',
     color: 'violet',
-    permissions: ['deleteMessages', 'timeoutKick', 'muteVoice', 'invite', 'approveRequests'],
+    permissions: ['deleteMessages', 'timeoutKick', 'muteVoice', 'invite', 'approveRequests', 'events'],
   },
-  { kind: 'member', name: 'Member', color: 'gray', permissions: ['invite'] },
+  { kind: 'member', name: 'Member', color: 'gray', permissions: ['invite', 'events'] },
 ]
 
 /** How long a time-out lasts. */
@@ -341,6 +344,21 @@ export type VoiceNebulaState = {
   muted: string[]
 }
 
+/**
+ * 0.7.5: a watch-only pass to peek at a screen share in a voice nebula before joining (the LIVE
+ * preview). It can't send anything, the person stays hidden, and it's ended after a short while.
+ */
+export type VoicePreviewPass = {
+  url: string
+  token: string
+  /** People sharing their screen right now */
+  sharing: string[]
+  /** The server ends the peek after this long */
+  lastsMs: number
+}
+/** How long a LIVE preview may stay connected */
+export const VOICE_PREVIEW_MS = 90_000
+
 /** A card on the dashboard. */
 export type ConstellationCard = {
   id: string
@@ -363,6 +381,12 @@ export type ConstellationCard = {
   lastMention: { by: PublicUser; nebulaName: string } | null
   /** When something last happened in it (ISO date) */
   activityAt: string
+  /** 0.7.5 living sky: its nebulas as stars (missing from older servers) */
+  sky?: NebulaStar[]
+  /** 0.7.5 identity: its accent color (null/missing = the classic firefly gold) */
+  accent?: ConstellationAccent | null
+  /** 0.7.5 identity: its banner photo's version (null/missing = the drawn sky) */
+  bannerVersion?: string | null
   /** Where you dragged it on the dashboard and the icon strip (lower first; null = never moved) */
   position: number | null
 }
@@ -392,6 +416,9 @@ export type DirectoryEntry = {
   joined: boolean
   /** You asked to join and are waiting */
   requested: boolean
+  /** 0.7.5 identity (missing from older servers) */
+  accent?: ConstellationAccent | null
+  bannerVersion?: string | null
 }
 
 export type ConstellationRole = {
@@ -404,6 +431,8 @@ export type ConstellationRole = {
   position: number
   permissions: ConstellationPermission[]
   memberCount: number
+  /** 0.7.5: members can pick this role themselves (welcome screen, "Your roles") */
+  selfAssign?: boolean
 }
 
 export type ConstellationCategory = { id: string; name: string; position: number }
@@ -425,7 +454,27 @@ export type Nebula = {
   notify: NotifyLevel | null
   /** Muted for a while (ISO; @mentions still get through), or null. Missing from older servers. */
   mutedUntil?: string | null
+  /** 0.7.5: when you last read it (ISO): the "New since you left" line. Missing from older servers. */
+  lastReadAt?: string | null
+  /** 0.7.5: how many people posted in it in the last few minutes (the sky's "chatting" pulse) */
+  chatting?: number
 }
+
+/** 0.7.5 living sky: one star per nebula, in sidebar order (dashboard cards). */
+export type NebulaStar = {
+  kind: NebulaKind
+  /** Unread messages you'd be told about */
+  news: boolean
+  /** Two or more people chatting in it right now */
+  chatting: boolean
+  /** People in it (voice nebulas) */
+  voice: number
+}
+
+/** 0.7.5: who counts as "chatting now": this many people … */
+export const CHATTING_PEOPLE = 2
+/** … posting within this long */
+export const CHATTING_WINDOW_MS = 3 * 60_000
 
 export type NotifyLevel = 'all' | 'mentions' | 'none'
 
@@ -440,6 +489,10 @@ export type ConstellationMember = {
   status: 'online' | 'away' | 'dnd' | 'offline'
   /** "Playing …" or a custom status, for the member list */
   activity: string | null
+  /** 0.7.5: the game they're playing and since when (ISO), for "Rocket League · 42 min" */
+  playing?: { name: string; since: string } | null
+  /** 0.7.5: when they were last here (offline members only, when they share it) */
+  lastSeenAt?: string | null
 }
 
 /** Everything the app needs to show a constellation. */
@@ -470,6 +523,113 @@ export type ConstellationDetail = {
   }
   /** Open join requests (only for people who can approve them) */
   pendingRequests: number
+  /** 0.7.5 identity: accent color and banner photo (missing from older servers) */
+  accent?: ConstellationAccent | null
+  bannerVersion?: string | null
+  /** 0.7.5: the house rules (empty = none) */
+  rules?: string[]
+  /** 0.7.5: what new members see and what gets posted */
+  welcome?: WelcomeSettings
+  /** 0.7.5: you saw the welcome (null = show it now) and agreed to the rules */
+  welcomedAt?: string | null
+  rulesAgreedAt?: string | null
+}
+
+/** 0.7.5: a constellation's welcome settings (Settings → Overview → Welcome). */
+export type WelcomeSettings = {
+  /** Show new members the welcome screen (about, rules, pick your roles) */
+  screen: boolean
+  /** Post "Priya joined. Say hi!" in the first text nebula */
+  joinLines: boolean
+  /** Post member milestones and the yearly birthday */
+  milestones: boolean
+  /** Invite links show a preview (name, picture, about, counts). Off: invite-only ones show nothing */
+  preview: boolean
+}
+export const DEFAULT_WELCOME: WelcomeSettings = { screen: true, joinLines: true, milestones: true, preview: true }
+
+export const RULES_MAX = 10
+export const RULE_MAX = 200
+/** Member counts that get a celebration (the yearly birthday too). */
+export const MEMBER_MILESTONES: readonly number[] = [10, 50, 100, 250, 500, 1000]
+
+/** The milestone just reached when the count went from `before` to `after` (null if none). */
+export function milestoneReached(before: number, after: number): number | null {
+  let hit: number | null = null
+  for (const m of MEMBER_MILESTONES) if (before < m && after >= m) hit = m
+  return hit
+}
+
+/**
+ * 0.7.5 identity: a constellation's accent color. It tints that constellation only: the open
+ * nebula, badges, Join buttons, the message box ring. Missing/null = the classic firefly gold.
+ */
+export type ConstellationAccent = 'gold' | 'ember' | 'lagoon' | 'violet' | 'mint' | 'rose'
+export const CONSTELLATION_ACCENTS: readonly ConstellationAccent[] = ['gold', 'ember', 'lagoon', 'violet', 'mint', 'rose']
+export const ACCENT_THEME: Record<
+  ConstellationAccent,
+  {
+    name: string
+    /** The accent itself (on the dark sidebar and as button fill) */
+    color: string
+    /** "r,g,b" for see-through tints */
+    rgb: string
+    /** Soft fill on white (the members button) */
+    soft: string
+    /** Text on `soft` */
+    ink: string
+    /** Text on `color` (buttons, badges) */
+    on: string
+    /** The closest older color, for apps before 0.7.5 */
+    legacy: ConstellationColor
+  }
+> = {
+  gold: { name: 'Firefly gold', color: '#ffb347', rgb: '255,179,71', soft: '#fde9d7', ink: '#8a3005', on: '#1c1210', legacy: 'ember' },
+  ember: { name: 'Ember red', color: '#ff5a4e', rgb: '255,90,78', soft: '#fde0dd', ink: '#9c1f16', on: '#2a0906', legacy: 'red' },
+  lagoon: { name: 'Lagoon', color: '#2fb7c9', rgb: '47,183,201', soft: '#d8f1f4', ink: '#0e626b', on: '#06262a', legacy: 'lagoon' },
+  violet: { name: 'Violet', color: '#a98bff', rgb: '169,139,255', soft: '#ebe4ff', ink: '#4b32b0', on: '#160c33', legacy: 'violet' },
+  mint: { name: 'Mint', color: '#5ad69a', rgb: '90,214,154', soft: '#daf5e8', ink: '#1d6b45', on: '#062616', legacy: 'green' },
+  rose: { name: 'Rose', color: '#ff7fb6', rgb: '255,127,182', soft: '#ffe1ee', ink: '#9c2a64', on: '#2a0716', legacy: 'red' },
+}
+export const isConstellationAccent = (x: unknown): x is ConstellationAccent =>
+  typeof x === 'string' && (CONSTELLATION_ACCENTS as readonly string[]).includes(x)
+/** The accent to show (gold when none was picked). */
+export const accentOf = (x: { accent?: ConstellationAccent | null }): (typeof ACCENT_THEME)[ConstellationAccent] =>
+  ACCENT_THEME[x.accent && isConstellationAccent(x.accent) ? x.accent : 'gold']
+
+/** 0.7.5: what an invite link shows (the card in chats, the join screen). */
+export type InvitePreview = {
+  constellation: DirectoryEntry
+  /** Who made the link (null if they left Glofly) */
+  by?: PublicUser | null
+  /** When the link stops working (ISO), null = never */
+  expiresAt?: string | null
+}
+
+/** 0.7.5: the member card's extras (GET /constellations/:id/members/:uid/card). */
+export type MemberCardInfo = {
+  /** Friends you both have (up to 3 shown), and how many in all */
+  mutualFriends: PublicUser[]
+  mutualCount: number
+  /** You two are friends */
+  friend: boolean
+}
+
+/** "Rocket League · 42 min", "Minecraft · 2 h" (since = when they started). */
+export function playingFor(sinceIso: string, now = Date.now()): string {
+  const min = Math.max(1, Math.floor((now - new Date(sinceIso).getTime()) / 60_000))
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m && h < 10 ? `${h} h ${m} min` : `${h} h`
+}
+
+/** "RL" for Rocket League, "VAL" for Valorant-like single words, "MC" for Minecraft. */
+export function gameInitials(name: string): string {
+  const words = name.trim().split(/[\s:]+/).filter(Boolean)
+  if (words.length >= 2) return words.slice(0, 3).map((w) => [...w][0]?.toUpperCase() ?? '').join('')
+  const w = words[0] ?? '?'
+  return w.slice(0, 3).toUpperCase()
 }
 
 export type JoinRequest = { user: PublicUser; note: string | null; createdAt: string }
@@ -605,6 +765,9 @@ export const CONSTELLATION_EVENT_NAMES = [
   'constellation:removed',
   'constellation:invited',
   'games:changed',
+  // 0.8.0 community tools: an event changed / is about to start / started, and the Inbox changed
+  'constellation:event',
+  'inbox:changed',
 ] as const
 
 /** One of those events, checked field by field (null if it doesn't look right). */
@@ -682,6 +845,31 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
         },
       }
     }
+    case 'constellation:event': {
+      // 0.8.0: an event was made, changed or cancelled ("changed"), starts in 15 minutes
+      // ("reminder", to people going or maybe) or just started ("started").
+      if (!str(p.constellationId) || !str(p.eventId)) return null
+      const phase = p.phase === 'reminder' || p.phase === 'started' ? p.phase : 'changed'
+      return {
+        type: 'constellation:event',
+        constellationId: p.constellationId,
+        eventId: p.eventId,
+        phase,
+        ...(phase === 'changed'
+          ? {}
+          : {
+              title: text(p.title, 100) || 'An event',
+              constellationName: text(p.constellationName, 100),
+              voiceNebulaId: str(p.voiceNebulaId) ? p.voiceNebulaId : null,
+              voiceName: text(p.voiceName, 100),
+              nebulaId: str(p.nebulaId) ? p.nebulaId : null,
+              conversationId: str(p.conversationId) ? p.conversationId : null,
+              inVoice: typeof p.inVoice === 'number' && p.inVoice >= 0 ? Math.floor(p.inVoice) : 0,
+            }),
+      }
+    }
+    case 'inbox:changed':
+      return { type: 'inbox:changed' }
     default:
       return null
   }

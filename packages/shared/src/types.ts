@@ -204,6 +204,12 @@ export type Message = {
   id: string
   conversationId: string
   senderId: string
+  /**
+   * 0.7.5: only on the sender's own copy of a message they just sent (the live event and the
+   * answer): the clientId their app sent it with, so a copy waiting in its outbox (say, one whose
+   * answer got lost) is recognised and replaced. Older apps ignore it.
+   */
+  clientId?: string
   /** Empty when deleted */
   body: string
   /** ISO date */
@@ -299,6 +305,13 @@ export type ChatEvent =
    * older apps' plain text. `movedTo`: in a 1-on-1 chat, the new group the call moved to.
    */
   | { type: 'callAdd'; callId: string; userIds: string[]; names: string[]; movedTo: string | null }
+  /**
+   * 0.7.5 Constellations: someone joined (a line in the first text nebula with a "Say hi" wave
+   * button). `name`: the constellation's name then.
+   */
+  | { type: 'cxJoined'; name: string }
+  /** 0.7.5 Constellations: a member milestone (`members`) or its birthday (`years`). */
+  | { type: 'cxMilestone'; name: string; members: number | null; years: number | null }
 
 export type CallStatus = 'ringing' | 'ongoing' | 'ended' | 'missed' | 'declined'
 
@@ -523,6 +536,23 @@ export type ServerEvent =
   | { type: 'constellation:invited'; invite: import('./constellations').InvitePopup }
   /** My games changed (on another device) */
   | { type: 'games:changed' }
+  /** 0.8.0: an event in a constellation changed, starts in 15 minutes, or just started */
+  | {
+      type: 'constellation:event'
+      constellationId: string
+      eventId: string
+      phase: 'changed' | 'reminder' | 'started'
+      /** reminder / started: what the reminder or "is starting" toast shows */
+      title?: string
+      constellationName?: string
+      voiceNebulaId?: string | null
+      voiceName?: string
+      nebulaId?: string | null
+      conversationId?: string | null
+      inVoice?: number
+    }
+  /** 0.8.0: something in your Inbox changed (a reply, a join request, an event reminder) */
+  | { type: 'inbox:changed' }
 
 /** 0.4.0: Glofly is paused (Glofly Control → Server → Pause Glofly). Nobody can use it until then. */
 export type Paused = {

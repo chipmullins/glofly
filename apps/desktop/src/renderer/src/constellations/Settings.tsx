@@ -35,8 +35,10 @@ import { AvatarFace } from '../components/Avatar'
 import { colorsFor } from '../lib/avatarColors'
 import { api, can, outranks, topRole } from '../lib/constellations'
 import { CloseIcon, ConstellationIcon } from './bits'
+import IdentitySettings from './SettingsIdentity'
 import { TagInput, VisibilityChoices } from './CreateJoin'
 import type { SettingsPageName } from './ConstellationView'
+import AutoModPage from './AutoModPage'
 import './Settings2.css'
 
 // Constellation settings (Roles.dc.html, approved): a left menu (Overview, Nebulas & categories,
@@ -89,13 +91,26 @@ const ACTION_WORDS: Record<string, string> = {
   visibility_changed: 'changed who can join',
   request_approved: 'let in',
   request_denied: 'turned down',
-  ownership_transferred: 'gave ownership to'
+  ownership_transferred: 'gave ownership to',
+  // 0.8.0 AutoMod (the actor is AutoMod itself: "Glofly")
+  automod_hidden: 'held a message by',
+  automod_links: 'held links by',
+  automod_wait: 'asked a new member to wait:',
+  automod_undo: 'undid AutoMod for',
+  automod_changed: 'changed AutoMod',
+  event_cancelled: 'cancelled an event by'
 }
 
 function moderationLine(e: ModerationEntry, meId: string): string {
   const who = (u: PublicUser | null): string =>
     u ? (u.id === meId ? 'you' : u.displayName) : 'someone'
-  const actor = e.actor ? (e.actor.id === meId ? 'You' : e.actor.displayName) : 'Glofly'
+  const actor = e.actor
+    ? e.actor.id === meId
+      ? 'You'
+      : e.actor.displayName
+    : e.action.startsWith('automod_')
+      ? 'AutoMod'
+      : 'Glofly'
   const verb = ACTION_WORDS[e.action] ?? e.action.replace(/_/g, ' ')
   const d = e.details ?? {}
   const extra =
@@ -184,6 +199,11 @@ export default function ConstellationSettings({
     { id: 'roles', name: 'Roles', show: true },
     { id: 'members', name: 'Members', show: true },
     { id: 'invites', name: 'Invites', show: true },
+    {
+      id: 'automod',
+      name: 'AutoMod',
+      show: can(c, 'manageConstellation') || can(c, 'deleteMessages')
+    },
     { id: 'moderation', name: 'Moderation', show: modViewer }
   ]
   const title =
@@ -228,6 +248,7 @@ export default function ConstellationSettings({
                 onClick={() => setPage(p.id)}
               >
                 {p.name}
+                {p.id === 'automod' && <span className="cx-settings-new">NEW</span>}
                 {p.id === 'members' && c.pendingRequests > 0 && (
                   <span className="cx-settings-count">{c.pendingRequests}</span>
                 )}
@@ -287,6 +308,7 @@ export default function ConstellationSettings({
             <MembersPage c={c} me={me} busy={busy} run={run} onProblem={onProblem} />
           )}
           {page === 'invites' && <InvitesPage c={c} friends={friends} onProblem={onProblem} />}
+          {page === 'automod' && <AutoModPage c={c} meId={me.id} onProblem={onProblem} />}
           {page === 'moderation' && <ModerationPage c={c} me={me} />}
           {page === 'delete' && <DeletePage c={c} onDeleted={onDeleted} />}
         </div>
@@ -441,6 +463,8 @@ function Overview({
           ))}
         </div>
       </fieldset>
+      {/* 0.7.5 identity and welcome: accent, banner, house rules, what new members see */}
+      <IdentitySettings c={c} busy={busy} run={run} onProblem={onProblem} />
       <fieldset className="cx-fieldset">
         <legend>Who can join</legend>
         {editable ? (
@@ -1143,10 +1167,40 @@ function RolesPage({ c, busy, run }: PageProps): React.JSX.Element {
             )}
           </div>
 
+          {/* 0.7.5: roles members pick themselves ("What do you play?" when they join) */}
+          {role.kind === 'custom' && (
+            <label className="cx-perm cx-perm--last cx-self-assign">
+              <span style={{ flex: 1 }}>
+                <span className="cx-perm-name">Members can pick this role</span>
+                <span className="cx-perm-what">
+                  It shows on the welcome screen and in “Your roles”. A role people pick themselves
+                  is a label: it can&apos;t have permissions.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={!!role.selfAssign}
+                disabled={!mine || busy || (!role.selfAssign && role.permissions.length > 0)}
+                title={
+                  !role.selfAssign && role.permissions.length > 0
+                    ? 'Turn this role’s permissions off first'
+                    : undefined
+                }
+                onChange={() =>
+                  void run(() => api.updateRole(c.id, role.id, { selfAssign: !role.selfAssign }))
+                }
+              />
+            </label>
+          )}
           <h2 className="cx-role-heading">What {plural} can do</h2>
           {role.kind === 'owner' ? (
             <p className="cx-settings-text">
               Everything, including transferring ownership and deleting the constellation.
+            </p>
+          ) : role.selfAssign ? (
+            <p className="cx-settings-text">
+              Nothing extra: members pick this role themselves, so it&apos;s a label everyone can
+              see on their card.
             </p>
           ) : (
             <div className="cx-perms">

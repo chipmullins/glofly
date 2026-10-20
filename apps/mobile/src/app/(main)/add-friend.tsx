@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Pressable, View } from 'react-native'
+import { useLocalSearchParams } from 'expo-router'
 import type { SearchResult } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { refreshFriends } from '@/state/sync'
@@ -15,7 +16,9 @@ import { useSession } from '@/state/session'
 
 export default function AddFriend() {
   const { c } = useTheme()
-  const [query, setQuery] = useState('')
+  // 0.7.5: "Find @name" from an empty search opens this with the name typed.
+  const params = useLocalSearchParams<{ q?: string }>()
+  const [query, setQuery] = useState(() => (typeof params.q === 'string' ? params.q : ''))
   const [results, setResults] = useState<SearchResult[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [note, setNote] = useState<{ tone: 'good' | 'danger'; text: string } | null>(null)

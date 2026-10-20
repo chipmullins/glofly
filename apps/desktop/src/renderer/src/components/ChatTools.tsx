@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import EmptyScene from './EmptyScene'
 import type { PinnedMessage, ScheduledMessage } from '../../../preload/api-types'
 import { sendLaterChoices } from '@glofly/shared/chatTools'
 import { attachmentSummary, shortBody } from '@glofly/shared'
@@ -121,10 +122,16 @@ export function PinsPanel({
         </button>
       </div>
       {pins.length === 0 ? (
-        <p className="pins-empty">
-          Nothing pinned yet.{' '}
-          {canPin ? 'Pin a message from its ••• menu to keep it handy here.' : ''}
-        </p>
+        <EmptyScene
+          kind="pins"
+          layout="small"
+          title="Nothing pinned yet"
+          text={
+            canPin
+              ? 'Pin a message from its ••• menu to keep it handy here.'
+              : 'Pinned messages will show up here.'
+          }
+        />
       ) : (
         <ul className="pins-list">
           {pins.map((p) => {
@@ -335,7 +342,14 @@ export function ScheduledPanel({
             ×
           </button>
         </div>
-        {list.length === 0 && <p className="pins-empty">Nothing waiting to be sent.</p>}
+        {list.length === 0 && (
+          <EmptyScene
+            kind="scheduled"
+            layout="small"
+            title="Nothing waiting to be sent"
+            text="Type a message, then use the clock by Send (or right-click Send) to pick a time. It waits here until then."
+          />
+        )}
         <ul className="scheduled-list">
           {list.map((s) => (
             <li

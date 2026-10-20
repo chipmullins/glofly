@@ -25,3 +25,18 @@ export async function squarePhoto(input: Buffer): Promise<Buffer | null> {
 /** Where a group's photo is kept. The version changes with every new photo. */
 export const groupPhotoKey = (conversationId: string, version: string) =>
   `group-photos/${conversationId}/${version}.webp`;
+
+/**
+ * 0.7.5: a constellation's banner. Like squarePhoto (a real image, turned the right way up, hidden
+ * photo data dropped by re-saving as WebP), but wide: 1200×400.
+ */
+export async function bannerPhoto(input: Buffer): Promise<Buffer | null> {
+  try {
+    const image = sharp(input, { limitInputPixels: 50_000_000 });
+    const meta = await image.metadata();
+    if (!["jpeg", "png", "webp", "gif", "heif", "avif"].includes(meta.format ?? "")) return null;
+    return await image.rotate().resize(1200, 400, { fit: "cover" }).webp({ quality: 82 }).toBuffer();
+  } catch {
+    return null;
+  }
+}

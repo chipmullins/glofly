@@ -8,6 +8,7 @@ import { startErrorReports } from './lib/errorReports'
 import OverlayApp from './overlay/OverlayApp'
 import { startAppearance } from './lib/appearance'
 import { startScrollbars } from './lib/scrollbars'
+import { startMotion } from './lib/motion'
 import { startTitleBarColor } from './lib/titleBar'
 import { setSoundSettings } from './lib/sounds'
 import { setNotificationSettings } from './lib/notify'
@@ -30,6 +31,8 @@ if (window.glofly.platform === 'darwin' && !isOverlay)
 startAppearance()
 // Scrollbars only show while scrolling.
 startScrollbars()
+// Menus and dialogs close with a short animation (0.7.5).
+startMotion()
 
 // Which sounds play (Settings → Notifications & sounds).
 void window.glofly.app.getSettings().then((s) => {

@@ -336,3 +336,143 @@ test('0.7.5 photo viewer: photos, when, zoom', () => {
   assert.deepEqual(s.clampPan({ x: 900, y: -900 }, { w: 2000, h: 1000 }, 1, { w: 1000, h: 800 }), { x: 500, y: -100 })
   assert.deepEqual(s.zoomAround({ x: 0, y: 0 }, 1, 2, { x: 100, y: 0 }), { x: -100, y: 0 })
 })
+
+test('0.8.0 AutoMod: blocked words, l33t, whole words, wildcards', () => {
+  const words = ['free nitro', 'crypto giveaway', 'onlyf*ns', 'scam']
+  assert.equal(s.blockedWordIn('get FREE NITRO here', words), 'free nitro')
+  assert.equal(s.blockedWordIn('fr33 n1tr0 lol', words), 'free nitro')
+  assert.equal(s.blockedWordIn('Fr€€   Nítro!!', words), 'free nitro')
+  assert.equal(s.blockedWordIn('fr.ee nitro', words), 'free nitro')
+  assert.equal(s.blockedWordIn('💰 CRYPTO GIVEAWAY click here', words), 'crypto giveaway')
+  assert.equal(s.blockedWordIn('check my onlyfans', words), 'onlyf*ns')
+  assert.equal(s.blockedWordIn('onlyf*ns link', words), 'onlyf*ns')
+  assert.equal(s.blockedWordIn('$c@m alert', words), 'scam')
+  assert.equal(s.blockedWordIn('n!tro is fr|ee', ['nitro']), 'nitro')
+  // whole words only
+  assert.equal(s.blockedWordIn('scampi for dinner', words), null)
+  assert.equal(s.blockedWordIn('freenitro', words), null)
+  assert.equal(s.blockedWordIn('game night at 8', words), null)
+  assert.equal(s.blockedWordIn('', words), null)
+  assert.equal(s.blockedWordIn('scam', []), null)
+  assert.equal(s.cleanBlockedWord('  Free   Nitro '), 'free nitro')
+  assert.equal(s.cleanBlockedWord('*'), null)
+  assert.equal(s.cleanBlockedWord('a*'), null)
+  assert.equal(s.cleanBlockedWord('x'.repeat(41)), null)
+})
+
+test('0.8.0 AutoMod: links and waits', () => {
+  assert.deepEqual(s.linksIn('see https://Example.com/a/ and www.foo.io/x, ok?'), ['example.com/a', 'foo.io/x'])
+  assert.deepEqual(s.linksIn('no links here'), [])
+  assert.equal(s.slowModeWait(12.2), 'Slow mode is on here: you can post again in 13 seconds.')
+  assert.equal(s.slowModeWait(0.3), 'Slow mode is on here: you can post again in 1 second.')
+  assert.equal(s.newMemberWait(5.5, 10), 'New members can post after 10 minutes. You can post in 6 minutes.')
+  assert.equal(s.slowModeLabel(120), '2 min')
+  assert.equal(s.isSlowModeChoice(30), true)
+  assert.equal(s.isSlowModeChoice(31), false)
+})
+
+test('0.8.0 events: phases, labels, calendar file', () => {
+  const now = Date.parse('2026-10-20T12:00:00Z')
+  const e = (start, extra = {}) => ({ startsAt: new Date(start).toISOString(), endsAt: null, cancelledAt: null, ...extra })
+  assert.equal(s.eventPhase(e(now + 3600_000), now), 'upcoming')
+  assert.equal(s.eventPhase(e(now + 10 * 60_000), now), 'soon')
+  assert.equal(s.eventPhase(e(now - 60_000), now), 'live')
+  assert.equal(s.eventPhase(e(now - 4 * 3600_000), now), 'ended')
+  assert.equal(s.eventPhase(e(now - 4 * 3600_000, { endsAt: new Date(now + 60_000).toISOString() }), now), 'live')
+  assert.equal(s.eventPhase(e(now + 3600_000, { cancelledAt: new Date(now).toISOString() }), now), 'cancelled')
+  assert.equal(s.eventWhenLabel(e(now + 15 * 60_000), now), 'Starts in 15 min')
+  assert.equal(s.eventWhenLabel(e(now - 60_000), now), 'Happening now')
+  const local = new Date(2026, 9, 20, 9, 0).getTime()
+  assert.equal(s.eventWhenLabel(e(new Date(2026, 9, 24, 20, 30).getTime()), local), 'In 4 days')
+  assert.equal(s.eventWhenLabel(e(new Date(2026, 9, 21, 20, 30).getTime()), local), 'Tomorrow')
+  assert.equal(s.eventWhenLabel(e(new Date(2026, 9, 20, 12, 0).getTime()), local), 'In 3 hours')
+  assert.deepEqual(s.eventDateTile('2026-10-25T00:30:00Z', 'America/New_York'), { weekday: 'SAT', day: '24', month: 'OCT' })
+  assert.equal(s.eventTimeLabel('2026-10-25T00:30:00Z', 'America/New_York'), '8:30 PM Eastern')
+  assert.equal(s.eventTimeLabel('2026-10-25T00:30:00Z', 'America/Chicago'), '7:30 PM Central')
+  assert.match(s.eventFallbackText({ title: 'Game Night', startsAt: '2026-10-25T00:30:00Z', timeZone: 'America/New_York', voiceName: 'Campfire' }), /^📅 Game Night · Sat, Oct 24, 8:30 PM EDT · in Campfire$/)
+  const ics = s.eventIcs({ id: 'e1', title: 'Game Night; snacks, too', description: 'Line 1\nLine 2', startsAt: '2026-10-25T00:30:00Z', endsAt: null }, 'Firefly Guild · Campfire')
+  assert.match(ics, /DTSTART:20261025T003000Z/)
+  assert.match(ics, /DTEND:20261025T033000Z/)
+  assert.ok(ics.includes('SUMMARY:Game Night\\; snacks\\, too'))
+  assert.ok(ics.includes('DESCRIPTION:Line 1\\nLine 2'))
+  assert.match(ics, /TRIGGER:-PT15M/)
+  assert.equal(s.rsvpSummary(11, 4), '11 going · 4 maybe')
+  assert.equal(s.rsvpSummary(3, 0), '3 going')
+  assert.equal(s.isRsvpAnswer('maybe'), true)
+  assert.equal(s.isRsvpAnswer('yes'), false)
+})
+
+test('0.8.0 search and inbox helpers', () => {
+  assert.deepEqual(s.searchWords('Rocket  league r'), ['rocket', 'league'])
+  assert.deepEqual(s.highlightPieces('That rocket save', ['rocket']), [
+    { text: 'That ', hit: false },
+    { text: 'rocket', hit: true },
+    { text: ' save', hit: false }
+  ])
+  assert.deepEqual(s.highlightPieces('Rocket League', ['rocket']).map((p) => p.hit), [true, false])
+  const fri = s.lastWeekday(5, new Date(2026, 9, 20, 15, 0)) // a Tuesday
+  assert.equal(fri.getDate(), 16)
+  assert.equal(s.lastWeekday(2, new Date(2026, 9, 20, 15, 0)).getDate(), 13)
+  assert.equal(s.isInboxTab('replies'), true)
+  assert.equal(s.isInboxTab('spam'), false)
+  assert.equal(s.isSearchHas('image'), true)
+})
+
+test('0.8.0 constellation events pass the live-event checker', () => {
+  assert.deepEqual(s.cleanConstellationEvent('constellation:event', { constellationId: 'c', eventId: 'e', phase: 'changed' }), {
+    type: 'constellation:event',
+    constellationId: 'c',
+    eventId: 'e',
+    phase: 'changed'
+  })
+  const r = s.cleanConstellationEvent('constellation:event', { constellationId: 'c', eventId: 'e', phase: 'started', title: 'Game Night', voiceNebulaId: 'v', inVoice: 9 })
+  assert.equal(r.phase, 'started')
+  assert.equal(r.inVoice, 9)
+  assert.equal(r.voiceNebulaId, 'v')
+  assert.equal(s.cleanConstellationEvent('constellation:event', { eventId: 'e' }), null)
+  assert.deepEqual(s.cleanConstellationEvent('inbox:changed', {}), { type: 'inbox:changed' })
+  assert.ok(s.CONSTELLATION_EVENT_NAMES.includes('inbox:changed'))
+  assert.ok(s.DEFAULT_ROLES.find((r) => r.kind === 'member').permissions.includes('events'))
+})
+
+test('0.7.5 quick switcher matching', () => {
+  assert.ok(s.matchScore('ma', 'Maya Lopez') > s.matchScore('ma', 'Game Night'))
+  assert.ok(s.matchScore('lop', 'Maya Lopez') > 0) // a word starts with it
+  assert.ok(s.matchScore('gn', 'Game Night') > 0) // initials
+  assert.ok(s.matchScore('night game', 'Game Night') > 0) // words in any order
+  assert.equal(s.matchScore('xyz', 'Game Night'), 0)
+  assert.ok(s.matchScore('quiet', 'Quiet hours') > s.matchScore('sleep', 'Quiet hours', 'quiet hours night sleep'))
+  assert.ok(s.matchScore('sleep', 'Quiet hours', 'quiet hours night sleep') > 0) // keywords
+  assert.ok(s.matchScore('jose', 'José') > 0) // accents don't matter
+  assert.equal(s.matchScore('', 'anything'), 1)
+})
+
+test('0.7.5 constellation community: milestones, join lines, accents, playing time', () => {
+  assert.equal(s.milestoneReached(9, 10), 10)
+  assert.equal(s.milestoneReached(10, 11), null)
+  assert.equal(s.milestoneReached(49, 100), 100)
+  const joined = { type: 'cxJoined', name: 'Firefly Guild' }
+  const ms = { type: 'cxMilestone', name: 'Firefly Guild', members: 100, years: null }
+  assert.equal(s.eventField(joined), 'eventLine4')
+  assert.equal(s.eventField(ms), 'eventLine4')
+  assert.equal(s.eventField({ type: 'callAdd', callId: 'c', userIds: [], names: [], movedTo: null }), 'eventLine3')
+  assert.equal(s.legacyEventBody(joined), 'joined Firefly Guild 👋')
+  assert.equal(s.legacyEventBody(ms), '🎉 Firefly Guild just reached 100 members!')
+  assert.equal(s.milestoneText({ name: 'X', members: null, years: 2 }), '🎂 X turns 2 today!')
+  const msg = { event: null, body: 'joined Firefly Guild 👋', eventLine4: joined }
+  s.upgradeEvents(msg)
+  assert.deepEqual(msg.event, joined)
+  assert.equal('eventLine4' in msg, false)
+  assert.equal(s.eventText(joined, 'u1', 'me', () => 'Priya'), 'Priya joined Firefly Guild. Say hi!')
+  assert.equal(s.eventText(joined, 'me', 'me', () => 'Priya'), 'You joined Firefly Guild')
+  assert.equal(s.accentOf({}).color, '#ffb347')
+  assert.equal(s.accentOf({ accent: 'lagoon' }).legacy, 'lagoon')
+  assert.equal(s.accentOf({ accent: 'nope' }).name, 'Firefly gold')
+  assert.equal(s.isConstellationAccent('rose'), true)
+  const now = Date.parse('2026-10-20T20:00:00Z')
+  assert.equal(s.playingFor('2026-10-20T19:18:00Z', now), '42 min')
+  assert.equal(s.playingFor('2026-10-20T18:48:00Z', now), '1 h 12 min')
+  assert.equal(s.playingFor('2026-10-20T18:00:00Z', now), '2 h')
+  assert.equal(s.gameInitials('Rocket League'), 'RL')
+  assert.equal(s.gameInitials('Valorant'), 'VAL')
+})

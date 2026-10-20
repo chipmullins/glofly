@@ -457,3 +457,69 @@ export async function notifyConstellationInvite(
       })),
   );
 }
+
+/**
+ * 0.8.0: an event starts in 15 minutes (people going or maybe). To phones whose Glofly knows
+ * Constellations, as a nebula message notification from the event's card (so every such phone
+ * build shows it and a tap opens that nebula at the card). Not the phone in use, not on Do not
+ * disturb or quiet hours.
+ */
+export async function notifyEventReminder(
+  userIds: string[],
+  e: {
+    eventTitle: string;
+    constellationId: string;
+    constellationName: string;
+    conversationId: string;
+    messageId: string | null;
+    hostId: string | null;
+    where: string;
+    minutes: number;
+  },
+): Promise<void> {
+  if (!pushConfigured || !userIds.length) return;
+  const devices = await db
+    .select({
+      userId: pushDevices.userId,
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
+      status: users.statusPreference,
+      quiet: users.quietHours,
+    })
+    .from(pushDevices)
+    .innerJoin(users, eq(users.id, pushDevices.userId))
+    .where(and(inArray(pushDevices.userId, userIds), sql`'constellations' = any(${pushDevices.features})`));
+  if (!devices.length) return;
+  const live = await liveSessions([...new Set(devices.map((d) => d.userId))]);
+  const title = `📅 ${e.eventTitle.slice(0, 80)}`;
+  const text = `Starts in ${e.minutes} min${e.where ? ` · in ${e.where}` : ""}`;
+  await deliver(
+    devices
+      .filter((d) => !quietOrDnd(d) && !live.get(d.userId)?.has(d.sessionId))
+      .map((device) => ({
+        device,
+        ttl: 20 * 60,
+        data: {
+          type: "message",
+          conversationId: e.conversationId,
+          messageId: e.messageId ?? "",
+          chatKind: "group",
+          chatTitle: e.constellationName.slice(0, 80),
+          groupPhoto: "",
+          senderId: e.hostId ?? "",
+          senderName: title,
+          senderAvatar: "",
+          title,
+          text: device.platform === "ios" ? `${e.constellationName}: ${text}` : text,
+          preview: "1",
+          mention: "1",
+          sentAt: new Date().toISOString(),
+          nebula: "1",
+          thread: `constellation:${e.constellationId}`,
+        },
+      })),
+  );
+}

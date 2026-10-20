@@ -691,23 +691,28 @@ function registerIpcHandlers(): void {
       return apiRequest(method, path as string, body ?? undefined)
     }
   )
-  ipcMain.handle('constellations:set-icon', (event, id: unknown, data: unknown, type: unknown) => {
-    if (
-      !fromApp(event) ||
-      !isUserId(id) ||
-      !(data instanceof ArrayBuffer) ||
-      !PHOTO_TYPES.includes(type as PhotoType)
-    ) {
-      return invalid
+  ipcMain.handle(
+    'constellations:set-icon',
+    (event, id: unknown, data: unknown, type: unknown, which: unknown = 'icon') => {
+      // 0.7.5: the same for the banner photo (which: 'banner').
+      if (
+        !fromApp(event) ||
+        !isUserId(id) ||
+        !(data instanceof ArrayBuffer) ||
+        !PHOTO_TYPES.includes(type as PhotoType) ||
+        (which !== 'icon' && which !== 'banner')
+      ) {
+        return invalid
+      }
+      if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
+        return { ok: false, error: 'invalid', message: 'Photos can be up to 8 MB.' }
+      }
+      return apiRequest('PUT', `/constellations/${id}/${which}`, undefined, {
+        data: new Uint8Array(data),
+        type: type as PhotoType
+      })
     }
-    if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
-      return { ok: false, error: 'invalid', message: 'Photos can be up to 8 MB.' }
-    }
-    return apiRequest('PUT', `/constellations/${id}/icon`, undefined, {
-      data: new Uint8Array(data),
-      type: type as PhotoType
-    })
-  })
+  )
   ipcMain.handle('conversations:remove-group-photo', (event, id: unknown) =>
     fromApp(event) && isUserId(id) ? removeGroupPhoto(id) : invalid
   )
@@ -735,6 +740,8 @@ function registerIpcHandlers(): void {
       ? searchMessages(query.trim(), id, before)
       : invalid
   )
+  const clientIdOf = (v: unknown): string | undefined =>
+    typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : undefined
   const isAttachmentIds = (v: unknown): v is string[] =>
     Array.isArray(v) && v.length <= 10 && v.every(isUserId)
   ipcMain.handle(
@@ -753,7 +760,8 @@ function registerIpcHandlers(): void {
       (replyTo == null || isUserId(replyTo)) &&
       (attachmentIds == null || isAttachmentIds(attachmentIds))
         ? sendMessage(id, body, replyTo ?? undefined, attachmentIds ?? undefined, {
-            lantern: (options as { lantern?: unknown } | null)?.lantern === true
+            lantern: (options as { lantern?: unknown } | null)?.lantern === true,
+            clientId: clientIdOf((options as { clientId?: unknown } | null)?.clientId)
           })
         : invalid
   )

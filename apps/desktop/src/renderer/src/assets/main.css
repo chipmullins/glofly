@@ -29,8 +29,8 @@
   --glo-ink: #24170f;
   --glo-icon: #4a372b;
   --glo-muted: #6b5547;
-  --glo-faint: #8f7868; /* timestamps, hints */
-  --glo-placeholder: #8f7868;
+  --glo-faint: #76604f; /* timestamps, hints (4.5:1 on every light surface) */
+  --glo-placeholder: #7a6354;
 
   /* Accent (Glow Orange) */
   --glo-accent: #f47a1f;
@@ -56,6 +56,13 @@
   --glo-warn-bg: #fcf1d8;
 
   --glo-shadow-rgb: 36, 23, 15;
+
+  /* Depth (0.7.5): menus and cards. Light keeps its lines; dark adds a faint light edge. */
+  --glo-menu-bg: var(--glo-surface);
+  --glo-edge: var(--glo-line);
+  --glo-lift-edge: transparent; /* dialogs and floating cards: only dark mode draws an edge */
+  --glo-card-shadow: none;
+  --glo-menu-shadow: 0 12px 32px rgba(var(--glo-shadow-rgb), 0.16);
   --glo-night: #1c1210; /* the login screen's night-sky panel (dark in both themes) */
 
   /* Calls (Calling.dc.html, Incoming.dc.html): dark in every theme, like the night sky. */
@@ -92,33 +99,42 @@
   color-scheme: light;
 }
 
-/* Dark theme (ChatDark.dc.html) */
+/* Dark theme (ChatDark.dc.html; 0.7.5 "dark mode with depth": three layers instead of one flat
+   brown. The sidebar sits deepest, the chat above it, cards and menus on top with a faint light
+   edge. Every grey text color passes 4.5:1 on the backgrounds it's used on.) */
 :root[data-theme='dark'] {
-  --glo-cream: #1e1916;
-  --glo-bg: #1e1916;
-  --glo-sidebar: #171310;
-  --glo-surface: #2a231f;
-  --glo-panel: #322a25;
-  --glo-subtle: #26201c;
-  --glo-hover: #3a302a;
+  --glo-cream: #1d1715;
+  --glo-bg: #1d1715;
+  --glo-sidebar: #161110;
+  --glo-surface: #28201c;
+  --glo-panel: #2a221e;
+  --glo-subtle: #221b18;
+  --glo-hover: #2f2621;
   --glo-backdrop: rgba(0, 0, 0, 0.6);
 
-  --glo-line: #3a302a;
-  --glo-line-soft: #2e2622;
+  --glo-line: rgba(255, 255, 255, 0.08);
+  --glo-line-soft: rgba(255, 255, 255, 0.06);
   --glo-border: #4a3e36;
   --glo-line-strong: #574a41;
 
   --glo-ink: #f5ede6;
   --glo-icon: #d9c8bc;
-  --glo-muted: #b8a699;
-  --glo-faint: #9a897c;
-  --glo-placeholder: #8e7d71;
+  --glo-muted: #c9b8ab;
+  --glo-faint: #ad9b8e;
+  --glo-placeholder: #a8968a;
+
+  /* Depth: menus a step above cards, both with a faint light edge */
+  --glo-menu-bg: #2f2621;
+  --glo-edge: rgba(255, 255, 255, 0.07);
+  --glo-lift-edge: rgba(255, 255, 255, 0.07);
+  --glo-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 6px 16px rgba(0, 0, 0, 0.25);
+  --glo-menu-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 18px 40px rgba(0, 0, 0, 0.5);
 
   --glo-accent: #f7893a;
   --glo-accent-deep: #ef7d2c;
   --glo-on-accent: #2a1406;
   --glo-accent-rgb: 247, 137, 58;
-  --glo-accent-soft: #4a2e1c;
+  --glo-accent-soft: #4d2f1b;
   --glo-accent-tint: #3a2618;
   --glo-accent-muted: #5a3a26;
   --glo-link: #ffa96a;
@@ -386,4 +402,84 @@ img.emoji {
 .app-broken-card p {
   margin: 0 0 18px;
   color: var(--glo-muted);
+}
+
+/* 0.7.5 motion: one gentle spring everywhere (Motion.dc.html). Opening is 240 ms with a tiny
+   overshoot; closing is 160 ms with no bounce (closing should feel instant). Menus grow from
+   the corner they open from, dialogs rise in, a message you send rises into place. Closing is
+   played by lib/motion.ts (a still copy that fades out, so no screen needs to wait for it).
+   Reduce Motion: fades only. */
+:root {
+  --glo-ease-open: cubic-bezier(0.2, 0.9, 0.3, 1.15);
+  --glo-ease-close: cubic-bezier(0.4, 0, 1, 1);
+  --glo-open: 240ms;
+  --glo-close: 160ms;
+}
+.menu {
+  transform-origin: var(--glo-menu-origin, top right);
+  animation:
+    glo-menu-in var(--glo-open) var(--glo-ease-open),
+    glo-fade-in 120ms ease-out;
+}
+.menu.glo-leaving {
+  animation: glo-menu-out var(--glo-close) var(--glo-ease-close) forwards;
+}
+.dialog-backdrop.glo-leaving {
+  animation: glo-fade-out 200ms ease forwards;
+}
+.dialog-backdrop.glo-leaving .dialog {
+  animation: glo-dialog-out var(--glo-close) var(--glo-ease-close) forwards;
+}
+.glo-leaving,
+.glo-leaving * {
+  pointer-events: none !important;
+}
+@keyframes glo-menu-in {
+  from {
+    transform: translateY(var(--glo-menu-dy, -6px)) scale(0.94);
+  }
+}
+@keyframes glo-menu-out {
+  to {
+    opacity: 0;
+    transform: translateY(var(--glo-menu-dy, -6px)) scale(0.94);
+  }
+}
+@keyframes glo-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes glo-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes glo-dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+/* A message you just sent (lib/motion.ts adds .msg-rise for a moment) */
+.msg-rise {
+  animation:
+    glo-rise 260ms var(--glo-ease-open),
+    glo-fade-in 180ms ease;
+}
+@keyframes glo-rise {
+  from {
+    transform: translateY(24px) scale(0.96);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu,
+  .msg-rise {
+    animation: glo-fade-in 120ms ease-out;
+  }
+  .menu.glo-leaving,
+  .dialog-backdrop.glo-leaving,
+  .dialog-backdrop.glo-leaving .dialog {
+    animation: glo-fade-out 120ms ease forwards;
+  }
 }

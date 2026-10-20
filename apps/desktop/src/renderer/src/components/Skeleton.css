@@ -77,26 +77,24 @@
 .skeleton-messages {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
   padding-bottom: 8px;
 }
-.skeleton-bubble-row {
+/* Lines up with .message: 12px sides, 40px avatar, 14px gap */
+.skeleton-message {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 12px 2px;
 }
-.skeleton-bubble-row--mine {
-  justify-content: flex-end;
+.skeleton-message--follow {
+  padding: 0 12px 2px 66px;
 }
-.skeleton-bubble {
-  height: 36px;
-  min-width: 90px;
-  max-width: 440px;
-  border-radius: 18px;
+.skeleton-message .skeleton-lines {
+  max-width: 640px;
+  padding-top: 3px;
 }
-.skeleton-bubble--tall {
-  height: 58px;
-}
-.skeleton-bubble-row--mine .skeleton-bubble {
-  background-color: var(--glo-accent-soft);
+.skeleton-line--text {
+  height: 10px;
+  opacity: 0.75;
 }

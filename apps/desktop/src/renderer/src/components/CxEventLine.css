@@ -1,0 +1,198 @@
+/* 0.7.5 Constellations: join lines and milestone cards (the approved Celebrations board). */
+
+.cx-join-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 8px 24px 8px 76px;
+  font-size: 14px;
+  color: var(--glo-muted);
+}
+.cx-join-line b {
+  color: var(--glo-ink);
+}
+.cx-join-line time {
+  font-size: 12px;
+  color: var(--glo-faint);
+  margin-left: 4px;
+}
+.cx-join-arrow {
+  color: #2e9e5b;
+  font-weight: 700;
+}
+.cx-wave {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--glo-line-strong);
+  background: var(--glo-surface, #ffffff);
+  color: var(--glo-ink);
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.cx-wave:hover:not(:disabled) {
+  border-color: #f47a1f;
+}
+.cx-wave--on,
+.cx-wave:disabled {
+  background: #fde9d7;
+  border-color: #f47a1f;
+  color: #8a3005;
+  cursor: default;
+}
+.cx-wave-hand {
+  display: inline-block;
+  transform-origin: 70% 80%;
+}
+.cx-wave-hand--go {
+  animation: cx-wave 1s ease-in-out;
+}
+.cx-wave-count {
+  font-size: 12px;
+  color: var(--glo-faint);
+}
+@keyframes cx-wave {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(18deg);
+  }
+  40% {
+    transform: rotate(-10deg);
+  }
+  60% {
+    transform: rotate(14deg);
+  }
+  80% {
+    transform: rotate(-4deg);
+  }
+}
+
+.cx-milestone-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 12px 24px;
+}
+.cx-milestone {
+  position: relative;
+  width: min(560px, 100%);
+  box-sizing: border-box;
+  border-radius: 18px;
+  padding: 16px 20px;
+  background: #1c1210;
+  color: #f5ede6;
+  border: 1px solid #4a372b;
+  box-shadow:
+    0 0 0 1px rgba(255, 179, 71, 0.1),
+    0 0 30px rgba(255, 165, 74, 0.28);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.cx-milestone-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #120c0a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+  box-shadow: 0 0 16px rgba(255, 165, 74, 0.45);
+}
+.cx-milestone-icon .cx-milestone-cicon {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 17px;
+}
+.cx-milestone-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cx-milestone-text strong {
+  font-family: Outfit, 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 19px;
+}
+.cx-milestone-big {
+  color: #ffd27a;
+}
+.cx-milestone-text > span {
+  font-size: 13px;
+  color: #d9c2b1;
+}
+.cx-milestone-replay {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #574a41;
+  background: transparent;
+  color: #f5ede6;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.cx-milestone-replay:hover {
+  border-color: #ffb347;
+}
+.cx-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.cx-burst-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: #ffd27a;
+  box-shadow: 0 0 10px 4px rgba(255, 179, 71, 0.65);
+  opacity: 0;
+  animation-name: cx-burst;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  animation-fill-mode: forwards;
+}
+@keyframes cx-burst {
+  0% {
+    transform: translate(0, 0) scale(0.3);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(1);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cx-burst {
+    display: none;
+  }
+  .cx-wave-hand--go {
+    animation: none;
+  }
+}
+.cx-milestone-cicon .cx-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

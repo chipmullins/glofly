@@ -212,7 +212,15 @@ export function TwoStepForm({
 }
 
 /** A QR code drawn from its modules (no image file, no outside service). */
-function QrImage({ text, size = 208 }: { text: string; size?: number }): React.JSX.Element | null {
+export function QrImage({
+  text,
+  size = 208,
+  label = 'QR code to sign in with your phone'
+}: {
+  text: string
+  size?: number
+  label?: string
+}): React.JSX.Element | null {
   const qr = useMemo(() => {
     try {
       return QRCode.create(text, { errorCorrectionLevel: 'M' })
@@ -236,7 +244,7 @@ function QrImage({ text, size = 208 }: { text: string; size?: number }): React.J
       viewBox={`0 0 ${total} ${total}`}
       shapeRendering="crispEdges"
       role="img"
-      aria-label="QR code to sign in with your phone"
+      aria-label={label}
     >
       <rect width={total} height={total} fill="#ffffff" />
       <path d={path.join('')} fill="#1c1210" />

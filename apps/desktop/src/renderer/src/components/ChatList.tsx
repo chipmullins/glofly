@@ -1,14 +1,12 @@
-import { shortBody } from '@glofly/shared/gifs'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type {
   ConversationSummary,
   MuteDuration,
   Presence,
   PublicUser
 } from '../../../preload/api-types'
-import { attachmentSummary } from '../lib/attachments'
 import type { ChatResult } from '../lib/chatSearch'
-import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
+import { chatTitle, memberCountLabel, typingText } from '../lib/groups'
 import { useTypingByChat } from '../lib/typingWatch'
 import { useSocial } from '../lib/social'
 import { BirthdayMark, GlowMark } from './Social'
@@ -24,7 +22,6 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   BellOffIcon,
-  ChatIcon,
   CloseIcon,
   GroupIcon,
   LeaveIcon,
@@ -33,6 +30,9 @@ import {
   SearchIcon
 } from './icons'
 import { ListSkeleton } from './Skeleton'
+import { lastMessagePreview } from '../lib/chatPreview'
+import EmptyScene from './EmptyScene'
+import { useListGlide } from '../lib/listGlide'
 
 export function PinIcon({ size = 13 }: { size?: number }): React.JSX.Element {
   return (
@@ -81,22 +81,8 @@ type ChatListProps = {
   onNewGroup: () => void
   /** Opens message search across all chats with this text */
   onSearchMessages: (query: string) => void
-}
-
-/** The sidebar's one-line preview of a chat's latest message. */
-function lastMessagePreview(c: ConversationSummary, me: PublicUser): string {
-  const last = c.lastMessage
-  if (!last) return 'No messages yet'
-  const nameOf = (id: string): string =>
-    c.members.find((m) => m.id === id)?.displayName.split(/\s+/)[0] ?? 'Someone'
-  if (last.event) return eventText(last.event, last.senderId, me.id, nameOf)
-  const text = last.deleted
-    ? 'Message deleted'
-    : shortBody(last.body).replace(/\s+/g, ' ') || attachmentSummary(last.attachments)
-  // Groups say who sent it ("Maya: hi"); DMs only mark your own ("You: hi").
-  const who =
-    last.senderId === me.id ? 'You: ' : c.kind === 'group' ? `${nameOf(last.senderId)}: ` : ''
-  return who + text
+  /** 0.7.5: "Find @name" when a search finds nobody (opens Add friend with it typed) */
+  onFindUsername?: (username: string) => void
 }
 
 /** A pinned chat row's drag-to-reorder state and handlers. */
@@ -175,6 +161,7 @@ function DmRow({
       ]
         .filter(Boolean)
         .join(' ')}
+      data-glide={c.id}
       draggable={drag ? true : undefined}
       onDragStart={drag?.onDragStart}
       onDragOver={drag?.onDragOver}
@@ -386,7 +373,8 @@ export default function ChatList({
   onReorderPins,
   onNewMessage,
   onNewGroup,
-  onSearchMessages
+  onSearchMessages,
+  onFindUsername
 }: ChatListProps): React.JSX.Element {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   // Dragging a pinned chat: which one, and where it would land (the line above or below a row).
@@ -402,6 +390,9 @@ export default function ChatList({
     .sort((a, b) => (a.pinnedAt ?? '').localeCompare(b.pinnedAt ?? ''))
   // Closed chats stay out of the list until something new arrives (or they're opened again).
   const others = conversations.filter((c) => !c.pinnedAt && (c.id === openChatId || !isClosed(c)))
+  // 0.7.5: a chat bumped to the top glides there with a soft glow (not while searching).
+  const chatsNav = useRef<HTMLElement | null>(null)
+  useListGlide(chatsNav, query.trim() ? [] : others.map((c) => c.id), openChatId)
 
   /** Moves one pinned chat to a new place and saves the whole order. */
   function movePin(id: string, to: number): void {
@@ -472,7 +463,22 @@ export default function ChatList({
           <span>Results</span>
         </div>
         {results.length === 0 ? (
-          <p className="search-empty">No friends or chats match “{query.trim()}”.</p>
+          <EmptyScene
+            kind="search"
+            layout="small"
+            title={`No one called “${query.trim()}” here`}
+            text="Check the spelling, or look them up by their username to send a friend request."
+          >
+            {onFindUsername && /^@?[a-z0-9._-]{2,}$/i.test(query.trim()) && (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => onFindUsername(query.trim().replace(/^@/, ''))}
+              >
+                Find @{query.trim().replace(/^@/, '')}
+              </button>
+            )}
+          </EmptyScene>
         ) : (
           <div
             className="dm-list"
@@ -614,10 +620,12 @@ export default function ChatList({
       {!loaded ? (
         <ListSkeleton rows={6} label="Loading chats" />
       ) : conversations.length === 0 ? (
-        <div className="dm-empty">
-          <ChatIcon />
-          <p>No conversations yet. Messages and group chats with friends will show up here.</p>
-        </div>
+        <EmptyScene
+          kind="hello"
+          layout="small"
+          title="No chats yet"
+          text="Messages and group chats with friends will show up here."
+        />
       ) : others.length === 0 ? (
         <p className="search-empty">
           {pinned.length
@@ -625,7 +633,7 @@ export default function ChatList({
             : 'All your chats are closed. Search or a new message brings them back.'}
         </p>
       ) : (
-        <nav aria-label="Chats" className="dm-list">
+        <nav aria-label="Chats" className="dm-list" ref={chatsNav}>
           {others.map(row)}
         </nav>
       )}

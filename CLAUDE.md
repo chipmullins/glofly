@@ -138,3 +138,14 @@
   them like Do not disturb (`push/quiet.ts`); desktop/web/phone apps silence sounds themselves. Desktop:
   one allow-listed gateway `window.glofly.tools.request` for these routes; the chat view draws only the
   newest 150 messages (more on scroll up) and has scroll anchoring off.
+- **0.7.4 (Oct 20, 2026): the polish round** (project doc `glofly-release-0.7.4.md`, migration 0034 with hand-added
+  data backfills at the end). Approved mockups: "Glofly 0.7.5 Polish Mockups" and "Glofly Constellations Polish
+  Mockups" canvases; keep screens matching them. App-wide: welcome flow (`WelcomeFlow`, `lib/welcome.ts`), one motion
+  system (`lib/motion.ts`, phones `ui/motion.tsx`), dark depth tokens + light `--glo-faint` ≥ 4.5:1 (`assets/main.css`,
+  phones `ui/theme.ts`), empty scenes (`EmptyScene`), Ctrl+K `QuickSwitcher` + Ctrl+/ `ShortcutSheet`, outbox with
+  optional `clientId` dedupe on POST messages (Redis `sendclient:*`), photo viewer, camera-off `TileGlow`, Reply in
+  desktop notifications + Jump List/Dock menu (`main/shortcuts.ts`, `taskbar-core.ts`). Constellations:
+  `server/src/constellations/community.ts` (accent/banner/rules/welcome, `/c/:code` public invite page via Caddy,
+  join/milestone/birthday lines as `eventLine4`), `communityTools.ts` + `automod.ts`/`events.ts`/`inbox.ts` (search,
+  events + `events` permission, AutoMod in the nebula send path, Inbox), voice preview pass (`previewToken`,
+  subscribe-only). Self-assigned roles are labels only (never permissions). Sounds are ON HOLD (`glofly-on-hold.md`).

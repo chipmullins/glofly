@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, View, type View as RNView } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -15,7 +15,7 @@ import { useNow } from '@/lib/hooks'
 import { QUICK_REACTIONS } from '@/lib/emoji'
 import { joinVoiceNebula, useCall } from '@/calls/controller'
 import { Composer, type ComposerHandle } from '@/chat/Composer'
-import { markUnread, PinnedBar, PinsSheet, ScheduledSheet, ScheduledStrip, SendLaterSheet, usePins, useScheduled } from '@/chat/chatTools'
+import { markUnread, PinsSheet, ScheduledSheet, ScheduledStrip, SendLaterSheet, usePins, useScheduled } from '@/chat/chatTools'
 import { TypingBubble } from '@/chat/TypingBubble'
 import { discard, isLocal, retry, sendText } from '@/chat/send'
 import { attachMenu, UploadTray, useUploads } from '@/chat/uploads'
@@ -29,6 +29,7 @@ import { Icon } from '@/ui/icons'
 import { Spinner, Text } from '@/ui/kit'
 import { Skeleton } from '@/ui/Skeleton'
 import { JumpToLatestButton, useJumpToLatest } from '@/chat/JumpToLatest'
+import { ReconnectingStrip } from '@/ui/Reconnecting'
 import { openReport, pickEmoji } from '@/ui/sheets'
 import { measure, openContextMenu, type MenuItem } from './ContextMenu'
 import { openDmDock } from './dock'
@@ -36,10 +37,13 @@ import { haptic } from './motion'
 import { openMemberSheet } from './Members'
 import { pickTimeout } from './moderation'
 import { NebulaRow, type NebulaRowInfo } from './NebulaRow'
+import { firstNewId, NewSinceLine, NewSincePill, PinsChip, type NewSince } from './feel'
 import { can, cantPost, isQuiet, outranks, roleLook } from './roles'
 import { markNebulaRead, useNebulaChat } from './useNebula'
 import { openNebulaSheet } from './nebulaActions'
 import { CountBadge, FireflyMark, Glyph, N, SpeakerGlyph, StarGlyph } from './ui'
+// 0.8.0 community tools: event cards, search across the constellation
+import { EventCard, takeJump, useEventMessages } from './communityTools'
 
 // A text nebula (canvas boards 4 and 4b): the chat with role colors and badges, @you rows,
 // polls, the voice Join card, and the read-only / timed-out states. Messages go through the same
@@ -76,6 +80,11 @@ export function NebulaChat({
 }) {
   const insets = useSafeAreaInsets()
   const { rows, messages, people, members, meId } = useNebulaChat(c, n)
+  // 0.7.5 "New since you left": what was new when you opened it (kept until Mark as read)
+  const [newSince, setNewSince] = useState<NewSince | null>(() =>
+    n.lastReadAt && n.unreadCount > 0 ? { since: n.lastReadAt, count: n.unreadCount } : null,
+  )
+  const firstNew = useMemo(() => (newSince ? firstNewId(messages?.list ?? [], newSince.since, meId) : null), [newSince, messages?.list, meId])
   const typing = useStore((s) => s.typing[n.conversationId])
   const dmUnread = useStore((s) => unreadTotal(Object.values(s.conversations)))
   const myVoice = useCall((s) => s.voice?.nebulaId ?? null)
@@ -103,6 +112,8 @@ export function NebulaChat({
   const others = useMemo(() => members.filter((p) => p.id !== meId), [members, meId])
   const online = c.members.filter((m) => m.status !== 'offline').length
   const memberIds = useMemo(() => members.map((p) => p.id), [members])
+  // 0.8.0 events: a card under each event's "made an event 📅" message
+  const eventCards = useEventMessages(c.id)
 
   // A voice nebula with people in it, that you could drop into (the Join card).
   const dropIn = useMemo(() => {
@@ -159,6 +170,7 @@ export function NebulaChat({
 
   async function react(m: Message, emoji: string) {
     const on = !m.reactions.find((r) => r.emoji === emoji)?.userIds.includes(meId)
+    if (on) haptic.light()
     const reactions = m.reactions.map((r) => ({ ...r, userIds: [...r.userIds] }))
     const found = reactions.find((r) => r.emoji === emoji)
     if (on) {
@@ -306,13 +318,43 @@ export function NebulaChat({
 
   const latest = useRef({ react, jumpTo, messageMenu })
   latest.current = { react, jumpTo, messageMenu }
+  // 0.8.0: opened from the Inbox or search at a message
+  const loadedOnce = !!messages?.loaded
+  useEffect(() => {
+    if (!loadedOnce) return
+    const id = takeJump(n.id)
+    if (id) setTimeout(() => void latest.current.jumpTo(id), 150)
+  }, [loadedOnce, n.id])
   const onReact = useCallback((m: Message, e: string) => void latest.current.react(m, e), [])
   const onQuote = useCallback((mid: string) => void latest.current.jumpTo(mid), [])
   const onPhoto = useCallback((m: Message, index: number) => setViewer({ message: m, index }), [])
   const onFace = useCallback((uid: string) => openMemberSheet(c.id, uid), [c.id])
   const renderRow = useCallback(
-    ({ item }: { item: NebulaRowInfo }) => <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />,
-    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds],
+    ({ item: raw }: { item: NebulaRowInfo }) => {
+      const ev = eventCards.get(raw.message.id)
+      const item = ev && !raw.message.deleted ? { ...raw, message: { ...raw.message, body: 'made an event 📅' } } : raw
+      const row = item.message.id === firstNew && newSince ? (
+      <View>
+        <NewSinceLine since={newSince.since} />
+        <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />
+      </View>
+    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />
+      if (!ev || raw.message.deleted) return row
+      return (
+        <View>
+          {row}
+          <EventCard
+            event={ev}
+            c={c}
+            onJoinVoice={(vid) => {
+              const vn = c.nebulas.find((x) => x.id === vid)
+              if (vn) void joinVoiceNebula({ constellationId: c.id, nebulaId: vn.id, nebulaName: vn.name, constellationName: c.name })
+            }}
+          />
+        </View>
+      )
+    },
+    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds, firstNew, newSince, eventCards],
   )
 
   // Phones: swipe left on the chat for the members (the canvas's other way in, besides the button).
@@ -335,11 +377,12 @@ export function NebulaChat({
           </Text>
         ) : null}
       </View>
+      <PinsChip count={pinsApi.pins.length} onPress={() => setPinsOpen(true)} />
       {isQuiet(n) ? <Icon name="bellOff" size={16} color={N.faint} /> : null}
       <HeaderButton label={`${n.name} notifications`} onPress={() => openNebulaSheet(c.id, n.id)}>
         <Icon name="bell" size={19} color={N.ink2} />
       </HeaderButton>
-      <HeaderButton label="Search this nebula" onPress={() => setSearching(true)}>
+      <HeaderButton label={`Search ${c.name}`} onPress={() => router.push({ pathname: '/constellations/[cid]/search', params: { cid: c.id } })}>
         <Icon name="search" size={19} color={N.ink2} />
       </HeaderButton>
       <HeaderButton label={wide.membersShown ? 'Hide members' : 'Show members'} onPress={wide.toggleMembers} on={wide.membersShown}>
@@ -358,6 +401,7 @@ export function NebulaChat({
             {n.name}
           </Text>
           {isQuiet(n) ? <Icon name="bellOff" size={14} color={N.faint} /> : null}
+          <PinsChip count={pinsApi.pins.length} onPress={() => setPinsOpen(true)} />
         </View>
         <Text size={12} numberOfLines={1} style={{ color: N.muted }}>
           {c.name} · {online} online
@@ -372,6 +416,9 @@ export function NebulaChat({
         <FireflyMark size={22} />
         <CountBadge count={dmUnread} style={{ position: 'absolute', right: -3, top: -3 }} />
       </Pressable>
+      <HeaderButton label={`Search ${c.name}`} onPress={() => router.push({ pathname: '/constellations/[cid]/search', params: { cid: c.id } })}>
+        <Icon name="search" size={20} color={N.ink2} />
+      </HeaderButton>
       <HeaderButton label="Members" onPress={() => router.push({ pathname: '/constellations/[cid]/members', params: { cid: c.id } })}>
         <Icon name="friends" size={20} color={N.ink2} />
       </HeaderButton>
@@ -381,7 +428,7 @@ export function NebulaChat({
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: N.bg }} behavior={Platform.OS === 'ios' && !wide ? 'padding' : undefined}>
       {header}
-      <PinnedBar pins={pinsApi.pins} onOpen={() => setPinsOpen(true)} night />
+      <ReconnectingStrip night />
       <GestureDetector gesture={membersSwipe}>
       <View style={{ flex: 1 }}>
         <FlatList
@@ -451,6 +498,7 @@ export function NebulaChat({
           {...jumper.listProps}
         />
         <JumpToLatestButton visible={jumper.away} count={jumper.count} onPress={jumper.jump} night />
+        {newSince && firstNew ? <NewSincePill info={newSince} onJump={() => void jumpTo(firstNew)} onMarkRead={() => setNewSince(null)} /> : null}
         <ChatFireflies conversationId={n.conversationId} meId={meId} nameOf={nameOf} />
       </View>
       </GestureDetector>

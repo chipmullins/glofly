@@ -34,8 +34,12 @@ import { CloseIcon, ConstellationIcon, LinkOutIcon, MicIconLine, SpeakerIcon } f
 import { hexA } from './colors'
 import { GalaxyIcon } from './sky'
 import type { CxPlace } from './phase'
+import { preloadLastPlace } from './preload'
 import './Dock.css'
 import './HomeDock.css'
+// 0.8.0: the Inbox replaces Mentions in the dock
+import { useInboxCounts } from '../lib/community'
+import { InboxIcon, InboxPanel } from './Inbox'
 
 // The nebula dock on Glofly home (2.0; approved Oct 17, canvas boards 9–14): your constellations,
 // nebulas you pinned, your @mentions and the voice nebula you're in, without leaving Glofly.
@@ -46,18 +50,6 @@ const MAX_OPEN = 3
 const firstName = (u: PublicUser): string => u.displayName.trim().split(/\s+/)[0] || u.username
 const quiet = (n: Nebula): boolean =>
   n.notify === 'none' || (!!n.mutedUntil && new Date(n.mutedUntil).getTime() > Date.now())
-
-/** "8:31 PM", "Yesterday", "Tue", "Oct 3" */
-function shortTime(iso: string): string {
-  const d = new Date(iso)
-  const now = new Date()
-  if (d.toDateString() === now.toDateString())
-    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  const days = Math.floor((now.getTime() - d.getTime()) / 86_400_000)
-  if (days < 1) return 'Yesterday'
-  if (days < 7) return d.toLocaleDateString([], { weekday: 'short' })
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
 
 /** Text with @you picked out (purple in the dark panels, orange in the white mini chat). */
 function WithMentions({
@@ -210,6 +202,9 @@ export default function HomeDock({
 }): React.JSX.Element {
   const calls = useCalls()
   void calls.tick
+  // 0.7.5 instant fly-in: the constellation the Constellations button goes to, loaded ahead
+  const cardIds = cards.map((c) => c.id).join(',')
+  useEffect(() => preloadLastPlace(me.id, cardIds.split(',')), [me.id, cardIds])
   const [shown, setShown] = useState(false)
   const [hover, setHover] = useState<string | null>(null)
   const [panel, setPanel] = useState<Panel>(null)
@@ -221,6 +216,9 @@ export default function HomeDock({
     unread: number
     more: boolean
   }>({ list: [], unread: 0, more: false })
+  // 0.8.0: the Inbox (mentions, replies, events, join requests) in place of Mentions
+  const inbox = useInboxCounts(true)
+  const inboxCount = inbox.counts?.all ?? 0
   const itemRefs = useRef(new Map<string, HTMLElement>())
   const [anchors, setAnchors] = useState<Record<string, number>>({})
   const anchorsKey = useRef('{}')
@@ -585,13 +583,23 @@ export default function HomeDock({
         {!up && (
           <>
             <span className="dock-hint" />
-            {(mentions.unread > 0 || unreadCards > 0) && (
+            {(mentions.unread > 0 || inboxCount > 0 || unreadCards > 0) && (
               <span
                 className={
-                  mentions.unread > 0 ? 'dock-hint-count hd-badge--mention' : 'dock-hint-count'
+                  mentions.unread > 0 || inboxCount > 0
+                    ? 'dock-hint-count hd-badge--mention'
+                    : 'dock-hint-count'
                 }
               >
-                {mentions.unread > 0 ? '@' : unreadCards > 9 ? '9+' : unreadCards}
+                {mentions.unread > 0 && !inboxCount
+                  ? '@'
+                  : inboxCount > 0
+                    ? inboxCount > 9
+                      ? '9+'
+                      : inboxCount
+                    : unreadCards > 9
+                      ? '9+'
+                      : unreadCards}
               </span>
             )}
           </>
@@ -621,36 +629,25 @@ export default function HomeDock({
       )}
 
       {panel?.kind === 'mentions' && (
-        <MentionsPanel
-          me={me}
-          mentions={mentions}
-          place={placeFor(panelKey, 400)}
-          constellationCount={cards.length}
-          onPick={(m) => openNebula(m.constellation.id, m.nebula.id, m.id)}
-          onReadAll={async () => {
-            const r = await api.readMentions()
-            if (!r.ok) onProblem(r.message)
-            loadMentions()
+        <InboxPanel
+          className="hd-panel inbox--dock"
+          style={{ left: placeFor(panelKey, 520).left }}
+          onCounts={() => inbox.reload()}
+          onOpenMessage={(i) => {
+            if (i.nebula && i.messageId) openNebula(i.constellation.id, i.nebula.id, i.messageId)
+          }}
+          onOpenEvent={(i) => {
+            setPanel(null)
+            if (i.nebula) {
+              if (i.messageId) openNebula(i.constellation.id, i.nebula.id, i.messageId)
+              else onEnter({ constellationId: i.constellation.id, nebulaId: i.nebula.id })
+            }
+          }}
+          onClose={() => {
+            setPanel(null)
+            inbox.reload()
             onCardsChanged()
           }}
-          onMore={async () => {
-            const oldest = mentions.list.at(-1)?.createdAt
-            const r = await api.mentions(oldest)
-            if (r.ok)
-              setMentions((m) => ({
-                list: [
-                  ...m.list,
-                  ...r.data.mentions.filter((x) => !m.list.some((y) => y.id === x.id))
-                ],
-                unread: r.data.unread,
-                more: r.data.more
-              }))
-          }}
-          onOpenConstellations={() => {
-            setPanel(null)
-            onEnter(null)
-          }}
-          onClose={() => setPanel(null)}
         />
       )}
 
@@ -914,7 +911,7 @@ export default function HomeDock({
                   ? 'dock-item hd-mentions hd-trigger dock-item--current'
                   : 'dock-item hd-mentions hd-trigger'
               }
-              aria-label={`Mentions${mentions.unread ? `, ${mentions.unread} new` : ''}`}
+              aria-label={`Inbox${inboxCount ? `, ${inboxCount} new` : ''}`}
               aria-haspopup="dialog"
               aria-expanded={panelKey === 'mentions'}
               tabIndex={up ? 0 : -1}
@@ -924,15 +921,15 @@ export default function HomeDock({
                 togglePanel({ kind: 'mentions' })
               }}
             >
-              @
-              {mentions.unread > 0 && (
+              <InboxIcon size={24} />
+              {inboxCount > 0 && (
                 <span className="dock-badge hd-badge--mention">
-                  {mentions.unread > 99 ? '99+' : mentions.unread}
+                  {inboxCount > 99 ? '99+' : inboxCount}
                 </span>
               )}
             </button>
             {panelKey === 'mentions' && <span className="dock-running" aria-hidden="true" />}
-            {tip('mentions', 'Mentions')}
+            {tip('mentions', 'Inbox')}
           </span>
           {voiceNebula && (
             <span className="dock-slot">
@@ -1146,156 +1143,6 @@ function NebulaList({
         <span>Hover a nebula to pin it</span>
         <button type="button" className="all-chats-home" onClick={onOpenFull}>
           Open in Constellations
-          <LinkOutIcon size={14} />
-        </button>
-      </footer>
-      <span className="all-chats-tail" aria-hidden="true" style={{ left: place.tail }} />
-    </section>
-  )
-}
-
-/** Every @mention of you, newest first (board 12). */
-function MentionsPanel({
-  me,
-  mentions,
-  place,
-  constellationCount,
-  onPick,
-  onReadAll,
-  onMore,
-  onOpenConstellations,
-  onClose
-}: {
-  me: SignedInUser
-  mentions: { list: NebulaMention[]; unread: number; more: boolean }
-  place: { left: number; tail: number }
-  constellationCount: number
-  onPick: (m: NebulaMention) => void
-  onReadAll: () => Promise<void>
-  onMore: () => Promise<void>
-  onOpenConstellations: () => void
-  onClose: () => void
-}): React.JSX.Element {
-  const [filter, setFilter] = useState<string>('all')
-  const [busy, setBusy] = useState(false)
-  const newCount = mentions.list.filter((m) => m.unread).length
-  const constellations = [
-    ...new Map(mentions.list.map((m) => [m.constellation.id, m.constellation])).values()
-  ]
-  const shown = mentions.list.filter(
-    (m) => filter === 'all' || (filter === 'new' ? m.unread : m.constellation.id === filter)
-  )
-  return (
-    <section
-      className="all-chats hd-panel hd-mentions-panel"
-      role="dialog"
-      aria-label="Mentions"
-      style={{ left: place.left }}
-    >
-      <header className="all-chats-head">
-        <h2>Mentions</h2>
-        <button
-          type="button"
-          className="hd-readall"
-          disabled={busy || mentions.unread === 0}
-          onClick={async () => {
-            setBusy(true)
-            await onReadAll()
-            setBusy(false)
-          }}
-        >
-          Mark all read
-        </button>
-        <button type="button" className="all-chats-icon" aria-label="Close" onClick={onClose}>
-          <CloseIcon />
-        </button>
-      </header>
-      <div className="all-chats-filters" role="group" aria-label="Show">
-        <button
-          type="button"
-          className="all-chats-chip"
-          aria-pressed={filter === 'all'}
-          onClick={() => setFilter('all')}
-        >
-          All
-        </button>
-        <button
-          type="button"
-          className="all-chats-chip"
-          aria-pressed={filter === 'new'}
-          onClick={() => setFilter('new')}
-        >
-          New
-          {newCount > 0 && <span className="all-chats-chip-count hd-new-count">{newCount}</span>}
-        </button>
-        {constellations.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            className="all-chats-chip"
-            aria-pressed={filter === c.id}
-            onClick={() => setFilter(c.id)}
-          >
-            {c.name}
-          </button>
-        ))}
-      </div>
-      <ul className="all-chats-list hd-mention-list">
-        {shown.map((m) => (
-          <li key={m.id}>
-            <button
-              type="button"
-              className={m.unread ? 'hd-mention hd-mention--new' : 'hd-mention'}
-              aria-label={`${m.sender.displayName} in #${m.nebula.name}, ${m.constellation.name}${m.unread ? ', new' : ''}: ${m.text}`}
-              onClick={() => onPick(m)}
-            >
-              {m.unread && <span className="hd-mention-dot" aria-hidden="true" />}
-              <span className="hd-mention-face">
-                <Face person={m.sender} size={36} />
-                <CxTag
-                  id={m.constellation.id}
-                  name={m.constellation.name}
-                  color={m.constellation.color}
-                  iconVersion={m.constellation.iconVersion}
-                  className="hd-tag hd-tag--face"
-                />
-              </span>
-              <span className="hd-mention-text">
-                <span className="hd-mention-top">
-                  <strong>{firstName(m.sender)}</strong>
-                  <span className="hd-mention-where">
-                    in #{m.nebula.name} · {m.constellation.name}
-                  </span>
-                  <span className="hd-mention-when">{shortTime(m.createdAt)}</span>
-                  <span className="hd-mention-open">Open</span>
-                </span>
-                <span className="hd-mention-body">
-                  <WithMentions text={m.text} me={me} className="hd-at-dark" />
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-        {shown.length === 0 && (
-          <li className="all-chats-empty">
-            {mentions.list.length === 0 ? 'No @mentions in the last 30 days' : 'Nothing here'}
-          </li>
-        )}
-        {mentions.more && filter === 'all' && (
-          <li className="hd-more-row">
-            <button type="button" className="hd-more" onClick={() => void onMore()}>
-              Show older
-            </button>
-          </li>
-        )}
-      </ul>
-      <footer className="all-chats-foot">
-        <span>
-          Across your {constellationCount}{' '}
-          {constellationCount === 1 ? 'constellation' : 'constellations'}
-        </span>
-        <button type="button" className="all-chats-home" onClick={onOpenConstellations}>
-          Open Constellations
           <LinkOutIcon size={14} />
         </button>
       </footer>

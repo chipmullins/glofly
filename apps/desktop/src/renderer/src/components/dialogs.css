@@ -9,32 +9,36 @@
   align-items: center;
   justify-content: center;
   padding: 40px;
-  animation: dialogFade 0.15s ease-out;
+  animation: dialogFade 200ms ease;
 }
 .dialog {
   width: 100%;
   background: var(--glo-surface);
   border-radius: 22px;
-  box-shadow: 0 24px 64px rgba(28, 18, 16, 0.35);
+  box-shadow:
+    0 0 0 1px var(--glo-lift-edge),
+    0 24px 64px rgba(28, 18, 16, 0.35);
   font-family: var(--glo-font-body);
   color: var(--glo-ink);
-  animation: dialogPop 0.18s ease-out;
+  animation:
+    dialogPop var(--glo-open) var(--glo-ease-open),
+    dialogFade 180ms ease;
 }
 @keyframes dialogFade {
   from {
     opacity: 0;
   }
 }
+/* 0.7.5 motion: dialogs rise 40px into place with the shared spring (main.css) */
 @keyframes dialogPop {
   from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translateY(40px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .dialog-backdrop,
   .dialog {
-    animation: none;
+    animation: dialogFade 120ms ease;
   }
 }
 

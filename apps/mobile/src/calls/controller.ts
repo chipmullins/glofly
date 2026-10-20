@@ -1,4 +1,5 @@
 import { PermissionsAndroid, Platform } from 'react-native'
+import { tap } from '@/lib/haptics'
 import { router } from 'expo-router'
 import { create } from 'zustand'
 import { Room, RoomEvent, Track, createLocalAudioTrack, type LocalAudioTrack, type LocalVideoTrack, type Participant, type RemoteTrack, type RemoteTrackPublication, type VideoTrack } from 'livekit-client'
@@ -195,6 +196,7 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
       if (stopOutgoing) {
         stopOutgoing()
         stopOutgoing = null
+        tap.firm() // 0.7.5: the call connected
         if (usePhonePrefs.getState().sounds) playSound('connected')
       } else if ((useCall.getState().call?.members.length ?? 0) > 2 && usePhonePrefs.getState().sounds) playSound('joined', 0.7)
     }
@@ -249,6 +251,8 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
     throw e
   }
   diag('joined the room')
+  // 0.7.5: answering a call that's already going: a firm tap as it connects.
+  if (r.remoteParticipants.size > 0) tap.firm()
   const micOn = mic
     ? r.localParticipant.publishTrack(mic).then(() => undefined)
     : r.localParticipant.setMicrophoneEnabled(true).then(() => undefined)

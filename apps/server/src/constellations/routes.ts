@@ -23,6 +23,8 @@ import {
   ROLE_NAME_MAX,
   TIMEOUT_LENGTHS,
   VOICE_NEBULA_MAX,
+  VOICE_PREVIEW_MS,
+  type VoicePreviewPass,
   cleanNebulaName,
   cleanTag,
   colorForName,
@@ -32,6 +34,10 @@ import {
   type ConstellationPermission,
   type NebulaKind,
   PINNED_NEBULAS_MAX,
+  ACCENT_THEME,
+  RULE_MAX,
+  RULES_MAX,
+  isConstellationAccent,
 } from "@glofly/shared";
 import { db } from "../db";
 import {
@@ -62,14 +68,16 @@ import { removeFiles } from "../messages/attachments";
 import type { Tx } from "../messages/routes";
 import { activeCallOf, closeCall, joinVoiceRoom, leaveCall, openVoiceRoom, peopleInCall } from "../calls/service";
 import { joinDetails } from "../calls/routes";
-import { livekitConfigured, removeFromRoom, setMicrophoneAllowed } from "../calls/livekit";
+import { LIVEKIT_URL, livekitConfigured, previewToken, removeFromRoom, setMicrophoneAllowed } from "../calls/livekit";
 import { setVoiceMuted } from "../calls/voiceMutes";
 import { nebulaOfChat, rememberNebulaChat } from "./chats";
 import { can, OWNER_RANK, outranks, ranksOf, standingOf, type Standing } from "./perms";
 import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstellations } from "./members";
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
-import { cardsFor, detailFor, entriesFor, publicUsers } from "./views";
-import { announceVoice, setSharing } from "./voice";
+import { cardsFor, detailFor, entriesFor, publicUsers, welcomeOf } from "./views";
+import { bannerKey, memberCard } from "./community";
+import { bannerPhoto } from "../profile/photo";
+import { announceVoice, setSharing, voiceStatesOf } from "./voice";
 import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula } from "./home";
 
 // Constellations (Glofly 2.0): communities with nebulas, categories, members and roles.
@@ -118,6 +126,13 @@ import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, un
 //   POST   /constellations/:id/invites              { userIds }  invite friends
 //   GET    /constellations/:id/links                · POST { lifetime, maxUses? } · DELETE …/links/:linkId
 //   GET    /constellations/:id/moderation?before=   what moderators did
+//   0.7.5 community and identity:
+//   PATCH  /constellations/:id                      also { accent, rules, welcome }
+//   PUT    /constellations/:id/banner · DELETE      the banner photo (image is the body)
+//   GET    /constellations/:id/banner/:version
+//   POST   /constellations/:id/welcome              { agreed?, roleIds? }  done with the welcome screen
+//   PUT    /constellations/:id/me/roles             { roleIds }  the roles I picked myself
+//   GET    /constellations/:id/members/:uid/card    mutual friends, for the member card
 
 export const constellationsRouter = Router();
 constellationsRouter.use(requireAuth);
@@ -147,6 +162,9 @@ const createLimiter = limiter(10, 60 * 60 * 1000, "That's a lot of new constella
 const changeLimiter = limiter(120, 10 * 60 * 1000, "That's a lot of changes. Wait a few minutes and try again.");
 const joinLimiter = limiter(30, 10 * 60 * 1000, "That's a lot of joining. Wait a few minutes and try again.");
 const directoryLimiter = limiter(60, 60 * 1000, "That's a lot of searching. Try again in a minute.");
+// 0.7.5: invite cards in chats look their link up (more often than joining).
+const previewLimiter = limiter(240, 10 * 60 * 1000, "That's a lot of invite links. Wait a few minutes.");
+const cardLimiter = limiter(120, 60 * 1000, "That's a lot of profiles. Wait a minute.");
 
 const idParam = z.uuid();
 const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁩﻿]/;
@@ -350,7 +368,7 @@ constellationsRouter.post("/", createLimiter, async (req, res) => {
           permissions: [...r.permissions],
         })),
       );
-      await addMember(tx, c.id, myId);
+      await addMember(tx, c.id, myId, { welcomed: true });
       let nebulaPosition = 0;
       for (const [i, category] of plan.categories.entries()) {
         const [cat] = await tx
@@ -512,8 +530,9 @@ async function isBanned(constellationId: string, userId: string): Promise<boolea
   return !!row;
 }
 
-// GET /constellations/links/:code — what an invite link is.
-constellationsRouter.get("/links/:code", joinLimiter, async (req, res) => {
+// GET /constellations/links/:code — what an invite link is (0.7.5: also who made it and when it
+// runs out, for the invite card in chats).
+constellationsRouter.get("/links/:code", previewLimiter, async (req, res) => {
   const link = await liveLink(String(req.params.code));
   if (!link) {
     deadLink(res);
@@ -524,7 +543,8 @@ constellationsRouter.get("/links/:code", joinLimiter, async (req, res) => {
     deadLink(res);
     return;
   }
-  res.json({ constellation: entry });
+  const by = link.createdBy ? ((await publicUsers([link.createdBy])).get(link.createdBy) ?? null) : null;
+  res.json({ constellation: entry, by, expiresAt: link.expiresAt?.toISOString() ?? null });
 });
 
 /** Joins, answering the request (shared by links, public joins and invites). */
@@ -635,6 +655,14 @@ constellationsRouter.patch("/:id", changeLimiter, async (req, res) => {
       visibility: visibilityField.optional(),
       type: z.string().nullable().optional(),
       tags: tagsField.optional(),
+      // 0.7.5 identity and welcome
+      accent: z.string().nullable().optional(),
+      rules: z.array(z.string().max(RULE_MAX * 2)).max(RULES_MAX * 2).optional(),
+      welcome: z
+        .object({ screen: z.boolean(), joinLines: z.boolean(), milestones: z.boolean(), preview: z.boolean() })
+        .partial()
+        .strict()
+        .optional(),
     })
     .safeParse(req.body);
   if (!parsed.success) {
@@ -642,6 +670,31 @@ constellationsRouter.patch("/:id", changeLimiter, async (req, res) => {
     return;
   }
   const d = parsed.data;
+  if (d.accent !== undefined && d.accent !== null && !isConstellationAccent(d.accent)) {
+    bad(res, "Pick one of the accent colors.");
+    return;
+  }
+  let rules: string[] | undefined;
+  if (d.rules !== undefined) {
+    rules = [];
+    for (const raw of d.rules) {
+      const t = raw.normalize("NFKC").replace(/\s+/g, " ").trim();
+      if (!t) continue;
+      if (t.length > RULE_MAX) {
+        bad(res, `Each rule can be up to ${RULE_MAX} characters.`);
+        return;
+      }
+      if (HIDDEN_CHARS.test(t)) {
+        bad(res, "Rules can't contain hidden characters.");
+        return;
+      }
+      rules.push(t);
+    }
+    if (rules.length > RULES_MAX) {
+      bad(res, `Up to ${RULES_MAX} rules.`);
+      return;
+    }
+  }
   if (d.color !== undefined && !isConstellationColor(d.color)) {
     bad(res, "Pick one of the colors.");
     return;
@@ -666,8 +719,15 @@ constellationsRouter.patch("/:id", changeLimiter, async (req, res) => {
       ...(d.visibility !== undefined ? { visibility: d.visibility } : {}),
       ...(d.type !== undefined ? { type: d.type } : {}),
       ...(d.tags !== undefined ? { tags: d.tags } : {}),
+      // An accent also sets the nearest older color, so apps before 0.7.5 look close.
+      ...(d.accent !== undefined ? { accent: d.accent, ...(d.accent ? { color: ACCENT_THEME[d.accent as keyof typeof ACCENT_THEME].legacy } : {}) } : {}),
+      ...(rules !== undefined ? { rules } : {}),
+      ...(d.welcome !== undefined ? { welcome: { ...welcomeOf(current.welcome), ...d.welcome } } : {}),
     })
     .where(eq(constellations.id, s.constellationId));
+  // 0.7.5: what changed goes in the moderation log (visibility has its own line below).
+  const changed = (["name", "description", "color", "type", "tags", "accent", "rules", "welcome"] as const).filter((k) => d[k] !== undefined);
+  if (changed.length) await logModeration(s.constellationId, s.userId, "settings_changed", null, { fields: changed });
   // No longer asking first: people waiting are let in? No: their requests stay for a moderator
   // to approve (opening the doors shouldn't add people nobody checked).
   if (d.visibility && d.visibility !== current.visibility) {
@@ -746,6 +806,144 @@ constellationsRouter.get("/:id/icon/:version", async (req, res) => {
   sendStream(file.stream, res);
 });
 
+// ───────────── 0.7.5: banner, welcome, my roles, member card ─────────────
+
+// PUT /constellations/:id/banner — a new banner photo (the image itself is the body).
+constellationsRouter.put("/:id/banner", changeLimiter, express.raw({ type: "image/*", limit: PHOTO_UPLOAD_MAX }), async (req, res) => {
+  const s = await standingFor(req, res, "manageConstellation");
+  if (!s) return;
+  const photo = Buffer.isBuffer(req.body) && req.body.length ? await bannerPhoto(req.body) : null;
+  if (!photo) {
+    bad(res, "That file isn't a photo Glofly can use.");
+    return;
+  }
+  const version = randomUUID();
+  await storage.put(bannerKey(s.constellationId, version), photo, "image/webp");
+  const [old] = await db.select({ v: constellations.bannerVersion }).from(constellations).where(eq(constellations.id, s.constellationId));
+  await db.update(constellations).set({ bannerVersion: version }).where(eq(constellations.id, s.constellationId));
+  if (old?.v) await storage.remove(bannerKey(s.constellationId, old.v)).catch(() => undefined);
+  await logModeration(s.constellationId, s.userId, "settings_changed", null, { fields: ["banner"] });
+  await constellationChanged(s.constellationId);
+  for (const id of await memberIdsOf(s.constellationId)) emitToUser(id, "constellations:changed", {}, true);
+  res.json({ bannerVersion: version });
+});
+
+// DELETE /constellations/:id/banner — back to the drawn sky.
+constellationsRouter.delete("/:id/banner", changeLimiter, async (req, res) => {
+  const s = await standingFor(req, res, "manageConstellation");
+  if (!s) return;
+  const [old] = await db.select({ v: constellations.bannerVersion }).from(constellations).where(eq(constellations.id, s.constellationId));
+  await db.update(constellations).set({ bannerVersion: null }).where(eq(constellations.id, s.constellationId));
+  if (old?.v) await storage.remove(bannerKey(s.constellationId, old.v)).catch(() => undefined);
+  await logModeration(s.constellationId, s.userId, "settings_changed", null, { fields: ["banner"] });
+  await constellationChanged(s.constellationId);
+  for (const id of await memberIdsOf(s.constellationId)) emitToUser(id, "constellations:changed", {}, true);
+  res.json({ bannerVersion: null });
+});
+
+// GET /constellations/:id/banner/:version — the same people who may see its icon.
+constellationsRouter.get("/:id/banner/:version", async (req, res) => {
+  const id = idParam.safeParse(req.params.id);
+  const version = idParam.safeParse(req.params.version);
+  if (!id.success || !version.success) {
+    res.status(404).end();
+    return;
+  }
+  const [c] = await db.select().from(constellations).where(eq(constellations.id, id.data));
+  if (!c || c.takenDownAt || c.bannerVersion !== version.data) {
+    res.status(404).end();
+    return;
+  }
+  const myId = me(res).id;
+  let allowed = c.visibility !== "invite" || !!(await standingOf(c.id, myId));
+  if (!allowed) {
+    const [invite] = await db
+      .select({ id: constellationInvites.id })
+      .from(constellationInvites)
+      .where(and(eq(constellationInvites.constellationId, c.id), eq(constellationInvites.inviteeId, myId)));
+    allowed = !!invite;
+  }
+  if (!allowed && typeof req.query.code === "string") allowed = (await liveLink(req.query.code))?.constellationId === c.id;
+  const file = allowed ? await storage.get(bannerKey(c.id, version.data)) : null;
+  if (!file) {
+    res.status(404).end();
+    return;
+  }
+  res.setHeader("Content-Type", "image/webp");
+  res.setHeader("Content-Length", String(file.size));
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  sendStream(file.stream, res);
+});
+
+/** Sets my self-picked roles to exactly `wanted` (only roles members may pick themselves). */
+async function setMyPickedRoles(tx: Tx, constellationId: string, userId: string, wanted: string[]): Promise<string[]> {
+  const pickable = await tx
+    .select({ id: constellationRoles.id, name: constellationRoles.name })
+    .from(constellationRoles)
+    .where(and(eq(constellationRoles.constellationId, constellationId), eq(constellationRoles.selfAssign, true), eq(constellationRoles.kind, "custom")));
+  const want = new Set(wanted.filter((id) => pickable.some((p) => p.id === id)));
+  for (const p of pickable) {
+    if (want.has(p.id)) {
+      await tx.insert(constellationMemberRoles).values({ constellationId, userId, roleId: p.id }).onConflictDoNothing();
+    } else {
+      await tx
+        .delete(constellationMemberRoles)
+        .where(and(eq(constellationMemberRoles.constellationId, constellationId), eq(constellationMemberRoles.userId, userId), eq(constellationMemberRoles.roleId, p.id)));
+    }
+  }
+  return pickable.filter((p) => want.has(p.id)).map((p) => p.name);
+}
+
+// POST /constellations/:id/welcome  { agreed?, roleIds? } — done with the welcome screen: agreed
+// to the house rules (needed when it has some), and the roles I picked.
+constellationsRouter.post("/:id/welcome", changeLimiter, async (req, res) => {
+  const s = await standingFor(req, res);
+  if (!s) return;
+  const parsed = z.object({ agreed: z.boolean().optional(), roleIds: z.array(idParam).max(CUSTOM_ROLES_MAX).optional() }).safeParse(req.body ?? {});
+  if (!parsed.success) {
+    bad(res, "That didn't work. Try again.");
+    return;
+  }
+  const [c] = await db.select({ rules: constellations.rules }).from(constellations).where(eq(constellations.id, s.constellationId));
+  if (c?.rules.length && parsed.data.agreed !== true) {
+    bad(res, "Agree to the house rules to continue.");
+    return;
+  }
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(constellationMembers)
+      .set({ welcomedAt: now, ...(c?.rules.length ? { rulesAgreedAt: now } : {}) })
+      .where(and(eq(constellationMembers.constellationId, s.constellationId), eq(constellationMembers.userId, s.userId)));
+    if (parsed.data.roleIds) await setMyPickedRoles(tx, s.constellationId, s.userId, parsed.data.roleIds);
+  });
+  if (parsed.data.roleIds?.length) await constellationChanged(s.constellationId);
+  res.json({ constellation: await detailFor(s.constellationId, s.userId) });
+});
+
+// PUT /constellations/:id/me/roles  { roleIds } — the roles I picked myself (any time).
+constellationsRouter.put("/:id/me/roles", changeLimiter, async (req, res) => {
+  const s = await standingFor(req, res);
+  if (!s) return;
+  const parsed = z.object({ roleIds: z.array(idParam).max(CUSTOM_ROLES_MAX) }).safeParse(req.body);
+  if (!parsed.success) {
+    bad(res, "Pick roles from the list.");
+    return;
+  }
+  await db.transaction((tx) => setMyPickedRoles(tx, s.constellationId, s.userId, parsed.data.roleIds));
+  await constellationChanged(s.constellationId);
+  res.json({ constellation: await detailFor(s.constellationId, s.userId) });
+});
+
+// GET /constellations/:id/members/:uid/card — the member card's mutual friends.
+constellationsRouter.get("/:id/members/:uid/card", cardLimiter, async (req, res) => {
+  const s = await standingFor(req, res);
+  if (!s) return;
+  const t = await targetFor(req, res, s);
+  if (!t) return;
+  res.json(t.userId === s.userId ? { mutualFriends: [], mutualCount: 0, friend: false } : await memberCard(s.userId, t.userId));
+});
+
 /** Removes a constellation for good: its nebulas, their messages and files, its icon. */
 export async function deleteConstellation(constellationId: string): Promise<void> {
   const chats = await db.select({ id: nebulas.conversationId }).from(nebulas).where(eq(nebulas.constellationId, constellationId));
@@ -765,13 +963,17 @@ export async function deleteConstellation(constellationId: string): Promise<void
         .from(attachments)
         .where(inArray(attachments.conversationId, chatIds))
     : [];
-  const [c] = await db.select({ icon: constellations.iconVersion }).from(constellations).where(eq(constellations.id, constellationId));
+  const [c] = await db
+    .select({ icon: constellations.iconVersion, banner: constellations.bannerVersion })
+    .from(constellations)
+    .where(eq(constellations.id, constellationId));
   await db.transaction(async (tx) => {
     if (chatIds.length) await tx.delete(conversations).where(inArray(conversations.id, chatIds));
     await tx.delete(constellations).where(eq(constellations.id, constellationId));
   });
   await removeFiles(files);
   if (c?.icon) await storage.remove(iconKey(constellationId, c.icon)).catch(() => undefined);
+  if (c?.banner) await storage.remove(bannerKey(constellationId, c.banner)).catch(() => undefined);
   for (const id of memberIds) {
     emitToUser(id, "constellation:removed", { constellationId }, true);
     emitToUser(id, "constellations:changed", {}, true);
@@ -1296,6 +1498,50 @@ constellationsRouter.post("/:id/voice/sharing", async (req, res) => {
   res.status(204).end();
 });
 
+// POST …/nebulas/:nid/voice/preview — 0.7.5 LIVE preview: a watch-only pass to peek at a screen
+// share before joining. Hidden from the room, can't send anything, ended after VOICE_PREVIEW_MS.
+const previews = new Map<string, { room: string; identity: string; timer: ReturnType<typeof setTimeout> }>();
+constellationsRouter.post("/:id/nebulas/:nid/voice/preview", joinLimiter, async (req, res) => {
+  if (!livekitConfigured) {
+    res.status(503).json({ error: "calls_unavailable", message: "Voice isn't set up on this server yet." });
+    return;
+  }
+  const s = await standingFor(req, res);
+  if (!s) return;
+  const n = await nebulaFor(req, res, s);
+  if (!n) return;
+  if (n.kind !== "voice") {
+    bad(res, "That's a text nebula.");
+    return;
+  }
+  if (s.timedOutUntil) {
+    bad(res, "You're timed out for now, so you can't watch voice.", 403);
+    return;
+  }
+  const state = (await voiceStatesOf(s.constellationId)).find((v) => v.nebulaId === n.id);
+  if (!state?.callId || !state.sharing.length) {
+    res.status(409).json({ error: "not_live", message: "Nobody is sharing their screen there right now." });
+    return;
+  }
+  // One peek at a time per person: a new one ends the last.
+  const old = previews.get(s.userId);
+  if (old) {
+    clearTimeout(old.timer);
+    void removeFromRoom(old.room, old.identity);
+  }
+  const room = state.callId;
+  const identity = `preview:${s.userId}:${randomBytes(4).toString("hex")}`;
+  const token = await previewToken(room, identity, me(res).displayName);
+  const timer = setTimeout(() => {
+    if (previews.get(s.userId)?.identity === identity) previews.delete(s.userId);
+    void removeFromRoom(room, identity);
+  }, VOICE_PREVIEW_MS);
+  timer.unref?.();
+  previews.set(s.userId, { room, identity, timer });
+  const pass: VoicePreviewPass = { url: LIVEKIT_URL, token, sharing: state.sharing, lastsMs: VOICE_PREVIEW_MS };
+  res.json(pass);
+});
+
 // POST …/nebulas/:nid/voice/mute  { userId, muted } — a moderator mutes someone in voice.
 constellationsRouter.post("/:id/nebulas/:nid/voice/mute", changeLimiter, async (req, res) => {
   const s = await standingFor(req, res, "muteVoice");
@@ -1371,10 +1617,20 @@ constellationsRouter.post("/:id/roles", changeLimiter, async (req, res) => {
   const s = await standingFor(req, res, "manageRoles");
   if (!s) return;
   const parsed = z
-    .object({ name: plainText(ROLE_NAME_MAX, "The role name"), color: z.enum(ROLE_COLOR_CHOICES as [string, ...string[]]), permissions: permissionsField })
+    .object({
+      name: plainText(ROLE_NAME_MAX, "The role name"),
+      color: z.enum(ROLE_COLOR_CHOICES as [string, ...string[]]),
+      permissions: permissionsField,
+      selfAssign: z.boolean().optional(),
+    })
     .safeParse(req.body);
   if (!parsed.success) {
     bad(res, firstIssue(parsed.error));
+    return;
+  }
+  // 0.7.5: a role members pick themselves can't carry permissions (it's a label).
+  if (parsed.data.selfAssign && parsed.data.permissions.length) {
+    bad(res, "Roles members pick themselves can't have permissions.");
     return;
   }
   if (!grantable(s, parsed.data.permissions)) {
@@ -1399,6 +1655,7 @@ constellationsRouter.post("/:id/roles", changeLimiter, async (req, res) => {
       color: parsed.data.color,
       position: 1,
       permissions: parsed.data.permissions,
+      selfAssign: parsed.data.selfAssign ?? false,
     });
   });
   await logModeration(s.constellationId, s.userId, "role_created", null, { name: parsed.data.name });
@@ -1416,10 +1673,21 @@ constellationsRouter.patch("/:id/roles/:rid", changeLimiter, async (req, res) =>
       name: plainText(ROLE_NAME_MAX, "The role name").optional(),
       color: z.enum(ROLE_COLOR_CHOICES as [string, ...string[]]).optional(),
       permissions: permissionsField.optional(),
+      selfAssign: z.boolean().optional(),
     })
     .safeParse(req.body);
   if (!parsed.success) {
     bad(res, firstIssue(parsed.error));
+    return;
+  }
+  // 0.7.5: only custom roles can be picked by members, and then without permissions.
+  const selfAssign = parsed.data.selfAssign ?? r.selfAssign;
+  if (parsed.data.selfAssign && r.kind !== "custom") {
+    bad(res, "Only roles you made can be picked by members.");
+    return;
+  }
+  if (selfAssign && (parsed.data.permissions ?? r.permissions).length) {
+    bad(res, "Roles members pick themselves can't have permissions. Turn their permissions off first.");
     return;
   }
   if (parsed.data.permissions) {
@@ -1437,6 +1705,7 @@ constellationsRouter.patch("/:id/roles/:rid", changeLimiter, async (req, res) =>
       // The Member role is always gray.
       ...(parsed.data.color !== undefined && r.kind !== "member" ? { color: parsed.data.color } : {}),
       ...(parsed.data.permissions !== undefined ? { permissions: parsed.data.permissions } : {}),
+      ...(parsed.data.selfAssign !== undefined ? { selfAssign: parsed.data.selfAssign } : {}),
     })
     .where(eq(constellationRoles.id, r.id));
   await logModeration(s.constellationId, s.userId, "role_changed", null, { name: parsed.data.name ?? r.name });

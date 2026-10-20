@@ -139,7 +139,7 @@ export function SpeakerGlyph({ size = 16, color = N.faint, waves = 1 }: { size?:
 }
 
 /** A few small line icons the canvas uses that the app's icon set doesn't have. */
-export function Glyph({ name, size = 18, color = N.ink }: { name: 'crown' | 'shield' | 'timer' | 'leave' | 'kick' | 'ban' | 'grip' | 'lock' | 'mention' | 'list' | 'micSlash' | 'eyeOff' | 'pin' | 'external' | 'screen' | 'watch' | 'markRead' | 'invite'; size?: number; color?: string }) {
+export function Glyph({ name, size = 18, color = N.ink }: { name: 'crown' | 'shield' | 'timer' | 'leave' | 'kick' | 'ban' | 'grip' | 'lock' | 'mention' | 'list' | 'micSlash' | 'eyeOff' | 'pin' | 'external' | 'screen' | 'watch' | 'markRead' | 'invite' | 'inbox'; size?: number; color?: string }) {
   const fillOnly = name === 'crown' || name === 'grip'
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={fillOnly ? color : 'none'} stroke={fillOnly ? 'none' : color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -169,6 +169,7 @@ export function Glyph({ name, size = 18, color = N.ink }: { name: 'crown' | 'shi
       {name === 'screen' ? <Path d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 20h8M12 16v4" /> : null}
       {name === 'watch' ? <Path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 21h8M10 9l4 2-4 2z" /> : null}
       {name === 'markRead' ? <Path d="M2 12l5 5L18 6M12 15l2 2L22 9" /> : null}
+      {name === 'inbox' ? <Path d="M3 13h5l1.5 3h5L16 13h5M5.5 5h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z" /> : null}
       {name === 'invite' ? <Path d="M2.5 19.5a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6M12.5 8a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z" /> : null}
     </Svg>
   )

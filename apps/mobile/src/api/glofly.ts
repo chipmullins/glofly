@@ -103,13 +103,15 @@ export const loadMessages = (id: string, before?: string) => request<MessagePage
 /** Messages containing these words (newest first), in one chat or all; `before` = the last result you have. */
 export const searchMessages = (q: string, chat?: string, before?: string) =>
   request<MessageSearchPage>('GET', `/conversations/messages/search?q=${enc(q)}${chat ? `&chat=${chat}` : ''}${before ? `&before=${before}` : ''}`)
-export const sendMessage = async (id: string, body: string, replyToId?: string, attachmentIds?: string[], lantern?: boolean) =>
+export const sendMessage = async (id: string, body: string, replyToId?: string, attachmentIds?: string[], lantern?: boolean, clientId?: string) =>
   map(
     await request<{ message: Message }>('POST', `/conversations/${id}/messages`, {
       body,
       ...(replyToId ? { replyToId } : {}),
       ...(attachmentIds?.length ? { attachmentIds } : {}),
       ...(lantern ? { lantern: true } : {}),
+      // 0.7.5: the same on a retry, so the server never makes a copy
+      ...(clientId ? { clientId } : {}),
     }),
     (d) => d.message,
   )

@@ -64,10 +64,21 @@ export function eventText(
         ? `${actor} added ${added} to the call. It carries on in a new group.`
         : `${actor} added ${added} to the call`
     }
+    case 'cxJoined':
+      return actorId === meId ? `You joined ${event.name}` : `${nameOf(actorId)} joined ${event.name}. Say hi!`
+    case 'cxMilestone':
+      return milestoneText(event)
     default:
       // A line from a newer version of Glofly: nothing to show rather than breaking the chat.
       return ''
   }
+}
+
+/** "Firefly Guild just reached 100 members!" / "Firefly Guild turns 1 today!" */
+export function milestoneText(event: { name: string; members: number | null; years: number | null }): string {
+  const name = event.name.slice(0, 60)
+  if (event.years) return `🎂 ${name} turns ${event.years} today!`
+  return `🎉 ${name} just reached ${event.members ?? 0} members!`
 }
 
 /** "1 min", "12 min", "1 hr 5 min", "40 sec" */

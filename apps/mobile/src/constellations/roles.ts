@@ -1,15 +1,18 @@
-import { ROLE_COLORS, type ConstellationDetail, type ConstellationMember, type ConstellationPermission, type ConstellationRole, type Nebula } from '@glofly/shared'
+import { ROLE_COLORS, playingFor, type ConstellationDetail, type ConstellationMember, type ConstellationPermission, type ConstellationRole, type Nebula } from '@glofly/shared'
 import { hexA } from './ui'
 import type { RoleLook } from './NebulaRow'
 
 // What someone can do in a constellation, read from what the server sent (the server checks every
 // action again; this only decides what to show). The same rules as the desktop app.
 
-/** The highest role someone has (Owner first, Member last). */
+/**
+ * The highest role someone has (Owner first, Member last). 0.7.5: roles people pick themselves
+ * are labels and never count here (like the server).
+ */
 export function topRole(c: ConstellationDetail, userId: string): ConstellationRole {
   if (c.ownerId === userId) return c.roles.find((r) => r.kind === 'owner') ?? c.roles[0]
   const held = c.members.find((m) => m.user.id === userId)?.roleIds ?? []
-  const roles = c.roles.filter((r) => r.kind === 'member' || held.includes(r.id))
+  const roles = c.roles.filter((r) => r.kind === 'member' || (held.includes(r.id) && !r.selfAssign))
   return roles.sort((a, b) => b.position - a.position)[0] ?? c.roles[c.roles.length - 1]
 }
 
@@ -52,7 +55,7 @@ export function memberGroups(c: ConstellationDetail, query = ''): { key: string;
     placed.add(owner.user.id)
     if (match(owner)) out.push({ key: 'owner', title: 'Owner', color: ROLE_COLORS.ember.dark, members: [owner] })
   }
-  const roles = [...c.roles].filter((r) => r.kind !== 'owner' && r.kind !== 'member').sort((a, b) => b.position - a.position)
+  const roles = [...c.roles].filter((r) => r.kind !== 'owner' && r.kind !== 'member' && !r.selfAssign).sort((a, b) => b.position - a.position)
   for (const role of roles) {
     const list = c.members.filter((m) => !placed.has(m.user.id) && topRole(c, m.user.id).id === role.id)
     list.forEach((m) => placed.add(m.user.id))
@@ -73,6 +76,8 @@ export function activityOf(c: ConstellationDetail, m: ConstellationMember): { te
     if (v.sharing.includes(m.user.id)) return { text: `Streaming in ${n?.name ?? 'voice'}`, voice: true }
     return { text: `In ${n?.name ?? 'voice'}`, voice: true }
   }
+  // 0.7.5: the game and how long ("Rocket League · 42 min")
+  if (m.playing) return { text: `${m.playing.name} · ${playingFor(m.playing.since)}`, voice: false }
   return m.activity ? { text: m.activity, voice: false } : null
 }
 

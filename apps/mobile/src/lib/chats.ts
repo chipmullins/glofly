@@ -95,3 +95,14 @@ export function pinTimesFor(ids: string[], all: ConversationSummary[]): Record<s
   const base = Math.min(...times.map((t) => Date.parse(t)))
   return Object.fromEntries(ids.map((id, i) => [id, new Date(base + i).toISOString()]))
 }
+
+/**
+ * 0.7.5: the chat a new message just bumped to the top of the list (it was lower down before),
+ * for its glide and glow. Null when the top didn't change or it's a brand-new chat.
+ */
+export function bumpedToTop(before: string[] | null, after: string[]): string | null {
+  if (!before || after.length < 2) return null
+  const top = after[0]
+  if (top === before[0]) return null
+  return before.indexOf(top) > 0 ? top : null
+}

@@ -52,38 +52,43 @@ export function ListSkeleton({
   )
 }
 
-// Theirs on the left, mine on the right, in a believable rhythm.
-const BUBBLES: { mine: boolean; width: number; tall?: boolean }[] = [
-  { mine: false, width: 46 },
-  { mine: false, width: 30 },
-  { mine: true, width: 38 },
-  { mine: false, width: 56, tall: true },
-  { mine: true, width: 26 },
-  { mine: true, width: 44 },
-  { mine: false, width: 34 }
+// Like Glofly's real message rows: avatar, then a name line and one or two lines of text.
+// Some rows are follow-ups from the same person (no avatar or name), like a real chat.
+const MESSAGE_ROWS: { name: number; lines: number[] }[] = [
+  { name: 22, lines: [58] },
+  { name: 0, lines: [40] },
+  { name: 18, lines: [72, 46] },
+  { name: 26, lines: [34] },
+  { name: 0, lines: [52] },
+  { name: 20, lines: [64] },
+  { name: 24, lines: [44, 28] }
 ]
 
-/** Alternating message bubbles: a chat opening for the first time. */
+/** Message rows: a chat opening for the first time. */
 export function MessagesSkeleton(): React.JSX.Element | null {
   const show = useShowAfterDelay()
   if (!show) return null
   return (
     <div className="skeleton-messages" role="status" aria-label="Loading messages">
-      {BUBBLES.map((b, i) => (
+      {MESSAGE_ROWS.map((r, i) => (
         <div
           key={i}
-          className={
-            b.mine ? 'skeleton-bubble-row skeleton-bubble-row--mine' : 'skeleton-bubble-row'
-          }
+          className={r.name ? 'skeleton-message' : 'skeleton-message skeleton-message--follow'}
           aria-hidden="true"
         >
-          {!b.mine && <span className="skeleton skeleton-circle skeleton-circle--small" />}
-          <span
-            className={
-              b.tall ? 'skeleton skeleton-bubble skeleton-bubble--tall' : 'skeleton skeleton-bubble'
-            }
-            style={{ width: `${b.width}%` }}
-          />
+          {r.name > 0 && <span className="skeleton skeleton-circle" />}
+          <span className="skeleton-lines">
+            {r.name > 0 && (
+              <span className="skeleton skeleton-line" style={{ width: `${r.name}%` }} />
+            )}
+            {r.lines.map((w, j) => (
+              <span
+                key={j}
+                className="skeleton skeleton-line skeleton-line--text"
+                style={{ width: `${w}%` }}
+              />
+            ))}
+          </span>
         </div>
       ))}
     </div>

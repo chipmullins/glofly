@@ -37,7 +37,13 @@ export async function standingOf(constellationId: string, userId: string): Promi
     .where(and(eq(constellationMembers.constellationId, constellationId), eq(constellationMembers.userId, userId)));
   if (!row || row.takenDownAt) return null;
   const roles = await db
-    .select({ id: constellationRoles.id, kind: constellationRoles.kind, position: constellationRoles.position, permissions: constellationRoles.permissions })
+    .select({
+      id: constellationRoles.id,
+      kind: constellationRoles.kind,
+      position: constellationRoles.position,
+      permissions: constellationRoles.permissions,
+      selfAssign: constellationRoles.selfAssign,
+    })
     .from(constellationRoles)
     .where(eq(constellationRoles.constellationId, constellationId));
   const held = await db
@@ -45,7 +51,9 @@ export async function standingOf(constellationId: string, userId: string): Promi
     .from(constellationMemberRoles)
     .where(and(eq(constellationMemberRoles.constellationId, constellationId), eq(constellationMemberRoles.userId, userId)));
   const heldIds = new Set(held.map((h) => h.roleId));
-  const mine = roles.filter((r) => r.kind === "member" || heldIds.has(r.id));
+  // 0.7.5: roles members pick themselves ("What do you play?") are labels only: they never give
+  // permissions or rank, whatever is stored on them.
+  const mine = roles.filter((r) => r.kind === "member" || (heldIds.has(r.id) && !r.selfAssign));
   const owner = row.ownerId === userId;
   const permissions = new Set<ConstellationPermission>();
   for (const r of mine) for (const p of r.permissions) if (isPermission(p)) permissions.add(p);
@@ -76,7 +84,13 @@ export async function ranksOf(constellationId: string, userIds: string[]): Promi
     .select({ userId: constellationMemberRoles.userId, position: constellationRoles.position })
     .from(constellationMemberRoles)
     .innerJoin(constellationRoles, eq(constellationRoles.id, constellationMemberRoles.roleId))
-    .where(and(eq(constellationMemberRoles.constellationId, constellationId), inArray(constellationMemberRoles.userId, userIds)));
+    .where(
+      and(
+        eq(constellationMemberRoles.constellationId, constellationId),
+        inArray(constellationMemberRoles.userId, userIds),
+        eq(constellationRoles.selfAssign, false),
+      ),
+    );
   for (const r of rows) out.set(r.userId, Math.max(out.get(r.userId) ?? 0, r.position));
   return out;
 }
