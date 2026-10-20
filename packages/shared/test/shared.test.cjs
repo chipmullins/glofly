@@ -308,3 +308,31 @@ test('0.5.2 group calls on your own: the countdown', () => {
   assert.equal(s.soloCountdown(new Date(now + 41_200).toISOString(), now), '0:42')
   assert.equal(s.soloCountdown(new Date(now - 5_000).toISOString(), now), '0:00')
 })
+
+test('0.7.5 photo viewer: photos, when, zoom', () => {
+  const img = (id, extra = {}) => ({ id, kind: 'image', name: id, size: 1, width: 100, height: 50, ...extra })
+  const msgs = [
+    { id: 'b', senderId: 'u', createdAt: '2026-10-17T12:00:00Z', deleted: false, attachments: [img('p2'), img('s', { sticker: true })] },
+    { id: 'a', senderId: 'u', createdAt: '2026-10-16T12:00:00Z', deleted: false, attachments: [img('p1'), { ...img('f'), kind: 'file' }] },
+    { id: 'c', senderId: 'u', createdAt: '2026-10-18T12:00:00Z', deleted: true, attachments: [img('gone')] }
+  ]
+  assert.deepEqual(s.viewerPhotos(msgs).map((p) => p.photo.id), ['p1', 'p2'])
+  const now = new Date(2026, 9, 20, 9, 0)
+  assert.equal(s.photoWhen(new Date(2026, 9, 20, 8, 5).toISOString(), now), 'Today 8:05 AM')
+  assert.equal(s.photoWhen(new Date(2026, 9, 19, 18, 42).toISOString(), now), 'Yesterday 6:42 PM')
+  assert.equal(s.photoWhen(new Date(2026, 9, 17, 18, 42).toISOString(), now), 'Saturday 6:42 PM')
+  assert.equal(s.photoWhen(new Date(2026, 9, 3, 0, 15).toISOString(), now), 'Oct 3, 12:15 AM')
+  assert.equal(s.photoWhen(new Date(2025, 9, 3, 12, 0).toISOString(), now), 'Oct 3, 2025, 12:00 PM')
+  assert.equal(s.photoSubtitle(new Date(2026, 9, 17, 18, 42).toISOString(), 'Weekend Hike', now), 'Saturday 6:42 PM · in Weekend Hike')
+  assert.equal(s.photoSubtitle(new Date(2026, 9, 17, 18, 42).toISOString(), null, now), 'Saturday 6:42 PM')
+  assert.equal(s.fitScale({ w: 2000, h: 1000 }, { w: 1000, h: 1000 }), 0.5)
+  assert.equal(s.fitScale({ w: 200, h: 100 }, { w: 1000, h: 1000 }), 1)
+  assert.equal(s.stepZoom(0.5, 0.5, 1), 0.625)
+  assert.equal(s.stepZoom(0.6, 0.5, -1), null)
+  assert.equal(s.stepZoom(8, 0.5, 1), 8)
+  assert.equal(s.toggleZoom(null, 0.5), 1)
+  assert.equal(s.toggleZoom(null, 1), 2)
+  assert.equal(s.toggleZoom(1, 0.5), null)
+  assert.deepEqual(s.clampPan({ x: 900, y: -900 }, { w: 2000, h: 1000 }, 1, { w: 1000, h: 800 }), { x: 500, y: -100 })
+  assert.deepEqual(s.zoomAround({ x: 0, y: 0 }, 1, 2, { x: 100, y: 0 }), { x: -100, y: 0 })
+})

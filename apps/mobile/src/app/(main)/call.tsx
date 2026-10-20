@@ -15,6 +15,8 @@ import { timer } from '@/lib/format'
 import { allowRotation, lockPortrait } from '@/lib/orientation'
 import { useNow } from '@/lib/hooks'
 import { Avatar } from '@/ui/Avatar'
+import Reanimated from 'react-native-reanimated'
+import { GlowFace, TalkingRing, TileGlow, tileEntering, tileExiting, tileLayout } from '@/calls/TileGlow'
 import { BottomSheet, chooseFrom } from '@/ui/dialogs'
 import { Icon, type IconName } from '@/ui/icons'
 import { Button, Text } from '@/ui/kit'
@@ -388,22 +390,29 @@ function TileView({ tile, person, w, h, ringing, onPress, fill, pip }: { tile: T
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={`${person.displayName}${ringing ? ', ringing' : ''}${tile?.micMuted ? ', muted' : ''}${onPress ? '. Tap to pin' : ''}`}
       onPress={onPress}
-      style={{ width: w, height: h, borderRadius: 16, overflow: 'hidden', backgroundColor: callColors.tile, alignItems: 'center', justifyContent: 'center', borderWidth: talking ? 3 : 0, borderColor: '#FFA54A' }}
+      style={{ width: w, height: h, borderRadius: 16, overflow: 'hidden', backgroundColor: callColors.tile, alignItems: 'center', justifyContent: 'center' }}
     >
       {tile?.camera ? (
         // fill: the video covers the tile (edges trimmed) like FaceTime, instead of a narrow strip with
         // bars beside it. A pinned (big) tile shows the whole picture.
         <CallVideo track={tile.camera} mirror={tile.local && frontCamera} contain={!fill} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} pip={pip && !tile.local} />
       ) : (
-        <View style={{ opacity: ringing ? 0.85 : 1, borderRadius: 60, boxShadow: ringing ? '0 0 24px rgba(255,179,71,0.6)' : undefined }}>
-          <Avatar user={person} size={Math.min(w, h) * 0.42} />
-        </View>
+        <>
+          <TileGlow person={person} mine={tile?.local} />
+          <View style={{ opacity: ringing ? 0.85 : 1, borderRadius: 60, boxShadow: ringing ? '0 0 24px rgba(255,179,71,0.6)' : undefined }}>
+            <GlowFace size={Math.min(w, h) * 0.42}>
+              <Avatar user={person} size={Math.min(w, h) * 0.42} />
+            </GlowFace>
+          </View>
+        </>
       )}
+      {talking ? <TalkingRing radius={16} /> : null}
       <View style={{ position: 'absolute', left: 8, bottom: 8, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, height: 24, borderRadius: 12, backgroundColor: 'rgba(18,13,11,0.6)' }}>
         {tile?.micMuted ? <Icon name="micOff" size={12} color="#FFF" /> : null}
         <Text size={12} weight="bold" style={{ color: '#FFF' }} numberOfLines={1}>
           {tile?.local ? 'You' : person.displayName.split(' ')[0]}
           {ringing ? ' · Ringing…' : ''}
+          {talking && !tile?.micMuted && !tile?.local ? <Text size={12} weight="medium" style={{ color: '#FFD27A' }}>{' · talking'}</Text> : null}
         </Text>
       </View>
     </Pressable>
@@ -426,7 +435,9 @@ function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom, left = 0, 
         <TileView tile={pin.tile} person={personOf(pin.id)} w={landscape ? width - 20 - 10 - stripW : width - 20} h={landscape ? available - 20 : available - 130} ringing={pin.ringing} onPress={() => onPin(pin.id)} pip={pin.id === pipId} />
         <ScrollView horizontal={!landscape} contentContainerStyle={{ gap: 8 }}>
           {rest.map((x) => (
-            <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={landscape ? stripW : 130} h={100} ringing={x.ringing} onPress={() => onPin(x.id)} fill pip={x.id === pipId} />
+            <Reanimated.View key={x.id} layout={tileLayout} entering={tileEntering} exiting={tileExiting}>
+              <TileView tile={x.tile} person={personOf(x.id)} w={landscape ? stripW : 130} h={100} ringing={x.ringing} onPress={() => onPin(x.id)} fill pip={x.id === pipId} />
+            </Reanimated.View>
           ))}
         </ScrollView>
       </View>
@@ -456,7 +467,9 @@ function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom, left = 0, 
   return (
     <ScrollView style={{ position: 'absolute', top, left, right, bottom }} contentContainerStyle={{ padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap, justifyContent: 'center', minHeight: available, alignContent: 'center' }}>
       {all.map((x) => (
-        <TileView key={x.id} tile={x.tile} person={personOf(x.id)} w={w} h={h} ringing={x.ringing} onPress={() => onPin(x.id)} fill pip={x.id === pipId} />
+        <Reanimated.View key={x.id} layout={tileLayout} entering={tileEntering} exiting={tileExiting}>
+          <TileView tile={x.tile} person={personOf(x.id)} w={w} h={h} ringing={x.ringing} onPress={() => onPin(x.id)} fill pip={x.id === pipId} />
+        </Reanimated.View>
       ))}
     </ScrollView>
   )

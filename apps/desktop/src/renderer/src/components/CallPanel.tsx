@@ -26,6 +26,8 @@ import { CallAudioPanel, PersonVolumeMenu } from './CallAudio'
 import ContextMenu, { MenuItem } from './ContextMenu'
 import { PinIcon } from './ChatList'
 import Avatar from './Avatar'
+import TileGlow from './TileGlow'
+import { flipKey, useFlip } from '../lib/flip'
 import {
   AddFriendIcon,
   CloseIcon,
@@ -260,12 +262,14 @@ function Tile({
         'call-tile',
         tile.me && 'call-tile--me',
         speaking && 'call-tile--speaking',
+        speaking && !tile.muted && 'tile-talking',
         actions?.pin?.pinned && 'call-tile--pinned',
         className
       ]
         .filter(Boolean)
         .join(' ')}
       data-full={ringing ? undefined : person.id}
+      data-flip={person.id}
       title={
         onMenu
           ? tile.remote
@@ -286,28 +290,35 @@ function Tile({
       {camera ? (
         <TrackVideo track={camera} mirror={mirror} fit={tile.me && isTouch ? 'contain' : 'auto'} />
       ) : (
-        <div className="call-tile-face">
-          <div
-            className={ringing ? 'call-glow-face' : 'call-glow-face call-glow-face--still'}
-            style={{ width: ringing ? ringFace : face, height: ringing ? ringFace : face }}
-          >
-            {ringing && <span className="call-ring" aria-hidden="true" />}
-            {ringing && <span className="call-ring call-ring--late" aria-hidden="true" />}
-            <Avatar
-              id={person.id}
-              name={person.displayName}
-              avatarVersion={person.avatarVersion}
-              size={ringing ? ringFace : face}
-              className={ringing ? 'call-glow-photo call-glow-photo--ringing' : 'call-glow-photo'}
-            />
-          </div>
-          {status && (
-            <div className="call-tile-status">
-              {face >= 96 && <strong>{person.displayName}</strong>}
-              <span>{status}</span>
+        <>
+          <TileGlow id={person.id} avatarVersion={person.avatarVersion} mine={tile.me} />
+          <div className="call-tile-face">
+            <div
+              className={ringing ? 'call-glow-face' : 'call-glow-face call-glow-face--still'}
+              style={{ width: ringing ? ringFace : face, height: ringing ? ringFace : face }}
+            >
+              {ringing && <span className="call-ring" aria-hidden="true" />}
+              {ringing && <span className="call-ring call-ring--late" aria-hidden="true" />}
+              <Avatar
+                id={person.id}
+                name={person.displayName}
+                avatarVersion={person.avatarVersion}
+                size={ringing ? ringFace : face}
+                className={
+                  ringing
+                    ? 'call-glow-photo call-glow-photo--ringing'
+                    : 'call-glow-photo tile-glow-face'
+                }
+              />
             </div>
-          )}
-        </div>
+            {status && (
+              <div className="call-tile-status">
+                {face >= 96 && <strong>{person.displayName}</strong>}
+                <span>{status}</span>
+              </div>
+            )}
+          </div>
+        </>
       )}
       <TileTag tile={tile} />
       {actions && (
@@ -371,6 +382,7 @@ function TileTag({ tile }: { tile: TileInfo }): React.JSX.Element {
         </span>
       )}
       {label}
+      {speaking && !muted && !tile.me && <span className="tile-talk-label">· talking</span>}
     </span>
   )
 }
@@ -1345,6 +1357,16 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   const overlay = layout === 'frame' || full
   const autoHide = overlay && prefs.callControls === 'hover'
   const { idle, wake } = useAutoHide(autoHide, panelRef)
+  // 0.7.5: tiles glide into place when someone joins or leaves (lib/flip.ts)
+  const mediaRef = useRef<HTMLDivElement>(null)
+  useFlip(
+    mediaRef,
+    flipKey(
+      tiles.map((t) => t.person.id),
+      // two side by side and the grid are the same kind of view: going 3 → 2 people slides too
+      layout === 'side' ? 'grid' : layout
+    )
+  )
   // On your own in a group call (0.5.2): the buttons stay showing during the last minute's notice.
   const soloEndsAt = group && inCall ? (call?.soloEndsAt ?? null) : null
   const [soloSoonFor, setSoloSoonFor] = useState<string | null>(null)
@@ -1730,6 +1752,7 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       )}
 
       <div
+        ref={mediaRef}
         className={`call-media call-media--${layout}`}
         style={
           {

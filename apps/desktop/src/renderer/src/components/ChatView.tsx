@@ -20,7 +20,8 @@ import { onMobile, presenceHeader } from '../lib/presence'
 import { clockTime, continuesGroup, dayLabel, isSameDay } from '../lib/time'
 import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
-import { MessageAttachments, PhotoViewer, UploadTray, type Upload } from './Attachments'
+import { MessageAttachments, UploadTray, type Upload } from './Attachments'
+import ChatPhotoViewer from './ChatPhotoViewer'
 import { attachmentSummary, looksLikeVideo } from '../lib/attachments'
 import {
   CallLineIcon,
@@ -70,7 +71,8 @@ import {
 } from './ChatExtras'
 import { isShortcutKey, shortcutLabel } from '../lib/platform'
 import { useVoiceRecorder, voiceTime, VOICE_MAX_MS, type Recorded } from '../lib/voice'
-import { ChevronIcon, MicIcon, WatchIcon } from './icons'
+import { MessagesSkeleton } from './Skeleton'
+import { ArrowDownIcon, ChevronIcon, MicIcon, WatchIcon } from './icons'
 import {
   isMuted,
   mentionQuery,
@@ -413,6 +415,11 @@ export default function ChatView({
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const stickToBottom = useRef(true)
+  /** 0.7.4 "Jump to latest": more than a screen up from the newest message */
+  const [farUp, setFarUp] = useState(false)
+  /** Messages from others that arrived while scrolled up (they don't pull the view down) */
+  const [newBelow, setNewBelow] = useState(0)
+  const newBelowRef = useRef(0)
   const keepScrollFrom = useRef<number | null>(null)
   const lastTypingSent = useRef(0)
   const typingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -507,7 +514,13 @@ export default function ChatView({
         rememberPeople(event.people)
         if (m.senderId !== me.id) {
           stopTyping(m.senderId)
-          void markRead()
+          if (stickToBottom.current) void markRead()
+          else {
+            // Reading further up: count it on the "Jump to latest" button instead, and mark
+            // read once they come back down.
+            newBelowRef.current += 1
+            setNewBelow(newBelowRef.current)
+          }
         }
       }
       if (event.type === 'message:updated' && event.message.conversationId === conversation.id) {
@@ -569,6 +582,20 @@ export default function ChatView({
     }
   }, [messages, pending, someoneTyping, replyingTo, conversation.partnerReadAt, windowSize])
 
+  /** Smoothly back to the newest message (the far-up part stops being drawn once there). */
+  function jumpToLatest(): void {
+    const list = listRef.current
+    if (!list) return
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    drawingBackUntil.current = 0
+    list.scrollTo({ top: list.scrollHeight, behavior: calm ? 'auto' : 'smooth' })
+    if (newBelowRef.current > 0) {
+      newBelowRef.current = 0
+      setNewBelow(0)
+      void markRead()
+    }
+  }
+
   async function loadOlder(): Promise<void> {
     if (loadingOlder || !hasMore || messages.length === 0) return
     setLoadingOlder(true)
@@ -589,7 +616,14 @@ export default function ChatView({
   function onScroll(): void {
     const list = listRef.current
     if (!list) return
-    stickToBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 120
+    const fromBottom = list.scrollHeight - list.scrollTop - list.clientHeight
+    stickToBottom.current = fromBottom < 120
+    setFarUp(fromBottom > list.clientHeight)
+    if (stickToBottom.current && newBelowRef.current > 0) {
+      newBelowRef.current = 0
+      setNewBelow(0)
+      void markRead()
+    }
     // Back at the newest: what's far above stops being drawn (it's still loaded).
     if (
       stickToBottom.current &&
@@ -2029,7 +2063,19 @@ export default function ChatView({
         />
       )}
 
-      <div className="chat-messages" ref={listRef} onScroll={onScroll}>
+      <div
+        className="chat-messages"
+        ref={listRef}
+        onScroll={onScroll}
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          if (e.key === 'End' && e.target === e.currentTarget && farUp) {
+            e.preventDefault()
+            jumpToLatest()
+          }
+        }}
+      >
+        {loading && messages.length === 0 && <MessagesSkeleton />}
         {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}
         {!loading && !hasMore && nebula && (
           <div className="chat-start cx-nebula-start">
@@ -2084,6 +2130,27 @@ export default function ChatView({
 
         {messageRows}
         {seenLine}
+      </div>
+
+      <div className="chat-jump-anchor">
+        {(farUp || newBelow > 0) && !loading && (
+          <button
+            type="button"
+            className={newBelow > 0 ? 'chat-jump chat-jump--new' : 'chat-jump'}
+            onClick={jumpToLatest}
+            aria-label={
+              newBelow > 0
+                ? `Jump to latest, ${newBelow} new ${newBelow === 1 ? 'message' : 'messages'}`
+                : 'Jump to latest'
+            }
+            title="Jump to latest (End)"
+          >
+            {newBelow > 0 && (
+              <span className="chat-jump-count">{newBelow > 99 ? '99+' : newBelow} new</span>
+            )}
+            <ArrowDownIcon size={18} />
+          </button>
+        )}
       </div>
 
       <div className="composer-area">
@@ -2518,10 +2585,15 @@ export default function ChatView({
       )}
 
       {viewing && (
-        <PhotoViewer
+        <ChatPhotoViewer
           conversationId={conversation.id}
-          photos={viewing.photos}
-          startIndex={viewing.index}
+          chatName={nebula ? nebula.name : isGroup ? title : null}
+          messages={messages}
+          start={viewing.photos[viewing.index]}
+          fallback={viewing.photos}
+          personOf={personOf}
+          nameOf={nameOf}
+          onShowInChat={jumpTo}
           onClose={() => setViewing(null)}
           onFailure={handleFailure}
         />

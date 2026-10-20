@@ -624,6 +624,8 @@ export function createBridge(): GloflyApi {
       clear: (key) => void clearNotification(key),
       badge: (count) => setBadge(count)
     },
+    // Browsers have no Jump List or Dock menu.
+    shortcuts: { take: async () => null },
     onEvent,
     games: {
       state: async () => NO_GAMES,
