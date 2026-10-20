@@ -312,6 +312,9 @@ const glofly: GloflyApi = {
     badge: (count: number, image: string | null) =>
       ipcRenderer.send('notifications:badge', count, image)
   },
+  shortcuts: {
+    take: () => ipcRenderer.invoke('shortcuts:take')
+  },
   onEvent: (listener: (event: GloflyEvent) => void) => {
     const handler = (_e: Electron.IpcRendererEvent, event: GloflyEvent): void => listener(event)
     ipcRenderer.on('glofly:event', handler)

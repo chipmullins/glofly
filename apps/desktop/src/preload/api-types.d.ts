@@ -271,11 +271,17 @@ export type LoginStepResult =
 export type QrPollResult =
   QrLoginState | { state: 'signed-in'; user: SignedInUser } | { state: 'error'; message: string }
 
+/** What a Jump List task or Dock menu item asks for (see `shortcuts`). */
+export type ShortcutAction =
+  'new-message' | 'status:online' | 'status:away' | 'status:dnd' | 'quiet-hours'
+
 export type GloflyEvent =
   | ServerEvent
   /** 0.7.3: pins changed in a chat; my own devices: marked unread / send-later list changed */
   | { type: 'pins:changed'; conversationId: string }
   | { type: 'conversation:unread'; conversationId: string; lastReadAt: string }
+  /** Jump List / Dock menu: call `shortcuts.take()` and do what it returns */
+  | { type: 'shortcut'; action: ShortcutAction }
   | { type: 'scheduled:changed'; conversationId: string }
   /** Push to talk: the chosen key went down or came up */
   | { type: 'ptt'; down: boolean }
@@ -776,6 +782,14 @@ export type GloflyApi = {
     clear: (key: string) => void
     /** The unread count on the taskbar icon; `image` is the badge drawn by the window. */
     badge: (count: number, image: string | null) => void
+  }
+  /**
+   * Jump List (Windows taskbar) and Dock menu (Mac) actions. On a `shortcut` event, and once
+   * when the signed-in screen is ready (Glofly may have been started by one), call take() and do
+   * what it returns: null means it was already done.
+   */
+  shortcuts: {
+    take: () => Promise<ShortcutAction | null>
   }
   /** Subscribe to live updates. Returns a function that unsubscribes. */
   onEvent: (listener: (event: GloflyEvent) => void) => () => void

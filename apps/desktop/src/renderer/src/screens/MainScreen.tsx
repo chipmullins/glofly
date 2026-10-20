@@ -11,6 +11,7 @@ import type {
   Message,
   MuteDuration,
   PublicUser,
+  ShortcutAction,
   SignedInUser,
   TeamNotice
 } from '../../../preload/api-types'
@@ -18,8 +19,11 @@ import fireflyImg from '../assets/firefly.png'
 import AddFriendDialog from '../components/AddFriendDialog'
 import Avatar, { AvatarFace } from '../components/Avatar'
 import ChatView from '../components/ChatView'
+import { ListSkeleton } from '../components/Skeleton'
 import ConfirmDialog from '../components/ConfirmDialog'
 import EditProfileDialog from '../components/EditProfileDialog'
+import WelcomeCard from '../components/WelcomeCard'
+import { noteInvited, welcomeHidden } from '../lib/welcome'
 import ProfileCard from '../components/ProfileCard'
 import {
   AddFriendIcon,
@@ -468,10 +472,15 @@ export default function MainScreen({
   }, [lists])
   const [notice, setNotice] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [adding, setAdding] = useState(false)
+  /** Add friend dialog: open at the search, or (0.7.4 welcome card) at "Invite your friends" */
+  const [adding, setAdding] = useState<false | 'search' | 'invite'>(false)
+  /** 0.7.4: the small welcome card above the friends list, hidden by the person */
+  const [welcomeOff, setWelcomeOff] = useState(() => welcomeHidden(user.id))
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  /** The chat list's first answer came back (until then it shows placeholders, never "no chats") */
+  const [chatsLoaded, setChatsLoaded] = useState(false)
   const [openChatId, setOpenChatId] = useState<string | null>(null)
   // Narrow windows (an iPad held upright, Split View; only in a browser, since the desktop app's
   // window is never that narrow): one pane at a time, the list or what's open, like the phone
@@ -493,6 +502,8 @@ export default function MainScreen({
   const [statusOpen, setStatusOpen] = useState(false)
   /** Settings, and the page it opens on (false = closed). */
   const [settingsOpen, setSettingsOpen] = useState<false | SettingsPage>(false)
+  /** Settings opened for one thing (the Jump List's "Quiet hours"): scrolled to it */
+  const [settingsFocus, setSettingsFocus] = useState<'quiet-hours' | undefined>(undefined)
   /** Message search: one chat (chatId) or all chats (null) */
   const [messageSearch, setMessageSearch] = useState<{
     chatId: string | null
@@ -675,6 +686,7 @@ export default function MainScreen({
       if (result.ok && retry && liveChanges.current !== seen) return load(false)
       if (result.ok) setConversations(result.data)
       else if (result.error === 'unauthorized') onSessionExpired()
+      setChatsLoaded(true)
     }
     await load(true)
   }, [onSessionExpired])
@@ -725,11 +737,12 @@ export default function MainScreen({
     )
   }, [])
 
-  // The unread count on the taskbar icon. Muted chats only count their @mentions of you.
-  const unreadTotal = conversations.reduce(
-    (sum, c) => sum + (isMuted(c) ? (c.mentionCount ?? 0) : c.unreadCount),
-    0
-  )
+  // The number on the taskbar icon / Dock: how many chats have something unread, like the
+  // sidebar shows them (0.7.4; it used to add up messages). A muted chat only counts when it
+  // has an unread @mention of you.
+  const unreadTotal = conversations.filter(
+    (c) => c.unreadCount > 0 && (!isMuted(c) || (c.mentionCount ?? 0) > 0)
+  ).length
   useEffect(() => {
     window.glofly.notifications.badge(unreadTotal, unreadTotal > 0 ? badgeImage(unreadTotal) : null)
   }, [unreadTotal])
@@ -1216,6 +1229,35 @@ export default function MainScreen({
     ? conversations.find((c) => c.id === groupPicker.groupId && c.kind === 'group')
     : undefined
 
+  // 0.7.4: Jump List (Windows) / Dock menu (Mac) actions. Glofly may have been started by one,
+  // so take() once now and again on each `shortcut` event (null: already handled).
+  const doShortcut = useRef<(action: ShortcutAction) => void>(() => {})
+  // Kept current after each render (its handlers read the latest state).
+  useEffect(() => {
+    doShortcut.current = (action) => {
+      if (action === 'new-message') {
+        setOpenChatId(null)
+        setPage('friends')
+        setFilter('all')
+        setNarrowList(false)
+      } else if (action === 'quiet-hours') {
+        setSettingsFocus('quiet-hours')
+        setSettingsOpen('general')
+      } else void changeStatus({ status: action.slice('status:'.length) as MyStatus['status'] })
+    }
+  })
+  useEffect(() => {
+    const take = (): void =>
+      void window.glofly.shortcuts
+        .take()
+        .then((action) => action && doShortcut.current(action))
+        .catch(() => {})
+    take()
+    return window.glofly.onEvent((event) => {
+      if (event.type === 'shortcut') take()
+    })
+  }, [])
+
   async function changeStatus(changes: Partial<MyStatus>): Promise<boolean> {
     const result = await window.glofly.status.set(changes)
     if (result.ok) {
@@ -1300,11 +1342,12 @@ export default function MainScreen({
   const outgoing = (lists?.outgoing ?? []).filter((p) => matches(p, search))
   const blocked = (lists?.blocked ?? []).filter((p) => matches(p, search))
   // A restricted (family-managed) account doesn't add or remove friends: their family does.
-  const openAdd = restricted ? undefined : (): void => setAdding(true)
+  const openAdd = restricted ? undefined : (): void => setAdding('search')
   const searching = search.trim().length > 0
 
   function renderTab(): React.ReactNode {
-    if (!lists) return null // first load: blank for a moment rather than a flash of "no friends"
+    // First load: shaped placeholders (after a moment) rather than a flash of "no friends".
+    if (!lists) return <ListSkeleton rows={7} label="Loading friends" />
 
     const friendRows = (people: FriendEntry[]): React.ReactNode =>
       people.map((p) => (
@@ -1351,6 +1394,25 @@ export default function MainScreen({
     }
 
     if (filter === 'all') {
+      // 0.7.4: a new account gets the welcome card (photo, a friend, invite friends) instead of
+      // "No friends yet"; with friends but no photo yet, a smaller one above the list.
+      const welcome = (compact: boolean): React.ReactNode => (
+        <WelcomeCard
+          userId={user.id}
+          firstName={user.displayName.trim().split(/\s+/)[0] || user.username}
+          hasPhoto={!!user.avatarVersion}
+          hasFriend={lists.friends.length > 0}
+          hasPendingRequest={lists.outgoing.length > 0}
+          compact={compact}
+          onPhoto={() => setEditingProfile(true)}
+          onAddFriend={() => setAdding('search')}
+          onInvite={() => setAdding('invite')}
+          onHide={() => setWelcomeOff(true)}
+        />
+      )
+      const showWelcome =
+        !restricted && !searching && !(user.avatarVersion && lists.friends.length > 0)
+      if (lists.friends.length === 0 && showWelcome) return welcome(false)
       if (lists.friends.length === 0) {
         return (
           <EmptyState
@@ -1369,6 +1431,7 @@ export default function MainScreen({
       // Grouped like the design: "Online — 3", then "Offline — 2".
       return (
         <>
+          {showWelcome && !welcomeOff && welcome(true)}
           {onlineFriends.length > 0 && (
             <section className="friend-group">
               <h2>Online — {onlineFriends.length}</h2>
@@ -1656,6 +1719,7 @@ export default function MainScreen({
           <ChatList
             me={user}
             conversations={conversations}
+            loaded={chatsLoaded}
             presence={presence}
             now={now}
             openChatId={openChatId}
@@ -1690,14 +1754,17 @@ export default function MainScreen({
               <span className="badge">{unreadTotal > 99 ? '99+' : unreadTotal}</span>
             )}
           </button>
-          <UpdateBar />
-          {isWeb && <WebNotifyBar />}
-          <AnnouncementBar announcement={announcement} />
-          <ConfirmEmailBar
-            userId={user.id}
-            onChangeEmail={() => setSettingsOpen('account')}
-            onSessionExpired={onSessionExpired}
-          />
+          {/* 0.7.4: one bar at a time, most important first (MainScreen.css .top-banners). */}
+          <div className="top-banners">
+            <AnnouncementBar announcement={announcement} />
+            <UpdateBar />
+            <ConfirmEmailBar
+              userId={user.id}
+              onChangeEmail={() => setSettingsOpen('account')}
+              onSessionExpired={onSessionExpired}
+            />
+            {isWeb && <WebNotifyBar />}
+          </div>
           {watchingId && friendsById.get(watchingId) && (
             <BroadcastViewer
               person={friendsById.get(watchingId)!}
@@ -1948,6 +2015,8 @@ export default function MainScreen({
         )}
         {adding && (
           <AddFriendDialog
+            startAt={adding}
+            onInvited={() => noteInvited(user.id)}
             onClose={() => setAdding(false)}
             onChanged={refresh}
             onSessionExpired={onSessionExpired}
@@ -2008,7 +2077,11 @@ export default function MainScreen({
           <SettingsDialog
             user={user}
             initialPage={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
+            scrollTo={settingsFocus}
+            onClose={() => {
+              setSettingsOpen(false)
+              setSettingsFocus(undefined)
+            }}
             onLogout={onLogout}
             onAccountDeleted={onAccountDeleted}
             onSessionExpired={onSessionExpired}

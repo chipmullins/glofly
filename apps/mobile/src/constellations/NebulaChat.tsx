@@ -27,6 +27,8 @@ import { cxSay, loadDetail, refreshCardsSoon, refreshNews } from '@/state/conste
 import { chooseFrom, confirm } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Spinner, Text } from '@/ui/kit'
+import { Skeleton } from '@/ui/Skeleton'
+import { JumpToLatestButton, useJumpToLatest } from '@/chat/JumpToLatest'
 import { openReport, pickEmoji } from '@/ui/sheets'
 import { measure, openContextMenu, type MenuItem } from './ContextMenu'
 import { openDmDock } from './dock'
@@ -35,7 +37,7 @@ import { openMemberSheet } from './Members'
 import { pickTimeout } from './moderation'
 import { NebulaRow, type NebulaRowInfo } from './NebulaRow'
 import { can, cantPost, isQuiet, outranks, roleLook } from './roles'
-import { useNebulaChat } from './useNebula'
+import { markNebulaRead, useNebulaChat } from './useNebula'
 import { openNebulaSheet } from './nebulaActions'
 import { CountBadge, FireflyMark, Glyph, N, SpeakerGlyph, StarGlyph } from './ui'
 
@@ -297,6 +299,9 @@ export function NebulaChat({
     }, 200)
   }
   const rowsRef = useRef(rows)
+  // Scrolled up more than a screen: a "Jump to latest" button (with "N new").
+  const newestFirst = useMemo(() => rows.map((r) => r.message), [rows])
+  const jumper = useJumpToLatest(newestFirst, meId, n.conversationId, list, () => void markNebulaRead(c.id, n))
   rowsRef.current = rows
 
   const latest = useRef({ react, jumpTo, messageMenu })
@@ -441,9 +446,11 @@ export function NebulaChat({
               </View>
             ) : null
           }
-          ListEmptyComponent={!messages?.loaded ? <View style={{ padding: 32, transform: [{ scaleY: -1 }] }}><Spinner /></View> : null}
+          ListEmptyComponent={!messages?.loaded ? <View style={{ transform: [{ scaleY: -1 }] }}><Skeleton kind="messages" night /></View> : null}
           renderItem={renderRow}
+          {...jumper.listProps}
         />
+        <JumpToLatestButton visible={jumper.away} count={jumper.count} onPress={jumper.jump} night />
         <ChatFireflies conversationId={n.conversationId} meId={meId} nameOf={nameOf} />
       </View>
       </GestureDetector>
@@ -560,7 +567,7 @@ export function NebulaChat({
         />
       ) : null}
       {pollOpen ? <PollSheet conversationId={n.conversationId} onDone={() => setPollOpen(false)} /> : null}
-      {viewer ? <PhotoViewer state={viewer} onClose={() => setViewer(null)} /> : null}
+      {viewer ? <PhotoViewer state={viewer} messages={messages?.list} chatName={n.name} onShowInChat={(mid) => void jumpTo(mid)} onClose={() => setViewer(null)} /> : null}
       {searching ? (
         <SearchPanel
           chatId={n.conversationId}

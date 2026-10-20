@@ -44,7 +44,7 @@ export default function QuietHoursSettings(): React.JSX.Element {
   const current: QuietHours = q ?? { ...QUIET_DEFAULT, tz: zone(), calls: false }
   return (
     <>
-      <div className="settings-row">
+      <div className="settings-row" id="settings-quiet-hours">
         <div className="settings-row-text">
           <span className="settings-row-label">Quiet hours</span>
           <span className="settings-row-desc">

@@ -1032,3 +1032,23 @@
   color: var(--glo-ink);
   font: inherit;
 }
+
+/* 0.7.4: opened from the Jump List / Dock menu for one setting: it glows once. */
+.settings-row--flash {
+  border-radius: 10px;
+  animation: settings-row-flash 1.6s ease-out 1;
+}
+@keyframes settings-row-flash {
+  0%,
+  35% {
+    background: var(--glo-accent-soft);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-row--flash {
+    animation: none;
+  }
+}

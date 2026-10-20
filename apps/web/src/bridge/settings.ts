@@ -27,7 +27,9 @@ type Saved = {
 const KEY = 'glofly:app-settings'
 
 const saved: Saved = {
-  theme: 'light',
+  // 0.7.4: a first visit follows the device's light / dark setting; browsers that used Glofly
+  // before keep light unless they picked something (load).
+  theme: 'system',
   accent: 'orange',
   textSize: 'default',
   sounds: {
@@ -145,7 +147,20 @@ function soundSettingOk(key: string, value: unknown): boolean {
   }
 }
 
+/** This browser has used Glofly before (it keeps a few small notes in localStorage). */
+function usedBefore(): boolean {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      if (/^glofly[.:]/.test(localStorage.key(i) ?? '')) return true
+    }
+  } catch {
+    // storage off: treat as new
+  }
+  return false
+}
+
 function load(): void {
+  if (usedBefore()) saved.theme = 'light'
   let value: Partial<Saved> | null = null
   try {
     value = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Saved> | null

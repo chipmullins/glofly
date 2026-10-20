@@ -32,6 +32,7 @@ import {
   ProfileIcon,
   SearchIcon
 } from './icons'
+import { ListSkeleton } from './Skeleton'
 
 export function PinIcon({ size = 13 }: { size?: number }): React.JSX.Element {
   return (
@@ -55,6 +56,8 @@ export function PinIcon({ size = 13 }: { size?: number }): React.JSX.Element {
 type ChatListProps = {
   me: PublicUser
   conversations: ConversationSummary[]
+  /** False until the first list arrives: placeholders show instead of "No conversations yet" */
+  loaded?: boolean
   presence: Record<string, Presence>
   now: number
   openChatId: string | null
@@ -365,6 +368,7 @@ function RowMenu({
 export default function ChatList({
   me,
   conversations,
+  loaded = true,
   presence,
   now,
   openChatId,
@@ -607,7 +611,9 @@ export default function ChatList({
         </span>
       </div>
 
-      {conversations.length === 0 ? (
+      {!loaded ? (
+        <ListSkeleton rows={6} label="Loading chats" />
+      ) : conversations.length === 0 ? (
         <div className="dm-empty">
           <ChatIcon />
           <p>No conversations yet. Messages and group chats with friends will show up here.</p>

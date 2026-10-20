@@ -58,6 +58,7 @@ import {
 import * as extras from './chatExtras'
 import * as social from './social'
 import { saveAttachment, showInFolder } from './files'
+import { handleSecondInstance, setupShortcuts, takePendingShortcut } from './shortcuts'
 import {
   clearAllNotifications,
   clearNotification,
@@ -215,8 +216,9 @@ if (isSecondWindow) app.setPath('userData', `${app.getPath('userData')}-second`)
 
 // Only one Glofly at a time (per sign-in folder). Opening it again, say while it's in the
 // tray, brings the existing window forward instead.
+// A Jump List task (Windows) arrives this way too: see shortcuts.ts.
 if (!app.requestSingleInstanceLock()) app.quit()
-else app.on('second-instance', () => showWindow())
+else app.on('second-instance', (_event, argv) => handleSecondInstance(argv))
 
 let mainWindow: BrowserWindow | null = null
 
@@ -1185,6 +1187,10 @@ function registerIpcHandlers(): void {
     return thenGoLive(qrPoll(id, secret))
   })
   // 0.7.3: two-step settings, quiet hours, pins, mark unread, send later.
+  // Jump List / Dock menu: the action waiting for the window (see shortcuts.ts).
+  ipcMain.handle('shortcuts:take', (event) =>
+    isAppUrl(event.senderFrame?.url ?? '') ? takePendingShortcut() : null
+  )
   ipcMain.handle('tools:request', (event, method: unknown, path: unknown, body: unknown) => {
     if (!fromApp(event) || !isToolsRequest(method, path, body)) return invalid
     return apiRequest(method, path as string, body ?? undefined)
@@ -1245,6 +1251,7 @@ app.whenReady().then(() => {
   startIdleWatch()
   createWindow()
   setUpTray(() => mainWindow, isMac ? menuBarIcon : icon)
+  setupShortcuts()
   startAutoUpdates()
   startGameWatch(shareActivity)
   // 0.7.0 game overlay (Windows): the same app page as the main window, opened with #overlay.

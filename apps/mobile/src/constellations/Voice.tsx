@@ -15,6 +15,8 @@ import { featured } from '@/calls/CallPip'
 import { useWatchStore } from '@/calls/watch'
 import { StartWatchSheet, WatchPortrait } from '@/calls/WatchMode'
 import { Avatar } from '@/ui/Avatar'
+import Reanimated from 'react-native-reanimated'
+import { GlowFace, TalkingRing, TileGlow, tileEntering, tileExiting, tileLayout } from '@/calls/TileGlow'
 import { Icon, type IconName } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { haptic } from './motion'
@@ -229,7 +231,9 @@ export function VoiceStage({ wide }: { wide?: boolean }) {
         ) : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: wide ? 10 : 8 }}>
           {tiles.map((t) => (
-            <VoiceTile key={t.userId} t={t} w={tileW} name={nameFor(t, meId, people)} person={t.userId === meId ? (useSession.getState().user as PublicUser) : personOf(t.userId)} me={t.userId === meId} mirror={t.local && s.frontCamera} modMuted={!!state?.muted.includes(t.userId)} onPress={() => !t.local && c && openMemberSheet(c.id, t.userId)} />
+            <Reanimated.View key={t.userId} layout={tileLayout} entering={tileEntering} exiting={tileExiting}>
+              <VoiceTile t={t} w={tileW} name={nameFor(t, meId, people)} person={t.userId === meId ? (useSession.getState().user as PublicUser) : personOf(t.userId)} me={t.userId === meId} mirror={t.local && s.frontCamera} modMuted={!!state?.muted.includes(t.userId)} onPress={() => !t.local && c && openMemberSheet(c.id, t.userId)} />
+            </Reanimated.View>
           ))}
         </View>
         {modMuted ? (
@@ -283,13 +287,22 @@ function VoiceTile({ t, w, name, person, me, mirror, modMuted, onPress }: { t: T
       accessibilityRole={me ? undefined : 'button'}
       accessibilityLabel={`${name}${talking ? ', talking' : ''}${t.micMuted || modMuted ? ', muted' : ''}${t.camera ? ', camera on' : ''}`}
       onPress={me ? undefined : onPress}
-      style={{ width: w, height: h, borderRadius: 14, overflow: 'hidden', backgroundColor: talking ? '#3a2418' : N.card2, alignItems: 'center', justifyContent: 'center', borderWidth: talking ? 2 : 0, borderColor: N.amber, boxShadow: talking ? '0 0 16px rgba(255,165,74,0.45)' : undefined }}
+      style={{ width: w, height: h, borderRadius: 14, overflow: 'hidden', backgroundColor: N.card2, alignItems: 'center', justifyContent: 'center' }}
     >
-      {t.camera ? <CallVideo track={t.camera} mirror={mirror} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} /> : me ? <Face user={person} size={46} me /> : <Avatar user={person} size={46} />}
+      {t.camera ? (
+        <CallVideo track={t.camera} mirror={mirror} style={{ position: 'absolute', top: 0, left: 0, width: w, height: h }} />
+      ) : (
+        <>
+          <TileGlow person={person} mine={me} />
+          <GlowFace size={46}>{me ? <Face user={person} size={46} me /> : <Avatar user={person} size={46} />}</GlowFace>
+        </>
+      )}
+      {talking ? <TalkingRing radius={14} /> : null}
       <View style={{ position: 'absolute', left: 8, bottom: 6, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.55)' }}>
         {t.micMuted || modMuted ? <Icon name="micOff" size={11} color={modMuted ? N.amber : '#fff'} /> : null}
         <Text size={11} weight="bold" style={{ color: '#fff' }}>
           {name}
+          {talking && !me ? <Text size={11} weight="medium" style={{ color: '#FFD27A' }}>{' · talking'}</Text> : null}
         </Text>
       </View>
     </Pressable>

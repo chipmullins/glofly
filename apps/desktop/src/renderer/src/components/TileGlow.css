@@ -1,0 +1,86 @@
+/* Cameras-off tiles (CallScreen.dc.html): blurred glow + vignette, under the face and name. */
+
+.tile-glow {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+.tile-glow-fill {
+  position: absolute;
+  inset: -30%;
+  width: 160%;
+  height: 160%;
+  object-fit: cover;
+  filter: blur(42px) saturate(1.15);
+  opacity: 0.85;
+  /* its own layer: the talking pulse repaints the tile, never this blur */
+  will-change: transform;
+  transform: translateZ(0);
+}
+.tile-glow-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 45%,
+    rgba(28, 18, 16, 0) 0%,
+    rgba(28, 18, 16, 0.55) 100%
+  );
+}
+/* Small tiles (beside a shared screen): a lighter blur so it doesn't turn into mud */
+.call-tile--small .tile-glow-fill,
+.cx-voice-tiles .tile-glow-fill {
+  filter: blur(24px) saturate(1.15);
+}
+
+/* The round photo on top: a soft white ring and a shadow */
+.tile-glow-face {
+  position: relative;
+  z-index: 1;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.25),
+    0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Talking: an accent ring and an outer glow that breathes */
+@keyframes tile-talk-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px #ffa54a,
+      0 0 22px 4px rgba(255, 165, 74, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px #ffa54a,
+      0 0 32px 8px rgba(255, 165, 74, 0.55);
+  }
+}
+.tile-talking {
+  animation: tile-talk-pulse 1.6s ease-in-out infinite;
+}
+.tile-talk-label {
+  font-weight: 500;
+  color: #ffd27a;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile-talking {
+    animation: none;
+    box-shadow:
+      0 0 0 3px #ffa54a,
+      0 0 28px 6px rgba(255, 165, 74, 0.45);
+  }
+}
+
+/* CallPanel: the face and its status sit above the glow; the still photo gets the ring */
+.call-tile-face {
+  position: relative;
+  z-index: 1;
+}
+.call-glow-face--still .call-glow-photo.tile-glow-face {
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.25),
+    0 10px 30px rgba(0, 0, 0, 0.35);
+}

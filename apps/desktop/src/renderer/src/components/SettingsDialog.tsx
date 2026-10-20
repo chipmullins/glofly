@@ -50,6 +50,8 @@ type SettingsDialogProps = {
   onAccountDeleted: (deleteAfter: string) => void
   /** Which page to open on (General unless said otherwise). */
   initialPage?: SettingsPage
+  /** Scrolled into view once open (the Jump List / Dock menu's "Quiet hours") */
+  scrollTo?: 'quiet-hours'
 }
 
 export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'about'
@@ -556,9 +558,20 @@ export default function SettingsDialog({
   onLogout,
   onSessionExpired,
   onAccountDeleted,
-  initialPage = 'general'
+  initialPage = 'general',
+  scrollTo
 }: SettingsDialogProps): React.JSX.Element {
   const [page, setPage] = useState<Page>(initialPage)
+  useEffect(() => {
+    if (!scrollTo) return
+    // The row is there once the page has drawn (its settings load first).
+    const timer = setTimeout(() => {
+      const row = document.getElementById(`settings-${scrollTo}`)
+      row?.scrollIntoView({ block: 'center' })
+      row?.classList.add('settings-row--flash')
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [scrollTo])
   const [settings, setSettings] = useState<PrivacySettings | null>(null)
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null)
   const [notice, setNotice] = useState<string | null>(null)

@@ -7,6 +7,8 @@ import { ScreenPicker, TrackVideo } from '../components/CallPanel'
 import { StartWatchDialog, WatchStage } from '../components/WatchTogether'
 import { CallAudioPanel, PersonVolumeMenu } from '../components/CallAudio'
 import { AvatarFace } from '../components/Avatar'
+import TileGlow, { FlipBox } from '../components/TileGlow'
+import { flipKey } from '../lib/flip'
 import { colorsFor } from '../lib/avatarColors'
 import { isWeb, web } from '../lib/platform'
 import { voiceLine } from '@glofly/shared/constellations'
@@ -56,6 +58,7 @@ function TileFace({
       ]
         .filter(Boolean)
         .join(' ')}
+      data-flip={tile.person.id}
       aria-label={`${tile.me ? 'You' : tile.person.displayName}${tile.muted ? ', muted' : ''}${tile.speaking && !tile.muted ? ', talking' : ''}`}
       onContextMenu={
         onMenu
@@ -69,26 +72,31 @@ function TileFace({
       {tile.camera ? (
         <TrackVideo track={tile.camera} mirror={tile.me} />
       ) : (
-        <span
-          className="cx-tile-face"
-          style={{
-            width: size,
-            height: size,
-            background: bg,
-            color: fg,
-            fontSize: large ? 32 : 22
-          }}
-        >
-          <AvatarFace
-            id={tile.person.id}
-            name={tile.person.displayName}
-            avatarVersion={tile.person.avatarVersion}
-          />
-        </span>
+        <>
+          <TileGlow id={tile.person.id} avatarVersion={tile.person.avatarVersion} mine={tile.me} />
+          <span
+            className="cx-tile-face tile-glow-face"
+            style={{
+              width: size,
+              height: size,
+              background: bg,
+              color: fg,
+              fontSize: large ? 32 : 22
+            }}
+          >
+            <AvatarFace
+              id={tile.person.id}
+              name={tile.person.displayName}
+              avatarVersion={tile.person.avatarVersion}
+            />
+          </span>
+        </>
       )}
       <span className="cx-tile-tag">
         {tile.me ? 'You' : tile.person.displayName.split(/\s+/)[0]}
-        {tile.speaking && !tile.muted && !tile.me ? ' · Talking' : ''}
+        {tile.speaking && !tile.muted && !tile.me && (
+          <span className="tile-talk-label">· talking</span>
+        )}
         {tile.muted && (
           <svg
             width="12"
@@ -352,7 +360,11 @@ export default function VoiceStage({
       )}
       <div className={media ? 'cx-voice-stage' : 'cx-voice-stage cx-voice-stage--grid'}>
         {media}
-        <div
+        <FlipBox
+          flip={flipKey(
+            tiles.map((t) => t.person.id),
+            media ? 'tiles' : 'grid'
+          )}
           className={media ? 'cx-voice-tiles' : 'cx-voice-grid'}
           data-count={Math.min(tiles.length, 9)}
           style={
@@ -372,7 +384,7 @@ export default function VoiceStage({
               onMenu={t.me ? undefined : (x, y) => setVolumeFor({ person: t.person, x, y })}
             />
           ))}
-        </div>
+        </FlipBox>
       </div>
 
       <div role="toolbar" aria-label="Voice controls" className="cx-voice-controls">

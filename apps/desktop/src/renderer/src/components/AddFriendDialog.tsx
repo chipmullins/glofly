@@ -12,6 +12,10 @@ type AddFriendDialogProps = {
   onSessionExpired: () => void
   /** Opens a chat with a friend from the results. */
   onMessage: (userId: string) => void
+  /** 0.7.4: where the cursor starts: the username search, or the invite-by-email box */
+  startAt?: 'search' | 'invite'
+  /** 0.7.4: an invite went out (the welcome card ticks "Invite friends") */
+  onInvited?: () => void
 }
 
 function Highlight({ text, query }: { text: string; query: string }): React.JSX.Element {
@@ -30,7 +34,9 @@ export default function AddFriendDialog({
   onClose,
   onChanged,
   onSessionExpired,
-  onMessage
+  onMessage,
+  startAt = 'search',
+  onInvited
 }: AddFriendDialogProps): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [answer, setAnswer] = useState<{ query: string; results: SearchResult[] } | null>(null)
@@ -45,13 +51,13 @@ export default function AddFriendDialog({
   })
 
   useEffect(() => {
-    inputRef.current?.focus()
+    if (startAt !== 'invite') inputRef.current?.focus()
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  }, [startAt])
 
   // Results appear as you type, once typing pauses briefly.
   const trimmed = query.trim()
@@ -255,7 +261,11 @@ export default function AddFriendDialog({
           ))}
         </ul>
 
-        <InviteFriends onSessionExpired={onSessionExpired} />
+        <InviteFriends
+          onSessionExpired={onSessionExpired}
+          focus={startAt === 'invite'}
+          onInvited={onInvited}
+        />
 
         <p className="dialog-foot">Blocked users never appear in search.</p>
       </div>
@@ -268,8 +278,23 @@ export default function AddFriendDialog({
  * Joining from it makes you friends straight away. An address that already has an account gets
  * a different email, and this always just says "Invite sent" (nobody learns who's on Glofly).
  */
-function InviteFriends({ onSessionExpired }: { onSessionExpired: () => void }): React.JSX.Element {
+function InviteFriends({
+  onSessionExpired,
+  focus,
+  onInvited
+}: {
+  onSessionExpired: () => void
+  /** 0.7.4: opened from the welcome card's "Invite friends": start here */
+  focus?: boolean
+  onInvited?: () => void
+}): React.JSX.Element {
   const [email, setEmail] = useState('')
+  const emailRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!focus) return
+    emailRef.current?.scrollIntoView({ block: 'center' })
+    emailRef.current?.focus()
+  }, [focus])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -288,6 +313,7 @@ function InviteFriends({ onSessionExpired }: { onSessionExpired: () => void }): 
     if (result.ok) {
       setNote({ ok: true, text: `Invite sent to ${address}.` })
       setEmail('')
+      onInvited?.()
     } else if (result.error === 'unauthorized') onSessionExpired()
     else setNote({ ok: false, text: result.message })
   }
@@ -303,6 +329,7 @@ function InviteFriends({ onSessionExpired }: { onSessionExpired: () => void }): 
       </div>
       <div className="invite-friends-row">
         <input
+          ref={emailRef}
           type="email"
           aria-label="Friend's email address"
           placeholder="friend@example.com"

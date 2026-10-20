@@ -21,7 +21,8 @@ import { ChatRow } from '@/ui/ChatRow'
 import { Banners } from '@/ui/Banners'
 import { SocialStrip } from '@/ui/Social'
 import { Icon } from '@/ui/icons'
-import { SectionLabel, Spinner, Text, webNoOutline } from '@/ui/kit'
+import { SectionLabel, Text, webNoOutline } from '@/ui/kit'
+import { Skeleton } from '@/ui/Skeleton'
 import { ReorderList, reorderActive } from '@/ui/Reorder'
 import { inform } from '@/ui/dialogs'
 import { Fab } from '@/ui/Fab'
@@ -157,9 +158,7 @@ export default function Chats() {
         }
         ListEmptyComponent={
           loading ? (
-            <View style={{ padding: 40, alignItems: 'center' }}>
-              <Spinner />
-            </View>
+            <Skeleton kind="chats" />
           ) : pinned.length ? null : query ? (
             <Text tone="muted" style={{ textAlign: 'center', padding: 32 }}>
               No friends or chats match “{query.trim()}”.

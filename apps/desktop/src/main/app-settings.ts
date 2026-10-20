@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Menu, nativeImage, nativeTheme, Tray } from 'electron'
-import { readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type {
   AccentChoice,
@@ -29,7 +29,9 @@ type Saved = {
 }
 const saved: Saved = {
   closeToTray: true, // the design has it on by default
-  theme: 'light',
+  // 0.7.4: a fresh install follows the computer's light / dark setting. Installs from before
+  // keep light unless they picked something (loadAppSettings).
+  theme: 'system',
   accent: 'orange',
   textSize: 'default',
   sounds: {
@@ -182,7 +184,18 @@ const file = (): string => join(app.getPath('userData'), 'app-settings.json')
 /** Launched by "Open Glofly when my computer starts": start quietly in the tray. */
 const STARTUP_ARG = '--hidden'
 
+/** Glofly has run on this computer before (anything it keeps in its folder is already there). */
+function usedBefore(): boolean {
+  const dir = app.getPath('userData')
+  return ['app-settings.json', 'session.dat', 'games.json', 'Local Storage'].some((name) =>
+    existsSync(join(dir, name))
+  )
+}
+
 export function loadAppSettings(): void {
+  // 0.7.4: everyone who used Glofly before "Match system" became the default keeps the light
+  // look they've been seeing, until they pick something else.
+  if (usedBefore()) saved.theme = 'light'
   try {
     const value = JSON.parse(readFileSync(file(), 'utf8')) as Partial<Saved>
     if (typeof value.closeToTray === 'boolean') saved.closeToTray = value.closeToTray

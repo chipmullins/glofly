@@ -46,6 +46,8 @@ import { ChatAvatar } from '@/ui/Avatar'
 import { BottomSheet, chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { IconButton, Spinner, Text } from '@/ui/kit'
+import { Skeleton } from '@/ui/Skeleton'
+import { JumpToLatestButton, useJumpToLatest } from '@/chat/JumpToLatest'
 import { openReport, pickEmoji } from '@/ui/sheets'
 import { useTheme } from '@/ui/theme'
 import { markUnread, PinnedBar, PinsSheet, ScheduledSheet, ScheduledStrip, SendLaterSheet, usePins, useScheduled } from '@/chat/chatTools'
@@ -202,6 +204,9 @@ export default function ChatScreen() {
     }
     return out.reverse()
   }, [messages?.list, meId, chat, outbox, isGroup])
+  // Scrolled up more than a screen: a "Jump to latest" button (with "N new").
+  const newestFirst = useMemo(() => rows.map((r) => r.message), [rows])
+  const jumper = useJumpToLatest(newestFirst, meId, id, list, () => void markChatRead(id))
 
   const memberIds = useMemo(() => [meId, ...members.map((p) => p.id)], [meId, members])
   const canMessage = !!chat?.canMessage
@@ -505,9 +510,11 @@ export default function ChatScreen() {
             </View>
           ) : null
         }
-        ListEmptyComponent={!messages?.loaded ? <View style={{ padding: 32, transform: [{ scaleY: -1 }] }}><Spinner /></View> : null}
+        ListEmptyComponent={!messages?.loaded ? <View style={{ transform: [{ scaleY: -1 }] }}><Skeleton kind="messages" /></View> : null}
         renderItem={renderRow}
+        {...jumper.listProps}
       />
+      <JumpToLatestButton visible={jumper.away} count={jumper.count} onPress={jumper.jump} />
       <ChatFireflies conversationId={id} meId={meId} nameOf={nameOf} />
       {partnerBirthday && chat.kind === 'dm' ? <BirthdayConfetti userId={chat.partner.id} name={chat.partner.displayName} /> : null}
       </View>
@@ -661,7 +668,7 @@ export default function ChatScreen() {
         />
       ) : null}
       {ringSome && canRingSome ? <RingSomeSheet chat={chat} onClose={() => setRingSome(false)} /> : null}
-      {viewer ? <PhotoViewer state={viewer} onClose={() => setViewer(null)} /> : null}
+      {viewer ? <PhotoViewer state={viewer} messages={messages?.list} chatName={isGroup ? title : null} onShowInChat={(mid) => void jumpTo(mid)} onClose={() => setViewer(null)} /> : null}
       {searching ? (
         <SearchPanel
           chatId={id}
