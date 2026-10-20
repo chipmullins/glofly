@@ -392,6 +392,11 @@ export const messages = pgTable(
     index("messages_sender_created_idx").on(t.senderId, t.createdAt),
     // Replies to a message: deleting messages (a group, a nebula) clears the links to them.
     index("messages_reply_to_idx").on(t.replyToId).where(sql`${t.replyToId} is not null`),
+    // Search (0.8.0): newest live messages first, so a common word finds a page without
+    // sorting every match (messages/search.ts). Built CONCURRENTLY by migrate.ts.
+    index("messages_search_recent_idx")
+      .on(t.createdAt.desc(), t.id.desc())
+      .where(sql`${t.deletedAt} is null and ${t.event} is null`),
   ],
 );
 
