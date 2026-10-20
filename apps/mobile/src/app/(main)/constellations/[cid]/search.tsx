@@ -126,7 +126,7 @@ export default function ConstellationSearch() {
         </ChipRow>
         {picker ? (
           <View accessibilityRole="list" style={{ borderRadius: 16, backgroundColor: N.card, borderWidth: 1, borderColor: N.line2, padding: 6, maxHeight: 260 }}>
-            <FlatList
+            <FlatList<{ key: string; label: string; pick: () => void; user: PublicUser | null }>
               keyboardShouldPersistTaps="handled"
               data={
                 picker === 'from'

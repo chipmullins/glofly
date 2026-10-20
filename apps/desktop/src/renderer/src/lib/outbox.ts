@@ -182,7 +182,8 @@ export function discard(conversationId: string, tempId: string): Pending | undef
 /** Back online: messages that failed because the connection was down go again (once). */
 export function retryOffline(): void {
   for (const list of Object.values(byChat)) {
-    for (const item of list) if (item.failed && item.offline) retry(item.conversationId, item.tempId)
+    for (const item of list)
+      if (item.failed && item.offline) retry(item.conversationId, item.tempId)
   }
 }
 

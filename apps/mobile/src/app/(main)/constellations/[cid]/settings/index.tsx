@@ -86,6 +86,12 @@ export default function SettingsMenu() {
           ))}
         </Card>
       ) : null}
+      {/* 0.8.0: AutoMod is set up on a computer (the desktop app or chat.glofly.app) */}
+      {can(c, 'manageConstellation') || can(c, 'deleteMessages') ? (
+        <Card>
+          <Row icon={<IconBox><Glyph name="shield" size={17} /></IconBox>} label="AutoMod" detail="Manage AutoMod on a computer" disabled last onPress={() => undefined} />
+        </Card>
+      ) : null}
       <Card>
         <Row icon={<IconBox><Icon name="bell" size={17} color={N.ink} /></IconBox>} label="Notifications" detail={NOTIFY_WORDS[c.me.notify]} chevron onPress={() => void pickNotify()} />
         <Row icon={<IconBox><Glyph name="markRead" size={17} /></IconBox>} label="Mark everything read" disabled={!card?.unreadCount && !card?.mentionCount} onPress={() => void readAll()} />

@@ -513,10 +513,7 @@ export default function MainScreen({
   // 0.7.5: "Reconnecting…" only once it's been down for a couple of seconds (a blip stays quiet).
   const [showReconnecting, setShowReconnecting] = useState(false)
   useEffect(() => {
-    if (connected) {
-      setShowReconnecting(false)
-      return
-    }
+    if (connected) return
     const t = setTimeout(() => setShowReconnecting(true), 2000)
     return () => clearTimeout(t)
   }, [connected])
@@ -936,6 +933,7 @@ export default function MainScreen({
         case 'connection':
           setConnected(event.connected)
           if (event.connected) {
+            setShowReconnecting(false)
             retryOffline() // messages that failed while the connection was down go again
             void refresh() // catch up on anything missed while offline
             void refreshNotices()

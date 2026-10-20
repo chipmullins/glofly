@@ -13,6 +13,8 @@ import { openDmDock, useDock } from './dock'
 import { haptic } from './motion'
 import { CountBadge, Face, GalaxyIcon, Glyph, HomeGlyph, N } from './ui'
 import { VoiceBar } from './Voice'
+import { startCommunity, useCommunity } from './communityTools'
+import { useEffect } from 'react'
 export { NIGHT_TAB_HEIGHT } from './ui'
 
 // The tab bar inside Constellations (board 1/8a): Home (the firefly) · Constellations · Mentions ·
@@ -25,7 +27,9 @@ export function NightTabBar({ active }: { active: NightTab }) {
   const insets = useSafeAreaInsets()
   const me = useSession((s) => s.user)
   const unread = useStore((s) => unreadTotal(Object.values(s.conversations)))
-  const mentions = useCx((s) => s.mentionsUnread)
+  // 0.8.0: the Inbox (mentions, replies, events, join requests) on the old Mentions tab
+  const mentions = useCommunity((s) => s.inbox?.all) ?? useCx.getState().mentionsUnread
+  useEffect(() => startCommunity(), [])
   const dockOpen = useDock((s) => s.dm !== null)
 
   const homeGesture = Gesture.Race(
@@ -74,8 +78,8 @@ export function NightTabBar({ active }: { active: NightTab }) {
       <TabItem label="Constellations" on={active === 'constellations'} onPress={() => goTab('constellations')}>
         <GalaxyIcon size={24} color={active === 'constellations' ? N.amber : N.ink2} />
       </TabItem>
-      <TabItem label="Mentions" on={active === 'mentions'} onPress={() => goTab('mentions')} badge={mentions} badgeLabel={mentions ? `, ${mentions} new` : ''}>
-        <Glyph name="mention" size={24} color={active === 'mentions' ? N.amber : N.ink2} />
+      <TabItem label="Inbox" on={active === 'mentions'} onPress={() => goTab('mentions')} badge={mentions} badgeLabel={mentions ? `, ${mentions} new` : ''}>
+        <Glyph name="inbox" size={24} color={active === 'mentions' ? N.amber : N.ink2} />
         {mentions > 0 ? <CountBadge count={mentions} mention ring="rgba(18,12,10,0.95)" style={{ position: 'absolute', left: '50%', marginLeft: 6, top: -4 }} /> : null}
       </TabItem>
       <TabItem label="You" on={active === 'you'} onPress={() => goTab('you')}>

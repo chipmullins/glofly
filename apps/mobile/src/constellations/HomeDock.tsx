@@ -1,3 +1,4 @@
+import { startCommunity, useCommunity } from './communityTools'
 import { useEffect, useMemo, useState } from 'react'
 import { FlatList, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -91,14 +92,16 @@ function Icons({ size = 50 }: { size?: number }) {
 }
 
 function MentionsRow({ chevron }: { chevron?: boolean }) {
-  const mentions = useCx((s) => s.mentionsUnread)
+  // 0.8.0: the Inbox (mentions, replies, events, join requests) in place of Mentions
+  const mentions = useCommunity((s) => s.inbox?.all) ?? 0
+  useEffect(() => startCommunity(), [])
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`Mentions${mentions ? `, ${mentions} new` : ''}`} onPress={() => flyTo('/constellations/mentions')} style={{ minHeight: 48, paddingHorizontal: 14, borderRadius: 16, backgroundColor: 'rgba(28,18,16,0.85)', borderWidth: chevron ? 1 : 0, borderColor: N.line2, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Inbox${mentions ? `, ${mentions} new` : ''}`} onPress={() => flyTo('/constellations/mentions')} style={{ minHeight: 48, paddingHorizontal: 14, borderRadius: 16, backgroundColor: 'rgba(28,18,16,0.85)', borderWidth: chevron ? 1 : 0, borderColor: N.line2, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(181,124,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>
-        <Glyph name="mention" size={15} color={N.violetText} />
+        <Glyph name="inbox" size={15} color={N.violetText} />
       </View>
       <Text size={chevron ? 15 : 14} weight="bold" style={{ flex: 1 }}>
-        Mentions
+        Inbox
       </Text>
       {mentions ? (
         <View style={{ height: 20, paddingHorizontal: 7, borderRadius: 10, backgroundColor: N.violet, justifyContent: 'center' }}>

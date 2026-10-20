@@ -20,7 +20,7 @@ import { api as cxApi } from '../lib/constellations'
 import Avatar from './Avatar'
 import GroupAvatar from './GroupAvatar'
 import EmojiText from './EmojiText'
-import { lastMessagePreview } from './ChatList'
+import { lastMessagePreview } from '../lib/chatPreview'
 import { ConstellationIcon, GearIcon, SpeakerIcon, StarIcon } from '../constellations/bits'
 import { SearchIcon } from './icons'
 import './QuickSwitcher.css'
@@ -107,7 +107,7 @@ export default function QuickSwitcher(props: QuickSwitcherProps): React.JSX.Elem
       for (const c of conversations) add({ kind: 'chat', key: `chat:${c.id}`, conversation: c })
       return recent.length ? [{ title: 'Recent', items: recent }] : []
     }
-    const score = <T,>(list: T[], text: (x: T) => string, keywords?: (x: T) => string) =>
+    const score = <T,>(list: T[], text: (x: T) => string, keywords?: (x: T) => string): T[] =>
       list
         .map((x) => ({ x, s: matchScore(q, text(x), keywords?.(x)) }))
         .filter((r) => r.s > 0)
@@ -117,7 +117,8 @@ export default function QuickSwitcher(props: QuickSwitcherProps): React.JSX.Elem
     const chats = score(
       conversations,
       (c) => chatTitle(c),
-      (c) => (c.kind === 'dm' ? `${c.partner.username}` : c.members.map((m) => m.displayName).join(' '))
+      (c) =>
+        c.kind === 'dm' ? `${c.partner.username}` : c.members.map((m) => m.displayName).join(' ')
     ).slice(0, LIMITS.chat)
     // Friends whose chat is already listed under Chats aren't listed twice.
     const shownChats = new Set(chats.map((c) => (c.kind === 'dm' ? c.partner.id : '')))
@@ -131,7 +132,11 @@ export default function QuickSwitcher(props: QuickSwitcherProps): React.JSX.Elem
       cxItems.push({ kind: 'constellation', key: `cx:${card.id}`, card })
     }
     for (const card of cards) {
-      for (const n of score(nebulas[card.id] ?? [], (n) => n.name, () => card.name)) {
+      for (const n of score(
+        nebulas[card.id] ?? [],
+        (n) => n.name,
+        () => card.name
+      )) {
         cxItems.push({ kind: 'nebula', key: `nb:${n.id}`, card, nebula: n })
       }
     }
@@ -170,15 +175,10 @@ export default function QuickSwitcher(props: QuickSwitcherProps): React.JSX.Elem
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups])
   const current = flat[Math.min(active, flat.length - 1)]
 
-  // Back to the top when the results change.
-  useEffect(() => setActive(0), [query])
-
   // Keep the highlighted row in view.
   useEffect(() => {
     if (!current) return
-    document
-      .getElementById(`qs-${cssId(current.key)}`)
-      ?.scrollIntoView({ block: 'nearest' })
+    document.getElementById(`qs-${cssId(current.key)}`)?.scrollIntoView({ block: 'nearest' })
   }, [current])
 
   function open(item: Item, mini: boolean): void {
@@ -233,7 +233,10 @@ export default function QuickSwitcher(props: QuickSwitcherProps): React.JSX.Elem
             ref={inputRef}
             className="qs-input"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setActive(0) // back to the top when the results change
+            }}
             placeholder="Jump to a chat, friend, constellation or setting"
             aria-label="Jump to a chat, friend, constellation or setting"
             role="combobox"

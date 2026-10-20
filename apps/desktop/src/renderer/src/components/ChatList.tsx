@@ -1,4 +1,3 @@
-import { shortBody } from '@glofly/shared/gifs'
 import { useRef, useState } from 'react'
 import type {
   ConversationSummary,
@@ -6,9 +5,8 @@ import type {
   Presence,
   PublicUser
 } from '../../../preload/api-types'
-import { attachmentSummary } from '../lib/attachments'
 import type { ChatResult } from '../lib/chatSearch'
-import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
+import { chatTitle, memberCountLabel, typingText } from '../lib/groups'
 import { useTypingByChat } from '../lib/typingWatch'
 import { useSocial } from '../lib/social'
 import { BirthdayMark, GlowMark } from './Social'
@@ -32,6 +30,7 @@ import {
   SearchIcon
 } from './icons'
 import { ListSkeleton } from './Skeleton'
+import { lastMessagePreview } from '../lib/chatPreview'
 import EmptyScene from './EmptyScene'
 import { useListGlide } from '../lib/listGlide'
 
@@ -84,22 +83,6 @@ type ChatListProps = {
   onSearchMessages: (query: string) => void
   /** 0.7.5: "Find @name" when a search finds nobody (opens Add friend with it typed) */
   onFindUsername?: (username: string) => void
-}
-
-/** The sidebar's one-line preview of a chat's latest message. */
-export function lastMessagePreview(c: ConversationSummary, me: PublicUser): string {
-  const last = c.lastMessage
-  if (!last) return 'No messages yet'
-  const nameOf = (id: string): string =>
-    c.members.find((m) => m.id === id)?.displayName.split(/\s+/)[0] ?? 'Someone'
-  if (last.event) return eventText(last.event, last.senderId, me.id, nameOf)
-  const text = last.deleted
-    ? 'Message deleted'
-    : shortBody(last.body).replace(/\s+/g, ' ') || attachmentSummary(last.attachments)
-  // Groups say who sent it ("Maya: hi"); DMs only mark your own ("You: hi").
-  const who =
-    last.senderId === me.id ? 'You: ' : c.kind === 'group' ? `${nameOf(last.senderId)}: ` : ''
-  return who + text
 }
 
 /** A pinned chat row's drag-to-reorder state and handlers. */
