@@ -18,6 +18,7 @@ import { haptic } from './motion'
 import { NebulaRow } from './NebulaRow'
 import { roleLook, cantPost } from './roles'
 import { useNebulaChat } from './useNebula'
+import { usePreloadCx } from './feel'
 import { CountBadge, ConstellationIcon, Caps, Glyph, N, SpeakerGlyph, StarGlyph } from './ui'
 
 // The nebula dock on Glofly home (board 8b), the same "portal" as the DM Dock: swipe up on the
@@ -44,6 +45,8 @@ function flyTo(...paths: string[]) {
 }
 
 export function HomeDock() {
+  // 0.7.5 instant fly-in: your last constellation loads ahead while you're home
+  usePreloadCx()
   const available = useCxAvailable()
   const open = useHomeDock((s) => s.open)
   const nebula = useHomeDock((s) => s.nebula)

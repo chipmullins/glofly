@@ -116,6 +116,8 @@ export const community = {
 /** A constellation's events, kept fresh by live events (and every minute, for "Starts in"). */
 export function useConstellationEvents(constellationId: string | null): {
   events: ConstellationEvent[]
+  /** The time the events were last looked at (ticks every 15 s while there are some) */
+  now: number
   reload: () => void
   setEvent: (e: ConstellationEvent) => void
 } {
@@ -123,12 +125,22 @@ export function useConstellationEvents(constellationId: string | null): {
     id: null,
     events: []
   })
+  const [now, setNow] = useState(() => Date.now())
   const load = useCallback(() => {
     if (!constellationId) return
     void community.events(constellationId).then((r) => {
-      if (r.ok) setState({ id: constellationId, events: r.data.events })
+      if (r.ok) {
+        setState({ id: constellationId, events: r.data.events })
+        setNow(Date.now())
+      }
     })
   }, [constellationId])
+  const any = state.events.length > 0
+  useEffect(() => {
+    if (!any) return
+    const t = setInterval(() => setNow(Date.now()), 15_000)
+    return () => clearInterval(t)
+  }, [any])
   useEffect(() => {
     load()
     if (!constellationId) return
@@ -141,7 +153,7 @@ export function useConstellationEvents(constellationId: string | null): {
   const setEvent = useCallback((e: ConstellationEvent) => {
     setState((s) => ({ ...s, events: s.events.map((x) => (x.id === e.id ? e : x)) }))
   }, [])
-  return { events: state.id === constellationId ? state.events : [], reload: load, setEvent }
+  return { events: state.id === constellationId ? state.events : [], now, reload: load, setEvent }
 }
 
 /** The Inbox's unread counts (the badge), kept fresh: its own news, and constellation activity. */

@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 import { Pressable, ScrollView, View, type View as RNView } from 'react-native'
+import { useCall } from '@/calls/controller'
+import { InVoiceCount, StackedFaces, TalkingFace, useTalking, VOICE_LIST_MAX } from './feel'
 import { CONSTELLATION_THEME, voiceLine, type ConstellationCard, type ConstellationDetail, type Nebula, type PublicUser, type VoiceNebulaState } from '@glofly/shared'
 import { useStore } from '@/state/store'
 import { useCx } from '@/state/constellations'
@@ -11,7 +13,7 @@ import { BannerArt } from './community'
 import { haptic } from './motion'
 import { nebulaMenu } from './nebulaActions'
 import { isQuiet, sectionsOf } from './roles'
-import { BannerStars, ConstellationIcon, CountBadge, Face, HomeGlyph, GalaxyIcon, Live, N, SpeakerGlyph, StarGlyph } from './ui'
+import { BannerStars, ConstellationIcon, CountBadge, HomeGlyph, GalaxyIcon, Live, N, SpeakerGlyph, StarGlyph } from './ui'
 
 // Inside a constellation (canvas board 4, and the iPad board): the icon strip to switch
 // constellations, the banner, and the categories with their nebulas.
@@ -313,6 +315,10 @@ function VoiceRow({ c, n, voice, people, onOpen, selected, dense }: { c: Constel
   const line = sharer ? `${firstName(sharer.displayName, sharer.username)} is sharing ${voice!.sharing.length > 1 ? 'a screen' : 'their screen'}` : inIt.length ? voiceLine(inIt.slice(0, 3), n.name, inIt.length) : ''
   const label = `${n.name}, voice${inIt.length ? `, ${inIt.length} in voice` : ', nobody in it'}${voice?.live ? ', live' : ''}`
   const busy = inIt.length > 0
+  // 0.7.5: who's talking (from inside the room), and stacked faces when it's busy
+  const talking = useTalking(n.id)
+  const mine = useCall((st) => st.voice?.nebulaId === n.id)
+  const stacked = inIt.length > VOICE_LIST_MAX && !mine
   if (!busy) {
     return (
       <Pressable
@@ -348,14 +354,15 @@ function VoiceRow({ c, n, voice, people, onOpen, selected, dense }: { c: Constel
         <Text size={dense ? 14 : 15} weight="medium" numberOfLines={1} style={{ flex: 1 }}>
           {n.name}
         </Text>
+        <InVoiceCount count={inIt.length} small={dense} />
         {voice?.live ? <Live small={dense} /> : null}
       </View>
       {dense ? (
         <View style={{ paddingLeft: 24, gap: 4 }}>
           {inIt.slice(0, 6).map((p) => (
             <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Face user={p} size={20} />
-              <Text size={13} numberOfLines={1} style={{ color: N.ink2, flex: 1 }}>
+              <TalkingFace user={p} size={20} talking={talking.has(p.id)} />
+              <Text size={13} numberOfLines={1} style={{ color: talking.has(p.id) ? N.ink : N.ink2, flex: 1 }}>
                 {p.displayName}
               </Text>
               {voice?.sharing.includes(p.id) ? <Live small /> : voice?.muted.includes(p.id) ? <Icon name="micOff" size={12} color={N.faint} /> : null}
@@ -369,11 +376,15 @@ function VoiceRow({ c, n, voice, people, onOpen, selected, dense }: { c: Constel
         </View>
       ) : (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 26 }}>
-          <View style={{ flexDirection: 'row', gap: 4 }}>
-            {inIt.slice(0, 4).map((p) => (
-              <Face key={p.id} user={p} size={24} />
-            ))}
-          </View>
+          {stacked ? (
+            <StackedFaces people={inIt} size={24} />
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              {inIt.slice(0, 4).map((p) => (
+                <TalkingFace key={p.id} user={p} size={24} talking={talking.has(p.id)} />
+              ))}
+            </View>
+          )}
           <Text size={12} numberOfLines={1} style={{ color: N.muted, flex: 1 }}>
             {line}
           </Text>

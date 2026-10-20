@@ -154,7 +154,7 @@ export function InviteCard({ code, width = 280, onProblem }: { code: string; wid
             <Text size={10} weight="bold" style={{ color: N.muted, letterSpacing: 0.9 }}>
               INVITE TO A CONSTELLATION
             </Text>
-            <Text display size={18} numberOfLines={1}>
+            <Text display size={18} numberOfLines={1} style={{ color: N.ink }}>
               {c.name}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

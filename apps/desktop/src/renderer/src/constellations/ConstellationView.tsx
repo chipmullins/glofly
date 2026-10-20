@@ -269,10 +269,10 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     () =>
       new Set(
         cxEvents.events
-          .filter((e) => e.voiceNebulaId && eventPhase(e, now) === 'live')
+          .filter((e) => e.voiceNebulaId && eventPhase(e, cxEvents.now) === 'live')
           .map((e) => e.voiceNebulaId!)
       ),
-    [cxEvents.events, now]
+    [cxEvents.events, cxEvents.now]
   )
   const eventsByMessage = useMemo(
     () => new Map(cxEvents.events.filter((e) => e.messageId).map((e) => [e.messageId!, e])),
@@ -997,7 +997,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
 
       <EventsChip
         events={cxEvents.events}
-        now={now}
+        now={Math.max(now, cxEvents.now)}
         onPlan={canPlan ? () => setEventDialog({ editing: null }) : null}
         onOpen={(e) => {
           if (e.messageId) showMessage(e.nebulaId, e.messageId)
@@ -1655,7 +1655,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 <EventCard
                   event={e}
                   constellation={c}
-                  now={now}
+                  now={Math.max(now, cxEvents.now)}
                   inVoice={vs?.userIds.length ?? 0}
                   onChanged={cxEvents.setEvent}
                   onEdit={(ev) => setEventDialog({ editing: ev })}

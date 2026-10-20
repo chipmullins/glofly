@@ -1,33 +1,21 @@
-import { useEffect, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { STATUS_TEXT_MAX } from "@glofly/shared";
-import * as api from "@/api/glofly";
-import { refreshMe } from "@/api/auth";
-import { useSession } from "@/state/session";
-import { refreshFriends, refreshStatus } from "@/state/sync";
-import { pickSquarePhoto } from "@/lib/photos";
-import { prefs } from "@/lib/storage";
-import { APP_SETTINGS } from "@/lib/config";
-import { finishWelcome, resumeWelcome, useWelcome } from "@/lib/welcome";
-import { Avatar } from "./Avatar";
-import { chooseFrom, inform } from "./dialogs";
-import { Button, Field, Notice, Text } from "./kit";
-import {
-  ACCENTS,
-  useTheme,
-  useThemeChoice,
-  type AccentChoice,
-  type ThemeChoice,
-} from "./theme";
-import { riseIn } from "./motion";
+import { useEffect, useState } from 'react'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native'
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { STATUS_TEXT_MAX } from '@glofly/shared'
+import * as api from '@/api/glofly'
+import { refreshMe } from '@/api/auth'
+import { useSession } from '@/state/session'
+import { refreshFriends, refreshStatus } from '@/state/sync'
+import { pickSquarePhoto } from '@/lib/photos'
+import { prefs } from '@/lib/storage'
+import { APP_SETTINGS } from '@/lib/config'
+import { finishWelcome, resumeWelcome, useWelcome } from '@/lib/welcome'
+import { Avatar } from './Avatar'
+import { chooseFrom, inform } from './dialogs'
+import { Button, Field, Notice, Text } from './kit'
+import { ACCENTS, useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from './theme'
+import { riseIn } from './motion'
 
 // 0.7.5 welcome flow on phones (Welcome.dc.html, approved Oct 20): the same three steps as the
 // desktop app, full screen after a new account is made: a photo and what you're up to, your look
@@ -35,142 +23,126 @@ import { riseIn } from "./motion";
 // the accent you pick. (No QR card here: you're already on your phone.)
 
 const THEMES: { key: ThemeChoice; label: string }[] = [
-  { key: "system", label: "Match my phone" },
-  { key: "light", label: "Light" },
-  { key: "dark", label: "Dark" },
-];
-const FIVE = ACCENTS.filter((a) => a.key !== "graphite");
+  { key: 'system', label: 'Match my phone' },
+  { key: 'light', label: 'Light' },
+  { key: 'dark', label: 'Dark' },
+]
+const FIVE = ACCENTS.filter((a) => a.key !== 'graphite')
 
-type Note = { tone: "good" | "danger"; text: string } | null;
+type Note = { tone: 'good' | 'danger'; text: string } | null
 
 /** Mounted once in the signed-in layout; shows itself for a new account. */
 export function WelcomeFlowHost() {
-  const user = useSession((s) => s.user);
-  const waiting = useWelcome((s) => s.userId);
+  const user = useSession((s) => s.user)
+  const waiting = useWelcome((s) => s.userId)
   useEffect(() => {
-    if (user) void resumeWelcome(user.id);
-  }, [user?.id]);
-  if (!user || waiting !== user.id || user.restricted) return null;
-  return <WelcomeFlow />;
+    if (user) void resumeWelcome(user.id)
+  }, [user?.id])
+  if (!user || waiting !== user.id || user.restricted) return null
+  return <WelcomeFlow />
 }
 
 function WelcomeFlow() {
-  const { c, dark } = useTheme();
-  const insets = useSafeAreaInsets();
-  const user = useSession((s) => s.user)!;
-  const theme = useThemeChoice((s) => s.choice);
-  const accent = useThemeChoice((s) => s.accent);
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const first = user.displayName.trim().split(/\s+/)[0] || user.username;
+  const { c, dark } = useTheme()
+  const insets = useSafeAreaInsets()
+  const user = useSession((s) => s.user)!
+  const theme = useThemeChoice((s) => s.choice)
+  const accent = useThemeChoice((s) => s.accent)
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
+  const first = user.displayName.trim().split(/\s+/)[0] || user.username
 
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const [photoNote, setPhotoNote] = useState<Note>(null);
-  const [statusText, setStatusText] = useState("");
-  const [username, setUsername] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [friendNote, setFriendNote] = useState<Note>(null);
-  const [email, setEmail] = useState("");
-  const [inviting, setInviting] = useState(false);
-  const [inviteNote, setInviteNote] = useState<Note>(null);
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoNote, setPhotoNote] = useState<Note>(null)
+  const [statusText, setStatusText] = useState('')
+  const [username, setUsername] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [friendNote, setFriendNote] = useState<Note>(null)
+  const [email, setEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteNote, setInviteNote] = useState<Note>(null)
 
-  const done = () => void finishWelcome(user.id);
+  const done = () => void finishWelcome(user.id)
   useEffect(() => {
-    if (step !== 4) return;
-    const t = setTimeout(done, 1600);
-    return () => clearTimeout(t);
+    if (step !== 4) return
+    const t = setTimeout(done, 1600)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+  }, [step])
 
   async function photo() {
     const pick = await chooseFrom(
       [
-        { key: "library", label: "Choose a photo", icon: "photo" },
-        { key: "camera", label: "Take a photo", icon: "camera" },
+        { key: 'library', label: 'Choose a photo', icon: 'photo' },
+        { key: 'camera', label: 'Take a photo', icon: 'camera' },
       ],
-      "Profile photo",
-    );
-    if (pick !== "library" && pick !== "camera") return;
-    const picked = await pickSquarePhoto(pick);
-    if (picked === "denied")
-      return void inform(
-        "Camera not allowed",
-        `Allow Glofly to use the camera in ${APP_SETTINGS}.`,
-      );
-    if (!picked) return;
-    setPhotoBusy(true);
-    const r = await api.setAvatar(picked);
-    if (r.ok) await refreshMe();
-    setPhotoBusy(false);
-    setPhotoNote(
-      r.ok
-        ? { tone: "good", text: "Looking good!" }
-        : { tone: "danger", text: r.message },
-    );
+      'Profile photo',
+    )
+    if (pick !== 'library' && pick !== 'camera') return
+    const picked = await pickSquarePhoto(pick)
+    if (picked === 'denied') return void inform('Camera not allowed', `Allow Glofly to use the camera in ${APP_SETTINGS}.`)
+    if (!picked) return
+    setPhotoBusy(true)
+    const r = await api.setAvatar(picked)
+    if (r.ok) await refreshMe()
+    setPhotoBusy(false)
+    setPhotoNote(r.ok ? { tone: 'good', text: 'Looking good!' } : { tone: 'danger', text: r.message })
   }
 
   function next() {
     if (step === 1 && statusText.trim()) {
       // Saved quietly: a problem here never stops the welcome.
-      void api
-        .setMyStatus({ statusText: statusText.trim() })
-        .then(() => refreshStatus());
+      void api.setMyStatus({ statusText: statusText.trim() }).then(() => refreshStatus())
     }
-    setStep((s) => (s < 4 ? ((s + 1) as 2 | 3 | 4) : s));
+    setStep((s) => (s < 4 ? ((s + 1) as 2 | 3 | 4) : s))
   }
 
   function pickTheme(t: ThemeChoice) {
-    useThemeChoice.getState().set(t);
-    void prefs.set("theme", t);
+    useThemeChoice.getState().set(t)
+    void prefs.set('theme', t)
   }
   function pickAccent(a: AccentChoice) {
-    useThemeChoice.getState().setAccent(a);
-    void prefs.set("accent", a);
+    useThemeChoice.getState().setAccent(a)
+    void prefs.set('accent', a)
   }
 
   async function addFriend() {
-    const name = username.trim().replace(/^@/, "");
-    if (!name || adding) return;
-    setAdding(true);
-    setFriendNote(null);
-    const r = await api.sendFriendRequest(name);
-    setAdding(false);
+    const name = username.trim().replace(/^@/, '')
+    if (!name || adding) return
+    setAdding(true)
+    setFriendNote(null)
+    const r = await api.sendFriendRequest(name)
+    setAdding(false)
     if (r.ok) {
       setFriendNote({
-        tone: "good",
-        text:
-          r.data.status === "accepted"
-            ? `You and @${name} are friends now!`
-            : `Request sent to @${name}. They’ll show up once they accept.`,
-      });
-      setUsername("");
-      void refreshFriends();
-    } else setFriendNote({ tone: "danger", text: r.message });
+        tone: 'good',
+        text: r.data.status === 'accepted' ? `You and @${name} are friends now!` : `Request sent to @${name}. They’ll show up once they accept.`,
+      })
+      setUsername('')
+      void refreshFriends()
+    } else setFriendNote({ tone: 'danger', text: r.message })
   }
 
   async function invite() {
-    const address = email.trim();
-    if (!address || inviting) return;
-    setInviting(true);
-    setInviteNote(null);
-    const r = await api.inviteFriend(address);
-    setInviting(false);
+    const address = email.trim()
+    if (!address || inviting) return
+    setInviting(true)
+    setInviteNote(null)
+    const r = await api.inviteFriend(address)
+    setInviting(false)
     if (r.ok) {
-      setInviteNote({ tone: "good", text: `Invite sent to ${address}.` });
-      setEmail("");
-    } else setInviteNote({ tone: "danger", text: r.message });
+      setInviteNote({ tone: 'good', text: `Invite sent to ${address}.` })
+      setEmail('')
+    } else setInviteNote({ tone: 'danger', text: r.message })
   }
 
-  const note = (n: Note) =>
-    n ? (
-      <Notice tone={n.tone === "good" ? "good" : "danger"}>{n.text}</Notice>
-    ) : null;
+  const note = (n: Note) => (n ? <Notice tone={n.tone === 'good' ? 'good' : 'danger'}>{n.text}</Notice> : null)
 
   return (
     <Animated.View
       entering={FadeIn.duration(200)}
       exiting={FadeOut.duration(160)}
       style={{
-        position: "absolute",
+        position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
@@ -180,24 +152,17 @@ function WelcomeFlow() {
       }}
       accessibilityViewIsModal
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View
           style={{
             paddingTop: insets.top + 8,
             paddingHorizontal: 24,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          <View
-            style={{ flexDirection: "row", gap: 8 }}
-            accessible
-            accessibilityLabel={`Step ${Math.min(step, 3)} of 3`}
-          >
+          <View style={{ flexDirection: 'row', gap: 8 }} accessible accessibilityLabel={`Step ${Math.min(step, 3)} of 3`}>
             {[1, 2, 3].map((n) => (
               <View
                 key={n}
@@ -211,12 +176,7 @@ function WelcomeFlow() {
             ))}
           </View>
           {step < 4 ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={done}
-              hitSlop={8}
-              style={{ minHeight: 44, justifyContent: "center" }}
-            >
+            <Pressable accessibilityRole="button" onPress={done} hitSlop={8} style={{ minHeight: 44, justifyContent: 'center' }}>
               <Text tone="muted" weight="medium" size={15}>
                 Skip for now
               </Text>
@@ -244,7 +204,7 @@ function WelcomeFlow() {
                     Let’s make it feel like you. This takes about a minute.
                   </Text>
                 </View>
-                <View style={{ alignItems: "center", gap: 12 }}>
+                <View style={{ alignItems: 'center', gap: 12 }}>
                   <View
                     style={{
                       borderRadius: 60,
@@ -254,22 +214,9 @@ function WelcomeFlow() {
                   >
                     <Avatar user={user} size={104} />
                   </View>
-                  <Button
-                    compact
-                    label={
-                      photoBusy
-                        ? "Saving…"
-                        : user.avatarVersion
-                          ? "Change profile photo"
-                          : "Add a profile photo"
-                    }
-                    busy={photoBusy}
-                    icon="camera"
-                    onPress={() => void photo()}
-                  />
-                  <Text tone="muted" size={14} style={{ textAlign: "center" }}>
-                    Friends see it in chats and calls. You can change it any
-                    time.
+                  <Button compact label={photoBusy ? 'Saving…' : user.avatarVersion ? 'Change profile photo' : 'Add a profile photo'} busy={photoBusy} icon="camera" onPress={() => void photo()} />
+                  <Text tone="muted" size={14} style={{ textAlign: 'center' }}>
+                    Friends see it in chats and calls. You can change it any time.
                   </Text>
                   {note(photoNote)}
                 </View>
@@ -295,19 +242,10 @@ function WelcomeFlow() {
                     Change it later in Settings.
                   </Text>
                 </View>
-                <View
-                  accessibilityRole="radiogroup"
-                  accessibilityLabel="Theme"
-                  style={{ flexDirection: "row", gap: 10 }}
-                >
+                <View accessibilityRole="radiogroup" accessibilityLabel="Theme" style={{ flexDirection: 'row', gap: 10 }}>
                   {THEMES.map((t) => {
-                    const on = theme === t.key;
-                    const art =
-                      t.key === "dark"
-                        ? ["#1D1715", "#161110", "#3A302A"]
-                        : t.key === "light"
-                          ? ["#FFFFFF", "#F7F0E9", "#EFE4DA"]
-                          : ["#FFFFFF", "#F7F0E9", "#3A302A"];
+                    const on = theme === t.key
+                    const art = t.key === 'dark' ? ['#1D1715', '#161110', '#3A302A'] : t.key === 'light' ? ['#FFFFFF', '#F7F0E9', '#EFE4DA'] : ['#FFFFFF', '#F7F0E9', '#3A302A']
                     return (
                       <Pressable
                         key={t.key}
@@ -322,47 +260,47 @@ function WelcomeFlow() {
                           borderRadius: 16,
                           padding: 8,
                           gap: 8,
-                          backgroundColor: dark ? c.surface : "#FFFFFF",
+                          backgroundColor: dark ? c.surface : '#FFFFFF',
                         }}
                       >
                         <View
                           style={{
                             height: 70,
                             borderRadius: 10,
-                            overflow: "hidden",
+                            overflow: 'hidden',
                             backgroundColor: art[0],
                             borderWidth: 1,
-                            borderColor: "rgba(0,0,0,0.06)",
+                            borderColor: 'rgba(0,0,0,0.06)',
                           }}
                         >
-                          {t.key === "system" ? (
+                          {t.key === 'system' ? (
                             <View
                               style={{
-                                position: "absolute",
+                                position: 'absolute',
                                 right: 0,
                                 top: 0,
                                 bottom: 0,
-                                width: "50%",
-                                backgroundColor: "#1D1715",
+                                width: '50%',
+                                backgroundColor: '#1D1715',
                               }}
                             />
                           ) : null}
                           <View
                             style={{
-                              position: "absolute",
+                              position: 'absolute',
                               left: 0,
                               top: 0,
                               bottom: 0,
-                              width: "30%",
+                              width: '30%',
                               backgroundColor: art[1],
                             }}
                           />
                           <View
                             style={{
-                              position: "absolute",
+                              position: 'absolute',
                               right: 8,
                               top: 14,
-                              width: "42%",
+                              width: '42%',
                               height: 10,
                               borderRadius: 5,
                               backgroundColor: art[2],
@@ -370,38 +308,30 @@ function WelcomeFlow() {
                           />
                           <View
                             style={{
-                              position: "absolute",
+                              position: 'absolute',
                               right: 8,
                               top: 32,
-                              width: "28%",
+                              width: '28%',
                               height: 10,
                               borderRadius: 5,
                               backgroundColor: c.accent,
                             }}
                           />
                         </View>
-                        <Text
-                          size={13}
-                          weight="bold"
-                          style={{ color: dark ? c.ink : "#24170F" }}
-                        >
+                        <Text size={13} weight="bold" style={{ color: dark ? c.ink : '#24170F' }}>
                           {t.label}
                         </Text>
                       </Pressable>
-                    );
+                    )
                   })}
                 </View>
                 <View style={{ gap: 10 }}>
                   <Text size={14} weight="bold" tone="ink2">
                     Accent
                   </Text>
-                  <View
-                    accessibilityRole="radiogroup"
-                    accessibilityLabel="Accent color"
-                    style={{ flexDirection: "row", gap: 14, flexWrap: "wrap" }}
-                  >
+                  <View accessibilityRole="radiogroup" accessibilityLabel="Accent color" style={{ flexDirection: 'row', gap: 14, flexWrap: 'wrap' }}>
                     {FIVE.map((a) => {
-                      const on = accent === a.key;
+                      const on = accent === a.key
                       return (
                         <Pressable
                           key={a.key}
@@ -419,7 +349,7 @@ function WelcomeFlow() {
                             boxShadow: on ? undefined : `0 0 0 1px ${c.line}`,
                           }}
                         />
-                      );
+                      )
                     })}
                   </View>
                 </View>
@@ -447,14 +377,7 @@ function WelcomeFlow() {
                     returnKeyType="send"
                     onSubmitEditing={() => void addFriend()}
                   />
-                  <Button
-                    compact
-                    label="Add friend"
-                    icon="addPerson"
-                    busy={adding}
-                    disabled={!username.trim()}
-                    onPress={() => void addFriend()}
-                  />
+                  <Button compact label="Add friend" icon="addPerson" busy={adding} disabled={!username.trim()} onPress={() => void addFriend()} />
                   {note(friendNote)}
                 </View>
                 <View
@@ -470,8 +393,7 @@ function WelcomeFlow() {
                     Not on Glofly yet?
                   </Text>
                   <Text tone="muted" size={14}>
-                    Send your invite link. You’ll automatically be friends as
-                    soon as they join.
+                    Send your invite link. You’ll automatically be friends as soon as they join.
                   </Text>
                   <Field
                     label="Their email"
@@ -484,15 +406,7 @@ function WelcomeFlow() {
                     returnKeyType="send"
                     onSubmitEditing={() => void invite()}
                   />
-                  <Button
-                    compact
-                    kind="secondary"
-                    label="Email an invite link"
-                    icon="send"
-                    busy={inviting}
-                    disabled={!email.trim()}
-                    onPress={() => void invite()}
-                  />
+                  <Button compact kind="secondary" label="Email an invite link" icon="send" busy={inviting} disabled={!email.trim()} onPress={() => void invite()} />
                   {note(inviteNote)}
                 </View>
               </>
@@ -501,8 +415,8 @@ function WelcomeFlow() {
             {step === 4 ? (
               <View
                 style={{
-                  alignItems: "center",
-                  justifyContent: "center",
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   paddingVertical: 60,
                   gap: 18,
                 }}
@@ -517,7 +431,7 @@ function WelcomeFlow() {
                     boxShadow: `0 0 26px 12px ${c.glow}`,
                   }}
                 />
-                <Text display size={28} style={{ textAlign: "center" }}>
+                <Text display size={28} style={{ textAlign: 'center' }}>
                   You’re all set. Glow on!
                 </Text>
               </View>
@@ -528,9 +442,9 @@ function WelcomeFlow() {
         {step < 4 ? (
           <View
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               paddingHorizontal: 24,
               paddingTop: 12,
               paddingBottom: insets.bottom + 16,
@@ -540,13 +454,11 @@ function WelcomeFlow() {
           >
             <Pressable
               accessibilityRole="button"
-              onPress={() =>
-                setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s))
-              }
+              onPress={() => setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s))}
               disabled={step === 1}
               style={{
                 minHeight: 48,
-                justifyContent: "center",
+                justifyContent: 'center',
                 paddingHorizontal: 6,
                 opacity: step === 1 ? 0 : 1,
               }}
@@ -555,14 +467,10 @@ function WelcomeFlow() {
                 Back
               </Text>
             </Pressable>
-            <Button
-              compact
-              label={step === 3 ? "Start chatting" : "Next"}
-              onPress={next}
-            />
+            <Button compact label={step === 3 ? 'Start chatting' : 'Next'} onPress={next} />
           </View>
         ) : null}
       </KeyboardAvoidingView>
     </Animated.View>
-  );
+  )
 }

@@ -15,7 +15,7 @@ import { useNow } from '@/lib/hooks'
 import { QUICK_REACTIONS } from '@/lib/emoji'
 import { joinVoiceNebula, useCall } from '@/calls/controller'
 import { Composer, type ComposerHandle } from '@/chat/Composer'
-import { markUnread, PinnedBar, PinsSheet, ScheduledSheet, ScheduledStrip, SendLaterSheet, usePins, useScheduled } from '@/chat/chatTools'
+import { markUnread, PinsSheet, ScheduledSheet, ScheduledStrip, SendLaterSheet, usePins, useScheduled } from '@/chat/chatTools'
 import { TypingBubble } from '@/chat/TypingBubble'
 import { discard, isLocal, retry, sendText } from '@/chat/send'
 import { attachMenu, UploadTray, useUploads } from '@/chat/uploads'
@@ -37,6 +37,7 @@ import { haptic } from './motion'
 import { openMemberSheet } from './Members'
 import { pickTimeout } from './moderation'
 import { NebulaRow, type NebulaRowInfo } from './NebulaRow'
+import { firstNewId, NewSinceLine, NewSincePill, PinsChip, type NewSince } from './feel'
 import { can, cantPost, isQuiet, outranks, roleLook } from './roles'
 import { markNebulaRead, useNebulaChat } from './useNebula'
 import { openNebulaSheet } from './nebulaActions'
@@ -77,6 +78,11 @@ export function NebulaChat({
 }) {
   const insets = useSafeAreaInsets()
   const { rows, messages, people, members, meId } = useNebulaChat(c, n)
+  // 0.7.5 "New since you left": what was new when you opened it (kept until Mark as read)
+  const [newSince, setNewSince] = useState<NewSince | null>(() =>
+    n.lastReadAt && n.unreadCount > 0 ? { since: n.lastReadAt, count: n.unreadCount } : null,
+  )
+  const firstNew = useMemo(() => (newSince ? firstNewId(messages?.list ?? [], newSince.since, meId) : null), [newSince, messages?.list, meId])
   const typing = useStore((s) => s.typing[n.conversationId])
   const dmUnread = useStore((s) => unreadTotal(Object.values(s.conversations)))
   const myVoice = useCall((s) => s.voice?.nebulaId ?? null)
@@ -313,8 +319,13 @@ export function NebulaChat({
   const onPhoto = useCallback((m: Message, index: number) => setViewer({ message: m, index }), [])
   const onFace = useCallback((uid: string) => openMemberSheet(c.id, uid), [c.id])
   const renderRow = useCallback(
-    ({ item }: { item: NebulaRowInfo }) => <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />,
-    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds],
+    ({ item }: { item: NebulaRowInfo }) => item.message.id === firstNew && newSince ? (
+      <View>
+        <NewSinceLine since={newSince.since} />
+        <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />
+      </View>
+    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />,
+    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds, firstNew, newSince],
   )
 
   // Phones: swipe left on the chat for the members (the canvas's other way in, besides the button).
@@ -337,6 +348,7 @@ export function NebulaChat({
           </Text>
         ) : null}
       </View>
+      <PinsChip count={pinsApi.pins.length} onPress={() => setPinsOpen(true)} />
       {isQuiet(n) ? <Icon name="bellOff" size={16} color={N.faint} /> : null}
       <HeaderButton label={`${n.name} notifications`} onPress={() => openNebulaSheet(c.id, n.id)}>
         <Icon name="bell" size={19} color={N.ink2} />
@@ -360,6 +372,7 @@ export function NebulaChat({
             {n.name}
           </Text>
           {isQuiet(n) ? <Icon name="bellOff" size={14} color={N.faint} /> : null}
+          <PinsChip count={pinsApi.pins.length} onPress={() => setPinsOpen(true)} />
         </View>
         <Text size={12} numberOfLines={1} style={{ color: N.muted }}>
           {c.name} · {online} online
@@ -384,7 +397,6 @@ export function NebulaChat({
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: N.bg }} behavior={Platform.OS === 'ios' && !wide ? 'padding' : undefined}>
       {header}
       <ReconnectingStrip night />
-      <PinnedBar pins={pinsApi.pins} onOpen={() => setPinsOpen(true)} night />
       <GestureDetector gesture={membersSwipe}>
       <View style={{ flex: 1 }}>
         <FlatList
@@ -454,6 +466,7 @@ export function NebulaChat({
           {...jumper.listProps}
         />
         <JumpToLatestButton visible={jumper.away} count={jumper.count} onPress={jumper.jump} night />
+        {newSince && firstNew ? <NewSincePill info={newSince} onJump={() => void jumpTo(firstNew)} onMarkRead={() => setNewSince(null)} /> : null}
         <ChatFireflies conversationId={n.conversationId} meId={meId} nameOf={nameOf} />
       </View>
       </GestureDetector>
