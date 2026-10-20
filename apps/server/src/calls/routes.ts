@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -75,7 +75,7 @@ const me = (res: Response): Me => res.locals.user as Me;
 
 const idParam = z.uuid();
 
-const startLimiter = rateLimit({
+const startLimiter = rateLimit("calls:start", {
   windowMs: 10 * 60 * 1000,
   limit: 30,
   keyGenerator: (_req, res) => me(res).id,
@@ -84,7 +84,7 @@ const startLimiter = rateLimit({
   message: { error: "too_many_requests", message: "That's a lot of calls. Wait a few minutes and try again." },
 });
 
-const addLimiter = rateLimit({
+const addLimiter = rateLimit("calls:add", {
   windowMs: 10 * 60 * 1000,
   limit: 20,
   keyGenerator: (_req, res) => me(res).id,
@@ -93,7 +93,7 @@ const addLimiter = rateLimit({
   message: { error: "too_many_requests", message: "That's a lot of adding. Wait a few minutes and try again." },
 });
 
-const actionLimiter = rateLimit({
+const actionLimiter = rateLimit("calls:action", {
   windowMs: 60 * 1000,
   limit: 60,
   keyGenerator: (_req, res) => me(res).id,
@@ -428,7 +428,7 @@ callsRouter.post("/:id/leave", actionLimiter, async (req, res) => {
 // ---------------------------------------------------------------------------------------------
 // Watch Together (0.5.0). Everything but the preview needs you in the call (on any device).
 
-const watchLimiter = rateLimit({
+const watchLimiter = rateLimit("calls:watch", {
   windowMs: 60 * 1000,
   limit: 120, // dragging along the timeline sends a few
   keyGenerator: (_req, res) => me(res).id,
@@ -437,7 +437,7 @@ const watchLimiter = rateLimit({
   message: { error: "too_many_requests", message: "Slow down a little and try again." },
 });
 
-const reactLimiter = rateLimit({
+const reactLimiter = rateLimit("calls:react", {
   windowMs: 10 * 1000,
   limit: 25,
   keyGenerator: (_req, res) => me(res).id,
@@ -446,7 +446,7 @@ const reactLimiter = rateLimit({
   message: { error: "too_many_requests", message: "That's a lot of fireflies! Give it a second." },
 });
 
-const previewLimiter = rateLimit({
+const previewLimiter = rateLimit("calls:preview", {
   windowMs: 60 * 1000,
   limit: 30,
   keyGenerator: (_req, res) => me(res).id,

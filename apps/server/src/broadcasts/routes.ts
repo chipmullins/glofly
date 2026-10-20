@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { inArray } from "drizzle-orm";
 import { z } from "zod";
 import { BROADCAST_TITLE_MAX, type BroadcastJoin, type PublicUser } from "@glofly/shared";
@@ -29,7 +29,7 @@ type Me = { id: string; displayName: string; avatarVersion: string | null };
 const me = (res: Response): Me => res.locals.user as Me;
 const idParam = z.uuid();
 
-const startLimiter = rateLimit({
+const startLimiter = rateLimit("broadcasts:start", {
   windowMs: 10 * 60 * 1000,
   limit: 6,
   keyGenerator: (_req, res) => me(res).id,
@@ -108,7 +108,7 @@ broadcastsRouter.get("/mine", async (_req, res) => {
   res.json({ broadcast: shown(b), viewers });
 });
 
-const watchLimiter = rateLimit({
+const watchLimiter = rateLimit("broadcasts:watch", {
   windowMs: 60 * 1000,
   limit: 20,
   keyGenerator: (_req, res) => me(res).id,

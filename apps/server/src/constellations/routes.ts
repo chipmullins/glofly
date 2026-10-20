@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -149,8 +149,8 @@ constellationsRouter.use(async (_req: Request, res: Response, next: NextFunction
   next();
 });
 
-const limiter = (limit: number, windowMs: number, message: string) =>
-  rateLimit({
+const limiter = (name: string, limit: number, windowMs: number, message: string) =>
+  rateLimit(name, {
     windowMs,
     limit,
     keyGenerator: (_req, res) => me(res).id,
@@ -158,13 +158,13 @@ const limiter = (limit: number, windowMs: number, message: string) =>
     legacyHeaders: false,
     message: { error: "too_many_requests", message },
   });
-const createLimiter = limiter(10, 60 * 60 * 1000, "That's a lot of new constellations. Try again later.");
-const changeLimiter = limiter(120, 10 * 60 * 1000, "That's a lot of changes. Wait a few minutes and try again.");
-const joinLimiter = limiter(30, 10 * 60 * 1000, "That's a lot of joining. Wait a few minutes and try again.");
-const directoryLimiter = limiter(60, 60 * 1000, "That's a lot of searching. Try again in a minute.");
+const createLimiter = limiter("constellations:create", 10, 60 * 60 * 1000, "That's a lot of new constellations. Try again later.");
+const changeLimiter = limiter("constellations:change", 120, 10 * 60 * 1000, "That's a lot of changes. Wait a few minutes and try again.");
+const joinLimiter = limiter("constellations:join", 30, 10 * 60 * 1000, "That's a lot of joining. Wait a few minutes and try again.");
+const directoryLimiter = limiter("constellations:directory", 60, 60 * 1000, "That's a lot of searching. Try again in a minute.");
 // 0.7.5: invite cards in chats look their link up (more often than joining).
-const previewLimiter = limiter(240, 10 * 60 * 1000, "That's a lot of invite links. Wait a few minutes.");
-const cardLimiter = limiter(120, 60 * 1000, "That's a lot of profiles. Wait a minute.");
+const previewLimiter = limiter("constellations:preview", 240, 10 * 60 * 1000, "That's a lot of invite links. Wait a few minutes.");
+const cardLimiter = limiter("constellations:card", 120, 60 * 1000, "That's a lot of profiles. Wait a minute.");
 
 const idParam = z.uuid();
 const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁩﻿]/;

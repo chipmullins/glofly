@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Router, type RequestHandler } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -28,8 +28,8 @@ const hash = (token: string): string => createHash("sha256").update(token).diges
 const challengeKey = (token: string) => `admin:challenge:${hash(token)}`;
 
 // Wrong passwords and wrong codes count separately; right ones don't count at all.
-const limiter = (limit: number) =>
-  rateLimit({
+const limiter = (name: string, limit: number) =>
+  rateLimit(name, {
     windowMs: 15 * 60 * 1000,
     limit,
     skipSuccessfulRequests: true,
@@ -37,8 +37,8 @@ const limiter = (limit: number) =>
     legacyHeaders: false,
     message: { error: "too_many_requests", message: "Too many tries. Wait 15 minutes and try again." },
   });
-const passwordLimiter = limiter(5);
-const codeLimiter = limiter(10);
+const passwordLimiter = limiter("admin:password", 5);
+const codeLimiter = limiter("admin:code", 10);
 
 const deviceNameSchema = z.string().trim().max(60).optional();
 

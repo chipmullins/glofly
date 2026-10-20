@@ -2,33 +2,53 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { messages } from "../db/schema";
 import { storage } from "../storage";
+import { noteRedisError, takeSlot } from "../rateLimit";
 import { firstLink, previewFor, previewImageKey, savePreviewImage } from "./links";
 
 // Link previews (0.5.0): made in the background after a message is sent (or edited), then
 // everyone gets the message again with its card (message:updated). See links.ts for the fetching.
 
 const LINKS_PER_MINUTE = 30;
-let recent: number[] = [];
-
 const PER_PERSON_PER_MINUTE = 6;
+
+// 0.8.0: counted in Redis (shared by every server process, kept through restarts). If Redis
+// can't be reached, the counts fall back to this server's memory, as before.
+let recent: number[] = [];
 const bySender = new Map<string, number[]>();
+
+/** Room for one more preview this minute (server-wide and for this person)? Takes it if so. */
+async function previewSlot(senderId: string | undefined): Promise<boolean> {
+  const slots = [{ key: "rl:previews:all", limit: LINKS_PER_MINUTE }];
+  if (senderId) slots.push({ key: `rl:previews:sender:${senderId}`, limit: PER_PERSON_PER_MINUTE });
+  try {
+    return await takeSlot(60_000, slots);
+  } catch (err) {
+    noteRedisError(err);
+    return memorySlot(senderId);
+  }
+}
+
+function memorySlot(senderId: string | undefined): boolean {
+  const now = Date.now();
+  recent = recent.filter((t) => now - t < 60_000);
+  if (recent.length >= LINKS_PER_MINUTE) return false;
+  if (senderId) {
+    const mine = (bySender.get(senderId) ?? []).filter((t) => now - t < 60_000);
+    if (mine.length >= PER_PERSON_PER_MINUTE) return false;
+    mine.push(now);
+    bySender.set(senderId, mine);
+    if (bySender.size > 5000) bySender.clear(); // never grows without end
+  }
+  recent.push(now);
+  return true;
+}
 
 export async function addLinkPreview(messageId: string, conversationId: string, text: string, senderId?: string): Promise<void> {
   const link = firstLink(text);
   if (!link) return;
   // The whole server makes at most this many previews a minute, and one person only a few of
   // them (a flood of links just goes without previews).
-  const now = Date.now();
-  recent = recent.filter((t) => now - t < 60_000);
-  if (recent.length >= LINKS_PER_MINUTE) return;
-  if (senderId) {
-    const mine = (bySender.get(senderId) ?? []).filter((t) => now - t < 60_000);
-    if (mine.length >= PER_PERSON_PER_MINUTE) return;
-    mine.push(now);
-    bySender.set(senderId, mine);
-    if (bySender.size > 5000) bySender.clear(); // never grows without end
-  }
-  recent.push(now);
+  if (!(await previewSlot(senderId))) return;
 
   const found = await previewFor(link);
   if (!found) return;

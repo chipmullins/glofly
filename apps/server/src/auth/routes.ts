@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { redis } from "../redis";
@@ -51,7 +51,7 @@ import { fieldErrors, forgotPasswordSchema, loginSchema, registerSchema, usernam
 export const authRouter = Router();
 
 // Limits slow down bots that try to mass-create accounts or scan usernames.
-const registerLimiter = rateLimit({
+const registerLimiter = rateLimit("auth:register", {
   windowMs: 60 * 60 * 1000, // 1 hour
   limit: 10,
   standardHeaders: "draft-8",
@@ -59,7 +59,7 @@ const registerLimiter = rateLimit({
   message: { error: "too_many_requests", message: "Too many sign-up attempts. Try again later." },
 });
 
-const usernameCheckLimiter = rateLimit({
+const usernameCheckLimiter = rateLimit("auth:username-check", {
   windowMs: 60 * 1000, // 1 minute
   limit: 60,
   standardHeaders: "draft-8",
@@ -68,7 +68,7 @@ const usernameCheckLimiter = rateLimit({
 });
 
 // Only failed attempts count, so a typo-prone person isn't locked out after logging in fine.
-const loginLimiter = rateLimit({
+const loginLimiter = rateLimit("auth:login", {
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 10,
   skipSuccessfulRequests: true,
@@ -392,7 +392,7 @@ authRouter.post("/login/resend", requireCurrentApp, loginLimiter, async (req, re
 });
 
 // Forgot password: a handful per IP. Each account also gets at most a few reset emails an hour.
-const forgotLimiter = rateLimit({
+const forgotLimiter = rateLimit("auth:forgot", {
   windowMs: 15 * 60 * 1000,
   limit: 5,
   standardHeaders: "draft-8",

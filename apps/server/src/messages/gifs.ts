@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { isGifId, type GifInfo } from "@glofly/shared";
@@ -29,7 +29,7 @@ gifsRouter.use(requireAuth);
 type Me = { id: string };
 const me = (res: Response): Me => res.locals.user as Me;
 
-const gifLimiter = rateLimit({
+const gifLimiter = rateLimit("gifs", {
   windowMs: 60 * 1000,
   limit: 60,
   keyGenerator: (_req, res) => me(res).id,

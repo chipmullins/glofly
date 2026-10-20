@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -29,8 +29,8 @@ type Me = { id: string; username: string; displayName: string; avatarVersion: st
 const me = (res: Response): Me => res.locals.user as Me;
 
 // Limits are per account, not per connection.
-const perUser = (windowMs: number, limit: number, message: string) =>
-  rateLimit({
+const perUser = (name: string, windowMs: number, limit: number, message: string) =>
+  rateLimit(name, {
     windowMs,
     limit,
     keyGenerator: (_req, res) => me(res).id,
@@ -38,8 +38,8 @@ const perUser = (windowMs: number, limit: number, message: string) =>
     legacyHeaders: false,
     message: { error: "too_many_requests", message },
   });
-const searchLimiter = perUser(60 * 1000, 60, "Slow down a little and try again.");
-const requestLimiter = perUser(60 * 60 * 1000, 30, "You've sent a lot of requests. Try again later.");
+const searchLimiter = perUser("friends:search", 60 * 1000, 60, "Slow down a little and try again.");
+const requestLimiter = perUser("friends:request", 60 * 60 * 1000, 30, "You've sent a lot of requests. Try again later.");
 
 const userIdParam = z.uuid();
 
@@ -434,7 +434,7 @@ friendsRouter.delete("/:userId", async (req, res) => {
 
 // POST /friends/invite  { email } — "Invite your friends" (0.3.0): emails them a link to join.
 // Always says "Invite sent" for an address that already has an account (see friends/invites.ts).
-const inviteLimiter = perUser(24 * 60 * 60 * 1000, FRIEND_INVITES_PER_DAY * 2, "You've sent a lot of invites today. Try again tomorrow.");
+const inviteLimiter = perUser("friends:invite", 24 * 60 * 60 * 1000, FRIEND_INVITES_PER_DAY * 2, "You've sent a lot of invites today. Try again tomorrow.");
 friendsRouter.post("/invite", inviteLimiter, async (req, res) => {
   if (await isRestricted(me(res).id)) {
     res.status(403).json(MANAGED_BY_FAMILY);

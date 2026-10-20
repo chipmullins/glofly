@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Router } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "./rateLimit";
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { ERROR_MESSAGE_MAX, ERROR_STACK_MAX, scrubError } from "@glofly/shared";
 import { db } from "./db";
@@ -83,7 +83,7 @@ export function recordServerError(err: unknown, where: string | null): void {
 
 export const errorReportsRouter = Router();
 
-const reportLimiter = rateLimit({
+const reportLimiter = rateLimit("errors:report", {
   windowMs: 10 * 60 * 1000,
   limit: 30,
   standardHeaders: "draft-8",

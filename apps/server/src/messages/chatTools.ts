@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, asc, desc, eq, inArray, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -40,7 +40,7 @@ const me = (res: Response) => (res.locals.user as { id: string }).id;
 const uuid = z.uuid();
 const notFound = (res: Response) => res.status(404).json({ error: "not_found" });
 
-const changeLimiter = rateLimit({
+const changeLimiter = rateLimit("chat-tools:change", {
   windowMs: 60 * 1000,
   limit: 60,
   keyGenerator: (_req, res) => me(res),

@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -47,8 +47,8 @@ type Me = { id: string };
 const me = (res: Response): Me => res.locals.user as Me;
 const idParam = z.uuid();
 
-const limiter = (windowMs: number, limit: number, message: string) =>
-  rateLimit({
+const limiter = (name: string, windowMs: number, limit: number, message: string) =>
+  rateLimit(name, {
     windowMs,
     limit,
     keyGenerator: (_req, res) => me(res).id,
@@ -56,9 +56,9 @@ const limiter = (windowMs: number, limit: number, message: string) =>
     legacyHeaders: false,
     message: { error: "too_many_requests", message },
   });
-const createLimiter = limiter(60_000, 15, "That's a lot at once. Wait a minute and try again.");
-const moveLimiter = limiter(10_000, 30, "Slow down a little and try again.");
-const fireflyLimiter = limiter(60_000, 10, "That's a lot of fireflies! Give them a minute.");
+const createLimiter = limiter("extras:create", 60_000, 15, "That's a lot at once. Wait a minute and try again.");
+const moveLimiter = limiter("extras:move", 10_000, 30, "Slow down a little and try again.");
+const fireflyLimiter = limiter("extras:firefly", 60_000, 10, "That's a lot of fireflies! Give them a minute.");
 
 const notFound = (res: Response) => res.status(404).json({ error: "not_found" });
 

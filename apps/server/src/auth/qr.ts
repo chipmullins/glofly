@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Router, type Request, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { eq } from "drizzle-orm";
 import { QR_ID_PATTERN, type QrLoginRequest, type QrLoginStart, type QrLoginState } from "@glofly/shared";
 import { db } from "../db";
@@ -53,14 +53,14 @@ function qrUrl(req: Request, id: string): string {
   return `${base}/qr/${id}`;
 }
 
-const startLimiter = rateLimit({
+const startLimiter = rateLimit("qr:start", {
   windowMs: 10 * 60 * 1000,
   limit: 40,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "too_many_requests", message: "Too many QR codes. Wait a few minutes." },
 });
-const pollLimiter = rateLimit({
+const pollLimiter = rateLimit("qr:poll", {
   windowMs: 60 * 1000,
   limit: 90,
   standardHeaders: "draft-8",

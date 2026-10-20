@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { MEMBER_MILESTONES, constellationInitials, type MemberCardInfo, type PublicUser } from "@glofly/shared";
 import { db } from "../db";
@@ -179,7 +179,7 @@ export const iconKeyOf = (constellationId: string, version: string) => `constell
 
 const NOBODY = "00000000-0000-0000-0000-000000000000";
 
-const pageLimiter = rateLimit({
+const pageLimiter = rateLimit("community:page", {
   windowMs: 15 * 60 * 1000,
   limit: 120,
   standardHeaders: "draft-8",
