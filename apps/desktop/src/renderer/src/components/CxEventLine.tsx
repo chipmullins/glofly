@@ -48,7 +48,8 @@ export function CxJoinLine({
   const first = (id: string): string => nameOf(id).trim().split(/\s+/)[0] || nameOf(id)
   const names = [...(waved ? ['You'] : []), ...others.slice(0, waved ? 1 : 1).map(first)]
   const rest = wavers.length - names.length
-  const wavedText = !wavers.length
+  // The button already says "You waved": the line only adds others who waved too.
+  const wavedText = !others.length
     ? null
     : rest > 0
       ? `${names.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'} waved`

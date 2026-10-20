@@ -49,6 +49,7 @@ import { scrollToNewLine, useNewSince } from './newSinceState'
 import { NewSincePill } from './NewSinceParts'
 import { layoutFromRows, layoutOf, rowsOf, sameRows, stepNebula, type Row } from './sidebarOrder'
 import { useRowsGlide, useSidebarDrag } from './useSidebarDrag'
+import { preloadConstellation } from './preload'
 import { InVoiceCount, LivePreview, VoiceFaces } from './VoiceFaces'
 // 0.8.0 community tools: events, constellation search, the Inbox
 import { eventPhase, type ConstellationEvent } from '@glofly/shared'
@@ -678,6 +679,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               aria-current={current ? 'page' : undefined}
               title={card.name}
               onClick={() => props.onOpenConstellation(card.id)}
+              onMouseEnter={() => !current && void preloadConstellation(card.id)}
             >
               <ConstellationIcon
                 id={card.id}

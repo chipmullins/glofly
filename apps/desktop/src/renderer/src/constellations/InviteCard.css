@@ -1,10 +1,10 @@
 /* 0.7.5: the invite card in chats (the approved Invite board). */
 
-.cx-invite {
+.cx-ic {
   margin-top: 8px;
   max-width: 380px;
 }
-.cx-invite-card {
+.cx-ic-card {
   width: 100%;
   max-width: 380px;
   border-radius: 16px;
@@ -16,37 +16,37 @@
     0 0 0 1px rgba(255, 179, 71, 0.06),
     0 0 20px rgba(255, 165, 74, 0.12);
 }
-.cx-invite-card--loading {
+.cx-ic-card--loading {
   height: 150px;
   background: linear-gradient(90deg, #241712, #2e2019, #241712);
   background-size: 200% 100%;
-  animation: cx-invite-shimmer 1.4s linear infinite;
+  animation: cx-ic-shimmer 1.4s linear infinite;
 }
-@keyframes cx-invite-shimmer {
+@keyframes cx-ic-shimmer {
   to {
     background-position: -200% 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cx-invite-card--loading {
+  .cx-ic-card--loading {
     animation: none;
   }
 }
-.cx-invite-card--dead {
+.cx-ic-card--dead {
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.cx-invite-dead {
+.cx-ic-dead {
   font-size: 13px;
   color: #d9c2b1;
 }
-.cx-invite-banner {
+.cx-ic-banner {
   position: relative;
   height: 76px;
 }
-.cx-invite-icon {
+.cx-ic-icon {
   position: absolute;
   left: 14px;
   bottom: -20px;
@@ -62,31 +62,31 @@
   font-size: 16px;
   box-sizing: border-box;
 }
-.cx-invite-icon .cx-icon-img {
+.cx-ic-icon .cx-icon-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.cx-invite-body {
+.cx-ic-body {
   padding: 26px 14px 14px;
   display: flex;
   align-items: flex-end;
   gap: 10px;
 }
-.cx-invite-text {
+.cx-ic-text {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
-.cx-invite-kicker {
+.cx-ic-kicker {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #b8a699;
 }
-.cx-invite-name {
+.cx-ic-name {
   font-family: Outfit, 'DM Sans', sans-serif;
   font-weight: 600;
   font-size: 19px;
@@ -94,20 +94,20 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cx-invite-counts {
+.cx-ic-counts {
   font-size: 13px;
   color: #d9c2b1;
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.cx-invite-dot {
+.cx-ic-dot {
   width: 8px;
   height: 8px;
   border-radius: 4px;
   background: #3dba6e;
 }
-.cx-invite-join {
+.cx-ic-join {
   flex: none;
   border: 0;
   border-radius: 999px;
@@ -120,15 +120,15 @@
   cursor: pointer;
   box-shadow: 0 0 18px rgba(var(--cxa-rgb, 255, 165, 74), 0.35);
 }
-.cx-invite-join:disabled {
+.cx-ic-join:disabled {
   opacity: 0.7;
   cursor: default;
 }
-.cx-invite-join:focus-visible {
+.cx-ic-join:focus-visible {
   outline: 3px solid #ffd27a;
   outline-offset: 2px;
 }
-.cx-invite-from {
+.cx-ic-from {
   font-size: 12px;
   color: var(--glo-faint);
   margin-top: 6px;

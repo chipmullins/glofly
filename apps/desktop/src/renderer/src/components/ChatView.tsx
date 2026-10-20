@@ -25,6 +25,7 @@ import ChatPhotoViewer from './ChatPhotoViewer'
 import { CxJoinLine, CxMilestoneCard } from './CxEventLine'
 import InviteCard, { inviteCodeIn } from '../constellations/InviteCard'
 import { NebulaPinsChip, NebulaPinsPopover } from './NebulaPins'
+import { prefetchedMessages } from '../lib/messagePrefetch'
 import { attachmentSummary, looksLikeVideo } from '../lib/attachments'
 import {
   CallLineIcon,
@@ -350,11 +351,13 @@ export default function ChatView({
   const [ringSome, setRingSome] = useState(false)
   const partnerPresence = partner ? presence[partner.id] : undefined
   const title = chatTitle(conversation)
-  const [messages, setMessages] = useState<Message[]>([])
+  // 0.7.5 instant fly-in: messages fetched ahead (a nebula you're flying into) show at once
+  const [prefetched] = useState(() => prefetchedMessages(conversation.id))
+  const [messages, setMessages] = useState<Message[]>(() => prefetched?.messages ?? [])
   // 0.7.5: messages on their way live in the outbox, so they keep going when you switch chats.
   const pending = outbox.useOutbox(conversation.id)
-  const [hasMore, setHasMore] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [hasMore, setHasMore] = useState(() => prefetched?.hasMore ?? false)
+  const [loading, setLoading] = useState(() => !prefetched)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState<string | null>(null)

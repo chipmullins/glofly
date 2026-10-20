@@ -561,3 +561,9 @@
     animation: none;
   }
 }
+
+/* Jumping to a message (pins, search, the new line) scrolled the whole night layer up: an
+   overflow:hidden box can still be scrolled by scrollIntoView. clip can't be. */
+.cx-root.cx-night {
+  overflow: clip;
+}

@@ -197,7 +197,7 @@ export function CxJoinLine({ m, meId, nameOf, canAct, onReact }: { m: Message; m
   const others = wavers.filter((id) => id !== meId)
   const names = [...(waved ? ['You'] : []), ...others.slice(0, 1).map(nameOf)]
   const rest = wavers.length - names.length
-  const wavedText = !wavers.length ? null : rest > 0 ? `${names.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'} waved` : names.length === 2 ? `${names[0]} and ${names[1]} waved` : `${names[0]} waved`
+  const wavedText = !others.length ? null : rest > 0 ? `${names.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'} waved` : names.length === 2 ? `${names[0]} and ${names[1]} waved` : `${names[0]} waved`
   const who = mine ? 'You' : nameOf(m.senderId)
   return (
     <View style={{ marginTop: 10, marginLeft: 48, gap: 6 }} accessibilityLabel={`${who} joined ${event?.name ?? 'the constellation'}${wavedText ? `. ${wavedText}` : ''}`}>

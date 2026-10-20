@@ -69,13 +69,13 @@ export default function InviteCard({
       live = false
     }
   }, [code])
-  if (!looked) return <div className="cx-invite-card cx-invite-card--loading" aria-hidden="true" />
+  if (!looked) return <div className="cx-ic-card cx-ic-card--loading" aria-hidden="true" />
   if (!looked.ok) {
     if (looked.hide) return null
     return (
-      <div className="cx-invite-card cx-invite-card--dead" role="note">
-        <span className="cx-invite-kicker">Invite to a constellation</span>
-        <span className="cx-invite-dead">This invite has expired or doesn&apos;t work any more.</span>
+      <div className="cx-ic-card cx-ic-card--dead" role="note">
+        <span className="cx-ic-kicker">Invite to a constellation</span>
+        <span className="cx-ic-dead">This invite has expired or doesn&apos;t work any more.</span>
       </div>
     )
   }
@@ -104,38 +104,38 @@ export default function InviteCard({
   const expires = expiresText(expiresAt)
   const from = by ? by.displayName.trim().split(/\s+/)[0] || by.username : null
   return (
-    <div className="cx-invite">
+    <div className="cx-ic">
       <div
-        className="cx-invite-card"
+        className="cx-ic-card"
         style={{ ['--cxa' as string]: a.color, ['--cxa-on' as string]: a.on, ['--cxa-rgb' as string]: a.rgb }}
       >
-        <div className="cx-invite-banner">
+        <div className="cx-ic-banner">
           <BannerArt c={c} width={380} height={76} />
           <ConstellationIcon
             id={c.id}
             name={c.name}
             color={c.color}
             iconVersion={c.iconVersion}
-            className="cx-invite-icon"
+            className="cx-ic-icon"
             style={c.iconVersion ? undefined : { background: '#120c0a', color: a.color }}
           />
         </div>
-        <div className="cx-invite-body">
-          <div className="cx-invite-text">
-            <span className="cx-invite-kicker">Invite to a constellation</span>
-            <span className="cx-invite-name">{c.name}</span>
-            <span className="cx-invite-counts">
-              <span className="cx-invite-dot" aria-hidden="true" />
+        <div className="cx-ic-body">
+          <div className="cx-ic-text">
+            <span className="cx-ic-kicker">Invite to a constellation</span>
+            <span className="cx-ic-name">{c.name}</span>
+            <span className="cx-ic-counts">
+              <span className="cx-ic-dot" aria-hidden="true" />
               {c.onlineCount} online now · {c.memberCount} {c.memberCount === 1 ? 'member' : 'members'}
             </span>
           </div>
-          <button type="button" className="cx-invite-join" disabled={busy} onClick={() => void join()}>
+          <button type="button" className="cx-ic-join" disabled={busy} onClick={() => void join()}>
             {c.joined ? 'Open' : busy ? 'Joining…' : 'Join'}
           </button>
         </div>
       </div>
       {!compact && (from || expires) && (
-        <div className="cx-invite-from">
+        <div className="cx-ic-from">
           {[from && `Invite from ${from}`, expires].filter(Boolean).join(' · ')}
         </div>
       )}

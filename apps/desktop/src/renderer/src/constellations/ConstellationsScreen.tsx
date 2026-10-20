@@ -15,6 +15,7 @@ import { api, usePinnedNebulas } from '../lib/constellations'
 import { Swarm } from './sky'
 import { makeStars, makeSwarm, prefersReducedMotion } from './skyData'
 import { rememberPlace, viewingNebula, type CxPhase, type CxPlace } from './phase'
+import { detailCache, rememberDetail } from './preload'
 import Dashboard from './Dashboard'
 import CreateJoin, { AskToJoin } from './CreateJoin'
 import ConstellationView, { type SettingsPageName } from './ConstellationView'
@@ -113,7 +114,6 @@ export default function ConstellationsScreen(props: Props): React.JSX.Element | 
   )
 }
 
-const detailCache = new Map<string, ConstellationDetail>()
 
 /** What's on the night side once the swipe is done. */
 function Space(props: Props): React.JSX.Element {
@@ -136,7 +136,7 @@ function Space(props: Props): React.JSX.Element {
   const setDetail = useCallback((d: React.SetStateAction<ConstellationDetail | null>) => {
     setDetailState((old) => {
       const next = typeof d === 'function' ? d(old) : d
-      if (next) detailCache.set(next.id, next)
+      if (next) rememberDetail(next)
       return next
     })
   }, [])

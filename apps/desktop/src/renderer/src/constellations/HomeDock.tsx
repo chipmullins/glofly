@@ -34,6 +34,7 @@ import { CloseIcon, ConstellationIcon, LinkOutIcon, MicIconLine, SpeakerIcon } f
 import { hexA } from './colors'
 import { GalaxyIcon } from './sky'
 import type { CxPlace } from './phase'
+import { preloadLastPlace } from './preload'
 import './Dock.css'
 import './HomeDock.css'
 // 0.8.0: the Inbox replaces Mentions in the dock
@@ -201,6 +202,9 @@ export default function HomeDock({
 }): React.JSX.Element {
   const calls = useCalls()
   void calls.tick
+  // 0.7.5 instant fly-in: the constellation the Constellations button goes to, loaded ahead
+  const cardIds = cards.map((c) => c.id).join(',')
+  useEffect(() => preloadLastPlace(me.id, cardIds.split(',')), [me.id, cardIds])
   const [shown, setShown] = useState(false)
   const [hover, setHover] = useState<string | null>(null)
   const [panel, setPanel] = useState<Panel>(null)
