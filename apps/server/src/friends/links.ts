@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 import { Router, type Request, type Response } from "express";
-import { rateLimit, type Options } from "express-rate-limit";
+import type { Options } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, count, eq, gt, isNull } from "drizzle-orm";
 import {
   FRIEND_LINK_DAILY_CAP,
@@ -222,17 +223,17 @@ const tooMany = (message: string): Partial<Options> => ({
   legacyHeaders: false,
   message: { error: "too_many_requests", message },
 });
-const perUserDaily = (limit: number, message: string) =>
-  rateLimit({ windowMs: DAY, limit, keyGenerator: (_req, res) => me(res).id, ...tooMany(message) });
-const perAddressDaily = (limit: number, message: string) => rateLimit({ windowMs: DAY, limit, ...tooMany(message) });
+const perUserDaily = (name: string, limit: number, message: string) =>
+  rateLimit(name, { windowMs: DAY, limit, keyGenerator: (_req, res) => me(res).id, ...tooMany(message) });
+const perAddressDaily = (name: string, limit: number, message: string) => rateLimit(name, { windowMs: DAY, limit, ...tooMany(message) });
 
 const TRY_TOMORROW = "That's a lot of invite links for one day. Try again tomorrow.";
-const lookupPerUser = perUserDaily(200, TRY_TOMORROW);
-const lookupPerAddress = perAddressDaily(400, TRY_TOMORROW);
-const acceptPerUser = perUserDaily(30, TRY_TOMORROW);
-const acceptPerAddress = perAddressDaily(60, TRY_TOMORROW);
-const resetPerUser = perUserDaily(20, "You've made a lot of new links today. Try again tomorrow.");
-const minePerUser = rateLimit({
+const lookupPerUser = perUserDaily("friend-link-lookup", 200, TRY_TOMORROW);
+const lookupPerAddress = perAddressDaily("friend-link-lookup-ip", 400, TRY_TOMORROW);
+const acceptPerUser = perUserDaily("friend-link-accept", 30, TRY_TOMORROW);
+const acceptPerAddress = perAddressDaily("friend-link-accept-ip", 60, TRY_TOMORROW);
+const resetPerUser = perUserDaily("friend-link-reset", 20, "You've made a lot of new links today. Try again tomorrow.");
+const minePerUser = rateLimit("friend-link-mine", {
   windowMs: 60 * 1000,
   limit: 60,
   keyGenerator: (_req, res) => me(res).id,
@@ -321,14 +322,14 @@ friendLinkRouter.post("/:code/accept", acceptPerUser, acceptPerAddress, async (r
 // friend?"); "use Glofly in your browser" opens chat.glofly.app/?friend=<code> (sign-up makes you
 // friends, signing in asks). Caddy sends /i/* from glofly.app here.
 
-const pageLimiter = rateLimit({
+const pageLimiter = rateLimit("friend-link-page", {
   windowMs: 15 * 60 * 1000,
   limit: 120,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   handler: (_req, res) => res.status(429).type("text/plain").send("Too many tries. Wait a few minutes and try again."),
 });
-const pageDailyLimiter = rateLimit({
+const pageDailyLimiter = rateLimit("friend-link-page-daily", {
   windowMs: DAY,
   limit: 1000,
   standardHeaders: "draft-8",

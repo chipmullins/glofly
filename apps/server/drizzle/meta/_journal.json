@@ -246,6 +246,13 @@
       "when": 1792480916143,
       "tag": "0034_constellation_polish",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792538802523,
+      "tag": "0035_glofly_080",
+      "breakpoints": true
     }
   ]
 }
