@@ -1679,12 +1679,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         {newSince.info?.nebulaId === chatNebula.id && !voiceChatOpen && (
           <NewSincePill
             info={newSince.info}
-            onJump={() => {
-              if (!scrollToNewLine())
-                document
-                  .querySelector('.cx-main [data-message-id]')
-                  ?.scrollIntoView({ block: 'start' })
-            }}
+            onJump={() => void scrollToNewLine()}
             onMarkRead={() => {
               newSince.clear()
               void window.glofly.conversations.markRead(chatNebula.conversationId)

@@ -80,7 +80,7 @@ export function NebulaPinsPopover({
     }
     document.addEventListener('pointerdown', onDown, true)
     document.addEventListener('keydown', onKey, true)
-    ref.current?.focus()
+    ref.current?.focus({ preventScroll: true })
     return () => {
       document.removeEventListener('pointerdown', onDown, true)
       document.removeEventListener('keydown', onKey, true)

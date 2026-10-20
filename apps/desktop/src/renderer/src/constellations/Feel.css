@@ -355,7 +355,7 @@
   color: #ffffff;
   font-weight: 700;
 }
-.cx-neb-voice--stacked {
+.cx-neb-voice.cx-neb-voice--stacked {
   flex-direction: row;
   align-items: center;
   gap: 8px;

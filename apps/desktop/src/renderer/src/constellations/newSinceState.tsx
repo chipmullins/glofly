@@ -5,12 +5,27 @@ import { NewSinceLine } from './NewSinceParts'
 
 // 0.7.5 "New since you left": what was new when you opened a nebula, and its line.
 
-/** Scrolls the chat to the "New since you left" line (true if it's drawn). */
+/**
+ * Scrolls the chat to the "New since you left" line (true if it's drawn). Only the message list
+ * scrolls (scrollIntoView would also nudge the whole window).
+ */
 export function scrollToNewLine(): boolean {
-  const el = document.querySelector('.cx-main .cx-newline')
+  const el = document.querySelector<HTMLElement>('.cx-main .cx-newline')
   if (!el) return false
+  let box = el.parentElement
+  while (
+    box &&
+    !(box.scrollHeight > box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY))
+  )
+    box = box.parentElement
+  if (!box) return false
+  const top =
+    el.getBoundingClientRect().top -
+    box.getBoundingClientRect().top +
+    box.scrollTop -
+    box.clientHeight / 3
   const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  el.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' })
+  box.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' })
   return true
 }
 
