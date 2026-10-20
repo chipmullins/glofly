@@ -28,6 +28,7 @@ import {
   BellIcon,
   BellOffIcon,
   GroupIcon,
+  MoreIcon,
   PhoneIcon,
   ProfileIcon,
   SearchIcon,
@@ -368,6 +369,8 @@ export default function ChatView({
   )
   /** The header's mute menu */
   const [muteOpen, setMuteOpen] = useState(false)
+  /** 0.7.4: the ⋯ More menu in the header */
+  const [moreOpen, setMoreOpen] = useState(false)
   const muteRef = useRef<HTMLDivElement>(null)
   /** The 😊 button, while the emoji picker it opened is showing */
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null)
@@ -1265,12 +1268,18 @@ export default function ChatView({
 
   // The mute menu closes on a click elsewhere or Escape.
   useEffect(() => {
-    if (!muteOpen) return
+    if (!muteOpen && !moreOpen) return
     const onDown = (e: MouseEvent): void => {
-      if (!muteRef.current?.contains(e.target as Node)) setMuteOpen(false)
+      if (!muteRef.current?.contains(e.target as Node)) {
+        setMuteOpen(false)
+        setMoreOpen(false)
+      }
     }
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setMuteOpen(false)
+      if (e.key === 'Escape') {
+        setMuteOpen(false)
+        setMoreOpen(false)
+      }
     }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
@@ -1278,7 +1287,7 @@ export default function ChatView({
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [muteOpen])
+  }, [muteOpen, moreOpen])
   const muted = isMuted(conversation, now)
 
   /** Puts an emoji where the cursor was (replacing any selected text). */
@@ -1581,6 +1590,25 @@ export default function ChatView({
     ]
   )
 
+  // 0.7.4: the pinned messages panel opens under the pins button, or under ⋯ More when the chat
+  // has no pins yet.
+  const pinsPanel = (
+    <PinsPanel
+      pins={pinList}
+      canPin={canPin}
+      nameOf={nameOf}
+      onJump={(id) => {
+        setPinsOpen(false)
+        setLocalJump({ messageId: id, nonce: Date.now() })
+      }}
+      onUnpin={(id) => {
+        const m = pinList.find((p) => p.message.id === id)?.message
+        if (m) void setPinned(m, false)
+      }}
+      onClose={() => setPinsOpen(false)}
+    />
+  )
+
   return (
     <div
       className="chat"
@@ -1744,113 +1772,42 @@ export default function ChatView({
             )}
           </div>
           <div className="chat-header-actions">
-            {/* 0.7.3: pinned messages */}
-            <span className="pins-wrap">
-              <button
-                type="button"
-                className={
-                  pinsOpen ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
-                }
-                aria-label={
-                  pinList.length ? `Pinned messages (${pinList.length})` : 'Pinned messages'
-                }
-                aria-expanded={pinsOpen}
-                title="Pinned messages"
-                onClick={() => setPinsOpen((v) => !v)}
-              >
-                <PinnedMessagesIcon size={20} />
-                {pinList.length > 0 && <span className="pins-count">{pinList.length}</span>}
-              </button>
-              {pinsOpen && (
-                <PinsPanel
-                  pins={pinList}
-                  canPin={canPin}
-                  nameOf={nameOf}
-                  onJump={(id) => {
-                    setPinsOpen(false)
-                    setLocalJump({ messageId: id, nonce: Date.now() })
-                  }}
-                  onUnpin={(id) => {
-                    const m = pinList.find((p) => p.message.id === id)?.message
-                    if (m) void setPinned(m, false)
-                  }}
-                  onClose={() => setPinsOpen(false)}
-                />
-              )}
-            </span>
-            {
-              <>
-                <button
-                  type="button"
-                  className="chat-header-button"
-                  aria-label={groupCallOn ? 'Join call' : 'Start voice call'}
-                  title={callTitle('Voice')}
-                  disabled={!canCall}
-                  onClick={() => calls.start(conversation, false)}
-                >
-                  <PhoneIcon size={20} />
-                </button>
-                <button
-                  type="button"
-                  className="chat-header-button"
-                  aria-label={groupCallOn ? 'Join call with video' : 'Start video call'}
-                  title={callTitle('Video')}
-                  disabled={!canCall}
-                  onClick={() => calls.start(conversation, true)}
-                >
-                  <VideoIcon size={21} />
-                </button>
-                {/* Groups (0.5.2): ring only some of the group. */}
-                {isGroup && !groupCallOn && conversation.memberCount > 2 && (
-                  <button
-                    type="button"
-                    className="chat-header-button chat-header-button--narrow"
-                    aria-label="Choose who to ring"
-                    title="Choose who to ring"
-                    disabled={!canCall}
-                    onClick={() => setRingSome(true)}
-                  >
-                    <ChevronIcon direction="down" size={16} strokeWidth={2.4} />
-                  </button>
-                )}
-              </>
-            }
-            {/* Order (Chip, Oct 12): voice, video, profile, pin, search, then mute. */}
-            {partner ? (
-              <button
-                type="button"
-                className="chat-header-button"
-                aria-label={`View ${partner.displayName}'s profile`}
-                title="Profile"
-                onClick={() => onViewProfile(partner)}
-              >
-                <ProfileIcon size={20} strokeWidth={1.9} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="chat-header-button"
-                aria-label="Group settings"
-                title="Group settings"
-                onClick={onGroupSettings}
-              >
-                <GroupIcon size={21} />
-              </button>
-            )}
+            {/* 0.7.4 (Chip, Oct 20): Call, Video and Search stay as buttons; Profile, Pinned
+                messages, Pin chat and Mute moved into ⋯ More. Pins and Muted still show as their
+                own button while they apply, so they stay one click away. */}
             <button
               type="button"
-              className={
-                conversation.pinnedAt
-                  ? 'chat-header-button chat-header-button--on'
-                  : 'chat-header-button'
-              }
-              aria-label={conversation.pinnedAt ? 'Unpin this chat' : 'Pin this chat'}
-              aria-pressed={!!conversation.pinnedAt}
-              title={conversation.pinnedAt ? 'Unpin' : 'Pin to the top'}
-              onClick={onTogglePin}
+              className="chat-header-button"
+              aria-label={groupCallOn ? 'Join call' : 'Start voice call'}
+              title={callTitle('Voice')}
+              disabled={!canCall}
+              onClick={() => calls.start(conversation, false)}
             >
-              <PinIcon size={19} />
+              <PhoneIcon size={20} />
             </button>
+            <button
+              type="button"
+              className="chat-header-button"
+              aria-label={groupCallOn ? 'Join call with video' : 'Start video call'}
+              title={callTitle('Video')}
+              disabled={!canCall}
+              onClick={() => calls.start(conversation, true)}
+            >
+              <VideoIcon size={21} />
+            </button>
+            {/* Groups (0.5.2): ring only some of the group. */}
+            {isGroup && !groupCallOn && conversation.memberCount > 2 && (
+              <button
+                type="button"
+                className="chat-header-button chat-header-button--narrow"
+                aria-label="Choose who to ring"
+                title="Choose who to ring"
+                disabled={!canCall}
+                onClick={() => setRingSome(true)}
+              >
+                <ChevronIcon direction="down" size={16} strokeWidth={2.4} />
+              </button>
+            )}
             <button
               type="button"
               className="chat-header-button"
@@ -1860,22 +1817,152 @@ export default function ChatView({
             >
               <SearchIcon size={19} />
             </button>
+            {pinList.length > 0 && (
+              <span className="pins-wrap">
+                <button
+                  type="button"
+                  className={
+                    pinsOpen ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
+                  }
+                  aria-label={`Pinned messages (${pinList.length})`}
+                  aria-expanded={pinsOpen}
+                  title="Pinned messages"
+                  onClick={() => setPinsOpen((v) => !v)}
+                >
+                  <PinnedMessagesIcon size={20} />
+                  <span className="pins-count">{pinList.length}</span>
+                </button>
+                {pinsOpen && pinsPanel}
+              </span>
+            )}
+            {muted && (
+              <button
+                type="button"
+                className="chat-header-button chat-header-button--on"
+                aria-label={isGroup ? 'Unmute this group' : 'Unmute this chat'}
+                title={
+                  conversation.mutedUntil
+                    ? `${mutedLabel(conversation.mutedUntil)} · Unmute`
+                    : 'Unmute'
+                }
+                onClick={() => onMute(null)}
+              >
+                <BellOffIcon size={19} />
+              </button>
+            )}
             <div className="chat-header-wrap" ref={muteRef}>
               <button
                 type="button"
                 className={
-                  muted ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
+                  moreOpen || muteOpen
+                    ? 'chat-header-button chat-header-button--on'
+                    : 'chat-header-button'
                 }
-                aria-label={muted ? 'Unmute this chat' : 'Mute this chat'}
+                aria-label="More"
                 aria-haspopup="menu"
-                aria-expanded={muteOpen}
-                title={
-                  muted && conversation.mutedUntil ? mutedLabel(conversation.mutedUntil) : 'Mute'
-                }
-                onClick={() => setMuteOpen((v) => !v)}
+                aria-expanded={moreOpen}
+                title="More"
+                onClick={() => {
+                  setMuteOpen(false)
+                  setMoreOpen((v) => !v)
+                }}
               >
-                {muted ? <BellOffIcon size={19} /> : <BellIcon size={19} />}
+                <MoreIcon size={20} />
               </button>
+              {moreOpen && (
+                <div
+                  role="menu"
+                  className="menu chat-more-menu"
+                  aria-label="More"
+                  onKeyDown={(e) => {
+                    // Up / Down move between the items, like the other menus' keyboard use.
+                    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+                    e.preventDefault()
+                    const items = [
+                      ...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
+                    ]
+                    const at = items.indexOf(document.activeElement as HTMLButtonElement)
+                    const next =
+                      e.key === 'ArrowDown'
+                        ? (at + 1) % items.length
+                        : (at - 1 + items.length) % items.length
+                    items[next]?.focus()
+                  }}
+                >
+                  {partner ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      autoFocus
+                      onClick={() => {
+                        setMoreOpen(false)
+                        onViewProfile(partner)
+                      }}
+                    >
+                      <ProfileIcon size={18} strokeWidth={1.9} />
+                      View profile
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      autoFocus
+                      onClick={() => {
+                        setMoreOpen(false)
+                        onGroupSettings()
+                      }}
+                    >
+                      <GroupIcon size={18} />
+                      Group settings
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="menu-item"
+                    onClick={() => {
+                      setMoreOpen(false)
+                      setPinsOpen(true)
+                    }}
+                  >
+                    <PinnedMessagesIcon size={18} />
+                    Pinned messages
+                    {pinList.length > 0 && (
+                      <span className="menu-item-count">{pinList.length}</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="menu-item"
+                    onClick={() => {
+                      setMoreOpen(false)
+                      onTogglePin()
+                    }}
+                  >
+                    <PinIcon size={18} />
+                    {conversation.pinnedAt
+                      ? `Unpin ${isGroup ? 'group' : 'chat'}`
+                      : `Pin ${isGroup ? 'group' : 'chat'} to the top`}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="menu-item"
+                    aria-haspopup={muted ? undefined : 'menu'}
+                    onClick={() => {
+                      setMoreOpen(false)
+                      if (muted) onMute(null)
+                      else setMuteOpen(true)
+                    }}
+                  >
+                    {muted ? <BellIcon size={18} /> : <BellOffIcon size={18} />}
+                    {muted ? 'Unmute' : `Mute ${isGroup ? 'group' : 'chat'}…`}
+                  </button>
+                </div>
+              )}
               {muteOpen && (
                 <div role="menu" className="menu chat-mute-menu">
                   {muted && conversation.mutedUntil ? (
@@ -1920,6 +2007,7 @@ export default function ChatView({
                   )}
                 </div>
               )}
+              {pinsOpen && pinList.length === 0 && pinsPanel}
             </div>
           </div>
         </header>

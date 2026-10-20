@@ -1,37 +1,12 @@
 import { useEffect, useState } from 'react'
 import fireflyImg from '../assets/firefly.png'
 import { AddFriendIcon, CameraIcon, CloseIcon, MegaphoneIcon } from './icons'
+import { hideWelcome, invitedSomeone } from '../lib/welcome'
 
 // 0.7.4: the first five minutes. A new account's Friends page used to say "No friends yet";
 // now it's three steps that make Glofly useful on day one: a photo, a friend, and inviting
 // friends who aren't on Glofly yet. Each step gets a check once done. With no friends it takes
 // the whole page; once there are friends but no photo it sits above the list, and can be hidden.
-
-const invitedKey = (userId: string): string => `glofly.invitedSomeone.${userId}`
-const hiddenKey = (userId: string): string => `glofly.welcomeHidden.${userId}`
-
-function stored(key: string): boolean {
-  try {
-    return localStorage.getItem(key) === '1'
-  } catch {
-    return false
-  }
-}
-
-/** Remembers on this computer that this person sent an invite (the server doesn't say). */
-export function noteInvited(userId: string): void {
-  try {
-    localStorage.setItem(invitedKey(userId), '1')
-  } catch {
-    // just for now
-  }
-  window.dispatchEvent(new Event('glofly:invited'))
-}
-
-/** Hidden by the person (only offered once they have friends). */
-export function welcomeHidden(userId: string): boolean {
-  return stored(hiddenKey(userId))
-}
 
 const CheckMark = (): React.JSX.Element => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -70,9 +45,9 @@ export default function WelcomeCard({
   onInvite: () => void
   onHide: () => void
 }): React.JSX.Element {
-  const [invited, setInvited] = useState(() => stored(invitedKey(userId)))
+  const [invited, setInvited] = useState(() => invitedSomeone(userId))
   useEffect(() => {
-    const again = (): void => setInvited(stored(invitedKey(userId)))
+    const again = (): void => setInvited(invitedSomeone(userId))
     window.addEventListener('glofly:invited', again)
     return () => window.removeEventListener('glofly:invited', again)
   }, [userId])
@@ -124,11 +99,7 @@ export default function WelcomeCard({
           aria-label="Hide these tips"
           title="Hide"
           onClick={() => {
-            try {
-              localStorage.setItem(hiddenKey(userId), '1')
-            } catch {
-              // just for now
-            }
+            hideWelcome(userId)
             onHide()
           }}
         >

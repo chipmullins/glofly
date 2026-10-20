@@ -871,6 +871,28 @@
   top: 44px;
   width: 250px;
 }
+/* 0.7.4: ⋯ More in the chat header (Profile, Pinned messages, Pin chat, Mute) */
+.chat-more-menu {
+  right: 0;
+  top: 52px;
+  width: 240px;
+}
+.chat-more-menu .menu-item-count {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 1px 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--glo-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+/* Opened from More with no pins yet: under the More button */
+.chat-header-wrap > .pins-panel {
+  right: 0;
+}
 .menu-note {
   padding: 6px 10px 4px;
   font-size: 12px;

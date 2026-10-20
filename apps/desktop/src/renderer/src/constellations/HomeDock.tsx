@@ -571,9 +571,11 @@ export default function HomeDock({
   return (
     <div className="dock-root hd-root">
       {/* The very bottom edge raises the dock (the message box above stays clickable). */}
+      {/* 0.7.4: it says what it is (it only exists for people in a constellation: MainScreen). */}
       <div
         className="dock-edge hd-edge"
         aria-hidden="true"
+        title="Your constellations and pinned nebulas"
         onMouseEnter={() => {
           stayUp()
           setShown(true)

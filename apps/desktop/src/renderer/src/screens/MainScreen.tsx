@@ -20,6 +20,8 @@ import Avatar, { AvatarFace } from '../components/Avatar'
 import ChatView from '../components/ChatView'
 import ConfirmDialog from '../components/ConfirmDialog'
 import EditProfileDialog from '../components/EditProfileDialog'
+import WelcomeCard from '../components/WelcomeCard'
+import { noteInvited, welcomeHidden } from '../lib/welcome'
 import ProfileCard from '../components/ProfileCard'
 import {
   AddFriendIcon,
@@ -468,7 +470,10 @@ export default function MainScreen({
   }, [lists])
   const [notice, setNotice] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [adding, setAdding] = useState(false)
+  /** Add friend dialog: open at the search, or (0.7.4 welcome card) at "Invite your friends" */
+  const [adding, setAdding] = useState<false | 'search' | 'invite'>(false)
+  /** 0.7.4: the small welcome card above the friends list, hidden by the person */
+  const [welcomeOff, setWelcomeOff] = useState(() => welcomeHidden(user.id))
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
@@ -1300,7 +1305,7 @@ export default function MainScreen({
   const outgoing = (lists?.outgoing ?? []).filter((p) => matches(p, search))
   const blocked = (lists?.blocked ?? []).filter((p) => matches(p, search))
   // A restricted (family-managed) account doesn't add or remove friends: their family does.
-  const openAdd = restricted ? undefined : (): void => setAdding(true)
+  const openAdd = restricted ? undefined : (): void => setAdding('search')
   const searching = search.trim().length > 0
 
   function renderTab(): React.ReactNode {
@@ -1351,6 +1356,25 @@ export default function MainScreen({
     }
 
     if (filter === 'all') {
+      // 0.7.4: a new account gets the welcome card (photo, a friend, invite friends) instead of
+      // "No friends yet"; with friends but no photo yet, a smaller one above the list.
+      const welcome = (compact: boolean): React.ReactNode => (
+        <WelcomeCard
+          userId={user.id}
+          firstName={user.displayName.trim().split(/\s+/)[0] || user.username}
+          hasPhoto={!!user.avatarVersion}
+          hasFriend={lists.friends.length > 0}
+          hasPendingRequest={lists.outgoing.length > 0}
+          compact={compact}
+          onPhoto={() => setEditingProfile(true)}
+          onAddFriend={() => setAdding('search')}
+          onInvite={() => setAdding('invite')}
+          onHide={() => setWelcomeOff(true)}
+        />
+      )
+      const showWelcome =
+        !restricted && !searching && !(user.avatarVersion && lists.friends.length > 0)
+      if (lists.friends.length === 0 && showWelcome) return welcome(false)
       if (lists.friends.length === 0) {
         return (
           <EmptyState
@@ -1369,6 +1393,7 @@ export default function MainScreen({
       // Grouped like the design: "Online — 3", then "Offline — 2".
       return (
         <>
+          {showWelcome && !welcomeOff && welcome(true)}
           {onlineFriends.length > 0 && (
             <section className="friend-group">
               <h2>Online — {onlineFriends.length}</h2>
@@ -1690,14 +1715,17 @@ export default function MainScreen({
               <span className="badge">{unreadTotal > 99 ? '99+' : unreadTotal}</span>
             )}
           </button>
-          <UpdateBar />
-          {isWeb && <WebNotifyBar />}
-          <AnnouncementBar announcement={announcement} />
-          <ConfirmEmailBar
-            userId={user.id}
-            onChangeEmail={() => setSettingsOpen('account')}
-            onSessionExpired={onSessionExpired}
-          />
+          {/* 0.7.4: one bar at a time, most important first (MainScreen.css .top-banners). */}
+          <div className="top-banners">
+            <AnnouncementBar announcement={announcement} />
+            <UpdateBar />
+            <ConfirmEmailBar
+              userId={user.id}
+              onChangeEmail={() => setSettingsOpen('account')}
+              onSessionExpired={onSessionExpired}
+            />
+            {isWeb && <WebNotifyBar />}
+          </div>
           {watchingId && friendsById.get(watchingId) && (
             <BroadcastViewer
               person={friendsById.get(watchingId)!}
@@ -1948,6 +1976,8 @@ export default function MainScreen({
         )}
         {adding && (
           <AddFriendDialog
+            startAt={adding}
+            onInvited={() => noteInvited(user.id)}
             onClose={() => setAdding(false)}
             onChanged={refresh}
             onSessionExpired={onSessionExpired}
