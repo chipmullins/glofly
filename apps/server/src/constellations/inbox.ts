@@ -173,7 +173,7 @@ async function allItems(userId: string): Promise<InboxItem[]> {
     } else if (!mine && e.hostId !== userId && !e.startedAt) {
       phase = "new";
       at = e.createdAt;
-    } else if (mine && !e.startedAt) {
+    } else if (mine && !e.startedAt && e.hostId !== userId) {
       phase = "new";
       at = e.createdAt;
     } else continue;
