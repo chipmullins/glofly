@@ -1,5 +1,8 @@
 import type {
   AccountDetails,
+  FriendLinkAccepted,
+  FriendLinkPreview,
+  MyFriendLink,
   ActiveCall,
   Announcement,
   ApiResult,
@@ -32,6 +35,7 @@ import type {
 } from '../../../desktop/src/preload/api-types'
 import { isGifId } from '@glofly/shared/gifs'
 import { looksLikeVideo } from '@glofly/shared/attachments'
+import { FRIEND_LINK_PATTERN } from '@glofly/shared/friendLinks'
 import { endSession, nothing, onSessionEnded, request, setPauseHandler, unwrap } from './api'
 import * as auth from './auth'
 import { API_URL, isApple, isId, isTouch } from './config'
@@ -108,6 +112,9 @@ const invalid = {
 /** Only real ids reach a URL: anything else answers "invalid" without asking the server. */
 const badId = (...ids: unknown[]): Promise<typeof invalid> | null =>
   ids.every((id) => id === undefined || isId(id)) ? null : Promise.resolve(invalid)
+/** 0.8.0: only a real invite link code goes into an address. */
+const badLinkCode = (code: unknown): Promise<typeof invalid> | null =>
+  typeof code === 'string' && FRIEND_LINK_PATTERN.test(code) ? null : Promise.resolve(invalid)
 
 /** The call address must be LiveKit's, never anything else the page might be sent to. */
 function checkedJoin<T extends { url: string; token: string }>(result: ApiResult<T>): ApiResult<T> {
@@ -130,7 +137,13 @@ let pendingChat: string | null = null
 {
   const chat = new URLSearchParams(location.search).get('chat')
   if (chat && isId(chat)) pendingChat = chat
-  if (location.search) history.replaceState(null, '', location.pathname)
+  // Only ?chat= goes: ?join=<code> (a constellation invite, 0.7.5) and ?friend=<code> (a friend's
+  // invite link, 0.8.0) are read and cleared by the screens themselves.
+  if (chat) {
+    const url = new URL(location.href)
+    url.searchParams.delete('chat')
+    history.replaceState(null, '', url.pathname + url.search)
+  }
 }
 
 /** Opens the live connection and push registration once signed in. */
@@ -213,6 +226,7 @@ export function createBridge(): GloflyApi {
       register: (r) => thenGoLive(auth.register(r)),
       checkUsername: auth.checkUsername,
       signupMode: auth.signupMode,
+      friendLinkInfo: auth.friendLinkInfo,
       restore: async () => {
         const user = await auth.restore()
         if (user) goLive()
@@ -251,7 +265,15 @@ export function createBridge(): GloflyApi {
       unblock: (id) => badId(id) ?? nothing(request('DELETE', `/blocks/${id}`)),
       setOnlineAlert: (id, on) =>
         badId(id) ?? request<{ on: boolean }>('PUT', `/friends/${id}/online-alert`, { on }),
-      invite: (email) => nothing(request('POST', '/friends/invite', { email }))
+      invite: (email) => nothing(request('POST', '/friends/invite', { email })),
+      // 0.8.0: shareable friend invite links
+      myLink: () => request<MyFriendLink>('GET', '/friends/link'),
+      resetLink: () => request<MyFriendLink>('POST', '/friends/link/reset', {}),
+      previewLink: (code) =>
+        badLinkCode(code) ?? request<FriendLinkPreview>('GET', `/friends/link/${code}`),
+      acceptLink: (code) =>
+        badLinkCode(code) ??
+        request<FriendLinkAccepted>('POST', `/friends/link/${code}/accept`, {})
     },
     settings: {
       get: () => request<PrivacySettings>('GET', '/users/me/settings'),
@@ -627,6 +649,8 @@ export function createBridge(): GloflyApi {
     },
     // Browsers have no Jump List or Dock menu.
     shortcuts: { take: async () => null },
+    // glofly:// links are for the apps; the browser gets ?friend=<code> instead (MainScreen).
+    links: { take: async () => null },
     onEvent,
     games: {
       state: async () => NO_GAMES,

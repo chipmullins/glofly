@@ -57,6 +57,8 @@ export type RegisterRequest = {
   acceptTerms: boolean
   /** Needed while sign-ups are invite only. */
   inviteCode?: string
+  /** 0.8.0: signing up from a friend's invite link (glofly.app/i/<code>): friends right away. */
+  friendLink?: string
 }
 
 /** Who can sign up right now (set in Glofly Control). */
@@ -64,7 +66,13 @@ export type SignupMode = 'open' | 'invite' | 'closed'
 
 /** On failure, `fields` holds a message per field (email, username, password, ...). */
 export type RegisterResult =
-  { ok: true; user: SignedInUser } | { ok: false; fields: Record<string, string>; message?: string }
+  | {
+      ok: true
+      user: SignedInUser
+      /** 0.8.0: signed up from a friend's invite link: who you're friends with now */
+      linkedFriend?: PublicUser
+    }
+  | { ok: false; fields: Record<string, string>; message?: string }
 
 export type UsernameCheck = { available: boolean; reason?: string }
 
@@ -481,6 +489,8 @@ export type ServerEvent =
   | { type: 'friend:online'; user: PublicUser }
   /** Someone joined Glofly from your invite and is now your friend (0.3.0) */
   | { type: 'friend:joined'; user: PublicUser }
+  /** 0.8.0: someone added you with your invite link (signed in), and is now your friend */
+  | { type: 'friend:linked'; user: PublicUser }
   | { type: 'conversation:read'; conversationId: string; userId: string; readAt: string }
   | { type: 'conversations:changed' }
   | { type: 'profile:changed'; userId: string }

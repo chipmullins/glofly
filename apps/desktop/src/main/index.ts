@@ -28,7 +28,8 @@ import {
   qrStart,
   register,
   restore,
-  signupMode
+  signupMode,
+  friendLinkInfo
 } from './auth'
 import { reportError, setErrorReports, watchMainErrors } from './errors'
 import {
@@ -59,6 +60,8 @@ import * as extras from './chatExtras'
 import * as social from './social'
 import { saveAttachment, showInFolder } from './files'
 import { handleSecondInstance, setupShortcuts, takePendingShortcut } from './shortcuts'
+import { handleDeepLinkArgv, setupDeepLinks, takeDeepLink } from './deepLinks'
+import { FRIEND_LINK_PATTERN } from '@glofly/shared/friendLinks'
 import {
   clearAllNotifications,
   clearNotification,
@@ -172,7 +175,11 @@ import {
   sendRequest,
   unblockUser,
   setOnlineAlert,
-  inviteByEmail
+  inviteByEmail,
+  myFriendLink,
+  resetFriendLink,
+  previewFriendLink,
+  acceptFriendLink
 } from './friends'
 import type {
   VoiceInfo,
@@ -217,8 +224,13 @@ if (isSecondWindow) app.setPath('userData', `${app.getPath('userData')}-second`)
 // Only one Glofly at a time (per sign-in folder). Opening it again, say while it's in the
 // tray, brings the existing window forward instead.
 // A Jump List task (Windows) arrives this way too: see shortcuts.ts.
+// 0.8.0: a glofly:// link (a friend's invite link) arrives the same way on Windows (deepLinks.ts).
 if (!app.requestSingleInstanceLock()) app.quit()
-else app.on('second-instance', (_event, argv) => handleSecondInstance(argv))
+else
+  app.on('second-instance', (_event, argv) => {
+    if (!handleDeepLinkArgv(argv)) handleSecondInstance(argv)
+  })
+setupDeepLinks()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -425,7 +437,8 @@ function isRegisterRequest(value: unknown): value is RegisterRequest {
     shortText(v.password, 128) &&
     shortText(v.birthday, 10) &&
     typeof v.acceptTerms === 'boolean' &&
-    (v.inviteCode === undefined || shortText(v.inviteCode, 20))
+    (v.inviteCode === undefined || shortText(v.inviteCode, 20)) &&
+    (v.friendLink === undefined || shortText(v.friendLink, 40))
   )
 }
 
@@ -519,6 +532,21 @@ function registerIpcHandlers(): void {
       ? inviteByEmail(email)
       : invalid
   )
+  // 0.8.0: shareable friend invite links.
+  const isLinkCode = (code: unknown): code is string =>
+    typeof code === 'string' && FRIEND_LINK_PATTERN.test(code)
+  ipcMain.handle('friends:my-link', (event) => (fromApp(event) ? myFriendLink() : invalid))
+  ipcMain.handle('friends:reset-link', (event) => (fromApp(event) ? resetFriendLink() : invalid))
+  ipcMain.handle('friends:preview-link', (event, code: unknown) =>
+    fromApp(event) && isLinkCode(code) ? previewFriendLink(code) : invalid
+  )
+  ipcMain.handle('friends:accept-link', (event, code: unknown) =>
+    fromApp(event) && isLinkCode(code) ? acceptFriendLink(code) : invalid
+  )
+  ipcMain.handle('auth:friend-link-info', (event, code: unknown) =>
+    fromApp(event) && isLinkCode(code) ? friendLinkInfo(code) : null
+  )
+  ipcMain.handle('links:take', (event) => (fromApp(event) ? takeDeepLink() : null))
 
   // Privacy settings: only known settings with allowed values get through.
   ipcMain.handle('settings:get', (event) => (fromApp(event) ? getSettings() : invalid))

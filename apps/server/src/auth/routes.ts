@@ -46,6 +46,7 @@ import {
   type PendingLogin,
 } from "./twoStep";
 import { inBackground } from "../push/notify";
+import { useFriendLink } from "../friends/links";
 import { fieldErrors, forgotPasswordSchema, loginSchema, registerSchema, usernameSchema } from "./validation";
 
 export const authRouter = Router();
@@ -229,7 +230,17 @@ authRouter.post("/register", requireCurrentApp, registerLimiter, async (req, res
     );
     // "Confirm your email": sent in the background so signing up stays quick.
     sendVerification(user.id).catch((err) => console.error("Couldn't send the confirm email", err));
-    signedIn(res, web, session, true, user, 201);
+    // 0.8.0: signed up from a friend's invite link: friends right away. A dead link (reset, blocked,
+    // the day's cap) just means no friendship; the account is made either way.
+    let linkedFriend: unknown = undefined;
+    if (input.friendLink) {
+      const used = await useFriendLink(input.friendLink, user, true).catch((err) => {
+        console.error("Couldn't use the invite link", err);
+        return null;
+      });
+      if (used?.ok) linkedFriend = used.owner;
+    }
+    signedIn(res, web, session, true, user, 201, linkedFriend ? { linkedFriend } : {});
     inBackground(noteSignIn(user.id, input.deviceName ?? null, web ?? platformColumn(req.headers["x-glofly-platform"])));
   } catch (err) {
     // Two people grabbing the same name at the same instant: the database still catches it.

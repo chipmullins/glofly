@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, TextInput, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -15,10 +15,11 @@ import {
   passwordProblem,
   strengthOf,
   usernameProblem,
+  FRIEND_LINK_PATTERN,
   type SignupMode,
 } from '@glofly/shared'
 import { register, signupMode, usernameAvailable } from '@/api/auth'
-import { setAvatar } from '@/api/glofly'
+import { friendLinkInfo, setAvatar } from '@/api/glofly'
 import { AuthHero } from '@/ui/AuthHero'
 import { Button, Checkbox, Field, Notice, Text } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
@@ -55,6 +56,15 @@ export default function Register() {
   useEffect(() => {
     void signupMode().then(setMode)
   }, [])
+
+  // 0.8.0: signing up from a friend's invite link (glofly://i/<code> → Sign up): friends right away.
+  const params = useLocalSearchParams<{ friend?: string }>()
+  const friendCode = typeof params.friend === 'string' && FRIEND_LINK_PATTERN.test(params.friend) ? params.friend : null
+  const [inviter, setInviter] = useState<{ name: string } | 'dead' | null>(null)
+  useEffect(() => {
+    if (!friendCode) return
+    void friendLinkInfo(friendCode).then((r) => setInviter(r.ok ? { name: r.data.displayName } : 'dead'))
+  }, [friendCode])
 
   // Live "Available" check, a moment after typing stops.
   useEffect(() => {
@@ -118,6 +128,7 @@ export default function Register() {
       birthday,
       acceptTerms: true,
       ...(mode === 'invite' ? { inviteCode: inviteCode.trim() } : {}),
+      ...(friendCode && inviter !== 'dead' ? { friendLink: friendCode } : {}),
     })
     if (!result.ok) {
       setBusy(false)
@@ -140,6 +151,11 @@ export default function Register() {
       <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
         <AuthHero title="Join Glofly" subtitle="Your friends are a firefly away." onBack={() => router.back()} />
         <View style={{ paddingHorizontal: 24, paddingTop: 20, gap: 14 }}>
+          {inviter && inviter !== 'dead' ? (
+            <Notice tone="good">{`${inviter.name} invited you. Sign up and you'll be friends with ${inviter.name.trim().split(/\s+/)[0]} right away.`}</Notice>
+          ) : inviter === 'dead' ? (
+            <Notice tone="info">That invite link doesn't work anymore. You can still sign up and add your friend by username.</Notice>
+          ) : null}
           {closed ? <Notice>Glofly isn't taking new sign-ups right now.</Notice> : null}
           {formError ? <Notice>{formError}</Notice> : null}
           <Field

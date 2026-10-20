@@ -40,6 +40,8 @@ function show(user: PublicUser, text: string, hang = false) {
 onLive((event, payload) => {
   if (event === 'friend:online') show(payload as PublicUser, 'is online')
   else if (event === 'friend:joined') show(payload as PublicUser, "joined Glofly from your invite. You're friends now!")
+  // 0.8.0: someone added you with your invite link.
+  else if (event === 'friend:linked') show(payload as PublicUser, "added you with your invite link. You're friends now!")
   else if (event === 'hang:ping') {
     // 0.5.0 "Want to hang?": a friend is free for a call, with a Call button.
     const { userId } = payload as { userId: string }

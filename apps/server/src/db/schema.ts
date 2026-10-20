@@ -881,6 +881,42 @@ export const friendInvites = pgTable(
   (t) => [index("friend_invites_inviter_idx").on(t.inviterId), index("friend_invites_email_idx").on(sql`lower(${t.email})`)],
 );
 
+// 0.8.0 shareable friend invite links (glofly.app/i/<code>, friends/links.ts): one personal code
+// per account, made the first time it's asked for. Reset replaces the code (the old one is dead at
+// once). Signing up from it, or opening it while signed in, makes you friends with its owner.
+export const friendLinks = pgTable("friend_links", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  // `chip-7Kq4mZ` (shared FRIEND_LINK_PATTERN). Matched exactly.
+  code: text("code").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Everyone who became friends through someone's link: "3 friends joined from your link" (counted
+// for the current code) and the daily cap per link owner.
+export const friendLinkUses = pgTable(
+  "friend_link_uses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    inviterId: uuid("inviter_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The code they used (the count only counts the current one).
+    code: text("code").notNull(),
+    // True when they made their account from the link (false: added while signed in).
+    signedUp: boolean("signed_up").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("friend_link_uses_inviter_idx").on(t.inviterId, t.createdAt),
+    index("friend_link_uses_code_idx").on(t.code),
+  ],
+);
+
 // ───────────── Constellations (Glofly 2.0) ─────────────
 //
 // A community: nebulas (text and voice rooms) under categories, members with roles. Everything

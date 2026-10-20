@@ -11,6 +11,8 @@ import { authRouter } from "./auth/routes";
 import { accountRouter } from "./account/routes";
 import { purgeDeletedAccounts } from "./account/deletion";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
+// 0.8.0: shareable friend invite links (/friends/link, and the page glofly.app/i/<code>).
+import { friendLinkPageRouter, friendLinkRouter } from "./friends/links";
 import { conversationsRouter } from "./messages/routes";
 import { extrasRouter } from "./messages/extras";
 import { gifsRouter, gifsConfigured } from "./messages/gifs";
@@ -108,6 +110,8 @@ app.use("/errors", errorReportsRouter);
 app.use("/users", usersRouter);
 app.use("/users", profileRouter);
 app.use("/avatars", avatarsRouter);
+// 0.8.0 (before friendsRouter: /friends/link isn't a friend's id).
+app.use("/friends/link", friendLinkRouter);
 app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
 // 0.7.3: pins, mark as unread, send later (before conversationsRouter: /conversations/scheduled).
@@ -129,6 +133,8 @@ app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
 // 0.7.5: a constellation invite link's page (glofly.app/c/<code>; Caddy sends /c/* here).
 app.use("/c", invitePageRouter);
+// 0.8.0: a friend invite link's page (glofly.app/i/<code>; Caddy sends /i/* here).
+app.use("/i", friendLinkPageRouter);
 // Watch Together's video player page (the apps show the shared YouTube video through it).
 app.use("/watch", watchPageRouter);
 app.use("/reports", reportsRouter);

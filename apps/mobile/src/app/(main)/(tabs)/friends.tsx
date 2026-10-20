@@ -15,6 +15,7 @@ import { inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Button, IconButton, SectionLabel, Text, webNoOutline } from '@/ui/kit'
 import { EmptyScene } from '@/ui/EmptyScene'
+import { shareFriendLink } from '@/state/friendLink'
 import { Skeleton } from '@/ui/Skeleton'
 import { font, useTheme } from '@/ui/theme'
 
@@ -154,8 +155,9 @@ export default function Friends() {
             restricted ? (
               <EmptyScene kind="friends" title="No friends yet" text="Your family adds your friends for you. They’ll show up here." />
             ) : (
-              <EmptyScene kind="friends" title="Every glow starts with one friend" text="Add someone by their username, or invite them by email. You’ll automatically be friends as soon as they join.">
+              <EmptyScene kind="friends" title="Every glow starts with one friend" text="Send your invite link. You’ll automatically be friends as soon as they join.">
                 <Button compact label="Add a friend" icon="addPerson" onPress={() => router.push('/add-friend')} />
+                <Button compact kind="secondary" label="Share your invite link" icon="share" onPress={() => void shareFriendLink().then((p) => void (p && inform("Couldn't share your link", p)))} />
               </EmptyScene>
             )
           ) : (

@@ -381,3 +381,27 @@
   line-height: 13px;
   cursor: pointer;
 }
+
+/* 0.8.0: signing up from a friend's invite link */
+.register-invited {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -6px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--glo-accent-tint);
+  border: 1px solid var(--glo-accent-muted);
+  color: var(--glo-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.register-invited strong {
+  font-family: var(--glo-font-display);
+  font-size: 15px;
+  color: var(--glo-ink);
+}
+.register-invited--dead {
+  background: var(--glo-panel);
+  border-color: var(--glo-line);
+}

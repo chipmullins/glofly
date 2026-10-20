@@ -17,6 +17,9 @@ import type {
 } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import AddFriendDialog from '../components/AddFriendDialog'
+import FriendLinkDialog from '../components/FriendLinkDialog'
+import { peekDeepLink, takeDeepLink, takeJoinedWith, useDeepLinks } from '../lib/deepLink'
+import { copyFriendLink, loadFriendLink } from '../lib/friendLink'
 import Avatar, { AvatarFace } from '../components/Avatar'
 import ChatView from '../components/ChatView'
 import { ListSkeleton } from '../components/Skeleton'
@@ -930,6 +933,25 @@ export default function MainScreen({
           void refresh()
           break
         }
+        case 'friend:linked': {
+          // 0.8.0: someone added you with your invite link.
+          const who = event.user
+          playSound('friendRequest')
+          setToast(`${who.displayName} added you with your invite link. You're friends now!`)
+          if (shouldNotify()) {
+            void notify(
+              {
+                key: `linked:${who.id}`,
+                conversationId: null,
+                title: who.displayName,
+                body: 'added you with your invite link. You’re friends now!'
+              },
+              who
+            )
+          }
+          void refresh()
+          break
+        }
         case 'connection':
           setConnected(event.connected)
           if (event.connected) {
@@ -1268,6 +1290,22 @@ export default function MainScreen({
       window.removeEventListener('glofly:call-person', call)
     }
   }, [])
+  // 0.8.0: opened from a friend's invite link (glofly://i/<code>, chat.glofly.app/?friend=<code>):
+  // "Add Chip as a friend?". A glofly://c/<code> link shows that constellation invite.
+  const [friendLinkCode, setFriendLinkCode] = useState<string | null>(null)
+  const onDeepLink = useCallback(() => {
+    const link = peekDeepLink()
+    if (!link) return
+    takeDeepLink()
+    if (link.kind === 'friend') setFriendLinkCode(link.code)
+    else setJoinCode(link.code)
+  }, [])
+  useDeepLinks(onDeepLink)
+  // Signed up from an invite link: say who you're friends with now (once).
+  useEffect(() => {
+    const friend = takeJoinedWith()
+    if (friend) setToast(`You and ${friend.displayName} are friends now!`)
+  }, [])
   const [joinCode, setJoinCode] = useState<string | null>(() => {
     try {
       const code = new URLSearchParams(window.location.search).get('join')
@@ -1429,6 +1467,22 @@ export default function MainScreen({
   const blocked = (lists?.blocked ?? []).filter((p) => matches(p, search))
   // A restricted (family-managed) account doesn't add or remove friends: their family does.
   const openAdd = restricted ? undefined : (): void => setAdding('search')
+  // 0.8.0: the empty Friends screen's "Copy your invite link".
+  const [linkCopied, setLinkCopied] = useState(false)
+  async function copyMyLink(): Promise<void> {
+    await loadFriendLink(user.id)
+    const r = await window.glofly.friends.myLink()
+    if (!r.ok) {
+      if (r.error === 'unauthorized') onSessionExpired()
+      else setToast(r.message)
+      return
+    }
+    if (await copyFriendLink(r.data.code)) {
+      noteInvited(user.id)
+      setLinkCopied(true)
+      window.setTimeout(() => setLinkCopied(false), 1600)
+    } else setToast("Couldn't copy the link.")
+  }
   const searching = search.trim().length > 0
 
   function renderTab(): React.ReactNode {
@@ -1522,14 +1576,17 @@ export default function MainScreen({
           <EmptyScene
             kind="friends"
             title="Every glow starts with one friend"
-            text="Add someone by their username, or invite them by email. You’ll automatically be friends as soon as they join."
+            text="Send your invite link. You’ll automatically be friends as soon as they join."
           >
             <button type="button" className="primary-button" onClick={openAdd}>
               <AddFriendIcon />
               Add a friend
             </button>
-            <button type="button" className="scene-button" onClick={() => setAdding('invite')}>
-              Invite by email
+            <button type="button" className="scene-button" onClick={() => void copyMyLink()}>
+              {linkCopied ? 'Copied!' : 'Copy your invite link'}
+            </button>
+            <button type="button" className="scene-link" onClick={() => setAdding('invite')}>
+              Email an invite instead
             </button>
           </EmptyScene>
         )
@@ -2089,6 +2146,21 @@ export default function MainScreen({
       {!restricted && joinCode && (
         <InviteJoinDialog code={joinCode} onClose={() => setJoinCode(null)} onProblem={setToast} />
       )}
+      {friendLinkCode &&
+        (restricted ? (
+          <FriendLinkDialogRestricted onClose={() => setFriendLinkCode(null)} />
+        ) : (
+          <FriendLinkDialog
+            code={friendLinkCode}
+            onClose={() => setFriendLinkCode(null)}
+            onFriends={() => void refresh()}
+            onSessionExpired={onSessionExpired}
+            onMessage={(userId) => {
+              setFriendLinkCode(null)
+              void openChatWith(userId)
+            }}
+          />
+        ))}
 
       {/* 0.8.0: "Game Night starts in 15 min" / "is starting · Join Campfire" */}
       {!restricted && (
@@ -2148,6 +2220,7 @@ export default function MainScreen({
         )}
         {adding && (
           <AddFriendDialog
+            userId={user.id}
             startAt={adding}
             initialQuery={addQuery}
             onInvited={() => noteInvited(user.id)}
@@ -2379,5 +2452,34 @@ export default function MainScreen({
         )}
       </div>
     </CallProvider>
+  )
+}
+
+/** 0.8.0: a restricted (family) account opened an invite link: their family adds friends. */
+function FriendLinkDialogRestricted({ onClose }: { onClose: () => void }): React.JSX.Element {
+  useEffect(() => {
+    const key = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', key)
+    return () => document.removeEventListener('keydown', key)
+  }, [onClose])
+  return (
+    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" aria-labelledby="il-family" className="dialog il-ask">
+        <h1 id="il-family">Invite link</h1>
+        <p>Your account is managed by your family, so they add your friends for you.</p>
+        <div className="il-ask-actions">
+          <button
+            type="button"
+            className="small-button small-button--primary"
+            autoFocus
+            onClick={onClose}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

@@ -10,6 +10,7 @@ import type {
   SignedInUser,
   SignupMode,
   UsernameCheck,
+  PublicUser,
   LoginTwoStep,
   TwoStepMethod,
 } from '@glofly/shared'
@@ -89,7 +90,9 @@ export async function register(req: RegisterRequest): Promise<RegisterResult> {
     await startWelcome(user.id)
     // New accounts stay signed in (like the desktop app).
     await startSession(json.token, user, true)
-    return { ok: true, user }
+    // 0.8.0: signed up from a friend's invite link: who you're friends with now.
+    const friend = json.linkedFriend as PublicUser | undefined
+    return { ok: true, user, ...(friend && typeof friend.id === 'string' ? { linkedFriend: friend } : {}) }
   }
   const fields = (json?.fields && typeof json.fields === 'object' ? json.fields : {}) as Record<string, string>
   const message = typeof json?.message === 'string' ? json.message : undefined

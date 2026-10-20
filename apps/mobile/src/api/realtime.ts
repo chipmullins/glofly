@@ -167,6 +167,13 @@ function connect() {
       void refreshFriends()
     }
   })
+  // 0.8.0: someone added you with your invite link.
+  s.on('friend:linked', (p: { user?: PublicUser }) => {
+    if (typeof p?.user?.id === 'string' && typeof p.user.displayName === 'string') {
+      emit('friend:linked', p.user)
+      void refreshFriends()
+    }
+  })
   s.on('friends:changed', () => {
     void refreshFriends()
     void refreshConversations()

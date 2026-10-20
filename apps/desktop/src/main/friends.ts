@@ -1,4 +1,11 @@
-import type { ApiResult, FriendLists, SearchResult } from '../preload/api-types'
+import type {
+  ApiResult,
+  FriendLinkAccepted,
+  FriendLinkPreview,
+  FriendLists,
+  MyFriendLink,
+  SearchResult
+} from '../preload/api-types'
 import { request } from './api'
 
 export const listFriends = (): Promise<ApiResult<FriendLists>> => request('GET', '/friends')
@@ -44,3 +51,17 @@ export async function setOnlineAlert(id: string, on: boolean): Promise<ApiResult
 /** "Invite your friends": emails them a link to join Glofly (0.3.0 servers). */
 export const inviteByEmail = (email: string): Promise<ApiResult<null>> =>
   empty(request('POST', '/friends/invite', { email }))
+
+// ---- 0.8.0: shareable friend invite links ----
+
+/** Your invite link (made the first time) and how many joined from it. */
+export const myFriendLink = (): Promise<ApiResult<MyFriendLink>> => request('GET', '/friends/link')
+/** A new invite link: the old one stops working right away. */
+export const resetFriendLink = (): Promise<ApiResult<MyFriendLink>> =>
+  request('POST', '/friends/link/reset', {})
+/** Whose invite link this is and what they are to you. */
+export const previewFriendLink = (code: string): Promise<ApiResult<FriendLinkPreview>> =>
+  request('GET', `/friends/link/${encodeURIComponent(code)}`)
+/** Become friends with the link's owner. */
+export const acceptFriendLink = (code: string): Promise<ApiResult<FriendLinkAccepted>> =>
+  request('POST', `/friends/link/${encodeURIComponent(code)}/accept`, {})

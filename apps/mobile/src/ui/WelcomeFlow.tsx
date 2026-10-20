@@ -11,6 +11,7 @@ import { pickSquarePhoto } from '@/lib/photos'
 import { prefs } from '@/lib/storage'
 import { APP_SETTINGS } from '@/lib/config'
 import { finishWelcome, resumeWelcome, useWelcome } from '@/lib/welcome'
+import { loadFriendLink, shareFriendLink } from '@/state/friendLink'
 import { Avatar } from './Avatar'
 import { chooseFrom, inform } from './dialogs'
 import { Button, Field, Notice, Text } from './kit'
@@ -60,6 +61,15 @@ function WelcomeFlow() {
   const [email, setEmail] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteNote, setInviteNote] = useState<Note>(null)
+  // 0.8.0: "Share your invite link"; email one step away
+  const [emailOpen, setEmailOpen] = useState(false)
+  useEffect(() => {
+    if (step === 3) void loadFriendLink()
+  }, [step])
+  async function shareLink() {
+    const problem = await shareFriendLink()
+    setInviteNote(problem ? { tone: 'danger', text: problem } : null)
+  }
 
   const done = () => void finishWelcome(user.id)
   useEffect(() => {
@@ -395,6 +405,9 @@ function WelcomeFlow() {
                   <Text tone="muted" size={14}>
                     Send your invite link. You’ll automatically be friends as soon as they join.
                   </Text>
+                  <Button compact label="Share your invite link" icon="share" onPress={() => void shareLink()} />
+                  {emailOpen ? (
+                    <>
                   <Field
                     label="Their email"
                     value={email}
@@ -406,7 +419,13 @@ function WelcomeFlow() {
                     returnKeyType="send"
                     onSubmitEditing={() => void invite()}
                   />
-                  <Button compact kind="secondary" label="Email an invite link" icon="send" busy={inviting} disabled={!email.trim()} onPress={() => void invite()} />
+                  <Button compact kind="secondary" label="Send invite" icon="send" busy={inviting} disabled={!email.trim()} onPress={() => void invite()} />
+                    </>
+                  ) : (
+                    <Text size={13} weight="bold" tone="accent" accessibilityRole="link" onPress={() => setEmailOpen(true)} style={{ paddingVertical: 6 }}>
+                      Email an invite instead
+                    </Text>
+                  )}
                   {note(inviteNote)}
                 </View>
               </>

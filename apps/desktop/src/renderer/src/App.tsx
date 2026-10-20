@@ -8,6 +8,14 @@ import UpdateRequiredScreen from './components/UpdateRequired'
 import PausedScreen from './components/Paused'
 import { playSound } from './lib/sounds'
 import { startWelcomeFlow } from './lib/welcome'
+import {
+  noteJoinedWith,
+  peekDeepLink,
+  pushDeepLink,
+  startDeepLinks,
+  takeDeepLink,
+  useDeepLinks
+} from './lib/deepLink'
 
 type AuthScreen = 'login' | 'register'
 
@@ -43,6 +51,27 @@ export default function App(): React.JSX.Element {
     })
   }, [])
 
+  // 0.8.0: glofly:// links and chat.glofly.app/?friend=<code> (a friend's invite link).
+  useEffect(() => startDeepLinks(), [])
+  // Signed out with a friend's invite link waiting: sign-up (the link makes you friends), and
+  // the code goes with it. Signed in, MainScreen asks "Add Chip as a friend?".
+  const [friendCode, setFriendCode] = useState<string | null>(null)
+  const screenName = screen.name
+  const onLink = useCallback(() => {
+    const link = peekDeepLink()
+    if (link?.kind !== 'friend' || screenName === 'app' || screenName === 'starting') return
+    takeDeepLink()
+    setFriendCode(link.code)
+    setScreen((s) => (s.name === 'auth' ? { name: 'auth', form: 'register' } : s))
+  }, [screenName])
+  useDeepLinks(onLink)
+  // Logged in instead of signing up: the app asks "Add Chip as a friend?" with the same link.
+  useEffect(() => {
+    if (screenName !== 'app' || !friendCode) return
+    pushDeepLink({ kind: 'friend', code: friendCode })
+    setFriendCode(null)
+  }, [screenName, friendCode])
+
   // On launch, try the saved session. If it's valid, go straight into the app.
   useEffect(() => {
     let cancelled = false
@@ -50,7 +79,11 @@ export default function App(): React.JSX.Element {
       .restore()
       .catch(() => null) // (never stuck on the blank starting screen)
       .then((user) => {
-        if (!cancelled) setScreen(user ? { name: 'app', user } : { name: 'auth', form: 'login' })
+        if (cancelled) return
+        const signUp = !user && peekDeepLink()?.kind === 'friend'
+        setScreen(
+          user ? { name: 'app', user } : { name: 'auth', form: signUp ? 'register' : 'login' }
+        )
       })
     return () => {
       cancelled = true
@@ -95,8 +128,15 @@ export default function App(): React.JSX.Element {
     request: RegisterRequest,
     photo: RegisterPhoto | null
   ): Promise<{ fields: Record<string, string>; message?: string } | null> {
-    const result = await window.glofly.auth.register(request)
+    const result = await window.glofly.auth.register(
+      friendCode ? { ...request, friendLink: friendCode } : request
+    )
     if (!result.ok) return { fields: result.fields, message: result.message }
+    // 0.8.0: signed up from a friend's invite link: "You and Chip are friends now!" once inside.
+    if (friendCode) {
+      setFriendCode(null)
+      noteJoinedWith(result.linkedFriend ?? null)
+    }
     // 0.7.5: the welcome flow shows once the app opens (photo, look, friends).
     startWelcomeFlow(result.user.id)
     setScreen({ name: 'takeoff', form: 'register', user: result.user, isNew: true })
@@ -172,7 +212,12 @@ export default function App(): React.JSX.Element {
               notice={screen.name === 'auth' ? screen.notice : null}
             />
           ) : (
-            <RegisterScreen onRegister={handleRegister} onLogin={showForm('login')} busy={flying} />
+            <RegisterScreen
+              onRegister={handleRegister}
+              onLogin={showForm('login')}
+              busy={flying}
+              friendCode={friendCode}
+            />
           )}
           {flying && (
             <FireflyTakeoff
