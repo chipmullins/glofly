@@ -130,7 +130,7 @@ export function PhotoViewer({
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={() => close()}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(14,9,8,0.97)' }, backdrop]} />
+        <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#0E0908' }, backdrop]} />
         <Animated.View style={[{ flex: 1 }, content]}>
           <FlatList
             ref={list}
