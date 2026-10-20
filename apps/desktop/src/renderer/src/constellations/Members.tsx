@@ -19,13 +19,18 @@ import './Members.css'
 // "Last here 2 h ago", and the member card (roles, playing now, mutual friends, member since,
 // Message / Call / ⋯).
 
-export type MemberGroup = { key: string; title: string; color: string; members: ConstellationMember[] }
+export type MemberGroup = {
+  key: string
+  title: string
+  color: string
+  members: ConstellationMember[]
+}
 
 const firstName = (u: PublicUser): string => u.displayName.trim().split(/\s+/)[0] || u.username
 
 /** A game's little tile color (the same game always gets the same one). */
 const GAME_TILES = ['#1d4fa0', '#e0193a', '#2e9e5b', '#7457e6', '#d4448c', '#127a85', '#b8430a']
-export function gameTileColor(name: string): string {
+function gameTileColor(name: string): string {
   let h = 0
   for (const ch of name.toLowerCase()) h = (h * 31 + (ch.codePointAt(0) ?? 0)) >>> 0
   return GAME_TILES[h % GAME_TILES.length]
@@ -51,7 +56,7 @@ export function GameTile({ name, size = 18 }: { name: string; size?: number }): 
 }
 
 /** "2 h ago", "yesterday", "3 days ago" */
-export function lastHere(iso: string, now: number): string {
+function lastHere(iso: string, now: number): string {
   const min = Math.max(1, Math.floor((now - new Date(iso).getTime()) / 60_000))
   if (min < 60) return `${min} min ago`
   const h = Math.floor(min / 60)
@@ -60,13 +65,27 @@ export function lastHere(iso: string, now: number): string {
   return d === 1 ? 'yesterday' : `${d} days ago`
 }
 
-function Face({ person, size, me }: { person: PublicUser; size: number; me: boolean }): React.JSX.Element {
+function Face({
+  person,
+  size,
+  me
+}: {
+  person: PublicUser
+  size: number
+  me: boolean
+}): React.JSX.Element {
   const [bg, fg] = me ? ['#f47a1f', '#2a1406'] : colorsFor(person.id)
   return (
     <span
       className="cx-face"
       aria-hidden="true"
-      style={{ width: size, height: size, background: bg, color: fg, fontSize: Math.round(size * 0.38) }}
+      style={{
+        width: size,
+        height: size,
+        background: bg,
+        color: fg,
+        fontSize: Math.round(size * 0.38)
+      }}
     >
       <AvatarFace id={person.id} name={person.displayName} avatarVersion={person.avatarVersion} />
     </span>
@@ -147,7 +166,8 @@ export function MembersPanel({
       )
     }
     if (m.activity) return m.activity
-    if (m.status === 'offline') return m.lastSeenAt ? `Last here ${lastHere(m.lastSeenAt, now)}` : null
+    if (m.status === 'offline')
+      return m.lastSeenAt ? `Last here ${lastHere(m.lastSeenAt, now)}` : null
     if (m.user.id === c.ownerId || topRole(c, m.user.id).kind !== 'member') return 'Online'
     return null
   }
@@ -199,7 +219,17 @@ export function MembersPanel({
                 aria-expanded={!folded}
                 onClick={toggleFold}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
                   <path d="M6 9l6 6 6-6" />
                 </svg>
                 {g.title} · {g.members.length}
@@ -289,10 +319,25 @@ export function MemberCardTop({
     : `Member since ${new Date(m.joinedAt).toDateString() === new Date(now).toDateString() ? 'today 🎉' : monthYear(m.joinedAt)}${friend || info?.friend ? ' · your friend' : ''}`
   return (
     <>
-      <div className="cx-mcard-banner" style={{ background: `linear-gradient(120deg, ${bg}, color-mix(in srgb, ${bg} 45%, #ffd27a))` }} />
+      <div
+        className="cx-mcard-banner"
+        style={{
+          background: `linear-gradient(120deg, ${bg}, color-mix(in srgb, ${bg} 45%, #ffd27a))`
+        }}
+      />
       <div className="cx-mcard-body">
-        <button type="button" className="cx-mcard-face" style={{ background: bg, color: fg }} onClick={onViewProfile} aria-label={`View ${m.user.displayName}'s profile`}>
-          <AvatarFace id={m.user.id} name={m.user.displayName} avatarVersion={m.user.avatarVersion} />
+        <button
+          type="button"
+          className="cx-mcard-face"
+          style={{ background: bg, color: fg }}
+          onClick={onViewProfile}
+          aria-label={`View ${m.user.displayName}'s profile`}
+        >
+          <AvatarFace
+            id={m.user.id}
+            name={m.user.displayName}
+            avatarVersion={m.user.avatarVersion}
+          />
           <StatusDot status={m.status} ring="#ffffff" size={14} />
         </button>
         <div>
@@ -333,7 +378,9 @@ export function MemberCardTop({
           </div>
         )}
         <div className="cx-mcard-since">
-          {m.status === 'offline' && m.lastSeenAt ? `Last here ${lastHere(m.lastSeenAt, now)}` : since}
+          {m.status === 'offline' && m.lastSeenAt
+            ? `Last here ${lastHere(m.lastSeenAt, now)}`
+            : since}
         </div>
         <div className="cx-mcard-actions">
           {!mine && friend ? (
@@ -346,7 +393,11 @@ export function MemberCardTop({
               </button>
             </>
           ) : (
-            <button type="button" className="cx-mcard-call cx-mcard-call--wide" onClick={onViewProfile}>
+            <button
+              type="button"
+              className="cx-mcard-call cx-mcard-call--wide"
+              onClick={onViewProfile}
+            >
               View profile
             </button>
           )}

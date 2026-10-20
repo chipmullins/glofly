@@ -99,8 +99,9 @@ export function CxMilestoneCard({
 }): React.JSX.Element {
   const event = message.event?.type === 'cxMilestone' ? message.event : null
   // A burst plays when it's brand new on screen (posted in the last two minutes), and on Replay.
-  const fresh = Date.now() - new Date(message.createdAt).getTime() < 2 * 60_000
-  const [burst, setBurst] = useState(fresh && !reducedMotion() ? 1 : 0)
+  const [burst, setBurst] = useState(() =>
+    Date.now() - new Date(message.createdAt).getTime() < 2 * 60_000 && !reducedMotion() ? 1 : 0
+  )
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current)

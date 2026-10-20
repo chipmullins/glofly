@@ -103,6 +103,8 @@ export default function NebulaSky({
   } | null>(null)
   const before = useRef<Map<string, SkyStar> | null>(null)
 
+  // What changed since the last look (news arriving, someone joining voice)
+  const sig = shown.map((s) => `${s.key}:${s.news ? 1 : 0}:${s.voice}`).join('|')
   useLayoutEffect(() => {
     const prev = before.current
     before.current = new Map(shown.map((s) => [s.key, s]))
@@ -139,7 +141,8 @@ export default function NebulaSky({
         dy
       }))
     }
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig, id])
 
   // The shooting star leaves once it has landed.
   useEffect(() => {

@@ -10,12 +10,6 @@ import './InviteCard.css'
 // glofly.app/c/<code> link in a chat (DMs and groups too) becomes a card with the constellation's
 // banner, icon, name and counts, and a Join button (Open once you're in it).
 
-/** The invite code in a message (only real glofly.app/c/… links count). */
-export function inviteCodeIn(text: string): string | null {
-  const m = text.match(/(?:^|[\s(])(?:https?:\/\/)?(?:www\.)?glofly\.app\/c\/([A-Za-z0-9]{6,16})\b/)
-  return m ? m[1] : null
-}
-
 type Looked = { ok: true; preview: InvitePreview } | { ok: false; hide: boolean }
 /** Looked-up links, so a chat full of the same link asks once (kept a few minutes). */
 const cache = new Map<string, { at: number; result: Promise<Looked> }>()
@@ -23,15 +17,13 @@ const cache = new Map<string, { at: number; result: Promise<Looked> }>()
 function lookUp(code: string, fresh = false): Promise<Looked> {
   const hit = cache.get(code)
   if (hit && !fresh && Date.now() - hit.at < 5 * 60_000) return hit.result
-  const result = api
-    .linkPreview(code)
-    .then((r): Looked =>
-      r.ok
-        ? { ok: true, preview: r.data }
-        : // Only a dead link says so. Anything else (a family-managed account, which can't use
-          // Constellations; no connection) shows no card, just the link.
-          { ok: false, hide: r.error !== 'not_found' }
-    )
+  const result = api.linkPreview(code).then((r): Looked =>
+    r.ok
+      ? { ok: true, preview: r.data }
+      : // Only a dead link says so. Anything else (a family-managed account, which can't use
+        // Constellations; no connection) shows no card, just the link.
+        { ok: false, hide: r.error !== 'not_found' }
+  )
   cache.set(code, { at: Date.now(), result })
   return result
 }
@@ -107,7 +99,11 @@ export default function InviteCard({
     <div className="cx-ic">
       <div
         className="cx-ic-card"
-        style={{ ['--cxa' as string]: a.color, ['--cxa-on' as string]: a.on, ['--cxa-rgb' as string]: a.rgb }}
+        style={{
+          ['--cxa' as string]: a.color,
+          ['--cxa-on' as string]: a.on,
+          ['--cxa-rgb' as string]: a.rgb
+        }}
       >
         <div className="cx-ic-banner">
           <BannerArt c={c} width={380} height={76} />
@@ -126,7 +122,8 @@ export default function InviteCard({
             <span className="cx-ic-name">{c.name}</span>
             <span className="cx-ic-counts">
               <span className="cx-ic-dot" aria-hidden="true" />
-              {c.onlineCount} online now · {c.memberCount} {c.memberCount === 1 ? 'member' : 'members'}
+              {c.onlineCount} online now · {c.memberCount}{' '}
+              {c.memberCount === 1 ? 'member' : 'members'}
             </span>
           </div>
           <button type="button" className="cx-ic-join" disabled={busy} onClick={() => void join()}>

@@ -3,7 +3,8 @@ import { DEFAULT_WELCOME, RULE_MAX, RULES_MAX } from '@glofly/shared/constellati
 import type { WelcomeSettings } from '@glofly/shared/constellations'
 import type { ApiResult, ConstellationDetail } from '../../../preload/api-types'
 import { api, can } from '../lib/constellations'
-import { ACCENT_CHOICES, BannerArt } from './identity'
+import { BannerArt } from './identity'
+import { ACCENT_CHOICES } from './communityLib'
 
 // 0.7.5 Constellations polish: Settings → Overview's identity and welcome parts. The accent color
 // and banner photo (the approved Identity board), the house rules and what new members see (the
@@ -17,8 +18,16 @@ const WELCOME_ROWS: { key: keyof WelcomeSettings; name: string; what: string }[]
     name: 'Welcome new members',
     what: 'Right after they join: the description, the house rules and the roles they can pick.'
   },
-  { key: 'joinLines', name: 'Say when someone joins', what: '“Priya joined. Say hi!” in the first text nebula, with a wave button.' },
-  { key: 'milestones', name: 'Celebrate milestones', what: '10, 50, 100 and 250 members, and its birthday each year.' },
+  {
+    key: 'joinLines',
+    name: 'Say when someone joins',
+    what: '“Priya joined. Say hi!” in the first text nebula, with a wave button.'
+  },
+  {
+    key: 'milestones',
+    name: 'Celebrate milestones',
+    what: '10, 50, 100 and 250 members, and its birthday each year.'
+  },
   {
     key: 'preview',
     name: 'Show a preview on the invite page',
@@ -43,7 +52,11 @@ export default function IdentitySettings({
   const [rules, setRules] = useState<string[]>(() => (c.rules?.length ? c.rules : []))
   const [rulesSaved, setRulesSaved] = useState(false)
   const current = c.accent ?? 'gold'
-  const rulesDirty = rules.map((r) => r.trim()).filter(Boolean).join('\n') !== (c.rules ?? []).join('\n')
+  const rulesDirty =
+    rules
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .join('\n') !== (c.rules ?? []).join('\n')
 
   async function pickBanner(file: File | undefined): Promise<void> {
     if (!file) return
@@ -57,7 +70,9 @@ export default function IdentitySettings({
   }
 
   async function saveRules(): Promise<void> {
-    const ok = await run(() => api.update(c.id, { rules: rules.map((r) => r.trim()).filter(Boolean) }))
+    const ok = await run(() =>
+      api.update(c.id, { rules: rules.map((r) => r.trim()).filter(Boolean) })
+    )
     if (ok) {
       setRulesSaved(true)
       setTimeout(() => setRulesSaved(false), 1800)
@@ -68,7 +83,9 @@ export default function IdentitySettings({
     <>
       <fieldset className="cx-fieldset">
         <legend>Accent</legend>
-        <p className="cx-settings-hint">Tints this constellation only: the open nebula, badges, Join buttons and the message box.</p>
+        <p className="cx-settings-hint">
+          Tints this constellation only: the open nebula, badges, Join buttons and the message box.
+        </p>
         <div role="radiogroup" aria-label="Accent color" className="cx-swatches cx-accents">
           {ACCENT_CHOICES.map((a) => (
             <button
@@ -81,10 +98,14 @@ export default function IdentitySettings({
               disabled={!editable || busy}
               className={current === a.id ? 'cx-accent cx-accent--on' : 'cx-accent'}
               style={{ background: a.color }}
-              onClick={() => void run(() => api.update(c.id, { accent: a.id === 'gold' ? null : a.id }))}
+              onClick={() =>
+                void run(() => api.update(c.id, { accent: a.id === 'gold' ? null : a.id }))
+              }
             />
           ))}
-          <span className="cx-accent-name">{ACCENT_CHOICES.find((a) => a.id === current)?.name}</span>
+          <span className="cx-accent-name">
+            {ACCENT_CHOICES.find((a) => a.id === current)?.name}
+          </span>
         </div>
       </fieldset>
       <fieldset className="cx-fieldset">
@@ -103,7 +124,11 @@ export default function IdentitySettings({
           />
           {editable && (
             <div className="cx-banner-buttons">
-              <button type="button" className="cx-button" onClick={() => bannerRef.current?.click()}>
+              <button
+                type="button"
+                className="cx-button"
+                onClick={() => bannerRef.current?.click()}
+              >
                 {c.bannerVersion ? 'Change banner' : 'Add a banner photo'}
               </button>
               {c.bannerVersion && (
@@ -172,7 +197,10 @@ export default function IdentitySettings({
         <legend>New members</legend>
         <div className="cx-perms">
           {WELCOME_ROWS.map((row, i) => (
-            <label key={row.key} className={i === WELCOME_ROWS.length - 1 ? 'cx-perm cx-perm--last' : 'cx-perm'}>
+            <label
+              key={row.key}
+              className={i === WELCOME_ROWS.length - 1 ? 'cx-perm cx-perm--last' : 'cx-perm'}
+            >
               <span style={{ flex: 1 }}>
                 <span className="cx-perm-name">{row.name}</span>
                 <span className="cx-perm-what">{row.what}</span>
@@ -181,7 +209,9 @@ export default function IdentitySettings({
                 type="checkbox"
                 checked={welcome[row.key]}
                 disabled={!editable || busy}
-                onChange={() => void run(() => api.update(c.id, { welcome: { [row.key]: !welcome[row.key] } }))}
+                onChange={() =>
+                  void run(() => api.update(c.id, { welcome: { [row.key]: !welcome[row.key] } }))
+                }
               />
             </label>
           ))}

@@ -13,11 +13,6 @@ import './WelcomeDialog.css'
 // house rules with "I agree", and "What do you play?": roles members can pick themselves. Steps
 // without anything to show are skipped. Owners write the about and rules in Settings → Overview.
 
-/** Should the welcome show now? (Only for people who joined after 0.7.5, once.) */
-export function needsWelcome(c: ConstellationDetail): boolean {
-  return c.welcomedAt === null && c.welcome?.screen !== false && !c.me.owner
-}
-
 const firstName = (u: PublicUser): string => u.displayName.trim().split(/\s+/)[0] || u.username
 
 function Face({ person, size }: { person: PublicUser; size: number }): React.JSX.Element {
@@ -26,7 +21,13 @@ function Face({ person, size }: { person: PublicUser; size: number }): React.JSX
     <span
       className="cx-face cx-welcome-face"
       aria-hidden="true"
-      style={{ width: size, height: size, background: bg, color: fg, fontSize: Math.round(size * 0.36) }}
+      style={{
+        width: size,
+        height: size,
+        background: bg,
+        color: fg,
+        fontSize: Math.round(size * 0.36)
+      }}
     >
       <AvatarFace id={person.id} name={person.displayName} avatarVersion={person.avatarVersion} />
     </span>
@@ -69,11 +70,17 @@ export default function WelcomeDialog({
 }): React.JSX.Element {
   const rules = c.rules ?? []
   const pickable = c.roles.filter((r) => r.selfAssign)
-  const steps: Step[] = ['about', ...(rules.length ? (['rules'] as const) : []), ...(pickable.length ? (['roles'] as const) : [])]
+  const steps: Step[] = [
+    'about',
+    ...(rules.length ? (['rules'] as const) : []),
+    ...(pickable.length ? (['roles'] as const) : [])
+  ]
   const [at, setAt] = useState(0)
   const [agreed, setAgreed] = useState(false)
   const mine = c.members.find((m) => m.user.id === me.id)
-  const [picks, setPicks] = useState<string[]>(() => (mine?.roleIds ?? []).filter((id) => pickable.some((r) => r.id === id)))
+  const [picks, setPicks] = useState<string[]>(() =>
+    (mine?.roleIds ?? []).filter((id) => pickable.some((r) => r.id === id))
+  )
   const [busy, setBusy] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const step = steps[at]
@@ -81,8 +88,14 @@ export default function WelcomeDialog({
   const owner = c.members.find((m) => m.user.id === c.ownerId)?.user
   const online = c.members.filter((m) => m.status !== 'offline').length
   const friends = c.members.filter((m) => friendIds.has(m.user.id)).map((m) => m.user)
-  const faces = [...friends, ...c.members.map((m) => m.user).filter((u) => u.id !== me.id && !friendIds.has(u.id))].slice(0, 4)
-  const nebulaNames = useMemo(() => new Set(c.nebulas.map((n) => n.name.toLowerCase())), [c.nebulas])
+  const faces = [
+    ...friends,
+    ...c.members.map((m) => m.user).filter((u) => u.id !== me.id && !friendIds.has(u.id))
+  ].slice(0, 4)
+  const nebulaNames = useMemo(
+    () => new Set(c.nebulas.map((n) => n.name.toLowerCase())),
+    [c.nebulas]
+  )
   const firstText = c.nebulas.find((n) => n.kind === 'text' && !n.readOnly)?.name ?? 'general'
   const blocked = step === 'rules' && !agreed
   const last = at === steps.length - 1
@@ -106,7 +119,8 @@ export default function WelcomeDialog({
     if (last) void finish()
     else setAt(at + 1)
   }
-  const nextLabel = step === 'rules' ? (agreed ? 'Continue' : 'Agree to continue') : last ? 'Fly in' : 'Next'
+  const nextLabel =
+    step === 'rules' ? (agreed ? 'Continue' : 'Agree to continue') : last ? 'Fly in' : 'Next'
 
   return (
     <div className="cx-welcome-backdrop">
@@ -117,7 +131,11 @@ export default function WelcomeDialog({
         aria-modal="true"
         aria-label={`Welcome to ${c.name}`}
         className="cx-welcome"
-        style={{ ['--cxa' as string]: a.color, ['--cxa-rgb' as string]: a.rgb, ['--cxa-on' as string]: a.on }}
+        style={{
+          ['--cxa' as string]: a.color,
+          ['--cxa-rgb' as string]: a.rgb,
+          ['--cxa-on' as string]: a.on
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
             e.stopPropagation()
@@ -213,12 +231,17 @@ export default function WelcomeDialog({
             <div className="cx-welcome-step">
               <div>
                 <h2>What do you play?</h2>
-                <div className="cx-welcome-line">Pick any. You get the role, so people know. Change it any time.</div>
+                <div className="cx-welcome-line">
+                  Pick any. You get the role, so people know. Change it any time.
+                </div>
               </div>
               <RoleChips c={c} picks={picks} onPicks={setPicks} />
               <div className="cx-welcome-unlock">
                 {picks.length
-                  ? `You'll get: ${pickable.filter((r) => picks.includes(r.id)).map((r) => r.name).join(', ')}`
+                  ? `You'll get: ${pickable
+                      .filter((r) => picks.includes(r.id))
+                      .map((r) => r.name)
+                      .join(', ')}`
                   : 'No roles picked. You can pick some later from the menu by its name.'}
               </div>
             </div>
@@ -297,7 +320,9 @@ export function YourRolesDialog({
 }): React.JSX.Element {
   const pickable = c.roles.filter((r) => r.selfAssign)
   const mine = c.members.find((m) => m.user.id === me.id)
-  const [picks, setPicks] = useState<string[]>(() => (mine?.roleIds ?? []).filter((id) => pickable.some((r) => r.id === id)))
+  const [picks, setPicks] = useState<string[]>(() =>
+    (mine?.roleIds ?? []).filter((id) => pickable.some((r) => r.id === id))
+  )
   const [busy, setBusy] = useState(false)
   const a = accentOf(c)
   async function save(): Promise<void> {
@@ -312,20 +337,29 @@ export function YourRolesDialog({
     onClose()
   }
   return (
-    <div className="cx-welcome-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="cx-welcome-backdrop"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Your roles"
         className="cx-welcome cx-welcome--small"
-        style={{ ['--cxa' as string]: a.color, ['--cxa-rgb' as string]: a.rgb, ['--cxa-on' as string]: a.on }}
+        style={{
+          ['--cxa' as string]: a.color,
+          ['--cxa-rgb' as string]: a.rgb,
+          ['--cxa-on' as string]: a.on
+        }}
         onKeyDown={(e) => e.key === 'Escape' && onClose()}
       >
         <div className="cx-welcome-body">
           <div className="cx-welcome-step">
             <div>
               <h2>Your roles</h2>
-              <div className="cx-welcome-line">Pick any. Everyone in {c.name} sees them on your card.</div>
+              <div className="cx-welcome-line">
+                Pick any. Everyone in {c.name} sees them on your card.
+              </div>
             </div>
             <RoleChips c={c} picks={picks} onPicks={setPicks} />
           </div>
@@ -333,7 +367,13 @@ export function YourRolesDialog({
             <button type="button" className="cx-welcome-back" onClick={onClose}>
               Cancel
             </button>
-            <button type="button" className="cx-welcome-next" aria-disabled={busy} onClick={() => void save()} autoFocus>
+            <button
+              type="button"
+              className="cx-welcome-next"
+              aria-disabled={busy}
+              onClick={() => void save()}
+              autoFocus
+            >
               {busy ? 'Saving…' : 'Save'}
             </button>
           </div>

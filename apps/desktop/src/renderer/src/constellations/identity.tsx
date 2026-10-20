@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ACCENT_THEME, accentOf } from '@glofly/shared/constellations'
+import { accentOf } from '@glofly/shared/constellations'
 import type { ConstellationAccent } from '@glofly/shared/constellations'
 import { constellationBannerUrl } from '../lib/media'
 import './identity.css'
@@ -9,22 +9,11 @@ import './identity.css'
 // nebula, badges, Join buttons, the chat's header icon and message box ring. No accent = the
 // classic firefly gold, so nothing changes for constellations that never picked one.
 
-type HasIdentity = { id: string; accent?: ConstellationAccent | null; bannerVersion?: string | null }
-
-/** The CSS variables `.cx-accented` (Inside.css) reads. */
-export function accentStyle(c: HasIdentity): React.CSSProperties {
-  const a = accentOf(c)
-  return {
-    ['--cxa' as string]: a.color,
-    ['--cxa-rgb' as string]: a.rgb,
-    ['--cxa-soft' as string]: a.soft,
-    ['--cxa-ink' as string]: a.ink,
-    ['--cxa-on' as string]: a.on
-  }
+type HasIdentity = {
+  id: string
+  accent?: ConstellationAccent | null
+  bannerVersion?: string | null
 }
-
-/** Does it have a picked accent (anything other than the default gold)? */
-export const hasAccent = (c: HasIdentity): boolean => !!c.accent && c.accent !== 'gold'
 
 /**
  * A banner: the photo when it has one, otherwise the drawn night sky with a little constellation
@@ -46,7 +35,11 @@ export function BannerArt({
   const a = accentOf(c)
   if (url && url !== failed) {
     return (
-      <span className={className} aria-hidden="true" style={{ display: 'block', width: '100%', height }}>
+      <span
+        className={className}
+        aria-hidden="true"
+        style={{ display: 'block', width: '100%', height }}
+      >
         <img
           src={url}
           alt=""
@@ -97,9 +90,3 @@ export function BannerArt({
     </span>
   )
 }
-
-/** The six accent swatches (Settings → Overview). */
-export const ACCENT_CHOICES = (Object.keys(ACCENT_THEME) as ConstellationAccent[]).map((id) => ({
-  id,
-  ...ACCENT_THEME[id]
-}))

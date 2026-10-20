@@ -114,7 +114,6 @@ export default function ConstellationsScreen(props: Props): React.JSX.Element | 
   )
 }
 
-
 /** What's on the night side once the swipe is done. */
 function Space(props: Props): React.JSX.Element {
   const { me, cards, reloadCards, phase } = props

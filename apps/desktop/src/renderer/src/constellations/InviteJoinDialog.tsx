@@ -24,7 +24,10 @@ export function InviteJoinDialog({
     return () => document.removeEventListener('keydown', key)
   }, [onClose])
   return (
-    <div className="cx-dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="cx-dialog-backdrop"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div
         ref={box}
         tabIndex={-1}
