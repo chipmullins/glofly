@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>What to approve</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#a8480a}a:hover{color:#7d3507}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; padding: 48px 56px; background: #fbf7f3; color: #24170f; font-family: 'DM Sans', sans-serif; display: flex; flex-direction: column; gap: 26px">
+  <div>
+    <div style="font-size: 13px; font-weight: 700; letter-spacing: .1em; color: #8f7868">GLOFLY · NEXT ROUND</div>
+    <h1 style="margin: 6px 0 8px; font-family: Outfit, sans-serif; font-weight: 800; font-size: 44px">Four things to look at before I build them</h1>
+    <p style="margin: 0; font-size: 17px; color: #6b5547; line-height: 1.5; max-width: 900px">The rest of the round (faster search, limits that survive restarts, grouped phone notifications, Share to Glofly, iPad shortcuts) doesn't change how Glofly looks, so it's being built now.</p>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; flex: 1">
+    <div style="background: #ffffff; border: 1px solid #eaddd1; border-radius: 20px; padding: 24px 26px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 10px"><span style="width: 34px; height: 34px; border-radius: 10px; background: #fde9d7; color: #a8480a; font-family: Outfit, sans-serif; font-weight: 800; display: grid; place-items: center">6</span><span style="font-family: Outfit, sans-serif; font-weight: 700; font-size: 22px">Your invite link</span></div>
+      <p style="margin: 0; font-size: 15px; color: #4a372b; line-height: 1.55">One personal link (glofly.app/i/…) you can paste anywhere. Whoever joins from it, or opens it while signed in, becomes your friend right away. Reset makes the old link stop working. It's in Add friend, the welcome, the empty Friends screen and Settings → Friends.</p>
+      <p style="margin: 0; font-size: 14px; color: #8f7868">Two artboards: the card in Add friend, and the page people see.</p>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #eaddd1; border-radius: 20px; padding: 24px 26px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 10px"><span style="width: 34px; height: 34px; border-radius: 10px; background: #fde9d7; color: #a8480a; font-family: Outfit, sans-serif; font-weight: 800; display: grid; place-items: center">7</span><span style="font-family: Outfit, sans-serif; font-weight: 700; font-size: 22px">Statuses that clear themselves</span></div>
+      <p style="margin: 0; font-size: 15px; color: #4a372b; line-height: 1.55">A "Clear after" row under your custom status: 30 minutes, 1 hour, 4 hours, Today, This week or Never. The server takes it off on time, and the picker tells you when it ends.</p>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #eaddd1; border-radius: 20px; padding: 24px 26px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 10px"><span style="width: 34px; height: 34px; border-radius: 10px; background: #2a1f33; color: #ffb347; font-family: Outfit, sans-serif; font-weight: 800; display: grid; place-items: center">9</span><span style="font-family: Outfit, sans-serif; font-weight: 700; font-size: 22px">Role-only nebulas</span></div>
+      <p style="margin: 0; font-size: 15px; color: #4a372b; line-height: 1.55">A nebula (or a whole category) can be for Everyone or Only these roles. People without the role don't see it anywhere. Picking "Valorant" in the welcome unlocks #valorant.</p>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #eaddd1; border-radius: 20px; padding: 24px 26px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 10px"><span style="width: 34px; height: 34px; border-radius: 10px; background: #2a1f33; color: #ffb347; font-family: Outfit, sans-serif; font-weight: 800; display: grid; place-items: center">11</span><span style="font-family: Outfit, sans-serif; font-weight: 700; font-size: 22px">Templates that set everything up</span></div>
+      <p style="margin: 0; font-size: 15px; color: #4a372b; line-height: 1.55">Each template now also brings starter roles, house rules, a welcome and an accent color, and the picker shows exactly what you'll get. Mostly the wording needs your OK.</p>
+    </div>
+  </div>
+  <p style="margin: 0; font-size: 14px; color: #6b5547">Everything follows the system theme and your accent color, like the rest of Glofly. Phones get the same screens in their own layout.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

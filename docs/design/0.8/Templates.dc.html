@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Constellation templates</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffb347}a:hover{color:#ffd08a}
+button{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; position: relative; overflow: hidden; font-family: 'DM Sans', sans-serif; background: radial-gradient(ellipse at 50% 0%, #2a1a33 0%, #160e14 55%, #0f0a09 100%); color: #f5ede6; display: flex; align-items: center; justify-content: center">
+  <div style="width: 1120px; height: 700px; box-sizing: border-box; background: #1c1210; border: 1px solid #33251f; border-radius: 26px; box-shadow: 0 30px 80px rgba(0,0,0,.5); padding: 28px 30px; display: flex; flex-direction: column; gap: 18px">
+    <div>
+      <h2 style="margin: 0 0 4px; font-family: Outfit, sans-serif; font-weight: 700; font-size: 28px">Start a constellation</h2>
+      <p style="margin: 0; font-size: 15px; color: #c9b8ab">Pick a starting point. You can change every part of it afterwards.</p>
+    </div>
+    <div style="display: flex; gap: 22px; flex: 1; min-height: 0">
+      <div style="width: 330px; flex: none; display: flex; flex-direction: column; gap: 10px">
+        <sc-for list="{{emptyOne}}" as="t" hint-placeholder-count="1">
+          <button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="border: 2px solid {{t.ring}}; border-radius: 16px; background: {{t.bg}}; color: #f5ede6; padding: 14px 16px; text-align: left; display: flex; align-items: center; gap: 14px; min-height: 72px">
+            <span style="width: 44px; height: 44px; border-radius: 14px; border: 2px dashed {{t.accent}}; box-sizing: border-box; flex: none; display: grid; place-items: center; color: {{t.accent}}; font-size: 22px; font-weight: 700">+</span>
+            <span style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 16px">{{t.name}}</b><span style="font-size: 13px; color: #c9b8ab">{{t.what}}</span></span>
+          </button>
+        </sc-for>
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: #a89383; padding: 6px 2px 0">CHOOSE A PREMADE TEMPLATE<span style="flex: 1; height: 1px; background: #33251f"></span></div>
+        <sc-for list="{{templates}}" as="t" hint-placeholder-count="3">
+          <button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="border: 2px solid {{t.ring}}; border-radius: 16px; background: {{t.bg}}; color: #f5ede6; padding: 14px 16px; text-align: left; display: flex; align-items: center; gap: 14px; min-height: 72px">
+            <span style="width: 44px; height: 44px; border-radius: 14px; background: {{t.accent}}; flex: none; box-shadow: 0 0 18px {{t.glow}}"></span>
+            <span style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 16px">{{t.name}}</b><span style="font-size: 13px; color: #c9b8ab">{{t.what}}</span></span>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="flex: 1; min-width: 0; background: #241815; border: 1px solid #33251f; border-radius: 20px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; overflow: hidden">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span style="width: 14px; height: 14px; border-radius: 50%; background: {{cur.accent}}; box-shadow: 0 0 12px {{cur.glow}}"></span>
+          <b style="font-family: Outfit, sans-serif; font-size: 20px">What you'll get: {{cur.name}}</b>
+          <span style="margin-left: auto; font-size: 13px; color: #c9b8ab">Accent: {{cur.accentName}}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; flex: 1; min-height: 0">
+          <div style="display: flex; flex-direction: column; gap: 12px">
+            <div>
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #a89383; margin-bottom: 6px">NEBULAS</div>
+              <sc-for list="{{cur.cats}}" as="c" hint-placeholder-count="2">
+                <div style="font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #8f7b6d; margin: 6px 0 2px">{{c.name}}</div>
+                <sc-for list="{{c.nebs}}" as="n" hint-placeholder-count="2">
+                  <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #e9d5c4; padding: 3px 0">
+                    <span style="color: #a89383; width: 12px; text-align: center">{{n.glyph}}</span>{{n.name}}
+                    <sc-if value="{{n.role}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; color: #e3c39f; background: #34241c; border-radius: 999px; padding: 1px 8px">only {{n.role}}</span></sc-if>
+                  </div>
+                </sc-for>
+              </sc-for>
+            </div>
+            <div>
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #a89383; margin-bottom: 6px">ROLES MEMBERS CAN PICK</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                <sc-for list="{{cur.roles}}" as="r" hint-placeholder-count="3">
+                  <span style="display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid #4a372b; padding: 4px 10px; font-size: 13px; font-weight: 700"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{r.color}}"></span>{{r.name}}</span>
+                </sc-for>
+                <sc-if value="{{cur.noRoles}}" hint-placeholder-val="{{false}}"><span style="font-size: 13px; color: #a89383">None, add your own later</span></sc-if>
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px">
+            <div>
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #a89383; margin-bottom: 6px">HOUSE RULES</div>
+              <sc-for list="{{cur.rules}}" as="r" hint-placeholder-count="3">
+                <div style="display: flex; gap: 8px; font-size: 14px; color: #e9d5c4; line-height: 1.45; padding: 2px 0"><span style="color: {{cur.accent}}; font-weight: 700">{{r.n}}</span><span>{{r.text}}</span></div>
+              </sc-for>
+              <sc-if value="{{cur.noRules}}" hint-placeholder-val="{{false}}"><span style="font-size: 13px; color: #a89383">None yet</span></sc-if>
+            </div>
+            <div>
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #a89383; margin-bottom: 6px">WELCOME NEW MEMBERS SEE</div>
+              <div style="border-radius: 14px; background: #1c1210; border: 1px solid #3a2a22; padding: 12px 14px; font-size: 14px; color: #f5ede6; line-height: 1.5">{{cur.welcome}}</div>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px">
+          <button type="button" style="border: 1px solid #4a372b; border-radius: 999px; background: transparent; color: #f5ede6; font-weight: 700; padding: 0 18px; min-height: 46px">Back</button>
+          <button type="button" style="border: 0; border-radius: 999px; background: {{cur.accent}}; color: #1c1210; font-weight: 700; padding: 0 22px; min-height: 46px; box-shadow: 0 0 18px {{cur.glow}}">Create {{cur.name}}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { pick: 'gaming' };
+  }
+  renderVals() {
+    var self = this;
+    var list = [
+      {
+        id: 'friends', name: 'Friends hangout', what: 'Chill spot for your crew', accent: '#ffa54a', glow: 'rgba(255,165,74,.45)', accentName: 'Glow Orange',
+        cats: [
+          { name: 'HANGOUT', nebs: [{ glyph: '#', name: 'general' }, { glyph: '#', name: 'clips' }, { glyph: '#', name: 'memes' }] },
+          { name: 'VOICE NEBULAS', nebs: [{ glyph: '◖', name: 'Campfire' }] }
+        ],
+        roles: [{ name: 'Night owl', color: '#8b7bff' }, { name: 'Early bird', color: '#ffd166' }],
+        rules: ['Be kind. This is a hangout, not a debate club.', 'Keep it fun for everyone in the room.', "Ask before sharing someone's photo."],
+        welcome: 'Welcome to the hangout! Say hi in #general and tell us what you’re up to.'
+      },
+      {
+        id: 'gaming', name: 'Gaming squad', what: 'Find teammates, hop in voice', accent: '#9f86ff', glow: 'rgba(159,134,255,.5)', accentName: 'Violet',
+        cats: [
+          { name: 'HANGOUT', nebs: [{ glyph: '#', name: 'general' }, { glyph: '#', name: 'looking-for-group' }, { glyph: '#', name: 'clips' }] },
+          { name: 'GAMES', nebs: [{ glyph: '#', name: 'rocket-league', role: 'Rocket League' }, { glyph: '#', name: 'valorant', role: 'Valorant' }, { glyph: '#', name: 'minecraft', role: 'Minecraft' }] },
+          { name: 'VOICE NEBULAS', nebs: [{ glyph: '◖', name: 'Campfire' }, { glyph: '◖', name: 'Squad Up' }] }
+        ],
+        roles: [{ name: 'Rocket League', color: '#3fa7ff' }, { name: 'Valorant', color: '#ff5a5f' }, { name: 'Minecraft', color: '#5bc46a' }],
+        rules: ['Be a good teammate. No flaming.', 'No cheats, hacks or selling accounts.', 'Put spoilers and clips in the right nebula.'],
+        welcome: 'Welcome to the squad! Pick the games you play and their nebulas show up for you.'
+      },
+      {
+        id: 'study', name: 'Study group', what: 'Share notes, study together', accent: '#3cc3cf', glow: 'rgba(60,195,207,.45)', accentName: 'Lagoon',
+        cats: [
+          { name: 'STUDY', nebs: [{ glyph: '#', name: 'resources' }, { glyph: '#', name: 'homework-help' }, { glyph: '#', name: 'off-topic' }] },
+          { name: 'VOICE NEBULAS', nebs: [{ glyph: '◖', name: 'Study room' }] }
+        ],
+        roles: [{ name: 'Math', color: '#ffb347' }, { name: 'Science', color: '#5bc46a' }, { name: 'Writing', color: '#d47bff' }],
+        rules: ["Help each other understand. Don't just post answers.", 'Keep #homework-help for questions.', 'Quiet in the Study room unless everyone agrees.'],
+        welcome: 'Welcome to the study group! Drop useful links in #resources and ask anything in #homework-help.'
+      },
+      {
+        id: 'blank', name: 'Start empty', what: 'Just a general nebula', accent: '#ffb347', glow: 'rgba(255,179,71,.4)', accentName: 'Glofly gold',
+        cats: [{ name: 'GENERAL', nebs: [{ glyph: '#', name: 'general' }] }],
+        roles: [], rules: [],
+        welcome: 'Welcome! (You write this yourself in Settings → Welcome.)'
+      }
+    ];
+    var s = this.state;
+    var cur = list.filter(function (t) { return t.id === s.pick; })[0];
+    return {
+      cur: Object.assign({}, cur, {
+        noRoles: cur.roles.length === 0,
+        noRules: cur.rules.length === 0,
+        rules: cur.rules.map(function (r, i) { return { n: (i + 1) + '.', text: r }; })
+      }),
+      emptyOne: list.filter(function (t) { return t.id === 'blank'; }).map(function (t) {
+        var on = t.id === s.pick;
+        return Object.assign({}, t, {
+          on: on,
+          ring: on ? t.accent : '#33251f',
+          bg: on ? '#2b1f1a' : '#211613',
+          pick: function () { self.setState({ pick: t.id }); }
+        });
+      }),
+      templates: list.filter(function (t) { return t.id !== 'blank'; }).map(function (t) {
+        var on = t.id === s.pick;
+        return Object.assign({}, t, {
+          on: on,
+          ring: on ? t.accent : '#33251f',
+          bg: on ? '#2b1f1a' : '#211613',
+          pick: function () { self.setState({ pick: t.id }); }
+        });
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

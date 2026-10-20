@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Role-only nebulas</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffb347}a:hover{color:#ffd08a}
+button{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; position: relative; overflow: hidden; font-family: 'DM Sans', sans-serif; background: #120c0a; color: #f5ede6; display: flex">
+
+  <div style="width: 300px; flex: none; background: #1c1210; border-right: 1px solid #2e2220; display: flex; flex-direction: column">
+    <div style="padding: 18px 18px 12px; border-bottom: 1px solid #2e2220">
+      <div style="font-family: Outfit, sans-serif; font-weight: 700; font-size: 19px">Firefly Guild</div>
+      <div style="font-size: 12px; color: #b8a699; margin-top: 2px">Viewing as: <b style="color: #ffb347">{{viewName}}</b></div>
+    </div>
+    <div style="padding: 12px 10px; display: flex; flex-direction: column; gap: 2px">
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+        <sc-if value="{{r.isCat}}" hint-placeholder-val="{{false}}">
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #a89383; padding: 12px 10px 4px; display: flex; align-items: center; gap: 6px">{{r.name}}<sc-if value="{{r.locked}}" hint-placeholder-val="{{false}}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c9a47e" stroke-width="2.4" stroke-linecap="round" aria-label="Role-only category"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></sc-if></div>
+        </sc-if>
+        <sc-if value="{{r.isNeb}}" hint-placeholder-val="{{true}}">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: {{r.bg}}; color: {{r.ink}}; font-size: 15px">
+            <span style="color: #a89383; width: 14px; text-align: center">{{r.glyph}}</span>
+            <span style="flex: 1">{{r.name}}</span>
+            <sc-if value="{{r.locked}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #e3c39f; background: #2b1f1a; border-radius: 999px; padding: 2px 8px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>{{r.who}}</span></sc-if>
+          </div>
+        </sc-if>
+      </sc-for>
+    </div>
+    <div style="margin-top: auto; padding: 14px; border-top: 1px solid #2e2220; display: flex; flex-direction: column; gap: 6px">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #a89383">TRY IT: VIEW AS</span>
+      <sc-for list="{{views}}" as="v" hint-placeholder-count="3">
+        <button type="button" onClick="{{v.pick}}" aria-pressed="{{v.on}}" style="border: 1px solid {{v.ring}}; border-radius: 10px; background: {{v.bg}}; color: #f5ede6; font-size: 13px; font-weight: 700; padding: 0 10px; min-height: 40px; text-align: left">{{v.label}}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-width: 0; padding: 26px 30px; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box">
+    <div style="display: flex; align-items: baseline; gap: 12px">
+      <h2 style="margin: 0; font-family: Outfit, sans-serif; font-weight: 700; font-size: 26px">Edit nebula · # valorant</h2>
+      <span style="font-size: 13px; color: #b8a699">Owners and admins</span>
+    </div>
+    <div style="background: #1c1210; border: 1px solid #2e2220; border-radius: 18px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+      <div style="font-weight: 700; font-size: 16px">Who can see this nebula</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <button type="button" onClick="{{pickEveryone}}" aria-pressed="{{everyoneOn}}" style="border: 2px solid {{everyoneRing}}; border-radius: 14px; background: #241815; color: #f5ede6; padding: 12px 14px; text-align: left; display: flex; flex-direction: column; gap: 4px; min-height: 44px">
+          <b style="font-size: 15px">Everyone</b><span style="font-size: 13px; color: #c9b8ab">All members of Firefly Guild</span>
+        </button>
+        <button type="button" onClick="{{pickRoles}}" aria-pressed="{{rolesOn}}" style="border: 2px solid {{rolesRing}}; border-radius: 14px; background: #241815; color: #f5ede6; padding: 12px 14px; text-align: left; display: flex; flex-direction: column; gap: 4px; min-height: 44px">
+          <b style="font-size: 15px">Only these roles</b><span style="font-size: 13px; color: #c9b8ab">Everyone else won't know it's here</span>
+        </button>
+      </div>
+      <sc-if value="{{rolesOn}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; flex-wrap: wrap; gap: 8px">
+            <span style="display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: #3a2617; border: 1px solid #ffb347; color: #ffd8a8; font-size: 14px; font-weight: 700; padding: 0 12px; min-height: 36px"><span style="width: 9px; height: 9px; border-radius: 50%; background: #ff5a5f"></span>Valorant<span style="font-size: 11px; color: #c9a47e; font-weight: 500">(members pick it)</span></span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: #3a2617; border: 1px solid #ffb347; color: #ffd8a8; font-size: 14px; font-weight: 700; padding: 0 12px; min-height: 36px"><span style="width: 9px; height: 9px; border-radius: 50%; background: #5fb0ff"></span>Moderator</span>
+            <button type="button" style="border: 1px dashed #5a4a40; border-radius: 999px; background: transparent; color: #c9b8ab; font-size: 14px; padding: 0 12px; min-height: 36px">+ Add role</button>
+          </div>
+          <div style="font-size: 13px; color: #b8a699">Owner and admins can always see it.</div>
+        </div>
+      </sc-if>
+      <div style="height: 1px; background: #2e2220"></div>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #d9c2b1">
+        <span style="width: 36px; height: 22px; border-radius: 11px; background: #4a3a30; position: relative; flex: none"><span style="position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #c9b8ab"></span></span>
+        The same choice is on categories too: "Edit category · GAMES" hides every nebula inside.
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+      <div style="background: #1c1210; border: 1px solid #2e2220; border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #a89383">WELCOME · PICK YOUR ROLES</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <sc-for list="{{picks}}" as="p" hint-placeholder-count="3">
+            <button type="button" onClick="{{p.pick}}" aria-pressed="{{p.on}}" style="border: 1px solid {{p.ring}}; border-radius: 999px; background: {{p.bg}}; color: #f5ede6; font-size: 14px; font-weight: 700; padding: 0 14px; min-height: 40px">{{p.label}}</button>
+          </sc-for>
+        </div>
+        <div style="font-size: 14px; color: #d9c2b1">You'll see: <b style="color: #ffd8a8">{{unlocks}}</b></div>
+      </div>
+      <div style="background: #1c1210; border: 1px solid #2e2220; border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: #d9c2b1; line-height: 1.5">
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #a89383">HIDDEN EVERYWHERE, CHECKED ON THE SERVER</div>
+        <span>No unread dot, star count, search result, Inbox mention, pin, push, voice room or live event leaks a role-only nebula to someone without the role.</span>
+        <span>Picking a game role only unlocks nebulas. It still never gives any powers.</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { view: 'owner', mode: 'roles', picked: { valorant: true } };
+  }
+  renderVals() {
+    var self = this;
+    var s = this.state;
+    var hasVal = s.view === 'owner' || s.view === 'val';
+    var canSeeLocked = s.mode === 'everyone' || hasVal;
+    var all = [
+      { kind: 'cat', name: 'HANGOUT' },
+      { kind: 'neb', name: 'general', glyph: '#' },
+      { kind: 'neb', name: 'clips', glyph: '#' },
+      { kind: 'cat', name: 'GAMES' },
+      { kind: 'neb', name: 'looking-for-group', glyph: '#' },
+      { kind: 'neb', name: 'valorant', glyph: '#', locked: s.mode === 'roles', who: 'Valorant', current: true },
+      { kind: 'neb', name: 'rocket-league', glyph: '#', locked: true, who: 'Rocket League', hiddenFor: 'all-but-owner' },
+      { kind: 'cat', name: 'VOICE NEBULAS' },
+      { kind: 'neb', name: 'Campfire', glyph: '◖' },
+      { kind: 'neb', name: 'Squad Up', glyph: '◖' }
+    ];
+    var rows = all.filter(function (r) {
+      if (r.name === 'valorant') return canSeeLocked;
+      if (r.hiddenFor) return s.view === 'owner';
+      return true;
+    }).map(function (r) {
+      return {
+        isCat: r.kind === 'cat',
+        isNeb: r.kind === 'neb',
+        name: r.name,
+        glyph: r.glyph || '',
+        locked: !!r.locked && s.view === 'owner',
+        who: r.who || '',
+        bg: r.current ? '#2b1f1a' : 'transparent',
+        ink: r.current ? '#ffffff' : '#d9c2b1'
+      };
+    });
+    var views = [
+      { id: 'owner', label: 'Owner (sees everything)' },
+      { id: 'val', label: 'Member with Valorant' },
+      { id: 'none', label: 'Member without it' }
+    ];
+    var pickList = [
+      { id: 'valorant', label: 'Valorant', unlock: '#valorant' },
+      { id: 'rl', label: 'Rocket League', unlock: '#rocket-league' },
+      { id: 'mc', label: 'Minecraft', unlock: '#minecraft' }
+    ];
+    var unlocked = pickList.filter(function (p) { return s.picked[p.id]; }).map(function (p) { return p.unlock; });
+    return {
+      viewName: views.filter(function (v) { return v.id === s.view; })[0].label,
+      rows: rows,
+      views: views.map(function (v) {
+        return Object.assign({}, v, {
+          on: v.id === s.view,
+          ring: v.id === s.view ? '#ffb347' : '#3a2a22',
+          bg: v.id === s.view ? '#2b1f1a' : 'transparent',
+          pick: function () { self.setState({ view: v.id }); }
+        });
+      }),
+      everyoneOn: s.mode === 'everyone',
+      rolesOn: s.mode === 'roles',
+      everyoneRing: s.mode === 'everyone' ? '#ffb347' : '#3a2a22',
+      rolesRing: s.mode === 'roles' ? '#ffb347' : '#3a2a22',
+      pickEveryone: function () { self.setState({ mode: 'everyone' }); },
+      pickRoles: function () { self.setState({ mode: 'roles' }); },
+      picks: pickList.map(function (p) {
+        var on = !!s.picked[p.id];
+        return Object.assign({}, p, {
+          on: on,
+          ring: on ? '#ffb347' : '#3a2a22',
+          bg: on ? '#3a2617' : 'transparent',
+          pick: function () {
+            var next = Object.assign({}, s.picked);
+            next[p.id] = !on;
+            self.setState({ picked: next });
+          }
+        });
+      }),
+      unlocks: unlocked.length ? unlocked.join(', ') : 'just the nebulas everyone sees'
+    };
+  }
+}
+</script>
+</body>
+</html>

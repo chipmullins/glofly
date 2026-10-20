@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Status clear after</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#a8480a}a:hover{color:#7d3507}
+button{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; position: relative; overflow: hidden; font-family: 'DM Sans', sans-serif; background: #ffffff; color: #24170f; display: flex">
+
+  <div style="width: 300px; flex: none; background: #f7f0e9; border-right: 1px solid #eaddd1; position: relative">
+    <div style="position: absolute; left: 20px; top: 20px; width: 260px; height: 40px; border-radius: 12px; background: #ffffff; border: 1px solid #eaddd1; display: flex; align-items: center; padding: 0 12px; box-sizing: border-box; color: #8f7868; font-size: 14px">Search</div>
+    <div style="position: absolute; left: 20px; top: 76px; width: 260px; box-sizing: border-box; border-radius: 14px; background: #ffffff; border: 2px solid #e2650f; padding: 10px 12px; display: flex; align-items: center; gap: 10px">
+      <span style="position: relative; width: 40px; height: 40px; border-radius: 50%; background: #e2650f; color: #ffffff; font-family: Outfit, sans-serif; font-weight: 700; display: grid; place-items: center; flex: none">CM<span style="position: absolute; right: -2px; bottom: -2px; width: 13px; height: 13px; border-radius: 50%; background: {{dot}}; border: 2px solid #ffffff"></span></span>
+      <span style="min-width: 0"><b style="display: block">Chip</b><span style="display: block; font-size: 13px; color: #6b5547; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{shownText}}</span></span>
+    </div>
+
+    <div style="position: absolute; left: 20px; top: 156px; width: 330px; box-sizing: border-box; background: #ffffff; border-radius: 18px; box-shadow: 0 18px 50px rgba(36,23,15,.22); border: 1px solid #eaddd1; padding: 14px; display: flex; flex-direction: column; gap: 4px; z-index: 3">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: .06em; color: #8f7868; padding: 2px 6px 6px">SET YOUR STATUS</div>
+      <sc-for list="{{choices}}" as="c" hint-placeholder-count="4">
+        <button type="button" onClick="{{c.pick}}" aria-pressed="{{c.on}}" style="display: flex; align-items: center; gap: 12px; border: 0; border-radius: 12px; background: {{c.bg}}; padding: 9px 10px; min-height: 44px; text-align: left">
+          <span style="width: 12px; height: 12px; border-radius: 50%; background: {{c.color}}; flex: none"></span>
+          <span style="display: flex; flex-direction: column"><span style="font-weight: 700; font-size: 15px; color: #24170f">{{c.label}}</span><span style="font-size: 12px; color: #6b5547">{{c.hint}}</span></span>
+        </button>
+      </sc-for>
+      <div style="height: 1px; background: #efe4da; margin: 6px 0"></div>
+      <label for="st-text" style="font-size: 12px; font-weight: 700; letter-spacing: .06em; color: #8f7868; padding: 2px 6px">CUSTOM STATUS</label>
+      <input id="st-text" value="At the dentist, back soon" style="height: 44px; border-radius: 12px; border: 1px solid #dcc8b8; padding: 0 12px; font: inherit; font-size: 15px; color: #24170f">
+      <div style="font-size: 13px; font-weight: 700; color: #4a372b; padding: 10px 4px 4px">Clear after</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px">
+        <sc-for list="{{clears}}" as="o" hint-placeholder-count="6">
+          <button type="button" onClick="{{o.pick}}" aria-pressed="{{o.on}}" style="border: 1px solid {{o.ring}}; border-radius: 999px; background: {{o.bg}}; color: {{o.ink}}; font-weight: 700; font-size: 13px; padding: 0 12px; min-height: 36px">{{o.label}}</button>
+        </sc-for>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6b5547; padding: 10px 4px 2px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a8480a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+        <span>{{endsLine}}</span>
+      </div>
+      <div style="display: flex; justify-content: flex-end; padding-top: 6px">
+        <button type="button" style="border: 0; border-radius: 10px; background: #e2650f; color: #ffffff; font-weight: 700; font-size: 14px; padding: 0 16px; min-height: 40px">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-width: 0; background: #fbf7f3; padding: 34px 44px 30px 120px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+    <div>
+      <h2 style="margin: 0 0 6px; font-family: Outfit, sans-serif; font-weight: 800; font-size: 30px">What your friends see</h2>
+      <p style="margin: 0; font-size: 15px; color: #6b5547; line-height: 1.5">The time it ends is only shown to you. Friends just see the status, and it quietly disappears on time, even if your computer is off.</p>
+    </div>
+
+    <div style="background: #ffffff; border: 1px solid #eaddd1; border-radius: 20px; width: 380px; overflow: hidden">
+      <div style="height: 80px; background: #f4a46a"></div>
+      <div style="padding: 0 20px 18px; margin-top: -34px; display: flex; flex-direction: column; gap: 6px">
+        <span style="position: relative; width: 68px; height: 68px; border-radius: 50%; background: #e2650f; color: #ffffff; font-family: Outfit, sans-serif; font-weight: 700; font-size: 24px; display: grid; place-items: center; border: 4px solid #ffffff">CM<span style="position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; border-radius: 50%; background: {{dot}}; border: 3px solid #ffffff"></span></span>
+        <b style="font-family: Outfit, sans-serif; font-size: 22px">Chip</b>
+        <span style="font-size: 14px; color: #6b5547">@chip</span>
+        <div style="border-radius: 12px; background: #f7f0e9; padding: 10px 12px; font-size: 15px; color: #24170f">{{shownText}}</div>
+      </div>
+    </div>
+
+    <div style="background: #ffffff; border: 1px solid #eaddd1; border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; width: 520px; box-sizing: border-box">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: .08em; color: #8f7868">ON YOUR PHONE (STATUS SCREEN)</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <span style="border-radius: 12px; background: #f7f0e9; padding: 10px 12px; font-size: 14px">Clear after: <b>{{clearLabel}}</b></span>
+        <span style="border-radius: 12px; background: #f7f0e9; padding: 10px 12px; font-size: 14px; color: #6b5547">Tapping it opens the same six choices as a list</span>
+      </div>
+    </div>
+
+    <p style="margin: 0; font-size: 13px; color: #6b5547; line-height: 1.5; max-width: 620px">"Today" ends at midnight where you are and "This week" at the end of Sunday, both in your own time zone. Older Glofly apps still show the status; they just can't set a time.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { status: 'online', clear: '4h' };
+  }
+  renderVals() {
+    var self = this;
+    var s = this.state;
+    var choices = [
+      { id: 'online', label: 'Online', hint: '', color: '#3dba6e' },
+      { id: 'away', label: 'Away', hint: "Shows you're not at your computer", color: '#f2b33d' },
+      { id: 'dnd', label: 'Do not disturb', hint: "Glofly's sounds stay quiet", color: '#e0393e' },
+      { id: 'invisible', label: 'Invisible', hint: 'Appear offline, but keep using Glofly', color: '#9a8a7f' }
+    ];
+    var clears = [
+      { id: '30m', label: '30 minutes', ends: 'Clears at 1:40 PM (in 30 minutes)' },
+      { id: '1h', label: '1 hour', ends: 'Clears at 2:10 PM (in 1 hour)' },
+      { id: '4h', label: '4 hours', ends: 'Clears at 5:10 PM (in 4 hours)' },
+      { id: 'today', label: 'Today', ends: 'Clears tonight at midnight' },
+      { id: 'week', label: 'This week', ends: 'Clears Sunday night at midnight' },
+      { id: 'never', label: 'Never', ends: 'Stays until you change it' }
+    ];
+    var cur = choices.filter(function (c) { return c.id === s.status; })[0];
+    var cl = clears.filter(function (c) { return c.id === s.clear; })[0];
+    return {
+      dot: cur.color,
+      shownText: 'At the dentist, back soon',
+      endsLine: cl.ends,
+      clearLabel: cl.label,
+      choices: choices.map(function (c) {
+        return Object.assign({}, c, {
+          on: c.id === s.status,
+          bg: c.id === s.status ? '#fdf0e4' : '#ffffff',
+          pick: function () { self.setState({ status: c.id }); }
+        });
+      }),
+      clears: clears.map(function (c) {
+        var on = c.id === s.clear;
+        return Object.assign({}, c, {
+          on: on,
+          ring: on ? '#e2650f' : '#dcc8b8',
+          bg: on ? '#e2650f' : '#ffffff',
+          ink: on ? '#ffffff' : '#4a372b',
+          pick: function () { self.setState({ clear: c.id }); }
+        });
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>
