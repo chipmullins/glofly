@@ -15,7 +15,7 @@ const light = {
   ink: '#24170F',
   ink2: '#4A372B',
   muted: '#6B5547',
-  faint: '#8F7868',
+  faint: '#76604F',
   accent: '#F47A1F',
   accentInk: '#2A1406',
   accentText: '#B8430A',

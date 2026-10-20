@@ -263,7 +263,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const newSince = useNewSince(c, nebulaId, me.id)
   // ---- 0.8.0 community tools: events, search across the constellation ----
   const cxEvents = useConstellationEvents(c.id)
-  const [eventDialog, setEventDialog] = useState<{ editing: ConstellationEvent | null } | null>(null)
+  const [eventDialog, setEventDialog] = useState<{ editing: ConstellationEvent | null } | null>(
+    null
+  )
   const [searchAll, setSearchAll] = useState(false)
   const liveEventVoice = useMemo(
     () =>
@@ -289,7 +291,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   }, [shownNebulaId])
   /** Show a message in a nebula of this constellation (another nebula: once it's open). */
   const showMessage = (targetNebulaId: string, messageId: string): void => {
-    if (targetNebulaId === shownNebulaId) setJump((j) => ({ messageId, nonce: (j?.nonce ?? 0) + 1 }))
+    if (targetNebulaId === shownNebulaId)
+      setJump((j) => ({ messageId, nonce: (j?.nonce ?? 0) + 1 }))
     else {
       requestJump(targetNebulaId, messageId)
       props.onSelectNebula(targetNebulaId)
@@ -628,10 +631,6 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     return out
   }, [c])
 
-
-
-
-
   // ---- The far-left strip ----
   const strip = (
     <nav aria-label="Your constellations" className="cx-strip">
@@ -835,7 +834,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         </div>
       )}
       <div
-        className={c.bannerVersion ? 'cx-side-banner cx-side-banner--under-photo' : 'cx-side-banner'}
+        className={
+          c.bannerVersion ? 'cx-side-banner cx-side-banner--under-photo' : 'cx-side-banner'
+        }
         style={{ background: theme.sideBanner }}
         ref={headRef}
       >
@@ -1246,7 +1247,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         openId={menu?.member.user.id ?? null}
         onOpen={(m, rect) => {
           setMemberMore(null)
-          setMenu(menu?.member.user.id === m.user.id ? null : { member: m, x: rect.left - 8, y: rect.top })
+          setMenu(
+            menu?.member.user.id === m.user.id ? null : { member: m, x: rect.left - 8, y: rect.top }
+          )
         }}
       />
     </aside>
@@ -1419,7 +1422,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             }}
             onCall={() => {
               setMenu(null)
-              window.dispatchEvent(new CustomEvent('glofly:call-person', { detail: { userId: m.user.id } }))
+              window.dispatchEvent(
+                new CustomEvent('glofly:call-person', { detail: { userId: m.user.id } })
+              )
             }}
             onViewProfile={() => {
               setMenu(null)
@@ -1427,138 +1432,142 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             }}
           />
           {more && (
-          <div className="cx-mcard-more-list" role="menu" aria-label={`More for ${m.user.displayName}`}>
-          <button
-            type="button"
-            role="menuitem"
-            className="cx-menu-item"
-            onClick={() => {
-              setMenu(null)
-              props.onViewProfile(m.user)
-            }}
-          >
-            View profile
-          </button>
-          {can(c, 'manageRoles') && (above || (mine && c.me.owner)) && roles.length > 0 && (
-            <>
-              <span className="cx-menu-sub">Roles</span>
-              {roles.map((r) => {
-                const has = m.roleIds.includes(r.id)
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    role="menuitemcheckbox"
-                    aria-checked={has}
-                    className="cx-menu-item cx-menu-item--indent"
-                    disabled={busy}
-                    onClick={() =>
-                      void act(() =>
-                        api.setMemberRoles(
-                          c.id,
-                          m.user.id,
-                          has ? m.roleIds.filter((x) => x !== r.id) : [...m.roleIds, r.id]
-                        )
-                      )
-                    }
-                  >
-                    <span
-                      className="cx-role-dot"
-                      style={{ background: (ROLE_COLORS[r.color] ?? ROLE_COLORS.gray).dot }}
-                    />
-                    {r.name}
-                    {has && <span className="cx-menu-check">✓</span>}
-                  </button>
-                )
-              })}
-            </>
-          )}
-          {above && can(c, 'muteVoice') && inVoice && (
-            <>
-              <span className="cx-menu-sub">Voice</span>
+            <div
+              className="cx-mcard-more-list"
+              role="menu"
+              aria-label={`More for ${m.user.displayName}`}
+            >
               <button
                 type="button"
                 role="menuitem"
-                className="cx-menu-item cx-menu-item--indent"
-                onClick={async () => {
+                className="cx-menu-item"
+                onClick={() => {
                   setMenu(null)
-                  const r = await api.voiceMute(
-                    c.id,
-                    inVoice.nebulaId,
-                    m.user.id,
-                    !inVoice.muted.includes(m.user.id)
-                  )
-                  if (!r.ok) props.onProblem(r.message)
+                  props.onViewProfile(m.user)
                 }}
               >
-                {inVoice.muted.includes(m.user.id) ? 'Unmute in voice' : 'Mute in voice'}
+                View profile
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="cx-menu-item cx-menu-item--indent"
-                onClick={async () => {
-                  setMenu(null)
-                  const r = await api.voiceDisconnect(c.id, inVoice.nebulaId, m.user.id)
-                  if (!r.ok) props.onProblem(r.message)
-                }}
-              >
-                Disconnect from voice
-              </button>
-            </>
-          )}
-          {above && can(c, 'timeoutKick') && (
-            <>
-              <span className="cx-menu-sub">Time out</span>
-              {m.timedOutUntil ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="cx-menu-item cx-menu-item--indent"
-                  onClick={() => void act(() => api.endTimeout(c.id, m.user.id))}
-                >
-                  Remove time-out
-                </button>
-              ) : (
-                TIMEOUT_LENGTHS.map((l) => (
+              {can(c, 'manageRoles') && (above || (mine && c.me.owner)) && roles.length > 0 && (
+                <>
+                  <span className="cx-menu-sub">Roles</span>
+                  {roles.map((r) => {
+                    const has = m.roleIds.includes(r.id)
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={has}
+                        className="cx-menu-item cx-menu-item--indent"
+                        disabled={busy}
+                        onClick={() =>
+                          void act(() =>
+                            api.setMemberRoles(
+                              c.id,
+                              m.user.id,
+                              has ? m.roleIds.filter((x) => x !== r.id) : [...m.roleIds, r.id]
+                            )
+                          )
+                        }
+                      >
+                        <span
+                          className="cx-role-dot"
+                          style={{ background: (ROLE_COLORS[r.color] ?? ROLE_COLORS.gray).dot }}
+                        />
+                        {r.name}
+                        {has && <span className="cx-menu-check">✓</span>}
+                      </button>
+                    )
+                  })}
+                </>
+              )}
+              {above && can(c, 'muteVoice') && inVoice && (
+                <>
+                  <span className="cx-menu-sub">Voice</span>
                   <button
-                    key={l.id}
                     type="button"
                     role="menuitem"
                     className="cx-menu-item cx-menu-item--indent"
-                    onClick={() => void act(() => api.timeout(c.id, m.user.id, l.id))}
+                    onClick={async () => {
+                      setMenu(null)
+                      const r = await api.voiceMute(
+                        c.id,
+                        inVoice.nebulaId,
+                        m.user.id,
+                        !inVoice.muted.includes(m.user.id)
+                      )
+                      if (!r.ok) props.onProblem(r.message)
+                    }}
                   >
-                    {l.name}
+                    {inVoice.muted.includes(m.user.id) ? 'Unmute in voice' : 'Mute in voice'}
                   </button>
-                ))
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="cx-menu-item cx-menu-item--indent"
+                    onClick={async () => {
+                      setMenu(null)
+                      const r = await api.voiceDisconnect(c.id, inVoice.nebulaId, m.user.id)
+                      if (!r.ok) props.onProblem(r.message)
+                    }}
+                  >
+                    Disconnect from voice
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                role="menuitem"
-                className="cx-menu-item cx-menu-item--danger"
-                onClick={() => {
-                  setMenu(null)
-                  setConfirm({ kind: 'kick', member: m })
-                }}
-              >
-                Kick {firstName(m.user)}
-              </button>
-            </>
-          )}
-          {above && can(c, 'ban') && (
-            <button
-              type="button"
-              role="menuitem"
-              className="cx-menu-item cx-menu-item--danger"
-              onClick={() => {
-                setMenu(null)
-                setConfirm({ kind: 'ban', member: m })
-              }}
-            >
-              Ban {firstName(m.user)}
-            </button>
-          )}
-          </div>
+              {above && can(c, 'timeoutKick') && (
+                <>
+                  <span className="cx-menu-sub">Time out</span>
+                  {m.timedOutUntil ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="cx-menu-item cx-menu-item--indent"
+                      onClick={() => void act(() => api.endTimeout(c.id, m.user.id))}
+                    >
+                      Remove time-out
+                    </button>
+                  ) : (
+                    TIMEOUT_LENGTHS.map((l) => (
+                      <button
+                        key={l.id}
+                        type="button"
+                        role="menuitem"
+                        className="cx-menu-item cx-menu-item--indent"
+                        onClick={() => void act(() => api.timeout(c.id, m.user.id, l.id))}
+                      >
+                        {l.name}
+                      </button>
+                    ))
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="cx-menu-item cx-menu-item--danger"
+                    onClick={() => {
+                      setMenu(null)
+                      setConfirm({ kind: 'kick', member: m })
+                    }}
+                  >
+                    Kick {firstName(m.user)}
+                  </button>
+                </>
+              )}
+              {above && can(c, 'ban') && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="cx-menu-item cx-menu-item--danger"
+                  onClick={() => {
+                    setMenu(null)
+                    setConfirm({ kind: 'ban', member: m })
+                  }}
+                >
+                  Ban {firstName(m.user)}
+                </button>
+              )}
+            </div>
           )}
         </div>
       )
@@ -1643,8 +1652,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             membersOpen,
             onToggleMembers: () => setMembersOpen((v) => !v),
             voiceCards,
-            lineBefore:
-              newSince.info?.nebulaId === chatNebula.id ? newSince.lineBefore : undefined,
+            lineBefore: newSince.info?.nebulaId === chatNebula.id ? newSince.lineBefore : undefined,
             // 0.8.0: the search button searches the whole constellation (Ctrl+F: this nebula)
             onSearchAll: () => setSearchAll(true),
             // 0.8.0 events: a card under its "made an event 📅" message
@@ -1652,7 +1660,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             cardFor: (m) => {
               const e = eventsByMessage.get(m.id)
               if (!e) return null
-              const vs = e.voiceNebulaId ? c.voice.find((v) => v.nebulaId === e.voiceNebulaId) : null
+              const vs = e.voiceNebulaId
+                ? c.voice.find((v) => v.nebulaId === e.voiceNebulaId)
+                : null
               return (
                 <EventCard
                   event={e}

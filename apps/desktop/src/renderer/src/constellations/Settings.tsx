@@ -199,7 +199,11 @@ export default function ConstellationSettings({
     { id: 'roles', name: 'Roles', show: true },
     { id: 'members', name: 'Members', show: true },
     { id: 'invites', name: 'Invites', show: true },
-    { id: 'automod', name: 'AutoMod', show: can(c, 'manageConstellation') || can(c, 'deleteMessages') },
+    {
+      id: 'automod',
+      name: 'AutoMod',
+      show: can(c, 'manageConstellation') || can(c, 'deleteMessages')
+    },
     { id: 'moderation', name: 'Moderation', show: modViewer }
   ]
   const title =
@@ -1169,8 +1173,8 @@ function RolesPage({ c, busy, run }: PageProps): React.JSX.Element {
               <span style={{ flex: 1 }}>
                 <span className="cx-perm-name">Members can pick this role</span>
                 <span className="cx-perm-what">
-                  It shows on the welcome screen and in “Your roles”. A role people pick
-                  themselves is a label: it can&apos;t have permissions.
+                  It shows on the welcome screen and in “Your roles”. A role people pick themselves
+                  is a label: it can&apos;t have permissions.
                 </span>
               </span>
               <input

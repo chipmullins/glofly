@@ -694,23 +694,23 @@ function registerIpcHandlers(): void {
   ipcMain.handle(
     'constellations:set-icon',
     (event, id: unknown, data: unknown, type: unknown, which: unknown = 'icon') => {
-    // 0.7.5: the same for the banner photo (which: 'banner').
-    if (
-      !fromApp(event) ||
-      !isUserId(id) ||
-      !(data instanceof ArrayBuffer) ||
-      !PHOTO_TYPES.includes(type as PhotoType) ||
-      (which !== 'icon' && which !== 'banner')
-    ) {
-      return invalid
-    }
-    if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
-      return { ok: false, error: 'invalid', message: 'Photos can be up to 8 MB.' }
-    }
-    return apiRequest('PUT', `/constellations/${id}/${which}`, undefined, {
-      data: new Uint8Array(data),
-      type: type as PhotoType
-    })
+      // 0.7.5: the same for the banner photo (which: 'banner').
+      if (
+        !fromApp(event) ||
+        !isUserId(id) ||
+        !(data instanceof ArrayBuffer) ||
+        !PHOTO_TYPES.includes(type as PhotoType) ||
+        (which !== 'icon' && which !== 'banner')
+      ) {
+        return invalid
+      }
+      if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
+        return { ok: false, error: 'invalid', message: 'Photos can be up to 8 MB.' }
+      }
+      return apiRequest('PUT', `/constellations/${id}/${which}`, undefined, {
+        data: new Uint8Array(data),
+        type: type as PhotoType
+      })
     }
   )
   ipcMain.handle('conversations:remove-group-photo', (event, id: unknown) =>

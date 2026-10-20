@@ -239,6 +239,13 @@
       "when": 1792431125915,
       "tag": "0033_two_step_pins_scheduled_errors",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792480916143,
+      "tag": "0034_constellation_polish",
+      "breakpoints": true
     }
   ]
 }

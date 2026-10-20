@@ -146,7 +146,6 @@ export type NebulaMode = {
   bodyFor?: (m: Message) => string | null
 }
 
-
 const TYPING_SEND_EVERY_MS = 3000 // how often we tell the other person we're typing
 const TYPING_SHOW_FOR_MS = 4500 // how long "is typing…" stays after their last keystroke
 const MESSAGE_MAX = 4000
@@ -1593,10 +1592,13 @@ export default function ChatView({
               extra={
                 m.deleted || m.event
                   ? null
-                  : ((nebula?.cardFor?.(m) ?? null) ??
+                  : (nebula?.cardFor?.(m) ??
+                    null ??
                     (nebula ? voiceCardFor(nebula, m.body) : null) ??
                     // 0.7.5: a constellation invite link becomes a card (any chat).
-                    (inviteCodeIn(m.body) ? <InviteCard code={inviteCodeIn(m.body)!} onProblem={setNotice} /> : null))
+                    (inviteCodeIn(m.body) ? (
+                      <InviteCard code={inviteCodeIn(m.body)!} onProblem={setNotice} />
+                    ) : null))
               }
               avatar={
                 m.senderId === me.id ? (
@@ -1760,7 +1762,9 @@ export default function ChatView({
           <button
             type="button"
             className="chat-header-button"
-            aria-label={nebula.onSearchAll ? 'Search the whole constellation' : 'Search this nebula'}
+            aria-label={
+              nebula.onSearchAll ? 'Search the whole constellation' : 'Search this nebula'
+            }
             title={
               nebula.onSearchAll
                 ? `Search every nebula (${shortcutLabel('F')} searches this one)`

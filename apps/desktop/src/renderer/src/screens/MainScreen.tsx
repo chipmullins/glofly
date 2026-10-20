@@ -2092,10 +2092,7 @@ export default function MainScreen({
 
       {/* 0.8.0: "Game Night starts in 15 min" / "is starting · Join Campfire" */}
       {!restricted && (
-        <EventToasts
-          meId={user.id}
-          onOpen={(place) => cx.enter(cxNavRef.current, place)}
-        />
+        <EventToasts meId={user.id} onOpen={(place) => cx.enter(cxNavRef.current, place)} />
       )}
 
       {!restricted && (

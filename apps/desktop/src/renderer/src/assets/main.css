@@ -29,8 +29,8 @@
   --glo-ink: #24170f;
   --glo-icon: #4a372b;
   --glo-muted: #6b5547;
-  --glo-faint: #8f7868; /* timestamps, hints */
-  --glo-placeholder: #8f7868;
+  --glo-faint: #76604f; /* timestamps, hints (4.5:1 on every light surface) */
+  --glo-placeholder: #7a6354;
 
   /* Accent (Glow Orange) */
   --glo-accent: #f47a1f;

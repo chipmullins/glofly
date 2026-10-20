@@ -392,11 +392,7 @@ export default function ChatList({
   const others = conversations.filter((c) => !c.pinnedAt && (c.id === openChatId || !isClosed(c)))
   // 0.7.5: a chat bumped to the top glides there with a soft glow (not while searching).
   const chatsNav = useRef<HTMLElement | null>(null)
-  useListGlide(
-    chatsNav,
-    query.trim() ? [] : others.map((c) => c.id),
-    openChatId
-  )
+  useListGlide(chatsNav, query.trim() ? [] : others.map((c) => c.id), openChatId)
 
   /** Moves one pinned chat to a new place and saves the whole order. */
   function movePin(id: string, to: number): void {

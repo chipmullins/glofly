@@ -117,7 +117,8 @@ export const api = {
   removeBanner: (id: string) => call<{ bannerVersion: null }>('DELETE', `${base(id)}/banner`),
   welcomeDone: (id: string, agreed: boolean, roleIds: string[]) =>
     call<Detail>('POST', `${base(id)}/welcome`, { agreed, roleIds }),
-  myRoles: (id: string, roleIds: string[]) => call<Detail>('PUT', `${base(id)}/me/roles`, { roleIds }),
+  myRoles: (id: string, roleIds: string[]) =>
+    call<Detail>('PUT', `${base(id)}/me/roles`, { roleIds }),
   memberCard: (id: string, userId: string) =>
     call<MemberCardInfo>('GET', `${base(id)}/members/${userId}/card`),
   setIcon: (
