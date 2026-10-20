@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -22,7 +22,7 @@ devicesRouter.use(requireAuth);
 const sessionOf = (res: Response) => res.locals.sessionId as string;
 const userOf = (res: Response) => (res.locals.user as { id: string }).id;
 
-const limiter = rateLimit({
+const limiter = rateLimit("push:devices", {
   windowMs: 60 * 1000,
   limit: 30,
   keyGenerator: (_req, res) => userOf(res),

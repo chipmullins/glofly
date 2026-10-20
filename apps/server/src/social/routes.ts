@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { HANG_MINUTES, isBirthdayOn, type Hanging, type SocialToday } from "@glofly/shared";
@@ -78,7 +78,7 @@ socialRouter.get("/", async (_req, res) => {
   res.json(body);
 });
 
-const hangLimiter = rateLimit({
+const hangLimiter = rateLimit("social:hang", {
   windowMs: 30 * 60 * 1000,
   limit: 4,
   keyGenerator: (_req, res) => me(res).id,
@@ -138,7 +138,7 @@ socialRouter.put("/birthday", async (req, res) => {
   res.json({ share: share.data.share });
 });
 
-const yearLimiter = rateLimit({
+const yearLimiter = rateLimit("social:year", {
   windowMs: 60 * 1000,
   limit: 6,
   keyGenerator: (_req, res) => me(res).id,

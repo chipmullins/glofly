@@ -1,5 +1,5 @@
 import express, { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Sticker } from "@glofly/shared";
@@ -29,7 +29,7 @@ const idParam = z.uuid();
 const STICKERS_MAX = 60;
 const imageKey = (ownerId: string, id: string) => `stickers/${ownerId}/${id}.webp`;
 
-const makeLimiter = rateLimit({
+const makeLimiter = rateLimit("stickers:make", {
   windowMs: 60 * 60 * 1000,
   limit: 30,
   keyGenerator: (_req, res) => me(res).id,
@@ -37,7 +37,7 @@ const makeLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "too_many_requests", message: "That's a lot of stickers for one hour. Try again later." },
 });
-const sendLimiter = rateLimit({
+const sendLimiter = rateLimit("stickers:send", {
   windowMs: 60 * 1000,
   limit: 30,
   keyGenerator: (_req, res) => me(res).id,

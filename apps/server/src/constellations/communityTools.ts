@@ -1,6 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
-import { and, desc, eq, gte, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { rateLimit } from "../rateLimit";
+import { and, eq, gte, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   BLOCKED_WORDS_MAX,
@@ -19,7 +19,8 @@ import { db } from "../db";
 import { automodHeld, constellationAutomod, constellationEventRsvps, constellationEvents, messages, nebulas } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
-import { access, hydrate, postSpecial, type MessageRow, messageFields } from "../messages/routes";
+import { access, hydrate, postSpecial, type MessageRow } from "../messages/routes";
+import { searchMessages } from "../messages/search";
 import { can, canPostInNebula, outranks, standingOf, type Standing } from "./perms";
 import { logModeration } from "./activity";
 import { publicUsers } from "./views";
@@ -59,8 +60,8 @@ communityToolsRouter.use(async (_req: Request, res: Response, next: NextFunction
   next();
 });
 
-const limiter = (limit: number, windowMs: number, message: string) =>
-  rateLimit({
+const limiter = (name: string, limit: number, windowMs: number, message: string) =>
+  rateLimit(name, {
     windowMs,
     limit,
     keyGenerator: (_req, res) => me(res).id,
@@ -68,10 +69,10 @@ const limiter = (limit: number, windowMs: number, message: string) =>
     legacyHeaders: false,
     message: { error: "too_many_requests", message },
   });
-const changeLimiter = limiter(120, 10 * 60 * 1000, "That's a lot of changes. Wait a few minutes and try again.");
-const searchLimiter = limiter(40, 60 * 1000, "That's a lot of searching. Try again in a minute.");
-const eventLimiter = limiter(20, 60 * 60 * 1000, "That's a lot of new events. Try again later.");
-const rsvpLimiter = limiter(120, 10 * 60 * 1000, "That's a lot of answers. Wait a few minutes and try again.");
+const changeLimiter = limiter("community:change", 120, 10 * 60 * 1000, "That's a lot of changes. Wait a few minutes and try again.");
+const searchLimiter = limiter("community:search", 40, 60 * 1000, "That's a lot of searching. Try again in a minute.");
+const eventLimiter = limiter("community:event", 20, 60 * 60 * 1000, "That's a lot of new events. Try again later.");
+const rsvpLimiter = limiter("community:rsvp", 120, 10 * 60 * 1000, "That's a lot of answers. Wait a few minutes and try again.");
 
 const idParam = z.uuid();
 const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁩﻿]/;
@@ -168,24 +169,20 @@ communityToolsRouter.get("/:id/search", searchLimiter, async (req, res) => {
           ? sql`${messages.body} ~* '(https?://|www\\.)'`
           : undefined;
   const PAGE = 25;
-  const rows: MessageRow[] = await db
-    .select(messageFields)
-    .from(messages)
-    .where(
-      and(
-        inArray(messages.conversationId, [...byChat.keys()]),
-        isNull(messages.deletedAt),
-        isNull(messages.event),
-        ...words.map((w) => ilike(messages.body, escape(w))),
-        from ? eq(messages.senderId, from.data) : undefined,
-        hasFilter,
-        before ? lt(messages.createdAt, before) : undefined,
-        after ? gte(messages.createdAt, after) : undefined,
-        olderThan,
-      ),
-    )
-    .orderBy(desc(messages.createdAt), desc(messages.id))
-    .limit(PAGE + 1);
+  const rows: MessageRow[] = await searchMessages(
+    and(
+      inArray(messages.conversationId, [...byChat.keys()]),
+      isNull(messages.deletedAt),
+      isNull(messages.event),
+      ...words.map((w) => ilike(messages.body, escape(w))),
+      from ? eq(messages.senderId, from.data) : undefined,
+      hasFilter,
+      before ? lt(messages.createdAt, before) : undefined,
+      after ? gte(messages.createdAt, after) : undefined,
+      olderThan,
+    ),
+    PAGE + 1,
+  );
   const page = rows.slice(0, PAGE);
   const full = await hydrate(page);
   const people = await publicUsers(page.map((r) => r.senderId));

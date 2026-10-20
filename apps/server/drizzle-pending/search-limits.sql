@@ -1,0 +1,46 @@
+-- 0.8.0 track "search-limits": item 3, faster search. (Item 5, limits in Redis, has no SQL.)
+--
+-- One new index: newest live messages first. messages/search.ts uses it so a common word
+-- returns a page right away instead of fetching and sorting every match.
+--
+-- On the live server, migrate.ts builds it with CREATE INDEX CONCURRENTLY (writes keep working
+-- while it builds; an interrupted build is dropped and redone). Drizzle runs each migration in a
+-- transaction, where CONCURRENTLY isn't allowed, so migrate.ts builds it BEFORE the migrations whenever the messages table exists, so on the live
+-- database the migration's own statement finds it and does nothing. When the lead runs
+-- `drizzle-kit generate`, please change the statement drizzle writes for this index to the
+-- IF NOT EXISTS form below (drizzle writes a plain CREATE INDEX, which would fail as "already
+-- exists"). On a new, empty database the migration simply builds it.
+--
+-- pg_trgm: nothing new. It was enabled in 0014 (with messages_body_trgm_idx), and that trigram
+-- index already makes ILIKE '%word%' indexable, so 0.8.0 adds no tsvector index: a
+-- full-text (tsvector) match is word-based (stemming, no partial words), which would change
+-- results, and no current search query could use it.
+
+CREATE INDEX IF NOT EXISTS "messages_search_recent_idx" ON "messages" USING btree ("created_at" DESC, "id" DESC) WHERE "messages"."deleted_at" is null and "messages"."event" is null;
+
+-- Measured on 1,000,000 seeded messages (Postgres 16, 149 MB table, 3 years of messages across
+-- 2,500 DMs, 300 groups and a 10-nebula constellation; ~1% deleted, ~1.6% event lines):
+--   index size 38 MB; plain CREATE INDEX 0.45 s (blocks writes to messages for that long);
+--   CREATE INDEX CONCURRENTLY 0.58 s (no write lock). For comparison, the 0014 trigram index is
+--   66 MB and takes 7.0 s to build.
+--
+-- Search timings (best of 5, ms; same ids in the same order in every case):
+-- | Search                                              | before | 0.8.0 |
+-- |-----------------------------------------------------|-------:|------:|
+-- | All my chats: common word "pizza"                   |   74.3 |   3.3 |
+-- | All my chats: partial "piz"                         |  103.8 |   3.0 |
+-- | All my chats: 2 letters "ok"                        |  280.6 |   3.5 |
+-- | All my chats: phrase "call me"                      |   30.7 |  29.1 |
+-- | All my chats: rare "xylophone"                      |    2.1 |   2.5 |
+-- | All my chats: only in my oldest messages            |    5.0 |   5.5 |
+-- | All my chats: no match                              |    1.2 |   1.8 |
+-- | All my chats: 2 letters, no match "qj"              |  245.3 | 247.5 |
+-- | All my chats: common elsewhere, absent in mine (*)  |   32.9 | 135.8 |
+-- | All my chats: common elsewhere, old in mine (*)     |   47.7 | 148.6 |
+-- | One big chat (150k msgs): "pizza" / "xylophone"     | 0.7/1.6 | 0.9/1.7 |
+-- | Constellation: "pizza"                              |  166.9 |   5.3 |
+-- | Constellation: partial "que"                        |  159.1 |   3.8 |
+-- | Constellation: two words "raid boss"                |  172.1 | 168.8 |
+-- | Constellation: rare "xylophone"                     |    1.7 |   2.1 |
+-- (*) worst cases built on purpose: the newest-first walk runs into its 100 ms limit, then the
+--     0.7.x plan runs. Without that limit these took 1.1-1.3 s with the new index.

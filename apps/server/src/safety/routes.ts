@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, desc, eq, gt, inArray, isNull, lt, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -33,7 +33,7 @@ const me = (res: Response): Me => res.locals.user as Me;
 
 export const REPORT_REASONS = ["spam", "harassment", "hate", "sexual", "violence", "self_harm", "other"] as const;
 
-const reportLimiter = rateLimit({
+const reportLimiter = rateLimit("safety:report", {
   windowMs: 60 * 60 * 1000,
   limit: 10,
   keyGenerator: (_req, res) => me(res).id,
