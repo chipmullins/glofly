@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, View, type View as RNView } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -318,6 +318,13 @@ export function NebulaChat({
 
   const latest = useRef({ react, jumpTo, messageMenu })
   latest.current = { react, jumpTo, messageMenu }
+  // 0.8.0: opened from the Inbox or search at a message
+  const loadedOnce = !!messages?.loaded
+  useEffect(() => {
+    if (!loadedOnce) return
+    const id = takeJump(n.id)
+    if (id) setTimeout(() => void latest.current.jumpTo(id), 150)
+  }, [loadedOnce, n.id])
   const onReact = useCallback((m: Message, e: string) => void latest.current.react(m, e), [])
   const onQuote = useCallback((mid: string) => void latest.current.jumpTo(mid), [])
   const onPhoto = useCallback((m: Message, index: number) => setViewer({ message: m, index }), [])
