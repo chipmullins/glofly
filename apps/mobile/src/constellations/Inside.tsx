@@ -12,7 +12,7 @@ import { measure } from './ContextMenu'
 import { BannerArt } from './community'
 import { haptic } from './motion'
 import { nebulaMenu } from './nebulaActions'
-import { isQuiet, sectionsOf } from './roles'
+import { gateLabel, isQuiet, sectionsOf } from './roles'
 import { BannerStars, ConstellationIcon, CountBadge, HomeGlyph, GalaxyIcon, Live, N, SpeakerGlyph, StarGlyph } from './ui'
 
 // Inside a constellation (canvas board 4, and the iPad board): the icon strip to switch
@@ -211,9 +211,16 @@ export function NebulaList({ c, onOpen, selected, dense }: ListProps) {
                 <View style={{ transform: [{ rotate: closed ? '-90deg' : '0deg' }] }}>
                   <Icon name="chevronDown" size={12} color={N.muted} strokeWidth={2.6} />
                 </View>
-                <Text size={dense ? 11 : 12} weight="bold" style={{ color: N.muted, letterSpacing: 0.96, textTransform: 'uppercase', flex: 1 }} numberOfLines={1}>
+                <Text size={dense ? 11 : 12} weight="bold" style={{ color: N.muted, letterSpacing: 0.96, textTransform: 'uppercase', flexShrink: 1 }} numberOfLines={1}>
                   {s.name}
                 </Text>
+                {/* 0.8.0: role-only category (only people who manage nebulas get the setting) */}
+                {c.categories.find((x) => x.id === s.id)?.visibility === 'roles' ? (
+                  <View accessible accessibilityLabel={`Only ${gateLabel(c, c.categories.find((x) => x.id === s.id)?.roleIds)}`}>
+                    <Icon name="lock" size={11} color="#c9a47e" />
+                  </View>
+                ) : null}
+                <View style={{ flex: 1 }} />
                 {closed && hasNews ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: N.orange }} /> : null}
               </Pressable>
             ) : null}
@@ -229,6 +236,18 @@ export function NebulaList({ c, onOpen, selected, dense }: ListProps) {
           </View>
         )
       })}
+    </View>
+  )
+}
+
+/** 0.8.0: the lock badge with the role, for people who manage nebulas (RoleNebulas board). */
+function LockBadge({ label }: { label: string }) {
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 120, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: '#2b1f1a' }}>
+      <Icon name="lock" size={10} color="#e3c39f" />
+      <Text size={11} weight="bold" numberOfLines={1} style={{ color: '#e3c39f', flexShrink: 1 }}>
+        {label}
+      </Text>
     </View>
   )
 }
@@ -266,7 +285,7 @@ function TextRow({ c, n, onOpen, selected, dense }: { c: ConstellationDetail; n:
   const unread = n.unreadCount > 0 || n.mentionCount > 0
   const quiet = isQuiet(n)
   const bright = unread && !quiet
-  const label = `${n.name}${n.mentionCount ? `, ${n.mentionCount} ${n.mentionCount === 1 ? 'mention' : 'mentions'} of you` : n.unreadCount ? `, ${n.unreadCount} new` : ''}${n.readOnly ? ', read only' : ''}${quiet ? ', muted' : ''}`
+  const label = `${n.name}${n.mentionCount ? `, ${n.mentionCount} ${n.mentionCount === 1 ? 'mention' : 'mentions'} of you` : n.unreadCount ? `, ${n.unreadCount} new` : ''}${n.readOnly ? ', read only' : ''}${quiet ? ', muted' : ''}${n.visibility === 'roles' ? `, only ${gateLabel(c, n.roleIds)}` : ''}`
   return (
     <Pressable
       ref={ref}
@@ -303,7 +322,7 @@ function TextRow({ c, n, onOpen, selected, dense }: { c: ConstellationDetail; n:
         </View>
       ) : null}
       {quiet ? <Icon name="bellOff" size={14} color={N.faint} /> : null}
-      {n.readOnly ? <Icon name="lock" size={14} color={N.faint} /> : null}
+      {n.visibility === 'roles' ? <LockBadge label={gateLabel(c, n.roleIds)} /> : n.readOnly ? <Icon name="lock" size={14} color={N.faint} /> : null}
     </Pressable>
   )
 }
@@ -313,7 +332,7 @@ function VoiceRow({ c, n, voice, people, onOpen, selected, dense }: { c: Constel
   const inIt = (voice?.userIds ?? []).map((id) => people[id] ?? c.members.find((m) => m.user.id === id)?.user).filter((p): p is PublicUser => !!p)
   const sharer = voice?.sharing[0] ? (people[voice.sharing[0]] ?? null) : null
   const line = sharer ? `${firstName(sharer.displayName, sharer.username)} is sharing ${voice!.sharing.length > 1 ? 'a screen' : 'their screen'}` : inIt.length ? voiceLine(inIt.slice(0, 3), n.name, inIt.length) : ''
-  const label = `${n.name}, voice${inIt.length ? `, ${inIt.length} in voice` : ', nobody in it'}${voice?.live ? ', live' : ''}`
+  const label = `${n.name}, voice${inIt.length ? `, ${inIt.length} in voice` : ', nobody in it'}${voice?.live ? ', live' : ''}${n.visibility === 'roles' ? `, only ${gateLabel(c, n.roleIds)}` : ''}`
   const busy = inIt.length > 0
   // 0.7.5: who's talking (from inside the room), and stacked faces when it's busy
   const talking = useTalking(n.id)
@@ -335,6 +354,7 @@ function VoiceRow({ c, n, voice, people, onOpen, selected, dense }: { c: Constel
         <Text size={dense ? 14 : 15} numberOfLines={1} style={{ flex: 1, color: N.ink2 }}>
           {n.name}
         </Text>
+        {n.visibility === 'roles' ? <LockBadge label={gateLabel(c, n.roleIds)} /> : null}
       </Pressable>
     )
   }
@@ -354,6 +374,7 @@ function VoiceRow({ c, n, voice, people, onOpen, selected, dense }: { c: Constel
         <Text size={dense ? 14 : 15} weight="medium" numberOfLines={1} style={{ flex: 1 }}>
           {n.name}
         </Text>
+        {n.visibility === 'roles' ? <LockBadge label={gateLabel(c, n.roleIds)} /> : null}
         <InVoiceCount count={inIt.length} small={dense} />
         {voice?.live ? <Live small={dense} /> : null}
       </View>

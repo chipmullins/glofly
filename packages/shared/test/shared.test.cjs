@@ -501,7 +501,7 @@ test('0.8.0 role-only nebulas and templates', () => {
   for (const n of games.nebulas) assert.equal(gaming.roles.some((r) => r.name === n.roles[0]), true)
   for (const t of s.CONSTELLATION_TEMPLATES) {
     assert.equal(s.isConstellationAccent(t.accent), true)
-    for (const r of t.roles) assert.equal(s.ROLE_COLOR_CHOICES.includes(r.color) || r.color === 'ember', true)
+    for (const r of t.roles) assert.equal(s.ROLE_COLOR_CHOICES.includes(r.color), true)
     assert.equal(t.rules.length <= s.RULES_MAX, true)
   }
 })

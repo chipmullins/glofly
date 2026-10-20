@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
-import { CATEGORIES_MAX, NEBULA_NAME_MAX, NEBULA_TOPIC_MAX, NEBULAS_MAX, cleanNebulaName, type ConstellationDetail, type Nebula, type NebulaKind } from '@glofly/shared'
+import { CATEGORIES_MAX, NEBULA_NAME_MAX, NEBULA_TOPIC_MAX, NEBULAS_MAX, cleanNebulaName, type ConstellationCategory, type ConstellationDetail, type Nebula, type NebulaKind, type NebulaVisibility } from '@glofly/shared'
 import { cx } from '@/api/constellations'
 import { cxSay, putDetail } from '@/state/constellations'
 import { chooseFrom, confirm } from '@/ui/dialogs'
@@ -12,6 +12,8 @@ import { haptic } from '@/constellations/motion'
 import { NightModal } from '@/constellations/sheet'
 import { ReorderList, runDetail, SettingsScreen, useSettingsDetail, type ReorderItem } from '@/constellations/settingsKit'
 import { Glyph, N, NightButton, NightField, Segmented, SpeakerGlyph, StarGlyph, Toggle } from '@/constellations/ui'
+import { WhoCanSee } from '@/constellations/visibility'
+import { gateLabel } from '@/constellations/roles'
 
 // Nebulas & categories (canvas board 7b): hold a nebula's grip and drag it (into another category
 // too); tap a nebula or category to rename, move or delete it.
@@ -23,6 +25,8 @@ export default function NebulasScreen() {
   const { cid } = useLocalSearchParams<{ cid: string }>()
   const c = useSettingsDetail(cid)
   const [editing, setEditing] = useState<Nebula | 'new' | null>(null)
+  /** 0.8.0: the category whose "Who can see" sheet is open */
+  const [gating, setGating] = useState<ConstellationCategory | null>(null)
   if (!c) return <SettingsScreen title="Nebulas & categories" c={null}>{null}</SettingsScreen>
 
   const cats = [...c.categories].sort((a, b) => a.position - b.position)
@@ -51,6 +55,7 @@ export default function NebulasScreen() {
     const pick = await chooseFrom(
       [
         { key: 'rename', label: 'Rename', icon: 'pencil' },
+        { key: 'who', label: 'Who can see it', icon: 'lock', detail: cats[i]?.visibility === 'roles' ? `Only ${gateLabel(c!, cats[i]?.roleIds)}` : 'Everyone' },
         ...(i > 0 ? [{ key: 'up', label: 'Move up', icon: 'arrowUp' as const }] : []),
         ...(i < cats.length - 1 ? [{ key: 'down', label: 'Move down', icon: 'arrowDown' as const }] : []),
         { key: 'delete', label: 'Delete category', icon: 'trash', danger: true, detail: name.trim().toLowerCase() === 'general' ? "Its nebulas won't be in a category" : 'Its nebulas move to General' },
@@ -61,6 +66,7 @@ export default function NebulasScreen() {
       const t = await askText('Rename category', '', name)
       if (t && t !== name) await runDetail(() => cx.renameCategory(c!.id, id, t))
     }
+    if (pick === 'who' && cats[i]) setGating(cats[i])
     if (pick === 'up' || pick === 'down') {
       const ids = cats.map((x) => x.id)
       const j = pick === 'up' ? i - 1 : i + 1
@@ -106,6 +112,14 @@ export default function NebulasScreen() {
               <Text size={15} numberOfLines={1} style={{ flex: 1 }}>
                 {x.n.name}
               </Text>
+              {x.n.visibility === 'roles' ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 120, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: N.card2 }}>
+                  <Icon name="lock" size={10} color={N.muted} />
+                  <Text size={11} weight="bold" numberOfLines={1} style={{ color: N.muted, flexShrink: 1 }}>
+                    {gateLabel(c, x.n.roleIds)}
+                  </Text>
+                </View>
+              ) : null}
               {x.n.readOnly ? (
                 <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: N.card2 }}>
                   <Text size={11} weight="bold" style={{ color: N.muted }}>
@@ -152,6 +166,7 @@ export default function NebulasScreen() {
       </View>
       <NightButton kind="outline" label="+ New category" onPress={() => void addCategory()} />
       {editing ? <NebulaSheet c={c} nebula={editing === 'new' ? null : editing} onClose={() => setEditing(null)} /> : null}
+      {gating ? <CategorySheet c={c} category={gating} onClose={() => setGating(null)} /> : null}
     </SettingsScreen>
   )
 }
@@ -163,6 +178,8 @@ function NebulaSheet({ c, nebula, onClose }: { c: ConstellationDetail; nebula: N
   const [topic, setTopic] = useState(nebula?.topic ?? '')
   const [readOnly, setReadOnly] = useState(nebula?.readOnly ?? false)
   const [categoryId, setCategoryId] = useState<string | null>(nebula ? nebula.categoryId : (cats[0]?.id ?? null))
+  const [visibility, setVisibility] = useState<NebulaVisibility>(nebula?.visibility ?? 'everyone')
+  const [roleIds, setRoleIds] = useState<string[]>(nebula?.roleIds ?? [])
   const [busy, setBusy] = useState(false)
   const category = cats.find((x) => x.id === categoryId)
 
@@ -195,8 +212,8 @@ function NebulaSheet({ c, nebula, onClose }: { c: ConstellationDetail; nebula: N
     if (!clean) return cxSay(kind === 'text' ? 'Use letters, numbers and dashes (up to 32).' : 'Give it a name (up to 32 characters).')
     setBusy(true)
     const ok = nebula
-      ? await runDetail(() => cx.updateNebula(c.id, nebula.id, { name: clean, topic: kind === 'text' ? topic.trim() || null : null, readOnly: kind === 'text' ? readOnly : false, categoryId }))
-      : await runDetail(() => cx.addNebula(c.id, { name: clean, kind, categoryId, topic: kind === 'text' ? topic.trim() || null : null, readOnly: kind === 'text' ? readOnly : false }))
+      ? await runDetail(() => cx.updateNebula(c.id, nebula.id, { name: clean, topic: kind === 'text' ? topic.trim() || null : null, readOnly: kind === 'text' ? readOnly : false, categoryId, visibility, roleIds }))
+      : await runDetail(() => cx.addNebula(c.id, { name: clean, kind, categoryId, topic: kind === 'text' ? topic.trim() || null : null, readOnly: kind === 'text' ? readOnly : false, visibility, roleIds }))
     setBusy(false)
     if (ok) {
       haptic.success()
@@ -259,6 +276,16 @@ function NebulaSheet({ c, nebula, onClose }: { c: ConstellationDetail; nebula: N
           </Text>
           <Icon name="chevronRight" size={16} color={N.faint} />
         </Pressable>
+        <WhoCanSee
+          c={c}
+          what="nebula"
+          visibility={visibility}
+          roleIds={roleIds}
+          onChange={(v, ids) => {
+            setVisibility(v)
+            setRoleIds(ids)
+          }}
+        />
         {nebula ? (
           <Pressable accessibilityRole="button" onPress={() => void remove()} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Icon name="trash" size={18} color={N.redText} />
@@ -267,6 +294,41 @@ function NebulaSheet({ c, nebula, onClose }: { c: ConstellationDetail; nebula: N
             </Text>
           </Pressable>
         ) : null}
+      </View>
+    </NightModal>
+  )
+}
+
+/** 0.8.0: "Who can see this category" (a role-only category hides every nebula inside). */
+function CategorySheet({ c, category, onClose }: { c: ConstellationDetail; category: ConstellationCategory; onClose: () => void }) {
+  const [visibility, setVisibility] = useState<NebulaVisibility>(category.visibility ?? 'everyone')
+  const [roleIds, setRoleIds] = useState<string[]>(category.roleIds ?? [])
+  const [busy, setBusy] = useState(false)
+  async function save() {
+    setBusy(true)
+    const ok = await runDetail(() => cx.categoryVisibility(c.id, category.id, visibility, roleIds))
+    setBusy(false)
+    if (ok) {
+      haptic.success()
+      onClose()
+    }
+  }
+  return (
+    <NightModal onClose={onClose} fit top={120} accessibilityLabel={`Who can see ${category.name}`} footer={<NightButton height={50} label="Save" busy={busy} onPress={() => void save()} />}>
+      <View style={{ gap: 14, paddingBottom: 8 }}>
+        <Text display size={20}>
+          Edit category · {category.name}
+        </Text>
+        <WhoCanSee
+          c={c}
+          what="category"
+          visibility={visibility}
+          roleIds={roleIds}
+          onChange={(v, ids) => {
+            setVisibility(v)
+            setRoleIds(ids)
+          }}
+        />
       </View>
     </NightModal>
   )

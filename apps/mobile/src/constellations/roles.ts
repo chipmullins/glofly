@@ -120,3 +120,10 @@ export function sectionsOf(c: ConstellationDetail): { id: string; name: string |
       .filter((s) => s.nebulas.length > 0),
   ]
 }
+
+/** 0.8.0 role-only: "Valorant", "Valorant +1", or "Owner and admins" (the lock badge). */
+export function gateLabel(c: ConstellationDetail, roleIds: string[] | undefined): string {
+  const names = (roleIds ?? []).map((id) => c.roles.find((r) => r.id === id)?.name).filter((n): n is string => !!n)
+  if (!names.length) return 'Owner and admins'
+  return names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`
+}

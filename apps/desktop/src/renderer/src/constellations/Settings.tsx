@@ -39,6 +39,8 @@ import IdentitySettings from './SettingsIdentity'
 import { TagInput, VisibilityChoices } from './CreateJoin'
 import type { SettingsPageName } from './ConstellationView'
 import AutoModPage from './AutoModPage'
+import WhoCanSee, { LockIcon, gateLabel } from './RoleVisibility'
+import type { NebulaVisibility } from '@glofly/shared/constellations'
 import './Settings2.css'
 
 // Constellation settings (Roles.dc.html, approved): a left menu (Overview, Nebulas & categories,
@@ -544,11 +546,21 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
   /** 0.7.1: "+ New category" picked in the new nebula's Category list: its name, typed in place */
   const [inlineCat, setInlineCat] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
-  const [draft, setDraft] = useState<{ name: string; topic: string; readOnly: boolean }>({
+  const [draft, setDraft] = useState<{
+    name: string
+    topic: string
+    readOnly: boolean
+    visibility: NebulaVisibility
+    roleIds: string[]
+  }>({
     name: '',
     topic: '',
-    readOnly: false
+    readOnly: false,
+    visibility: 'everyone',
+    roleIds: []
   })
+  /** 0.8.0: the category whose "Who can see" is open */
+  const [catGate, setCatGate] = useState<string | null>(null)
   const [drag, setDrag] = useState<string | null>(null)
   const cats = [...c.categories].sort((a, b) => a.position - b.position)
   const ordered = [...c.nebulas].sort((a, b) => a.position - b.position)
@@ -798,7 +810,9 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                         api.updateNebula(c.id, n.id, {
                           name: draft.name,
                           topic: draft.topic.trim() || null,
-                          readOnly: draft.readOnly
+                          readOnly: draft.readOnly,
+                          visibility: draft.visibility,
+                          roleIds: draft.roleIds
                         })
                       )
                       if (ok) setEditing(null)
@@ -829,6 +843,15 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                         Announcements (only moderators post)
                       </label>
                     )}
+                    <WhoCanSee
+                      c={c}
+                      what="nebula"
+                      visibility={draft.visibility}
+                      roleIds={draft.roleIds}
+                      onChange={(visibility, roleIds) =>
+                        setDraft({ ...draft, visibility, roleIds })
+                      }
+                    />
                     <span style={{ display: 'flex', gap: 8 }}>
                       <button type="button" className="cx-button" onClick={() => setEditing(null)}>
                         Cancel
@@ -858,6 +881,12 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                         {n.topic ? ` · ${n.topic}` : ''}
                       </span>
                     </span>
+                    {n.visibility === 'roles' && (
+                      <span className="cx-settings-lock" title="Only these roles can see it">
+                        <LockIcon size={11} />
+                        {gateLabel(c, n.roleIds)}
+                      </span>
+                    )}
                     {editable && (
                       <span className="cx-settings-item-actions">
                         <button
@@ -865,7 +894,13 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                           className="cx-link-button"
                           onClick={() => {
                             setEditing(n.id)
-                            setDraft({ name: n.name, topic: n.topic ?? '', readOnly: n.readOnly })
+                            setDraft({
+                              name: n.name,
+                              topic: n.topic ?? '',
+                              readOnly: n.readOnly,
+                              visibility: n.visibility ?? 'everyone',
+                              roleIds: n.roleIds ?? []
+                            })
                           }}
                         >
                           Edit
@@ -917,11 +952,37 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                   ↓
                 </button>
               </span>
+              <button
+                type="button"
+                className="cx-link-button"
+                aria-expanded={catGate === cat.id}
+                onClick={() => setCatGate(catGate === cat.id ? null : cat.id)}
+              >
+                {cat.visibility === 'roles' ? (
+                  <span className="cx-settings-lock">
+                    <LockIcon size={11} />
+                    {gateLabel(c, cat.roleIds)}
+                  </span>
+                ) : (
+                  'Who can see'
+                )}
+              </button>
               <DeleteCategory
                 name={cat.name}
                 count={ordered.filter((n) => n.categoryId === cat.id).length}
                 onDelete={() => void run(() => api.removeCategory(c.id, cat.id))}
               />
+              {catGate === cat.id && (
+                <WhoCanSee
+                  c={c}
+                  what="category"
+                  visibility={cat.visibility ?? 'everyone'}
+                  roleIds={cat.roleIds ?? []}
+                  onChange={(visibility, roleIds) =>
+                    void run(() => api.categoryVisibility(c.id, cat.id, visibility, roleIds))
+                  }
+                />
+              )}
             </div>
           ))}
           <form

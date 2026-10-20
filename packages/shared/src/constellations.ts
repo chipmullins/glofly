@@ -330,7 +330,7 @@ export const CONSTELLATION_TEMPLATES: readonly {
     accent: 'gold',
     roles: [
       { name: 'Night owl', color: 'violet', selfAssign: true },
-      { name: 'Early bird', color: 'ember', selfAssign: true },
+      { name: 'Early bird', color: 'red', selfAssign: true },
     ],
     rules: ['Be kind. This is a hangout, not a debate club.', 'Keep it fun for everyone in the room.', "Ask before sharing someone's photo."],
     welcome: 'Welcome to the hangout! Say hi in #general and tell us what you’re up to.',
@@ -384,7 +384,7 @@ export const CONSTELLATION_TEMPLATES: readonly {
     ],
     accent: 'lagoon',
     roles: [
-      { name: 'Math', color: 'ember', selfAssign: true },
+      { name: 'Math', color: 'red', selfAssign: true },
       { name: 'Science', color: 'green', selfAssign: true },
       { name: 'Writing', color: 'violet', selfAssign: true },
     ],

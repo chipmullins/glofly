@@ -29,6 +29,7 @@ import type {
   InvitePreview,
   MemberCardInfo,
   NebulaMention,
+  NebulaVisibility,
   PinnedNebula,
   WelcomeSettings
 } from '@glofly/shared/constellations'
@@ -146,6 +147,13 @@ export const api = {
     call<Detail>('POST', `${base(id)}/categories`, { name }),
   renameCategory: (id: string, categoryId: string, name: string) =>
     call<Detail>('PATCH', `${base(id)}/categories/${categoryId}`, { name }),
+  /** 0.8.0: who can see a category (and everything inside it) */
+  categoryVisibility: (
+    id: string,
+    categoryId: string,
+    visibility: NebulaVisibility,
+    roleIds: string[]
+  ) => call<Detail>('PATCH', `${base(id)}/categories/${categoryId}`, { visibility, roleIds }),
   removeCategory: (id: string, categoryId: string) =>
     call<Detail>('DELETE', `${base(id)}/categories/${categoryId}`),
   layout: (
@@ -161,6 +169,8 @@ export const api = {
       categoryId: string | null
       topic?: string | null
       readOnly?: boolean
+      visibility?: NebulaVisibility
+      roleIds?: string[]
     }
   ) => call<Detail & { nebulaId: string }>('POST', `${base(id)}/nebulas`, values),
   updateNebula: (
@@ -171,6 +181,8 @@ export const api = {
       topic: string | null
       readOnly: boolean
       categoryId: string | null
+      visibility: NebulaVisibility
+      roleIds: string[]
     }>
   ) => call<Detail>('PATCH', `${base(id)}/nebulas/${nebulaId}`, changes),
   removeNebula: (id: string, nebulaId: string) =>
