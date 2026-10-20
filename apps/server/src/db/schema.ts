@@ -1063,6 +1063,10 @@ export const constellationCategories = pgTable(
       .references(() => constellations.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     position: integer("position").notNull(),
+    // 0.8.0 role-only: "everyone" or "roles" (only people with one of role_ids, plus the Owner and
+    // roles that can manage nebulas). A role-only category gates every nebula inside it.
+    visibility: text("visibility").notNull().default("everyone"),
+    roleIds: uuid("role_ids").array().notNull().default(sql`'{}'::uuid[]`),
   },
   (t) => [index("constellation_categories_constellation_idx").on(t.constellationId)],
 );
@@ -1083,6 +1087,10 @@ export const nebulas = pgTable(
     position: integer("position").notNull(),
     // Announcements: only people who can manage nebulas or delete messages can post.
     readOnly: boolean("read_only").notNull().default(false),
+    // 0.8.0 role-only nebulas: "everyone" or "roles" (see constellation_categories). Who can see it
+    // is kept in its conversation's members (constellations/access.ts syncNebulaAccess).
+    visibility: text("visibility").notNull().default("everyone"),
+    roleIds: uuid("role_ids").array().notNull().default(sql`'{}'::uuid[]`),
     conversationId: uuid("conversation_id")
       .notNull()
       .unique()

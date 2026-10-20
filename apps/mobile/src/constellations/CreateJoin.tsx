@@ -15,6 +15,8 @@ import {
   type ConstellationVisibility,
   type DirectoryEntry,
   CONSTELLATION_THEME,
+  ACCENT_THEME,
+  ROLE_COLORS,
 } from '@glofly/shared'
 import { cx } from '@/api/constellations'
 import type { Upload } from '@/api/http'
@@ -183,7 +185,7 @@ export function CreateJoinSheet({ initialTab, initialCode, onClose, onDone }: { 
           <Glyph name="crown" size={14} color={N.amber} />
           <Text size={12} weight="bold" style={{ color: N.amber }}>You'll be the Owner</Text>
         </View>
-        <NightButton height={50} label="Create constellation" busy={busy} onPress={() => void create()} />
+        <CreateButton template={template} busy={busy} onPress={() => void create()} />
       </View>
     }>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 14, paddingBottom: 12 }}>
@@ -203,20 +205,7 @@ export function CreateJoinSheet({ initialTab, initialCode, onClose, onDone }: { 
             <NightField label="Name" value={name} onChangeText={setName} max={CONSTELLATION_NAME_MAX} placeholder="Friday Raid Club" returnKeyType="done" />
           </View>
         </View>
-        <View style={{ gap: 8 }}>
-          <Caps>Start with</Caps>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {CONSTELLATION_TEMPLATES.map((t) => {
-              const on = template === t.id
-              return (
-                <Pressable key={t.id} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={`${t.name}: ${t.what}`} onPress={() => setTemplate(t.id)} style={{ width: '48.5%', minHeight: 62, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: on ? 1.5 : 1, borderColor: on ? N.amber : N.edge, backgroundColor: on ? N.raised : N.card2, justifyContent: 'center', gap: 2, boxShadow: on ? '0 0 16px rgba(255,165,74,0.2)' : undefined }}>
-                  <Text size={14} weight="bold" style={{ color: on ? N.amber : N.ink }}>{t.name}</Text>
-                  <Text size={11} numberOfLines={2} style={{ color: on ? N.ink2 : N.muted }}>{t.what}</Text>
-                </Pressable>
-              )
-            })}
-          </View>
-        </View>
+        <TemplatePicker value={template} onChange={setTemplate} />
         <View style={{ gap: 8 }}>
           <Caps>Who can join</Caps>
           <View style={{ borderRadius: 16, backgroundColor: N.bg, borderWidth: 1, borderColor: N.line2, overflow: 'hidden' }}>
@@ -332,3 +321,141 @@ export function JoinButton({ entry, onPress, compact }: { entry: DirectoryEntry;
   return <NightButton kind={kind} label={label} height={36} style={compact ? { alignSelf: 'center' } : { marginTop: 4 }} onPress={onPress} accessibilityLabel={`${label}, ${entry.name}`} />
 }
 
+
+// 0.8.0 templates (approved Templates board): "Start empty" first (dashed +), a small "Choose a
+// premade template" divider, then the three templates; below, what you'll get. The Create button
+// takes the template's accent.
+
+const ACCENT_NAMES: Record<ConstellationTemplate, string> = { blank: 'Firefly gold', friends: 'Firefly gold', gaming: 'Violet', study: 'Lagoon' }
+
+function TemplateChoice({ t, on, onPress }: { t: (typeof CONSTELLATION_TEMPLATES)[number]; on: boolean; onPress: () => void }) {
+  const a = ACCENT_THEME[t.accent]
+  const empty = t.id === 'blank'
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={`${t.name}: ${t.what}`}
+      onPress={onPress}
+      style={{ minHeight: 64, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: 2, borderColor: on ? a.color : N.line2, backgroundColor: on ? N.raised : N.card2, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+    >
+      {empty ? (
+        <View style={{ width: 40, height: 40, borderRadius: 13, borderWidth: 2, borderStyle: 'dashed', borderColor: a.color, alignItems: 'center', justifyContent: 'center' }}>
+          <Text size={20} weight="bold" style={{ color: a.color }}>+</Text>
+        </View>
+      ) : (
+        <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: a.color, boxShadow: `0 0 16px rgba(${a.rgb},0.45)` }} />
+      )}
+      <View style={{ flex: 1 }}>
+        <Text size={15} weight="bold">{t.name}</Text>
+        <Text size={12} style={{ color: N.muted }}>{t.what}</Text>
+      </View>
+    </Pressable>
+  )
+}
+
+function TemplatePicker({ value, onChange }: { value: ConstellationTemplate; onChange: (t: ConstellationTemplate) => void }) {
+  const empty = CONSTELLATION_TEMPLATES.find((t) => t.id === 'blank')!
+  const cur = CONSTELLATION_TEMPLATES.find((t) => t.id === value) ?? empty
+  const a = ACCENT_THEME[cur.accent]
+  const pickable = cur.roles.filter((r) => r.selfAssign)
+  const caps = (label: string) => (
+    <Text size={11} weight="bold" style={{ color: N.faint, letterSpacing: 0.88, textTransform: 'uppercase', marginBottom: 4 }}>{label}</Text>
+  )
+  return (
+    <View style={{ gap: 10 }}>
+      <View>
+        <Caps>Start a constellation</Caps>
+        <Text size={13} style={{ color: N.muted, marginTop: 2 }}>Pick a starting point. You can change every part of it afterwards.</Text>
+      </View>
+      <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
+        <TemplateChoice t={empty} on={value === 'blank'} onPress={() => onChange('blank')} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 4 }}>
+          <Text size={11} weight="bold" style={{ color: N.faint, letterSpacing: 0.88, textTransform: 'uppercase' }}>Choose a premade template</Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: N.line2 }} />
+        </View>
+        {CONSTELLATION_TEMPLATES.filter((t) => t.id !== 'blank').map((t) => (
+          <TemplateChoice key={t.id} t={t} on={value === t.id} onPress={() => onChange(t.id)} />
+        ))}
+      </View>
+      <View accessibilityLiveRegion="polite" style={{ borderRadius: 18, borderWidth: 1, borderColor: N.line2, backgroundColor: N.bg, padding: 14, gap: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: a.color, boxShadow: `0 0 10px rgba(${a.rgb},0.5)` }} />
+          <Text size={16} weight="bold" style={{ flex: 1 }} numberOfLines={1}>What you'll get: {cur.name}</Text>
+        </View>
+        <Text size={12} style={{ color: N.muted, marginTop: -6 }}>Accent: {ACCENT_NAMES[cur.id]}</Text>
+        <View>
+          {caps('Nebulas')}
+          {cur.categories.map((cat) => (
+            <View key={cat.name} style={{ marginTop: 4 }}>
+              <Text size={11} weight="bold" style={{ color: N.faint, letterSpacing: 0.66 }}>{cat.name.toUpperCase()}</Text>
+              {cat.nebulas.map((n) => (
+                <View key={n.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}>
+                  <Text size={14} style={{ color: N.faint, width: 12, textAlign: 'center' }}>{n.kind === 'text' ? '#' : '◖'}</Text>
+                  <Text size={14} style={{ color: '#e9d5c4' }}>{n.name}</Text>
+                  {n.roles?.length ? (
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 1, borderRadius: 999, backgroundColor: '#34241c' }}>
+                      <Text size={11} style={{ color: '#e3c39f' }}>only {n.roles.join(', ')}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+        <View>
+          {caps('Roles members can pick')}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {pickable.length ? (
+              pickable.map((r) => (
+                <View key={r.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: '#4a372b' }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ROLE_COLORS[r.color].dot }} />
+                  <Text size={13} weight="bold">{r.name}</Text>
+                </View>
+              ))
+            ) : (
+              <Text size={13} style={{ color: N.muted }}>None, add your own later</Text>
+            )}
+          </View>
+        </View>
+        <View>
+          {caps('House rules')}
+          {cur.rules.length ? (
+            cur.rules.map((r, i) => (
+              <View key={i} style={{ flexDirection: 'row', gap: 8, paddingVertical: 2 }}>
+                <Text size={14} weight="bold" style={{ color: a.color }}>{i + 1}.</Text>
+                <Text size={14} style={{ color: '#e9d5c4', flex: 1, lineHeight: 20 }}>{r}</Text>
+              </View>
+            ))
+          ) : (
+            <Text size={13} style={{ color: N.muted }}>None yet</Text>
+          )}
+        </View>
+        <View>
+          {caps('Welcome new members see')}
+          <View style={{ borderRadius: 14, borderWidth: 1, borderColor: '#3a2a22', backgroundColor: N.card, padding: 12 }}>
+            <Text size={14} style={{ lineHeight: 20 }}>{cur.welcome ?? 'Welcome! (You write this yourself in Settings → Welcome.)'}</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  )
+}
+
+/** "Create Gaming squad", in the template's accent. */
+function CreateButton({ template, busy, onPress }: { template: ConstellationTemplate; busy: boolean; onPress: () => void }) {
+  const t = CONSTELLATION_TEMPLATES.find((x) => x.id === template) ?? CONSTELLATION_TEMPLATES[0]
+  const a = ACCENT_THEME[t.accent]
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Create ${t.name}`}
+      accessibilityState={{ disabled: busy, busy }}
+      disabled={busy}
+      onPress={onPress}
+      style={({ pressed }) => ({ height: 50, borderRadius: 25, backgroundColor: a.color, alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.6 : pressed ? 0.85 : 1, boxShadow: `0 0 18px rgba(${a.rgb},0.45)` })}
+    >
+      <Text size={16} weight="bold" style={{ color: a.on }}>{busy ? 'Creating…' : `Create ${t.name}`}</Text>
+    </Pressable>
+  )
+}

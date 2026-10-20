@@ -39,6 +39,7 @@ import {
   StarIcon
 } from './bits'
 import { hexA } from './colors'
+import { LockIcon, gateLabel } from './RoleVisibility'
 import { FireflyMark, GalaxyIcon } from './sky'
 import VoiceStage from './VoiceStage'
 import { BannerArt } from './identity'
@@ -1036,6 +1037,16 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 >
                   <ChevronDown />
                   {section.name}
+                  {c.categories.find((x) => x.id === section.id)?.visibility === 'roles' && (
+                    <span
+                      className="cx-cat-lock"
+                      role="img"
+                      aria-label={`Only ${gateLabel(c, c.categories.find((x) => x.id === section.id)?.roleIds)}`}
+                      title={`Only ${gateLabel(c, c.categories.find((x) => x.id === section.id)?.roleIds)}`}
+                    >
+                      <LockIcon size={11} />
+                    </span>
+                  )}
                   {closed && (
                     <span className={withNews ? 'cx-cat-hint cx-cat-hint--news' : 'cx-cat-hint'}>
                       {withNews ? `• ${withNews} with news` : 'folded'}
@@ -1102,6 +1113,16 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                         <SpeakerIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
                       )}
                       <span className="cx-neb-name">{n.name}</span>
+                      {n.visibility === 'roles' && (
+                        <span
+                          className="cx-neb-lock"
+                          title={`Only ${gateLabel(c, n.roleIds)} can see it`}
+                          aria-label={`Only ${gateLabel(c, n.roleIds)}`}
+                        >
+                          <LockIcon />
+                          {gateLabel(c, n.roleIds)}
+                        </span>
+                      )}
                       {liveEventVoice.has(n.id) && <span className="ev-event-badge">EVENT</span>}
                       {(isQuiet(n) || n.notify === 'none') && (
                         <span

@@ -157,7 +157,10 @@ async function allItems(userId: string): Promise<InboxItem[]> {
       .groupBy(constellationEventRsvps.eventId);
     for (const c of counts) goingCounts.set(c.eventId, c.n);
   }
+  // 0.8.0: events in role-only nebulas I can't see aren't mine to know about.
+  const visibleNebulaIds = new Set(chats.map((c) => c.nebulaId));
   for (const { e, answer, voiceName } of events) {
+    if (!visibleNebulaIds.has(e.nebulaId)) continue;
     const end = e.endsAt ? e.endsAt.getTime() : e.startsAt.getTime() + 3 * 3_600_000;
     if (end <= now) continue;
     const mine = answer === "going" || answer === "maybe" || answer === "no" ? (answer as RsvpAnswer) : null;
@@ -193,7 +196,7 @@ async function allItems(userId: string): Promise<InboxItem[]> {
         startsAt: e.startsAt.toISOString(),
         going: goingCounts.get(e.id) ?? 0,
         mine,
-        where: voiceName ?? n?.nebulaName ?? "",
+        where: (e.voiceNebulaId && visibleNebulaIds.has(e.voiceNebulaId) ? voiceName : null) ?? n?.nebulaName ?? "",
         started: !!e.startedAt,
       },
     });

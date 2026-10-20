@@ -17,6 +17,7 @@ import type { NebulaNews,
   MyGame,
   MyGamesVisibility,
   NebulaKind,
+  NebulaVisibility,
   NebulaMention,
   NotifyLevel,
   PinnedNebula,
@@ -90,12 +91,15 @@ export const cx = {
   nebulaNotify: (id: string, nebulaId: string, level: NotifyLevel | null) => request<null>('PUT', `${base(id)}/nebulas/${nebulaId}/notify`, { level }),
   addCategory: (id: string, name: string) => request<Detail>('POST', `${base(id)}/categories`, { name }),
   renameCategory: (id: string, categoryId: string, name: string) => request<Detail>('PATCH', `${base(id)}/categories/${categoryId}`, { name }),
+  /** 0.8.0: who can see a category (and everything inside it) */
+  categoryVisibility: (id: string, categoryId: string, visibility: NebulaVisibility, roleIds: string[]) =>
+    request<Detail>('PATCH', `${base(id)}/categories/${categoryId}`, { visibility, roleIds }),
   removeCategory: (id: string, categoryId: string) => request<Detail>('DELETE', `${base(id)}/categories/${categoryId}`),
   layout: (id: string, categories: string[], nebulas: { id: string; categoryId: string | null }[]) =>
     request<Detail>('PUT', `${base(id)}/layout`, { categories, nebulas }),
-  addNebula: (id: string, values: { name: string; kind: NebulaKind; categoryId: string | null; topic?: string | null; readOnly?: boolean }) =>
+  addNebula: (id: string, values: { name: string; kind: NebulaKind; categoryId: string | null; topic?: string | null; readOnly?: boolean; visibility?: NebulaVisibility; roleIds?: string[] }) =>
     request<Detail & { nebulaId: string }>('POST', `${base(id)}/nebulas`, values),
-  updateNebula: (id: string, nebulaId: string, changes: Partial<{ name: string; topic: string | null; readOnly: boolean; categoryId: string | null }>) =>
+  updateNebula: (id: string, nebulaId: string, changes: Partial<{ name: string; topic: string | null; readOnly: boolean; categoryId: string | null; visibility: NebulaVisibility; roleIds: string[] }>) =>
     request<Detail>('PATCH', `${base(id)}/nebulas/${nebulaId}`, changes),
   removeNebula: (id: string, nebulaId: string) => request<Detail>('DELETE', `${base(id)}/nebulas/${nebulaId}`),
   joinVoice: (id: string, nebulaId: string) => request<CallJoin>('POST', `${base(id)}/nebulas/${nebulaId}/voice`),

@@ -323,6 +323,19 @@ export function CxMilestoneCard({ m, c }: { m: Message; c: ConstellationDetail |
 
 // ───────────── The welcome when you join ─────────────
 
+/** 0.8.0 "You'll see: #valorant, #minecraft" as roles are picked (from the server's `unlocks`). */
+export function YoullSee({ c, picks }: { c: ConstellationDetail; picks: string[] }) {
+  const shown = [...new Set(picks.flatMap((id) => c.unlocks?.[id] ?? []))]
+  return (
+    <Text size={14} style={{ color: '#d9c2b1' }} accessibilityLiveRegion="polite">
+      You'll see:{' '}
+      <Text size={14} weight="bold" style={{ color: '#ffd8a8' }}>
+        {shown.length ? shown.join(', ') : 'just the nebulas everyone sees'}
+      </Text>
+    </Text>
+  )
+}
+
 export const needsWelcome = (c: ConstellationDetail): boolean => c.welcomedAt === null && c.welcome?.screen !== false && !c.me.owner
 
 /** Closed for this constellation while Glofly is open (Escape / swipe down = later). */
@@ -465,6 +478,7 @@ export function WelcomeSheet({ c }: { c: ConstellationDetail }) {
                   )
                 })}
               </View>
+              {Object.keys(c.unlocks ?? {}).length ? <YoullSee c={c} picks={picks} /> : null}
             </>
           ) : null}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: N.line2, paddingTop: 14 }}>

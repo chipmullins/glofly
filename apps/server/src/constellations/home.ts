@@ -31,6 +31,8 @@ export async function pinsFor(userId: string): Promise<PinnedNebula[]> {
       constellationMembers,
       and(eq(constellationMembers.constellationId, constellations.id), eq(constellationMembers.userId, userId)),
     )
+    // 0.8.0: only nebulas I can still see (role-only ones need the role).
+    .innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, nebulas.conversationId), eq(conversationMembers.userId, userId)))
     .where(and(eq(nebulaPins.userId, userId), isNull(constellations.takenDownAt)))
     .orderBy(asc(nebulaPins.position), asc(nebulaPins.createdAt));
   const unread = await unreadFor(userId, rows.map((r) => r.conversationId));

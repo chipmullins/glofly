@@ -25,7 +25,8 @@ import { can, canPostInNebula, outranks, standingOf, type Standing } from "./per
 import { logModeration } from "./activity";
 import { publicUsers } from "./views";
 import { automodLog, automodRow, forgetAutomod, nebulasOf, settingsOf, waiveWait } from "./automod";
-import { cardText, eventChanged, eventsOf, eventViews, refreshCard } from "./events";
+import { cardText, eventChanged, eventsOf, eventViews, refreshCard, visibleEvents } from "./events";
+import { seesNebulaChat, visibleChats } from "./access";
 import { inboxFor, markInboxAllRead, markInboxRead } from "./inbox";
 
 // Constellations community tools (0.8.0, approved Oct 20 boards 9, 13, 14, 15). Mounted at
@@ -142,11 +143,13 @@ communityToolsRouter.get("/:id/search", searchLimiter, async (req, res) => {
     return;
   }
 
-  // Every nebula of this constellation I can see (members see all of them).
-  const list = await db
+  // Every nebula of this constellation I can see (0.8.0: not role-only ones without the role).
+  const all = await db
     .select({ id: nebulas.id, name: nebulas.name, kind: nebulas.kind, conversationId: nebulas.conversationId })
     .from(nebulas)
     .where(eq(nebulas.constellationId, s.constellationId));
+  const seen = await visibleChats(s.userId, all.map((n) => n.conversationId));
+  const list = all.filter((n) => seen.has(n.conversationId));
   const shown = inNebula ? list.filter((n) => n.id === inNebula.data) : list;
   if (!shown.length) {
     res.json({ results: [], hasMore: false });
@@ -267,7 +270,9 @@ async function eventIn(s: Standing, eid: unknown) {
     .select()
     .from(constellationEvents)
     .where(and(eq(constellationEvents.id, id.data), eq(constellationEvents.constellationId, s.constellationId)));
-  return row ?? null;
+  // 0.8.0: an event in a role-only nebula I can't see isn't there for me.
+  if (!row || !(await visibleEvents([row], s.userId)).length) return null;
+  return row;
 }
 
 async function nebulaIn(constellationId: string, nebulaId: string) {
@@ -281,7 +286,7 @@ async function nebulaIn(constellationId: string, nebulaId: string) {
 communityToolsRouter.get("/:id/events", async (req, res) => {
   const s = await standingFor(req, res);
   if (!s) return;
-  res.json({ events: await eventViews(await eventsOf(s.constellationId), s) });
+  res.json({ events: await eventViews(await visibleEvents(await eventsOf(s.constellationId), s.userId), s) });
 });
 
 communityToolsRouter.post("/:id/events", eventLimiter, async (req, res) => {
@@ -313,7 +318,7 @@ communityToolsRouter.post("/:id/events", eventLimiter, async (req, res) => {
   }
   if (v.voiceNebulaId) {
     const voice = await nebulaIn(s.constellationId, v.voiceNebulaId);
-    if (!voice || voice.kind !== "voice") {
+    if (!voice || voice.kind !== "voice" || !(await seesNebulaChat(s.userId, voice.conversationId))) {
       bad(res, "Pick one of this constellation's voice nebulas.");
       return;
     }
@@ -384,7 +389,7 @@ communityToolsRouter.patch("/:id/events/:eid", changeLimiter, async (req, res) =
   }
   if (v.voiceNebulaId) {
     const voice = await nebulaIn(s.constellationId, v.voiceNebulaId);
-    if (!voice || voice.kind !== "voice") {
+    if (!voice || voice.kind !== "voice" || !(await seesNebulaChat(s.userId, voice.conversationId))) {
       bad(res, "Pick one of this constellation's voice nebulas.");
       return;
     }
@@ -471,7 +476,14 @@ communityToolsRouter.put("/:id/events/:eid/rsvp", rsvpLimiter, async (req, res) 
 /** The AutoMod page: settings, the nebulas for slow mode, and what it did lately. */
 async function automodPage(s: Standing) {
   const row = await automodRow(s.constellationId);
-  const log = await automodLog(s.constellationId);
+  // 0.8.0: nothing from role-only nebulas this moderator can't see (names, previews).
+  const allNebulas = await nebulasOf(s.constellationId);
+  const seen = await visibleChats(s.userId, allNebulas.map((n) => n.conversationId));
+  const hidden = new Set(allNebulas.filter((n) => !seen.has(n.conversationId)).map((n) => n.id));
+  const log = (await automodLog(s.constellationId)).filter((l) => {
+    const nid = (l.entry.details as { nebulaId?: unknown } | null)?.nebulaId;
+    return !(typeof nid === "string" && hidden.has(nid));
+  });
   const people = await publicUsers(log.flatMap((l) => [l.entry.targetUserId, l.undone?.by].filter((x): x is string => !!x)));
   const ranks = new Map<string, Standing | null>();
   const list = [];
@@ -503,7 +515,7 @@ async function automodPage(s: Standing) {
       canUndo,
     });
   }
-  const neb = (await nebulasOf(s.constellationId)).filter((n) => n.kind === "text");
+  const neb = allNebulas.filter((n) => n.kind === "text" && !hidden.has(n.id));
   return {
     settings: settingsOf(row),
     nebulas: neb.map((n) => ({ id: n.id, name: n.name })),
@@ -600,6 +612,10 @@ communityToolsRouter.post("/:id/automod/held/:hid/release", changeLimiter, async
     ? await db.select().from(automodHeld).where(and(eq(automodHeld.id, hid.data), eq(automodHeld.constellationId, s.constellationId)))
     : [];
   if (!held) {
+    notFound(res, "That held message isn't there any more.");
+    return;
+  }
+  if (!(await seesNebulaChat(s.userId, held.conversationId))) {
     notFound(res, "That held message isn't there any more.");
     return;
   }

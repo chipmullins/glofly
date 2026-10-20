@@ -17,6 +17,7 @@ import { removeFromChatCall } from "../calls/service";
 import { emitToUser } from "../realtime";
 import { constellationChanged } from "./activity";
 import { celebrateJoin } from "./community";
+import { syncNebulaAccess } from "./access";
 
 // Joining and leaving (2.0). A constellation's members are also members of each of its nebulas'
 // conversations (so every chat feature works there); these keep the two in step.
@@ -40,14 +41,9 @@ export async function addMember(tx: Tx, constellationId: string, userId: string,
   if (mine >= CONSTELLATIONS_JOINED_MAX) throw new TooManyConstellations();
   const now = new Date();
   await tx.insert(constellationMembers).values({ constellationId, userId, joinedAt: now, welcomedAt: opts.welcomed ? now : null });
-  const chats = await tx.select({ id: nebulas.conversationId }).from(nebulas).where(eq(nebulas.constellationId, constellationId));
-  if (chats.length) {
-    // Everything already there counts as read (a newcomer doesn't start with 500 unread).
-    await tx
-      .insert(conversationMembers)
-      .values(chats.map((c) => ({ conversationId: c.id, userId, lastReadAt: now, joinedAt: now })))
-      .onConflictDoNothing();
-  }
+  // 0.8.0: only the nebulas they may see (role-only ones need the role). Everything already there
+  // counts as read (a newcomer doesn't start with 500 unread).
+  await syncNebulaAccess(constellationId, { userIds: [userId], tx });
   // Joined: their invites and request for it are done.
   await tx
     .delete(constellationInvites)

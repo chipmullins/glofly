@@ -7,6 +7,7 @@ import { api } from '../lib/constellations'
 import { ConstellationIcon } from './bits'
 import { BannerArt } from './identity'
 import './WelcomeDialog.css'
+import './RoleVisibility.css'
 
 // 0.7.5 Constellations polish, "Welcome when you join" (the approved Welcome board): shown once,
 // right after you fly in for the first time. The about (with friends who are already there), the
@@ -236,13 +237,17 @@ export default function WelcomeDialog({
                 </div>
               </div>
               <RoleChips c={c} picks={picks} onPicks={setPicks} />
-              <div className="cx-welcome-unlock">
-                {picks.length
-                  ? `You'll get: ${pickable
-                      .filter((r) => picks.includes(r.id))
-                      .map((r) => r.name)
-                      .join(', ')}`
-                  : 'No roles picked. You can pick some later from the menu by its name.'}
+              <div className="cx-welcome-unlock" aria-live="polite">
+                {hasUnlocks(c) ? (
+                  <YoullSee c={c} picks={picks} />
+                ) : picks.length ? (
+                  `You'll get: ${pickable
+                    .filter((r) => picks.includes(r.id))
+                    .map((r) => r.name)
+                    .join(', ')}`
+                ) : (
+                  'No roles picked. You can pick some later from the menu by its name.'
+                )}
               </div>
             </div>
           )}
@@ -267,6 +272,25 @@ export default function WelcomeDialog({
         </div>
       </div>
     </div>
+  )
+}
+
+/** 0.8.0: does picking a role here show role-only nebulas? (From the server.) */
+const hasUnlocks = (c: ConstellationDetail): boolean => Object.keys(c.unlocks ?? {}).length > 0
+
+/** 0.8.0 "You'll see: #valorant, #minecraft" as roles are picked (RoleNebulas board). */
+export function YoullSee({
+  c,
+  picks
+}: {
+  c: ConstellationDetail
+  picks: string[]
+}): React.JSX.Element {
+  const shown = [...new Set(picks.flatMap((id) => c.unlocks?.[id] ?? []))]
+  return (
+    <span className="cx-welcome-sees">
+      You&apos;ll see: <b>{shown.length ? shown.join(', ') : 'just the nebulas everyone sees'}</b>
+    </span>
   )
 }
 
@@ -362,6 +386,11 @@ export function YourRolesDialog({
               </div>
             </div>
             <RoleChips c={c} picks={picks} onPicks={setPicks} />
+            {hasUnlocks(c) && (
+              <div className="cx-welcome-unlock" aria-live="polite">
+                <YoullSee c={c} picks={picks} />
+              </div>
+            )}
           </div>
           <div className="cx-welcome-nav">
             <button type="button" className="cx-welcome-back" onClick={onClose}>

@@ -1,0 +1,207 @@
+/* 0.8.0 role-only nebulas: "Who can see this nebula / category" (RoleNebulas board). */
+.cx-who {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-subtle);
+}
+.cx-who-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+.cx-who-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.cx-who-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 44px;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: 14px;
+  border: 2px solid var(--glo-line);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.cx-who-option b {
+  font-size: 15px;
+}
+.cx-who-option span {
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.cx-who-option[aria-pressed='true'] {
+  border-color: var(--glo-accent);
+  box-shadow: 0 0 0 3px rgba(var(--glo-accent-rgb), 0.15);
+}
+.cx-who-option:focus-visible,
+.cx-who-add:focus-visible,
+.cx-who-remove:focus-visible {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 2px;
+}
+.cx-who-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cx-who-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.cx-who-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--glo-accent);
+  background: var(--glo-accent-tint);
+  color: var(--glo-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.cx-who-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.cx-who-note {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--glo-muted);
+}
+.cx-who-remove {
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
+  border: 0;
+  background: transparent;
+  color: var(--glo-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cx-who-remove:hover {
+  background: var(--glo-hover);
+  color: var(--glo-ink);
+}
+.cx-who-add-wrap {
+  position: relative;
+}
+.cx-who-add {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px dashed var(--glo-border);
+  background: transparent;
+  color: var(--glo-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.cx-who-add:hover {
+  color: var(--glo-ink);
+  border-color: var(--glo-accent);
+}
+.cx-who-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  min-width: 200px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-menu-bg);
+  box-shadow: 0 12px 30px rgba(var(--glo-shadow-rgb), 0.22);
+  display: flex;
+  flex-direction: column;
+}
+.cx-who-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.cx-who-menu button:hover,
+.cx-who-menu button:focus-visible {
+  background: var(--glo-hover);
+  outline: none;
+}
+.cx-who-hint {
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.cx-who-hint--warn {
+  color: var(--glo-warn-text);
+}
+
+/* The sidebar: lock badge with the role (only people who manage nebulas get the setting). */
+.cx-neb-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: #e3c39f;
+  background: #2b1f1a;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.cx-neb-lock svg {
+  flex: none;
+}
+.cx-cat-lock {
+  display: inline-flex;
+  color: #c9a47e;
+  margin-left: 2px;
+}
+/* Settings list: the same badge on the light pages */
+.cx-settings-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--glo-warn-text);
+}
+.cx-welcome-sees b {
+  color: var(--cxa, #ffd8a8);
+}
+.cx-settings-cat-row {
+  flex-wrap: wrap;
+}
+.cx-settings-cat-row > .cx-who {
+  margin-bottom: 8px;
+}
