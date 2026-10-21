@@ -22,8 +22,6 @@ import { setupWebRTC } from '@/calls/media'
 import { lockPortrait } from '@/lib/orientation'
 import { installErrorReports } from '@/lib/errorReports'
 import { ErrorBoundary } from '@/ui/ErrorBoundary'
-import { ShareGate } from '@/share/ShareGate'
-import { startShareInbox } from '@/share/inbox'
 
 // 0.7.3: errors nothing caught are reported (Settings → Privacy can turn it off).
 installErrorReports()
@@ -51,8 +49,6 @@ export default function RootLayout() {
     void prefs.get<AccentChoice>('accent', 'orange').then((a) => useThemeChoice.getState().setAccent(a))
     void loadPhonePrefs()
     void restoreSession()
-    // 0.8.0: something shared to Glofly from another app (kept until you're signed in)
-    startShareInbox()
   }, [])
 
   useEffect(() => {
@@ -88,7 +84,6 @@ export default function RootLayout() {
           </Stack>
         </ErrorBoundary>
         <OverlayHosts />
-        <ShareGate />
         <PhotoCropperHost />
         <Paused />
         <UpdateRequired />

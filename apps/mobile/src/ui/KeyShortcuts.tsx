@@ -40,10 +40,9 @@ export function KeyShortcuts() {
   const overlay = useOverlayOpen()
   const sheet = useSheet((s) => s.open)
   const inCall = path === '/call' || path.startsWith('/live/') || path.startsWith('/incoming/')
-  const sharing = path === '/share'
 
-  useKeyCommand('quick', goSearch, !inCall && !sharing, -1)
-  useKeyCommand('find', goSearch, !inCall && !sharing, -1)
+  useKeyCommand('quick', goSearch, !inCall, -1)
+  useKeyCommand('find', goSearch, !inCall, -1)
   useKeyCommand('shortcuts', () => useSheet.setState((s) => ({ open: !s.open })), true, -1)
   useKeyCommand(
     'newMessage',
@@ -52,7 +51,7 @@ export function KeyShortcuts() {
       if (useNight.getState().phase === 'night') flyHome(go, { quick: true })
       else go()
     },
-    !inCall && !sharing && path !== '/new-chat',
+    !inCall && path !== '/new-chat',
     -1,
   )
   // Esc: Glofly's own dialog or sheet on top closes first; otherwise a pushed screen (a settings

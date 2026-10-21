@@ -65,8 +65,6 @@ export default function MainLayout() {
               <Stack.Screen name="call" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
               <Stack.Screen name="live/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
               <Stack.Screen name="year" options={{ animation: 'fade', contentStyle: { backgroundColor: '#1A1030' } }} />
-              {/* 0.8.0: "Send to…" for things shared from other apps */}
-              <Stack.Screen name="share" options={{ presentation: wide ? 'formSheet' : 'modal', animation: 'slide_from_bottom' }} />
               {/* Glofly 2.0: over Glofly home (which stays drawn underneath for the trip back). */}
               <Stack.Screen name="constellations" options={{ presentation: 'transparentModal', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
             </Stack>

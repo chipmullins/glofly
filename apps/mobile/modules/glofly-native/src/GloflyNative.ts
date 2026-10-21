@@ -55,9 +55,6 @@ type Native = {
   setPipCall?(on: boolean, width: number, height: number): void
   enterPip?(): boolean
   isInPip?(): boolean
-  /** 0.8.0 Share to Glofly: the share waiting for the "Send to…" screen (once). iPhone: `id` from glofly://share?id=… */
-  takePendingShare?(id: string | null): Promise<SharedItem | null>
-  discardShare?(id: string): void
   /** 0.8.0 keyboard shortcuts (iPad, Android tablets / Chromebooks): the commands the app can do right now. */
   setKeyCommands?(ids: string[]): void
 }
@@ -76,10 +73,6 @@ export type PushConfig = {
 }
 
 export type Recording = { uri: string; durationMs: number; mime: string; size: number }
-
-/** 0.8.0: something shared to Glofly from another app. Files are copies in Glofly's own cache. */
-export type SharedFile = { uri?: string | null; name: string; mimeType: string; size: number; tooBig: boolean }
-export type SharedItem = { id: string; text?: string | null; subject?: string | null; files: SharedFile[]; skipped: number }
 
 // ---- Voice messages ----
 
@@ -164,7 +157,7 @@ export const cancelCallNotification = (id: string) => native?.cancelCallNotifica
 /** iPhone: a glofly:// link from a notification tapped while the app was starting (once). */
 export const takeLaunchLink = (): string | null => native?.takeLaunchLink?.() ?? null
 
-export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp' | 'voipToken' | 'callAnswer' | 'callEnd' | 'callDeclined' | 'callMute' | 'pipChanged' | 'share' | 'keyCommand'
+export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp' | 'voipToken' | 'callAnswer' | 'callEnd' | 'callDeclined' | 'callMute' | 'pipChanged' | 'keyCommand'
 export function onNativeEvent(event: NativeEvent, fn: (body: Record<string, string>) => void): () => void {
   if (!native) return () => {}
   const sub = native.addListener(event, fn)
@@ -222,22 +215,6 @@ export const setSounds = (message: string, ringtone: string): boolean => {
   native.setSounds(message, ringtone)
   return true
 }
-
-// ---- 0.8.0: Share to Glofly ----
-
-/** This build can take things shared from other apps (0.8.0 builds). */
-export const canReceiveShares = (): boolean => !!native?.takePendingShare
-/** The share waiting to be sent (once), or null. */
-export const takePendingShare = async (id: string | null = null): Promise<SharedItem | null> => {
-  if (!native?.takePendingShare) return null
-  try {
-    return await native.takePendingShare(id)
-  } catch {
-    return null
-  }
-}
-/** Removes a share's copied files (after sending or cancelling). */
-export const discardShare = (id: string) => native?.discardShare?.(id)
 
 // ---- 0.8.0: hardware keyboard shortcuts ----
 

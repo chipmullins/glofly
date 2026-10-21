@@ -18,7 +18,7 @@ public class GloflyNativeModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("GloflyNative")
-    Events("pushToken", "callRing", "hangUp", "voipToken", "callAnswer", "callEnd", "callDeclined", "callMute", "pipChanged", "share", "keyCommand")
+    Events("pushToken", "callRing", "hangUp", "voipToken", "callAnswer", "callEnd", "callDeclined", "callMute", "pipChanged", "keyCommand")
 
     OnCreate {
       GloflyNativeModule.current = self
@@ -208,17 +208,6 @@ public class GloflyNativeModule: Module {
         "sample rate": String(format: "%.0f", s.sampleRate),
         "mic permission": mic,
       ]
-    }
-
-    // ---- 0.8.0: things shared to Glofly from other apps (Share.swift + the Share Extension) ----
-
-    /// The share waiting for the "Send to…" screen (once), or nil. `id` from glofly://share?id=…
-    AsyncFunction("takePendingShare") { (id: String?) -> [String: Any]? in
-      GloflyShareInbox.take(id)
-    }
-
-    Function("discardShare") { (id: String) in
-      GloflyShareInbox.discard(id)
     }
 
     // ---- 0.8.0: hardware keyboard shortcuts (KeyCommands.swift) ----
