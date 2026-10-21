@@ -7,7 +7,7 @@ import {
   skyPoints,
   SKY_MAX,
   type SkyStar
-} from './nebulaSky'
+} from './skyLayout'
 import './Feel.css'
 
 // 0.7.5 living sky (canvas board 4, approved): a constellation's nebulas as stars on its banner.
