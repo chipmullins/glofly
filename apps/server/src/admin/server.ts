@@ -5,6 +5,7 @@ import { connectedSummary, pauseConnections, resumeConnections } from "../realti
 import { logAction, noteSchema } from "./audit";
 import { DEFAULT_PAUSE_MESSAGE, getPause, PAUSE_MESSAGE_MAX, setPause } from "./pause";
 import { admin, invalid, ip } from "./routes";
+import { getLockdown, notePause, noteStopping } from "./ops";
 
 // Control → Server (0.4.0): "Pause Glofly" (the kill switch, see admin/pause.ts) and
 // "Restart server".
@@ -30,6 +31,7 @@ serverRouter.get("/server", async (_req, res) => {
     uptimeSec: Math.round(process.uptime()),
     canRestart: canRestart(),
     devicesConnected: (await connectedSummary()).devices,
+    lockdown: await getLockdown(),
   });
 });
 
@@ -58,6 +60,7 @@ serverRouter.put("/server/pause", async (req, res) => {
     if (!before.paused) {
       calls = await endAllCalls();
       devices = await pauseConnections();
+      await notePause(true).catch(() => undefined);
     }
     await logAction({
       adminId: admin(res).id,
@@ -83,6 +86,7 @@ serverRouter.put("/server/pause", async (req, res) => {
   }
   const state = await setPause(false, message);
   resumeConnections();
+  await notePause(false).catch(() => undefined);
   const minutes = before.since ? Math.max(1, Math.round((Date.now() - Date.parse(before.since)) / 60_000)) : null;
   await logAction({
     adminId: admin(res).id,
@@ -112,6 +116,7 @@ serverRouter.post("/server/restart", async (req, res) => {
   }
   restarting = true;
   // Logged first, so the entry is there even though this process is about to stop.
+  await noteStopping("restart");
   await logAction({
     adminId: admin(res).id,
     action: "Restarted the server",

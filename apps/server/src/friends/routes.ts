@@ -9,6 +9,7 @@ import { emitToUser } from "../realtime";
 import { endCallsBetween } from "../calls/service";
 import { announcePresence, liveStatusText, presenceOf } from "../presence";
 import { blockedEitherWay, chatPartnersOf, isRestricted, MANAGED_BY_FAMILY, pair, pairIs } from "./rules";
+import { lockedDown, LOCKDOWN_MESSAGE } from "../admin/lockdown";
 
 export { chatPartnersOf };
 import { STATUS_CLEAR_AFTER, STATUS_TEXT_MAX, isTimeZone, statusClearEndsAt } from "@glofly/shared";
@@ -331,6 +332,11 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
   const myId = me(res).id;
   if (await isRestricted(myId)) {
     res.status(403).json(MANAGED_BY_FAMILY);
+    return;
+  }
+  // 0.9.0: Lockdown (Glofly Control) holds back accounts under a day old.
+  if (await lockedDown(myId)) {
+    res.status(403).json(LOCKDOWN_MESSAGE);
     return;
   }
 

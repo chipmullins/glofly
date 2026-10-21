@@ -253,6 +253,13 @@
       "when": 1792538802523,
       "tag": "0035_glofly_080",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792557151509,
+      "tag": "0036_control_mobile",
+      "breakpoints": true
     }
   ]
 }

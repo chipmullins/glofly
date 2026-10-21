@@ -65,8 +65,10 @@ function session(host: string): ClientHttp2Session {
 
 export type VoipResult = "sent" | "gone" | "failed";
 
-/** Sends one VoIP push. "gone" means Apple says the token no longer works (forget it). */
-export function sendVoip(storedToken: string, payload: Record<string, string>, ttlSeconds: number): Promise<VoipResult> {
+type ApnsRequest = { topic: string; pushType: "voip" | "alert"; priority: "10" | "5"; ttlSeconds: number; body: unknown; what: string };
+
+/** One push to Apple. "gone" means Apple says the token no longer works (forget it). */
+function post(storedToken: string, r: ApnsRequest): Promise<VoipResult> {
   if (!config) return Promise.resolve("failed");
   const sandbox = storedToken.startsWith("sandbox:");
   const token = sandbox ? storedToken.slice(8) : storedToken;
@@ -74,10 +76,10 @@ export function sendVoip(storedToken: string, payload: Record<string, string>, t
   const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
   return new Promise((resolve) => {
     let done = false;
-    const finish = (r: VoipResult) => {
+    const finish = (result: VoipResult) => {
       if (!done) {
         done = true;
-        resolve(r);
+        resolve(result);
       }
     };
     try {
@@ -85,10 +87,10 @@ export function sendVoip(storedToken: string, payload: Record<string, string>, t
         [constants.HTTP2_HEADER_METHOD]: "POST",
         [constants.HTTP2_HEADER_PATH]: `/3/device/${token}`,
         authorization: `bearer ${bearer(config)}`,
-        "apns-topic": config.topic,
-        "apns-push-type": "voip",
-        "apns-priority": "10",
-        "apns-expiration": String(Math.floor(Date.now() / 1000) + Math.max(1, ttlSeconds)),
+        "apns-topic": r.topic,
+        "apns-push-type": r.pushType,
+        "apns-priority": r.priority,
+        "apns-expiration": String(Math.floor(Date.now() / 1000) + Math.max(1, r.ttlSeconds)),
       });
       let status = 0;
       let body = "";
@@ -105,7 +107,7 @@ export function sendVoip(storedToken: string, payload: Record<string, string>, t
           }
         })();
         if (status === 410 || reason === "BadDeviceToken" || reason === "Unregistered") return finish("gone");
-        console.error(`iPhone call push failed: ${status} ${reason}`);
+        console.error(`${r.what} failed: ${status} ${reason}`);
         finish("failed");
       });
       req.on("error", () => finish("failed"));
@@ -113,10 +115,44 @@ export function sendVoip(storedToken: string, payload: Record<string, string>, t
         req.close();
         finish("failed");
       });
-      req.end(JSON.stringify({ aps: {}, ...payload }));
+      req.end(JSON.stringify(r.body));
     } catch (err) {
-      console.error("iPhone call push failed:", err);
+      console.error(`${r.what} failed:`, err);
       finish("failed");
     }
+  });
+}
+
+/** Sends one VoIP push. "gone" means Apple says the token no longer works (forget it). */
+export function sendVoip(storedToken: string, payload: Record<string, string>, ttlSeconds: number): Promise<VoipResult> {
+  if (!config) return Promise.resolve("failed");
+  return post(storedToken, { topic: config.topic, pushType: "voip", priority: "10", ttlSeconds, body: { aps: {}, ...payload }, what: "iPhone call push" });
+}
+
+// 0.9.0: alerts for Glofly Control for iPhone (its own app, so its own topic). Same Apple key.
+//   CONTROL_APNS_BUNDLE_ID  optional, default com.glofly.control
+export const controlAlertsConfigured = config !== null;
+const controlTopic = process.env.CONTROL_APNS_BUNDLE_ID?.trim() || "com.glofly.control";
+
+/** A normal visible notification to the Control app. Time-sensitive ones break through Focus. */
+export function sendControlAlert(
+  storedToken: string,
+  alert: { title: string; body: string; data?: Record<string, string>; timeSensitive?: boolean },
+): Promise<VoipResult> {
+  return post(storedToken, {
+    topic: controlTopic,
+    pushType: "alert",
+    priority: "10",
+    ttlSeconds: 6 * 60 * 60,
+    body: {
+      aps: {
+        alert: { title: alert.title, body: alert.body },
+        sound: "default",
+        "interruption-level": alert.timeSensitive ? "time-sensitive" : "active",
+        "thread-id": "control",
+      },
+      ...(alert.data ?? {}),
+    },
+    what: "Control alert",
   });
 }

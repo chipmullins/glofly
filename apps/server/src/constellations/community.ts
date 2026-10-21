@@ -207,7 +207,7 @@ export async function invitePreviewOf(code: string) {
     .from(constellationLinks)
     .innerJoin(constellations, eq(constellations.id, constellationLinks.constellationId))
     .where(eq(constellationLinks.code, code));
-  if (!row || row.c.takenDownAt || row.link.revokedAt) return null;
+  if (!row || row.c.takenDownAt || row.c.invitesOffAt || row.link.revokedAt) return null;
   if (row.link.expiresAt && row.link.expiresAt.getTime() <= Date.now()) return null;
   if (row.link.maxUses !== null && row.link.uses >= row.link.maxUses) return null;
   const previewOk = row.c.visibility !== "invite" || welcomeOf(row.c.welcome).preview;

@@ -11,10 +11,12 @@ import {
   conversations,
   messages,
   reports,
+  teamReplies,
   userNotices,
   users,
   type ReportSnapshot,
 } from "../db/schema";
+import { raiseAlert } from "../admin/alerts";
 import { requireAuth } from "../auth/sessions";
 import { attachmentsOf } from "../messages/attachments";
 import { blockPerson } from "../friends/routes";
@@ -277,7 +279,7 @@ export async function currentAnnouncement() {
 noticesRouter.get("/", async (_req, res) => {
   const myId = me(res).id;
   const unseen = await db
-    .select({ id: userNotices.id, kind: userNotices.kind, body: userNotices.body, createdAt: userNotices.createdAt })
+    .select({ id: userNotices.id, kind: userNotices.kind, body: userNotices.body, createdAt: userNotices.createdAt, allowReply: userNotices.allowReply })
     .from(userNotices)
     .where(and(eq(userNotices.userId, myId), isNull(userNotices.seenAt)))
     .orderBy(userNotices.createdAt);
@@ -294,6 +296,38 @@ noticesRouter.post("/:id/seen", async (req, res) => {
       .where(and(eq(userNotices.id, id.data), eq(userNotices.userId, me(res).id), isNull(userNotices.seenAt)));
   }
   res.status(204).end();
+});
+
+// 0.9.0: POST /notices/:id/reply  { body } — answer a Glofly Team message (Control → Inbox).
+// Only for team messages that allow replies; it also counts as seen.
+const replyLimiter = rateLimit("safety:team-reply", {
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  keyGenerator: (_req, res) => me(res).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "That's a lot of replies. Try again in a while." },
+});
+noticesRouter.post("/:id/reply", replyLimiter, async (req, res) => {
+  const id = z.uuid().safeParse(req.params.id);
+  const body = z.string().trim().min(1).max(1000).safeParse(req.body?.body);
+  if (!id.success || !body.success) {
+    res.status(400).json({ error: "invalid", message: "Write a reply (up to 1,000 characters)." });
+    return;
+  }
+  const myId = me(res).id;
+  const [notice] = await db
+    .select({ id: userNotices.id, allowReply: userNotices.allowReply, kind: userNotices.kind })
+    .from(userNotices)
+    .where(and(eq(userNotices.id, id.data), eq(userNotices.userId, myId)));
+  if (!notice || notice.kind !== "message" || !notice.allowReply) {
+    res.status(404).json({ error: "not_found", message: "You can't reply to this message." });
+    return;
+  }
+  await db.insert(teamReplies).values({ noticeId: notice.id, userId: myId, body: body.data });
+  await db.update(userNotices).set({ seenAt: new Date() }).where(and(eq(userNotices.id, notice.id), isNull(userNotices.seenAt)));
+  void raiseAlert("inbox_reply", "New reply in Inbox", `@${me(res).username} replied to your Glofly Team message.`, { open: "inbox", userId: myId });
+  res.status(201).json({ ok: true });
 });
 
 /** Resolved reports (and their copy of the messages) are kept a year, then removed (hourly). */

@@ -18,7 +18,10 @@ import {
   sessions,
   signupMode,
   users,
+  teamReplies,
+  adminAlerts,
 } from "../db/schema";
+import { getLockdown } from "./lockdown";
 import { redis } from "../redis";
 import { connectedSessionIds, connectedSummary, disconnectSessions, emitToUser } from "../realtime";
 import { announcePresence, liveStatusText } from "../presence";
@@ -245,8 +248,35 @@ adminRouter.get("/dashboard", async (req, res) => {
     },
     recentAccounts,
     recentActions,
+    // 0.9.0 (the phone's Home and desktop's Dashboard): calls happening now, Inbox replies to read,
+    // Lockdown, the oldest open report, and the newest alerts.
+    now: await happeningNow(),
   });
 });
+
+async function happeningNow() {
+  const [live] = await db.execute<{ calls: number; people: number }>(sql`
+    select count(distinct c.id)::int as calls, count(p.user_id)::int as people
+    from calls c left join call_participants p on p.call_id = c.id and p.joined_at is not null and p.left_at is null
+    where c.status = 'ongoing'
+  `).then((r) => r.rows);
+  const [oldest] = await db
+    .select({ createdAt: reports.createdAt, reason: reports.reason })
+    .from(reports)
+    .where(eq(reports.status, "open"))
+    .orderBy(reports.createdAt)
+    .limit(1);
+  const [unread] = await db.select({ n: count() }).from(teamReplies).where(isNull(teamReplies.readAt));
+  const alerts = await db.select().from(adminAlerts).orderBy(desc(adminAlerts.createdAt)).limit(5);
+  return {
+    calls: live?.calls ?? 0,
+    inCalls: live?.people ?? 0,
+    oldestOpenReport: oldest ? { createdAt: oldest.createdAt.toISOString(), reason: oldest.reason } : null,
+    inboxUnread: unread.n,
+    lockdown: await getLockdown(),
+    alerts: alerts.map((a) => ({ id: a.id, kind: a.kind, title: a.title, body: a.body, data: a.data ?? {}, createdAt: a.createdAt.toISOString() })),
+  };
+}
 
 // ───────────── Accounts ─────────────
 

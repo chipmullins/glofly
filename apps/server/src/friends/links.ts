@@ -25,6 +25,7 @@ import { inBackground, notifyFriendJoined, notifyFriendNews } from "../push/noti
 import { storage } from "../storage";
 import { renderFriendLinkPreview } from "./linkPreview";
 import { blockedEitherWay, isRestricted, MANAGED_BY_FAMILY, pair, pairIs } from "./rules";
+import { lockedDown, LOCKDOWN_MESSAGE } from "../admin/lockdown";
 
 // 0.8.0 shareable friend invite links (glofly.app/i/<code>; approved mockups
 // docs/design/0.8/InviteLink.dc.html + InvitePage.dc.html).
@@ -151,7 +152,7 @@ async function usesToday(inviterId: string): Promise<number> {
 
 export type LinkUseResult =
   | { ok: true; status: "accepted" | "already_friends"; owner: LinkOwner }
-  | { ok: false; reason: "dead" | "self" | "restricted" | "cap" };
+  | { ok: false; reason: "dead" | "self" | "restricted" | "cap" | "lockdown" };
 
 /**
  * Makes `me` and the link's owner friends (signed in, or just signed up with `signedUp`). Works out
@@ -166,6 +167,7 @@ export async function useFriendLink(
   if (!owner) return { ok: false, reason: "dead" };
   if (owner.id === me.id) return { ok: false, reason: "self" };
   if (await isRestricted(me.id)) return { ok: false, reason: "restricted" };
+  if (await lockedDown(me.id)) return { ok: false, reason: "lockdown" };
   // A block (either way) looks like a dead link.
   if (await blockedEitherWay(owner.id, me.id)) return { ok: false, reason: "dead" };
 
@@ -305,6 +307,7 @@ friendLinkRouter.post("/:code/accept", acceptPerUser, acceptPerAddress, async (r
   const result = await useFriendLink(code, me(res), false);
   if (!result.ok) {
     if (result.reason === "restricted") res.status(403).json(MANAGED_BY_FAMILY);
+    else if (result.reason === "lockdown") res.status(403).json(LOCKDOWN_MESSAGE);
     else if (result.reason === "self") res.status(400).json({ error: "self", message: "That's your own invite link. Send it to a friend!" });
     else if (result.reason === "cap")
       res.status(429).json({ error: "too_many_requests", message: "This invite link has been used a lot today. Try again tomorrow." });

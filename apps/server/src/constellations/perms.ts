@@ -3,6 +3,7 @@ import { isPermission, type ConstellationPermission } from "@glofly/shared";
 import { db } from "../db";
 import { constellationMemberRoles, constellationMembers, constellationRoles, constellations, conversationMembers } from "../db/schema";
 import { nebulaOfChat } from "./chats";
+import { lockedDown, LOCKDOWN_MESSAGE } from "../admin/lockdown";
 
 // Who may do what in a constellation (2.0). Every action is checked here on the server:
 // the Owner can do everything; everyone else gets everything their roles allow (the Member role
@@ -112,6 +113,8 @@ export async function canPostInNebula(conversationId: string, userId: string): P
   if (!nebula || !(await seesChat(conversationId, userId))) return false;
   const s = await standingOf(nebula.constellationId, userId);
   if (!s || s.timedOutUntil) return false;
+  // 0.9.0, Glofly Control: a frozen constellation, or a new account during Lockdown.
+  if ((await frozen(nebula.constellationId)) || (await lockedDown(userId))) return false;
   if (nebula.readOnly && !can(s, "manageNebulas") && !can(s, "deleteMessages")) return false;
   return true;
 }
@@ -123,6 +126,8 @@ export async function whyCantPostInNebula(conversationId: string, userId: string
   const s = await standingOf(nebula.constellationId, userId);
   if (!s) return "You're not in this constellation.";
   if (s.timedOutUntil) return "You're timed out for now, so you can read but not post.";
+  if (await frozen(nebula.constellationId)) return FROZEN_MESSAGE;
+  if (await lockedDown(userId)) return LOCKDOWN_MESSAGE.message;
   if (nebula.readOnly && !can(s, "manageNebulas") && !can(s, "deleteMessages")) return "Only moderators can post here.";
   return null;
 }
@@ -143,6 +148,15 @@ export async function canModerateNebula(
   const sender = await standingOf(nebula.constellationId, senderId);
   if (sender && !outranks(s, sender)) return null;
   return { constellationId: nebula.constellationId };
+}
+
+/** 0.9.0: what people see in a constellation frozen in Glofly Control. */
+export const FROZEN_MESSAGE = "The Glofly team paused this constellation for now. You can still read it.";
+
+/** Frozen in Glofly Control (members can read, nobody can post or join). */
+export async function frozen(constellationId: string): Promise<boolean> {
+  const [c] = await db.select({ frozenAt: constellations.frozenAt }).from(constellations).where(eq(constellations.id, constellationId));
+  return !!c?.frozenAt;
 }
 
 /** A nebula's chat can be used (its constellation hasn't been taken down in Control). */

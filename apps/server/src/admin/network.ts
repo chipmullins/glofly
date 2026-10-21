@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import type { RequestHandler } from "express";
+import { verifyDeviceRequest } from "./devices";
 
 // Control only answers from the admin's own network(s). On the live server Caddy already
 // refuses /admin from anywhere else (ADMIN_IPS in deploy/.env); this is the same check
@@ -43,9 +44,23 @@ export function ipAllowed(ip: string): boolean {
   return allowedRules().some((rule) => matches(ip, rule));
 }
 
-/** First thing on every /admin request. */
-export const requireAdminNetwork: RequestHandler = (req, res, next) => {
+/**
+ * First thing on every /admin request. 0.9.0: a request signed by an approved phone (Control for
+ * iPhone, see devices.ts) is let in from anywhere; everything else only from ADMIN_IPS.
+ */
+export const requireAdminNetwork: RequestHandler = async (req, res, next) => {
   const ip = cleanIp(req.ip);
+  if (req.headers["x-control-device"] !== undefined) {
+    const verdict = await verifyDeviceRequest(req, ip);
+    if (!verdict.ok) {
+      res.status(401).json({ error: "phone_not_approved", message: verdict.message });
+      return;
+    }
+    res.locals.adminIp = ip;
+    res.locals.adminDevice = verdict.device;
+    next();
+    return;
+  }
   if (!ipAllowed(ip)) {
     res.status(403).json({
       error: "not_allowed_network",

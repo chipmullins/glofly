@@ -60,6 +60,7 @@ import {
 } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { canMessage, deletionPending, isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
+import { lockedDown, LOCKDOWN_MESSAGE } from "../admin/lockdown";
 import { emitToUser } from "../realtime";
 import { inBackground, notifyConstellationInvite } from "../push/notify";
 import { sendStream, storage } from "../storage";
@@ -71,7 +72,7 @@ import { joinDetails } from "../calls/routes";
 import { LIVEKIT_URL, livekitConfigured, previewToken, removeFromRoom, setMicrophoneAllowed } from "../calls/livekit";
 import { setVoiceMuted } from "../calls/voiceMutes";
 import { nebulaOfChat, rememberNebulaChat } from "./chats";
-import { can, OWNER_RANK, outranks, ranksOf, standingOf, type Standing } from "./perms";
+import { can, OWNER_RANK, outranks, ranksOf, standingOf, type Standing , frozen, FROZEN_MESSAGE } from "./perms";
 import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstellations } from "./members";
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
 import { cardsFor, detailFor, entriesFor, publicUsers, welcomeOf } from "./views";
@@ -359,6 +360,10 @@ const createBody = z.object({
 // POST /constellations — create one. I'm its Owner.
 constellationsRouter.post("/", createLimiter, async (req, res) => {
   const myId = me(res).id;
+  if (await lockedDown(myId)) {
+    bad(res, LOCKDOWN_MESSAGE.message, 403);
+    return;
+  }
   const parsed = createBody.safeParse(req.body);
   if (!parsed.success) {
     bad(res, firstIssue(parsed.error));
@@ -586,14 +591,28 @@ constellationsRouter.get("/discover", directoryLimiter, async (_req, res) => {
 async function liveLink(code: string) {
   if (!/^[A-Za-z0-9]{6,16}$/.test(code)) return null;
   const [link] = await db
-    .select({ link: constellationLinks, takenDownAt: constellations.takenDownAt })
+    .select({ link: constellationLinks, takenDownAt: constellations.takenDownAt, invitesOffAt: constellations.invitesOffAt })
     .from(constellationLinks)
     .innerJoin(constellations, eq(constellations.id, constellationLinks.constellationId))
     .where(eq(constellationLinks.code, code));
-  if (!link || link.takenDownAt || link.link.revokedAt) return null;
+  if (!link || link.takenDownAt || link.invitesOffAt || link.link.revokedAt) return null;
   if (link.link.expiresAt && link.link.expiresAt.getTime() <= Date.now()) return null;
   if (link.link.maxUses !== null && link.link.uses >= link.link.maxUses) return null;
   return link.link;
+}
+
+/** 0.9.0: invites turned off (or the constellation frozen) in Glofly Control. Answers and returns true. */
+async function invitesBlocked(res: Response, constellationId: string): Promise<boolean> {
+  const [c] = await db.select({ invitesOffAt: constellations.invitesOffAt, frozenAt: constellations.frozenAt }).from(constellations).where(eq(constellations.id, constellationId));
+  if (c?.frozenAt) {
+    bad(res, FROZEN_MESSAGE, 403);
+    return true;
+  }
+  if (c?.invitesOffAt) {
+    bad(res, "The Glofly team turned off invites for this constellation for now.", 403);
+    return true;
+  }
+  return false;
 }
 
 const deadLink = (res: Response) =>
@@ -626,6 +645,15 @@ constellationsRouter.get("/links/:code", previewLimiter, async (req, res) => {
 
 /** Joins, answering the request (shared by links, public joins and invites). */
 async function joinNow(res: Response, constellationId: string, userId: string, afterAdd?: (tx: Tx) => Promise<void>) {
+  // 0.9.0, Glofly Control: no joining a frozen constellation, or as a new account during Lockdown.
+  if (await frozen(constellationId)) {
+    bad(res, FROZEN_MESSAGE, 403);
+    return;
+  }
+  if (await lockedDown(userId)) {
+    bad(res, LOCKDOWN_MESSAGE.message, 403);
+    return;
+  }
   if (await isBanned(constellationId, userId)) {
     bad(res, "You can't join this constellation.", 403);
     return;
@@ -2152,6 +2180,7 @@ constellationsRouter.get("/:id/moderation", async (req, res) => {
 constellationsRouter.post("/:id/invites", changeLimiter, async (req, res) => {
   const s = await standingFor(req, res, "invite");
   if (!s) return;
+  if (await invitesBlocked(res, s.constellationId)) return;
   const parsed = z.object({ userIds: z.array(idParam).min(1).max(50) }).safeParse(req.body);
   if (!parsed.success) {
     bad(res, "Pick friends to invite.");
@@ -2227,6 +2256,7 @@ constellationsRouter.get("/:id/links", async (req, res) => {
 constellationsRouter.post("/:id/links", changeLimiter, async (req, res) => {
   const s = await standingFor(req, res, "invite");
   if (!s) return;
+  if (await invitesBlocked(res, s.constellationId)) return;
   const lifetime = LINK_LIFETIMES.find((l) => l.id === (req.body?.lifetime ?? "7d"));
   const maxUses = z.number().int().min(1).max(1000).nullable().optional().safeParse(req.body?.maxUses);
   if (!lifetime || !maxUses.success) {

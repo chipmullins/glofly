@@ -712,7 +712,61 @@ export const adminSessions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    // 0.9.0: a session started on an approved phone (Control for iPhone). Such a session isn't tied
+    // to a network: every request must be signed by that phone's key instead (admin/devices.ts).
+    deviceId: uuid("device_id").references((): AnyPgColumn => adminDevices.id, { onDelete: "cascade" }),
   },
+);
+
+// 0.9.0: phones approved for Glofly Control (Control for iPhone). Approved once from the home
+// network with a code from desktop Control; afterwards the phone signs every request with its own
+// key (ECDSA P-256; only the public half is kept here), so it works from anywhere.
+export const adminDevices = pgTable(
+  "admin_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    adminId: uuid("admin_id")
+      .notNull()
+      .references(() => admins.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // The raw public key (65 bytes, uncompressed point), base64url.
+    publicKey: text("public_key").notNull(),
+    // Apple push token for alerts ("<hex>", or "sandbox:<hex>" for development builds).
+    pushToken: text("push_token"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    lastIp: text("last_ip"),
+  },
+  (t) => [index("admin_devices_admin_idx").on(t.adminId)],
+);
+
+// 0.9.0: what Control alerted the admin about (pushes to the phone, desktop notifications, the
+// "Recent alerts" lists). Kept 30 days.
+export const adminAlerts = pgTable(
+  "admin_alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    data: jsonb("data").$type<Record<string, string>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("admin_alerts_created_idx").on(t.createdAt)],
+);
+
+// 0.9.0: the server's ups and downs (Control → Server → Uptime). "outage" = it stopped answering by
+// itself; "restart" = restarted from Control; "pause" = Glofly paused from Control.
+export const uptimeEvents = pgTable(
+  "uptime_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+  },
+  (t) => [index("uptime_events_started_idx").on(t.startedAt)],
 );
 
 // Everything done in Control. Rows can only be added: the database refuses to change or
@@ -812,12 +866,35 @@ export const userNotices = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // "warning" (from a report) or, 0.9.0, "message" (Control → Message as Glofly team).
     kind: text("kind").notNull().default("warning"),
     body: text("body").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     seenAt: timestamp("seen_at", { withTimezone: true }),
+    // 0.9.0: they may answer it (their reply goes to Control → Inbox), and which admin sent it.
+    allowReply: boolean("allow_reply").notNull().default(false),
+    sentBy: uuid("sent_by"),
   },
   (t) => [index("user_notices_user_idx").on(t.userId)],
+);
+
+// 0.9.0: answers to a Glofly Team message (Control → Inbox).
+export const teamReplies = pgTable(
+  "team_replies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    noticeId: uuid("notice_id")
+      .notNull()
+      .references(() => userNotices.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // When the admin opened it in Control.
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (t) => [index("team_replies_user_idx").on(t.userId, t.createdAt), index("team_replies_unread_idx").on(t.createdAt).where(sql`${t.readAt} is null`)],
 );
 
 export const announcementTone = pgEnum("announcement_tone", ["info", "important"]);
@@ -960,6 +1037,10 @@ export const constellations = pgTable(
     // record until the admin removes it for good. Null = normal.
     takenDownAt: timestamp("taken_down_at", { withTimezone: true }),
     takedownReason: text("takedown_reason"),
+    // 0.9.0, Control: frozen = members can read but nobody can post or join until it's unfrozen;
+    // invites off = its invite links stop working and no new ones can be made.
+    frozenAt: timestamp("frozen_at", { withTimezone: true }),
+    invitesOffAt: timestamp("invites_off_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     // The newest message in any of its nebulas (the dashboard's "Quiet since yesterday").
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),

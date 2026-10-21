@@ -42,6 +42,8 @@ import { getPause, refuseWhilePaused } from "./admin/pause";
 import { emailKind } from "./email/send";
 import { sweepEmailTokens } from "./email/tokens";
 import { controlRouter } from "./admin";
+import { heartbeat, noteStopping, recordStartup } from "./admin/ops";
+import { sweepAlerts } from "./admin/alerts";
 import { sweepExpiredStatuses } from "./statusSweep";
 import { devicesRouter } from "./push/devices";
 import { pushKind } from "./push/fcm";
@@ -76,7 +78,15 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));
 // Glofly in a browser: CORS for chat.glofly.app only (off unless WEB_ORIGIN is set). Before the
 // pause gate, so the web app can read "Glofly is paused" too.
 app.use(webCors);
-app.use(express.json({ limit: "10kb" })); // rejects oversized request bodies
+app.use(
+  express.json({
+    limit: "10kb", // rejects oversized request bodies
+    // 0.9.0: Control for iPhone signs its requests, body included (admin/devices.ts).
+    verify: (req, _res, buf) => {
+      if ((req as { url?: string }).url?.startsWith("/admin/")) (req as { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
 
 app.get("/health", async (_req, res) => {
   try {
@@ -183,6 +193,8 @@ async function shutdown(signal: string): Promise<void> {
   stopping = true;
   console.log(`${signal}: shutting down.`);
   setTimeout(() => process.exit(0), 10_000).unref();
+  // 0.9.0: Control's uptime history counts this as an update, not an outage.
+  await noteStopping("update");
   try {
     // Closing the live connections also closes the HTTP server, once its requests are done.
     await stopRealtime();
@@ -217,6 +229,12 @@ connectRedis()
           : `iPhone lock-screen calls: ${voipKind}`,
       );
     });
+    // 0.9.0 Control: uptime history (a heartbeat every 30 s; a gap found at startup is an outage)
+    // and Control's alerts (new reports, failures, sign-ups, fast-growing constellations, the
+    // morning summary), checked every minute.
+    recordStartup().catch((err) => console.error("Uptime history failed", err));
+    every(30_000, "Heartbeat", heartbeat);
+    every(60_000, "Control alerts", sweepAlerts);
     // Calls nobody answered become missed; calls someone dropped out of are ended.
     every(15_000, "Call check", sweepCalls);
     // 0.5.0: who's watching broadcasts (and ending abandoned ones), hangs that ran out, birthday

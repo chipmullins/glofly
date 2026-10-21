@@ -11,6 +11,8 @@ import { bearerToken } from "../auth/sessions";
 import { verifyTotp } from "./totp";
 import { decryptSecret, hashBackupCode, normalizeBackupCode } from "./secrets";
 import { logAction, logInBackground } from "./audit";
+import { PHONE_SESSION_MINUTES, type SignedDevice } from "./devices";
+import { noteRefusedCode, noteSignIn } from "./alerts";
 
 // Signing in to Control: two steps, every time.
 //   1. POST /admin/auth/password  { username, password }  (the admin password, not the Glofly one)
@@ -163,6 +165,7 @@ adminAuthRouter.post("/code", codeLimiter, async (req, res) => {
       note: backupCode ? "Wrong backup code" : "Wrong authenticator code",
       ip: res.locals.adminIp,
     });
+    noteRefusedCode(res.locals.adminIp as string);
     res.status(401).json({
       error: "wrong_code",
       message: backupCode ? "That backup code isn't right." : "That code isn't right. Check your authenticator app and try again.",
@@ -172,13 +175,21 @@ adminAuthRouter.post("/code", codeLimiter, async (req, res) => {
   }
 
   await redis.del(key);
+  // 0.9.0: on an approved phone the session is shorter and belongs to that phone, not a network.
+  const device = res.locals.adminDevice as SignedDevice | undefined;
+  if (device && device.adminId !== admin.id) {
+    res.status(401).json({ error: "start_over", message: "This phone is approved for someone else." });
+    return;
+  }
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + ADMIN_SESSION_MINUTES * 60 * 1000);
+  const minutes = device ? PHONE_SESSION_MINUTES : ADMIN_SESSION_MINUTES;
+  const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
   await db.insert(adminSessions).values({
     adminId: admin.id,
     tokenHash: hash(token),
     ip: res.locals.adminIp,
-    deviceName: state.deviceName,
+    deviceName: device ? device.name : state.deviceName,
+    deviceId: device?.id ?? null,
     expiresAt,
   });
   // Expired admin sessions are tidied up whenever someone signs in.
@@ -186,12 +197,14 @@ adminAuthRouter.post("/code", codeLimiter, async (req, res) => {
 
   const [after] = await db.select({ backupCodes: admins.backupCodes }).from(admins).where(eq(admins.id, admin.id));
   const left = after?.backupCodes.length ?? 0;
+  const where = device ? `${device.name} (phone)` : state.deviceName;
   await logAction({
     adminId: admin.id,
     action: "Signed in",
-    note: [state.deviceName, usedBackup ? `with a backup code (${left} left)` : null].filter(Boolean).join(" · "),
+    note: [where, usedBackup ? `with a backup code (${left} left)` : null].filter(Boolean).join(" · "),
     ip: res.locals.adminIp,
   });
+  noteSignIn({ adminId: admin.id, where: where ?? "Control", ip: res.locals.adminIp as string, backup: usedBackup });
   res.json({ token, expiresAt: expiresAt.toISOString(), ...(await adminProfile(admin.id)) });
 });
 
@@ -233,14 +246,18 @@ export const requireAdmin: RequestHandler = async (req, res, next) => {
       displayName: users.displayName,
       deleteAfter: users.deleteAfter,
       suspendedAt: users.suspendedAt,
+      deviceId: adminSessions.deviceId,
     })
     .from(adminSessions)
     .innerJoin(admins, eq(admins.id, adminSessions.adminId))
     .innerJoin(users, eq(users.id, admins.userId))
     .where(and(eq(adminSessions.tokenHash, hash(token)), gt(adminSessions.expiresAt, new Date())))
     .limit(1);
-  // A session only works from the network it was started on.
-  if (!row || row.ip !== res.locals.adminIp || row.deleteAfter || row.suspendedAt) {
+  // A session only works from the network it was started on; 0.9.0: a phone's session only with
+  // that phone's signature (from anywhere), and a desktop session never from a phone.
+  const device = res.locals.adminDevice as SignedDevice | undefined;
+  const placeOk = row ? (row.deviceId ? device?.id === row.deviceId : !device && row.ip === res.locals.adminIp) : false;
+  if (!row || !placeOk || row.deleteAfter || row.suspendedAt) {
     res.status(401).json({ error: "unauthorized", message: "Your Control session ended. Sign in again." });
     return;
   }
@@ -258,7 +275,12 @@ export const requireAdmin: RequestHandler = async (req, res, next) => {
 
 adminAuthRouter.get("/me", requireAdmin, async (_req, res) => {
   const admin = res.locals.admin as AdminLocals;
-  res.json({ expiresAt: (res.locals.adminExpiresAt as Date).toISOString(), ...(await adminProfile(admin.id)) });
+  const device = res.locals.adminDevice as SignedDevice | undefined;
+  res.json({
+    expiresAt: (res.locals.adminExpiresAt as Date).toISOString(),
+    device: device ? { id: device.id, name: device.name } : null,
+    ...(await adminProfile(admin.id)),
+  });
 });
 
 adminAuthRouter.post("/logout", requireAdmin, async (_req, res) => {

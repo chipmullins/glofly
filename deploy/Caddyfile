@@ -9,9 +9,13 @@
 	# Glofly Control (the admin app) only answers from the admin's own network.
 	# ADMIN_IPS in deploy/.env: addresses or ranges separated by spaces. Unset: nobody.
 	# (The server checks the same list again.)
+	# 0.9.0: requests from Control for iPhone carry X-Control-Device and are signed with the
+	# approved phone's own key; they're let through from anywhere and the server checks the
+	# signature (apps/server/src/admin/devices.ts). Anything without a good signature is refused there.
 	@control_elsewhere {
 		path /admin /admin/*
 		not remote_ip {$ADMIN_IPS:127.0.0.1}
+		not header X-Control-Device *
 	}
 	handle @control_elsewhere {
 		header Content-Type application/json
