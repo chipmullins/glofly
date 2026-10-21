@@ -1,6 +1,8 @@
 import type { CallResult, Failure } from '../../../preload/types'
 
 // Typed calls to the server's /admin routes (through the main process).
+// 0.9.0: Control for iPhone (apps/control-mobile) uses this same file; it supplies its own
+// `window.control.call` (signed requests from the approved phone).
 
 export type { Failure }
 export type Result<T> = { ok: true; data: T } | Failure
@@ -43,7 +45,7 @@ export type ErrorRow = {
 }
 
 /** 2.0: Constellations, as Control sees them */
-export type ConstellationStatus = 'all' | 'live' | 'taken_down'
+export type ConstellationStatus = 'all' | 'live' | 'taken_down' | 'frozen' | 'reports' | 'growing'
 export type ConstellationOwner = { id: string; username: string; displayName: string }
 export type ConstellationRow = {
   id: string
@@ -57,7 +59,14 @@ export type ConstellationRow = {
   owner: ConstellationOwner
   memberCount: number
   openReports: number
+  /** 0.9.0 (missing from older servers) */
+  joinsToday?: number
+  nebulaCount?: number
+  frozenAt?: string | null
+  invitesOffAt?: string | null
 }
+/** 0.9.0: across Glofly */
+export type ConstellationTotals = { constellations: number; nebulas: number; voiceLive: number }
 export type ConstellationInfo = {
   id: string
   name: string
@@ -70,7 +79,23 @@ export type ConstellationInfo = {
   takedownReason: string | null
   owner: ConstellationOwner | undefined
   memberCount: number
-  nebulas: { id: string; name: string; kind: 'text' | 'voice'; messages: number }[]
+  nebulas: {
+    id: string
+    name: string
+    kind: 'text' | 'voice'
+    messages: number
+    /** 0.9.0 (missing from older servers) */
+    visibility?: 'everyone' | 'roles'
+    readOnly?: boolean
+    messagesToday?: number
+    inVoice?: number
+  }[]
+  /** 0.9.0 (missing from older servers) */
+  joinsToday?: number
+  messagesToday?: number
+  openReports?: number
+  frozenAt?: string | null
+  invitesOffAt?: string | null
   moderation: {
     action: string
     actor: string | null
@@ -137,7 +162,90 @@ export type Dashboard = {
     status: AccountStatus | 'invited' | 'invite_expired'
   }[]
   recentActions: AuditEntry[]
+  /** 0.9.0: what's happening now (missing from older servers) */
+  now?: HappeningNow
 }
+
+// ───────────── 0.9.0: phones, alerts, quick notes, lockdown, uptime, Inbox ─────────────
+
+export type LockdownState = { on: boolean; since: string | null }
+
+export type HappeningNow = {
+  calls: number
+  inCalls: number
+  oldestOpenReport: { createdAt: string; reason: ReportReason } | null
+  inboxUnread: number
+  lockdown: LockdownState
+  alerts: ControlAlert[]
+}
+
+export const ALERT_KINDS = [
+  'server_down',
+  'control_signin',
+  'report_spike',
+  'report_new',
+  'delivery_failures',
+  'account_new',
+  'constellation_growing',
+  'inbox_reply',
+  'morning_summary'
+] as const
+export type AlertKind = (typeof ALERT_KINDS)[number]
+/** Urgent kinds break through Focus on the phone */
+export const URGENT_ALERTS: AlertKind[] = ['server_down', 'control_signin', 'report_spike']
+export const ALERT_LABELS: Record<AlertKind, { title: string; sub: string }> = {
+  server_down: { title: 'Server down or back', sub: 'After about a minute and a half of no answer' },
+  control_signin: { title: 'Control sign-in somewhere new', sub: 'A new device, a backup code or a wrong code' },
+  report_spike: { title: 'Report spike', sub: '5 or more reports in 10 minutes' },
+  report_new: { title: 'New report', sub: 'One alert per report' },
+  delivery_failures: { title: 'Failed emails or pushes', sub: 'Bundled, at most once an hour' },
+  account_new: { title: 'New account', sub: 'Sign-ups and accepted invites' },
+  constellation_growing: { title: 'Constellation growing fast', sub: '25 or more joins in an hour' },
+  inbox_reply: { title: 'Inbox reply', sub: 'Someone answered a Glofly Team message' },
+  morning_summary: { title: 'Morning summary', sub: '9:00 AM · the last 24 hours in numbers' }
+}
+
+export type ControlAlert = {
+  id: string
+  kind: AlertKind | string
+  title: string
+  body: string
+  /** open: which page it's about (reports, accounts, constellations, inbox, server, dashboard) */
+  data: Record<string, string>
+  createdAt: string
+}
+export type AlertPrefs = { kinds: Record<AlertKind, boolean>; desktop: boolean }
+
+export type ApprovedPhone = {
+  id: string
+  name: string
+  createdAt: string
+  lastUsedAt: string | null
+  lastIp: string | null
+  alerts: boolean
+  thisDevice: boolean
+}
+
+export type UptimeDay = { day: string; status: 'up' | 'you' | 'down'; downSec: number }
+export type UptimeEvent = {
+  kind: 'outage' | 'restart' | 'update' | 'pause'
+  startedAt: string
+  endedAt: string | null
+  seconds: number | null
+}
+export type Uptime = { percent: number; days: UptimeDay[]; events: UptimeEvent[] }
+
+export type InboxPerson = { id: string; username: string; displayName: string; avatarVersion: string | null }
+export type InboxThread = {
+  user: InboxPerson
+  lastAt: string
+  preview: string
+  lastFromTeam: boolean
+  unread: number
+}
+export type InboxItem =
+  | { id: string; from: 'team'; body: string; createdAt: string; seen: boolean; allowReply: boolean }
+  | { id: string; from: 'user'; body: string; createdAt: string; unread: boolean; noticeId: string }
 
 export type AccountRow = {
   id: string
@@ -328,6 +436,8 @@ export type ServerInfo = {
   /** Only the live server (Docker) can restart itself. */
   canRestart: boolean
   devicesConnected: number
+  /** 0.9.0 (missing from older servers) */
+  lockdown?: LockdownState
 }
 
 /** A restricted account's friends (Accounts → Family). */
@@ -385,7 +495,7 @@ export const api = {
     ),
   report: (id: string) => call<{ report: ReportDetail }>('GET', `/admin/reports/${id}`),
   constellations: (query: string, status: ConstellationStatus, offset = 0) =>
-    call<{ constellations: ConstellationRow[]; hasMore: boolean }>(
+    call<{ constellations: ConstellationRow[]; hasMore: boolean; totals?: ConstellationTotals }>(
       'GET',
       `/admin/constellations${q({ q: query, status, offset: offset ? String(offset) : undefined })}`
     ),
@@ -451,6 +561,43 @@ export const api = {
   errorAction: (id: string, action: 'resolve' | 'reopen') =>
     call<Done>('POST', `/admin/errors/${id}/${action}`),
   clearFixedErrors: () => call<{ removed: number }>('DELETE', '/admin/errors'),
+  // ── 0.9.0 ──
+  freezeConstellation: (id: string, frozen: boolean, note: string) =>
+    call<Done>('POST', `/admin/constellations/${id}/freeze`, { frozen, note }),
+  constellationInvites: (id: string, off: boolean, note: string) =>
+    call<Done>('POST', `/admin/constellations/${id}/invites`, { off, note }),
+  transferConstellation: (id: string, username: string, note: string) =>
+    call<Done>('POST', `/admin/constellations/${id}/transfer`, { username, note }),
+  /** Add a friend for any account (it was family accounts only before 0.9.0) */
+  addFriendFor: (id: string, username: string, note: string) =>
+    call<Done>('POST', `/admin/accounts/${id}/friends`, { username, note }),
+  messageUser: (id: string, body: string, allowReply: boolean, note: string) =>
+    call<Done>('POST', `/admin/accounts/${id}/message`, { body, allowReply, note }),
+  inbox: () => call<{ threads: InboxThread[]; unreadTotal: number }>('GET', '/admin/inbox'),
+  inboxThread: (userId: string) =>
+    call<{ user: InboxPerson; items: InboxItem[] }>('GET', `/admin/inbox/${userId}`),
+  quickNotes: () => call<{ notes: string[] }>('GET', '/admin/quick-notes'),
+  setQuickNotes: (notes: string[]) => call<{ notes: string[] }>('PUT', '/admin/quick-notes', { notes }),
+  lockdown: () =>
+    call<{ lockdown: LockdownState; affected: number; hours: number }>('GET', '/admin/server/lockdown'),
+  setLockdown: (on: boolean, note: string) =>
+    call<Done & { lockdown: LockdownState }>('PUT', '/admin/server/lockdown', { on, note }),
+  endAllCalls: (note: string) =>
+    call<Done & { ended: number }>('POST', '/admin/server/end-calls', { note }),
+  uptime: () => call<Uptime>('GET', '/admin/server/uptime'),
+  alerts: (after?: string) =>
+    call<{ alerts: ControlAlert[]; prefs: AlertPrefs; pushReady: boolean; now: string }>(
+      'GET',
+      `/admin/alerts${q({ after })}`
+    ),
+  setAlertPrefs: (prefs: { kinds?: Partial<Record<AlertKind, boolean>>; desktop?: boolean }) =>
+    call<{ prefs: AlertPrefs }>('PUT', '/admin/alerts/prefs', prefs),
+  testAlert: () => call<Done & { sent: number }>('POST', '/admin/alerts/test'),
+  phones: () => call<{ devices: ApprovedPhone[]; max: number }>('GET', '/admin/devices'),
+  phonePairCode: (note: string) =>
+    call<{ code: string; expiresIn: number }>('POST', '/admin/devices/pair-code', { note }),
+  removePhone: (id: string, note: string) =>
+    call<Done>('POST', `/admin/devices/${id}/remove`, { note }),
   audit: (search: string, before?: string) =>
     call<{ entries: AuditEntry[]; hasMore: boolean }>(
       'GET',

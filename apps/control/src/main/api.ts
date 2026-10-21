@@ -213,7 +213,24 @@ const ALLOWED: [string, RegExp][] = [
   // 0.7.3: Errors (the apps' error reports)
   ['GET', new RegExp(`^/admin/errors${QUERY}$`)],
   ['POST', new RegExp(`^/admin/errors/${ID}/(resolve|reopen)$`)],
-  ['DELETE', new RegExp(`^/admin/errors$`)]
+  ['DELETE', new RegExp(`^/admin/errors$`)],
+  // 0.9.0: approved phones, alerts, quick notes, lockdown, end calls, uptime, team messages + Inbox,
+  // add a friend for anyone (the family route above), constellation freeze / invites / transfer
+  ['GET', new RegExp(`^/admin/devices$`)],
+  ['POST', new RegExp(`^/admin/devices/pair-code$`)],
+  ['POST', new RegExp(`^/admin/devices/${ID}/remove$`)],
+  ['GET', new RegExp(`^/admin/alerts${QUERY}$`)],
+  ['PUT', new RegExp(`^/admin/alerts/prefs$`)],
+  ['POST', new RegExp(`^/admin/alerts/test$`)],
+  ['GET', new RegExp(`^/admin/quick-notes$`)],
+  ['PUT', new RegExp(`^/admin/quick-notes$`)],
+  ['GET', new RegExp(`^/admin/server/(lockdown|uptime)$`)],
+  ['PUT', new RegExp(`^/admin/server/lockdown$`)],
+  ['POST', new RegExp(`^/admin/server/end-calls$`)],
+  ['POST', new RegExp(`^/admin/accounts/${ID}/message$`)],
+  ['GET', new RegExp(`^/admin/inbox$`)],
+  ['GET', new RegExp(`^/admin/inbox/${ID}$`)],
+  ['POST', new RegExp(`^/admin/constellations/${ID}/(freeze|invites|transfer)$`)]
 ]
 
 export function isAllowedCall(method: unknown, path: unknown): boolean {
