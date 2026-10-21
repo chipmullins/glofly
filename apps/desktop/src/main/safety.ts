@@ -59,7 +59,7 @@ export async function listNotices(): Promise<
   return { ok: true, data: { notices, announcement: cleanAnnouncement(result.data.announcement) } }
 }
 
-/** 0.9.0: answer a Glofly Team message (it goes to Glofly Control's Inbox). */
+/** 0.8.2: answer a Glofly Team message (it goes to Glofly Control's Inbox). */
 export async function noticeReply(id: string, body: string): Promise<ApiResult<null>> {
   const result = await request('POST', `/notices/${id}/reply`, { body })
   return result.ok ? { ok: true, data: null } : result

@@ -2010,7 +2010,7 @@ button.stat:hover {
   color: var(--c-bad);
 }
 
-/* ───────────── 0.9.0 ───────────── */
+/* ───────────── 0.8.2 ───────────── */
 
 kbd {
   font-family: var(--font-body);

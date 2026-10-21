@@ -39,7 +39,7 @@ export default function App(): JSX.Element {
     then: null as 'message' | 'friend' | null,
     n: 0
   })
-  // 0.9.0: Constellations / Inbox opened on one (the command bar, an alert).
+  // 0.8.2: Constellations / Inbox opened on one (the command bar, an alert).
   const [constellationOpen, setConstellationOpen] = useState({ id: null as string | null, n: 0 })
   const [inboxOpen, setInboxOpen] = useState({ id: null as string | null, n: 0 })
   const [creating, setCreating] = useState(false)
@@ -49,7 +49,7 @@ export default function App(): JSX.Element {
   const [newErrors, setNewErrors] = useState(0)
   // Glofly is paused (Server → Pause Glofly): a banner on every page and "Paused" in the sidebar.
   const [paused, setPaused] = useState(false)
-  // 0.9.0: Lockdown ("Lockdown" in the sidebar), Inbox replies to read, the command bar.
+  // 0.8.2: Lockdown ("Lockdown" in the sidebar), Inbox replies to read, the command bar.
   const [lockdown, setLockdown] = useState(false)
   const [inboxUnread, setInboxUnread] = useState(0)
   const [commandOpen, setCommandOpen] = useState(false)
@@ -72,7 +72,7 @@ export default function App(): JSX.Element {
         setPaused(r.data.pause.paused)
         if (r.data.lockdown) setLockdown(r.data.lockdown.on)
       })
-      // 0.9.0 (older servers answer 404: no badge)
+      // 0.8.2 (older servers answer 404: no badge)
       void api.inbox().then((r) => r.ok && setInboxUnread(r.data.unreadTotal))
     }
     check()
@@ -80,13 +80,13 @@ export default function App(): JSX.Element {
     return () => clearInterval(timer)
   }, [session])
 
-  // 0.9.0: the quick notes, once per session.
+  // 0.8.2: the quick notes, once per session.
   useEffect(() => {
     if (session) void loadQuickNotes(true)
     else forgetQuickNotes()
   }, [session])
 
-  // 0.9.0: new alerts become desktop notifications (when that's on in Server → Alerts). The first
+  // 0.8.2: new alerts become desktop notifications (when that's on in Server → Alerts). The first
   // check only notes the newest alert, so old ones don't pop up.
   useEffect(() => {
     if (!session) return
@@ -130,7 +130,7 @@ export default function App(): JSX.Element {
     []
   )
 
-  // 0.9.0: Ctrl+K / ⌘K (command bar), G then a letter (pages), ? (shortcuts).
+  // 0.8.2: Ctrl+K / ⌘K (command bar), G then a letter (pages), ? (shortcuts).
   useEffect(() => {
     if (!session) return
     let goAt = 0

@@ -214,7 +214,7 @@ const ALLOWED: [string, RegExp][] = [
   ['GET', new RegExp(`^/admin/errors${QUERY}$`)],
   ['POST', new RegExp(`^/admin/errors/${ID}/(resolve|reopen)$`)],
   ['DELETE', new RegExp(`^/admin/errors$`)],
-  // 0.9.0: approved phones, alerts, quick notes, lockdown, end calls, uptime, team messages + Inbox,
+  // 0.8.2: approved phones, alerts, quick notes, lockdown, end calls, uptime, team messages + Inbox,
   // add a friend for anyone (the family route above), constellation freeze / invites / transfer
   ['GET', new RegExp(`^/admin/devices$`)],
   ['POST', new RegExp(`^/admin/devices/pair-code$`)],

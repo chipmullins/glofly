@@ -6,7 +6,7 @@ import { Icon, ICONS } from './icons'
 import type { Page } from './Sidebar'
 import { PAGE_LABELS } from '../lib/pages'
 
-// 0.9.0: the command bar (Ctrl+K, ⌘K on a Mac). Finds accounts, constellations, pages and actions.
+// 0.8.2: the command bar (Ctrl+K, ⌘K on a Mac). Finds accounts, constellations, pages and actions.
 // Actions that change something only open their confirm dialog (with the audit note): nothing
 // happens straight from the bar.
 

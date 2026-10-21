@@ -7,7 +7,7 @@ import { Button, Field, Notice, Text } from './kit'
 import { useTheme } from './theme'
 
 // "A message from the Glofly team": a warning from Glofly Control, shown until "I understand".
-// 0.9.0: a message sent with Control's "Message as Glofly team" shows as from the Glofly Team
+// 0.8.2: a message sent with Control's "Message as Glofly team" shows as from the Glofly Team
 // (Official), with a reply box when replies are allowed (the reply goes to the team's Inbox).
 
 export function TeamNotice() {

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { serverSettings, users } from "../db/schema";
 
-// 0.9.0 Lockdown (Control → Server / Emergency): while it's on, accounts made in the last 24 hours
+// 0.8.2 Lockdown (Control → Server / Emergency): while it's on, accounts made in the last 24 hours
 // can only talk to the friends they already have: no friend requests or friend links, no joining,
 // making or posting in constellations. Kept apart from the routes so any part of the server can ask.
 

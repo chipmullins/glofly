@@ -25,7 +25,7 @@ export function Dashboard({
   onFind: (q: string) => void
   onOpenAccount: (id: string) => void
   onPage: (page: Page) => void
-  /** 0.9.0: open the page an alert is about */
+  /** 0.8.2: open the page an alert is about */
   onOpenAlert: (alert: ControlAlert) => void
   dataVersion: number
 }): JSX.Element {
@@ -414,7 +414,7 @@ function DashboardBody({
   )
 }
 
-/** 0.9.0: what's going on right now (older servers don't send `now`: no strip). */
+/** 0.8.2: what's going on right now (older servers don't send `now`: no strip). */
 function HappeningNowStrip({
   now,
   onPage

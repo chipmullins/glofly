@@ -612,12 +612,12 @@ export type UpdateRequired = {
 }
 
 /**
- * A message from the Glofly team to you: a warning from Glofly Control (kind "warning") or, 0.9.0,
+ * A message from the Glofly team to you: a warning from Glofly Control (kind "warning") or, 0.8.2,
  * a message sent with "Message as Glofly team" (kind "message"), which may allow a reply.
  */
 export type TeamNotice = { id: string; kind: string; body: string; createdAt: string; allowReply?: boolean }
 
-/** 0.9.0: the most a reply to a Glofly Team message can be. */
+/** 0.8.2: the most a reply to a Glofly Team message can be. */
 export const TEAM_REPLY_MAX = 1000
 
 /** The banner at the top of everyone's app (Glofly Control → Announcements). */

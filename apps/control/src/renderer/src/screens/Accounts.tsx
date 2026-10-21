@@ -35,7 +35,7 @@ export function Accounts({
 }: {
   initialQuery: string
   initialSelect: string | null
-  /** 0.9.0 (command bar): open this dialog for the selected account straight away */
+  /** 0.8.2 (command bar): open this dialog for the selected account straight away */
   initialThen?: 'message' | 'friend' | null
   adminUserId: string
   onCreate: () => void
@@ -251,7 +251,7 @@ export function Accounts({
 
 // ───────────── One account ─────────────
 
-/** "Add a friend for them" (0.9.0: any account; family accounts use the same dialog). */
+/** "Add a friend for them" (0.8.2: any account; family accounts use the same dialog). */
 function addFriendSpec(a: AccountDetail['account']): ActionSpec {
   return {
     title: `Add a friend for @${a.username}`,

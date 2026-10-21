@@ -1,6 +1,6 @@
 # Glofly Control for iPhone
 
-The Glofly admin app for Chip's iPhone (0.9.0). It does what desktop Control does when you're away from
+The Glofly admin app for Chip's iPhone (0.8.2). It does what desktop Control does when you're away from
 your computer: see what's happening, handle reports, act on accounts and constellations, and use the
 emergency switches (Pause, Restart, Lockdown, End all calls). Push alerts tell you when something
 needs you.
@@ -64,7 +64,7 @@ Once only:
    project id it prints into `EXPO_PROJECT_ID` in `app.config.ts`, which turns on over-the-air updates.
 2. In App Store Connect, make the app record "Glofly Control" with bundle id `com.glofly.control`. EAS
    offers to do this, and to make the push key and certificates, the first time you build.
-3. The server needs its Control alert settings (APNs key, topic `com.glofly.control`). See the 0.9.0
+3. The server needs its Control alert settings (APNs key, topic `com.glofly.control`). See the 0.8.2
    release doc.
 
 Each build:

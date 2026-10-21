@@ -17,7 +17,7 @@ import { ago, plural, shortDate, when } from '../lib/format'
 import { setQuickNotes, useQuickNotes } from '../lib/quickNotes'
 import { endCallsSpec, lockdownSpec } from './serverSpecs'
 
-// 0.9.0 cards on Control → Server: uptime, Lockdown, End all calls, approved phones, alerts and
+// 0.8.2 cards on Control → Server: uptime, Lockdown, End all calls, approved phones, alerts and
 // quick notes. Every change goes through a confirm dialog with a note (except alert settings and
 // quick notes, which aren't audited actions).
 

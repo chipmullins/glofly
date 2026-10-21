@@ -7,10 +7,10 @@ import { emitToUser } from "../realtime";
 import { logAction, noteSchema } from "./audit";
 import { admin, invalid, ip } from "./routes";
 
-// 0.9.0: "Message as Glofly team" and Control's Inbox.
+// 0.8.2: "Message as Glofly team" and Control's Inbox.
 //
 // A team message is a user notice of kind "message": the apps show it as a message from the
-// Glofly Team (apps from 0.9.0 with a reply box when replies are allowed; older apps show it like a
+// Glofly Team (apps from 0.8.2 with a reply box when replies are allowed; older apps show it like a
 // warning, "A message from the Glofly team" + I understand). Replies (POST /notices/:id/reply,
 // safety/routes.ts) land here.
 

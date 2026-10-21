@@ -41,7 +41,7 @@ export type ControlApi = {
   setScreen: (screen: 'signin' | 'app') => void
   onSignedOut: (callback: (reason: 'expired' | 'ended') => void) => () => void
   /**
-   * 0.9.0: a native notification for a Control alert (title ≤120, body ≤300 characters, page one
+   * 0.8.2: a native notification for a Control alert (title ≤120, body ≤300 characters, page one
    * of Control's pages). Clicking it brings Control forward and calls onOpenPage.
    */
   notify: (alert: { title: string; body: string; page: string }) => void

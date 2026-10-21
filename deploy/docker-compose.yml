@@ -38,7 +38,7 @@ services:
       driver: json-file
       options: { max-size: "20m", max-file: "5" }
 
-  # 0.9.0: tells Control for iPhone when the server stops answering (and when it's back). Same image
+  # 0.8.2: tells Control for iPhone when the server stops answering (and when it's back). Same image
   # as the server, its own small program (apps/server/src/watchdog.ts). It never touches users.
   watchdog:
     build:

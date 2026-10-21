@@ -2,7 +2,7 @@ import { api, type LockdownState } from '../lib/api'
 import type { ActionSpec } from '../components/ActionDialog'
 import { plural } from '../lib/format'
 
-// 0.9.0: the confirm dialogs for Lockdown and End all calls (Server's cards, its header buttons
+// 0.8.2: the confirm dialogs for Lockdown and End all calls (Server's cards, its header buttons
 // and the command bar all open these).
 
 export function lockdownSpec(

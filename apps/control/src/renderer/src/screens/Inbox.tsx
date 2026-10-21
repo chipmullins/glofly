@@ -4,7 +4,7 @@ import { Avatar, NoteField } from '../components/common'
 import { Icon, ICONS } from '../components/icons'
 import { ago, when } from '../lib/format'
 
-// 0.9.0: the Inbox. Messages you sent as the Glofly Team and the replies people wrote back. In
+// 0.8.2: the Inbox. Messages you sent as the Glofly Team and the replies people wrote back. In
 // Glofly they see "Glofly Team · Official", with a reply box when you allowed replies.
 
 const TEAM_MESSAGE_MAX = 1000

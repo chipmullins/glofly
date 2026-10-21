@@ -12,7 +12,7 @@ import { TIME_ZONE } from "../social/glows";
 import { adminConfigured } from "./secrets";
 import { invalid } from "./routes";
 
-// 0.9.0: Control's alerts. Each one is kept (Recent alerts, desktop notifications while Control is
+// 0.8.2: Control's alerts. Each one is kept (Recent alerts, desktop notifications while Control is
 // open) and, if its kind is switched on, pushed to every approved phone that registered for alerts.
 // Alerts never carry message text or who reported someone, so nothing private shows on a lock
 // screen. "Urgent" kinds are time-sensitive (they break through Focus).

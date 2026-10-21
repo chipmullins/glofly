@@ -298,7 +298,7 @@ noticesRouter.post("/:id/seen", async (req, res) => {
   res.status(204).end();
 });
 
-// 0.9.0: POST /notices/:id/reply  { body } — answer a Glofly Team message (Control → Inbox).
+// 0.8.2: POST /notices/:id/reply  { body } — answer a Glofly Team message (Control → Inbox).
 // Only for team messages that allow replies; it also counts as seen.
 const replyLimiter = rateLimit("safety:team-reply", {
   windowMs: 60 * 60 * 1000,

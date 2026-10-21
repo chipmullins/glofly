@@ -601,7 +601,7 @@ async function liveLink(code: string) {
   return link.link;
 }
 
-/** 0.9.0: invites turned off (or the constellation frozen) in Glofly Control. Answers and returns true. */
+/** 0.8.2: invites turned off (or the constellation frozen) in Glofly Control. Answers and returns true. */
 async function invitesBlocked(res: Response, constellationId: string): Promise<boolean> {
   const [c] = await db.select({ invitesOffAt: constellations.invitesOffAt, frozenAt: constellations.frozenAt }).from(constellations).where(eq(constellations.id, constellationId));
   if (c?.frozenAt) {
@@ -645,7 +645,7 @@ constellationsRouter.get("/links/:code", previewLimiter, async (req, res) => {
 
 /** Joins, answering the request (shared by links, public joins and invites). */
 async function joinNow(res: Response, constellationId: string, userId: string, afterAdd?: (tx: Tx) => Promise<void>) {
-  // 0.9.0, Glofly Control: no joining a frozen constellation, or as a new account during Lockdown.
+  // 0.8.2, Glofly Control: no joining a frozen constellation, or as a new account during Lockdown.
   if (await frozen(constellationId)) {
     bad(res, FROZEN_MESSAGE, 403);
     return;

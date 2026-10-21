@@ -249,7 +249,7 @@ adminRouter.get("/dashboard", async (req, res) => {
     },
     recentAccounts,
     recentActions,
-    // 0.9.0 (the phone's Home and desktop's Dashboard): calls happening now, Inbox replies to read,
+    // 0.8.2 (the phone's Home and desktop's Dashboard): calls happening now, Inbox replies to read,
     // Lockdown, the oldest open report, and the newest alerts.
     now: await happeningNow(),
   });
@@ -462,7 +462,7 @@ adminRouter.get("/accounts/:id", async (req, res) => {
       deleteAfter: u.deleteAfter,
       friends: friends.n,
       groups: groups.n,
-      // 0.9.0 (Control for iPhone's account card)
+      // 0.8.2 (Control for iPhone's account card)
       constellations: await db.$count(constellationMembers, eq(constellationMembers.userId, id)),
       openReports: await db.$count(reports, and(eq(reports.reportedUserId, id), eq(reports.status, "open"))),
       storageBytes: Number(storage.bytes ?? 0),

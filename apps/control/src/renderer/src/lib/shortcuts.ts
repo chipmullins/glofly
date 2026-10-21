@@ -1,4 +1,4 @@
-// 0.9.0: keyboard shortcuts. They never fire while typing in a field or while a dialog is open.
+// 0.8.2: keyboard shortcuts. They never fire while typing in a field or while a dialog is open.
 
 export const isMac = (): boolean => window.control.platform === 'darwin'
 

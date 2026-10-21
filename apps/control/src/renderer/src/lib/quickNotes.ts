@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { api } from './api'
 
-// 0.9.0: the saved quick notes (Server → Quick notes), loaded once per session and shared by every
+// 0.8.2: the saved quick notes (Server → Quick notes), loaded once per session and shared by every
 // note box. Older servers answer 404: no chips, the note box works as before.
 
 let notes: string[] = []

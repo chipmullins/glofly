@@ -10,7 +10,7 @@ import './Safety.css'
 // announcement banner at the top of the app (Glofly Control → Announcements).
 
 /**
- * "A message from the Glofly team": a warning stays until you press I understand. 0.9.0: a message
+ * "A message from the Glofly team": a warning stays until you press I understand. 0.8.2: a message
  * sent with Control's "Message as Glofly team" shows as from the Glofly Team (Official), with a reply
  * box when replies are allowed (the reply goes to the team's Inbox).
  */

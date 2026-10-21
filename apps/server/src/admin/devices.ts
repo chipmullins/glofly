@@ -9,7 +9,7 @@ import { rateLimit } from "../rateLimit";
 import { logAction, logInBackground, noteSchema } from "./audit";
 import { admin, invalid, ip } from "./routes";
 
-// 0.9.0: Control for iPhone. A phone is approved once, from the home network, with a code shown in
+// 0.8.2: Control for iPhone. A phone is approved once, from the home network, with a code shown in
 // desktop Control (Server → Approved phones). The phone makes its own key pair (ECDSA P-256; the
 // private half never leaves the phone and is locked behind Face ID) and hands us the public half.
 // From then on every request from the phone carries a signature, which is what lets it reach

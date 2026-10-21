@@ -16,7 +16,7 @@ import {
 import { endCallsSpec, lockdownSpec } from './serverSpecs'
 
 // Control → Server (0.4.0): "Pause Glofly" (the kill switch) and "Restart server".
-// 0.9.0: uptime, Lockdown, End all calls, approved phones, alerts and quick notes (ServerCards).
+// 0.8.2: uptime, Lockdown, End all calls, approved phones, alerts and quick notes (ServerCards).
 
 /** "3 days, 4 hours" / "12 minutes". */
 function uptime(seconds: number): string {
@@ -42,10 +42,10 @@ export function Server({
   toast: (message: string, bad?: boolean) => void
   /** The sidebar and the banner follow the switch. */
   onPauseChange: (paused: boolean) => void
-  /** 0.9.0: the sidebar's "Lockdown" follows it too */
+  /** 0.8.2: the sidebar's "Lockdown" follows it too */
   onLockdownChange: (on: boolean) => void
   onDesktopAlertsChange: (on: boolean) => void
-  /** 0.9.0: an action picked in the command bar (opens its confirm dialog here) */
+  /** 0.8.2: an action picked in the command bar (opens its confirm dialog here) */
   request: { action: CommandAction; n: number } | null
   onRequestDone: () => void
 }): JSX.Element {
@@ -199,7 +199,7 @@ export function Server({
       }
     }
 
-  // 0.9.0: Lockdown (also the header button and the command bar).
+  // 0.8.2: Lockdown (also the header button and the command bar).
   const [lockdownOn, setLockdownOn] = useState(false)
   const onLockdown = useCallback(
     (on: boolean) => {

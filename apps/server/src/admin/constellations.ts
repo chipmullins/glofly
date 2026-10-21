@@ -33,7 +33,7 @@ import { admin, invalid, ip } from "./routes";
 //   POST /admin/constellations/:id/take-down  { reason, note }
 //   POST /admin/constellations/:id/restore    { note }
 //   POST /admin/constellations/:id/delete     { confirmName, note }
-// 0.9.0 (desktop Control and Control for iPhone):
+// 0.8.2 (desktop Control and Control for iPhone):
 //   POST /admin/constellations/:id/freeze      { frozen, note }   members can read, nobody posts or joins
 //   POST /admin/constellations/:id/invites     { off, note }      invite links stop working, none can be made
 //   POST /admin/constellations/:id/transfer    { username, note } a member becomes the Owner

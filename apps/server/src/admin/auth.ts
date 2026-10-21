@@ -175,7 +175,7 @@ adminAuthRouter.post("/code", codeLimiter, async (req, res) => {
   }
 
   await redis.del(key);
-  // 0.9.0: on an approved phone the session is shorter and belongs to that phone, not a network.
+  // 0.8.2: on an approved phone the session is shorter and belongs to that phone, not a network.
   const device = res.locals.adminDevice as SignedDevice | undefined;
   if (device && device.adminId !== admin.id) {
     res.status(401).json({ error: "start_over", message: "This phone is approved for someone else." });
@@ -253,7 +253,7 @@ export const requireAdmin: RequestHandler = async (req, res, next) => {
     .innerJoin(users, eq(users.id, admins.userId))
     .where(and(eq(adminSessions.tokenHash, hash(token)), gt(adminSessions.expiresAt, new Date())))
     .limit(1);
-  // A session only works from the network it was started on; 0.9.0: a phone's session only with
+  // A session only works from the network it was started on; 0.8.2: a phone's session only with
   // that phone's signature (from anywhere), and a desktop session never from a phone.
   const device = res.locals.adminDevice as SignedDevice | undefined;
   const placeOk = row ? (row.deviceId ? device?.id === row.deviceId : !device && row.ip === res.locals.adminIp) : false;

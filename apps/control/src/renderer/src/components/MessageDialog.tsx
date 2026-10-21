@@ -2,7 +2,7 @@ import { useId, useState, type JSX } from 'react'
 import { api } from '../lib/api'
 import { Avatar, Dialog, NoteField } from './common'
 
-// 0.9.0: "Message as Glofly team" (Accounts). In Glofly they see it from "Glofly Team · Official",
+// 0.8.2: "Message as Glofly team" (Accounts). In Glofly they see it from "Glofly Team · Official",
 // with a reply box when replies are allowed; replies come to Control's Inbox.
 
 const MAX = 1000

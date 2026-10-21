@@ -124,7 +124,7 @@ function answer(method: string, path: string): Record<string, unknown> | null {
   if (p === '/admin/announcements') return { current: null, history: [], minVersion: { version: null, message: null } }
   if (p === '/admin/app-version') {
     const plat = new URLSearchParams(path.split('?')[1] ?? '').get('platform')
-    return { minVersion: plat === 'desktop' ? '0.8.0' : plat === 'ios' || plat === 'android' ? '1.0.0' : null, message: null, newest: '0.9.0', check: null }
+    return { minVersion: plat === 'desktop' ? '0.8.0' : plat === 'ios' || plat === 'android' ? '1.0.0' : null, message: null, newest: '0.8.2', check: null }
   }
   if (p === '/admin/devices')
     return { devices: [{ id: U(900), name: "Chip's iPhone", createdAt: iso(60 * 24), lastUsedAt: iso(1), lastIp: '203.0.113.9', alerts: true, thisDevice: true }], max: 3 }

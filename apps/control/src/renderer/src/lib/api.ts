@@ -1,7 +1,7 @@
 import type { CallResult, Failure } from '../../../preload/types'
 
 // Typed calls to the server's /admin routes (through the main process).
-// 0.9.0: Control for iPhone (apps/control-mobile) uses this same file; it supplies its own
+// 0.8.2: Control for iPhone (apps/control-mobile) uses this same file; it supplies its own
 // `window.control.call` (signed requests from the approved phone).
 
 export type { Failure }
@@ -59,13 +59,13 @@ export type ConstellationRow = {
   owner: ConstellationOwner
   memberCount: number
   openReports: number
-  /** 0.9.0 (missing from older servers) */
+  /** 0.8.2 (missing from older servers) */
   joinsToday?: number
   nebulaCount?: number
   frozenAt?: string | null
   invitesOffAt?: string | null
 }
-/** 0.9.0: across Glofly */
+/** 0.8.2: across Glofly */
 export type ConstellationTotals = { constellations: number; nebulas: number; voiceLive: number }
 export type ConstellationInfo = {
   id: string
@@ -84,13 +84,13 @@ export type ConstellationInfo = {
     name: string
     kind: 'text' | 'voice'
     messages: number
-    /** 0.9.0 (missing from older servers) */
+    /** 0.8.2 (missing from older servers) */
     visibility?: 'everyone' | 'roles'
     readOnly?: boolean
     messagesToday?: number
     inVoice?: number
   }[]
-  /** 0.9.0 (missing from older servers) */
+  /** 0.8.2 (missing from older servers) */
   joinsToday?: number
   messagesToday?: number
   openReports?: number
@@ -162,11 +162,11 @@ export type Dashboard = {
     status: AccountStatus | 'invited' | 'invite_expired'
   }[]
   recentActions: AuditEntry[]
-  /** 0.9.0: what's happening now (missing from older servers) */
+  /** 0.8.2: what's happening now (missing from older servers) */
   now?: HappeningNow
 }
 
-// ───────────── 0.9.0: phones, alerts, quick notes, lockdown, uptime, Inbox ─────────────
+// ───────────── 0.8.2: phones, alerts, quick notes, lockdown, uptime, Inbox ─────────────
 
 export type LockdownState = { on: boolean; since: string | null }
 
@@ -324,7 +324,7 @@ export type AccountDetail = {
     deleteAfter: string | null
     friends: number
     groups: number
-    /** 0.9.0 (missing from older servers) */
+    /** 0.8.2 (missing from older servers) */
     constellations?: number
     openReports?: number
     storageBytes: number
@@ -460,7 +460,7 @@ export type ServerInfo = {
   /** Only the live server (Docker) can restart itself. */
   canRestart: boolean
   devicesConnected: number
-  /** 0.9.0 (missing from older servers) */
+  /** 0.8.2 (missing from older servers) */
   lockdown?: LockdownState
 }
 
@@ -585,14 +585,14 @@ export const api = {
   errorAction: (id: string, action: 'resolve' | 'reopen') =>
     call<Done>('POST', `/admin/errors/${id}/${action}`),
   clearFixedErrors: () => call<{ removed: number }>('DELETE', '/admin/errors'),
-  // ── 0.9.0 ──
+  // ── 0.8.2 ──
   freezeConstellation: (id: string, frozen: boolean, note: string) =>
     call<Done>('POST', `/admin/constellations/${id}/freeze`, { frozen, note }),
   constellationInvites: (id: string, off: boolean, note: string) =>
     call<Done>('POST', `/admin/constellations/${id}/invites`, { off, note }),
   transferConstellation: (id: string, username: string, note: string) =>
     call<Done>('POST', `/admin/constellations/${id}/transfer`, { username, note }),
-  /** Add a friend for any account (it was family accounts only before 0.9.0) */
+  /** Add a friend for any account (it was family accounts only before 0.8.2) */
   addFriendFor: (id: string, username: string, note: string) =>
     call<Done>('POST', `/admin/accounts/${id}/friends`, { username, note }),
   messageUser: (id: string, body: string, allowReply: boolean, note: string) =>

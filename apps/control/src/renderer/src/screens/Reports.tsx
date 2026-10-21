@@ -89,7 +89,7 @@ export function Reports({
     }
   }, [selected])
 
-  // 0.9.0: J / K = next / previous report (not while typing or with a dialog open).
+  // 0.8.2: J / K = next / previous report (not while typing or with a dialog open).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const key = e.key.toLowerCase()

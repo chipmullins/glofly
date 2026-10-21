@@ -334,7 +334,7 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
     res.status(403).json(MANAGED_BY_FAMILY);
     return;
   }
-  // 0.9.0: Lockdown (Glofly Control) holds back accounts under a day old.
+  // 0.8.2: Lockdown (Glofly Control) holds back accounts under a day old.
   if (await lockedDown(myId)) {
     res.status(403).json(LOCKDOWN_MESSAGE);
     return;

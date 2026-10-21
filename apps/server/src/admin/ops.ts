@@ -11,7 +11,7 @@ import { getLockdown, LOCKDOWN_NEW_HOURS, saveLockdown, type LockdownState } fro
 
 export { getLockdown, lockedDown, LOCKDOWN_MESSAGE } from "./lockdown";
 
-// 0.9.0 Control tools for when things go wrong (desktop Control and Control for iPhone):
+// 0.8.2 Control tools for when things go wrong (desktop Control and Control for iPhone):
 //   - Quick notes: saved reasons that fill an action's audit note in one tap
 //   - Lockdown: accounts made in the last 24 hours can only talk to the friends they already have
 //   - End all calls

@@ -712,13 +712,13 @@ export const adminSessions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    // 0.9.0: a session started on an approved phone (Control for iPhone). Such a session isn't tied
+    // 0.8.2: a session started on an approved phone (Control for iPhone). Such a session isn't tied
     // to a network: every request must be signed by that phone's key instead (admin/devices.ts).
     deviceId: uuid("device_id").references((): AnyPgColumn => adminDevices.id, { onDelete: "cascade" }),
   },
 );
 
-// 0.9.0: phones approved for Glofly Control (Control for iPhone). Approved once from the home
+// 0.8.2: phones approved for Glofly Control (Control for iPhone). Approved once from the home
 // network with a code from desktop Control; afterwards the phone signs every request with its own
 // key (ECDSA P-256; only the public half is kept here), so it works from anywhere.
 export const adminDevices = pgTable(
@@ -740,7 +740,7 @@ export const adminDevices = pgTable(
   (t) => [index("admin_devices_admin_idx").on(t.adminId)],
 );
 
-// 0.9.0: what Control alerted the admin about (pushes to the phone, desktop notifications, the
+// 0.8.2: what Control alerted the admin about (pushes to the phone, desktop notifications, the
 // "Recent alerts" lists). Kept 30 days.
 export const adminAlerts = pgTable(
   "admin_alerts",
@@ -755,7 +755,7 @@ export const adminAlerts = pgTable(
   (t) => [index("admin_alerts_created_idx").on(t.createdAt)],
 );
 
-// 0.9.0: the server's ups and downs (Control → Server → Uptime). "outage" = it stopped answering by
+// 0.8.2: the server's ups and downs (Control → Server → Uptime). "outage" = it stopped answering by
 // itself; "restart" = restarted from Control; "pause" = Glofly paused from Control.
 export const uptimeEvents = pgTable(
   "uptime_events",
@@ -866,19 +866,19 @@ export const userNotices = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    // "warning" (from a report) or, 0.9.0, "message" (Control → Message as Glofly team).
+    // "warning" (from a report) or, 0.8.2, "message" (Control → Message as Glofly team).
     kind: text("kind").notNull().default("warning"),
     body: text("body").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     seenAt: timestamp("seen_at", { withTimezone: true }),
-    // 0.9.0: they may answer it (their reply goes to Control → Inbox), and which admin sent it.
+    // 0.8.2: they may answer it (their reply goes to Control → Inbox), and which admin sent it.
     allowReply: boolean("allow_reply").notNull().default(false),
     sentBy: uuid("sent_by"),
   },
   (t) => [index("user_notices_user_idx").on(t.userId)],
 );
 
-// 0.9.0: answers to a Glofly Team message (Control → Inbox).
+// 0.8.2: answers to a Glofly Team message (Control → Inbox).
 export const teamReplies = pgTable(
   "team_replies",
   {
@@ -1037,7 +1037,7 @@ export const constellations = pgTable(
     // record until the admin removes it for good. Null = normal.
     takenDownAt: timestamp("taken_down_at", { withTimezone: true }),
     takedownReason: text("takedown_reason"),
-    // 0.9.0, Control: frozen = members can read but nobody can post or join until it's unfrozen;
+    // 0.8.2, Control: frozen = members can read but nobody can post or join until it's unfrozen;
     // invites off = its invite links stop working and no new ones can be made.
     frozenAt: timestamp("frozen_at", { withTimezone: true }),
     invitesOffAt: timestamp("invites_off_at", { withTimezone: true }),

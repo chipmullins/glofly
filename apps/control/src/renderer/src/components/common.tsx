@@ -152,7 +152,7 @@ export function NoteField({
   placeholder?: string
 }): JSX.Element {
   const id = useId()
-  // 0.9.0: the saved quick notes as one-tap chips (tap again to clear).
+  // 0.8.2: the saved quick notes as one-tap chips (tap again to clear).
   const quick = useQuickNotes()
   const picked = value.trim()
   return (

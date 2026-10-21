@@ -158,7 +158,7 @@ async function restrictedTarget(res: Parameters<typeof target>[0], id: unknown) 
 }
 
 // POST /admin/accounts/:id/friends  { username, note } — "Add a friend for them": friends at once.
-// 0.9.0: for any account (it was family accounts only). Blocks still win.
+// 0.8.2: for any account (it was family accounts only). Blocks still win.
 familyRouter.post("/accounts/:id/friends", async (req, res) => {
   const parsed = z
     .object({ username: z.string({ error: "Enter their username." }).trim().min(1, "Enter their username.").max(40), note: noteSchema })

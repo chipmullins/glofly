@@ -14,7 +14,7 @@ import { ago, longDate, plural, when } from '../lib/format'
 // Glofly 2.0: every constellation, biggest first. Take one down (hidden from everyone at once,
 // kept for the record; voice is hung up), bring it back, or delete it for good. Reports about
 // nebula messages arrive in Reports like any other, naming the constellation.
-// 0.9.0: totals, Frozen / Has reports / Growing filters, freeze, invite links off, transfer owner.
+// 0.8.2: totals, Frozen / Has reports / Growing filters, freeze, invite links off, transfer owner.
 
 const FILTERS: { id: ConstellationStatus; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -76,7 +76,7 @@ export function Constellations({
 }: {
   toast: (message: string, bad?: boolean) => void
   onOpenAccount: (id: string) => void
-  /** 0.9.0: opened on one (the command bar, an alert) */
+  /** 0.8.2: opened on one (the command bar, an alert) */
   initialSelect?: string | null
 }): JSX.Element {
   const [query, setQuery] = useState('')

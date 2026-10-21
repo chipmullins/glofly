@@ -196,7 +196,7 @@ export const listSessions = async () => map(await request<{ sessions: SignedInDe
 export const report = async (r: ReportRequest) => none(await request('POST', '/reports', r))
 export const getNotices = () => request<{ notices: TeamNotice[]; announcement: Announcement | null }>('GET', '/notices')
 export const noticeSeen = async (id: string) => none(await request('POST', `/notices/${id}/seen`))
-// 0.9.0: answer a Glofly Team message (goes to Glofly Control's Inbox)
+// 0.8.2: answer a Glofly Team message (goes to Glofly Control's Inbox)
 export const noticeReply = async (id: string, body: string) => none(await request('POST', `/notices/${id}/reply`, { body }))
 
 // ---- Push notifications ----

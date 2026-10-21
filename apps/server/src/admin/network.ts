@@ -45,7 +45,7 @@ export function ipAllowed(ip: string): boolean {
 }
 
 /**
- * First thing on every /admin request. 0.9.0: a request signed by an approved phone (Control for
+ * First thing on every /admin request. 0.8.2: a request signed by an approved phone (Control for
  * iPhone, see devices.ts) is let in from anywhere; everything else only from ADMIN_IPS.
  */
 export const requireAdminNetwork: RequestHandler = async (req, res, next) => {

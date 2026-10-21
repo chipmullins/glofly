@@ -81,7 +81,7 @@ app.use(webCors);
 app.use(
   express.json({
     limit: "10kb", // rejects oversized request bodies
-    // 0.9.0: Control for iPhone signs its requests, body included (admin/devices.ts).
+    // 0.8.2: Control for iPhone signs its requests, body included (admin/devices.ts).
     verify: (req, _res, buf) => {
       if ((req as { url?: string }).url?.startsWith("/admin/")) (req as { rawBody?: Buffer }).rawBody = buf;
     },
@@ -193,7 +193,7 @@ async function shutdown(signal: string): Promise<void> {
   stopping = true;
   console.log(`${signal}: shutting down.`);
   setTimeout(() => process.exit(0), 10_000).unref();
-  // 0.9.0: Control's uptime history counts this as an update, not an outage.
+  // 0.8.2: Control's uptime history counts this as an update, not an outage.
   await noteStopping("update");
   try {
     // Closing the live connections also closes the HTTP server, once its requests are done.
@@ -229,7 +229,7 @@ connectRedis()
           : `iPhone lock-screen calls: ${voipKind}`,
       );
     });
-    // 0.9.0 Control: uptime history (a heartbeat every 30 s; a gap found at startup is an outage)
+    // 0.8.2 Control: uptime history (a heartbeat every 30 s; a gap found at startup is an outage)
     // and Control's alerts (new reports, failures, sign-ups, fast-growing constellations, the
     // morning summary), checked every minute.
     recordStartup().catch((err) => console.error("Uptime history failed", err));

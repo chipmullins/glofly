@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import type { ExpoConfig } from 'expo/config'
 
-// Glofly Control for iPhone (0.9.0): the admin app in Chip's pocket. iPhone only, installed through
+// Glofly Control for iPhone (0.8.2): the admin app in Chip's pocket. iPhone only, installed through
 // TestFlight (internal testing only; never on the App Store for others).
 //
 // The server address comes from EXPO_PUBLIC_SERVER_URL (apps/control-mobile/.env.local while

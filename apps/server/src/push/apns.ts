@@ -129,7 +129,7 @@ export function sendVoip(storedToken: string, payload: Record<string, string>, t
   return post(storedToken, { topic: config.topic, pushType: "voip", priority: "10", ttlSeconds, body: { aps: {}, ...payload }, what: "iPhone call push" });
 }
 
-// 0.9.0: alerts for Glofly Control for iPhone (its own app, so its own topic). Same Apple key.
+// 0.8.2: alerts for Glofly Control for iPhone (its own app, so its own topic). Same Apple key.
 //   CONTROL_APNS_BUNDLE_ID  optional, default com.glofly.control
 export const controlAlertsConfigured = config !== null;
 const controlTopic = process.env.CONTROL_APNS_BUNDLE_ID?.trim() || "com.glofly.control";

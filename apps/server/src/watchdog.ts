@@ -3,7 +3,7 @@ import { db, pool } from "./db";
 import { adminAlerts, adminDevices, serverSettings } from "./db/schema";
 import { controlAlertsConfigured, sendControlAlert } from "./push/apns";
 
-// 0.9.0: the watchdog (its own small service in deploy/docker-compose.yml: `node dist/watchdog.js`).
+// 0.8.2: the watchdog (its own small service in deploy/docker-compose.yml: `node dist/watchdog.js`).
 // It asks the Glofly server's /health every 30 seconds. When the server hasn't answered for about a
 // minute and a half, it pushes "Server isn't answering" to the admin's approved phones (Control for
 // iPhone), and "Server is back" once it answers again. A restart from Control or an update (both

@@ -113,7 +113,7 @@ export async function canPostInNebula(conversationId: string, userId: string): P
   if (!nebula || !(await seesChat(conversationId, userId))) return false;
   const s = await standingOf(nebula.constellationId, userId);
   if (!s || s.timedOutUntil) return false;
-  // 0.9.0, Glofly Control: a frozen constellation, or a new account during Lockdown.
+  // 0.8.2, Glofly Control: a frozen constellation, or a new account during Lockdown.
   if ((await frozen(nebula.constellationId)) || (await lockedDown(userId))) return false;
   if (nebula.readOnly && !can(s, "manageNebulas") && !can(s, "deleteMessages")) return false;
   return true;
@@ -150,7 +150,7 @@ export async function canModerateNebula(
   return { constellationId: nebula.constellationId };
 }
 
-/** 0.9.0: what people see in a constellation frozen in Glofly Control. */
+/** 0.8.2: what people see in a constellation frozen in Glofly Control. */
 export const FROZEN_MESSAGE = "The Glofly team paused this constellation for now. You can still read it.";
 
 /** Frozen in Glofly Control (members can read, nobody can post or join). */

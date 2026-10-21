@@ -65,11 +65,11 @@ export function Sidebar({
   newErrors?: number
   /** Glofly is paused (Server → Pause Glofly): a red "Paused" next to Server */
   paused: boolean
-  /** 0.9.0: Lockdown is on (a red "Lockdown" next to Server) */
+  /** 0.8.2: Lockdown is on (a red "Lockdown" next to Server) */
   lockdown?: boolean
-  /** 0.9.0: replies waiting in the Inbox */
+  /** 0.8.2: replies waiting in the Inbox */
   inboxUnread?: number
-  /** 0.9.0: opens the command bar (Ctrl+K) */
+  /** 0.8.2: opens the command bar (Ctrl+K) */
   onSearch: () => void
   onSignOut: () => void
 }): JSX.Element {

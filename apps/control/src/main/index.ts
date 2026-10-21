@@ -108,7 +108,7 @@ function isBody(value: unknown): boolean {
   }
 }
 
-/** 0.9.0: pages a desktop alert can open (renderer Page names). */
+/** 0.8.2: pages a desktop alert can open (renderer Page names). */
 const ALERT_PAGES = new Set([
   'dashboard',
   'accounts',
@@ -120,7 +120,7 @@ const ALERT_PAGES = new Set([
   'audit'
 ])
 
-/** 0.9.0: a native notification for a Control alert; clicking it brings Control forward on that page. */
+/** 0.8.2: a native notification for a Control alert; clicking it brings Control forward on that page. */
 function showAlert(title: string, body: string, page: string): void {
   if (!Notification.isSupported()) return
   const notification = new Notification({ title, body, silent: false })
