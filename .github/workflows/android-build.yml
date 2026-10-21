@@ -20,16 +20,12 @@
 name: Android build
 
 on:
+  # Manual only (Oct 20, 2026): Android builds are made with Expo (EAS) now, from apps/mobile:
+  #   npx eas build -p android --profile preview      (a test APK)
+  #   npx eas build -p android --profile production   (the Play Store build)
+  # This workflow kept running out of memory on GitHub's machines. It can still be started by
+  # hand: GitHub → Actions → "Android build" → Run workflow.
   workflow_dispatch:
-  push:
-    # ci/* branches: Claude's compile checks for native code before it lands on dev.
-    branches: [dev, 'ci/**']
-    paths:
-      - 'apps/mobile/**'
-      - 'packages/shared/**'
-      # Not package-lock.json: every desktop release bumps the version in it, which set these
-      # off for nothing. Phone dependency changes also change apps/mobile/package.json.
-      - '.github/workflows/android-build.yml'
 
 permissions:
   contents: read
