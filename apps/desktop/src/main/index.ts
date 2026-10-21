@@ -146,7 +146,8 @@ import {
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isConstellationRequest, isToolsRequest, isUserId } from './api'
 import { checkPausedNow, configurePauseChecks, getPaused, getUpdateRequired } from './app-status'
-import { isReportRequest, listNotices, noticeSeen, sendReport } from './safety'
+import { isReportRequest, listNotices, noticeReply, noticeSeen, sendReport } from './safety'
+import { TEAM_REPLY_MAX } from '@glofly/shared/types'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
 import { checkNow, restartToUpdate, startAutoUpdates, updateReady } from './updater'
 import { isPttBinding, startPtt, stopPtt } from './ptt'
@@ -1175,6 +1176,15 @@ function registerIpcHandlers(): void {
   ipcMain.handle('notices:list', (event) => (fromApp(event) ? listNotices() : invalid))
   ipcMain.handle('notices:seen', (event, id: unknown) =>
     fromApp(event) && isUserId(id) ? noticeSeen(id) : invalid
+  )
+  ipcMain.handle('notices:reply', (event, id: unknown, body: unknown) =>
+    fromApp(event) &&
+    isUserId(id) &&
+    typeof body === 'string' &&
+    body.trim() &&
+    body.length <= TEAM_REPLY_MAX
+      ? noticeReply(id, body.trim())
+      : invalid
   )
   ipcMain.on('updates:restart', (event) => {
     if (!isAppUrl(event.senderFrame?.url ?? '')) return

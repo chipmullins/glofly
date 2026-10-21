@@ -53,9 +53,16 @@ export async function listNotices(): Promise<
       id: n.id as string,
       kind: typeof n.kind === 'string' ? n.kind : 'warning',
       body: (n.body as string).slice(0, 1000),
-      createdAt: String(n.createdAt)
+      createdAt: String(n.createdAt),
+      allowReply: n.allowReply === true
     }))
   return { ok: true, data: { notices, announcement: cleanAnnouncement(result.data.announcement) } }
+}
+
+/** 0.9.0: answer a Glofly Team message (it goes to Glofly Control's Inbox). */
+export async function noticeReply(id: string, body: string): Promise<ApiResult<null>> {
+  const result = await request('POST', `/notices/${id}/reply`, { body })
+  return result.ok ? { ok: true, data: null } : result
 }
 
 export async function noticeSeen(id: string): Promise<ApiResult<null>> {

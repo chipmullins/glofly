@@ -849,6 +849,8 @@ export type GloflyApi = {
     list: () => Promise<ApiResult<{ notices: TeamNotice[]; announcement: Announcement | null }>>
     /** "I understand" */
     seen: (noticeId: string) => Promise<ApiResult<null>>
+    /** 0.9.0: answer a Glofly Team message that allows replies */
+    reply: (noticeId: string, body: string) => Promise<ApiResult<null>>
   }
   /** Set when the server needs a newer Glofly (checked at startup). */
   appStatus: {

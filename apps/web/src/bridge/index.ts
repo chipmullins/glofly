@@ -34,6 +34,7 @@ import type {
   YearInGlow
 } from '../../../desktop/src/preload/api-types'
 import { isGifId } from '@glofly/shared/gifs'
+import { TEAM_REPLY_MAX } from '@glofly/shared/types'
 import { looksLikeVideo } from '@glofly/shared/attachments'
 import { FRIEND_LINK_PATTERN } from '@glofly/shared/friendLinks'
 import { endSession, nothing, onSessionEnded, request, setPauseHandler, unwrap } from './api'
@@ -703,12 +704,18 @@ export function createBridge(): GloflyApi {
             id: n.id as string,
             kind: typeof n.kind === 'string' ? n.kind : 'warning',
             body: (n.body as string).slice(0, 1000),
-            createdAt: String(n.createdAt)
+            createdAt: String(n.createdAt),
+            allowReply: n.allowReply === true
           }))
         const announcement: Announcement | null = cleanAnnouncement(result.data.announcement)
         return { ok: true, data: { notices, announcement } }
       },
-      seen: (id) => badId(id) ?? nothing(request('POST', `/notices/${id}/seen`))
+      seen: (id) => badId(id) ?? nothing(request('POST', `/notices/${id}/seen`)),
+      reply: (id, body) =>
+        badId(id) ??
+        (typeof body !== 'string' || !body.trim() || body.length > TEAM_REPLY_MAX
+          ? Promise.resolve(invalid)
+          : nothing(request('POST', `/notices/${id}/reply`, { body: body.trim() })))
     },
     appStatus: {
       updateRequired: async () => getUpdateRequired(),

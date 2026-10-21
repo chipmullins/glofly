@@ -93,7 +93,8 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
           id: n.id,
           kind: typeof n.kind === 'string' ? n.kind : 'warning',
           body: n.body.slice(0, 1000),
-          createdAt: String(n.createdAt)
+          createdAt: String(n.createdAt),
+          allowReply: n.allowReply === true
         }
       })
     }

@@ -2418,11 +2418,18 @@ export default function MainScreen({
         )}
         {teamNotices[0] && (
           <TeamNoticeDialog
+            key={teamNotices[0].id}
             notice={teamNotices[0]}
             onSeen={() => {
               const id = teamNotices[0].id
               setTeamNotices((list) => list.filter((n) => n.id !== id))
               void window.glofly.notices.seen(id)
+            }}
+            onReply={async (body) => {
+              const id = teamNotices[0].id
+              const result = await window.glofly.notices.reply(id, body)
+              if (result.ok) setTeamNotices((list) => list.filter((n) => n.id !== id))
+              return result.ok
             }}
           />
         )}

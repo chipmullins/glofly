@@ -152,6 +152,57 @@
 .dialog .team-notice-foot {
   font-size: 13px;
 }
+/* 0.9.0: a message from the Glofly Team (Control → Message as Glofly team) */
+.team-notice-from {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.team-notice-official {
+  font-family: var(--glo-font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #ffc24a;
+  color: #24174a;
+}
+.dialog .team-notice-bubble {
+  padding: 10px 14px;
+  border-radius: 4px 16px 16px 16px;
+  background: var(--glo-subtle);
+}
+.team-notice-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--glo-muted);
+}
+.team-notice-reply textarea {
+  resize: vertical;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-weight: 400;
+  font-size: 14px;
+}
+.team-notice-reply textarea:focus-visible {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 1px;
+}
+.dialog .team-notice-error {
+  margin: -4px 0 12px;
+  font-size: 13px;
+  color: var(--glo-danger, #b42318);
+}
 
 /* ---------- Announcement banner (top of the app) ---------- */
 

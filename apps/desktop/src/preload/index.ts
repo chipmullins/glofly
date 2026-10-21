@@ -357,7 +357,8 @@ const glofly: GloflyApi = {
   },
   notices: {
     list: () => ipcRenderer.invoke('notices:list'),
-    seen: (noticeId: string) => ipcRenderer.invoke('notices:seen', noticeId)
+    seen: (noticeId: string) => ipcRenderer.invoke('notices:seen', noticeId),
+    reply: (noticeId: string, body: string) => ipcRenderer.invoke('notices:reply', noticeId, body)
   },
   appStatus: {
     updateRequired: () => ipcRenderer.invoke('app:update-required'),
