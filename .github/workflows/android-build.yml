@@ -14,8 +14,8 @@
 # GOOGLE_SERVICES_JSON (Settings → Secrets and variables → Actions) holding the whole
 # google-services.json. Without it the APK works, just without push.
 #
-# Runs on pushes to dev that touch the phone app or the shared package, and by hand
-# (Run workflow, once this file is on the default branch). Linux minutes count 1× (~15 min a build).
+# Runs only by hand now (see "on:" below; Android builds are made with Expo/EAS)
+# (Run workflow, once this file is on the default branch). Linux minutes count 1×.
 
 name: Android build
 
