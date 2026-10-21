@@ -15,7 +15,7 @@ const webPreview = process.env.CONTROL_WEB_PREVIEW === '1'
 
 // The Expo project (@chipmullins/glofly-control): fill in after `eas init` (run once in this folder;
 // it prints the id). Until then over-the-air updates are off and EAS asks to link the project.
-const EXPO_PROJECT_ID = ''
+const EXPO_PROJECT_ID = '2bfe0f09-3dce-481d-aae5-c95aa18244a7'
 
 // Over-the-air updates (expo-updates), like the Glofly phone app: JavaScript-only changes reach the
 // installed app without a new build (`npm run update:preview` / `update:production`, see
