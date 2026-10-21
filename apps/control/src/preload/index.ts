@@ -18,6 +18,12 @@ const control: ControlApi = {
   openExternal: (url) => ipcRenderer.invoke('control:open-external', url),
   setScreen: (screen) => ipcRenderer.send('control:screen', screen),
   reportError: (report) => ipcRenderer.send('control:report-error', report),
+  notify: (alert) => ipcRenderer.send('control:notify', alert),
+  onOpenPage: (callback) => {
+    const listener = (_event: unknown, page: string): void => callback(page)
+    ipcRenderer.on('control:open-page', listener)
+    return () => ipcRenderer.removeListener('control:open-page', listener)
+  },
   onSignedOut: (callback) => {
     const listener = (_event: unknown, reason: 'expired' | 'ended'): void => callback(reason)
     ipcRenderer.on('control:signed-out', listener)

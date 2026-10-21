@@ -10,6 +10,7 @@ import {
 } from '../lib/api'
 import { Avatar, Chip, StatusChip } from '../components/common'
 import { ActionDialog, type ActionSpec } from '../components/ActionDialog'
+import { MessageDialog } from '../components/MessageDialog'
 import { Icon, ICONS } from '../components/icons'
 import { ago, bytes, daysUntil, longDate, plural, shortDate, when } from '../lib/format'
 
@@ -26,6 +27,7 @@ type Selected = { kind: 'account'; id: string } | { kind: 'invite'; id: string }
 export function Accounts({
   initialQuery,
   initialSelect,
+  initialThen,
   adminUserId,
   onCreate,
   toast,
@@ -33,6 +35,8 @@ export function Accounts({
 }: {
   initialQuery: string
   initialSelect: string | null
+  /** 0.9.0 (command bar): open this dialog for the selected account straight away */
+  initialThen?: 'message' | 'friend' | null
   adminUserId: string
   onCreate: () => void
   toast: (message: string, bad?: boolean) => void
@@ -210,6 +214,7 @@ export function Accounts({
             key={`${selected.id}-${detailVersion}`}
             id={selected.id}
             adminUserId={adminUserId}
+            then={selected.id === initialSelect && detailVersion === 0 ? initialThen : null}
             onChanged={(message) => {
               toast(message)
               reload()
@@ -246,32 +251,59 @@ export function Accounts({
 
 // ───────────── One account ─────────────
 
+/** "Add a friend for them" (0.9.0: any account; family accounts use the same dialog). */
+function addFriendSpec(a: AccountDetail['account']): ActionSpec {
+  return {
+    title: `Add a friend for @${a.username}`,
+    intro:
+      'They become friends straight away, no request needed. Both of them see each other in Friends right away.',
+    confirmLabel: 'Add friend',
+    fields: [
+      {
+        name: 'username',
+        label: 'Friend’s username',
+        maxLength: 40,
+        prefix: '@',
+        hint: 'Their Glofly username, e.g. chip'
+      }
+    ],
+    notePlaceholder: a.restricted ? 'e.g. "Cousin, parent OK’d"' : 'e.g. "Requested by user"',
+    run: (v, note) => api.addFriendFor(a.id, v.username.replace(/^@/, ''), note)
+  }
+}
+
 function AccountPanel({
   id,
   adminUserId,
+  then,
   onChanged,
   onGone
 }: {
   id: string
   adminUserId: string
+  then?: 'message' | 'friend' | null
   onChanged: (message: string) => void
   onGone: (message: string) => void
 }): JSX.Element {
   const [detail, setDetail] = useState<AccountDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [action, setAction] = useState<(ActionSpec & { gone?: boolean }) | null>(null)
+  const [messaging, setMessaging] = useState(false)
 
   useEffect(() => {
     let live = true
     void api.account(id).then((result) => {
       if (!live) return
-      if (result.ok) setDetail(result.data)
-      else setError(result.message)
+      if (result.ok) {
+        setDetail(result.data)
+        if (then === 'message') setMessaging(true)
+        if (then === 'friend') setAction(addFriendSpec(result.data.account))
+      } else setError(result.message)
     })
     return () => {
       live = false
     }
-  }, [id])
+  }, [id, then])
 
   if (error) {
     return (
@@ -297,7 +329,15 @@ function AccountPanel({
     (values: Record<string, string>, note: string) =>
       api.accountAction(a.id, path, { ...extra(values), note })
 
+  // Family accounts add friends from their Family card (same dialog), so it isn't shown twice.
+  const familyCard = !isMe && a.restricted === true
+
   const actions: { label: string; spec: ActionSpec & { gone?: boolean }; show: boolean }[] = [
+    {
+      label: 'Add a friend for them',
+      show: !familyCard && a.status !== 'deleting',
+      spec: addFriendSpec(a)
+    },
     {
       label: 'Send password reset',
       show: true,
@@ -465,6 +505,13 @@ function AccountPanel({
 
       {!isMe && a.restricted !== undefined && <FamilySection account={a} onAction={setAction} />}
 
+      {a.status !== 'deleting' && (
+        <button type="button" className="btn btn--team" onClick={() => setMessaging(true)}>
+          <Icon d={ICONS.message} size={17} strokeWidth={2} />
+          Message as Glofly team
+        </button>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <span className="section-label">Devices</span>
         {a.devices.length === 0 && (
@@ -625,6 +672,16 @@ function AccountPanel({
           }}
         />
       )}
+      {messaging && (
+        <MessageDialog
+          user={a}
+          onClose={() => setMessaging(false)}
+          onDone={(message) => {
+            setMessaging(false)
+            onChanged(message)
+          }}
+        />
+      )}
     </aside>
   )
 }
@@ -734,24 +791,7 @@ function FamilySection({
           <button
             type="button"
             className="btn btn--action"
-            onClick={() =>
-              onAction({
-                title: `Add a friend for @${a.username}`,
-                intro:
-                  'They become friends straight away, no request needed. Both of them see each other in Friends right away.',
-                confirmLabel: 'Add friend',
-                fields: [
-                  {
-                    name: 'username',
-                    label: 'Friend’s username',
-                    maxLength: 40,
-                    hint: 'Their Glofly username, e.g. chip'
-                  }
-                ],
-                notePlaceholder: 'e.g. "Cousin, parent OK’d"',
-                run: (v, note) => api.addFamilyFriend(a.id, v.username.replace(/^@/, ''), note)
-              })
-            }
+            onClick={() => onAction(addFriendSpec(a))}
           >
             <Icon d={ICONS.plus} size={16} strokeWidth={2.2} />
             Add a friend for them

@@ -4,6 +4,7 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  Notification,
   session,
   shell,
   type IpcMainEvent,
@@ -107,6 +108,33 @@ function isBody(value: unknown): boolean {
   }
 }
 
+/** 0.9.0: pages a desktop alert can open (renderer Page names). */
+const ALERT_PAGES = new Set([
+  'dashboard',
+  'accounts',
+  'reports',
+  'inbox',
+  'constellations',
+  'server',
+  'errors',
+  'audit'
+])
+
+/** 0.9.0: a native notification for a Control alert; clicking it brings Control forward on that page. */
+function showAlert(title: string, body: string, page: string): void {
+  if (!Notification.isSupported()) return
+  const notification = new Notification({ title, body, silent: false })
+  notification.on('click', () => {
+    const window = mainWindow
+    if (!window) return
+    if (window.isMinimized()) window.restore()
+    window.show()
+    window.focus()
+    window.webContents.send('control:open-page', page)
+  })
+  notification.show()
+}
+
 const REFUSED = { ok: false, status: 0, error: 'refused', message: 'Not allowed.' } as const
 
 function setUpIpc(): void {
@@ -173,6 +201,13 @@ function setUpIpc(): void {
       },
       app.getVersion()
     )
+  })
+  ipcMain.on('control:notify', (event, alert: unknown) => {
+    if (!fromApp(event) || typeof alert !== 'object' || alert === null) return
+    const a = alert as Record<string, unknown>
+    if (!text(a.title, 120) || (a.body !== '' && !text(a.body, 300))) return
+    if (typeof a.page !== 'string' || !ALERT_PAGES.has(a.page)) return
+    showAlert(a.title, a.body as string, a.page)
   })
   ipcMain.on('control:screen', (event, screen: unknown) => {
     if (!fromApp(event) || !customTitleBar || (screen !== 'signin' && screen !== 'app')) return

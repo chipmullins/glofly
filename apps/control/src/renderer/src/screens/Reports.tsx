@@ -9,6 +9,7 @@ import {
 } from '../lib/api'
 import { Avatar, Chip, Dialog, NoteField, type Tone } from '../components/common'
 import { ago, longDate, time } from '../lib/format'
+import { plainShortcut } from '../lib/shortcuts'
 
 // Reports from the Report button in Glofly: a queue of open ones, and the resolved ones.
 // Each report shows the reported message and a few around it, as the reporter saw them
@@ -88,6 +89,23 @@ export function Reports({
     }
   }, [selected])
 
+  // 0.9.0: J / K = next / previous report (not while typing or with a dialog open).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const key = e.key.toLowerCase()
+      if ((key !== 'j' && key !== 'k') || e.shiftKey || !plainShortcut(e) || !rows?.length) return
+      e.preventDefault()
+      const at = rows.findIndex((r) => r.id === selected)
+      const next = key === 'j' ? Math.min(rows.length - 1, at + 1) : Math.max(0, at - 1)
+      const id = rows[next]?.id
+      if (!id || id === selected) return
+      setSelected(id)
+      document.getElementById(`report-${id}`)?.scrollIntoView({ block: 'nearest' })
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [rows, selected])
+
   const loadMore = (): void => {
     const last = rows?.at(-1)
     if (!last) return
@@ -154,6 +172,7 @@ export function Reports({
           {rows?.map((r) => (
             <button
               key={r.id}
+              id={`report-${r.id}`}
               type="button"
               className="account-row report-row"
               aria-current={selected === r.id ? 'true' : undefined}

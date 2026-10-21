@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
-import { api, PLATFORM_LABEL, type Dashboard as DashboardData } from '../lib/api'
-import { Avatar, StatusChip } from '../components/common'
+import {
+  api,
+  PLATFORM_LABEL,
+  type ControlAlert,
+  type Dashboard as DashboardData,
+  type HappeningNow
+} from '../lib/api'
+import { Avatar, Chip, StatusChip } from '../components/common'
 import { Icon, ICONS } from '../components/icons'
 import { ago, bytes, plural, uptime, when } from '../lib/format'
 import type { Page } from '../components/Sidebar'
@@ -12,12 +18,15 @@ export function Dashboard({
   onFind,
   onOpenAccount,
   onPage,
+  onOpenAlert,
   dataVersion
 }: {
   onCreate: () => void
   onFind: (q: string) => void
   onOpenAccount: (id: string) => void
   onPage: (page: Page) => void
+  /** 0.9.0: open the page an alert is about */
+  onOpenAlert: (alert: ControlAlert) => void
   dataVersion: number
 }): JSX.Element {
   const [data, setData] = useState<DashboardData | null>(null)
@@ -92,12 +101,16 @@ export function Dashboard({
       {!data && !error && <p className="loading">Loading…</p>}
 
       {data && (
-        <DashboardBody
-          data={data}
-          errorsLastDay={errorsLastDay}
-          onOpenAccount={onOpenAccount}
-          onPage={onPage}
-        />
+        <>
+          {data.now && <HappeningNowStrip now={data.now} onPage={onPage} />}
+          <DashboardBody
+            data={data}
+            errorsLastDay={errorsLastDay}
+            onOpenAccount={onOpenAccount}
+            onPage={onPage}
+          />
+          {data.now && <RecentAlerts alerts={data.now.alerts} onOpen={onOpenAlert} />}
+        </>
       )}
     </>
   )
@@ -398,6 +411,88 @@ function DashboardBody({
         </section>
       </div>
     </>
+  )
+}
+
+/** 0.9.0: what's going on right now (older servers don't send `now`: no strip). */
+function HappeningNowStrip({
+  now,
+  onPage
+}: {
+  now: HappeningNow
+  onPage: (page: Page) => void
+}): JSX.Element {
+  const oldest = now.oldestOpenReport
+  return (
+    <section className="card happening" aria-labelledby="now-title">
+      <h2 id="now-title" className="happening-title">
+        <span className="live-dot" aria-hidden="true" />
+        Happening now
+      </h2>
+      <div className="happening-items">
+        <div className="happening-item">
+          <span className="value">{now.calls.toLocaleString('en-US')}</span>
+          <span className="label">
+            {now.calls === 1 ? 'call' : 'calls'} · {plural(now.inCalls, 'person', 'people')} in them
+          </span>
+        </div>
+        <button type="button" className="happening-item" onClick={() => onPage('inbox')}>
+          <span className={`value${now.inboxUnread ? ' value--gold' : ''}`}>
+            {now.inboxUnread.toLocaleString('en-US')}
+          </span>
+          <span className="label">
+            Inbox {now.inboxUnread === 1 ? 'reply' : 'replies'} to read →
+          </span>
+        </button>
+        <button type="button" className="happening-item" onClick={() => onPage('reports')}>
+          <span className="value">{oldest ? ago(oldest.createdAt).replace(' ago', '') : '—'}</span>
+          <span className="label">
+            {oldest ? 'oldest open report is waiting →' : 'no open reports'}
+          </span>
+        </button>
+        {now.lockdown.on && (
+          <button type="button" className="happening-item" onClick={() => onPage('server')}>
+            <Chip tone="bad">Lockdown on</Chip>
+            <span className="label">
+              {now.lockdown.since ? `since ${ago(now.lockdown.since)}` : ''} →
+            </span>
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function RecentAlerts({
+  alerts,
+  onOpen
+}: {
+  alerts: ControlAlert[]
+  onOpen: (alert: ControlAlert) => void
+}): JSX.Element {
+  return (
+    <section className="card card-pad" aria-labelledby="alerts-title">
+      <div className="card-title">
+        <h2 id="alerts-title">Recent alerts</h2>
+      </div>
+      {alerts.length === 0 ? (
+        <p className="empty">No alerts yet. Server, report and sign-in alerts show here.</p>
+      ) : (
+        <ul className="alert-list">
+          {alerts.map((a) => (
+            <li key={a.id}>
+              <button type="button" className="alert-row" onClick={() => onOpen(a)}>
+                <span className="text">
+                  <span className="title">{a.title}</span>
+                  <span className="sub">{a.body}</span>
+                </span>
+                <span className="when">{when(a.createdAt)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 

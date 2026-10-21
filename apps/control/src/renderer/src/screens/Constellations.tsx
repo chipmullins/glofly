@@ -3,7 +3,8 @@ import {
   api,
   type ConstellationInfo,
   type ConstellationRow,
-  type ConstellationStatus
+  type ConstellationStatus,
+  type ConstellationTotals
 } from '../lib/api'
 import { Avatar, Chip } from '../components/common'
 import { Icon, ICONS } from '../components/icons'
@@ -13,11 +14,15 @@ import { ago, longDate, plural, when } from '../lib/format'
 // Glofly 2.0: every constellation, biggest first. Take one down (hidden from everyone at once,
 // kept for the record; voice is hung up), bring it back, or delete it for good. Reports about
 // nebula messages arrive in Reports like any other, naming the constellation.
+// 0.9.0: totals, Frozen / Has reports / Growing filters, freeze, invite links off, transfer owner.
 
 const FILTERS: { id: ConstellationStatus; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'live', label: 'Live' },
-  { id: 'taken_down', label: 'Taken down' }
+  { id: 'taken_down', label: 'Taken down' },
+  { id: 'frozen', label: 'Frozen' },
+  { id: 'reports', label: 'Has reports' },
+  { id: 'growing', label: 'Growing' }
 ]
 
 const VISIBILITY: Record<ConstellationRow['visibility'], string> = {
@@ -66,17 +71,21 @@ function modLine(m: ConstellationInfo['moderation'][number]): string {
 
 export function Constellations({
   toast,
-  onOpenAccount
+  onOpenAccount,
+  initialSelect
 }: {
   toast: (message: string, bad?: boolean) => void
   onOpenAccount: (id: string) => void
+  /** 0.9.0: opened on one (the command bar, an alert) */
+  initialSelect?: string | null
 }): JSX.Element {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<ConstellationStatus>('all')
   const [rows, setRows] = useState<ConstellationRow[] | null>(null)
+  const [totals, setTotals] = useState<ConstellationTotals | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(initialSelect ?? null)
   const [version, setVersion] = useState(0)
   const latest = useRef(0)
 
@@ -89,6 +98,7 @@ export function Constellations({
           if (result.ok) {
             setRows(result.data.constellations)
             setHasMore(result.data.hasMore)
+            if (result.data.totals) setTotals(result.data.totals)
             setError(null)
           } else setError(result.message)
         })
@@ -118,6 +128,26 @@ export function Constellations({
           </p>
         </div>
       </header>
+
+      {totals && (
+        <section className="stats stats--small" aria-label="Across Glofly">
+          <div className="card stat">
+            <span className="label">Constellations</span>
+            <span className="value">{totals.constellations.toLocaleString('en-US')}</span>
+          </div>
+          <div className="card stat">
+            <span className="label">Nebulas</span>
+            <span className="value">{totals.nebulas.toLocaleString('en-US')}</span>
+          </div>
+          <div className="card stat">
+            <span className="label">Voice rooms live</span>
+            <span className="value">{totals.voiceLive.toLocaleString('en-US')}</span>
+            <span className={`note${totals.voiceLive ? '' : ' note--quiet'}`}>
+              {totals.voiceLive ? 'People talking now' : 'Nobody in voice'}
+            </span>
+          </div>
+        </section>
+      )}
 
       <div className="filters-bar">
         <label className="search">
@@ -160,7 +190,11 @@ export function Constellations({
           )}
           {rows?.length === 0 && (
             <p className="empty" style={{ padding: '22px 18px' }}>
-              {query ? `No constellations match “${query}”.` : 'No constellations yet.'}
+              {query
+                ? `No constellations match “${query}”.`
+                : status === 'all'
+                  ? 'No constellations yet.'
+                  : 'None right now.'}
             </p>
           )}
           {rows?.map((r) => (
@@ -179,15 +213,7 @@ export function Constellations({
                 </span>
               </span>
               <span className="seen">Active {ago(r.lastActivityAt)}</span>
-              {r.takenDownAt ? (
-                <Chip tone="bad">Taken down</Chip>
-              ) : r.openReports > 0 ? (
-                <Chip tone="warn">{plural(r.openReports, 'open report')}</Chip>
-              ) : (
-                <Chip tone={r.visibility === 'invite' ? 'plain' : 'good'}>
-                  {VISIBILITY[r.visibility]}
-                </Chip>
-              )}
+              <RowChips r={r} />
             </button>
           ))}
           {hasMore && (
@@ -218,6 +244,47 @@ export function Constellations({
       </div>
     </>
   )
+}
+
+function RowChips({ r }: { r: ConstellationRow }): JSX.Element {
+  const chips: JSX.Element[] = []
+  if (r.takenDownAt)
+    chips.push(
+      <Chip key="down" tone="bad">
+        Taken down
+      </Chip>
+    )
+  if (r.frozenAt)
+    chips.push(
+      <Chip key="frozen" tone="purple">
+        Frozen
+      </Chip>
+    )
+  if (r.invitesOffAt)
+    chips.push(
+      <Chip key="inv" tone="plain">
+        Invites off
+      </Chip>
+    )
+  if (r.openReports > 0)
+    chips.push(
+      <Chip key="rep" tone="warn">
+        {plural(r.openReports, 'report')}
+      </Chip>
+    )
+  if ((r.joinsToday ?? 0) >= 10)
+    chips.push(
+      <Chip key="grow" tone="good">
+        Growing (+{r.joinsToday} today)
+      </Chip>
+    )
+  if (!chips.length)
+    chips.push(
+      <Chip key="vis" tone={r.visibility === 'invite' ? 'plain' : 'good'}>
+        {VISIBILITY[r.visibility]}
+      </Chip>
+    )
+  return <span className="row-chips">{chips}</span>
 }
 
 function Detail({
@@ -286,6 +353,44 @@ function Detail({
         </div>
       )}
 
+      {(c.frozenAt || c.invitesOffAt) && (
+        <div className="notice" role="status">
+          <Icon d={ICONS.lock} size={18} strokeWidth={2} />
+          <span>
+            {c.frozenAt && (
+              <>
+                <strong>Frozen {when(c.frozenAt)}.</strong> Members can read; nobody can post or
+                join.{' '}
+              </>
+            )}
+            {c.invitesOffAt && (
+              <>
+                <strong>Invite links off</strong> since {when(c.invitesOffAt)}.
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className="mini-stats" aria-label="Today">
+        <div>
+          <span className="n">{c.memberCount.toLocaleString('en-US')}</span>
+          <span className="label">Members{c.joinsToday ? ` (+${c.joinsToday} today)` : ''}</span>
+        </div>
+        {c.messagesToday !== undefined && (
+          <div>
+            <span className="n">{c.messagesToday.toLocaleString('en-US')}</span>
+            <span className="label">Messages today</span>
+          </div>
+        )}
+        {c.openReports !== undefined && (
+          <div>
+            <span className={`n${c.openReports ? ' n--warn' : ''}`}>{c.openReports}</span>
+            <span className="label">Open reports</span>
+          </div>
+        )}
+      </div>
+
       <dl className="facts">
         <dt>Owner</dt>
         <dd>
@@ -295,19 +400,6 @@ function Detail({
             </button>
           ) : (
             'A removed account'
-          )}
-        </dd>
-        <dt>Members</dt>
-        <dd>{c.memberCount}</dd>
-        <dt>Nebulas</dt>
-        <dd>
-          {plural(text, 'text nebula')}, {plural(voice, 'voice nebula')}
-          {c.nebulas.length > 0 && (
-            <div className="hint">
-              {c.nebulas
-                .map((n) => `${n.kind === 'voice' ? '🔊' : '#'}${n.name} (${n.messages})`)
-                .join(' · ')}
-            </div>
           )}
         </dd>
         {c.description && (
@@ -326,8 +418,153 @@ function Detail({
         <dd>{longDate(c.createdAt)}</dd>
       </dl>
 
+      <div>
+        <span className="section-label">
+          Nebulas · {plural(text, 'text')}, {plural(voice, 'voice')}
+        </span>
+        {c.nebulas.length === 0 ? (
+          <p className="hint" style={{ marginTop: 6 }}>
+            No nebulas.
+          </p>
+        ) : (
+          <ul className="nebula-list">
+            {c.nebulas.map((n) => {
+              const marks = [
+                n.kind === 'voice' ? 'Voice room' : 'Text',
+                n.visibility === 'roles'
+                  ? 'role-only'
+                  : n.visibility === 'everyone'
+                    ? 'everyone'
+                    : '',
+                n.readOnly ? 'read-only' : ''
+              ].filter(Boolean)
+              return (
+                <li key={n.id} className="nebula-row">
+                  <span className="nebula-icon" aria-hidden="true">
+                    <Icon
+                      d={
+                        n.visibility === 'roles'
+                          ? ICONS.lock
+                          : n.kind === 'voice'
+                            ? ICONS.voice
+                            : ICONS.text
+                      }
+                      size={17}
+                      strokeWidth={2}
+                    />
+                  </span>
+                  <span className="text">
+                    <span className="name">{n.kind === 'voice' ? n.name : `#${n.name}`}</span>
+                    <span className="sub">{marks.join(' · ')}</span>
+                  </span>
+                  {n.kind === 'voice' && (n.inVoice ?? 0) > 0 ? (
+                    <Chip small tone="good">
+                      {n.inVoice} live
+                    </Chip>
+                  ) : (
+                    <span className="nebula-count">
+                      {n.messagesToday !== undefined
+                        ? `${n.messagesToday.toLocaleString('en-US')} today`
+                        : plural(n.messages, 'message')}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        <p className="hint" style={{ margin: '8px 0 0' }}>
+          Counts only. Messages show up in Control only when someone reports them.
+        </p>
+      </div>
+
       <span className="section-label">Actions</span>
       <div className="actions-grid">
+        {c.frozenAt !== undefined && (
+          <button
+            type="button"
+            className="btn btn--action"
+            onClick={() =>
+              setAction({
+                gone: false,
+                spec: c.frozenAt
+                  ? {
+                      title: `Unfreeze ${c.name}`,
+                      intro: 'Members can post and people can join again.',
+                      confirmLabel: 'Unfreeze',
+                      run: (_v, note) => api.freezeConstellation(c.id, false, note)
+                    }
+                  : {
+                      title: `Freeze ${c.name}`,
+                      intro:
+                        'Members can still read everything, but nobody can post, join or talk in voice until you unfreeze it. Nothing is deleted.',
+                      confirmLabel: 'Freeze',
+                      danger: true,
+                      notePlaceholder: 'e.g. "Raid in progress"',
+                      run: (_v, note) => api.freezeConstellation(c.id, true, note)
+                    }
+              })
+            }
+          >
+            {c.frozenAt ? 'Unfreeze' : 'Freeze'}
+          </button>
+        )}
+        {c.invitesOffAt !== undefined && (
+          <button
+            type="button"
+            className="btn btn--action"
+            onClick={() =>
+              setAction({
+                gone: false,
+                spec: c.invitesOffAt
+                  ? {
+                      title: `Turn on invite links for ${c.name}`,
+                      intro: 'Its invite links work again.',
+                      confirmLabel: 'Turn on invite links',
+                      run: (_v, note) => api.constellationInvites(c.id, false, note)
+                    }
+                  : {
+                      title: `Turn off invite links for ${c.name}`,
+                      intro:
+                        'Every invite link stops working and no new ones can be made, so nobody new joins through a link. Members stay.',
+                      confirmLabel: 'Turn off invite links',
+                      run: (_v, note) => api.constellationInvites(c.id, true, note)
+                    }
+              })
+            }
+          >
+            {c.invitesOffAt ? 'Turn on invite links' : 'Turn off invite links'}
+          </button>
+        )}
+        {c.frozenAt !== undefined && (
+          <button
+            type="button"
+            className="btn btn--action"
+            onClick={() =>
+              setAction({
+                gone: false,
+                spec: {
+                  title: `Transfer ${c.name}`,
+                  intro: `A member becomes the Owner${c.owner ? ` instead of @${c.owner.username}` : ''}. The old owner stays a member.`,
+                  confirmLabel: 'Transfer owner',
+                  fields: [
+                    {
+                      name: 'username',
+                      label: 'New owner’s username',
+                      prefix: '@',
+                      maxLength: 40,
+                      hint: 'They have to be a member already.'
+                    }
+                  ],
+                  run: (v, note) =>
+                    api.transferConstellation(c.id, v.username.replace(/^@/, ''), note)
+                }
+              })
+            }
+          >
+            Transfer owner
+          </button>
+        )}
         {c.takenDownAt ? (
           <button
             type="button"
@@ -377,7 +614,7 @@ function Detail({
         )}
         <button
           type="button"
-          className="btn btn--action"
+          className="btn btn--action btn--danger-soft"
           onClick={() =>
             setAction({
               gone: true,

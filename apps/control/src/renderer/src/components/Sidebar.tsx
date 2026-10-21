@@ -8,6 +8,7 @@ export type Page =
   | 'accounts'
   | 'signups'
   | 'reports'
+  | 'inbox'
   | 'errors'
   | 'constellations'
   | 'announcements'
@@ -23,6 +24,7 @@ const ITEMS: {
   { id: 'accounts', label: 'Accounts', icon: ICONS.accounts },
   { id: 'signups', label: 'Sign-ups', icon: ICONS.signups },
   { id: 'reports', label: 'Reports', icon: ICONS.reports },
+  { id: 'inbox', label: 'Inbox', icon: ICONS.inbox },
   { id: 'errors', label: 'Errors', icon: ICONS.errors },
   { id: 'constellations', label: 'Constellations', icon: ICONS.constellations },
   { id: 'announcements', label: 'Announcements', icon: ICONS.announcements },
@@ -48,6 +50,9 @@ export function Sidebar({
   openReports,
   newErrors = 0,
   paused,
+  lockdown = false,
+  inboxUnread = 0,
+  onSearch,
   onSignOut
 }: {
   page: Page
@@ -60,8 +65,15 @@ export function Sidebar({
   newErrors?: number
   /** Glofly is paused (Server → Pause Glofly): a red "Paused" next to Server */
   paused: boolean
+  /** 0.9.0: Lockdown is on (a red "Lockdown" next to Server) */
+  lockdown?: boolean
+  /** 0.9.0: replies waiting in the Inbox */
+  inboxUnread?: number
+  /** 0.9.0: opens the command bar (Ctrl+K) */
+  onSearch: () => void
   onSignOut: () => void
 }): JSX.Element {
+  const mac = window.control.platform === 'darwin'
   const minutes = useMinutesLeft(expiresAt)
   const host = window.control.serverUrl.replace(/^https?:\/\//, '')
   return (
@@ -73,6 +85,16 @@ export function Sidebar({
           <span className="control">Control</span>
         </div>
       </div>
+      <button
+        type="button"
+        className="sidebar-search"
+        onClick={onSearch}
+        aria-keyshortcuts={mac ? 'Meta+K' : 'Control+K'}
+      >
+        <Icon d={ICONS.search} size={16} strokeWidth={2} />
+        <span className="label">Search</span>
+        <kbd>{mac ? '⌘K' : 'Ctrl K'}</kbd>
+      </button>
       <div className="nav">
         {ITEMS.map((item) => (
           <button
@@ -86,6 +108,14 @@ export function Sidebar({
             <span className="label">{item.label}</span>
             {item.id === 'server' && paused && (
               <span className="nav-count nav-count--paused">Paused</span>
+            )}
+            {item.id === 'server' && lockdown && (
+              <span className="nav-count nav-count--paused">Lockdown</span>
+            )}
+            {item.id === 'inbox' && inboxUnread > 0 && (
+              <span className="nav-count" aria-label={`${inboxUnread} unread`}>
+                {inboxUnread > 99 ? '99+' : inboxUnread}
+              </span>
             )}
             {item.id === 'errors' && newErrors > 0 && (
               <span className="nav-count" aria-label={`${newErrors} in the last day`}>

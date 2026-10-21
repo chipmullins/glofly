@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type JSX, type ReactNode } from 'react'
 import { avatarColor, initials } from '../lib/format'
+import { useQuickNotes } from '../lib/quickNotes'
 
 // Small pieces shared by every screen.
 
@@ -84,9 +85,11 @@ export function Dialog({
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
-    const first = ref.current?.querySelector<HTMLElement>(
-      'input:not([type=hidden]), textarea, select, button'
-    )
+    // A field first (quick-note chips sit above the note box), then any button.
+    const first =
+      ref.current?.querySelector<HTMLElement>(
+        'input:not([type=hidden]):not([type=checkbox]), textarea, select'
+      ) ?? ref.current?.querySelector<HTMLElement>('button')
     first?.focus()
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape' && !busyRef.current) closeRef.current()
@@ -149,9 +152,27 @@ export function NoteField({
   placeholder?: string
 }): JSX.Element {
   const id = useId()
+  // 0.9.0: the saved quick notes as one-tap chips (tap again to clear).
+  const quick = useQuickNotes()
+  const picked = value.trim()
   return (
     <div className="field">
       <label htmlFor={id}>Note for the audit log</label>
+      {quick.length > 0 && (
+        <div className="quick-notes" role="group" aria-label="Quick notes">
+          {quick.map((n) => (
+            <button
+              key={n}
+              type="button"
+              className="quick-note"
+              aria-pressed={picked === n}
+              onClick={() => onChange(picked === n ? '' : n)}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
       <textarea
         id={id}
         className="textarea"
@@ -180,7 +201,8 @@ export function TextField({
   hint,
   type = 'text',
   autoComplete = 'off',
-  maxLength
+  maxLength,
+  prefix
 }: {
   label: string
   value: string
@@ -190,23 +212,37 @@ export function TextField({
   type?: string
   autoComplete?: string
   maxLength?: number
+  /** Shown inside the box before the text, e.g. "@" for a username */
+  prefix?: string
 }): JSX.Element {
   const id = useId()
+  const input = (
+    <input
+      id={id}
+      className={prefix ? undefined : 'input'}
+      type={type}
+      value={value}
+      maxLength={maxLength}
+      autoComplete={autoComplete}
+      spellCheck={false}
+      aria-invalid={error ? true : undefined}
+      aria-describedby={error || hint ? `${id}-help` : undefined}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  )
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        className="input"
-        type={type}
-        value={value}
-        maxLength={maxLength}
-        autoComplete={autoComplete}
-        spellCheck={false}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error || hint ? `${id}-help` : undefined}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {prefix ? (
+        <div className="input-wrap" data-state={error ? 'bad' : undefined}>
+          <span className="prefix" aria-hidden="true">
+            {prefix}
+          </span>
+          {input}
+        </div>
+      ) : (
+        input
+      )}
       {(error || hint) && (
         <span id={`${id}-help`} className={error ? 'hint hint--error' : 'hint'}>
           {error ?? hint}

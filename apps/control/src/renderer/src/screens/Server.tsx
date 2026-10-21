@@ -1,11 +1,22 @@
-import { useCallback, useEffect, useState, type JSX } from 'react'
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { api, type ServerInfo } from '../lib/api'
 import { ActionDialog, type ActionSpec } from '../components/ActionDialog'
 import { Chip } from '../components/common'
 import { Icon, ICONS } from '../components/icons'
 import { ago, when } from '../lib/format'
+import type { CommandAction } from '../components/CommandBar'
+import {
+  AlertsCard,
+  EndCallsCard,
+  LockdownCard,
+  PhonesCard,
+  QuickNotesCard,
+  UptimeCard
+} from './ServerCards'
+import { endCallsSpec, lockdownSpec } from './serverSpecs'
 
 // Control → Server (0.4.0): "Pause Glofly" (the kill switch) and "Restart server".
+// 0.9.0: uptime, Lockdown, End all calls, approved phones, alerts and quick notes (ServerCards).
 
 /** "3 days, 4 hours" / "12 minutes". */
 function uptime(seconds: number): string {
@@ -22,16 +33,29 @@ type Restart = { phase: 'waiting' | 'back' | 'slow'; from: string; started: numb
 
 export function Server({
   toast,
-  onPauseChange
+  onPauseChange,
+  onLockdownChange,
+  onDesktopAlertsChange,
+  request,
+  onRequestDone
 }: {
   toast: (message: string, bad?: boolean) => void
   /** The sidebar and the banner follow the switch. */
   onPauseChange: (paused: boolean) => void
+  /** 0.9.0: the sidebar's "Lockdown" follows it too */
+  onLockdownChange: (on: boolean) => void
+  onDesktopAlertsChange: (on: boolean) => void
+  /** 0.9.0: an action picked in the command bar (opens its confirm dialog here) */
+  request: { action: CommandAction; n: number } | null
+  onRequestDone: () => void
 }): JSX.Element {
   const [info, setInfo] = useState<ServerInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [action, setAction] = useState<ActionSpec | null>(null)
   const [restart, setRestart] = useState<Restart>(null)
+  const [version, setVersion] = useState(0)
+  const [pairRequest, setPairRequest] = useState(0)
+  const [testRequest, setTestRequest] = useState(0)
 
   const load = useCallback(
     (): Promise<void> =>
@@ -175,22 +199,101 @@ export function Server({
       }
     }
 
+  // 0.9.0: Lockdown (also the header button and the command bar).
+  const [lockdownOn, setLockdownOn] = useState(false)
+  const onLockdown = useCallback(
+    (on: boolean) => {
+      setLockdownOn(on)
+      onLockdownChange(on)
+    },
+    [onLockdownChange]
+  )
+  const openLockdown = async (): Promise<void> => {
+    const r = await api.lockdown()
+    if (!r.ok) {
+      toast(r.message, true)
+      return
+    }
+    setAction(
+      lockdownSpec({ ...r.data.lockdown, affected: r.data.affected, hours: r.data.hours }, (l) =>
+        onLockdown(l.on)
+      )
+    )
+  }
+
+  // An action picked in the command bar: open its dialog once the page has loaded.
+  const handled = useRef(0)
+  useEffect(() => {
+    if (!request || !info || handled.current === request.n) return
+    handled.current = request.n
+    const action = request.action
+    // (Opened just after this render, once the page has its data.)
+    const timer = setTimeout(() => {
+      onRequestDone()
+      if (action === 'pause') setAction(pauseSpec())
+      else if (action === 'restart') {
+        if (info.canRestart) setAction(restartSpec())
+        else toast('This server can’t restart itself. Restart it where it runs.', true)
+      } else if (action === 'lockdown') void openLockdown()
+      else if (action === 'end-calls') setAction(endCallsSpec())
+      else if (action === 'approve-phone') setPairRequest((n) => n + 1)
+      else if (action === 'test-alert') setTestRequest((n) => n + 1)
+    }, 0)
+    return () => {
+      clearTimeout(timer)
+      handled.current = 0
+    }
+    // The specs are rebuilt each render from `info`; only a new request should open one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request, info])
+
   return (
     <>
       <header className="page-head">
         <div>
           <h1>Server</h1>
-          <p className="sub">The Glofly server itself: pause everyone, or restart it.</p>
+          <p className="sub">
+            {info
+              ? `${paused ? 'Paused' : 'Running'} · up ${uptime(info.uptimeSec)}`
+              : 'The Glofly server itself.'}
+          </p>
         </div>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => void load()}
-          disabled={!!restart && restart.phase !== 'back'}
-        >
-          <Icon d={ICONS.refresh} size={16} strokeWidth={2} />
-          Refresh
-        </button>
+        <div className="tools">
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              void load()
+              setVersion((n) => n + 1)
+            }}
+            disabled={!!restart && restart.phase !== 'back'}
+          >
+            <Icon d={ICONS.refresh} size={16} strokeWidth={2} />
+            Refresh
+          </button>
+          {info && (
+            <>
+              <button
+                type="button"
+                className="btn"
+                disabled={!info.canRestart || (!!restart && restart.phase !== 'back')}
+                onClick={() => setAction(restartSpec())}
+              >
+                Restart server
+              </button>
+              <button type="button" className="btn btn--danger-soft" onClick={() => openLockdown()}>
+                {lockdownOn ? 'Turn off Lockdown' : 'Lockdown'}
+              </button>
+              <button
+                type="button"
+                className={paused ? 'btn btn--primary' : 'btn btn--danger'}
+                onClick={() => setAction(pauseSpec())}
+              >
+                {paused ? 'Unpause Glofly' : 'Pause Glofly'}
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
       {error && !restart && (
@@ -199,6 +302,8 @@ export function Server({
         </div>
       )}
       {!info && !error && <p className="loading">Loading…</p>}
+
+      {info && <UptimeCard version={version} />}
 
       {info && (
         <div className="server-cards">
@@ -343,6 +448,22 @@ export function Server({
               </button>
             </div>
           </section>
+
+          <LockdownCard version={version} onAction={setAction} onLockdownChange={onLockdown} />
+          <EndCallsCard onAction={setAction} />
+          <PhonesCard
+            version={version}
+            onAction={setAction}
+            pairRequest={pairRequest}
+            toast={toast}
+          />
+          <QuickNotesCard />
+          <AlertsCard
+            version={version}
+            testRequest={testRequest}
+            onDesktopChange={onDesktopAlertsChange}
+            toast={toast}
+          />
         </div>
       )}
 
@@ -353,6 +474,7 @@ export function Server({
           onDone={(message) => {
             setAction(null)
             toast(message)
+            setVersion((n) => n + 1)
           }}
         />
       )}

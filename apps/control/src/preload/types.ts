@@ -40,6 +40,12 @@ export type ControlApi = {
   openExternal: (url: string) => Promise<void>
   setScreen: (screen: 'signin' | 'app') => void
   onSignedOut: (callback: (reason: 'expired' | 'ended') => void) => () => void
+  /**
+   * 0.9.0: a native notification for a Control alert (title ≤120, body ≤300 characters, page one
+   * of Control's pages). Clicking it brings Control forward and calls onOpenPage.
+   */
+  notify: (alert: { title: string; body: string; page: string }) => void
+  onOpenPage: (callback: (page: string) => void) => () => void
   /** 0.7.3: Control's own unexpected errors go to the server's error reports */
   reportError: (report: { message: string; stack?: string; where?: string }) => void
 }

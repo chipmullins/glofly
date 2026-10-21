@@ -194,13 +194,22 @@ export type AlertKind = (typeof ALERT_KINDS)[number]
 /** Urgent kinds break through Focus on the phone */
 export const URGENT_ALERTS: AlertKind[] = ['server_down', 'control_signin', 'report_spike']
 export const ALERT_LABELS: Record<AlertKind, { title: string; sub: string }> = {
-  server_down: { title: 'Server down or back', sub: 'After about a minute and a half of no answer' },
-  control_signin: { title: 'Control sign-in somewhere new', sub: 'A new device, a backup code or a wrong code' },
+  server_down: {
+    title: 'Server down or back',
+    sub: 'After about a minute and a half of no answer'
+  },
+  control_signin: {
+    title: 'Control sign-in somewhere new',
+    sub: 'A new device, a backup code or a wrong code'
+  },
   report_spike: { title: 'Report spike', sub: '5 or more reports in 10 minutes' },
   report_new: { title: 'New report', sub: 'One alert per report' },
   delivery_failures: { title: 'Failed emails or pushes', sub: 'Bundled, at most once an hour' },
   account_new: { title: 'New account', sub: 'Sign-ups and accepted invites' },
-  constellation_growing: { title: 'Constellation growing fast', sub: '25 or more joins in an hour' },
+  constellation_growing: {
+    title: 'Constellation growing fast',
+    sub: '25 or more joins in an hour'
+  },
   inbox_reply: { title: 'Inbox reply', sub: 'Someone answered a Glofly Team message' },
   morning_summary: { title: 'Morning summary', sub: '9:00 AM · the last 24 hours in numbers' }
 }
@@ -235,7 +244,12 @@ export type UptimeEvent = {
 }
 export type Uptime = { percent: number; days: UptimeDay[]; events: UptimeEvent[] }
 
-export type InboxPerson = { id: string; username: string; displayName: string; avatarVersion: string | null }
+export type InboxPerson = {
+  id: string
+  username: string
+  displayName: string
+  avatarVersion: string | null
+}
 export type InboxThread = {
   user: InboxPerson
   lastAt: string
@@ -244,7 +258,14 @@ export type InboxThread = {
   unread: number
 }
 export type InboxItem =
-  | { id: string; from: 'team'; body: string; createdAt: string; seen: boolean; allowReply: boolean }
+  | {
+      id: string
+      from: 'team'
+      body: string
+      createdAt: string
+      seen: boolean
+      allowReply: boolean
+    }
   | { id: string; from: 'user'; body: string; createdAt: string; unread: boolean; noticeId: string }
 
 export type AccountRow = {
@@ -577,9 +598,13 @@ export const api = {
   inboxThread: (userId: string) =>
     call<{ user: InboxPerson; items: InboxItem[] }>('GET', `/admin/inbox/${userId}`),
   quickNotes: () => call<{ notes: string[] }>('GET', '/admin/quick-notes'),
-  setQuickNotes: (notes: string[]) => call<{ notes: string[] }>('PUT', '/admin/quick-notes', { notes }),
+  setQuickNotes: (notes: string[]) =>
+    call<{ notes: string[] }>('PUT', '/admin/quick-notes', { notes }),
   lockdown: () =>
-    call<{ lockdown: LockdownState; affected: number; hours: number }>('GET', '/admin/server/lockdown'),
+    call<{ lockdown: LockdownState; affected: number; hours: number }>(
+      'GET',
+      '/admin/server/lockdown'
+    ),
   setLockdown: (on: boolean, note: string) =>
     call<Done & { lockdown: LockdownState }>('PUT', '/admin/server/lockdown', { on, note }),
   endAllCalls: (note: string) =>

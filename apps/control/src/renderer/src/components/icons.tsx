@@ -44,6 +44,19 @@ export const ICONS = {
   server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
   pause: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM10 9v6M14 9v6',
   errors: 'M12 3l9.5 17h-19zM12 10v4M12 17h.01',
+  inbox: 'M4 13l2.5-8h11l2.5 8v6H4zM4 13h5l1 2h4l1-2h5',
+  message: 'M4 5h16v11H8l-4 4z',
+  addFriend:
+    'M15 19c0-2.2-1.8-4-4-4H7c-2.2 0-4 1.8-4 4M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19 8v6M16 11h6',
+  phone: 'M7 3h10v18H7zM11 18h2',
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0',
+  calls: 'M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5c-2-.7-5-.7-7 0V16l-3 1.5z',
+  uptime: 'M3 12h4l3-7 4 14 3-7h4',
+  note: 'M5 4h14v16H5zM9 9h6M9 13h6M9 17h3',
+  text: 'M4 6h16M4 12h16M4 18h10',
+  voice: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3',
+  close: 'M6 6l12 12M18 6L6 18',
+  arrow: 'M9 6l6 6-6 6',
   family:
     'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 20a6 6 0 0 1 12 0M14.5 15.5A5 5 0 0 1 21 20'
 } as const

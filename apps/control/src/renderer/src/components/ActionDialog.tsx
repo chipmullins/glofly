@@ -12,6 +12,8 @@ export type ActionField = {
   type?: string
   maxLength?: number
   initial?: string
+  /** e.g. "@" before a username */
+  prefix?: string
 }
 
 export type ActionSpec = {
@@ -87,6 +89,7 @@ export function ActionDialog({
             type={f.type}
             hint={f.hint}
             maxLength={f.maxLength}
+            prefix={f.prefix}
             value={values[f.name] ?? ''}
             error={errors[f.name]}
             onChange={(v) => setValues((old) => ({ ...old, [f.name]: v }))}
