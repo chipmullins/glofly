@@ -149,3 +149,18 @@
   join/milestone/birthday lines as `eventLine4`), `communityTools.ts` + `automod.ts`/`events.ts`/`inbox.ts` (search,
   events + `events` permission, AutoMod in the nebula send path, Inbox), voice preview pass (`previewToken`,
   subscribe-only). Self-assigned roles are labels only (never permissions). Sounds are ON HOLD (`glofly-on-hold.md`).
+- **0.9.0 (Oct 21, 2026): Control for iPhone + new Control tools** (project doc `glofly-release-0.9.0.md`, migration 0036).
+  `apps/control-mobile` = Glofly Control for iPhone (Expo, iOS only, `com.glofly.control`, TestFlight internal only,
+  JS only). It reuses `apps/control/src/renderer/src/lib/api.ts` (supplies its own `window.control.call`). Phones are
+  approved once from desktop Control at home (`admin/devices.ts`: pair code → the phone's P-256 public key); every phone
+  request is signed (`X-Control-Device/Time/Nonce/Signature`, spec at the top of devices.ts), which lets it past the
+  ADMIN_IPS check (server `admin/network.ts` and Caddy's `not header X-Control-Device *`). Phone sessions: 30 min,
+  bound to that phone (`admin_sessions.device_id`), never to a network; desktop sessions stay IP-bound. Alerts
+  (`admin/alerts.ts`: APNs `sendControlAlert` to topic com.glofly.control, minute sweep, `admin_alerts` table) +
+  the `watchdog` compose service (`src/watchdog.ts`, pushes "server down/back"). Uptime: heartbeat in server_settings,
+  `uptime_events` (gap at startup = outage unless `noteStopping` said restart/update). `admin/ops.ts`: quick notes,
+  Lockdown (state in `admin/lockdown.ts`; `lockedDown(userId)` must be checked by new ways to add friends, join or post
+  in constellations), end all calls, uptime. `admin/inbox.ts`: "Message as Glofly team" = user_notices kind "message"
+  (+ allow_reply), replies POST /notices/:id/reply → team_replies → Control Inbox; apps show "Glofly Team · Official"
+  with a reply box, older apps show it like a warning. Constellations: `frozen_at` (read-only, no joins:
+  `perms.ts frozen`) and `invites_off_at` (links dead, none made). Add a friend works for any account now.
