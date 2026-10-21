@@ -9,6 +9,9 @@ import android.webkit.MimeTypeMap
 import androidx.core.content.IntentCompat
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import kotlin.concurrent.thread
 
 /**
@@ -28,7 +31,9 @@ object ShareIntake {
   /** Bigger than any upload Glofly takes (videos 64 MB); the app says it's too big. */
   private const val MAX_BYTES = 80L * 1024 * 1024
 
-  private val lock = Object()
+  // A lock + condition (Kotlin's Any has no wait/notify).
+  private val lock = ReentrantLock()
+  private val done = lock.newCondition()
   private var pending: Map<String, Any?>? = null
   private var working = 0
   private var lastKey: String? = null
@@ -45,24 +50,24 @@ object ShareIntake {
     // The activity being recreated straight away hands the same share over again: once is enough.
     // (Only for a few seconds: sharing the same link again later, to another chat, still works.)
     val key = listOf(intent.action, intent.type, intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString(), IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)?.toString(), intent.clipData?.toString()).joinToString("|")
-    synchronized(lock) {
+    lock.withLock {
       if (key == lastKey && System.currentTimeMillis() - lastAt < 5_000L) return
       lastKey = key
       lastAt = System.currentTimeMillis()
     }
     val app = context.applicationContext
     val copy = Intent(intent)
-    synchronized(lock) { working++ }
+    lock.withLock { working++ }
     thread(name = "glofly-share") {
       val payload = try {
         read(app, copy)
       } catch (_: Exception) {
         null
       }
-      synchronized(lock) {
+      lock.withLock {
         working--
         if (payload != null) pending = payload
-        lock.notifyAll()
+        done.signalAll()
       }
       if (payload != null) GloflyNativeModule.emitEvent("share", mapOf("id" to payload["id"]))
     }
@@ -70,12 +75,12 @@ object ShareIntake {
 
   /** The waiting share (once), after any copying still going on (up to timeoutMs). */
   fun take(timeoutMs: Long = 30_000): Map<String, Any?>? {
-    synchronized(lock) {
+    lock.withLock {
       val until = System.currentTimeMillis() + timeoutMs
       while (working > 0) {
         val left = until - System.currentTimeMillis()
         if (left <= 0) break
-        lock.wait(left)
+        done.await(left, TimeUnit.MILLISECONDS)
       }
       val p = pending
       pending = null
