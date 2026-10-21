@@ -12,6 +12,8 @@ import { Avatar } from '@/ui/Avatar'
 import { chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { SectionLabel, Text } from '@/ui/kit'
 import { SettingsRow } from '@/ui/SettingsRow'
+import { MOD, showShortcutsInSettings } from '@/lib/keys'
+import { openShortcutSheet } from '@/ui/KeyShortcuts'
 import { refreshSocial, useSocial } from '@/state/social'
 import { setPhonePref, usePhonePrefs } from '@/state/prefs'
 import { ACCENTS, useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
@@ -146,6 +148,8 @@ export default function Settings() {
 
       <SectionLabel>Account</SectionLabel>
       <SettingsRow icon="user" label="Account" detail="Email, password, devices, delete account" onPress={() => router.push('/settings/account')} />
+      {/* 0.8.0: iPad / tablet keyboard shortcuts (also ⌘/ on the keyboard) */}
+      {showShortcutsInSettings() ? <SettingsRow icon="key" label="Keyboard shortcuts" detail={`${MOD}K to find a chat, ${MOD}/ for the full list`} onPress={openShortcutSheet} /> : null}
       <SettingsRow icon="info" label="About Glofly" onPress={() => router.push('/settings/about')} />
       <SettingsRow
         icon="logout"

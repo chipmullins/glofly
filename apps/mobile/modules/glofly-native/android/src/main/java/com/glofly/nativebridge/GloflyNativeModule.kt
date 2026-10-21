@@ -43,7 +43,7 @@ class GloflyNativeModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("GloflyNative")
-    Events("pushToken", "callRing", "hangUp", "pipChanged")
+    Events("pushToken", "callRing", "hangUp", "pipChanged", "share", "keyCommand")
 
     OnCreate {
       instance = WeakReference(this@GloflyNativeModule)
@@ -184,6 +184,27 @@ class GloflyNativeModule : Module() {
     }
     OnUserLeavesActivity {
       appContext.currentActivity?.let { Pip.onUserLeave(it) }
+    }
+
+    // ---- 0.8.0: things shared to Glofly from other apps (ShareIntake.kt) ----
+
+    /** The share waiting for the "Send to…" screen (once), or null. Waits for copying to finish. */
+    AsyncFunction("takePendingShare") { _: String? ->
+      ShareIntake.take()
+    }
+
+    /** Removes a share's copied files once it's sent or cancelled. */
+    Function("discardShare") { id: String ->
+      if (Regex("^[0-9a-fA-F-]{36}$").matches(id)) {
+        java.io.File(java.io.File(context.cacheDir, "glofly-share"), id).deleteRecursively()
+      }
+    }
+
+    // ---- 0.8.0: keyboard shortcuts (tablets, Chromebooks; KeyCommands.kt) ----
+
+    /** The commands the app can do right now (ids like "quick", "find"); others pass through. */
+    Function("setKeyCommands") { ids: List<String> ->
+      KeyCommands.enabled = ids.toSet()
     }
 
     // ---- Voice messages ----

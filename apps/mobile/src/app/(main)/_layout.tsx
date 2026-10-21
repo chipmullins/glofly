@@ -22,6 +22,8 @@ import { HomeDock } from '@/constellations/HomeDock'
 import { InvitePopup } from '@/constellations/InvitePopup'
 import { WelcomeFlowHost } from '@/ui/WelcomeFlow'
 import { startQuietHours } from '@/state/quiet'
+import { startKeyCommands } from '@/lib/keys'
+import { KeyShortcuts } from '@/ui/KeyShortcuts'
 
 // Everything after signing in: the live connection, push notifications and calls start here.
 
@@ -44,6 +46,7 @@ export default function MainLayout() {
     startWatch()
     startUpdates()
     startQuietHours()
+    startKeyCommands()
   }, [])
   return (
     <>
@@ -62,6 +65,8 @@ export default function MainLayout() {
               <Stack.Screen name="call" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
               <Stack.Screen name="live/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
               <Stack.Screen name="year" options={{ animation: 'fade', contentStyle: { backgroundColor: '#1A1030' } }} />
+              {/* 0.8.0: "Send to…" for things shared from other apps */}
+              <Stack.Screen name="share" options={{ presentation: wide ? 'formSheet' : 'modal', animation: 'slide_from_bottom' }} />
               {/* Glofly 2.0: over Glofly home (which stays drawn underneath for the trip back). */}
               <Stack.Screen name="constellations" options={{ presentation: 'transparentModal', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
             </Stack>
@@ -76,6 +81,8 @@ export default function MainLayout() {
       {/* 0.7.5: a brand-new account's three welcome steps, over everything but calls */}
       <WelcomeFlowHost />
       <TeamNotice />
+      {/* 0.8.0: keyboard shortcuts (iPad, tablets) and the shortcut sheet */}
+      <KeyShortcuts />
       {/* Last, so the floating call window covers everything. */}
       <CallPip />
     </>

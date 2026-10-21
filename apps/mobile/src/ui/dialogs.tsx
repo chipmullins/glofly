@@ -112,6 +112,21 @@ export function chooseFrom(items: SheetItem[], title?: string, header?: ReactNod
   return new Promise((resolve) => push({ kind: 'sheet', items, title, header, resolve }))
 }
 
+/** 0.8.0 Esc on a keyboard: closes the dialog or sheet on top, as if dismissed. */
+export function dismissTopOverlay(): boolean {
+  const top = useOverlays.getState().stack.filter((o) => !o.closing).at(-1)
+  if (!top) return false
+  pop()
+  if (top.kind === 'confirm') {
+    if (top.options.cancelLabel === null) top.resolve(true)
+    else top.resolve(false)
+  } else top.resolve(null)
+  return true
+}
+
+/** A dialog or sheet of ours is open. */
+export const useOverlayOpen = (): boolean => useOverlays((s) => s.stack.some((o) => !o.closing))
+
 export function DialogHost() {
   const stack = useOverlays((s) => s.stack)
   const open = stack.filter((o) => !o.closing)

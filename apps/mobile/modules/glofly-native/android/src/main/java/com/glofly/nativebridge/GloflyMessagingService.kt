@@ -27,6 +27,9 @@ class GloflyMessagingService : FirebaseMessagingService() {
         val title = if (isGroup) d["chatTitle"].orEmpty() else d["senderName"].orEmpty()
         val preview = d["preview"] != "0"
         PushStore.saveTitle(context, conversationId, title, isGroup)
+        // Its notification went away some other way (tapped, cleared with others): count afresh.
+        if (!Notifier.isShowing(context, conversationId)) PushStore.resetUnread(context, conversationId)
+        PushStore.addUnread(context, conversationId)
         val at = d["sentAt"]?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: System.currentTimeMillis()
         val lines = PushStore.addLine(
           context,

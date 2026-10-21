@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, View, type View as RNView } from 'react-native'
-import { router } from 'expo-router'
+import { router, useIsFocused } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import * as Clipboard from 'expo-clipboard'
@@ -23,6 +23,7 @@ import { RecordButton, VoiceRecorderBar, useVoice } from '@/chat/voice'
 import { PhotoViewer, type ViewerState } from '@/chat/PhotoViewer'
 import { ChatFireflies, GAMES, GifSheet, PollSheet } from '@/chat/Extras'
 import { SearchPanel } from '@/chat/SearchPanel'
+import { useKeyCommand } from '@/lib/keys'
 import { cxSay, loadDetail, refreshCardsSoon, refreshNews } from '@/state/constellations'
 import { chooseFrom, confirm } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
@@ -124,6 +125,37 @@ export function NebulaChat({
 
   const nameOf = (uid: string) => (uid === meId ? 'You' : (people[uid]?.displayName ?? 'Someone'))
   const typingWho = typing ? Object.entries(typing).filter(([, until]) => until > Date.now()).map(([uid]) => uid) : []
+
+  // 0.8.0 keyboard shortcuts: ↑ in an empty box edits your last message, ⌘F searches the nebula,
+  // Esc cancels a reply or edit (⌥↑ / ⌥↓ between nebulas: lib/nebulaKeys.ts).
+  const focused = useIsFocused()
+  const [boxKeys, setBoxKeys] = useState({ focused: false, empty: true })
+  const lastEditable = useMemo(
+    () => [...(messages?.list ?? [])].reverse().find((m) => m.senderId === meId && !m.deleted && !m.event && !!m.body && !special(m) && !isLocal(m)) ?? null,
+    [messages?.list, meId],
+  )
+  useKeyCommand(
+    'editLast',
+    () => {
+      if (!lastEditable || !composer.current?.emptyAndFocused()) return
+      setReply(null)
+      setEditing(lastEditable)
+      composer.current?.setText(lastEditable.body)
+      composer.current?.focus()
+    },
+    focused && canAct && !editing && boxKeys.focused && boxKeys.empty && !!lastEditable,
+  )
+  useKeyCommand('find', () => setSearching(true), focused && !searching)
+  useKeyCommand(
+    'escape',
+    () => {
+      if (editing) composer.current?.clear()
+      setReply(null)
+      setEditing(null)
+    },
+    focused && !searching && !!(reply || editing),
+  )
+  useKeyCommand('escape', () => setSearching(false), focused && searching)
 
   function onSend(text: string) {
     if (editing) {
@@ -558,6 +590,7 @@ export function NebulaChat({
             </>
           }
           onSendLater={uploads.items.length ? undefined : (t) => setLaterText(t)}
+          onKeyState={setBoxKeys}
           canSendEmpty={uploads.items.length > 0}
           voice={voice.recording ? <VoiceRecorderBar voice={voice} /> : undefined}
           recordButton={<RecordButton voice={voice} />}

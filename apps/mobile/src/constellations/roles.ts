@@ -120,3 +120,13 @@ export function sectionsOf(c: ConstellationDetail): { id: string; name: string |
       .filter((s) => s.nebulas.length > 0),
   ]
 }
+
+/** 0.8.0 ⌥↑ / ⌥↓: the nebula before or after this one, in sidebar order (wrapping round). */
+export function stepNebula(c: ConstellationDetail, currentId: string | null | undefined, dir: -1 | 1): Nebula | null {
+  const order = sectionsOf(c).flatMap((s) => s.nebulas)
+  if (!order.length) return null
+  const at = order.findIndex((n) => n.id === currentId)
+  if (at < 0) return order[dir > 0 ? 0 : order.length - 1]
+  if (order.length === 1) return null
+  return order[(at + dir + order.length) % order.length]
+}

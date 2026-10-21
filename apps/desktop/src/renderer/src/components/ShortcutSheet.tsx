@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { shortcutSections } from '@glofly/shared'
 import type { OverlaySettings } from '../../../preload/api-types'
 import { getCallPrefs } from '../lib/callPrefs'
 import { isMac, isWeb } from '../lib/platform'
@@ -7,7 +8,7 @@ import './QuickSwitcher.css'
 
 // 0.7.5 Ctrl+/ (⌘/ on a Mac): every keyboard shortcut Glofly really has, in one sheet. Only
 // shortcuts that exist are listed; the push-to-talk and game overlay keys show the ones you
-// picked in Settings.
+// picked in Settings. The list itself is shared with the tablets (@glofly/shared shortcuts.ts).
 
 type Line = { what: string; keys: string[][] }
 type Section = { title: string; lines: Line[] }
@@ -31,44 +32,7 @@ export default function ShortcutSheet({ onClose }: { onClose: () => void }): Rea
     }
   }, [])
 
-  const sections: Section[] = [
-    {
-      title: 'Anywhere',
-      lines: [
-        { what: 'Jump to a chat, friend, constellation or setting', keys: [[ctrl, 'K']] },
-        { what: 'Show keyboard shortcuts', keys: [[ctrl, '/']] },
-        { what: 'Close a menu, dialog or panel', keys: [['Esc']] }
-      ]
-    },
-    {
-      title: 'In a chat',
-      lines: [
-        { what: 'Send', keys: [['Enter']] },
-        { what: 'New line', keys: [['Shift', 'Enter']] },
-        { what: 'Edit your last message (message box empty)', keys: [['↑']] },
-        { what: 'Cancel a reply', keys: [['Esc']] },
-        { what: 'Pick someone to @mention', keys: [['↑'], ['↓'], ['Enter']] },
-        { what: 'Search this chat', keys: [[ctrl, 'F']] },
-        { what: 'Jump to the newest message (message list focused)', keys: [['End']] }
-      ]
-    },
-    {
-      title: 'Photo viewer',
-      lines: [
-        { what: 'Previous or next photo', keys: [['←'], ['→']] },
-        { what: 'Zoom in, zoom out, fit', keys: [['+'], ['−'], ['0']] },
-        { what: 'Close', keys: [['Esc']] }
-      ]
-    },
-    {
-      title: 'Watch Together (full screen)',
-      lines: [
-        { what: 'Play or pause', keys: [['Space'], ['K']] },
-        { what: 'Back 10 seconds', keys: [['←'], ['J']] },
-        { what: 'Forward 10 seconds', keys: [['→'], ['L']] }
-      ]
-    }
-  ]
+  const sections: Section[] = shortcutSections('desktop', { mod: ctrl, alt: isMac ? '⌥' : 'Alt' })
   const calls: Line[] = []
   if (ptt.inputMode === 'ptt') calls.push({ what: 'Push to talk (hold)', keys: [[ptt.pttLabel]] })
   if (overlay) {

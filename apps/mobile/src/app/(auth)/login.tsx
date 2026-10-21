@@ -10,11 +10,14 @@ import { confirm } from '@/ui/dialogs'
 import { useTheme } from '@/ui/theme'
 import { useSession } from '@/state/session'
 import { longDate } from '@/lib/format'
+import { useShareInbox } from '@/share/inbox'
 
 export default function Login() {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const note = useSession((s) => s.signedOutNote)
+  // 0.8.0: something shared to Glofly waits for you to sign in
+  const sharing = useShareInbox((s) => !!s.item)
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [keep, setKeep] = useState(true)
@@ -79,6 +82,7 @@ export default function Login() {
             </Text>
           </View>
           {error ? <Notice>{error}</Notice> : note ? <Notice tone="info">{note}</Notice> : null}
+          {sharing && !error ? <Notice tone="info">Sign in to send what you shared. You'll pick the chat next.</Notice> : null}
           <Field
             label="Username or email"
             value={identifier}

@@ -17,6 +17,9 @@ class ActionReceiver : BroadcastReceiver() {
     const val READ = "com.glofly.action.READ"
     const val DECLINE = "com.glofly.action.DECLINE"
     const val HANG_UP = "com.glofly.action.HANG_UP"
+    /** 0.8.0: a chat's notification (or the whole stack) was swiped away. */
+    const val DISMISSED = "com.glofly.action.DISMISSED"
+    const val DISMISSED_ALL = "com.glofly.action.DISMISSED_ALL"
   }
 
   override fun onReceive(context: Context, intent: Intent) {
@@ -37,6 +40,16 @@ class ActionReceiver : BroadcastReceiver() {
   }
 
   private fun handle(context: Context, intent: Intent) {
+    when (intent.action) {
+      DISMISSED -> {
+        intent.getStringExtra("conversationId")?.let { Notifier.chatDismissed(context, it) }
+        return
+      }
+      DISMISSED_ALL -> {
+        PushStore.resetAllUnread(context)
+        return
+      }
+    }
     val config = PushStore.config(context) ?: return
     when (intent.action) {
       REPLY -> {
@@ -47,7 +60,9 @@ class ActionReceiver : BroadcastReceiver() {
         val status = Http.send(config, "POST", "/conversations/$conversationId/messages", body)
         val (title, isGroup) = PushStore.title(context, conversationId)
         if (status in 200..299) {
-          // Show the reply in the notification (the server marks the chat read when you send).
+          // Show the reply in the notification (the server marks the chat read when you send, so
+          // its count starts again).
+          PushStore.resetUnread(context, conversationId)
           val lines = PushStore.addLine(context, conversationId, PushStore.Line(config.meId, "You", null, text, System.currentTimeMillis()))
           Notifier.showChat(context, conversationId, title, isGroup, lines, alert = false, previews = true)
         } else {

@@ -37,6 +37,7 @@ import { placePaths } from '@/constellations/nav'
 import { ConstellationIcon, N } from '@/constellations/ui'
 import { isWideNow } from '@/lib/layout'
 import { PHONE_SETTINGS, type PhoneSettingsPlace } from '@/lib/quickPlaces'
+import { useSearchFocus } from '@/lib/keys'
 
 type Item =
   | { type: 'label'; key: string; label: string }
@@ -46,16 +47,25 @@ type Item =
   | { type: 'cx'; key: string; card: ConstellationCard; nebula: Nebula | null }
   | { type: 'setting'; key: string; place: PhoneSettingsPlace }
 
-export function SearchPill({ value, onChange, placeholder }: { value: string; onChange: (s: string) => void; placeholder: string }) {
+export function SearchPill({ value, onChange, placeholder, focusOnKey }: { value: string; onChange: (s: string) => void; placeholder: string; focusOnKey?: boolean }) {
   const { c } = useTheme()
   const user = useSession((s) => s.user)
   const myStatus = useStore((s) => s.myStatus)
+  // 0.8.0: ⌘K / ⌘F on a keyboard puts the cursor here (lib/keys.ts requestSearchFocus).
+  const input = useRef<TextInput>(null)
+  const focusAt = useSearchFocus((s) => s.at)
+  useEffect(() => {
+    if (!focusOnKey || !focusAt) return
+    const t = setTimeout(() => input.current?.focus(), 120)
+    return () => clearTimeout(t)
+  }, [focusAt, focusOnKey])
   return (
     <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 4, paddingRight: 6, borderRadius: 28, backgroundColor: c.surface }}>
       <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
         {value ? <Icon name="search" size={22} color={c.muted} /> : <Image source={require('../../../../assets/firefly.png')} style={{ width: 26, height: 19 }} contentFit="contain" />}
       </View>
       <TextInput
+        ref={input}
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
@@ -220,7 +230,7 @@ export default function Chats() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 }}>
-        <SearchPill value={query} onChange={setQuery} placeholder="Find a friend or chat" />
+        <SearchPill value={query} onChange={setQuery} placeholder="Find a friend or chat" focusOnKey />
       </View>
       {!query ? <Banners /> : null}
       {!query ? <SocialStrip /> : null}

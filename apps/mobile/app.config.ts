@@ -32,7 +32,9 @@ const updateChannel = variant === 'production' ? 'production' : 'preview'
 // 2026-10-14.1: Glofly 0.4.0, the iPad version (ios.supportsTablet below is a native setting).
 // 2026-10-16.1: Glofly 0.5.0, Watch Together (react-native-webview).
 // 2026-10-17.1: Glofly 0.5.0, videos in chats (expo-video), after builds of 16.1 may already exist.
-const RUNTIME_VERSION = '2026-10-17.1'
+// 2026-10-20.1: Glofly 0.8.0: grouped notifications (Android), Share to Glofly (share intent + the
+//   iPhone Share Extension and App Group), keyboard shortcuts on iPad / tablets (glofly-native).
+const RUNTIME_VERSION = '2026-10-20.1'
 
 const config: ExpoConfig = {
   name: 'Glofly',
@@ -158,12 +160,16 @@ const config: ExpoConfig = {
         cameraPermission: 'Glofly uses the camera for video calls and the photos and videos you take.',
       },
     ],
-    // Videos in chats (0.5.0).
-    ['expo-video', { supportsBackgroundPlayback: false, supportsPictureInPicture: false }],
+    // Videos in chats (0.5.0). No options on purpose (0.8.0): `false` for these made the plugin
+    // remove iOS's "audio" background mode (calls going on with the screen locked) and Android's
+    // supportsPictureInPicture (the floating call window) that the settings above add.
+    'expo-video',
     ['expo-media-library', { savePhotosPermission: 'Glofly saves photos from chats when you ask it to.', granularPermissions: ['photo'] }],
     '@livekit/react-native-expo-plugin',
     // Calls shrink into a floating window when you leave Glofly (Android; iPhone needs nothing extra).
     './plugins/with-picture-in-picture.js',
+    // 0.8.0: Share to Glofly (Android share targets; the iPhone Share Extension + App Group).
+    './plugins/with-share-to-glofly.js',
     [
       '@config-plugins/react-native-webrtc',
       {

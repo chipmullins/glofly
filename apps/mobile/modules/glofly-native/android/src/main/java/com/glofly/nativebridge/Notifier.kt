@@ -15,6 +15,7 @@ import android.graphics.Rect
 import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
@@ -43,6 +44,10 @@ object Notifier {
   fun callId(callId: String) = 2_000_000 + abs(callId.hashCode() % 1_000_000)
   const val FRIENDS_ID = 3_000_001
   const val ONGOING_ID = 3_000_002
+  /** 0.8.0: the summary that stacks several chats' notifications together. */
+  const val MESSAGES_SUMMARY_ID = 3_000_003
+  const val GROUP_MESSAGES = "com.glofly.MESSAGES"
+  private const val EXTRA_CONVERSATION = "glofly.conversationId"
 
   private fun raw(context: Context, name: String): Uri =
     Uri.parse("${ContentResolver.SCHEME_ANDROID_RESOURCE}://${context.packageName}/raw/$name")
@@ -241,12 +246,104 @@ object Notifier {
       ).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ).setShowsUserInterface(false).build(),
     )
     if (c?.vibrate == false) builder.setVibrate(longArrayOf(0))
+    // 0.8.0 grouped notifications: every chat is one conversation notification (new messages are
+    // added to it, the last few kept), and several chats stack under one summary.
+    val unread = PushStore.unread(context, conversationId)
+    if (unread > 0) builder.setNumber(unread)
+    // "Maya · 5 new messages": the count in the notification's header line.
+    if (unread > 1) builder.setSubText("$unread new messages")
+    builder
+      .setGroup(GROUP_MESSAGES)
+      .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+      .addExtras(Bundle().apply { putString(EXTRA_CONVERSATION, conversationId) })
+      // Swiped away: its count starts again (the history stays for context).
+      .setDeleteIntent(action(context, ActionReceiver.DISMISSED, mapOf("conversationId" to conversationId), id + 700_000))
     notify(context, id, builder)
+    showMessagesSummary(context, added = conversationId)
   }
 
   fun cancelChat(context: Context, conversationId: String) {
     NotificationManagerCompat.from(context).cancel(chatId(conversationId))
     PushStore.clearLines(context, conversationId)
+    showMessagesSummary(context, removed = conversationId)
+  }
+
+  /** A chat's notification was swiped away (not read): only its count is reset. */
+  fun chatDismissed(context: Context, conversationId: String) {
+    PushStore.resetUnread(context, conversationId)
+    showMessagesSummary(context, removed = conversationId)
+  }
+
+  /** This chat's notification is showing now. */
+  fun isShowing(context: Context, conversationId: String): Boolean {
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    return try {
+      nm.activeNotifications.any { it.id == chatId(conversationId) }
+    } catch (_: Exception) {
+      true
+    }
+  }
+
+  /** The chats with a notification showing right now (newest first). */
+  private fun shownChats(context: Context): List<String> {
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    return try {
+      nm.activeNotifications
+        .filter { it.notification.group == GROUP_MESSAGES && it.id != MESSAGES_SUMMARY_ID }
+        .sortedByDescending { it.postTime }
+        .mapNotNull { it.notification.extras?.getString(EXTRA_CONVERSATION) }
+        .distinct()
+    } catch (_: Exception) {
+      emptyList()
+    }
+  }
+
+  /**
+   * The group summary: "5 new messages" over "Maya · 3 new messages", "Weekend crew · 2 new
+   * messages". Android shows it once two or more chats have notifications (one chat on its own
+   * shows just that chat). Silent: only the chats themselves make a sound.
+   */
+  fun showMessagesSummary(context: Context, added: String? = null, removed: String? = null) {
+    val chats = (listOfNotNull(added) + shownChats(context)).distinct().filter { it != removed }
+    val manager = NotificationManagerCompat.from(context)
+    if (chats.isEmpty()) {
+      manager.cancel(MESSAGES_SUMMARY_ID)
+      return
+    }
+    val inbox = NotificationCompat.InboxStyle()
+    var total = 0
+    for (id in chats.take(6)) {
+      val (title, _) = PushStore.title(context, id)
+      val n = PushStore.unread(context, id)
+      total += n
+      val name = title.ifEmpty { "Glofly" }
+      inbox.addLine(if (n > 1) "$name · $n new messages" else if (n == 1) "$name · 1 new message" else name)
+    }
+    for (id in chats.drop(6)) total += PushStore.unread(context, id)
+    val headline = when {
+      total > 1 -> "$total new messages"
+      total == 1 -> "1 new message"
+      else -> "New messages"
+    }
+    inbox.setBigContentTitle(headline)
+    inbox.setSummaryText(if (chats.size == 1) "1 chat" else "${chats.size} chats")
+    val b = NotificationCompat.Builder(context, messageChannel(context))
+      .setSmallIcon(R.drawable.glofly_notification)
+      .setColor(ACCENT)
+      .setContentTitle(headline)
+      .setContentText(chats.joinToString(", ") { PushStore.title(context, it).first.ifEmpty { "Glofly" } })
+      .setStyle(inbox)
+      .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+      .setGroup(GROUP_MESSAGES)
+      .setGroupSummary(true)
+      .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+      .setOnlyAlertOnce(true)
+      .setSilent(true)
+      .setAutoCancel(true)
+      .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+      .setContentIntent(openLink(context, "glofly://chats", MESSAGES_SUMMARY_ID))
+      .setDeleteIntent(action(context, ActionReceiver.DISMISSED_ALL, emptyMap(), MESSAGES_SUMMARY_ID + 1))
+    notify(context, MESSAGES_SUMMARY_ID, b)
   }
 
   fun showFriendRequest(context: Context, userId: String, name: String, avatar: String?) {

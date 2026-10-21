@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { Platform, Pressable, ScrollView, TextInput, View, type NativeSyntheticEvent, type TextInputSelectionChangeEventData } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MESSAGE_MAX, mentionQuery, mentionSuggestions, quoteSummary, type Message, type PublicUser } from '@glofly/shared'
@@ -11,7 +11,13 @@ import { font, useTheme } from '@/ui/theme'
 // The message box: reply / edit bar, @mention suggestions, + (photos and files), emoji, and
 // Send (which becomes the voice-message mic while the box is empty).
 
-export type ComposerHandle = { focus: () => void; setText: (t: string) => void; clear: () => void }
+export type ComposerHandle = {
+  focus: () => void
+  setText: (t: string) => void
+  clear: () => void
+  /** 0.8.0 keyboard ↑: the box is focused and empty (then ↑ edits your last message). */
+  emptyAndFocused: () => boolean
+}
 
 type Props = {
   placeholder: string
@@ -33,10 +39,12 @@ type Props = {
   canSendEmpty?: boolean
   /** 0.7.3: hold Send to send the text later (the box keeps it until it's scheduled) */
   onSendLater?: (text: string) => void
+  /** 0.8.0 keyboard shortcuts: the box gained or lost focus, or became empty / not empty */
+  onKeyState?: (s: { focused: boolean; empty: boolean }) => void
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot, canSendEmpty, onSendLater },
+  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot, canSendEmpty, onSendLater, onKeyState },
   ref,
 ) {
   const { c } = useTheme()
@@ -50,6 +58,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     setForced(s)
   }
   const input = useRef<TextInput>(null)
+  const [focused, setFocused] = useState(false)
+  const empty = text.length === 0
+  const keyState = useRef({ focused: false, empty: true })
+  useEffect(() => {
+    if (keyState.current.focused === focused && keyState.current.empty === empty) return
+    keyState.current = { focused, empty }
+    onKeyState?.({ focused, empty })
+  }, [focused, empty, onKeyState])
 
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
@@ -61,6 +77,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       setText('')
       setSelection({ start: 0, end: 0 })
     },
+    emptyAndFocused: () => keyState.current.focused && keyState.current.empty,
   }))
 
   const query = mentionable ? mentionQuery(text, selection.start) : null
@@ -165,6 +182,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 setSelectionState(e.nativeEvent.selection)
                 if (forced) setForced(undefined)
               }}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
               placeholder={placeholder}
               placeholderTextColor={c.faint}
               accessibilityLabel={placeholder}

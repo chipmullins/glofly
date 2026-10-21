@@ -89,7 +89,16 @@ final class GloflyNotifications: NSObject, UNUserNotificationCenterDelegate {
     let answer = UNNotificationAction(identifier: Self.answerAction, title: "Answer", options: [.foreground])
     let decline = UNNotificationAction(identifier: Self.declineAction, title: "Decline", options: [.destructive])
     center.setNotificationCategories([
-      UNNotificationCategory(identifier: Self.messageCategory, actions: [reply, read], intentIdentifiers: [], options: []),
+      // 0.8.0: a chat's notifications stack (the server gives each chat its own thread-id and its
+      // name as summary-arg): "3 new messages from Maya". Hidden previews say how many, not what.
+      UNNotificationCategory(
+        identifier: Self.messageCategory,
+        actions: [reply, read],
+        intentIdentifiers: [],
+        hiddenPreviewsBodyPlaceholder: "%u new messages",
+        categorySummaryFormat: "%u new messages from %@",
+        options: []
+      ),
       UNNotificationCategory(identifier: Self.callCategory, actions: [answer, decline], intentIdentifiers: [], options: []),
     ])
   }

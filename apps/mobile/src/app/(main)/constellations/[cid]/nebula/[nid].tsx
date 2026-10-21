@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { View } from 'react-native'
-import { router, useLocalSearchParams } from 'expo-router'
+import { router, useIsFocused, useLocalSearchParams } from 'expo-router'
 import { loadDetail, onRemovedFrom, useCx } from '@/state/constellations'
 import { useWide } from '@/lib/layout'
 import { Spinner, Text } from '@/ui/kit'
@@ -8,6 +8,8 @@ import { NebulaChat } from '@/constellations/NebulaChat'
 import { VoiceLobby } from '@/constellations/Voice'
 import { N, NightButton, NightCenter } from '@/constellations/ui'
 import { rememberCxPlace } from '@/constellations/nav'
+import { stepNebula } from '@/constellations/roles'
+import { useKeyCommand } from '@/lib/keys'
 
 // One nebula on a phone: a text nebula's chat, or a voice nebula's lobby. On iPad the nebula opens
 // inside the constellation's layout instead.
@@ -36,6 +38,14 @@ export default function NebulaScreen() {
   useEffect(() => {
     if (wide && c) router.replace({ pathname: '/constellations/[cid]', params: { cid, nebula: nid } })
   }, [wide, c, cid, nid])
+  // 0.8.0 keyboard: ⌥↑ / ⌥↓ (Alt on Android) to the previous / next nebula.
+  const focused = useIsFocused()
+  const step = (dir: -1 | 1) => {
+    const next = c ? stepNebula(c, nid, dir) : null
+    if (next) router.replace({ pathname: '/constellations/[cid]/nebula/[nid]', params: { cid, nid: next.id } })
+  }
+  useKeyCommand('prevNebula', () => step(-1), focused && !!c && !wide)
+  useKeyCommand('nextNebula', () => step(1), focused && !!c && !wide)
 
   if (!c || !n) {
     const gone = !!c && !n

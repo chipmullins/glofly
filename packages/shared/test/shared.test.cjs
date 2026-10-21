@@ -476,3 +476,18 @@ test('0.7.5 constellation community: milestones, join lines, accents, playing ti
   assert.equal(s.gameInitials('Rocket League'), 'RL')
   assert.equal(s.gameInitials('Valorant'), 'VAL')
 })
+
+test('keyboard shortcuts: one list, per app', () => {
+  const desk = s.shortcutSections('desktop', { mod: 'Ctrl', alt: 'Alt' })
+  const tab = s.shortcutSections('tablet', { mod: '⌘', alt: '⌥' })
+  const lines = (secs) => secs.flatMap((x) => x.lines.map((l) => l.what))
+  assert.ok(lines(desk).includes('Send'))
+  assert.ok(!lines(tab).includes('Send'))
+  assert.ok(lines(tab).includes('New message'))
+  assert.ok(!lines(desk).includes('New message'))
+  assert.deepEqual(tab[0].lines[0].keys, [['⌘', 'K']])
+  assert.deepEqual(desk[0].lines[0].keys, [['Ctrl', 'K']])
+  assert.ok(!tab.some((x) => x.title === 'Photo viewer'))
+  const neb = tab.find((x) => x.title === 'Constellations')
+  assert.deepEqual(neb.lines[0].keys, [['⌥', '↑'], ['⌥', '↓']])
+})

@@ -17,6 +17,8 @@ on:
     # Only what changes the native iPhone app (JavaScript-only changes don't need a compile).
     paths:
       - 'apps/mobile/modules/glofly-native/**'
+      # Config plugins (0.8.0: the Share Extension's Swift and target live here).
+      - 'apps/mobile/plugins/**'
       - 'apps/mobile/app.config.ts'
       - 'apps/mobile/package.json'
       # Not package-lock.json: every desktop release bumps the version in it, which set these

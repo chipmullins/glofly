@@ -1,9 +1,9 @@
 import { createSign } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { phoneMessageSound, phoneRingtone } from "@glofly/shared";
 import { redis } from "../redis";
 import { webEnabled } from "../web/session";
 import { sendWebPush } from "./web";
+import { apnsFor, type DeviceSounds } from "./apnsPayload";
 
 // Sends push messages to phones through Firebase Cloud Messaging (the HTTP v1 API).
 //
@@ -99,62 +99,9 @@ async function countFailure() {
   }
 }
 
-/** The APNs part of a push for an iPhone, built from the same data the Android app gets. */
-/** The sounds picked on a phone (push_devices; null = defaults). */
-export type DeviceSounds = { messageSound?: string | null; ringtone?: string | null };
-
-export function apnsFor(data: PushData, ttlSeconds: number, sounds: DeviceSounds = {}): Record<string, unknown> {
-  // The .caf files are in the iPhone app (modules/glofly-native/ios/sounds); unknown ids get the defaults.
-  const messageSound = `${phoneMessageSound(sounds.messageSound).native}.caf`;
-  const ringSound = `${phoneRingtone(sounds.ringtone).native}.caf`;
-  const expiration = String(Math.floor(Date.now() / 1000) + Math.max(0, Math.round(ttlSeconds)));
-  // Clearing a notification (read elsewhere, call answered or over): a silent background push the
-  // app handles if iOS wakes it (best effort; iOS can delay or skip these).
-  const silent = data.type === "clear" || data.type === "call_stop" || (data.type === "call_missed" && data.dnd === "1");
-  if (silent) {
-    return {
-      headers: { "apns-push-type": "background", "apns-priority": "5", "apns-expiration": expiration },
-      payload: { aps: { "content-available": 1 } },
-    };
-  }
-  const headers: Record<string, string> = { "apns-push-type": "alert", "apns-priority": "10", "apns-expiration": expiration };
-  const aps: Record<string, unknown> = { "mutable-content": 0 };
-  if (data.type === "message") {
-    aps.alert = { title: data.title || data.senderName || "Glofly", body: data.text || "New message" };
-    // 0.7.0: nebula alerts are grouped by constellation ("thread"); chats by chat.
-    aps["thread-id"] = data.thread || data.conversationId;
-    aps.category = "GLOFLY_MESSAGE";
-    aps.sound = messageSound;
-  } else if (data.type === "friend_request") {
-    aps.alert = { title: data.title || "Glofly", body: data.text || "sent you a friend request" };
-    aps["thread-id"] = "friends";
-    aps.sound = messageSound;
-  } else if (data.type === "friend_online" || data.type === "friend_joined") {
-    // 0.3.0: "Maya is online" / "Maya joined Glofly from your invite".
-    aps.alert = { title: data.title || "Glofly", body: data.text || "" };
-    aps["thread-id"] = data.type === "friend_online" ? "online" : "friends";
-    aps.sound = messageSound;
-  } else if (data.type === "call_ring") {
-    const kind = data.video === "1" ? "video" : "voice";
-    aps.alert = {
-      title: data.chatTitle ? `${data.callerName} · ${data.chatTitle}` : data.callerName || "Glofly",
-      body: data.group === "1" ? `Incoming group ${kind} call · Tap to answer` : `Incoming ${kind} call · Tap to answer`,
-    };
-    aps["interruption-level"] = "time-sensitive";
-    aps.category = "GLOFLY_CALL";
-    if (data.dnd !== "1") aps.sound = ringSound;
-    // The missed-call notification later replaces this one.
-    headers["apns-collapse-id"] = data.callId;
-  } else if (data.type === "call_missed") {
-    aps.alert = { title: data.title || "Missed call", body: data.text || "Missed call" };
-    aps["thread-id"] = data.conversationId;
-    aps.sound = messageSound;
-    headers["apns-collapse-id"] = data.callId;
-  } else {
-    aps.alert = { title: data.title || "Glofly", body: data.text || "" };
-  }
-  return { headers, payload: { aps } };
-}
+// The APNs part of an iPhone push (and the sounds picked on a phone) live in apnsPayload.ts, so
+// they can be tested without Redis or Firebase.
+export { apnsFor, type DeviceSounds } from "./apnsPayload";
 
 /**
  * Sends one data message to one phone. `ttlSeconds`: how long FCM keeps trying if the phone is

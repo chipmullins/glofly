@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { router, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router'
 import { isWideNow, useWide } from '@/lib/layout'
 import { placeOfChat } from '@/state/constellations'
 import { flyIn } from '@/constellations/transition'
@@ -39,6 +39,8 @@ import { tap } from '@/lib/haptics'
 import { DayPill, useDayPill } from '@/chat/DayPill'
 import { ReconnectingStrip } from '@/ui/Reconnecting'
 import { chatOpened } from '@/push'
+import { useKeyCommand } from '@/lib/keys'
+
 import { attachMenu, UploadTray, useUploads } from '@/chat/uploads'
 import { VoiceRecorderBar, RecordButton, useVoice } from '@/chat/voice'
 import { PhotoViewer, type ViewerState } from '@/chat/PhotoViewer'
@@ -217,6 +219,34 @@ export default function ChatScreen() {
   const memberIds = useMemo(() => [meId, ...members.map((p) => p.id)], [meId, members])
   const canMessage = !!chat?.canMessage
   const nameOf = (uid: string) => (uid === meId ? 'You' : (people[uid]?.displayName ?? 'Someone'))
+
+  // 0.8.0 keyboard shortcuts (iPad, tablets): ↑ in an empty message box edits your last message,
+  // ⌘F searches this chat, Esc cancels a reply or edit.
+  const focused = useIsFocused()
+  const [boxKeys, setBoxKeys] = useState({ focused: false, empty: true })
+  const lastEditable = useMemo(
+    () => [...(messages?.list ?? [])].reverse().find((m) => m.senderId === meId && !m.deleted && !m.event && !!m.body && !special(m) && !isLocal(m)) ?? null,
+    [messages?.list, meId],
+  )
+  useKeyCommand(
+    'editLast',
+    () => {
+      if (!lastEditable || !composer.current?.emptyAndFocused()) return
+      void messageAction(lastEditable, 'edit')
+    },
+    focused && canMessage && !editing && boxKeys.focused && boxKeys.empty && !!lastEditable,
+  )
+  useKeyCommand('find', () => setSearching(true), focused && !searching)
+  useKeyCommand(
+    'escape',
+    () => {
+      if (editing) composer.current?.clear()
+      setReply(null)
+      setEditing(null)
+    },
+    focused && !searching && !!(reply || editing),
+  )
+  useKeyCommand('escape', () => setSearching(false), focused && searching)
 
   function onSend(text: string) {
     if (editing) {
@@ -569,6 +599,7 @@ export default function ChatScreen() {
           voice={voice.recording ? <VoiceRecorderBar voice={voice} /> : undefined}
           recordButton={<RecordButton voice={voice} />}
           onSendLater={uploads.items.length || lantern ? undefined : (t) => setLaterText(t)}
+          onKeyState={setBoxKeys}
         />
       ) : (
         <View style={{ padding: 16, paddingBottom: insets.bottom + 16, backgroundColor: c.barBg, borderTopWidth: 0.5, borderTopColor: c.line }}>

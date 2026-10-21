@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native'
-import { router, useLocalSearchParams } from 'expo-router'
+import { router, useIsFocused, useLocalSearchParams } from 'expo-router'
 import Animated, { FadeIn, SlideInLeft, SlideInRight } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -26,7 +26,8 @@ import { openDmDock } from '@/constellations/dock'
 import { flyHome } from '@/constellations/transition'
 import { rememberCxPlace } from '@/constellations/nav'
 import { haptic, useReduceMotion } from '@/constellations/motion'
-import { can, topRole, roleColor, STATUS_WORD } from '@/constellations/roles'
+import { can, stepNebula, topRole, roleColor, STATUS_WORD } from '@/constellations/roles'
+import { useKeyCommand } from '@/lib/keys'
 import { Face, N, NightButton, NightCenter, SearchBox } from '@/constellations/ui'
 
 // Inside a constellation. Phones (canvas board 4): the icon strip (swipe sideways to switch),
@@ -197,6 +198,14 @@ function WideLayout({ c, nebulaParam, onAdd, sheet, closeSheet }: { c: Constella
     rememberCxPlace(c.id, x.id)
     setPicked(x.id)
   }
+  // 0.8.0 keyboard: ⌥↑ / ⌥↓ (Alt on Android tablets) to the previous / next nebula.
+  const focused = useIsFocused()
+  const step = (dir: -1 | 1) => {
+    const next = stepNebula(c, n?.id, dir)
+    if (next) open(next)
+  }
+  useKeyCommand('prevNebula', () => step(-1), focused)
+  useKeyCommand('nextNebula', () => step(1), focused)
   const role = me ? topRole(c, me.id) : null
   const myStatus = useStore((s) => s.myStatus?.status ?? 'online')
   const inThisVoice = !!myVoice && !!n && myVoice.nebulaId === n.id

@@ -94,12 +94,32 @@ object PushStore {
     }
   }
 
-  fun clearLines(context: Context, conversationId: String) = prefs(context).edit().remove("lines:$conversationId").apply()
+  fun clearLines(context: Context, conversationId: String) =
+    prefs(context).edit().remove("lines:$conversationId").remove("unread:$conversationId").apply()
 
   fun clearAllLines(context: Context) {
     val p = prefs(context)
     val e = p.edit()
-    for (key in p.all.keys) if (key.startsWith("lines:")) e.remove(key)
+    for (key in p.all.keys) if (key.startsWith("lines:") || key.startsWith("unread:")) e.remove(key)
+    e.apply()
+  }
+
+  // ---- 0.8.0: new messages per chat since it was last read (the "Maya · 5 new messages" stack) ----
+
+  fun unread(context: Context, conversationId: String): Int = prefs(context).getInt("unread:$conversationId", 0)
+
+  fun addUnread(context: Context, conversationId: String): Int {
+    val n = unread(context, conversationId) + 1
+    prefs(context).edit().putInt("unread:$conversationId", n).apply()
+    return n
+  }
+
+  fun resetUnread(context: Context, conversationId: String) = prefs(context).edit().remove("unread:$conversationId").apply()
+
+  fun resetAllUnread(context: Context) {
+    val p = prefs(context)
+    val e = p.edit()
+    for (key in p.all.keys) if (key.startsWith("unread:")) e.remove(key)
     e.apply()
   }
 
