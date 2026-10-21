@@ -233,7 +233,9 @@ alertsRouter.get("/alerts", async (req, res) => {
   const rows = await db
     .select()
     .from(adminAlerts)
-    .where(after.success ? gt(adminAlerts.createdAt, new Date(after.data)) : undefined)
+    // Compared at millisecond precision: the database keeps microseconds, the apps' "after" only
+    // milliseconds, so a plain comparison sent the newest alert back again on every check.
+    .where(after.success ? sql`date_trunc('milliseconds', ${adminAlerts.createdAt}) > ${new Date(after.data).toISOString()}::timestamptz` : undefined)
     .orderBy(desc(adminAlerts.createdAt))
     .limit(50);
   res.json({

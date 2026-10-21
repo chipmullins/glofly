@@ -93,12 +93,15 @@ export default function App(): JSX.Element {
     let newest: string | null = null
     let first = true
     let stopped = false
+    // Each alert pops up once, whatever the server sends back.
+    const shown = new Set<string>()
     const check = async (): Promise<void> => {
       const r = await api.alerts(newest ?? undefined)
       if (stopped || !r.ok) return
       desktopAlerts.current = r.data.prefs.desktop
-      const fresh = r.data.alerts
-      if (fresh.length) newest = fresh[0].createdAt
+      const fresh = r.data.alerts.filter((a) => !shown.has(a.id))
+      for (const a of fresh) shown.add(a.id)
+      if (fresh.length && (!newest || fresh[0].createdAt > newest)) newest = fresh[0].createdAt
       else if (!newest) newest = r.data.now
       if (first) {
         first = false
