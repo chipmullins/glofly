@@ -324,6 +324,9 @@ export type AccountDetail = {
     deleteAfter: string | null
     friends: number
     groups: number
+    /** 0.9.0 (missing from older servers) */
+    constellations?: number
+    openReports?: number
     storageBytes: number
     fileCount: number
     inviteCode: { code: string; label: string } | null

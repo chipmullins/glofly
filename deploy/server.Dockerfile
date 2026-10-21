@@ -12,6 +12,7 @@ COPY apps/server/package.json apps/server/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/control/package.json apps/control/
 COPY apps/mobile/package.json apps/mobile/
+COPY apps/control-mobile/package.json apps/control-mobile/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 RUN npm ci -w @glofly/server -w @glofly/shared --ignore-scripts --no-audit --no-fund
@@ -31,6 +32,7 @@ COPY apps/server/package.json apps/server/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/control/package.json apps/control/
 COPY apps/mobile/package.json apps/mobile/
+COPY apps/control-mobile/package.json apps/control-mobile/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 # Custom stickers (0.5.0) use ONNX Runtime: only its Linux files are kept (it ships every platform's).

@@ -20,6 +20,7 @@ import {
   users,
   teamReplies,
   adminAlerts,
+  constellationMembers,
 } from "../db/schema";
 import { getLockdown } from "./lockdown";
 import { redis } from "../redis";
@@ -461,6 +462,9 @@ adminRouter.get("/accounts/:id", async (req, res) => {
       deleteAfter: u.deleteAfter,
       friends: friends.n,
       groups: groups.n,
+      // 0.9.0 (Control for iPhone's account card)
+      constellations: await db.$count(constellationMembers, eq(constellationMembers.userId, id)),
+      openReports: await db.$count(reports, and(eq(reports.reportedUserId, id), eq(reports.status, "open"))),
       storageBytes: Number(storage.bytes ?? 0),
       fileCount: storage.n,
       inviteCode: code ?? null,

@@ -152,6 +152,8 @@ export function sendControlAlert(
         "thread-id": "control",
       },
       ...(alert.data ?? {}),
+      // expo-notifications (Control for iPhone) reads a notification's data from "body".
+      body: alert.data ?? {},
     },
     what: "Control alert",
   });
