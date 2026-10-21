@@ -120,7 +120,7 @@ jobs:
           set -o pipefail
           if ! ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64 2>&1 | tee build.log; then
             # The first errors as annotations too (readable without the full log).
-            grep -E "^e: |error:|FAILURE:|What went wrong|> Task .* FAILED|Execution failed|Caused by|> " -A3 build.log | grep -v '^--$' | awk '!seen[$0]++' | head -n 45 | while IFS= read -r line; do
+            { grep -E "^e: |error:" build.log | head -n 30; grep -E "> Task .* FAILED" build.log; grep -A8 "What went wrong" build.log; } | grep -v '^--$' | awk '!seen[$0]++' | head -n 48 | while IFS= read -r line; do
               echo "::error::${line:0:900}"
             done
             exit 1
