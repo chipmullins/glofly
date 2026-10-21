@@ -229,8 +229,9 @@ function withExtensionTarget(config) {
         TARGETED_DEVICE_FAMILY: '"1,2"',
         CLANG_ENABLE_MODULES: 'YES',
         GENERATE_INFOPLIST_FILE: 'NO',
-        // Opening Glofly afterwards goes through UIApplication (not extension-only API).
-        APPLICATION_EXTENSION_API_ONLY: 'NO',
+        // Required for extensions (Xcode refuses NO); opening Glofly afterwards is looked up at
+        // run time instead (ShareViewController.openGlofly).
+        APPLICATION_EXTENSION_API_ONLY: 'YES',
         SKIP_INSTALL: 'YES',
         ...(appSettings.DEVELOPMENT_TEAM ? { DEVELOPMENT_TEAM: appSettings.DEVELOPMENT_TEAM } : {}),
       })

@@ -161,16 +161,23 @@ final class ShareViewController: UIViewController {
     guard let url = URL(string: "\(scheme)://share?id=\(id)") else { return finish(message: nil) }
     // Share extensions can't open apps directly; the app object at the end of the responder
     // chain can (the way every "open in" share extension does it).
+    // UIApplication.open isn't available to extension code at compile time, so it's called by
+    // name: open(_:options:completionHandler:).
+    let selector = NSSelectorFromString("openURL:options:completionHandler:")
     var responder: UIResponder? = self
     while let r = responder {
-      if let app = r as? UIApplication {
-        app.open(url, options: [:]) { ok in
-          if ok {
-            self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
-          } else {
-            self.finish(message: "Saved. Open Glofly to choose where to send it.")
+      if r.isKind(of: UIApplication.self), r.responds(to: selector), let method = r.method(for: selector) {
+        typealias OpenURL = @convention(c) (AnyObject, Selector, URL, [String: Any], ((Bool) -> Void)?) -> Void
+        let open = unsafeBitCast(method, to: OpenURL.self)
+        open(r, selector, url, [:], { ok in
+          DispatchQueue.main.async {
+            if ok {
+              self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+            } else {
+              self.finish(message: "Saved. Open Glofly to choose where to send it.")
+            }
           }
-        }
+        })
         return
       }
       responder = r.next
