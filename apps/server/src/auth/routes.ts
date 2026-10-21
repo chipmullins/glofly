@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { redis } from "../redis";
@@ -46,12 +46,13 @@ import {
   type PendingLogin,
 } from "./twoStep";
 import { inBackground } from "../push/notify";
+import { useFriendLink } from "../friends/links";
 import { fieldErrors, forgotPasswordSchema, loginSchema, registerSchema, usernameSchema } from "./validation";
 
 export const authRouter = Router();
 
 // Limits slow down bots that try to mass-create accounts or scan usernames.
-const registerLimiter = rateLimit({
+const registerLimiter = rateLimit("auth:register", {
   windowMs: 60 * 60 * 1000, // 1 hour
   limit: 10,
   standardHeaders: "draft-8",
@@ -59,7 +60,7 @@ const registerLimiter = rateLimit({
   message: { error: "too_many_requests", message: "Too many sign-up attempts. Try again later." },
 });
 
-const usernameCheckLimiter = rateLimit({
+const usernameCheckLimiter = rateLimit("auth:username-check", {
   windowMs: 60 * 1000, // 1 minute
   limit: 60,
   standardHeaders: "draft-8",
@@ -68,7 +69,7 @@ const usernameCheckLimiter = rateLimit({
 });
 
 // Only failed attempts count, so a typo-prone person isn't locked out after logging in fine.
-const loginLimiter = rateLimit({
+const loginLimiter = rateLimit("auth:login", {
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 10,
   skipSuccessfulRequests: true,
@@ -229,7 +230,17 @@ authRouter.post("/register", requireCurrentApp, registerLimiter, async (req, res
     );
     // "Confirm your email": sent in the background so signing up stays quick.
     sendVerification(user.id).catch((err) => console.error("Couldn't send the confirm email", err));
-    signedIn(res, web, session, true, user, 201);
+    // 0.8.0: signed up from a friend's invite link: friends right away. A dead link (reset, blocked,
+    // the day's cap) just means no friendship; the account is made either way.
+    let linkedFriend: unknown = undefined;
+    if (input.friendLink) {
+      const used = await useFriendLink(input.friendLink, user, true).catch((err) => {
+        console.error("Couldn't use the invite link", err);
+        return null;
+      });
+      if (used?.ok) linkedFriend = used.owner;
+    }
+    signedIn(res, web, session, true, user, 201, linkedFriend ? { linkedFriend } : {});
     inBackground(noteSignIn(user.id, input.deviceName ?? null, web ?? platformColumn(req.headers["x-glofly-platform"])));
   } catch (err) {
     // Two people grabbing the same name at the same instant: the database still catches it.
@@ -392,7 +403,7 @@ authRouter.post("/login/resend", requireCurrentApp, loginLimiter, async (req, re
 });
 
 // Forgot password: a handful per IP. Each account also gets at most a few reset emails an hour.
-const forgotLimiter = rateLimit({
+const forgotLimiter = rateLimit("auth:forgot", {
   windowMs: 15 * 60 * 1000,
   limit: 5,
   standardHeaders: "draft-8",

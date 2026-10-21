@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import express, { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { squarePhoto } from "./photo";
 import { and, eq, or } from "drizzle-orm";
 import { z } from "zod";
@@ -25,7 +25,7 @@ import { BIO_MAX, cleanNickname, nicknameProblem } from "@glofly/shared";
 import { setNickname } from "./nicknames";
 const AVATAR_UPLOAD_MAX = "8mb";
 
-const uploadLimiter = rateLimit({
+const uploadLimiter = rateLimit("profile:upload", {
   windowMs: 60 * 60 * 1000,
   limit: 30,
   keyGenerator: (_req, res) => me(res).id,

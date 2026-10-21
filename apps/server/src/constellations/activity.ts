@@ -4,6 +4,12 @@ import { constellationAuditLog, constellationMembers, constellations, conversati
 import { emitToUser } from "../realtime";
 import { nebulaOfChat } from "./chats";
 
+/** Who can see a nebula (its conversation's members; role-only nebulas, 0.8.0). */
+async function viewersOf(conversationId: string): Promise<string[]> {
+  const rows = await db.select({ userId: conversationMembers.userId }).from(conversationMembers).where(eq(conversationMembers.conversationId, conversationId));
+  return rows.map((r) => r.userId);
+}
+
 // Live news about constellations (2.0). Everything goes to newer apps only (modernOnly).
 
 /** Everyone in a constellation. */
@@ -57,7 +63,8 @@ export async function nebulaActivity(
     .returning({ name: constellations.name });
   const base = { constellationId: nebula.constellationId, nebulaId: nebula.id, conversationId, senderId, mentions };
   if (preview === undefined) {
-    await tellMembers(nebula.constellationId, "constellation:activity", base);
+    // 0.8.0: only people who can see it (role-only nebulas): its conversation's members.
+    for (const userId of await viewersOf(conversationId)) emitToUser(userId, "constellation:activity", base, true);
     return;
   }
   const settings = await db
@@ -68,7 +75,7 @@ export async function nebulaActivity(
       mutedUntil: conversationMembers.mutedUntil,
     })
     .from(constellationMembers)
-    .leftJoin(
+    .innerJoin(
       conversationMembers,
       and(eq(conversationMembers.userId, constellationMembers.userId), eq(conversationMembers.conversationId, conversationId)),
     )

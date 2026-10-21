@@ -209,6 +209,11 @@ export function connectRealtime(onUnauthorized: () => void): void {
     const user = cleanUser(p?.user)
     if (user) forward({ type: 'friend:joined', user })
   })
+  // 0.8.0: someone added you with your invite link.
+  socket.on('friend:linked', (p) => {
+    const user = cleanUser(p?.user)
+    if (user) forward({ type: 'friend:linked', user })
+  })
   socket.on('presence', (p) => {
     const statuses = ['online', 'away', 'dnd', 'offline']
     if (typeof p?.userId !== 'string' || !statuses.includes(p?.status)) return

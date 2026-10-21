@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import express, { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -22,6 +22,7 @@ import {
   type VoiceInfo,
 } from "../db/schema";
 import { sendStream, storage } from "../storage";
+import { searchMessages } from "./search";
 import {
   ATTACHMENT_MAX_BYTES,
   VIDEO_MAX_BYTES,
@@ -83,7 +84,7 @@ const me = (res: Response): Me => res.locals.user as Me;
 
 export { MESSAGE_MAX, MAX_PINNED, GROUP_MAX, GROUP_NAME_MAX } from "@glofly/shared";
 
-const sendLimiter = rateLimit({
+const sendLimiter = rateLimit("messages:send", {
   windowMs: 10 * 1000,
   limit: 20,
   keyGenerator: (_req, res) => me(res).id,
@@ -92,7 +93,7 @@ const sendLimiter = rateLimit({
   message: { error: "too_many_requests", message: "You're sending messages very fast. Take a breath and try again." },
 });
 
-const searchLimiter = rateLimit({
+const searchLimiter = rateLimit("messages:search", {
   windowMs: 60 * 1000,
   limit: 60,
   keyGenerator: (_req, res) => me(res).id,
@@ -150,7 +151,7 @@ const captionBody = z
   .transform((s) => (s ?? "").replace(/\r\n/g, "\n").trim())
   .pipe(z.string().max(MESSAGE_MAX));
 
-const uploadLimiter = rateLimit({
+const uploadLimiter = rateLimit("messages:upload", {
   windowMs: 60 * 1000,
   limit: 30,
   keyGenerator: (_req, res) => me(res).id,
@@ -826,7 +827,7 @@ conversationsRouter.post("/dm", async (req, res) => {
 
 const GROUP_HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
 
-const groupLimiter = rateLimit({
+const groupLimiter = rateLimit("messages:group", {
   windowMs: 10 * 60 * 1000,
   limit: 40,
   keyGenerator: (_req, res) => me(res).id,
@@ -1309,20 +1310,16 @@ conversationsRouter.get("/messages/search", searchLimiter, async (req, res) => {
     }
   }
 
-  const rows = await db
-    .select(messageFields)
-    .from(messages)
-    .where(
-      and(
-        chat ? eq(messages.conversationId, chat.data) : inArray(messages.conversationId, myChats),
-        isNull(messages.deletedAt),
-        isNull(messages.event),
-        ilike(messages.body, pattern),
-        olderThan,
-      ),
-    )
-    .orderBy(desc(messages.createdAt), desc(messages.id))
-    .limit(PAGE + 1);
+  const rows = await searchMessages(
+    and(
+      chat ? eq(messages.conversationId, chat.data) : inArray(messages.conversationId, myChats),
+      isNull(messages.deletedAt),
+      isNull(messages.event),
+      ilike(messages.body, pattern),
+      olderThan,
+    ),
+    PAGE + 1,
+  );
 
   const page = rows.slice(0, PAGE);
   res.json({ results: await hydrate(page), hasMore: rows.length > PAGE, people: await peopleFor(page) });

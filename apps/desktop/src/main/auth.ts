@@ -2,6 +2,8 @@ import { notePaused, noteUpdateRequired } from './app-status'
 import type {
   ForgotPasswordResult,
   SignupMode,
+  FriendLinkInfo,
+  PublicUser,
   LoginRequest,
   ApiResult,
   LoginStepResult,
@@ -240,6 +242,18 @@ async function signInAnswer(response: Response, keepSignedIn: boolean): Promise<
   }
 }
 
+/** 0.8.0: who the sign-up made you friends with (from a friend's invite link). */
+function cleanLinkedFriend(u: unknown): PublicUser | null {
+  const x = u as Record<string, unknown> | null
+  if (!x || typeof x.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(x.id)) return null
+  return {
+    id: x.id,
+    username: typeof x.username === 'string' ? x.username.slice(0, 40) : '',
+    displayName: typeof x.displayName === 'string' ? x.displayName.slice(0, 64) : '',
+    avatarVersion: typeof x.avatarVersion === 'string' ? x.avatarVersion.slice(0, 64) : null
+  }
+}
+
 export async function register(request: RegisterRequest): Promise<RegisterResult> {
   let response: Response
   try {
@@ -256,6 +270,7 @@ export async function register(request: RegisterRequest): Promise<RegisterResult
   const body = (await response.json().catch(() => null)) as {
     token?: string
     user?: SignedInUser
+    linkedFriend?: unknown
     fields?: Record<string, string>
     message?: string
     error?: string
@@ -270,7 +285,8 @@ export async function register(request: RegisterRequest): Promise<RegisterResult
   if (response.status === 201 && body?.token && body.user) {
     sessionToken = body.token
     await saveToken(body.token) // new accounts start out kept signed in
-    return { ok: true, user: body.user }
+    const friend = cleanLinkedFriend(body.linkedFriend)
+    return { ok: true, user: body.user, ...(friend ? { linkedFriend: friend } : {}) }
   }
   if ((response.status === 400 || response.status === 409) && body?.fields) {
     return { ok: false, fields: body.fields }
@@ -339,6 +355,22 @@ export async function signupMode(): Promise<SignupMode | null> {
     const body = (await response.json()) as { mode?: unknown }
     return body.mode === 'open' || body.mode === 'invite' || body.mode === 'closed'
       ? body.mode
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** 0.8.0: whose friend invite link this is (the sign-up screen's "Chip invited you"). */
+export async function friendLinkInfo(code: string): Promise<FriendLinkInfo | null> {
+  try {
+    const response = await fetch(`${API_URL}/i/${encodeURIComponent(code)}/info`, {
+      signal: AbortSignal.timeout(5_000)
+    })
+    if (!response.ok) return null
+    const body = (await response.json()) as Partial<FriendLinkInfo>
+    return typeof body.displayName === 'string' && typeof body.username === 'string'
+      ? { displayName: body.displayName.slice(0, 64), username: body.username.slice(0, 40) }
       : null
   } catch {
     return null

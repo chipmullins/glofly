@@ -13,9 +13,30 @@ import { emitToUser } from "../realtime";
 import { inBackground, notifyEventReminder } from "../push/notify";
 import { sendUpdated } from "../messages/routes";
 import { can, outranks, standingOf, type Standing } from "./perms";
-import { memberIdsOf, tellMembers } from "./activity";
 import { publicUsers } from "./views";
 import { voiceStatesOf } from "./voice";
+import { viewersOf, visibleChats } from "./access";
+
+/**
+ * 0.8.0 role-only nebulas: who an event is for. An event lives in its card's nebula, so only people
+ * who can see that nebula see the event (in the list, the Inbox, reminders and live news).
+ */
+export async function eventViewerIds(r: Pick<EventRow, "nebulaId">): Promise<string[]> {
+  const [n] = await db.select({ conversationId: nebulas.conversationId }).from(nebulas).where(eq(nebulas.id, r.nebulaId));
+  return n ? viewersOf(n.conversationId) : [];
+}
+
+/** The events someone can see (their nebula is visible to them). */
+export async function visibleEvents(rows: EventRow[], userId: string): Promise<EventRow[]> {
+  if (!rows.length) return rows;
+  const chats = await db
+    .select({ id: nebulas.id, conversationId: nebulas.conversationId })
+    .from(nebulas)
+    .where(inArray(nebulas.id, [...new Set(rows.map((r) => r.nebulaId))]));
+  const seen = await visibleChats(userId, chats.map((c) => c.conversationId));
+  const ok = new Set(chats.filter((c) => seen.has(c.conversationId)).map((c) => c.id));
+  return rows.filter((r) => ok.has(r.nebulaId));
+}
 
 // Events with RSVP (0.8.0, approved Oct 20 board 13). An event's card is a message in a text
 // nebula (plain text there for apps that don't know events); the event and who's going live in
@@ -26,10 +47,21 @@ export type EventRow = typeof constellationEvents.$inferSelect;
 
 const FACES = 6;
 
+/** 0.8.0: the voice nebulas (ids) among these that this person can see. */
+async function seenVoice(rows: Pick<EventRow, "voiceNebulaId">[], userId: string): Promise<Set<string>> {
+  const ids = [...new Set(rows.map((r) => r.voiceNebulaId).filter((x): x is string => !!x))];
+  if (!ids.length) return new Set();
+  const chats = await db.select({ id: nebulas.id, conversationId: nebulas.conversationId }).from(nebulas).where(inArray(nebulas.id, ids));
+  const seen = await visibleChats(userId, chats.map((c) => c.conversationId));
+  return new Set(chats.filter((c) => seen.has(c.conversationId)).map((c) => c.id));
+}
+
 /** Several events as the apps see them, for one viewer. */
 export async function eventViews(rows: EventRow[], viewer: Standing): Promise<ConstellationEvent[]> {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
+  // A voice nebula they can't see (role-only) isn't named to them.
+  const voiceOk = await seenVoice(rows, viewer.userId);
   const answers = await db
     .select({ eventId: constellationEventRsvps.eventId, userId: constellationEventRsvps.userId, answer: constellationEventRsvps.answer, at: constellationEventRsvps.updatedAt })
     .from(constellationEventRsvps)
@@ -63,7 +95,7 @@ export async function eventViews(rows: EventRow[], viewer: Standing): Promise<Co
       constellationId: r.constellationId,
       nebulaId: r.nebulaId,
       messageId: r.messageId,
-      voiceNebulaId: r.voiceNebulaId,
+      voiceNebulaId: r.voiceNebulaId && voiceOk.has(r.voiceNebulaId) ? r.voiceNebulaId : null,
       title: r.title,
       description: r.description,
       startsAt: r.startsAt.toISOString(),
@@ -106,11 +138,15 @@ export async function eventsOf(constellationId: string): Promise<EventRow[]> {
 }
 
 /** The event's card text in its nebula (what apps that don't know events show). */
-export async function cardText(r: Pick<EventRow, "title" | "startsAt" | "timeZone" | "voiceNebulaId" | "cancelledAt">): Promise<string> {
+export async function cardText(r: Pick<EventRow, "title" | "startsAt" | "timeZone" | "voiceNebulaId" | "cancelledAt" | "nebulaId">): Promise<string> {
   let voiceName: string | null = null;
   if (r.voiceNebulaId) {
-    const [n] = await db.select({ name: nebulas.name }).from(nebulas).where(eq(nebulas.id, r.voiceNebulaId));
-    voiceName = n?.name ?? null;
+    const [n] = await db.select({ name: nebulas.name, conversationId: nebulas.conversationId }).from(nebulas).where(eq(nebulas.id, r.voiceNebulaId));
+    // 0.8.0: only named when everyone who sees the card can see the voice nebula too.
+    if (n) {
+      const voiceViewers = new Set(await viewersOf(n.conversationId));
+      voiceName = (await eventViewerIds(r)).every((id) => voiceViewers.has(id)) ? n.name : null;
+    }
   }
   const text = eventFallbackText({ title: r.title, startsAt: r.startsAt.toISOString(), timeZone: r.timeZone, voiceName });
   return r.cancelledAt ? `Cancelled: ${text}` : text;
@@ -127,7 +163,9 @@ export async function refreshCard(r: EventRow): Promise<void> {
 
 /** Tells everyone in the constellation that an event changed (their apps reload its events). */
 export async function eventChanged(constellationId: string, eventId: string): Promise<void> {
-  await tellMembers(constellationId, "constellation:event", { constellationId, eventId, phase: "changed" });
+  const [r] = await db.select({ nebulaId: constellationEvents.nebulaId }).from(constellationEvents).where(eq(constellationEvents.id, eventId));
+  if (!r) return;
+  for (const userId of await eventViewerIds(r)) emitToUser(userId, "constellation:event", { constellationId, eventId, phase: "changed" }, true);
 }
 
 async function goingOrMaybe(eventId: string): Promise<string[]> {
@@ -174,7 +212,7 @@ export async function sweepEvents(now = new Date()): Promise<void> {
   for (const r of toRemind) {
     const about = await aboutEvent(r);
     if (about.takenDown) continue;
-    const who = new Set(await memberIdsOf(r.constellationId));
+    const who = new Set(await eventViewerIds(r));
     const people = (await goingOrMaybe(r.id)).filter((u) => who.has(u));
     const payload = {
       constellationId: r.constellationId,
@@ -188,13 +226,16 @@ export async function sweepEvents(now = new Date()): Promise<void> {
       conversationId: about.conversationId,
       inVoice: about.inVoice,
     };
+    const hideVoice = { voiceNebulaId: null, voiceName: "", inVoice: 0 };
+    const voiceSeers = new Set<string>();
+    for (const u of people) if ((await seenVoice([r], u)).size) voiceSeers.add(u);
     for (const u of people) {
-      emitToUser(u, "constellation:event", payload, true);
+      emitToUser(u, "constellation:event", voiceSeers.has(u) ? payload : { ...payload, ...hideVoice }, true);
       emitToUser(u, "inbox:changed", {}, true);
     }
-    if (about.conversationId)
+    if (about.conversationId && voiceSeers.size)
       inBackground(
-        notifyEventReminder(people, {
+        notifyEventReminder([...voiceSeers], {
           eventTitle: r.title,
           constellationId: r.constellationId,
           constellationName: about.constellationName,
@@ -202,6 +243,20 @@ export async function sweepEvents(now = new Date()): Promise<void> {
           messageId: r.messageId,
           hostId: r.hostId,
           where: about.voiceName,
+          minutes: Math.max(1, Math.round((r.startsAt.getTime() - now.getTime()) / 60_000)),
+        }),
+      );
+    const others = people.filter((u) => !voiceSeers.has(u));
+    if (about.conversationId && others.length)
+      inBackground(
+        notifyEventReminder(others, {
+          eventTitle: r.title,
+          constellationId: r.constellationId,
+          constellationName: about.constellationName,
+          conversationId: about.conversationId,
+          messageId: r.messageId,
+          hostId: r.hostId,
+          where: "",
           minutes: Math.max(1, Math.round((r.startsAt.getTime() - now.getTime()) / 60_000)),
         }),
       );
@@ -218,7 +273,7 @@ export async function sweepEvents(now = new Date()): Promise<void> {
     const about = await aboutEvent(r);
     if (about.takenDown) continue;
     if (!late) {
-      await tellMembers(r.constellationId, "constellation:event", {
+      const payload = {
         constellationId: r.constellationId,
         eventId: r.id,
         phase: "started",
@@ -229,7 +284,11 @@ export async function sweepEvents(now = new Date()): Promise<void> {
         nebulaId: r.nebulaId,
         conversationId: about.conversationId,
         inVoice: about.inVoice,
-      });
+      };
+      for (const u of await eventViewerIds(r)) {
+        const sees = !r.voiceNebulaId || (await seenVoice([r], u)).size > 0;
+        emitToUser(u, "constellation:event", sees ? payload : { ...payload, voiceNebulaId: null, voiceName: "", inVoice: 0 }, true);
+      }
       for (const u of await goingOrMaybe(r.id)) emitToUser(u, "inbox:changed", {}, true);
     } else {
       await eventChanged(r.constellationId, r.id);

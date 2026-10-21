@@ -1,5 +1,5 @@
 import express, { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { passwordSchema, PASSWORD_MAX } from "../auth/validation";
 import { confirmEmail, resetPassword } from "../account/email";
 import { findToken, looksLikeToken } from "../email/tokens";
@@ -23,8 +23,8 @@ import { DISPLAY_NAME_MAX, USERNAME_MAX } from "@glofly/shared";
 export const webRouter = Router();
 
 // Pressing a button (POST) is limited more tightly than opening a page.
-const limiter = (limit: number) =>
-  rateLimit({
+const limiter = (name: string, limit: number) =>
+  rateLimit(name, {
     windowMs: 15 * 60 * 1000,
     limit,
     standardHeaders: "draft-8",
@@ -35,8 +35,8 @@ const limiter = (limit: number) =>
         body: `<p>Too many tries from here. Wait a few minutes and try again.</p>`,
       }),
   });
-const openLimiter = limiter(60);
-const submitLimiter = limiter(20);
+const openLimiter = limiter("web:open", 60);
+const submitLimiter = limiter("web:submit", 20);
 
 const formBody = express.urlencoded({ extended: false, limit: "4kb" });
 

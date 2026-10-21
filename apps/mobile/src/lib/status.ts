@@ -15,7 +15,7 @@ const CHOICES: { key: MyStatusChoice; detail: string }[] = [
 
 export async function setStatus(status: MyStatusChoice) {
   const before = useStore.getState().myStatus
-  useStore.setState({ myStatus: { status, statusText: before?.statusText ?? null } })
+  useStore.setState({ myStatus: { status, statusText: before?.statusText ?? null, statusTextEndsAt: before?.statusTextEndsAt ?? null } })
   const r = await api.setMyStatus({ status })
   if (r.ok) useStore.setState({ myStatus: r.data })
   else {

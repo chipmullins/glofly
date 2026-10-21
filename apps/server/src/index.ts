@@ -11,6 +11,8 @@ import { authRouter } from "./auth/routes";
 import { accountRouter } from "./account/routes";
 import { purgeDeletedAccounts } from "./account/deletion";
 import { blocksRouter, friendsRouter, usersRouter } from "./friends/routes";
+// 0.8.0: shareable friend invite links (/friends/link, and the page glofly.app/i/<code>).
+import { friendLinkPageRouter, friendLinkRouter } from "./friends/links";
 import { conversationsRouter } from "./messages/routes";
 import { extrasRouter } from "./messages/extras";
 import { gifsRouter, gifsConfigured } from "./messages/gifs";
@@ -40,6 +42,7 @@ import { getPause, refuseWhilePaused } from "./admin/pause";
 import { emailKind } from "./email/send";
 import { sweepEmailTokens } from "./email/tokens";
 import { controlRouter } from "./admin";
+import { sweepExpiredStatuses } from "./statusSweep";
 import { devicesRouter } from "./push/devices";
 import { pushKind } from "./push/fcm";
 import { voipKind } from "./push/apns";
@@ -108,6 +111,8 @@ app.use("/errors", errorReportsRouter);
 app.use("/users", usersRouter);
 app.use("/users", profileRouter);
 app.use("/avatars", avatarsRouter);
+// 0.8.0 (before friendsRouter: /friends/link isn't a friend's id).
+app.use("/friends/link", friendLinkRouter);
 app.use("/friends", friendsRouter);
 app.use("/blocks", blocksRouter);
 // 0.7.3: pins, mark as unread, send later (before conversationsRouter: /conversations/scheduled).
@@ -129,6 +134,8 @@ app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
 // 0.7.5: a constellation invite link's page (glofly.app/c/<code>; Caddy sends /c/* here).
 app.use("/c", invitePageRouter);
+// 0.8.0: a friend invite link's page (glofly.app/i/<code>; Caddy sends /i/* here).
+app.use("/i", friendLinkPageRouter);
 // Watch Together's video player page (the apps show the shared YouTube video through it).
 app.use("/watch", watchPageRouter);
 app.use("/reports", reportsRouter);
@@ -223,6 +230,8 @@ connectRedis()
     every(15_000, "Send later", async () => void (await sendDueMessages()));
     // 2.0 My games: a minute of playtime for everyone playing something right now.
     every(60_000, "Playtime", sweepPlaytime);
+    // 0.8.0: custom statuses whose "Clear after" time has come (cheap: a partial index).
+    every(15_000, "Status clear", async () => void (await sweepExpiredStatuses()));
     // 0.7.5: constellations' birthdays ("Firefly Guild turns 1 today!").
     every(10 * 60_000, "Constellation birthdays", () => sweepConstellationBirthdays());
     // 0.8.0: event reminders (15 minutes before) and starts.

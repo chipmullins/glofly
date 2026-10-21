@@ -11,6 +11,7 @@ import type {
   TextSize
 } from '../../../preload/api-types'
 import ActivitySettings from './ActivitySettings'
+import { InviteLinkRow } from './InviteLink'
 import { CloseIcon, LogOutIcon } from './icons'
 import AccountSettings from './AccountSettings'
 import AboutSettings from './AboutSettings'
@@ -913,6 +914,16 @@ export default function SettingsDialog({
                     <ErrorReportsRow />
                   </div>
                 </section>
+
+                {/* 0.8.0: your invite link (restricted accounts don't get one) */}
+                {!user.restricted && (
+                  <section className="settings-section">
+                    <h2>Friends</h2>
+                    <div className="settings-card">
+                      <InviteLinkRow userId={user.id} />
+                    </div>
+                  </section>
+                )}
 
                 {/* "Playing …" needs the desktop app (a browser can't see other programs). */}
                 {!isWeb && (

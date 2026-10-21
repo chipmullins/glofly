@@ -66,6 +66,9 @@ export const registerSchema = z.object({
   deviceName: z.string().trim().max(60).optional(),
   // Needed while sign-ups are invite only (Control → Sign-ups). Checked in the route.
   inviteCode: z.string().trim().max(20).optional(),
+  // 0.8.0: signed up from a friend's invite link (glofly.app/i/<code>): friends right away. A link
+  // that doesn't work never stops the sign-up (checked in the route).
+  friendLink: z.string().trim().max(40).optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

@@ -11,6 +11,7 @@ import {
   refreshConversations,
   refreshFriends,
   refreshNotices,
+  refreshStatus,
   setCall,
   stopRefreshing,
   updateMessage,
@@ -144,7 +145,12 @@ function connect() {
       activity: a && typeof a.name === 'string' && typeof a.since === 'string' ? { name: a.name, since: a.since } : null,
       mobile: p.mobile === true,
     })
-    if (p.userId === useSession.getState().user?.id) emit('presence:me', p)
+    if (p.userId === useSession.getState().user?.id) {
+      emit('presence:me', p)
+      // 0.8.0: your custom status changed elsewhere or cleared itself on time: fetch it again.
+      const mine = useStore.getState().myStatus
+      if (mine?.statusText && (p.statusText ?? null) !== mine.statusText) void refreshStatus()
+    }
   })
   s.on('conversation:read', (p: { conversationId?: string; userId?: string; readAt?: string }) => {
     if (typeof p?.conversationId !== 'string' || typeof p?.userId !== 'string' || typeof p?.readAt !== 'string') return
@@ -164,6 +170,13 @@ function connect() {
   s.on('friend:joined', (p: { user?: PublicUser }) => {
     if (typeof p?.user?.id === 'string' && typeof p.user.displayName === 'string') {
       emit('friend:joined', p.user)
+      void refreshFriends()
+    }
+  })
+  // 0.8.0: someone added you with your invite link.
+  s.on('friend:linked', (p: { user?: PublicUser }) => {
+    if (typeof p?.user?.id === 'string' && typeof p.user.displayName === 'string') {
+      emit('friend:linked', p.user)
       void refreshFriends()
     }
   })

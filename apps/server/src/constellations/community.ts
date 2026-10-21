@@ -1,6 +1,6 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
-import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { rateLimit } from "../rateLimit";
+import { and, asc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { MEMBER_MILESTONES, constellationInitials, type MemberCardInfo, type PublicUser } from "@glofly/shared";
 import { db } from "../db";
 import {
@@ -35,7 +35,16 @@ export async function welcomeNebula(constellationId: string): Promise<{ id: stri
     })
     .from(nebulas)
     .leftJoin(constellationCategories, eq(constellationCategories.id, nebulas.categoryId))
-    .where(and(eq(nebulas.constellationId, constellationId), eq(nebulas.kind, "text"), eq(nebulas.readOnly, false)))
+    .where(
+      and(
+        eq(nebulas.constellationId, constellationId),
+        eq(nebulas.kind, "text"),
+        eq(nebulas.readOnly, false),
+        // 0.8.0: one everyone can see (not role-only, nor in a role-only category)
+        ne(nebulas.visibility, "roles"),
+        sql`coalesce(${constellationCategories.visibility}, 'everyone') <> 'roles'`,
+      ),
+    )
     .orderBy(asc(sql`coalesce(${constellationCategories.position}, -1)`), asc(nebulas.position));
   return rows[0] ? { id: rows[0].id, conversationId: rows[0].conversationId } : null;
 }
@@ -179,7 +188,7 @@ export const iconKeyOf = (constellationId: string, version: string) => `constell
 
 const NOBODY = "00000000-0000-0000-0000-000000000000";
 
-const pageLimiter = rateLimit({
+const pageLimiter = rateLimit("community:page", {
   windowMs: 15 * 60 * 1000,
   limit: 120,
   standardHeaders: "draft-8",

@@ -21,6 +21,8 @@ type RegisterScreenProps = {
   ) => Promise<{ fields: Record<string, string>; message?: string } | null>
   onLogin: () => void
   busy?: boolean
+  /** 0.8.0: signing up from a friend's invite link: "Chip invited you" above the form */
+  friendCode?: string | null
 }
 
 const MONTHS = [
@@ -146,8 +148,22 @@ function Hint({
 export default function RegisterScreen({
   onRegister,
   onLogin,
-  busy = false
+  busy = false,
+  friendCode = null
 }: RegisterScreenProps): React.JSX.Element {
+  // 0.8.0: whose invite link brought them here (null: none, or it doesn't work any more)
+  const [inviter, setInviter] = useState<{ code: string; name: string; dead: boolean } | null>(null)
+  useEffect(() => {
+    if (!friendCode) return
+    let live = true
+    void window.glofly.auth.friendLinkInfo(friendCode).then((info) => {
+      if (live) setInviter({ code: friendCode, name: info?.displayName.trim() ?? '', dead: !info })
+    })
+    return () => {
+      live = false
+    }
+  }, [friendCode])
+  const invitedBy = inviter && inviter.code === friendCode ? inviter : null
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -406,6 +422,23 @@ export default function RegisterScreen({
             <h1>Join Glofly</h1>
             <p>Your people are just a hello away.</p>
           </div>
+
+          {invitedBy && !invitedBy.dead && (
+            <div className="register-invited" role="status">
+              <strong>{invitedBy.name} invited you</strong>
+              <span>
+                Sign up and you&apos;ll be friends with {invitedBy.name.split(/\s+/)[0]} right away.
+              </span>
+            </div>
+          )}
+          {invitedBy?.dead && (
+            <div className="register-invited register-invited--dead" role="status">
+              <span>
+                That invite link doesn&apos;t work anymore. You can still sign up and add your
+                friend by username.
+              </span>
+            </div>
+          )}
 
           {closed && (
             <div className="login-error" role="status">

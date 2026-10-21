@@ -14,7 +14,7 @@ import type {
   GloflyEvent,
   LoginRequest,
   MuteDuration,
-  MyStatus,
+  MyStatusChanges,
   PhotoType,
   PrivacySettings,
   ProfileChanges,
@@ -82,7 +82,8 @@ const glofly: GloflyApi = {
     restore: () => ipcRenderer.invoke('auth:restore'),
     me: () => ipcRenderer.invoke('auth:me'),
     logout: () => ipcRenderer.invoke('auth:logout'),
-    forgotPassword: (identifier: string) => ipcRenderer.invoke('auth:forgot-password', identifier)
+    forgotPassword: (identifier: string) => ipcRenderer.invoke('auth:forgot-password', identifier),
+    friendLinkInfo: (code: string) => ipcRenderer.invoke('auth:friend-link-info', code)
   },
   friends: {
     list: () => ipcRenderer.invoke('friends:list'),
@@ -95,7 +96,11 @@ const glofly: GloflyApi = {
     unblock: (userId: string) => ipcRenderer.invoke('friends:unblock', userId),
     setOnlineAlert: (userId: string, on: boolean) =>
       ipcRenderer.invoke('friends:set-online-alert', userId, on),
-    invite: (email: string) => ipcRenderer.invoke('friends:invite', email)
+    invite: (email: string) => ipcRenderer.invoke('friends:invite', email),
+    myLink: () => ipcRenderer.invoke('friends:my-link'),
+    resetLink: () => ipcRenderer.invoke('friends:reset-link'),
+    previewLink: (code: string) => ipcRenderer.invoke('friends:preview-link', code),
+    acceptLink: (code: string) => ipcRenderer.invoke('friends:accept-link', code)
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
@@ -132,7 +137,7 @@ const glofly: GloflyApi = {
   setErrorReports: (on: boolean) => ipcRenderer.send('errors:enabled', on),
   status: {
     get: () => ipcRenderer.invoke('status:get'),
-    set: (changes: Partial<MyStatus>) => ipcRenderer.invoke('status:set', changes)
+    set: (changes: MyStatusChanges) => ipcRenderer.invoke('status:set', changes)
   },
   profile: {
     getMine: () => ipcRenderer.invoke('profile:get-mine'),
@@ -314,6 +319,9 @@ const glofly: GloflyApi = {
   },
   shortcuts: {
     take: () => ipcRenderer.invoke('shortcuts:take')
+  },
+  links: {
+    take: () => ipcRenderer.invoke('links:take')
   },
   onEvent: (listener: (event: GloflyEvent) => void) => {
     const handler = (_e: Electron.IpcRendererEvent, event: GloflyEvent): void => listener(event)

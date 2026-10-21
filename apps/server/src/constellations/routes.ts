@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -79,6 +79,7 @@ import { bannerKey, memberCard } from "./community";
 import { bannerPhoto } from "../profile/photo";
 import { announceVoice, setSharing, voiceStatesOf } from "./voice";
 import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula } from "./home";
+import { seesNebulaChat, syncNebulaAccess } from "./access";
 
 // Constellations (Glofly 2.0): communities with nebulas, categories, members and roles.
 // Every action is permission-checked here. Restricted (family) accounts can't use any of it.
@@ -149,8 +150,8 @@ constellationsRouter.use(async (_req: Request, res: Response, next: NextFunction
   next();
 });
 
-const limiter = (limit: number, windowMs: number, message: string) =>
-  rateLimit({
+const limiter = (name: string, limit: number, windowMs: number, message: string) =>
+  rateLimit(name, {
     windowMs,
     limit,
     keyGenerator: (_req, res) => me(res).id,
@@ -158,13 +159,13 @@ const limiter = (limit: number, windowMs: number, message: string) =>
     legacyHeaders: false,
     message: { error: "too_many_requests", message },
   });
-const createLimiter = limiter(10, 60 * 60 * 1000, "That's a lot of new constellations. Try again later.");
-const changeLimiter = limiter(120, 10 * 60 * 1000, "That's a lot of changes. Wait a few minutes and try again.");
-const joinLimiter = limiter(30, 10 * 60 * 1000, "That's a lot of joining. Wait a few minutes and try again.");
-const directoryLimiter = limiter(60, 60 * 1000, "That's a lot of searching. Try again in a minute.");
+const createLimiter = limiter("constellations:create", 10, 60 * 60 * 1000, "That's a lot of new constellations. Try again later.");
+const changeLimiter = limiter("constellations:change", 120, 10 * 60 * 1000, "That's a lot of changes. Wait a few minutes and try again.");
+const joinLimiter = limiter("constellations:join", 30, 10 * 60 * 1000, "That's a lot of joining. Wait a few minutes and try again.");
+const directoryLimiter = limiter("constellations:directory", 60, 60 * 1000, "That's a lot of searching. Try again in a minute.");
 // 0.7.5: invite cards in chats look their link up (more often than joining).
-const previewLimiter = limiter(240, 10 * 60 * 1000, "That's a lot of invite links. Wait a few minutes.");
-const cardLimiter = limiter(120, 60 * 1000, "That's a lot of profiles. Wait a minute.");
+const previewLimiter = limiter("constellations:preview", 240, 10 * 60 * 1000, "That's a lot of invite links. Wait a few minutes.");
+const cardLimiter = limiter("constellations:card", 120, 60 * 1000, "That's a lot of profiles. Wait a minute.");
 
 const idParam = z.uuid();
 const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁩﻿]/;
@@ -294,7 +295,16 @@ constellationsRouter.put("/order", changeLimiter, async (req, res) => {
 async function createNebula(
   tx: Tx,
   constellationId: string,
-  values: { name: string; kind: NebulaKind; categoryId: string | null; topic: string | null; position: number; readOnly?: boolean },
+  values: {
+    name: string;
+    kind: NebulaKind;
+    categoryId: string | null;
+    topic: string | null;
+    position: number;
+    readOnly?: boolean;
+    visibility?: "everyone" | "roles";
+    roleIds?: string[];
+  },
 ) {
   const [chat] = await tx.insert(conversations).values({ kind: "nebula", name: values.name }).returning({ id: conversations.id });
   rememberNebulaChat(chat.id);
@@ -309,7 +319,31 @@ async function createNebula(
   if (members.length) {
     await tx.insert(conversationMembers).values(members.map((m) => ({ conversationId: chat.id, userId: m.userId })));
   }
+  // 0.8.0: a role-only nebula (or one in a role-only category) keeps only the people who can see it.
+  const category = values.categoryId
+    ? (await tx.select({ visibility: constellationCategories.visibility }).from(constellationCategories).where(eq(constellationCategories.id, values.categoryId)))[0]
+    : undefined;
+  if (values.visibility === "roles" || category?.visibility === "roles") await syncNebulaAccess(constellationId, { tx });
   return row;
+}
+
+/** 0.8.0: everyone's access to role-only nebulas again, after roles, members or settings changed. */
+async function resync(constellationId: string, userIds?: string[]): Promise<void> {
+  await syncNebulaAccess(constellationId, userIds ? { userIds } : {});
+}
+
+/** 0.8.0: the "Who can see this" fields (nebulas and categories). Role ids must be this constellation's (not Member). */
+const visibilityFields = {
+  visibility: z.enum(["everyone", "roles"]).optional(),
+  roleIds: z.array(idParam).max(CUSTOM_ROLES_MAX + 2).optional(),
+};
+async function cleanRoleIds(constellationId: string, ids: string[] | undefined): Promise<string[] | undefined> {
+  if (ids === undefined) return undefined;
+  const rows = await db
+    .select({ id: constellationRoles.id })
+    .from(constellationRoles)
+    .where(and(eq(constellationRoles.constellationId, constellationId), ne(constellationRoles.kind, "member")));
+  return [...new Set(ids)].filter((id) => rows.some((r) => r.id === id));
 }
 
 const createBody = z.object({
@@ -369,6 +403,40 @@ constellationsRouter.post("/", createLimiter, async (req, res) => {
         })),
       );
       await addMember(tx, c.id, myId, { welcomed: true });
+      // 0.8.0 templates: starter roles members pick themselves (labels only, never permissions),
+      // just above Member, the first one highest; Moderator and Admin move above them.
+      const roleIds = new Map<string, string>();
+      if (plan.roles.length) {
+        await tx
+          .update(constellationRoles)
+          .set({ position: sql`${constellationRoles.position} + ${plan.roles.length}` })
+          .where(and(eq(constellationRoles.constellationId, c.id), ne(constellationRoles.kind, "member")));
+        const made = await tx
+          .insert(constellationRoles)
+          .values(
+            plan.roles.map((r, i) => ({
+              constellationId: c.id,
+              kind: "custom" as const,
+              name: r.name,
+              color: r.color,
+              position: plan.roles.length - i,
+              permissions: [],
+              selfAssign: r.selfAssign,
+            })),
+          )
+          .returning({ id: constellationRoles.id, name: constellationRoles.name });
+        for (const r of made) roleIds.set(r.name, r.id);
+      }
+      // House rules, the welcome new members see (the about; a description typed in wins), accent.
+      await tx
+        .update(constellations)
+        .set({
+          rules: [...plan.rules],
+          accent: plan.accent,
+          ...(isConstellationColor(parsed.data.color) ? {} : { color: ACCENT_THEME[plan.accent].legacy }),
+          ...(description ? {} : plan.welcome ? { description: plan.welcome } : {}),
+        })
+        .where(eq(constellations.id, c.id));
       let nebulaPosition = 0;
       for (const [i, category] of plan.categories.entries()) {
         const [cat] = await tx
@@ -376,7 +444,15 @@ constellationsRouter.post("/", createLimiter, async (req, res) => {
           .values({ constellationId: c.id, name: category.name, position: i })
           .returning({ id: constellationCategories.id });
         for (const n of category.nebulas) {
-          await createNebula(tx, c.id, { name: n.name, kind: n.kind, categoryId: cat.id, topic: n.topic ?? null, position: nebulaPosition++ });
+          const only = (n.roles ?? []).map((name) => roleIds.get(name)).filter((id): id is string => !!id);
+          await createNebula(tx, c.id, {
+            name: n.name,
+            kind: n.kind,
+            categoryId: cat.id,
+            topic: n.topic ?? null,
+            position: nebulaPosition++,
+            ...(only.length ? { visibility: "roles" as const, roleIds: only } : {}),
+          });
         }
       }
       return c.id;
@@ -399,7 +475,8 @@ constellationsRouter.get("/chats/:conversationId", async (req, res) => {
   const cid = idParam.safeParse(req.params.conversationId);
   const nebula = cid.success ? await nebulaOfChat(cid.data) : null;
   const s = nebula ? await standingOf(nebula.constellationId, me(res).id) : null;
-  if (!nebula || !s) {
+  // 0.8.0: a role-only nebula I can't see is as good as not there.
+  if (!nebula || !s || !(await seesNebulaChat(s.userId, String(cid.data)))) {
     res.status(404).json({ error: "not_found", message: "That nebula isn't available." });
     return;
   }
@@ -917,6 +994,8 @@ constellationsRouter.post("/:id/welcome", changeLimiter, async (req, res) => {
       .where(and(eq(constellationMembers.constellationId, s.constellationId), eq(constellationMembers.userId, s.userId)));
     if (parsed.data.roleIds) await setMyPickedRoles(tx, s.constellationId, s.userId, parsed.data.roleIds);
   });
+  // 0.8.0: picked roles unlock role-only nebulas.
+  if (parsed.data.roleIds) await resync(s.constellationId, [s.userId]);
   if (parsed.data.roleIds?.length) await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
@@ -931,6 +1010,7 @@ constellationsRouter.put("/:id/me/roles", changeLimiter, async (req, res) => {
     return;
   }
   await db.transaction((tx) => setMyPickedRoles(tx, s.constellationId, s.userId, parsed.data.roleIds));
+  await resync(s.constellationId, [s.userId]);
   await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
@@ -1027,6 +1107,7 @@ constellationsRouter.post("/:id/transfer", changeLimiter, async (req, res) => {
     return;
   }
   await transferOwnership(s.constellationId, s.userId, t.userId);
+  await resync(s.constellationId, [s.userId, t.userId]);
   await logModeration(s.constellationId, s.userId, "ownership_transferred", t.userId);
   await constellationChanged(s.constellationId);
   for (const id of [s.userId, t.userId]) emitToUser(id, "constellations:changed", {}, true);
@@ -1149,7 +1230,8 @@ async function nebulaFor(req: Request, res: Response, s: Standing) {
   const [n] = nid.success
     ? await db.select().from(nebulas).where(and(eq(nebulas.id, nid.data), eq(nebulas.constellationId, s.constellationId)))
     : [];
-  if (!n) {
+  // 0.8.0: a role-only nebula I can't see is as good as not there.
+  if (!n || !(await seesNebulaChat(s.userId, n.conversationId))) {
     res.status(404).json({ error: "not_found", message: "That nebula isn't there any more." });
     return null;
   }
@@ -1219,19 +1301,33 @@ constellationsRouter.post("/:id/categories", changeLimiter, async (req, res) => 
   res.status(201).json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
 
+// PATCH …/categories/:cid  { name?, visibility?, roleIds? } — 0.8.0: who can see it ("Only these
+// roles" hides every nebula inside from everyone else). Left out = unchanged (older apps send a name).
 constellationsRouter.patch("/:id/categories/:cid", changeLimiter, async (req, res) => {
   const s = await standingFor(req, res, "manageNebulas");
   if (!s) return;
   const cid = idParam.safeParse(req.params.cid);
-  const name = plainText(CATEGORY_NAME_MAX, "The category name").safeParse(req.body?.name);
-  if (!cid.success || !name.success) {
-    bad(res, name.success ? "That category isn't there." : firstIssue(name.error));
+  const parsed = z
+    .object({ name: plainText(CATEGORY_NAME_MAX, "The category name").optional(), ...visibilityFields })
+    .safeParse(req.body ?? {});
+  if (!cid.success || !parsed.success) {
+    bad(res, parsed.success ? "That category isn't there." : firstIssue(parsed.error));
     return;
   }
+  const roleIds = await cleanRoleIds(s.constellationId, parsed.data.roleIds);
+  const gateChanged = parsed.data.visibility !== undefined || roleIds !== undefined;
   await db
     .update(constellationCategories)
-    .set({ name: name.data })
+    .set({
+      ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+      ...(parsed.data.visibility !== undefined ? { visibility: parsed.data.visibility } : {}),
+      ...(roleIds !== undefined ? { roleIds } : {}),
+    })
     .where(and(eq(constellationCategories.id, cid.data), eq(constellationCategories.constellationId, s.constellationId)));
+  if (gateChanged) {
+    await logModeration(s.constellationId, s.userId, "category_visibility_changed", null, { visibility: parsed.data.visibility ?? null });
+    await resync(s.constellationId);
+  }
   await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
@@ -1286,7 +1382,10 @@ constellationsRouter.delete("/:id/categories/:cid", changeLimiter, async (req, r
       });
       return true;
     });
-    if (done) await constellationChanged(s.constellationId);
+    if (done) {
+      await resync(s.constellationId);
+      await constellationChanged(s.constellationId);
+    }
   }
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
@@ -1322,6 +1421,8 @@ constellationsRouter.put("/:id/layout", changeLimiter, async (req, res) => {
       await tx.update(nebulas).set({ position: j++, categoryId }).where(eq(nebulas.id, n.id));
     }
   });
+  // 0.8.0: moving a nebula in or out of a role-only category changes who sees it.
+  await resync(s.constellationId);
   await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
@@ -1332,6 +1433,8 @@ const nebulaBody = z.object({
   categoryId: idParam.nullable().optional(),
   topic: optionalText(NEBULA_TOPIC_MAX, "The topic").optional(),
   readOnly: z.boolean().optional(),
+  // 0.8.0 role-only nebulas
+  ...visibilityFields,
 });
 
 constellationsRouter.post("/:id/nebulas", changeLimiter, async (req, res) => {
@@ -1364,6 +1467,7 @@ constellationsRouter.post("/:id/nebulas", changeLimiter, async (req, res) => {
     .select({ max: sql<number>`coalesce(max(${nebulas.position}), -1)::int` })
     .from(nebulas)
     .where(eq(nebulas.constellationId, s.constellationId));
+  const roleIds = await cleanRoleIds(s.constellationId, parsed.data.roleIds);
   const nebula = await db.transaction((tx) =>
     createNebula(tx, s.constellationId, {
       name,
@@ -1372,6 +1476,8 @@ constellationsRouter.post("/:id/nebulas", changeLimiter, async (req, res) => {
       topic: parsed.data.topic ?? null,
       position: max + 1,
       readOnly: parsed.data.readOnly,
+      visibility: parsed.data.visibility,
+      roleIds,
     }),
   );
   await constellationChanged(s.constellationId);
@@ -1399,6 +1505,10 @@ constellationsRouter.patch("/:id/nebulas/:nid", changeLimiter, async (req, res) 
   }
   if (parsed.data.topic !== undefined) changes.topic = parsed.data.topic;
   if (parsed.data.readOnly !== undefined) changes.readOnly = parsed.data.readOnly;
+  // 0.8.0: who can see it. Left out = unchanged, so older apps editing a nebula keep it.
+  if (parsed.data.visibility !== undefined) changes.visibility = parsed.data.visibility;
+  const roleIds = await cleanRoleIds(s.constellationId, parsed.data.roleIds);
+  if (roleIds !== undefined) changes.roleIds = roleIds;
   if (parsed.data.categoryId !== undefined) {
     const cid = parsed.data.categoryId;
     const [cat] = cid
@@ -1409,9 +1519,16 @@ constellationsRouter.patch("/:id/nebulas/:nid", changeLimiter, async (req, res) 
       : [];
     changes.categoryId = cat?.id ?? null;
   }
+  const gateChanged = changes.visibility !== undefined || changes.roleIds !== undefined || changes.categoryId !== undefined;
   if (Object.keys(changes).length) {
     await db.update(nebulas).set(changes).where(eq(nebulas.id, n.id));
     if (changes.name) await db.update(conversations).set({ name: changes.name }).where(eq(conversations.id, n.conversationId));
+  }
+  if (gateChanged) {
+    if (changes.visibility !== undefined || changes.roleIds !== undefined) {
+      await logModeration(s.constellationId, s.userId, "nebula_visibility_changed", null, { name: n.name, visibility: changes.visibility ?? n.visibility });
+    }
+    await resync(s.constellationId);
   }
   await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
@@ -1709,6 +1826,8 @@ constellationsRouter.patch("/:id/roles/:rid", changeLimiter, async (req, res) =>
     })
     .where(eq(constellationRoles.id, r.id));
   await logModeration(s.constellationId, s.userId, "role_changed", null, { name: parsed.data.name ?? r.name });
+  // 0.8.0: "Manage nebulas" shows every role-only nebula; picking-yourself doesn't change who sees.
+  if (parsed.data.permissions !== undefined || parsed.data.selfAssign !== undefined) await resync(s.constellationId);
   await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
@@ -1723,7 +1842,18 @@ constellationsRouter.delete("/:id/roles/:rid", changeLimiter, async (req, res) =
     return;
   }
   await db.delete(constellationRoles).where(eq(constellationRoles.id, r.id));
+  // 0.8.0: nebulas and categories only for this role lose it (only the Owner and admins see one
+  // left with no roles, until someone picks new ones).
+  await db
+    .update(nebulas)
+    .set({ roleIds: sql`array_remove(${nebulas.roleIds}, ${r.id}::uuid)` })
+    .where(and(eq(nebulas.constellationId, s.constellationId), sql`${r.id}::uuid = any(${nebulas.roleIds})`));
+  await db
+    .update(constellationCategories)
+    .set({ roleIds: sql`array_remove(${constellationCategories.roleIds}, ${r.id}::uuid)` })
+    .where(and(eq(constellationCategories.constellationId, s.constellationId), sql`${r.id}::uuid = any(${constellationCategories.roleIds})`));
   await logModeration(s.constellationId, s.userId, "role_deleted", null, { name: r.name });
+  await resync(s.constellationId);
   await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
@@ -1800,6 +1930,8 @@ constellationsRouter.put("/:id/members/:uid/roles", changeLimiter, async (req, r
   await logModeration(s.constellationId, s.userId, "roles_changed", t.userId, {
     roles: roles.filter((r) => wanted.has(r.id)).map((r) => r.name),
   });
+  // 0.8.0: their roles decide which role-only nebulas they see.
+  await resync(s.constellationId, [t.userId]);
   await constellationChanged(s.constellationId);
   emitToUser(t.userId, "constellations:changed", {}, true);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });

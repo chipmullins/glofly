@@ -1,0 +1,289 @@
+/* 0.8.0 templates (Templates board). The dialog gets wide for this step. */
+.cx-dialog.cx-dialog--wide {
+  width: 1120px;
+}
+.cx-tpl {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.cx-tpl h1 {
+  margin: 0 0 4px;
+}
+.cx-tpl-lead {
+  margin: 0;
+  font-size: 15px;
+  color: var(--glo-muted);
+}
+.cx-tpl-cols {
+  display: flex;
+  gap: 22px;
+  min-height: 0;
+}
+.cx-tpl-list {
+  width: 330px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cx-tpl-choice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 14px 16px;
+  text-align: left;
+  border-radius: 16px;
+  border: 2px solid var(--glo-line);
+  background: var(--glo-subtle);
+  color: var(--glo-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.cx-tpl-choice[aria-pressed='true'] {
+  border-color: var(--tpl);
+  background: var(--glo-surface);
+  box-shadow: 0 0 0 3px rgba(var(--tpl-rgb), 0.16);
+}
+.cx-tpl-choice:focus-visible,
+.cx-tpl-back:focus-visible,
+.cx-tpl-create:focus-visible {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 2px;
+}
+.cx-tpl-swatch {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 14px;
+  background: var(--tpl);
+  box-shadow: 0 0 18px rgba(var(--tpl-rgb), 0.45);
+}
+.cx-tpl-swatch--empty {
+  box-sizing: border-box;
+  background: transparent;
+  box-shadow: none;
+  border: 2px dashed var(--tpl);
+  display: grid;
+  place-items: center;
+  color: var(--tpl);
+  font-size: 22px;
+  font-weight: 700;
+}
+.cx-tpl-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cx-tpl-choice-text b {
+  font-size: 16px;
+}
+.cx-tpl-choice-text span {
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.cx-tpl-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glo-faint);
+}
+.cx-tpl-divider span {
+  flex: 1;
+  height: 1px;
+  background: var(--glo-line);
+}
+.cx-tpl-get {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 22px;
+  border-radius: 20px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-subtle);
+}
+.cx-tpl-get-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cx-tpl-get-head b {
+  font-family: var(--glo-font-display);
+  font-size: 20px;
+}
+.cx-tpl-dot {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--tpl);
+  box-shadow: 0 0 12px rgba(var(--tpl-rgb), 0.5);
+}
+.cx-tpl-accent {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--glo-muted);
+  white-space: nowrap;
+}
+.cx-tpl-get-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  flex: 1;
+}
+.cx-tpl-get-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cx-tpl-caps {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glo-faint);
+}
+.cx-tpl-cat {
+  margin: 6px 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--glo-faint);
+}
+.cx-tpl-neb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 14px;
+}
+.cx-tpl-glyph {
+  width: 12px;
+  text-align: center;
+  color: var(--glo-faint);
+}
+.cx-tpl-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.cx-tpl-only {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--glo-warn-bg);
+  color: var(--glo-warn-text);
+}
+.cx-tpl-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cx-tpl-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--glo-border);
+  font-size: 13px;
+  font-weight: 700;
+}
+.cx-tpl-role span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.cx-tpl-none {
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.cx-tpl-rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cx-tpl-rules li {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.cx-tpl-rules li span {
+  font-weight: 700;
+  color: var(--glo-link);
+}
+.cx-tpl-welcome {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.cx-tpl-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.cx-tpl-back {
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--glo-border);
+  background: transparent;
+  color: var(--glo-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cx-tpl-create {
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--tpl);
+  color: var(--tpl-on);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(var(--tpl-rgb), 0.45);
+}
+.cx-tpl-create:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 860px) {
+  .cx-tpl-cols {
+    flex-direction: column;
+  }
+  .cx-tpl-list {
+    width: auto;
+  }
+  .cx-tpl-get-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cx-tpl-get-head {
+    flex-wrap: wrap;
+  }
+  .cx-tpl-get-head b {
+    font-size: 18px;
+  }
+  .cx-tpl-accent {
+    margin-left: 26px;
+    flex-basis: 100%;
+  }
+}

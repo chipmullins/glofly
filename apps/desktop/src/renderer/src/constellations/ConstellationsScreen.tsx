@@ -7,6 +7,7 @@ import type {
   DirectoryEntry,
   Message,
   MyStatus,
+  MyStatusChanges,
   Presence,
   PublicUser,
   SignedInUser
@@ -36,7 +37,7 @@ type Props = {
   start: CxPlace
   me: SignedInUser
   myStatus: MyStatus
-  onChangeStatus: (changes: Partial<MyStatus>) => Promise<boolean>
+  onChangeStatus: (changes: MyStatusChanges) => Promise<boolean>
   presence: Record<string, Presence>
   friends: PublicUser[]
   conversations: ConversationSummary[]

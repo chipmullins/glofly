@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -236,7 +236,7 @@ twoStepRouter.use(requireAuth);
 
 const me = (res: Response) => (res.locals.user as { id: string }).id;
 
-const settingsLimiter = rateLimit({
+const settingsLimiter = rateLimit("two-step:settings", {
   windowMs: 15 * 60 * 1000,
   limit: 10,
   keyGenerator: (_req, res) => me(res),

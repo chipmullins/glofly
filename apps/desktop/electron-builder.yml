@@ -4,6 +4,13 @@ productName: Glofly
 copyright: Copyright © 2026 Glofly
 directories:
   buildResources: build
+# 0.8.0: glofly:// links ("Open in Glofly" on a friend's invite page) open Glofly
+# (src/main/deepLinks.ts). On the Mac this is what puts the scheme in Info.plist; Windows also
+# registers it when Glofly starts (app.setAsDefaultProtocolClient).
+protocols:
+  - name: Glofly
+    schemes:
+      - glofly
 # Electron's built-in switches ("fuses"), flipped in the packaged app (not in npm run dev):
 # the Glofly program can't be reused as a plain Node.js runner, doesn't take Node options or a
 # debugger from the command line or environment, and only runs its own signed-in-place app.asar

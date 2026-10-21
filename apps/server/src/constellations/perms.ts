@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { isPermission, type ConstellationPermission } from "@glofly/shared";
 import { db } from "../db";
-import { constellationMemberRoles, constellationMembers, constellationRoles, constellations } from "../db/schema";
+import { constellationMemberRoles, constellationMembers, constellationRoles, constellations, conversationMembers } from "../db/schema";
 import { nebulaOfChat } from "./chats";
 
 // Who may do what in a constellation (2.0). Every action is checked here on the server:
@@ -97,10 +97,19 @@ export async function ranksOf(constellationId: string, userIds: string[]): Promi
 
 // ───────────── Nebula chats (used by messages/routes.ts) ─────────────
 
+/** 0.8.0: can I see this nebula (role-only ones)? Its conversation's members are who can. */
+async function seesChat(conversationId: string, userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ userId: conversationMembers.userId })
+    .from(conversationMembers)
+    .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, userId)));
+  return !!row;
+}
+
 /** Can I post in this nebula right now? Not timed out, and for read-only nebulas, a moderator. */
 export async function canPostInNebula(conversationId: string, userId: string): Promise<boolean> {
   const nebula = await nebulaOfChat(conversationId);
-  if (!nebula) return false;
+  if (!nebula || !(await seesChat(conversationId, userId))) return false;
   const s = await standingOf(nebula.constellationId, userId);
   if (!s || s.timedOutUntil) return false;
   if (nebula.readOnly && !can(s, "manageNebulas") && !can(s, "deleteMessages")) return false;
@@ -110,7 +119,7 @@ export async function canPostInNebula(conversationId: string, userId: string): P
 /** Why I can't post (for the app's message), or null when I can. */
 export async function whyCantPostInNebula(conversationId: string, userId: string): Promise<string | null> {
   const nebula = await nebulaOfChat(conversationId);
-  if (!nebula) return "This nebula isn't available.";
+  if (!nebula || !(await seesChat(conversationId, userId))) return "This nebula isn't available.";
   const s = await standingOf(nebula.constellationId, userId);
   if (!s) return "You're not in this constellation.";
   if (s.timedOutUntil) return "You're timed out for now, so you can read but not post.";

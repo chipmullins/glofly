@@ -233,7 +233,6 @@ export default function Chats() {
         <SearchPill value={query} onChange={setQuery} placeholder="Find a friend or chat" focusOnKey />
       </View>
       {!query ? <Banners /> : null}
-      {!query ? <SocialStrip /> : null}
       <FlatList
         data={items}
         keyExtractor={(i) => i.key}
@@ -280,6 +279,8 @@ export default function Chats() {
         ListHeaderComponent={
           query ? null : (
             <View>
+              {/* The faces row (Hang?, live, free to hang, birthdays) scrolls with the chats so rows never slide under it. */}
+              <SocialStrip />
               {/* 0.7.1: nebulas with news for you; a tap flies straight in */}
               <ChatsNews />
               {pinned.length ? (

@@ -3,18 +3,24 @@ import type { Relationship, SearchResult } from '../../../preload/api-types'
 import { splitMatch } from '../lib/names'
 import Avatar from './Avatar'
 import { AddFriendIcon, ChatIcon, CloseIcon, SearchIcon } from './icons'
+import { InviteLinkCard } from './InviteLink'
 import './dialogs.css'
 
 type AddFriendDialogProps = {
+  /** 0.8.0: whose invite link the card shows */
+  userId: string
   onClose: () => void
   /** Called after any change, so the friends list can refresh. */
   onChanged: () => void
   onSessionExpired: () => void
   /** Opens a chat with a friend from the results. */
   onMessage: (userId: string) => void
-  /** 0.7.4: where the cursor starts: the username search, or the invite-by-email box */
-  startAt?: 'search' | 'invite'
-  /** 0.7.4: an invite went out (the welcome card ticks "Invite friends") */
+  /**
+   * 0.7.4: where the cursor starts: the username search, or the invite-by-email box. 0.8.0:
+   * 'link' starts at the search with the invite link card in view.
+   */
+  startAt?: 'search' | 'invite' | 'link'
+  /** 0.7.4: an invite went out or (0.8.0) the link was copied (the welcome card ticks "Invite friends") */
   onInvited?: () => void
   /** 0.7.5: "Find @name" from an empty search starts with that name typed */
   initialQuery?: string
@@ -33,6 +39,7 @@ function Highlight({ text, query }: { text: string; query: string }): React.JSX.
 }
 
 export default function AddFriendDialog({
+  userId,
   onClose,
   onChanged,
   onSessionExpired,
@@ -46,6 +53,9 @@ export default function AddFriendDialog({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  // 0.8.0: the email invite form, under the invite link card
+  const [emailOpen, setEmailOpen] = useState(startAt === 'invite')
+  const [emailAsked, setEmailAsked] = useState(false)
 
   // Always call the latest onClose, without re-running the effect (which would steal focus).
   const onCloseRef = useRef(onClose)
@@ -264,11 +274,28 @@ export default function AddFriendDialog({
           ))}
         </ul>
 
-        <InviteFriends
-          onSessionExpired={onSessionExpired}
-          focus={startAt === 'invite'}
-          onInvited={onInvited}
-        />
+        {/* 0.8.0: the invite link first; email invites one click away (or open, from "Invite by email"). */}
+        <InviteLinkCard userId={userId} onCopied={onInvited} />
+        {emailOpen ? (
+          <InviteFriends
+            onSessionExpired={onSessionExpired}
+            focus={startAt === 'invite' || emailAsked}
+            onInvited={onInvited}
+          />
+        ) : (
+          <p className="il-email-alt">
+            Prefer email?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setEmailAsked(true)
+                setEmailOpen(true)
+              }}
+            >
+              Email an invite instead
+            </button>
+          </p>
+        )}
 
         <p className="dialog-foot">Blocked users never appear in search.</p>
       </div>

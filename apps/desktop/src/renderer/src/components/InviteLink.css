@@ -1,0 +1,295 @@
+/* 0.8.0 shareable friend invite link (InviteLink.dc.html). Theme tokens only, so it follows light,
+   dark and the accent color. */
+
+.il-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 18px 16px;
+  border-radius: 18px;
+  background: var(--glo-accent-tint);
+  border: 1px solid var(--glo-accent-muted);
+  flex: none;
+}
+.il-art {
+  position: absolute;
+  right: -6px;
+  top: -8px;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.il-art-path {
+  stroke: var(--glo-accent-muted);
+}
+.il-text {
+  position: relative;
+}
+.il-text h2 {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--glo-ink);
+}
+.il-text p {
+  margin: 0;
+  max-width: 380px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--glo-muted);
+}
+.il-row {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.il-link {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--glo-surface);
+  border: 1px solid var(--glo-accent-muted);
+  color: var(--glo-link);
+  font-size: 15px;
+  user-select: text;
+}
+.il-link svg {
+  flex: none;
+}
+.il-link-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--glo-ink);
+}
+.il-link-text--wait {
+  color: var(--glo-faint);
+  font-size: 14px;
+}
+.il-copy {
+  min-width: 128px;
+  min-height: 46px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+  font: inherit;
+  font-family: var(--glo-font-display);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+.il-copy:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+.il-copy:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.il-copy--done {
+  background: var(--glo-good);
+  color: #ffffff;
+}
+.il-foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.il-text-button {
+  min-height: 44px;
+  padding: 10px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--glo-link);
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  flex: none;
+}
+.il-text-button:hover:not(:disabled) {
+  color: var(--glo-link-hover);
+}
+.il-text-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.il-text-button--ink {
+  color: var(--glo-icon);
+  font-size: 14px;
+  padding: 10px 8px;
+}
+.il-text-button--muted {
+  color: var(--glo-muted);
+  font-size: 14px;
+  padding: 0 6px;
+}
+.il-confirm {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--glo-surface);
+  border: 1px solid var(--glo-accent-muted);
+  animation: il-pop 0.22s ease-out;
+}
+.il-confirm > span {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--glo-icon);
+}
+.il-new {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--glo-ink);
+  color: var(--glo-bg);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  flex: none;
+}
+.il-new:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+@keyframes il-pop {
+  0% {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .il-confirm {
+    animation: none;
+  }
+}
+.il-note {
+  position: relative;
+  margin: 0;
+  font-size: 13px;
+  color: var(--glo-danger-text);
+}
+.il-email-alt {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--glo-faint);
+}
+.il-email-alt button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--glo-link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.il-email-alt button:hover {
+  color: var(--glo-link-hover);
+}
+
+/* Settings → Friends */
+.il-settings-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.il-settings-link {
+  overflow-wrap: anywhere;
+}
+.il-settings-copy {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--glo-accent);
+  border-radius: 10px;
+  background: var(--glo-surface);
+  color: var(--glo-link);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  flex: none;
+  min-width: 82px;
+}
+.il-settings-copy:hover:not(:disabled) {
+  background: var(--glo-accent-tint);
+}
+.il-settings-copy:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.il-settings-copy--done {
+  border-color: var(--glo-good);
+  color: var(--glo-good);
+}
+
+/* "Add Chip as a friend?" (opened from an invite link) */
+.il-ask {
+  max-width: 400px;
+  padding: 28px 26px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.il-ask:focus {
+  outline: none;
+}
+.il-ask-face {
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 4px rgba(var(--glo-accent-rgb), 0.22),
+    0 0 26px rgba(var(--glo-accent-rgb), 0.35);
+}
+.il-ask h1 {
+  margin: 6px 0 0;
+  font-family: var(--glo-font-display);
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--glo-ink);
+}
+.il-ask p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--glo-muted);
+}
+.il-ask-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.il-ask-actions .small-button {
+  height: 44px;
+  padding: 0 18px;
+}

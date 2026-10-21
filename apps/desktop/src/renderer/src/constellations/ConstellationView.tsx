@@ -14,6 +14,7 @@ import type {
   Message,
   MuteDuration,
   MyStatus,
+  MyStatusChanges,
   Nebula,
   NotifyLevel,
   Presence,
@@ -38,6 +39,7 @@ import {
   StarIcon
 } from './bits'
 import { hexA } from './colors'
+import { LockIcon, gateLabel } from './RoleVisibility'
 import { FireflyMark, GalaxyIcon } from './sky'
 import VoiceStage from './VoiceStage'
 import { BannerArt } from './identity'
@@ -45,7 +47,7 @@ import { accentStyle, hasAccent, needsWelcome } from './communityLib'
 import { MemberCardTop, MembersPanel } from './Members'
 import WelcomeDialog, { YourRolesDialog } from './WelcomeDialog'
 import NebulaSky from './NebulaSky'
-import { sidebarOrder, starsOf } from './nebulaSky'
+import { sidebarOrder, starsOf } from './skyLayout'
 import { scrollToNewLine, useNewSince } from './newSinceState'
 import { NewSincePill } from './NewSinceParts'
 import { layoutFromRows, layoutOf, rowsOf, sameRows, stepNebula, type Row } from './sidebarOrder'
@@ -167,7 +169,7 @@ export type ConstellationViewProps = {
   me: SignedInUser
   myStatus: MyStatus
   /** Change your status (the same as Glofly's own status menu) */
-  onChangeStatus: (changes: Partial<MyStatus>) => Promise<boolean>
+  onChangeStatus: (changes: MyStatusChanges) => Promise<boolean>
   /** Friends' presence (for the profile card) */
   presence: Record<string, Presence>
   friendIds: Set<string>
@@ -1035,6 +1037,16 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 >
                   <ChevronDown />
                   {section.name}
+                  {c.categories.find((x) => x.id === section.id)?.visibility === 'roles' && (
+                    <span
+                      className="cx-cat-lock"
+                      role="img"
+                      aria-label={`Only ${gateLabel(c, c.categories.find((x) => x.id === section.id)?.roleIds)}`}
+                      title={`Only ${gateLabel(c, c.categories.find((x) => x.id === section.id)?.roleIds)}`}
+                    >
+                      <LockIcon size={11} />
+                    </span>
+                  )}
                   {closed && (
                     <span className={withNews ? 'cx-cat-hint cx-cat-hint--news' : 'cx-cat-hint'}>
                       {withNews ? `• ${withNews} with news` : 'folded'}
@@ -1101,6 +1113,16 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                         <SpeakerIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
                       )}
                       <span className="cx-neb-name">{n.name}</span>
+                      {n.visibility === 'roles' && (
+                        <span
+                          className="cx-neb-lock"
+                          title={`Only ${gateLabel(c, n.roleIds)} can see it`}
+                          aria-label={`Only ${gateLabel(c, n.roleIds)}`}
+                        >
+                          <LockIcon />
+                          {gateLabel(c, n.roleIds)}
+                        </span>
+                      )}
                       {liveEventVoice.has(n.id) && <span className="ev-event-badge">EVENT</span>}
                       {(isQuiet(n) || n.notify === 'none') && (
                         <span

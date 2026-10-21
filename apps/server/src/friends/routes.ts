@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -7,11 +7,12 @@ import { blocks, friendships, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { emitToUser } from "../realtime";
 import { endCallsBetween } from "../calls/service";
-import { announcePresence, presenceOf } from "../presence";
+import { announcePresence, liveStatusText, presenceOf } from "../presence";
 import { blockedEitherWay, chatPartnersOf, isRestricted, MANAGED_BY_FAMILY, pair, pairIs } from "./rules";
 
 export { chatPartnersOf };
-import { STATUS_TEXT_MAX } from "@glofly/shared";
+import { STATUS_CLEAR_AFTER, STATUS_TEXT_MAX, isTimeZone, statusClearEndsAt } from "@glofly/shared";
+import { TIME_ZONE } from "../social/glows";
 import { inBackground, notifyFriendRequest } from "../push/notify";
 import { alertTargetsOf, clearOnlineAlerts, setOnlineAlert } from "./online-alerts";
 import { FRIEND_INVITES_PER_DAY, sendFriendInvite } from "./invites";
@@ -29,8 +30,8 @@ type Me = { id: string; username: string; displayName: string; avatarVersion: st
 const me = (res: Response): Me => res.locals.user as Me;
 
 // Limits are per account, not per connection.
-const perUser = (windowMs: number, limit: number, message: string) =>
-  rateLimit({
+const perUser = (name: string, windowMs: number, limit: number, message: string) =>
+  rateLimit(name, {
     windowMs,
     limit,
     keyGenerator: (_req, res) => me(res).id,
@@ -38,8 +39,8 @@ const perUser = (windowMs: number, limit: number, message: string) =>
     legacyHeaders: false,
     message: { error: "too_many_requests", message },
   });
-const searchLimiter = perUser(60 * 1000, 60, "Slow down a little and try again.");
-const requestLimiter = perUser(60 * 60 * 1000, 30, "You've sent a lot of requests. Try again later.");
+const searchLimiter = perUser("friends:search", 60 * 1000, 60, "Slow down a little and try again.");
+const requestLimiter = perUser("friends:request", 60 * 60 * 1000, 30, "You've sent a lot of requests. Try again later.");
 
 const userIdParam = z.uuid();
 
@@ -74,14 +75,31 @@ const statusSchema = z.object({
     .transform((t) => (t === "" ? null : t))
     .nullable()
     .optional(),
+  // 0.8.0: when the custom status clears itself; the end time is worked out here, never trusted
+  // from the app. Older apps don't send it: their text stays until changed (as before).
+  statusClearAfter: z.enum(STATUS_CLEAR_AFTER).optional(),
+  // 0.8.0: the app's IANA time zone, for "Today" and "This week" (Glofly's own zone if missing).
+  timeZone: z.string().max(64).refine(isTimeZone, "That isn't a time zone.").optional(),
 });
 
 async function myStatus(userId: string) {
   const [row] = await db
-    .select({ status: users.statusPreference, statusText: users.statusText })
+    .select({
+      status: users.statusPreference,
+      statusText: users.statusText,
+      statusTextExpiresAt: users.statusTextExpiresAt,
+    })
     .from(users)
     .where(eq(users.id, userId));
-  return row;
+  if (!row) return row;
+  // A status past its end (the sweep hasn't reached it yet) is already gone.
+  const expired = !!row.statusText && !liveStatusText(row.statusText, row.statusTextExpiresAt);
+  return {
+    status: row.status,
+    statusText: expired ? null : row.statusText,
+    // 0.8.0: only ever sent to you (friends just see the text).
+    statusTextEndsAt: !expired && row.statusText ? (row.statusTextExpiresAt?.toISOString() ?? null) : null,
+  };
 }
 
 // GET /users/me/status — the status you picked and your custom status.
@@ -89,20 +107,39 @@ usersRouter.get("/me/status", async (_req, res) => {
   res.json(await myStatus(me(res).id));
 });
 
-// PATCH /users/me/status  { status?, statusText? } — change them. Friends see it instantly.
+// PATCH /users/me/status  { status?, statusText?, statusClearAfter?, timeZone? } — change them.
+// Friends see it instantly.
 usersRouter.patch("/me/status", searchLimiter, async (req, res) => {
   const parsed = statusSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid", message: parsed.error.issues[0].message });
     return;
   }
-  const { status, statusText } = parsed.data;
-  const changes: { statusPreference?: typeof status; statusText?: string | null } = {};
+  const { status, statusText, statusClearAfter, timeZone } = parsed.data;
+  const changes: {
+    statusPreference?: typeof status;
+    statusText?: string | null;
+    statusTextExpiresAt?: Date | null;
+  } = {};
   if (status !== undefined) changes.statusPreference = status;
-  if (statusText !== undefined) changes.statusText = statusText;
+  if (statusText !== undefined) {
+    changes.statusText = statusText;
+    // New text without a "Clear after" = Never; clearing the text clears its end too.
+    changes.statusTextExpiresAt = statusText
+      ? statusClearEndsAt(statusClearAfter ?? "never", new Date(), timeZone ?? TIME_ZONE)
+      : null;
+  } else if (statusClearAfter !== undefined) {
+    // Only the "Clear after" changed: it applies to the text you have now (if any), from now.
+    const [row] = await db.select({ statusText: users.statusText }).from(users).where(eq(users.id, me(res).id));
+    changes.statusTextExpiresAt = row?.statusText
+      ? statusClearEndsAt(statusClearAfter, new Date(), timeZone ?? TIME_ZONE)
+      : null;
+  }
   if (Object.keys(changes).length) {
     await db.update(users).set(changes).where(eq(users.id, me(res).id));
-    await announcePresence(me(res).id, emitToUser);
+    // A change of end time alone looks the same to friends, but your other devices refresh
+    // your status when they hear your own presence, so it's sent anyway.
+    await announcePresence(me(res).id, emitToUser, "statusTextExpiresAt" in changes);
   }
   res.json(await myStatus(me(res).id));
 });
@@ -434,7 +471,7 @@ friendsRouter.delete("/:userId", async (req, res) => {
 
 // POST /friends/invite  { email } — "Invite your friends" (0.3.0): emails them a link to join.
 // Always says "Invite sent" for an address that already has an account (see friends/invites.ts).
-const inviteLimiter = perUser(24 * 60 * 60 * 1000, FRIEND_INVITES_PER_DAY * 2, "You've sent a lot of invites today. Try again tomorrow.");
+const inviteLimiter = perUser("friends:invite", 24 * 60 * 60 * 1000, FRIEND_INVITES_PER_DAY * 2, "You've sent a lot of invites today. Try again tomorrow.");
 friendsRouter.post("/invite", inviteLimiter, async (req, res) => {
   if (await isRestricted(me(res).id)) {
     res.status(403).json(MANAGED_BY_FAMILY);

@@ -130,3 +130,10 @@ export function stepNebula(c: ConstellationDetail, currentId: string | null | un
   if (order.length === 1) return null
   return order[(at + dir + order.length) % order.length]
 }
+
+/** 0.8.0 role-only: "Valorant", "Valorant +1", or "Owner and admins" (the lock badge). */
+export function gateLabel(c: ConstellationDetail, roleIds: string[] | undefined): string {
+  const names = (roleIds ?? []).map((id) => c.roles.find((r) => r.id === id)?.name).filter((n): n is string => !!n)
+  if (!names.length) return 'Owner and admins'
+  return names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`
+}

@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit } from "../rateLimit";
 import { and, desc, eq, gt, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -27,7 +27,7 @@ type Me = { id: string; username: string };
 const me = (res: Response): Me => res.locals.user as Me;
 
 // Wrong current passwords count against this, so a borrowed computer can't be used to guess.
-const passwordCheckLimiter = rateLimit({
+const passwordCheckLimiter = rateLimit("account:password-check", {
   windowMs: 15 * 60 * 1000,
   limit: 5,
   skipSuccessfulRequests: true,

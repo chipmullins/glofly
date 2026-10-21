@@ -2,6 +2,7 @@
 // and the server. Moved here from apps/desktop/src/preload/api-types.d.ts (Oct 11, 2026).
 
 import type { WatchReactionEvent, WatchUpdate } from './watch'
+import type { StatusClearAfter } from './statusClear'
 // Watch Together's shapes live in watch.ts; re-exported so `@glofly/shared/types` has them too.
 export type {
   WatchAction,
@@ -57,6 +58,8 @@ export type RegisterRequest = {
   acceptTerms: boolean
   /** Needed while sign-ups are invite only. */
   inviteCode?: string
+  /** 0.8.0: signing up from a friend's invite link (glofly.app/i/<code>): friends right away. */
+  friendLink?: string
 }
 
 /** Who can sign up right now (set in Glofly Control). */
@@ -64,7 +67,13 @@ export type SignupMode = 'open' | 'invite' | 'closed'
 
 /** On failure, `fields` holds a message per field (email, username, password, ...). */
 export type RegisterResult =
-  { ok: true; user: SignedInUser } | { ok: false; fields: Record<string, string>; message?: string }
+  | {
+      ok: true
+      user: SignedInUser
+      /** 0.8.0: signed up from a friend's invite link: who you're friends with now */
+      linkedFriend?: PublicUser
+    }
+  | { ok: false; fields: Record<string, string>; message?: string }
 
 export type UsernameCheck = { available: boolean; reason?: string }
 
@@ -123,7 +132,24 @@ export type Activity = { name: string; since: string }
 
 /** The status you pick for yourself. */
 export type MyStatusChoice = 'online' | 'away' | 'dnd' | 'invisible'
-export type MyStatus = { status: MyStatusChoice; statusText: string | null }
+export type MyStatus = {
+  status: MyStatusChoice
+  statusText: string | null
+  /**
+   * 0.8.0: when the custom status clears itself (ISO), null = stays until you change it. Only sent
+   * to you, never to friends; missing on older servers.
+   */
+  statusTextEndsAt?: string | null
+}
+/** PATCH /users/me/status. Text without `statusClearAfter` = Never (what older apps send). */
+export type MyStatusChanges = {
+  status?: MyStatusChoice
+  statusText?: string | null
+  /** 0.8.0: '30m' | '1h' | '4h' | 'today' | 'week' | 'never' (StatusClearAfter). */
+  statusClearAfter?: StatusClearAfter
+  /** 0.8.0: your IANA time zone, for "Today" and "This week". */
+  timeZone?: string
+}
 
 /** `since` is when you became friends, the request was sent, or you blocked them (ISO date). */
 export type FriendEntry = PublicUser & {
@@ -481,6 +507,8 @@ export type ServerEvent =
   | { type: 'friend:online'; user: PublicUser }
   /** Someone joined Glofly from your invite and is now your friend (0.3.0) */
   | { type: 'friend:joined'; user: PublicUser }
+  /** 0.8.0: someone added you with your invite link (signed in), and is now your friend */
+  | { type: 'friend:linked'; user: PublicUser }
   | { type: 'conversation:read'; conversationId: string; userId: string; readAt: string }
   | { type: 'conversations:changed' }
   | { type: 'profile:changed'; userId: string }

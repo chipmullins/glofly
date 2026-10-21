@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import {
   CONSTELLATION_NAME_MAX,
   CONSTELLATION_TAGS_MAX,
-  CONSTELLATION_TEMPLATES,
   CONSTELLATION_TYPES,
   JOIN_REQUEST_NOTE_MAX,
   VISIBILITY_LABELS,
@@ -15,6 +14,7 @@ import {
 } from '@glofly/shared/constellations'
 import { api } from '../lib/constellations'
 import { CloseIcon, ConstellationIcon, StarIcon } from './bits'
+import TemplatePicker from './TemplatePicker'
 
 // The + (Create.dc.html, approved): tabs Create | Join with an invite. Create: icon, name, "Start
 // with" templates, and (Chip, Oct 17) who can join: Invite only, Public, or Public with approval,
@@ -194,6 +194,8 @@ export default function CreateJoin({
   // Create
   const [name, setName] = useState('')
   const [template, setTemplate] = useState<ConstellationTemplate>('gaming')
+  /** 0.8.0: Create is two steps: the details, then the starting point (Templates board) */
+  const [step, setStep] = useState<'details' | 'template'>('details')
   const [visibility, setVisibility] = useState<ConstellationVisibility>('invite')
   const [type, setType] = useState<ConstellationType | ''>('')
   const [tags, setTags] = useState<string[]>([])
@@ -274,13 +276,22 @@ export default function CreateJoin({
     })
   }
 
-  async function create(): Promise<void> {
+  /** The details are fine: on to the starting point. */
+  function detailsReady(): boolean {
     if (!name.trim()) {
       setError('Give your constellation a name.')
-      return
+      return false
     }
     if (visibility !== 'invite' && !type) {
       setError('Pick what kind of constellation it is, so people can find it.')
+      return false
+    }
+    return true
+  }
+
+  async function create(): Promise<void> {
+    if (!detailsReady()) {
+      setStep('details')
       return
     }
     setBusy(true)
@@ -325,7 +336,14 @@ export default function CreateJoin({
       className="cx-dialog-backdrop"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="cx-cc-title" className="cx-dialog">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cx-cc-title"
+        className={
+          tab === 'create' && step === 'template' ? 'cx-dialog cx-dialog--wide' : 'cx-dialog'
+        }
+      >
         <div className="cx-dialog-top">
           <DialogStars />
           <div role="tablist" aria-label="Create or join" className="cx-tabs">
@@ -353,12 +371,27 @@ export default function CreateJoin({
           </button>
         </div>
 
-        {tab === 'create' ? (
+        {tab === 'create' && step === 'template' ? (
+          <div className="cx-dialog-body">
+            <TemplatePicker
+              value={template}
+              onChange={setTemplate}
+              busy={busy}
+              onBack={() => {
+                setError(null)
+                setStep('details')
+              }}
+              onCreate={() => void create()}
+            />
+            {error && <p className="cx-error">{error}</p>}
+          </div>
+        ) : tab === 'create' ? (
           <form
             className="cx-dialog-body"
             onSubmit={(e) => {
               e.preventDefault()
-              void create()
+              setError(null)
+              if (detailsReady()) setStep('template')
             }}
           >
             <h1 id="cx-cc-title">Create a constellation</h1>
@@ -416,24 +449,6 @@ export default function CreateJoin({
             </div>
 
             <fieldset className="cx-fieldset">
-              <legend>Start with</legend>
-              <div className="cx-choices">
-                {CONSTELLATION_TEMPLATES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className="cx-choice"
-                    aria-pressed={template === t.id}
-                    onClick={() => setTemplate(t.id)}
-                  >
-                    <strong>{t.name}</strong>
-                    <span>{t.what}</span>
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-
-            <fieldset className="cx-fieldset">
               <legend>Who can join</legend>
               <VisibilityChoices value={visibility} onChange={setVisibility} />
             </fieldset>
@@ -482,7 +497,7 @@ export default function CreateJoin({
                 Cancel
               </button>
               <button type="submit" className="cx-button cx-button--primary" disabled={busy}>
-                {busy ? 'Creating…' : 'Create constellation'}
+                Next: pick a starting point
               </button>
             </div>
           </form>

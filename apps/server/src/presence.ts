@@ -182,6 +182,7 @@ export async function presenceOf(userIds: string[]): Promise<Map<string, Presenc
       id: users.id,
       statusPreference: users.statusPreference,
       statusText: users.statusText,
+      statusTextExpiresAt: users.statusTextExpiresAt,
       lastSeenAt: users.lastSeenAt,
       showLastSeen: users.showLastSeen,
     })
@@ -203,9 +204,19 @@ type PresenceRow = {
   id: string;
   statusPreference: string;
   statusText: string | null;
+  statusTextExpiresAt: Date | null;
   lastSeenAt: Date | null;
   showLastSeen: boolean;
 };
+
+/**
+ * 0.8.0: a custom status as others may see it right now: null once its "Clear after" time has
+ * passed, even before the once-a-minute sweep (statusSweep.ts) has cleared it.
+ */
+export function liveStatusText(text: string | null, expiresAt: Date | null, now = Date.now()): string | null {
+  if (!text) return null;
+  return expiresAt && expiresAt.getTime() <= now ? null : text;
+}
 
 async function presenceRow(row: PresenceRow): Promise<Presence> {
   const devices = await liveDevices(row.id);
@@ -226,7 +237,7 @@ async function presenceRow(row: PresenceRow): Promise<Presence> {
   return {
     status,
     // Custom status only shows while they're around.
-    statusText: status === "offline" ? null : row.statusText,
+    statusText: status === "offline" ? null : liveStatusText(row.statusText, row.statusTextExpiresAt),
     // Invisible people, and anyone who turned off "Show when I was last online",
     // don't reveal when they were last seen.
     lastSeenAt:

@@ -14,6 +14,7 @@ import { SectionLabel, Text } from '@/ui/kit'
 import { SettingsRow } from '@/ui/SettingsRow'
 import { MOD, showShortcutsInSettings } from '@/lib/keys'
 import { openShortcutSheet } from '@/ui/KeyShortcuts'
+import { InviteLinkSettings } from '@/ui/InviteLink'
 import { refreshSocial, useSocial } from '@/state/social'
 import { setPhonePref, usePhonePrefs } from '@/state/prefs'
 import { ACCENTS, useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
@@ -105,6 +106,14 @@ export default function Settings() {
       <SectionLabel>Appearance</SectionLabel>
       <SettingsRow icon="palette" label="Theme" value={THEMES.find((t) => t.key === theme)?.label} onPress={() => void pickTheme()} />
       <SettingsRow icon="palette" label="Accent color" value={ACCENTS.find((a) => a.key === accent)?.label} onPress={() => void pickAccent()} />
+
+      {/* 0.8.0: your invite link (restricted accounts don't get one) */}
+      {!user.restricted ? (
+        <>
+          <SectionLabel>Friends</SectionLabel>
+          <InviteLinkSettings />
+        </>
+      ) : null}
 
       <SectionLabel>Notifications & sounds</SectionLabel>
       <SettingsRow icon="bell" label="Notifications" detail="Messages, friend requests and calls" onPress={() => router.push('/settings/notifications')} />

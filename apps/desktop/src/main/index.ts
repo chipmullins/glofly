@@ -28,7 +28,8 @@ import {
   qrStart,
   register,
   restore,
-  signupMode
+  signupMode,
+  friendLinkInfo
 } from './auth'
 import { reportError, setErrorReports, watchMainErrors } from './errors'
 import {
@@ -59,6 +60,8 @@ import * as extras from './chatExtras'
 import * as social from './social'
 import { saveAttachment, showInFolder } from './files'
 import { handleSecondInstance, setupShortcuts, takePendingShortcut } from './shortcuts'
+import { handleDeepLinkArgv, setupDeepLinks, takeDeepLink } from './deepLinks'
+import { FRIEND_LINK_PATTERN } from '@glofly/shared/friendLinks'
 import {
   clearAllNotifications,
   clearNotification,
@@ -93,6 +96,7 @@ import { screenSoundSupport, startScreenSound, stopScreenSound } from './screenS
 import { isWatchReaction } from '@glofly/shared/watch'
 import { looksLikeVideo } from '@glofly/shared/attachments'
 import { VIDEO_MAX_BYTES } from '@glofly/shared/rules'
+import { isStatusClearAfter, type StatusClearAfter } from '@glofly/shared/statusClear'
 import {
   cancelEmailChange,
   changeEmail,
@@ -172,7 +176,11 @@ import {
   sendRequest,
   unblockUser,
   setOnlineAlert,
-  inviteByEmail
+  inviteByEmail,
+  myFriendLink,
+  resetFriendLink,
+  previewFriendLink,
+  acceptFriendLink
 } from './friends'
 import type {
   VoiceInfo,
@@ -217,8 +225,13 @@ if (isSecondWindow) app.setPath('userData', `${app.getPath('userData')}-second`)
 // Only one Glofly at a time (per sign-in folder). Opening it again, say while it's in the
 // tray, brings the existing window forward instead.
 // A Jump List task (Windows) arrives this way too: see shortcuts.ts.
+// 0.8.0: a glofly:// link (a friend's invite link) arrives the same way on Windows (deepLinks.ts).
 if (!app.requestSingleInstanceLock()) app.quit()
-else app.on('second-instance', (_event, argv) => handleSecondInstance(argv))
+else
+  app.on('second-instance', (_event, argv) => {
+    if (!handleDeepLinkArgv(argv)) handleSecondInstance(argv)
+  })
+setupDeepLinks()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -425,7 +438,8 @@ function isRegisterRequest(value: unknown): value is RegisterRequest {
     shortText(v.password, 128) &&
     shortText(v.birthday, 10) &&
     typeof v.acceptTerms === 'boolean' &&
-    (v.inviteCode === undefined || shortText(v.inviteCode, 20))
+    (v.inviteCode === undefined || shortText(v.inviteCode, 20)) &&
+    (v.friendLink === undefined || shortText(v.friendLink, 40))
   )
 }
 
@@ -519,6 +533,21 @@ function registerIpcHandlers(): void {
       ? inviteByEmail(email)
       : invalid
   )
+  // 0.8.0: shareable friend invite links.
+  const isLinkCode = (code: unknown): code is string =>
+    typeof code === 'string' && FRIEND_LINK_PATTERN.test(code)
+  ipcMain.handle('friends:my-link', (event) => (fromApp(event) ? myFriendLink() : invalid))
+  ipcMain.handle('friends:reset-link', (event) => (fromApp(event) ? resetFriendLink() : invalid))
+  ipcMain.handle('friends:preview-link', (event, code: unknown) =>
+    fromApp(event) && isLinkCode(code) ? previewFriendLink(code) : invalid
+  )
+  ipcMain.handle('friends:accept-link', (event, code: unknown) =>
+    fromApp(event) && isLinkCode(code) ? acceptFriendLink(code) : invalid
+  )
+  ipcMain.handle('auth:friend-link-info', (event, code: unknown) =>
+    fromApp(event) && isLinkCode(code) ? friendLinkInfo(code) : null
+  )
+  ipcMain.handle('links:take', (event) => (fromApp(event) ? takeDeepLink() : null))
 
   // Privacy settings: only known settings with allowed values get through.
   ipcMain.handle('settings:get', (event) => (fromApp(event) ? getSettings() : invalid))
@@ -587,7 +616,12 @@ function registerIpcHandlers(): void {
   // Your status.
   ipcMain.handle('status:get', (event) => (fromApp(event) ? getMyStatus() : invalid))
   ipcMain.handle('status:set', (event, changes: unknown) => {
-    const c = changes as { status?: unknown; statusText?: unknown } | null
+    const c = changes as {
+      status?: unknown
+      statusText?: unknown
+      statusClearAfter?: unknown
+      timeZone?: unknown
+    } | null
     const choices = ['online', 'away', 'dnd', 'invisible']
     const ok =
       fromApp(event) &&
@@ -596,11 +630,17 @@ function registerIpcHandlers(): void {
       (c.status === undefined || (typeof c.status === 'string' && choices.includes(c.status))) &&
       (c.statusText === undefined ||
         c.statusText === null ||
-        (typeof c.statusText === 'string' && c.statusText.length <= 200))
+        (typeof c.statusText === 'string' && c.statusText.length <= 200)) &&
+      (c.statusClearAfter === undefined || isStatusClearAfter(c.statusClearAfter)) &&
+      (c.timeZone === undefined || (typeof c.timeZone === 'string' && c.timeZone.length <= 64))
     if (!ok) return invalid
     return setMyStatus({
       ...(c.status !== undefined ? { status: c.status as 'online' } : {}),
-      ...(c.statusText !== undefined ? { statusText: c.statusText as string | null } : {})
+      ...(c.statusText !== undefined ? { statusText: c.statusText as string | null } : {}),
+      ...(c.statusClearAfter !== undefined
+        ? { statusClearAfter: c.statusClearAfter as StatusClearAfter }
+        : {}),
+      ...(c.timeZone !== undefined ? { timeZone: c.timeZone as string } : {})
     })
   })
 

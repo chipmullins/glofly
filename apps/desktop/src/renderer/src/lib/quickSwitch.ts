@@ -35,6 +35,14 @@ export const SETTINGS_PLACES: SettingsPlace[] = [
     keywords: 'read receipts typing last seen online friend requests birthday'
   },
   {
+    id: 'invite-link',
+    name: 'Your invite link',
+    where: 'Settings → General → Friends',
+    page: 'general',
+    focus: 'invite-link',
+    keywords: 'invite link share friends copy reset join url'
+  },
+  {
     id: 'notifications',
     name: 'Notifications & sounds',
     where: 'Settings → General',
