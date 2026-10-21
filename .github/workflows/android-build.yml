@@ -84,21 +84,6 @@ jobs:
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --no-install
 
-      - name: Give Gradle more memory
-        # Expo's template caps Gradle at 2 GB with 512 MB of Metaspace; the build ran out of
-        # Metaspace and crawled to the 60-minute limit (every run from Oct 13 to Oct 20). The
-        # runner has 16 GB; 6 GB + 3 GB here got the whole job killed, so these stay modest.
-        working-directory: apps/mobile/android
-        run: |
-          sed -i '/^org.gradle.jvmargs=/d' gradle.properties
-          # The generated file has no newline at the end: add one before appending.
-          [ -n "$(tail -c1 gradle.properties)" ] && echo >> gradle.properties
-          echo 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1536m -Dfile.encoding=UTF-8' >> gradle.properties
-          echo 'kotlin.daemon.jvmargs=-Xmx2g' >> gradle.properties
-          # Fewer things at once: 4 parallel C++ compiles plus two JVMs ran the runner out of memory.
-          echo 'org.gradle.workers.max=3' >> gradle.properties
-          tail -n 6 gradle.properties
-
       - name: Install the Android NDK
         # Gradle would download it itself, but gives up on one bad download ("Error on ZipFile
         # unknown archive", Oct 12). Installing it first lets a broken download be retried.
@@ -116,15 +101,7 @@ jobs:
 
       - name: Build the APK
         working-directory: apps/mobile/android
-        run: |
-          set -o pipefail
-          if ! ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64 2>&1 | tee build.log; then
-            # The first errors as annotations too (readable without the full log).
-            { grep -E "^e: |error:" build.log | head -n 30; grep -E "> Task .* FAILED" build.log; grep -A8 "What went wrong" build.log; } | grep -v '^--$' | awk '!seen[$0]++' | head -n 48 | while IFS= read -r line; do
-              echo "::error::${line:0:900}"
-            done
-            exit 1
-          fi
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64
 
       - name: Collect the APK
         run: |
