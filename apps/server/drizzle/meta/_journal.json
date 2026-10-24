@@ -260,6 +260,13 @@
       "when": 1792557151509,
       "tag": "0036_control_mobile",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792876265661,
+      "tag": "0037_show_glows",
+      "breakpoints": true
     }
   ]
 }

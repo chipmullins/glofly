@@ -889,6 +889,23 @@ export default function SettingsDialog({
                       </div>
                     ))}
                     <BirthdayRow />
+                    {settings?.showGlows !== undefined && (
+                      <div className="settings-row">
+                        <div className="settings-row-text">
+                          <span className="settings-row-label">Show glows</span>
+                          <span className="settings-row-desc">
+                            A little firefly and a number by a friend&apos;s name: how many days
+                            you&apos;ve both messaged each other. It gets brighter the more days in
+                            a row.
+                          </span>
+                        </div>
+                        <Toggle
+                          on={settings.showGlows}
+                          label="Show glows"
+                          onChange={(on) => void change('showGlows', on)}
+                        />
+                      </div>
+                    )}
                     <div className="settings-row">
                       <div className="settings-row-text">
                         <label className="settings-row-label" htmlFor="settings-requests">

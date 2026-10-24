@@ -95,6 +95,9 @@ export const users = pgTable(
     // Settings → Notifications → "Friends coming online" (0.3.0): the master switch for the
     // per-person alerts in online_alerts. On by default; nobody is followed until you pick them.
     onlineAlerts: boolean("online_alerts").notNull().default(true),
+    // 0.8.3: show glows (the firefly + day count by a friend's name). Off unless you turn it on
+    // (people kept asking what the number meant). Glows still count in the background.
+    showGlows: boolean("show_glows").notNull().default(false),
 
     // Set when someone deletes their account: the moment it's permanently removed.
     // Until then the account is hidden, and logging in again offers to restore it.

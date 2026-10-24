@@ -144,6 +144,14 @@ export default function Settings() {
           },
         }}
       />
+      {privacy?.showGlows !== undefined ? (
+        <SettingsRow
+          icon="sparkles"
+          label="Show glows"
+          detail="A firefly and a number by a friend's name: how many days you've both messaged each other"
+          toggle={{ value: privacy.showGlows, onChange: (v) => void changePrivacy({ showGlows: v }).then(() => refreshSocial()) }}
+        />
+      ) : null}
       <SettingsRow
         icon="flag"
         label="Send error reports"

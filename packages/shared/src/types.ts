@@ -447,6 +447,8 @@ export type PrivacySettings = {
   friendRequests: 'everyone' | 'nobody'
   /** "Friends coming online" master switch (0.3.0 servers; missing = on) */
   onlineAlerts?: boolean
+  /** 0.8.3: show glows by friends' names (off by default; missing from older servers) */
+  showGlows?: boolean
 }
 
 /** Settings → Account: private details only you see. */

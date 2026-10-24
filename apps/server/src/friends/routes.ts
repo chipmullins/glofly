@@ -152,6 +152,7 @@ const settingsSchema = z
     showTyping: z.boolean(),
     friendRequests: z.enum(["everyone", "nobody"]),
     onlineAlerts: z.boolean(),
+    showGlows: z.boolean(),
   })
   .partial()
   .strict();
@@ -164,6 +165,7 @@ async function mySettings(userId: string) {
       showTyping: users.showTyping,
       friendRequests: users.friendRequests,
       onlineAlerts: users.onlineAlerts,
+      showGlows: users.showGlows,
     })
     .from(users)
     .where(eq(users.id, userId));
@@ -189,6 +191,8 @@ usersRouter.patch("/me/settings", searchLimiter, async (req, res) => {
 
   // Friends see the change right away.
   if (before.showLastSeen !== after.showLastSeen) await announcePresence(myId, emitToUser, true);
+  // 0.8.3: glows appear or disappear on your other devices at once.
+  if (before.showGlows !== after.showGlows) emitToUser(myId, "social:changed", {});
   if (before.readReceipts !== after.readReceipts) {
     for (const id of [myId, ...(await chatPartnersOf(myId))]) emitToUser(id, "conversations:changed", {});
   }

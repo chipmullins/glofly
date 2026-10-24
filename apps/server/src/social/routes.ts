@@ -53,7 +53,7 @@ socialRouter.get("/", async (_req, res) => {
   const friendIds = await friendIdsOf(myId);
   const now = new Date();
   const [mine] = await db
-    .select({ hangUntil: users.hangUntil, hangWith: users.hangWith, shareBirthday: users.shareBirthday })
+    .select({ hangUntil: users.hangUntil, hangWith: users.hangWith, shareBirthday: users.shareBirthday, showGlows: users.showGlows })
     .from(users)
     .where(eq(users.id, myId));
   const others = friendIds.length
@@ -67,7 +67,8 @@ socialRouter.get("/", async (_req, res) => {
     .filter((u) => u.hangUntil && u.hangUntil > now && (!u.hangWith || u.hangWith.includes(myId)))
     .map((u) => ({ userId: u.id, until: u.hangUntil!.toISOString() }));
   const body: SocialToday = {
-    glows: await glowsOf(myId),
+    // 0.8.3: only for people who turned on Settings → Show glows (every app version then hides them).
+    glows: mine?.showGlows ? await glowsOf(myId) : {},
     hanging,
     myHang: mine?.hangUntil && mine.hangUntil > now ? { until: mine.hangUntil.toISOString(), with: mine.hangWith ?? null } : null,
     birthdays: others.filter((u) => u.shareBirthday && isBirthdayOn(u.birthday, day)).map((u) => u.id),

@@ -553,7 +553,7 @@ function registerIpcHandlers(): void {
   // Privacy settings: only known settings with allowed values get through.
   ipcMain.handle('settings:get', (event) => (fromApp(event) ? getSettings() : invalid))
   ipcMain.handle('settings:set', (event, changes: unknown) => {
-    const onOff = ['readReceipts', 'showLastSeen', 'showTyping', 'onlineAlerts']
+    const onOff = ['readReceipts', 'showLastSeen', 'showTyping', 'onlineAlerts', 'showGlows']
     const allowed = (k: string, v: unknown): boolean =>
       onOff.includes(k)
         ? typeof v === 'boolean'
