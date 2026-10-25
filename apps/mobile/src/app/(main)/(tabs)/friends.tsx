@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Pressable, SectionList, TextInput, View } from 'react-native'
+import { Pressable, SectionList, TextInput, useWindowDimensions, View } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { onMobile, presenceLine, type FriendEntry } from '@glofly/shared'
@@ -18,12 +18,18 @@ import { EmptyScene } from '@/ui/EmptyScene'
 import { shareFriendLink } from '@/state/friendLink'
 import { Skeleton } from '@/ui/Skeleton'
 import { font, useTheme } from '@/ui/theme'
+import { paneWidth, useWide } from '@/lib/layout'
 
 type Filter = 'online' | 'all' | 'pending' | 'blocked'
 type Row = { kind: 'friend' | 'incoming' | 'outgoing' | 'blocked'; entry: FriendEntry }
 
 export default function Friends() {
   const { c } = useTheme()
+  // 0.8.3: a narrow list (iPhone Duo's left pane, small iPhones) drops the Message button so names
+  // have room; tapping a friend's row opens the chat anyway.
+  const { width } = useWindowDimensions()
+  const wide = useWide()
+  const narrow = (wide ? paneWidth(width) : width) < 360
   const restricted = useSession((s) => s.user?.restricted === true)
   const insets = useSafeAreaInsets()
   const lists = useStore((s) => s.friends)
@@ -202,7 +208,7 @@ export default function Friends() {
               </View>
               {item.kind === 'friend' ? (
                 <>
-                  <IconButton name="chatsLine" label={`Message ${first}`} box={42} size={20} onPress={() => void openDmWith(f.id)} />
+                  {narrow ? null : <IconButton name="chatsLine" label={`Message ${first}`} box={42} size={20} onPress={() => void openDmWith(f.id)} />}
                   <IconButton name="phone" label={`Call ${first}`} box={42} size={20} onPress={() => void startCallWith(f.id, false)} />
                   <IconButton name="more" label={`More options for ${first}`} box={36} size={20} onPress={() => void friendMenu(f)} />
                 </>
