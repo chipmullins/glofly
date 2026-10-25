@@ -13,6 +13,16 @@ export function setWatchDucking(_watching: boolean): void {}
 export function audioEngineInfo(): Record<string, string> {
   return {}
 }
+export async function holdAudioForCallKit(): Promise<string> {
+  return 'not iPhone'
+}
+export async function releaseAudioForCallKit(): Promise<boolean> {
+  return false
+}
+export async function onCallKitAudio(_active: boolean): Promise<void> {}
+export function callKitAudioInfo(): Record<string, string> {
+  return {}
+}
 export type AudioRoute = 'speaker' | 'earpiece' | 'headset' | 'bluetooth'
 export async function audioRoutes(): Promise<AudioRoute[]> {
   return ['speaker']

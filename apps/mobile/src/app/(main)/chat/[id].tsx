@@ -29,7 +29,7 @@ import { chatMenu } from '@/lib/chatActions'
 import { firstName } from '@/lib/format'
 import { useListNow } from '@/lib/hooks'
 import { QUICK_REACTIONS } from '@/lib/emoji'
-import { startCallIn, joinCallIn, useCall } from '@/calls/controller'
+import { startCallIn, joinCallIn, moveCallHere, useCall } from '@/calls/controller'
 import { RingSomeSheet } from '@/calls/RingSome'
 import { JoinBar } from '@/calls/JoinBar'
 import { Composer, type ComposerHandle } from '@/chat/Composer'
@@ -89,6 +89,8 @@ export default function ChatScreen() {
   const startingCall = useCall((s) => s.connecting && !s.call)
   // 0.8.3: already in a call somewhere (the group's Join is then off)
   const inAnyCall = useCall((s) => !!s.call)
+  // The call this phone is in (to tell "in it here" from "in it on another device")
+  const callHereId = useCall((s) => s.call?.id ?? null)
   // 0.5.0: your glow with this friend, and their birthday.
   const partnerGlow = useSocial((s) => (chat?.kind === 'dm' ? s.glows[chat.partner.id] : undefined))
   const partnerBirthday = useSocial((s) => chat?.kind === 'dm' && s.birthdays.includes(chat.partner.id))
@@ -466,6 +468,8 @@ export default function ChatScreen() {
   const muted = isMuted(chat, now)
   const inCall = call && (call.status === 'ongoing' || call.status === 'ringing')
   const iAmIn = inCall && call.members.find((m) => m.userId === meId)?.state === 'joined'
+  // You're in this chat's call, but on another device (the computer): offer to bring it here.
+  const onOtherDevice = !!iAmIn && call?.status === 'ongoing' && callHereId !== call.id
   // Groups of 3+ (0.5.2): a new call can ring only some of the group.
   const canRingSome = isGroup && !inCall && chat.memberCount > 2
   const ringSomeHint = canRingSome ? 'Long-press to choose who to ring' : undefined
@@ -503,7 +507,19 @@ export default function ChatScreen() {
             </View>
           </Pressable>
           {canMessage || isGroup ? (
-            inCall && !iAmIn && isGroup ? null : inCall && !iAmIn ? (
+            onOtherDevice ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="You're in this call on another device. Move it to this phone"
+                disabled={inAnyCall || startingCall}
+                onPress={() => void moveCallHere(id)}
+                style={{ height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: c.online, justifyContent: 'center', marginRight: 4, opacity: inAnyCall || startingCall ? 0.5 : 1 }}
+              >
+                <Text size={14} weight="bold" style={{ color: '#FFFFFF' }}>
+                  Move here
+                </Text>
+              </Pressable>
+            ) : inCall && !iAmIn && isGroup ? null : inCall && !iAmIn ? (
               <Pressable accessibilityRole="button" accessibilityLabel="Join call" onPress={() => void joinCallIn(id, false)} style={{ height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: c.online, justifyContent: 'center', marginRight: 4 }}>
                 <Text size={14} weight="bold" style={{ color: '#FFFFFF' }}>
                   Join call

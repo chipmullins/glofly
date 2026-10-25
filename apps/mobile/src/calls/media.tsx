@@ -11,6 +11,7 @@ import {
   type AppleAudioCategoryOption,
   type AppleAudioConfiguration,
 } from '@livekit/react-native'
+import { AudioEngineAvailability, RTCAudioSession } from '@livekit/react-native-webrtc'
 import type { VideoTrack } from 'livekit-client'
 import * as Native from 'glofly-native'
 
@@ -67,8 +68,69 @@ export async function startCallAudio(video: boolean): Promise<void> {
   await AudioSession.startAudioSession()
 }
 
+// ---- iPhone lock-screen calls (CallKit) ----
+// A call answered on iOS's own call screen belongs to CallKit, and iOS switches the audio session
+// on for it by itself, a moment after Answer (CallKit.swift didActivate → "callAudio"). If the
+// call connected before that, LiveKit's audio engine started on a session iOS then took over, and
+// nobody heard anything until the call was redialed (hit or miss: it depended on which came
+// first). So while a CallKit call connects, the engine is held off (no input, no output) and let
+// go once iOS says the audio is on. This is LiveKit's documented CallKit pattern.
+
+/** Never hold longer than this: if iOS doesn't say, the call goes ahead rather than stay silent. */
+const CALLKIT_AUDIO_WAIT_MS = 4000
+let heldForCallKit = false
+let holdTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * Before connecting a call answered through CallKit. Does nothing when iOS has already switched
+ * the audio on, on Android, and on iPhone builds without the native part (callKitAudioActive null).
+ * Returns what happened, for the call diagnostics.
+ */
+export async function holdAudioForCallKit(): Promise<string> {
+  if (Platform.OS !== 'ios') return 'not iPhone'
+  const active = Native.callKitAudioActive()
+  if (active === null) return 'not in this build'
+  if (active) return 'already on'
+  heldForCallKit = true
+  await AudioDeviceModule.setEngineAvailability(AudioEngineAvailability.none).catch(() => {})
+  if (holdTimer) clearTimeout(holdTimer)
+  holdTimer = setTimeout(() => void releaseAudioForCallKit(), CALLKIT_AUDIO_WAIT_MS)
+  return 'held until iOS switches audio on'
+}
+
+/** Lets the engine run again (iOS switched the audio on, the wait ran out, or the call ended). */
+export async function releaseAudioForCallKit(): Promise<boolean> {
+  if (holdTimer) clearTimeout(holdTimer)
+  holdTimer = null
+  if (!heldForCallKit) return false
+  heldForCallKit = false
+  await AudioDeviceModule.setEngineAvailability(AudioEngineAvailability.default).catch(() => {})
+  return true
+}
+
+/** CallKit switched the call's audio on or off (the "callAudio" native event). */
+export async function onCallKitAudio(active: boolean): Promise<void> {
+  if (Platform.OS !== 'ios') return
+  try {
+    if (active) RTCAudioSession.audioSessionDidActivate()
+    else RTCAudioSession.audioSessionDidDeactivate()
+  } catch {
+    // an older build: nothing to tell
+  }
+  if (active) await releaseAudioForCallKit()
+}
+
+/** Call diagnostics: whether the engine is waiting on CallKit. */
+export function callKitAudioInfo(): Record<string, string> {
+  if (Platform.OS !== 'ios') return {}
+  const active = Native.callKitAudioActive()
+  return { 'callkit audio': active === null ? 'n/a (older build)' : active ? 'on' : 'off', 'engine held for callkit': String(heldForCallKit) }
+}
+
 export async function stopCallAudio(): Promise<void> {
   if (Platform.OS === 'ios') {
+    // Never leave the engine held after a call (the next call would be silent).
+    await releaseAudioForCallKit()
     // LiveKit lets the session go once the engine stops (deactivateOnStop).
     Native.stopCallSpeaker()
     await AudioDeviceModule.setRecordingAlwaysPreparedMode(false).catch(() => {})

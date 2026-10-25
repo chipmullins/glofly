@@ -33,6 +33,9 @@ final class GloflyCallKit: NSObject, CXProviderDelegate, PKPushRegistryDelegate 
   private var pendingAnswer: [String: String]?
   /// Apple's VoIP token as hex ("sandbox:" in front for development builds).
   private(set) var voipToken: String?
+  /// iOS has switched the audio on for a CallKit call (didActivate) and not off again yet.
+  /// JS reads it when it starts late (answered from the lock screen while Glofly was closed).
+  private(set) var audioActive = false
 
   private override init() {
     let config = CXProviderConfiguration()
@@ -155,6 +158,10 @@ final class GloflyCallKit: NSObject, CXProviderDelegate, PKPushRegistryDelegate 
   // MARK: CXProviderDelegate
 
   func providerDidReset(_ provider: CXProvider) {
+    if audioActive {
+      audioActive = false
+      GloflyNativeModule.emit("callAudio", ["active": "0"])
+    }
     calls.removeAll()
     timers.values.forEach { $0.cancel() }
     timers.removeAll()
@@ -200,10 +207,19 @@ final class GloflyCallKit: NSObject, CXProviderDelegate, PKPushRegistryDelegate 
     action.fail() // Glofly calls can't be put on hold
   }
 
-  // The call's audio: LiveKit sets up and runs iOS's audio session itself (src/calls/media.tsx);
-  // CallKit only switches it on for the call, so there's nothing to do here.
-  func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {}
-  func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {}
+  // The call's audio. A call answered here belongs to CallKit, and iOS switches its audio session
+  // on by itself a moment after Answer (didActivate). LiveKit's audio engine must not start before
+  // that: when the call connected first, the engine came up on a session iOS was about to take
+  // over and stayed silent both ways until the call was redialed. JS holds the engine off while a
+  // CallKit call connects and lets it go on "callAudio" active (src/calls/controller.ts).
+  func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+    audioActive = true
+    GloflyNativeModule.emit("callAudio", ["active": "1"])
+  }
+  func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+    audioActive = false
+    GloflyNativeModule.emit("callAudio", ["active": "0"])
+  }
 
   /// TestFlight / ad hoc builds made for development have Apple's sandbox push environment.
   static var isSandboxBuild: Bool {

@@ -18,7 +18,7 @@ public class GloflyNativeModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("GloflyNative")
-    Events("pushToken", "callRing", "hangUp", "voipToken", "callAnswer", "callEnd", "callDeclined", "callMute", "pipChanged", "keyCommand")
+    Events("pushToken", "callRing", "hangUp", "voipToken", "callAnswer", "callEnd", "callDeclined", "callMute", "pipChanged", "keyCommand", "callAudio")
 
     OnCreate {
       GloflyNativeModule.current = self
@@ -154,6 +154,10 @@ public class GloflyNativeModule: Module {
     }
     Function("callKitAnsweredInApp") { (callId: String) in
       GloflyCallKit.shared.answeredInApp(callId)
+    }
+    /// Whether iOS has switched on the audio for a CallKit call (see CallKit.swift didActivate).
+    Function("callKitAudioActive") { () -> Bool in
+      GloflyCallKit.shared.audioActive
     }
 
     // Sounds picked in Settings (message sound, ringtone): in-app tones and lock-screen ringing.

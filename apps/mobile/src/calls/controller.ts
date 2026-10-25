@@ -2,7 +2,7 @@ import { PermissionsAndroid, Platform } from 'react-native'
 import { tap } from '@/lib/haptics'
 import { router } from 'expo-router'
 import { create } from 'zustand'
-import { Room, RoomEvent, Track, createLocalAudioTrack, type LocalAudioTrack, type LocalVideoTrack, type Participant, type RemoteTrack, type RemoteTrackPublication, type VideoTrack } from 'livekit-client'
+import { DisconnectReason, Room, RoomEvent, Track, createLocalAudioTrack, type LocalAudioTrack, type LocalVideoTrack, type Participant, type RemoteTrack, type RemoteTrackPublication, type VideoTrack } from 'livekit-client'
 import { RING_MS, chatTitle, type Call, type PublicUser } from '@glofly/shared'
 import * as Native from 'glofly-native'
 import * as api from '@/api/glofly'
@@ -15,7 +15,7 @@ import { confirm, inform } from '@/ui/dialogs'
 import { playSound, startLoop } from '@/push/sounds'
 import { isQuietNow } from '@/state/quiet'
 import { usePhonePrefs } from '@/state/prefs'
-import { audioEngineInfo, setupWebRTC, startCallAudio, stopCallAudio } from './media'
+import { audioEngineInfo, callKitAudioInfo, holdAudioForCallKit, onCallKitAudio, releaseAudioForCallKit, setupWebRTC, startCallAudio, stopCallAudio } from './media'
 import { APP_SETTINGS } from '@/lib/config'
 import { cx } from '@/api/constellations'
 
@@ -112,6 +112,7 @@ export function callDiagnostics(): { rows: [string, string][]; log: string[] } {
     }
   }
   for (const [k, v] of Object.entries(audioEngineInfo())) rows.push([k, v])
+  for (const [k, v] of Object.entries(callKitAudioInfo())) rows.push([k, v])
   for (const [k, v] of Object.entries(Native.audioSessionInfo())) rows.push([`session ${k}`, v])
   return { rows, log: [...diagLog] }
 }
@@ -227,10 +228,22 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
       document.body.appendChild(el)
     })
   }
-  r.on(RoomEvent.Disconnected, () => {
-    // Dropped (not by us): try once to get back in, like the desktop app.
+  r.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
     const call = useCall.getState().call
     if (!call || room !== r) return
+    diag(`disconnected (${reason !== undefined ? DisconnectReason[reason] ?? reason : 'no reason'})`)
+    if (reason === DisconnectReason.DUPLICATE_IDENTITY) {
+      // You joined this call on another device (Move here on the computer): it carries on there.
+      // This phone just steps out, without telling the server you left. Before, this looked like a
+      // dropped connection, so the phone joined again right away and pushed the computer back out.
+      cleanup('Your call moved to another device.')
+      return
+    }
+    if (reason === DisconnectReason.PARTICIPANT_REMOVED || reason === DisconnectReason.ROOM_DELETED || reason === DisconnectReason.ROOM_CLOSED) {
+      cleanup() // taken out of the call, or the call is over (the server says so too)
+      return
+    }
+    // Dropped (not by us): try once to get back in, like the desktop app.
     if (!rejoinedOnce) {
       rejoinedOnce = true
       void (async () => {
@@ -404,7 +417,26 @@ export async function answer(video: boolean, fromCallKit = false): Promise<void>
   // iPhone: answered on Glofly's own card while the lock-screen call was also ringing: stop that.
   if (!fromCallKit) Native.callKitAnsweredInApp(inc.call.id)
   Native.showOverLockScreen(false)
-  await enter(() => api.answerCall(inc.call.id), video, false)
+  // iPhone, answered on iOS's call screen: the audio engine waits for iOS to switch the call's
+  // audio on (media.tsx), or the call can come up silent both ways.
+  const held = fromCallKit ? await holdAudioForCallKit() : null
+  try {
+    await enter(() => api.answerCall(inc.call.id), video, false)
+  } finally {
+    if (held !== null) diag(`callkit audio: ${held}`)
+    if (!useCall.getState().call) await releaseAudioForCallKit()
+  }
+}
+
+/**
+ * You're in this call on another device (the computer): bring it to this phone. The other
+ * device steps out by itself once this one joins (LiveKit allows one connection per person), and
+ * the people you're talking to stay in the call.
+ */
+export async function moveCallHere(conversationId: string): Promise<void> {
+  const call = useStore.getState().calls[conversationId]
+  if (!call) return void inform('That call is over')
+  await enter(() => api.joinCall(call.id), call.video, false)
 }
 
 export async function decline(withMessage?: string): Promise<void> {
@@ -590,6 +622,11 @@ export function startCalls() {
     if (event !== 'call:updated') return
     const { call, caller } = payload as { call: Call; caller: PublicUser | null }
     onCallUpdated(call, caller)
+  })
+  // iPhone: iOS switched a lock-screen call's audio on or off (lets the held engine go).
+  Native.onNativeEvent('callAudio', ({ active }) => {
+    diag(`callkit audio ${active === '1' ? 'on' : 'off'}`)
+    void onCallKitAudio(active === '1')
   })
   Native.onNativeEvent('hangUp', () => {
     if (useCall.getState().call) cleanup()

@@ -41,6 +41,7 @@ type Native = {
   endCallKitCall?(callId: string): void
   /** iPhone only: answered on Glofly's own Incoming card, so the lock-screen ringing stops. */
   callKitAnsweredInApp?(callId: string): void
+  callKitAudioActive?(): boolean
   /** iPhone only: iOS's shared audio session right now (call diagnostics). */
   audioSessionInfo?(): Record<string, string>
   /** iPhone only: keep the call on the speaker unless headphones / Bluetooth are in use (CallSpeaker.swift). */
@@ -157,7 +158,7 @@ export const cancelCallNotification = (id: string) => native?.cancelCallNotifica
 /** iPhone: a glofly:// link from a notification tapped while the app was starting (once). */
 export const takeLaunchLink = (): string | null => native?.takeLaunchLink?.() ?? null
 
-export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp' | 'voipToken' | 'callAnswer' | 'callEnd' | 'callDeclined' | 'callMute' | 'pipChanged' | 'keyCommand'
+export type NativeEvent = 'pushToken' | 'callRing' | 'hangUp' | 'voipToken' | 'callAnswer' | 'callEnd' | 'callDeclined' | 'callMute' | 'pipChanged' | 'keyCommand' | 'callAudio'
 export function onNativeEvent(event: NativeEvent, fn: (body: Record<string, string>) => void): () => void {
   if (!native) return () => {}
   const sub = native.addListener(event, fn)
@@ -180,6 +181,11 @@ export const voipToken = (): string | null => native?.voipToken?.() ?? null
 export const takeCallKitAnswer = (): { callId: string; video: string } | null => native?.takeCallKitAnswer?.() ?? null
 export const endCallKitCall = (callId: string) => native?.endCallKitCall?.(callId)
 export const callKitAnsweredInApp = (callId: string) => native?.callKitAnsweredInApp?.(callId)
+/**
+ * iPhone: whether iOS has switched on the audio for a lock-screen (CallKit) call yet. Null on
+ * builds without it (older iPhone builds, Android): then nothing waits for it.
+ */
+export const callKitAudioActive = (): boolean | null => (native?.callKitAudioActive ? native.callKitAudioActive() : null)
 
 /** iPhone: keep calls on the speaker (false = let the earpiece be used). False when this build can't. */
 export const keepCallOnSpeaker = (on: boolean): boolean => {
