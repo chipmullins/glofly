@@ -5,7 +5,6 @@ import {
   AudioDeviceModule,
   AudioSession,
   VideoTrack as LKVideoTrack,
-  VideoView,
   type VideoTrackProps,
   registerGlobals,
   setupIOSAudioManagement,
@@ -162,25 +161,27 @@ export function currentAudioRoute(): AudioRoute | null {
  * window is the whole app (CallPip.tsx), so `pip` does nothing there.
  */
 export function CallVideo({ track, style, mirror, contain, zOrder, pip, shape }: { track: VideoTrack; style?: ViewStyle; mirror?: boolean; contain?: boolean; zOrder?: number; pip?: boolean; shape?: [number, number] }) {
-  const usePip = !!pip && Platform.OS === 'ios'
   // LiveKit's newer VideoTrack view is the one with picture-in-picture. It reads only the
   // publication's track and id from the reference, so a small stand-in is enough.
   const trackRef = useMemo(() => ({ publication: { track, trackSid: track.sid } }) as unknown as VideoTrackProps['trackRef'], [track])
-  if (usePip) {
-    const w = shape?.[0] ?? 9
-    const h = shape?.[1] ?? 16
-    return (
-      <LKVideoTrack
-        trackRef={trackRef}
-        style={style}
-        mirror={mirror}
-        objectFit={contain ? 'contain' : 'cover'}
-        zOrder={zOrder}
-        iosPIP={{ enabled: true, startAutomatically: true, preferredSize: { width: w, height: h } }}
-      />
-    )
-  }
-  return <VideoView videoTrack={track} style={style} mirror={mirror} objectFit={contain ? 'contain' : 'cover'} zOrder={zOrder} />
+  const w = shape?.[0] ?? 9
+  const h = shape?.[1] ?? 16
+  // 0.8.3: every video uses the same view, and on iPhone always the picture-in-picture kind, with
+  // PiP just switched on or off. Before, a tile switched between two different views when it
+  // gained or lost PiP (which follows whoever is talking), so the video went black for a moment
+  // each time the speaker changed in a group call: the flicker.
+  return (
+    <LKVideoTrack
+      // A different track (camera turned off and on again) gets a fresh view; the same one never does.
+      key={track.sid ?? 'local'}
+      trackRef={trackRef}
+      style={style}
+      mirror={mirror}
+      objectFit={contain ? 'contain' : 'cover'}
+      zOrder={zOrder}
+      iosPIP={Platform.OS === 'ios' ? { enabled: !!pip, startAutomatically: !!pip, preferredSize: { width: w, height: h } } : undefined}
+    />
+  )
 }
 
 /**

@@ -34,7 +34,8 @@ const updateChannel = variant === 'production' ? 'production' : 'preview'
 // 2026-10-17.1: Glofly 0.5.0, videos in chats (expo-video), after builds of 16.1 may already exist.
 // 2026-10-20.1: Glofly 0.8.1: grouped notifications (Android) and keyboard shortcuts on iPad / tablets
 //   (glofly-native).
-const RUNTIME_VERSION = '2026-10-20.1'
+// 2026-10-25.1: Glofly 0.8.3: iPhone Duo (built with the iOS 27 SDK; UIKit scene life cycle).
+const RUNTIME_VERSION = '2026-10-25.1'
 
 const config: ExpoConfig = {
   name: 'Glofly',
@@ -146,7 +147,10 @@ const config: ExpoConfig = {
           usesCleartextTraffic: isDev,
         },
         // Firebase's iPhone pods (push notifications) need static frameworks.
-        ios: { useFrameworks: 'static' },
+        // 0.8.3: the UIKit scene life cycle, which the iOS 27 SDK (Xcode 27, eas.json's image) requires.
+        // Building with that SDK is what lets Glofly fill iPhone Duo's inner screen instead of
+        // running letterboxed at an iPhone's size.
+        ios: { useFrameworks: 'static', enableSceneSupport: true },
       },
     ],
     [

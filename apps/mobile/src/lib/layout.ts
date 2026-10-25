@@ -6,12 +6,16 @@ import { create } from 'zustand'
 // Friends, Groups, Settings) on the left, the open chat on the right. Narrow windows (a phone,
 // or an iPad in Split View / Stage Manager made small) keep the phone layout.
 
-/** From this width (points) up, two panes. */
-export const WIDE_MIN = 700
+/**
+ * From this width (points) up, two panes. 0.8.3: 640 (was 700) so iPhone Duo's inner screen
+ * (about 669 points wide upright, 951 sideways) gets two panes both ways; its outer screen and
+ * every other iPhone stay one pane, and so does an iPad's half-screen Split View.
+ */
+export const WIDE_MIN = 640
 
-/** The left pane: a phone-sized column. */
+/** The left pane: a phone-sized column (a little narrower on the smallest two-pane screens). */
 export function paneWidth(windowWidth: number): number {
-  return Math.round(Math.min(420, Math.max(320, windowWidth * 0.36)))
+  return Math.round(Math.min(420, Math.max(windowWidth < 720 ? 300 : 320, windowWidth * 0.36)))
 }
 
 /** Two panes right now? (Follows the window: rotating, Split View, Stage Manager.) */
@@ -26,6 +30,16 @@ export function isWideNow(): boolean {
 
 /** An iPad (or Android tablet): may turn sideways everywhere, not just in calls. */
 export const isTablet = Platform.OS !== 'web' && Device.deviceType === Device.DeviceType.TABLET
+
+/**
+ * 0.8.3: a tablet-sized screen right now: an iPad, or a phone whose current screen is big (iPhone
+ * Duo opened, a foldable Android unfolded). Follows folding and unfolding.
+ */
+export function bigScreenNow(): boolean {
+  if (Platform.OS === 'web') return false
+  const { width, height } = Dimensions.get('screen')
+  return isTablet || Math.min(width, height) >= 600
+}
 
 export type PaneTab = 'chats' | 'groups' | 'friends' | 'settings'
 

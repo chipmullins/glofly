@@ -52,6 +52,17 @@ export default function CallScreen() {
   const [watchFull, setWatchFull] = useState(true)
   const watchState = useWatchStore((x) => (s.call && x.callId === s.call.id ? x.watch : null))
   const landscape = width > height
+  // Which video goes into iOS's floating window when you leave the app: the pinned person, else
+  // someone with their camera on. 0.8.3: it stays on that person while their camera stays on,
+  // instead of hopping to whoever talks (each hop restarted the floating window).
+  const pipRef = useRef<string | null>(null)
+  const pipId = (() => {
+    const cams = s.tiles.filter((t) => !t.local && t.camera)
+    if (pinned && cams.some((t) => t.userId === pinned)) return (pipRef.current = pinned)
+    if (pipRef.current && cams.some((t) => t.userId === pipRef.current)) return pipRef.current
+    const pick = featured(s.tiles)
+    return (pipRef.current = pick.video === 'camera' ? (pick.tile?.userId ?? null) : null)
+  })()
 
   // iPhone: show where the call is really playing (it starts on the speaker; plugging in
   // headphones or Bluetooth moves it there).
@@ -191,7 +202,7 @@ export default function CallScreen() {
             bottom={bottomSpace}
             left={insets.left}
             right={insets.right}
-            pipId={pinned && s.tiles.some((t) => t.userId === pinned && !t.local && t.camera) ? pinned : featured(s.tiles).video === 'camera' ? featured(s.tiles).tile?.userId : null}
+            pipId={pipId}
           />
         )}
       </View>

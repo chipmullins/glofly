@@ -2035,8 +2035,18 @@ export function JoinCallBar({
       ? 'Starting…'
       : `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`
   const busy = !!calls.current
+  // 0.8.3: everyone's names on hover (the bar shows up to four faces and three names).
+  const ringingNames = conversation.members
+    .filter((p) => memberState(call, p.id) === 'ringing')
+    .map((p) => p.displayName)
+  const everyone = [
+    here.length ? `In the call: ${here.map((p) => p.displayName).join(', ')}` : 'Starting…',
+    ringingNames.length ? `Ringing: ${ringingNames.join(', ')}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n')
   return (
-    <div className="call-join" role="region" aria-label="Call in this group">
+    <div className="call-join" role="region" aria-label="Call in this group" title={everyone}>
       <span className="call-dot" aria-hidden="true" />
       <span className="call-join-faces" aria-hidden="true">
         {here.slice(0, 4).map((p) => (

@@ -31,6 +31,7 @@ import { useListNow } from '@/lib/hooks'
 import { QUICK_REACTIONS } from '@/lib/emoji'
 import { startCallIn, joinCallIn, useCall } from '@/calls/controller'
 import { RingSomeSheet } from '@/calls/RingSome'
+import { JoinBar } from '@/calls/JoinBar'
 import { Composer, type ComposerHandle } from '@/chat/Composer'
 import { MessageRow, type RowInfo } from '@/chat/MessageRow'
 import { TypingBubble } from '@/chat/TypingBubble'
@@ -86,6 +87,8 @@ export default function ChatScreen() {
   const call = useStore((s) => s.calls[id])
   // 0.7.3: a call is starting (e.g. the microphone prompt is up): Call can't be pressed again
   const startingCall = useCall((s) => s.connecting && !s.call)
+  // 0.8.3: already in a call somewhere (the group's Join is then off)
+  const inAnyCall = useCall((s) => !!s.call)
   // 0.5.0: your glow with this friend, and their birthday.
   const partnerGlow = useSocial((s) => (chat?.kind === 'dm' ? s.glows[chat.partner.id] : undefined))
   const partnerBirthday = useSocial((s) => chat?.kind === 'dm' && s.birthdays.includes(chat.partner.id))
@@ -500,7 +503,7 @@ export default function ChatScreen() {
             </View>
           </Pressable>
           {canMessage || isGroup ? (
-            inCall && !iAmIn ? (
+            inCall && !iAmIn && isGroup ? null : inCall && !iAmIn ? (
               <Pressable accessibilityRole="button" accessibilityLabel="Join call" onPress={() => void joinCallIn(id, false)} style={{ height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: c.online, justifyContent: 'center', marginRight: 4 }}>
                 <Text size={14} weight="bold" style={{ color: '#FFFFFF' }}>
                   Join call
@@ -519,6 +522,8 @@ export default function ChatScreen() {
         </View>
       </View>
 
+      {/* 0.8.3: a group call you're not in: who's in it, and Join */}
+      {isGroup && inCall && !iAmIn && call ? <JoinBar call={call} people={me ? [...chat.members, me] : chat.members} onJoin={(video) => void joinCallIn(id, video)} busy={inAnyCall} /> : null}
       <ReconnectingStrip />
       <PinnedBar pins={pinsApi.pins} onOpen={() => setPinsOpen(true)} />
       <View style={{ flex: 1 }}>
