@@ -22,9 +22,11 @@ export type ScreenSoundFormat = {
   scope: 'app' | 'computer'
 }
 
+// Resolves the package's own entry, not `${pkg}/package.json`: packages with an "exports" list
+// (audiotee) refuse that path, which made every Mac answer 'none' and share without sound.
 const has = (pkg: string): boolean => {
   try {
-    require.resolve(`${pkg}/package.json`)
+    require.resolve(pkg)
     return true
   } catch {
     return false

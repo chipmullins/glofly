@@ -164,7 +164,8 @@ async function startMac(start: WorkerStart): Promise<void> {
   const pids = scope === 'app' ? await withChildren(appPid!) : start.gloflyPids
   // The helper sits next to its package: …/node_modules/audiotee/bin/audiotee. In the packaged
   // app it's unpacked from the archive (electron-builder asarUnpack), so it can run.
-  const bin = join(require.resolve('audiotee/package.json'), '..', 'bin', 'audiotee').replace(
+  // (From its entry, …/audiotee/dist/index.js: its "exports" list refuses audiotee/package.json.)
+  const bin = join(require.resolve('audiotee'), '..', '..', 'bin', 'audiotee').replace(
     `app.asar${sep}`,
     `app.asar.unpacked${sep}`
   )
