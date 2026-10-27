@@ -159,6 +159,12 @@ export function CallProvider({
   const [active, setActive] = useState<Record<string, Call>>({})
   const [room, setRoom] = useState<Room | null>(null)
   const [tick, setTick] = useState(0)
+  /**
+   * The browser is refusing to play the call's sound until the page is tapped (phone and tablet
+   * browsers' autoplay rule). The other person's voice arrives but stays silent here, so they can
+   * talk to you but you can't hear them. Never happens in the desktop app.
+   */
+  const [soundBlocked, setSoundBlocked] = useState(false)
   /** Push to talk while in a call (null = open mic) */
   const [ptt, setPtt] = useState<PttState | null>(null)
   /** True while push to talk is working: the microphone stays off unless the key is held */
@@ -285,6 +291,7 @@ export function CallProvider({
     }
     audioRoot.current?.replaceChildren()
     setRoom(null)
+    setSoundBlocked(false)
     setCurrent(null)
   }, [setCurrent])
 
@@ -374,6 +381,11 @@ export function CallProvider({
           rejoinRef.current(reason)
         })
         .on(RoomEvent.MediaDevicesError, (err: Error) => problem(deviceProblem(err, 'microphone')))
+        // The browser blocked (or later allowed) the call's sound: LiveKit tells us, and waits
+        // for startAudio() from a tap. Before, nothing listened, so the call just stayed silent.
+        .on(RoomEvent.AudioPlaybackStatusChanged, () => {
+          if (roomRef.current === next) setSoundBlocked(!next.canPlaybackAudio)
+        })
       for (const e of [
         RoomEvent.TrackMuted,
         RoomEvent.TrackUnmuted,
@@ -409,6 +421,7 @@ export function CallProvider({
         void next.disconnect()
         return
       }
+      setSoundBlocked(!next.canPlaybackAudio)
       try {
         await next.localParticipant.setMicrophoneEnabled(true)
         // Push to talk: the microphone is ready but stays off until the key is held.
@@ -794,6 +807,30 @@ export function CallProvider({
     reportSharing(false)
   }, [bump, reportSharing])
 
+  const turnOnSound = useCallback(() => {
+    const r = roomRef.current
+    if (!r) return
+    // Must run inside the tap itself (the browser's rule), so no awaiting before it.
+    void r.startAudio().then(
+      () => setSoundBlocked(!r.canPlaybackAudio),
+      () => setSoundBlocked(true)
+    )
+  }, [])
+
+  // While the sound is blocked, the first tap, click or key anywhere on the page turns it on, so
+  // it fixes itself even if they never see the button in the call panel. A finger only counts as
+  // a tap once it lifts (pointerup/touchend; a touch's pointerdown is too early for the browser).
+  useEffect(() => {
+    if (!soundBlocked) return
+    const unblock = (): void => turnOnSound()
+    const events = ['pointerup', 'touchend', 'click', 'keydown'] as const
+    const opts = { capture: true, passive: true }
+    for (const e of events) document.addEventListener(e, unblock, opts)
+    return () => {
+      for (const e of events) document.removeEventListener(e, unblock, opts)
+    }
+  }, [soundBlocked, turnOnSound])
+
   const clearProblem = useCallback(
     () => setCurrent((c) => (c ? { ...c, problem: null } : c)),
     [setCurrent]
@@ -1124,6 +1161,8 @@ export function CallProvider({
     moveHere,
     joinVoice,
     clearProblem,
+    soundBlocked,
+    turnOnSound,
     showProblem: problem
   }
   useEffect(() => {

@@ -201,6 +201,25 @@
   cursor: pointer;
 }
 
+/* Phone and tablet browsers: the call's sound is paused until the page is tapped. */
+.call-sound-blocked {
+  margin: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--glo-call-dot);
+  border-radius: 12px;
+  background: var(--glo-call-tile-me);
+  color: var(--glo-call-soft);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(255, 179, 71, 0.35);
+}
+
 /* ---------- The call area, in each layout ---------- */
 
 .call-media {

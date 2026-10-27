@@ -94,6 +94,13 @@ export type CallsValue = {
   /** 2.0: drops into a voice nebula (leaving any other call first). */
   joinVoice: (chat: CallChat & { nebula: { constellationId: string; nebulaId: string } }) => void
   clearProblem: () => void
+  /**
+   * The browser won't play the call's sound until you tap the page (phone and tablet browsers'
+   * autoplay rule). Their voices are arriving but silent here until `turnOnSound` runs from a tap.
+   */
+  soundBlocked: boolean
+  /** Starts the call's sound. Must run from a tap or click (the browser's rule). */
+  turnOnSound: () => void
   /** Shows a short problem in the call panel (say, a Watch Together button that was refused). */
   showProblem: (message: string) => void
 }

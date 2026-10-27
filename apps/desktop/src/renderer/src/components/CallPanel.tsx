@@ -1742,6 +1742,12 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
       </div>
 
       {soloEndsAt && <SoloNotice key={soloEndsAt} endsAt={soloEndsAt} onStay={calls.stay} />}
+      {calls.soundBlocked && (
+        // Phone and tablet browsers: the call's sound can't start until the page is tapped.
+        <button type="button" className="call-sound-blocked" onClick={calls.turnOnSound}>
+          Your browser paused the call's sound. Tap here to hear them.
+        </button>
+      )}
       {current.problem && (
         <p className="call-problem" role="alert">
           {current.problem}
@@ -1962,6 +1968,29 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
           onClick: () => {}
         })
       }
+    }
+    // Anyone else's voice: is it reaching this device and playing? (Someone can talk but can't
+    // hear: this line on their side says whether the voice arrives, or the browser paused it.)
+    if (id !== me.id && room) {
+      const mic = room.remoteParticipants.get(id)?.getTrackPublication(Track.Source.Microphone)
+      const el = mic?.audioTrack?.attachedElements.find(
+        (e): e is HTMLMediaElement => e instanceof HTMLMediaElement
+      )
+      const blocked = calls.soundBlocked || !room.canPlaybackAudio || (!!el && el.paused)
+      const label = !mic
+        ? "Their microphone isn't on"
+        : mic.isMuted
+          ? "They're muted"
+          : !mic.audioTrack
+            ? "Their voice isn't arriving yet"
+            : blocked
+              ? 'Their voice is paused by this browser · Tap to hear'
+              : 'Their voice is playing here'
+      items.push({
+        label,
+        icon: <SpeakerIcon size={18} />,
+        onClick: blocked ? calls.turnOnSound : () => {}
+      })
     }
     // Anyone else's camera: the size it actually arrives at here (to check tablets and phones).
     if (id !== me.id) {
