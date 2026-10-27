@@ -15,9 +15,10 @@ import { confirm, inform } from '@/ui/dialogs'
 import { playSound, startLoop } from '@/push/sounds'
 import { isQuietNow } from '@/state/quiet'
 import { usePhonePrefs } from '@/state/prefs'
-import { audioEngineInfo, callKitAudioInfo, holdAudioForCallKit, onCallKitAudio, releaseAudioForCallKit, setupWebRTC, startCallAudio, stopCallAudio } from './media'
+import { audioEngineInfo, audioEnginePlaying, callKitAudioInfo, holdAudioForCallKit, onCallKitAudio, releaseAudioForCallKit, setupWebRTC, startCallAudio, stopCallAudio } from './media'
 import { APP_SETTINGS } from '@/lib/config'
 import { cx } from '@/api/constellations'
+import { reportError } from '@/lib/errorReports'
 
 // Calls: starting, answering and leaving, the LiveKit room, ringing in the app, and the
 // "Call in progress" service that keeps a call going when Glofly leaves the screen.
@@ -66,7 +67,10 @@ let room: Room | null = null
 let stopRing: (() => void) | null = null
 let stopOutgoing: (() => void) | null = null
 let ringTimer: ReturnType<typeof setTimeout> | null = null
+/** Trying to get back into a call that dropped (one try per drop; reset once back in). */
 let rejoinedOnce = false
+/** Checks every few seconds that voices arriving are really playing (iPhone; see watchAudio). */
+let audioWatch: ReturnType<typeof setInterval> | null = null
 const audioEls = new Map<string, HTMLMediaElement>()
 
 // ---- Call diagnostics (long-press the call's title) ----
@@ -81,6 +85,16 @@ export function diag(line: string) {
   if (diagLog.length > 60) diagLog.shift()
 }
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+/**
+ * A call problem → Glofly Control → Errors (grouped by problem; never names or what was said).
+ * Calls used to fail without telling anyone, so reports of "nobody could hear" came with nothing
+ * to go on. Also logged in Call diagnostics.
+ */
+export function reportCall(problem: string) {
+  diag(`reported: ${problem}`)
+  reportError({ message: `Call: ${problem}` }, 'call')
+}
 
 /** Everything the diagnostics panel shows, as label → value rows plus the log. */
 export function callDiagnostics(): { rows: [string, string][]; log: string[] } {
@@ -243,18 +257,37 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
       cleanup() // taken out of the call, or the call is over (the server says so too)
       return
     }
-    // Dropped (not by us): try once to get back in, like the desktop app.
+    // Dropped (not by us): try to get back in, like the desktop app.
+    const why = reason !== undefined ? String(DisconnectReason[reason] ?? reason) : 'no reason'
     if (!rejoinedOnce) {
       rejoinedOnce = true
       void (async () => {
-        const voice = useCall.getState().voice
-        const again = voice ? await cx.joinVoice(voice.constellationId, voice.nebulaId) : await api.joinCall(call.id)
-        if (again.ok && useCall.getState().call?.id === call.id) {
+        try {
+          const voice = useCall.getState().voice
+          const again = voice ? await cx.joinVoice(voice.constellationId, voice.nebulaId) : await api.joinCall(call.id)
+          if (useCall.getState().call?.id !== call.id) return // hung up meanwhile
+          if (!again.ok) {
+            reportCall(`dropped (${why}), couldn't get back in: ${again.error}`)
+            cleanup('The call dropped.')
+            return
+          }
           room = null
           await connect(again.data, useCall.getState().cameraOn)
-        } else cleanup('The call dropped.')
+          // Back in. Before, this stayed set for the rest of the call, so a second drop (Wi-Fi to
+          // mobile data twice in a long call) always ended it.
+          rejoinedOnce = false
+          diag('back in the call')
+        } catch (e) {
+          // Getting back in failed halfway: this used to go uncaught and leave the call stuck.
+          if (useCall.getState().call?.id !== call.id) return
+          reportCall(`dropped (${why}), getting back in failed: ${errText(e)}`)
+          cleanup('The call dropped.')
+        }
       })()
-    } else cleanup('The call dropped.')
+    } else {
+      reportCall(`dropped again while getting back in (${why})`)
+      cleanup('The call dropped.')
+    }
   })
   try {
     await r.connect(join.url, join.token, { autoSubscribe: true })
@@ -271,6 +304,8 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
     : r.localParticipant.setMicrophoneEnabled(true).then(() => undefined)
   await micOn.catch((e) => {
     diag(`mic publish failed: ${errText(e)}`)
+    // The other person can't hear you: worth knowing about.
+    reportCall(`microphone didn't start: ${errText(e)}`)
     mic?.stop()
     useCall.setState({ micOn: false })
     // iPhone asks for the microphone the first time; if it was refused, say where to allow it.
@@ -282,11 +317,40 @@ async function connect(join: { token: string; url: string; call: Call }, video: 
       useCall.setState({ cameraOn: false })
     })
   refreshTiles()
+  watchAudio(r)
   Native.startOngoingCall(join.call.id, join.call.conversationId, title(join.call), video)
   if (video) Native.keepScreenOn(true)
 }
 
+/**
+ * iPhone: someone's voice is arriving (subscribed, unmuted, live) but the call's audio engine
+ * isn't playing anything. That's the "nobody can hear each other until you call back" state
+ * (Oct 25): reported once per call after 10 seconds, so it shows up in Control → Errors with the
+ * engine's state, instead of only when someone remembers to copy Call diagnostics.
+ */
+function watchAudio(r: Room) {
+  if (audioWatch) clearInterval(audioWatch)
+  audioWatch = null
+  if (audioEnginePlaying() === null) return // not an iPhone (or an older build)
+  let silentChecks = 0
+  let reported = false
+  audioWatch = setInterval(() => {
+    if (room !== r || reported) return
+    const arriving = [...r.remoteParticipants.values()].some((p) =>
+      [...p.audioTrackPublications.values()].some((pub) => pub.isSubscribed && !pub.isMuted && pub.track?.mediaStreamTrack?.readyState === 'live'),
+    )
+    silentChecks = arriving && audioEnginePlaying() === false ? silentChecks + 1 : 0
+    if (silentChecks >= 2) {
+      reported = true
+      const info = audioEngineInfo()
+      reportCall(`iPhone: voice arriving but audio engine not playing (running ${info['engine running']}, recording ${info.recording}, mute mode ${info['mute mode']})`)
+    }
+  }, 5000)
+}
+
 function cleanup(message?: string) {
+  if (audioWatch) clearInterval(audioWatch)
+  audioWatch = null
   const ending = useCall.getState().call
   if (ending) Native.endCallKitCall(ending.id) // iPhone: iOS's call screen ends too
   const r = room
@@ -346,7 +410,8 @@ async function enterOnce(request: () => ReturnType<typeof api.startCall>, video:
   else router.push('/call')
   try {
     await connect(r.data, video)
-  } catch {
+  } catch (e) {
+    reportCall(`couldn't connect: ${errText(e)}`)
     void api.leaveCall(r.data.call.id)
     cleanup("Couldn't connect the call. Check your connection.")
     return

@@ -48,6 +48,7 @@ import {
   askPermission,
   clearAllNotifications,
   clearNotification,
+  flashTitle,
   permission,
   pushSupported,
   setBadge,
@@ -731,8 +732,8 @@ export function createBridge(): GloflyApi {
     window: {
       setTheme: () => undefined,
       setTitleBarColor: () => undefined,
-      // A browser can't flash the taskbar: the call's notification and ringtone do that job.
-      attention: () => undefined
+      // A browser can't flash the taskbar: the tab's title blinks instead until you look at it.
+      attention: flashTitle
     }
   }
 }

@@ -109,11 +109,43 @@ export async function clearAllNotifications(): Promise<void> {
   }
 }
 
+/** The tab's normal title ("(3) Glofly"); flashTitle swaps it with a call line for a while. */
+let titleNow = 'Glofly'
+let flashing: ReturnType<typeof setInterval> | null = null
+
+function stopFlashing(): void {
+  if (flashing) clearInterval(flashing)
+  flashing = null
+  document.title = titleNow
+  window.removeEventListener('focus', stopFlashing)
+}
+
+/**
+ * Someone's calling and this tab isn't what you're looking at: its title blinks "📞 Incoming
+ * call" (the browser's stand-in for a flashing taskbar button) until you look, for up to 30 s.
+ */
+export function flashTitle(): void {
+  if (document.visibilityState === 'visible' && document.hasFocus()) return
+  if (flashing) clearInterval(flashing)
+  const until = Date.now() + 30_000
+  let on = false
+  flashing = setInterval(() => {
+    if (Date.now() > until || (document.visibilityState === 'visible' && document.hasFocus())) {
+      stopFlashing()
+      return
+    }
+    on = !on
+    document.title = on ? '📞 Incoming call · Glofly' : titleNow
+  }, 1000)
+  window.addEventListener('focus', stopFlashing)
+}
+
 /** The unread count: on the tab's title, and on the app icon where the browser has one. */
 export function setBadge(count: number): void {
   const n = Number.isInteger(count) && count > 0 ? Math.min(count, 999) : 0
   const base = 'Glofly'
-  document.title = n > 0 ? `(${n > 99 ? '99+' : n}) ${base}` : base
+  titleNow = n > 0 ? `(${n > 99 ? '99+' : n}) ${base}` : base
+  if (!flashing) document.title = titleNow
   try {
     if (n > 0) void navigator.setAppBadge?.(n).catch(() => undefined)
     else void navigator.clearAppBadge?.().catch(() => undefined)

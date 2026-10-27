@@ -13,6 +13,9 @@ export function setWatchDucking(_watching: boolean): void {}
 export function audioEngineInfo(): Record<string, string> {
   return {}
 }
+export function audioEnginePlaying(): boolean | null {
+  return null
+}
 export async function holdAudioForCallKit(): Promise<string> {
   return 'not iPhone'
 }

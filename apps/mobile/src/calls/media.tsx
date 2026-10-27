@@ -14,6 +14,7 @@ import {
 import { AudioEngineAvailability, RTCAudioSession } from '@livekit/react-native-webrtc'
 import type { VideoTrack } from 'livekit-client'
 import * as Native from 'glofly-native'
+import { reportError } from '@/lib/errorReports'
 
 // LiveKit on phones: WebRTC comes from @livekit/react-native-webrtc, audio routing from
 // LiveKit's AudioSession. (media.web.tsx is the browser preview's version.)
@@ -94,7 +95,11 @@ export async function holdAudioForCallKit(): Promise<string> {
   heldForCallKit = true
   await AudioDeviceModule.setEngineAvailability(AudioEngineAvailability.none).catch(() => {})
   if (holdTimer) clearTimeout(holdTimer)
-  holdTimer = setTimeout(() => void releaseAudioForCallKit(), CALLKIT_AUDIO_WAIT_MS)
+  holdTimer = setTimeout(() => {
+    // iOS never said the audio was on: go ahead anyway, and tell Control (a likely silent call).
+    reportError({ message: 'Call: iPhone lock-screen answer, iOS never switched the audio on (went ahead after 4 s)' }, 'call')
+    void releaseAudioForCallKit()
+  }, CALLKIT_AUDIO_WAIT_MS)
   return 'held until iOS switches audio on'
 }
 
@@ -158,6 +163,16 @@ export async function startWatchAudio(): Promise<void> {
 export async function stopWatchAudio(): Promise<void> {
   if (Platform.OS === 'ios') return // LiveKit lets the session go when the engine stops
   await AudioSession.stopAudioSession().catch(() => {})
+}
+
+/** iPhone: whether the call's audio engine is playing sound. Null elsewhere (or if it can't say). */
+export function audioEnginePlaying(): boolean | null {
+  if (Platform.OS !== 'ios') return null
+  try {
+    return AudioDeviceModule.isPlaying()
+  } catch {
+    return null
+  }
 }
 
 /** Call diagnostics: what LiveKit's audio engine is doing (iPhone only; empty elsewhere). */

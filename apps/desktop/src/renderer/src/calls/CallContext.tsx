@@ -19,9 +19,10 @@ import type {
 } from '../../../preload/api-types'
 import { chatTitle } from '../lib/groups'
 import { audioCapture, getCallPrefs, onCallPrefsChange, type CallPrefs } from '../lib/callPrefs'
-import { playNoAnswer, playPtt, playSound, preloadPtt, startLoop } from '../lib/sounds'
+import { playNoAnswer, playPtt, playSound, preloadPtt, soundCanPlay, startLoop } from '../lib/sounds'
 import { effectiveVolume, onCallAudioChange } from '../lib/callAudio'
-import { clearNotification, notify, shouldNotify } from '../lib/notify'
+import { clearNotification, notificationsAllowed, notify, shouldNotify } from '../lib/notify'
+import { sendErrorReport } from '../lib/errorReports'
 import IncomingCall from '../components/IncomingCall'
 import {
   CallsContext,
@@ -55,9 +56,25 @@ const MAC_SCREEN_PROBLEM =
 /** 1-on-1: how long the other person can drop out before the call is ended. */
 const AWAY_LIMIT_MS = 30_000
 
-/** A friendly explanation for a microphone or camera that won't start. */
+/**
+ * A call problem → Glofly Control → Errors (grouped by problem, with the browser and system; never
+ * names or what was said). Calls used to fail without telling anyone, so "they couldn't hear me"
+ * arrived with nothing to go on.
+ */
+function reportCall(problem: string): void {
+  sendErrorReport({ message: `Call: ${problem}` }, 'call')
+}
+
+const errText = (err: unknown): string => {
+  const e = err as { name?: string; message?: string } | null
+  return [e?.name, e?.message].filter(Boolean).join(': ') || String(err)
+}
+
+/** A friendly explanation for a microphone or camera that won't start (and a report of it). */
 function deviceProblem(err: unknown, device: 'microphone' | 'camera'): string {
   const name = (err as { name?: string })?.name
+  // The other person can't hear (or see) you: worth knowing about.
+  reportCall(`${device} didn't start: ${name ?? 'unknown'}`)
   const which = device === 'microphone' ? 'Microphone' : 'Camera'
   if (name === 'NotAllowedError' || name === 'SecurityError') {
     return `Glofly isn't allowed to use your ${device}. Turn it on in ${privacySettingsPath(which)}.`
@@ -408,8 +425,9 @@ export function CallProvider({
 
       try {
         await next.connect(join.url, join.token)
-      } catch {
+      } catch (err) {
         if (attempt !== attemptRef.current) return
+        reportCall(`couldn't connect: ${errText(err)}`)
         hangUp()
         callbacks.current.onNotice(
           "Couldn't connect the call. Check your connection and try again."
@@ -469,6 +487,10 @@ export function CallProvider({
       void window.glofly.calls.join(call.id).then((result) => {
         if (attempt !== attemptRef.current) return
         if (!result.ok) {
+          if (result.error !== 'conflict') {
+            const why = reason !== undefined ? String(DisconnectReason[reason] ?? reason) : 'no reason'
+            reportCall(`dropped (${why}), couldn't get back in: ${result.error}`)
+          }
           teardown()
           callbacks.current.onNotice(
             result.error === 'conflict'
@@ -831,6 +853,38 @@ export function CallProvider({
     }
   }, [soundBlocked, turnOnSound])
 
+  // Someone's voice is arriving (subscribed, unmuted, live) but isn't playing here, for 10
+  // seconds: the browser blocked it without saying so, or its player stopped. Show "Tap to hear"
+  // and tell Control once per call, so one-way audio shows up even if nobody reports it.
+  useEffect(() => {
+    if (!room) return
+    let silentChecks = 0
+    let reported = false
+    const timer = setInterval(() => {
+      const stuck: string[] = []
+      for (const p of room.remoteParticipants.values()) {
+        const pub = p.getTrackPublication(Track.Source.Microphone)
+        const track = pub?.audioTrack
+        if (!pub || pub.isMuted || !track || track.mediaStreamTrack.readyState !== 'live') continue
+        const els = track.attachedElements.filter(
+          (e): e is HTMLMediaElement => e instanceof HTMLMediaElement
+        )
+        if (!room.canPlaybackAudio) stuck.push('sound blocked')
+        else if (!els.length) stuck.push('no player')
+        else if (els.every((e) => e.paused)) stuck.push('player paused')
+      }
+      silentChecks = stuck.length ? silentChecks + 1 : 0
+      if (silentChecks < 2) return
+      // Try to start it again (works if it was only paused); the button stays until it plays.
+      setSoundBlocked(true)
+      if (!reported) {
+        reported = true
+        reportCall(`voice arriving but not playing (${[...new Set(stuck)].join(', ')})`)
+      }
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [room])
+
   const clearProblem = useCallback(
     () => setCurrent((c) => (c ? { ...c, problem: null } : c)),
     [setCurrent]
@@ -908,8 +962,10 @@ export function CallProvider({
           setIncoming({ call, caller: who, chat })
           stopRingtone.current = startLoop('ringtone')
           window.glofly.window.attention()
-          // Not looking at Glofly: a Windows notification too (clicking it opens the call).
-          if (shouldNotify()) {
+          // Not looking at Glofly: a Windows notification too (clicking it opens the call). In a
+          // browser tab nobody has tapped yet, the ringtone can't play: the notification is then
+          // the only thing the device can ring with, so it's shown even with the tab in front.
+          if (shouldNotify() || (isWeb && !soundCanPlay() && notificationsAllowed())) {
             const kind = call.video ? 'Video call' : 'Voice call'
             void notify(
               {

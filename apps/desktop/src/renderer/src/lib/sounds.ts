@@ -261,6 +261,40 @@ export function startLoop(name: 'ringtone' | 'outgoing'): () => void {
 let audioContext: AudioContext | null = null
 const decoded = new Map<string, Promise<AudioBuffer>>()
 
+// Browsers keep a page's sound off until it has been tapped, clicked or typed in once. The
+// ringtone used to wait for that tap, so a call to a chat.glofly.app tab nobody had touched yet
+// rang silently. Now the first touch for any reason (signing in, opening a chat) switches sound
+// on for good, so later rings play. Electron never blocks, so this changes nothing there.
+const UNLOCK_EVENTS = ['pointerup', 'touchend', 'click', 'keydown'] as const
+function unlockSound(): void {
+  try {
+    audioContext ??= new AudioContext()
+    void audioContext.resume().then(
+      () => {
+        if (audioContext?.state !== 'running') return
+        for (const e of UNLOCK_EVENTS) document.removeEventListener(e, unlockSound, true)
+      },
+      () => {}
+    )
+  } catch {
+    // No sound device: nothing to unlock.
+  }
+}
+if (typeof document !== 'undefined') {
+  for (const e of UNLOCK_EVENTS) document.addEventListener(e, unlockSound, { capture: true, passive: true })
+}
+
+/**
+ * Can a ringtone be heard right now? False only in a browser tab that hasn't been touched yet
+ * (then the incoming call also shows a system notification, which makes the device's own sound).
+ */
+export function soundCanPlay(): boolean {
+  if (audioContext?.state === 'running') return true
+  const activation = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } })
+    .userActivation
+  return activation ? activation.hasBeenActive : true
+}
+
 /** Web Audio, decoded once per file (used for loops, which need to be gapless). */
 function bufferOf(url: string): Promise<AudioBuffer> {
   audioContext ??= new AudioContext()

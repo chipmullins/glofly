@@ -23,7 +23,12 @@ export const previewsOn = (): boolean => settings.preview
 
 /** Worth a notification right now? (You're elsewhere, they're on, not Do not disturb.) */
 export function shouldNotify(): boolean {
-  return settings.enabled && !isSilenced() && !inQuiet() && !document.hasFocus()
+  return notificationsAllowed() && !document.hasFocus()
+}
+
+/** Notifications are on and nothing is silencing them (whether or not Glofly is in front). */
+export function notificationsAllowed(): boolean {
+  return settings.enabled && !isSilenced() && !inQuiet()
 }
 
 const FACE = 96
