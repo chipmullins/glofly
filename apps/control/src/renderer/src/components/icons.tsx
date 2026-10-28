@@ -52,6 +52,7 @@ export const ICONS = {
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0',
   calls: 'M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5c-2-.7-5-.7-7 0V16l-3 1.5z',
   uptime: 'M3 12h4l3-7 4 14 3-7h4',
+  insights: 'M3 20h18M6 20v-6M11 20V6M16 20v-9M21 20V9',
   note: 'M5 4h14v16H5zM9 9h6M9 13h6M9 17h3',
   text: 'M4 6h16M4 12h16M4 18h10',
   voice: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3',

@@ -11,6 +11,7 @@ import {
 import { Avatar, Chip, StatusChip } from '../components/common'
 import { ActionDialog, type ActionSpec } from '../components/ActionDialog'
 import { MessageDialog } from '../components/MessageDialog'
+import { SupportSection } from './AccountSupport'
 import { Icon, ICONS } from '../components/icons'
 import { ago, bytes, daysUntil, longDate, plural, shortDate, when } from '../lib/format'
 
@@ -411,6 +412,35 @@ function AccountPanel({
       }
     },
     {
+      label: 'Export their data',
+      show: true,
+      spec: {
+        title: `Export @${a.username}'s data`,
+        intro: (
+          <>
+            Saves everything Glofly keeps about @{a.username} as a .json file: profile, devices,
+            friends, the messages they sent, reactions, constellations and more. Other people&apos;s
+            messages and passwords are left out; photos and files are listed but not included. Use
+            it when someone asks for a copy of their data.
+          </>
+        ),
+        confirmLabel: 'Export and save…',
+        notePlaceholder: 'e.g. They asked for a copy of their data by email',
+        run: async (_v, note) => {
+          const r = await window.control.exportAccount(a.id, note)
+          if (!r.ok) return { ok: false, status: 0, error: 'export_failed', message: r.message }
+          return {
+            ok: true,
+            data: {
+              message: r.saved
+                ? 'Saved their data.'
+                : 'Not saved (the export is still in the audit log).'
+            }
+          }
+        }
+      }
+    },
+    {
       label: 'Sign out all devices',
       show: true,
       spec: {
@@ -531,6 +561,8 @@ function AccountPanel({
           </div>
         ))}
       </div>
+
+      <SupportSection id={a.id} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <span className="section-label">Actions</span>

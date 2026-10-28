@@ -213,7 +213,10 @@ export const ALERT_LABELS: Record<AlertKind, { title: string; sub: string }> = {
   },
   inbox_reply: { title: 'Inbox reply', sub: 'Someone answered a Glofly Team message' },
   morning_summary: { title: 'Morning summary', sub: '9:00 AM · the last 24 hours in numbers' },
-  costs: { title: 'Costs and limits', sub: 'A free plan running out, your budget, GIFs near the hourly limit' }
+  costs: {
+    title: 'Costs and limits',
+    sub: 'A free plan running out, your budget, GIFs near the hourly limit'
+  }
 }
 
 export type ControlAlert = {
@@ -492,12 +495,174 @@ export type UsageReport = {
   countingSince: string | null
   soFar: { lines: UsageCostLine[]; total: number }
   endOfMonth: { lines: UsageCostLine[]; total: number }
+  /** Oct 28, 2026: the monthly budget the cost alerts watch (null: none) */
+  budget?: number | null
+  /** Oct 28, 2026: GIF searches against GIPHY's hourly limit (null: Redis didn't answer) */
+  gifs?: GifMeter | null
+}
+export type GifMeter = {
+  limit: number
+  thisHour: number
+  refusedThisHour: number
+  busiestHour: number
+  refusedToday: number
+}
+
+// ───────────── Insights, what's live, deletions, Support (Oct 28, 2026) ─────────────
+
+export type CallInsights = {
+  days: number
+  started: number
+  answered: number
+  missed: number
+  declined: number
+  video: number
+  group: number
+  /** Answered but over in under 20 seconds */
+  short: number
+  avgSeconds: number
+  avgPeople: number
+  voiceRooms: { rooms: number; people: number; minutes: number }
+  daily: { day: string; started: number; answered: number; missed: number }[]
+  problems: {
+    id: string
+    message: string
+    app: string
+    appVersion: string | null
+    os: string | null
+    count: number
+    people: number
+    firstAt: string
+    lastAt: string
+    resolvedAt: string | null
+  }[]
+}
+export type AppSplit = { desktop: number; web: number; ios: number; android: number }
+export type PeopleInsights = {
+  today: number
+  week: number
+  month: number
+  accounts: number
+  apps: AppSplit
+  daily: ({ day: string; people: number } & AppSplit)[]
+  cohorts: {
+    week: string
+    joined: number
+    d1_of: number
+    d1: number
+    w1_of: number
+    w1: number
+    m1_of: number
+    m1: number
+  }[]
+  countingSince: string | null
+}
+export type FeatureInsights = {
+  days: number
+  activePeople: number
+  features: { key: string; uses: number; people: number }[]
+}
+export type FunnelInsights = {
+  days: number
+  steps: { key: string; label: string; people: number }[]
+  joinedConstellation: number
+  medianMinutesToFirstMessage: number | null
+}
+export type Insights = {
+  days: number
+  calls: CallInsights
+  people: PeopleInsights
+  features: FeatureInsights
+  funnel: FunnelInsights
+  timeZone: string
+}
+export type VersionUse = { version: string; people: number }
+export type LiveWhere = {
+  release: string | null
+  server: { version: string | null; upSince: string }
+  web: {
+    version: string | null
+    build: string | null
+    reachable: boolean
+    minimum: string | null
+    inUse: VersionUse[]
+  }
+  windows: {
+    version: string | null
+    releasedAt: string | null
+    reachable: boolean
+    minimum: string | null
+    inUse: VersionUse[]
+  }
+  mac: { version: string | null; releasedAt: string | null; reachable: boolean }
+  ios: { minimum: string | null; inUse: VersionUse[] }
+  android: { minimum: string | null; inUse: VersionUse[] }
+  checkedAt: string
+}
+export type PendingDeletions = {
+  count: number
+  next: { id: string; username: string; displayName: string; deleteAfter: string }[]
+}
+export type AccountSupport = {
+  devices: {
+    id: string
+    deviceName: string | null
+    platform: string
+    appVersion: string | null
+    persistent: boolean
+    createdAt: string
+    lastUsedAt: string
+    expiresAt: string
+    push: {
+      platform: string
+      preview: boolean
+      calls: boolean
+      features: string[] | null
+      updatedAt: string
+    } | null
+  }[]
+  errors: {
+    id: string
+    app: string
+    appVersion: string | null
+    os: string | null
+    message: string
+    where: string | null
+    count: number
+    lastAt: string
+    resolvedAt: string | null
+  }[]
+  calls: {
+    id: string
+    at: string
+    kind: 'dm' | 'group' | 'nebula'
+    video: boolean
+    status: string
+    caller: boolean
+    joined: boolean
+    seconds: number | null
+    people: number
+  }[]
+  activity: { daysLast30: number; lastDay: string | null; apps: string[] }
+  settings: {
+    twoStep: unknown
+    quietHours: unknown
+    restricted: boolean
+    lastSeenAt: string | null
+  }
 }
 
 // ───────────── Calls ─────────────
 
 export const api = {
   usage: () => call<UsageReport>('GET', '/admin/usage'),
+  setBudget: (monthly: number | null) =>
+    call<UsageReport>('PUT', '/admin/usage/budget', { monthly }),
+  insights: (days: 7 | 30 | 90) =>
+    call<Insights>('GET', `/admin/insights${q({ days: String(days) })}`),
+  live: () => call<LiveWhere>('GET', '/admin/live'),
+  deletions: () => call<PendingDeletions>('GET', '/admin/deletions'),
+  support: (id: string) => call<AccountSupport>('GET', `/admin/accounts/${id}/support`),
   dashboard: () =>
     call<Dashboard>(
       'GET',

@@ -45,6 +45,7 @@ const PAGE_HINTS: Partial<Record<Page, string>> = {
 
 const PAGE_ICONS: Record<Page, string> = {
   dashboard: ICONS.dashboard,
+  insights: ICONS.insights,
   accounts: ICONS.accounts,
   signups: ICONS.signups,
   reports: ICONS.reports,

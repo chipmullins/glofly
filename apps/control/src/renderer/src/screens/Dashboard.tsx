@@ -8,8 +8,8 @@ import {
 } from '../lib/api'
 import { Avatar, Chip, StatusChip } from '../components/common'
 import { Icon, ICONS } from '../components/icons'
-import type { UsageReport } from '../lib/api'
-import { ago, bytes, plural, uptime, when } from '../lib/format'
+import type { LiveWhere, PendingDeletions, UsageReport } from '../lib/api'
+import { ago, bytes, daysUntil, plural, uptime, when } from '../lib/format'
 import type { Page } from '../components/Sidebar'
 
 const MODE_NAMES = { open: 'Open', invite: 'Invite only', closed: 'Closed' } as const
@@ -306,6 +306,11 @@ function DashboardBody({
 
       <UsageCard />
 
+      <div className="grid-2">
+        <LiveCard />
+        <DeletionsCard onOpen={onOpenAccount} />
+      </div>
+
       <section className="card card-pad" aria-labelledby="activity-title">
         <div className="card-title">
           <h2 id="activity-title">Last 14 days</h2>
@@ -506,7 +511,11 @@ function activityLabel(daily: DashboardData['daily']): string {
 }
 
 const money = (n: number): string =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: n < 100 ? 2 : 0 })
+  n.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: n < 100 ? 2 : 0
+  })
 
 /**
  * Usage & costs (Oct 27, 2026): this month's calls, data sent, phone users and stored files, and
@@ -540,9 +549,13 @@ function UsageCard(): JSX.Element | null {
         About <strong>{money(usage.soFar.total)}</strong> so far · on pace for about{' '}
         <strong>{money(usage.endOfMonth.total)}</strong> this month
       </p>
+      <BudgetLine usage={usage} onSaved={setUsage} />
       {usage.soFar.lines.map((line) => (
         <div key={line.key} className="health-row">
-          <span className="name" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+          <span
+            className="name"
+            style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+          >
             {line.label}
             <span className="hint" style={{ fontSize: 12.5 }}>
               {line.detail}
@@ -553,6 +566,37 @@ function UsageCard(): JSX.Element | null {
           </span>
         </div>
       ))}
+      {usage.gifs && (
+        <div className="health-row">
+          <span
+            className="name"
+            style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+          >
+            GIFs (GIPHY&apos;s free key)
+            <span className="hint" style={{ fontSize: 12.5 }}>
+              {usage.gifs.thisHour} of {usage.gifs.limit} searches this hour · busiest hour today{' '}
+              {usage.gifs.busiestHour}
+              {usage.gifs.refusedToday > 0
+                ? ` · GIPHY said "too many" ${plural(usage.gifs.refusedToday, 'time')} today`
+                : ''}
+            </span>
+          </span>
+          <span className="state">
+            <Chip
+              small
+              tone={
+                usage.gifs.refusedThisHour > 0 || usage.gifs.thisHour >= usage.gifs.limit
+                  ? 'bad'
+                  : usage.gifs.thisHour >= usage.gifs.limit * 0.8
+                    ? 'warn'
+                    : 'good'
+              }
+            >
+              {Math.min(100, Math.round((usage.gifs.thisHour / usage.gifs.limit) * 100))}%
+            </Chip>
+          </span>
+        </div>
+      )}
       <p className="hint" style={{ margin: '10px 0 0', fontSize: 12.5 }}>
         Glofly&apos;s own counts at today&apos;s plan prices, scaled to the whole month. Data sent
         is counted{' '}
@@ -561,6 +605,261 @@ function UsageCard(): JSX.Element | null {
           : 'from the first photo sent'}
         . The real bills are in AWS Billing and the LiveKit and Expo dashboards.
       </p>
+    </section>
+  )
+}
+
+/** The monthly budget the cost alerts watch (Alerts → Costs and limits). */
+function BudgetLine({
+  usage,
+  onSaved
+}: {
+  usage: UsageReport
+  onSaved: (u: UsageReport) => void
+}): JSX.Element {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const budget = usage.budget ?? null
+  const save = async (monthly: number | null): Promise<void> => {
+    setBusy(true)
+    const r = await api.setBudget(monthly)
+    setBusy(false)
+    if (!r.ok) return setError(r.message)
+    onSaved(r.data)
+    setEditing(false)
+    setError(null)
+  }
+  if (editing) {
+    return (
+      <form
+        className="row-actions"
+        style={{ margin: '4px 0 8px', alignItems: 'center' }}
+        onSubmit={(e) => {
+          e.preventDefault()
+          const n = Number(value.replace(/[$,\s]/g, ''))
+          if (!value.trim()) return void save(null)
+          if (!Number.isFinite(n) || n <= 0) return setError('Type a dollar amount, like 75.')
+          void save(n)
+        }}
+      >
+        <label htmlFor="budget-input" style={{ fontSize: 14 }}>
+          Monthly budget $
+        </label>
+        <input
+          id="budget-input"
+          className="input"
+          style={{ width: 110 }}
+          inputMode="decimal"
+          autoFocus
+          value={value}
+          placeholder="75"
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button type="submit" className="btn btn--primary btn--small" disabled={busy}>
+          Save
+        </button>
+        <button type="button" className="btn btn--small" onClick={() => setEditing(false)}>
+          Cancel
+        </button>
+        {error && <span className="hint hint--error">{error}</span>}
+      </form>
+    )
+  }
+  const over = budget !== null && usage.soFar.total > budget
+  const pace = budget !== null && !over && usage.endOfMonth.total > budget
+  return (
+    <p style={{ margin: '0 0 8px', fontSize: 14 }}>
+      {budget === null ? (
+        <span className="hint">No monthly budget set. </span>
+      ) : (
+        <>
+          Budget {money(budget)} a month{' '}
+          {over ? (
+            <Chip small tone="bad">
+              Over
+            </Chip>
+          ) : pace ? (
+            <Chip small tone="warn">
+              On pace to pass it
+            </Chip>
+          ) : (
+            <Chip small tone="good">
+              On track
+            </Chip>
+          )}{' '}
+        </>
+      )}
+      <button
+        type="button"
+        className="link-btn"
+        onClick={() => {
+          setValue(budget === null ? '' : String(budget))
+          setEditing(true)
+        }}
+      >
+        {budget === null ? 'Set one' : 'Change'}
+      </button>
+    </p>
+  )
+}
+
+const RELEASE_ROWS = [
+  ['server', 'Server'],
+  ['web', 'Web (chat.glofly.app)'],
+  ['windows', 'Windows updates'],
+  ['mac', 'Mac updates']
+] as const
+
+/** What's live where (Oct 28, 2026): the release on the server, the web, the update feeds, phones. */
+function LiveCard(): JSX.Element | null {
+  const [live, setLive] = useState<LiveWhere | null>(null)
+  useEffect(() => {
+    void api.live().then((r) => setLive(r.ok ? r.data : null))
+  }, [])
+  if (!live) return null
+  const release = live.release
+  const newest = (rows: { version: string; people: number }[]): string | null =>
+    rows[0]?.version ?? null
+  const behind = (rows: { version: string; people: number }[]): number =>
+    rows.slice(1).reduce((n, r) => n + r.people, 0)
+  return (
+    <section className="card card-pad" aria-labelledby="live-title">
+      <div className="card-title">
+        <h2 id="live-title">What&apos;s live where</h2>
+        <span className="hint" style={{ fontSize: 13 }}>
+          Release {release ?? '?'}
+        </span>
+      </div>
+      {RELEASE_ROWS.map(([key, label]) => {
+        const v = key === 'server' ? live.server.version : live[key].version
+        const reachable = key === 'server' ? true : live[key].reachable
+        const match = v !== null && v === release
+        const detail =
+          key === 'server'
+            ? `Up since ${when(live.server.upSince)}`
+            : key === 'web'
+              ? live.web.build
+                ? `Build ${live.web.build}`
+                : ''
+              : live[key].releasedAt
+                ? `Published ${when(live[key].releasedAt)}`
+                : ''
+        return (
+          <div key={key} className="health-row">
+            <span
+              className="name"
+              style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+            >
+              {label}
+              {detail && (
+                <span className="hint" style={{ fontSize: 12.5 }}>
+                  {detail}
+                </span>
+              )}
+            </span>
+            <span className="state">
+              {!reachable ? (
+                <Chip small tone="warn">
+                  Couldn&apos;t check
+                </Chip>
+              ) : (
+                <Chip small tone={match ? 'good' : 'warn'}>
+                  {v ?? '?'}
+                  {match ? '' : ' · not the release'}
+                </Chip>
+              )}
+            </span>
+          </div>
+        )
+      })}
+      {(['ios', 'android'] as const).map((p) => {
+        const rows = live[p].inUse
+        const top = newest(rows)
+        const old = behind(rows)
+        return (
+          <div key={p} className="health-row">
+            <span
+              className="name"
+              style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+            >
+              {p === 'ios' ? 'iPhone app' : 'Android app'}
+              <span className="hint" style={{ fontSize: 12.5 }}>
+                {rows.length === 0
+                  ? 'Nobody in the past 7 days'
+                  : `${plural(
+                      rows.reduce((n, r) => n + r.people, 0),
+                      'person',
+                      'people'
+                    )} this week${old ? ` · ${old} on older versions` : ''}`}
+                {live[p].minimum ? ` · minimum ${live[p].minimum}` : ''}
+              </span>
+            </span>
+            <span className="state">{top ? <Chip small>{`Newest ${top}`}</Chip> : '—'}</span>
+          </div>
+        )
+      })}
+      <p className="hint" style={{ margin: '10px 0 0', fontSize: 12.5 }}>
+        Phone over-the-air updates don&apos;t change the version number, so phones show their store
+        version. Checked {when(live.checkedAt)}.
+      </p>
+    </section>
+  )
+}
+
+/** Accounts waiting to be deleted (Oct 28, 2026). Nothing shows when there are none. */
+function DeletionsCard({ onOpen }: { onOpen: (id: string) => void }): JSX.Element {
+  const [list, setList] = useState<PendingDeletions | null>(null)
+  useEffect(() => {
+    void api.deletions().then((r) => setList(r.ok ? r.data : null))
+  }, [])
+  return (
+    <section className="card card-pad" aria-labelledby="deletions-title">
+      <div className="card-title">
+        <h2 id="deletions-title">Waiting to be deleted</h2>
+        {list && list.count > 0 && (
+          <Chip small tone="warn">
+            {list.count}
+          </Chip>
+        )}
+      </div>
+      {!list ? (
+        <p className="hint">Loading…</p>
+      ) : list.count === 0 ? (
+        <p className="empty">No accounts are waiting to be deleted.</p>
+      ) : (
+        <>
+          {list.next.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              className="health-row"
+              style={{
+                width: '100%',
+                background: 'none',
+                border: 0,
+                cursor: 'pointer',
+                textAlign: 'left'
+              }}
+              onClick={() => onOpen(u.id)}
+            >
+              <span className="name">
+                {u.displayName} <span className="hint">@{u.username}</span>
+              </span>
+              <span className="state">
+                {daysUntil(u.deleteAfter) <= 0
+                  ? 'Deleting today'
+                  : `In ${plural(daysUntil(u.deleteAfter), 'day')}`}
+              </span>
+            </button>
+          ))}
+          <p className="hint" style={{ margin: '10px 0 0', fontSize: 12.5 }}>
+            Open an account to cancel its deletion (they asked for it; they can also cancel by
+            signing back in).
+          </p>
+        </>
+      )}
     </section>
   )
 }

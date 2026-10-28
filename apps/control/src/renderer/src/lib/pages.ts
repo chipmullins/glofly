@@ -4,6 +4,7 @@ import type { Page } from '../components/Sidebar'
 
 export const PAGE_LABELS: Record<Page, string> = {
   dashboard: 'Dashboard',
+  insights: 'Insights',
   accounts: 'Accounts',
   signups: 'Sign-ups',
   reports: 'Reports',

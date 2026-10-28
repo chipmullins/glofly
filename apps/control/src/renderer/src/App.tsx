@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { SignIn } from './screens/SignIn'
 import { Dashboard } from './screens/Dashboard'
+import { Insights } from './screens/Insights'
 import { Accounts } from './screens/Accounts'
 import { Signups } from './screens/Signups'
 import { AuditLog } from './screens/AuditLog'
@@ -287,6 +288,7 @@ export default function App(): JSX.Element {
             dataVersion={refresh}
           />
         )}
+        {page === 'insights' && <Insights />}
         {page === 'accounts' && (
           <Accounts
             key={accountsQuery.n}

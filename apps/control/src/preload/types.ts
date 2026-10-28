@@ -36,6 +36,11 @@ export type ControlApi = {
     body?: unknown
   ) => Promise<CallResult>
   exportAudit: () => Promise<{ ok: true; saved: boolean } | { ok: false; message: string }>
+  /** Oct 28, 2026: Accounts → Export data (saved as a .json file) */
+  exportAccount: (
+    id: string,
+    note: string
+  ) => Promise<{ ok: true; saved: boolean } | { ok: false; message: string }>
   copy: (text: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
   setScreen: (screen: 'signin' | 'app') => void

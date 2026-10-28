@@ -14,6 +14,7 @@ const control: ControlApi = {
   },
   call: (method, path, body) => ipcRenderer.invoke('control:call', method, path, body),
   exportAudit: () => ipcRenderer.invoke('control:export-audit'),
+  exportAccount: (id, note) => ipcRenderer.invoke('control:export-account', id, note),
   copy: (text) => ipcRenderer.invoke('control:copy', text),
   openExternal: (url) => ipcRenderer.invoke('control:open-external', url),
   setScreen: (screen) => ipcRenderer.send('control:screen', screen),

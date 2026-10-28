@@ -29,13 +29,15 @@ export const GO_KEYS = {
   c: 'constellations',
   s: 'server',
   l: 'audit',
-  e: 'errors'
+  e: 'errors',
+  n: 'insights'
 } as const
 
 /** "?": every shortcut. */
 export const SHORTCUTS: { keys: string[]; what: string }[] = [
   { keys: ['Ctrl', 'K'], what: 'Open the command bar (⌘K on a Mac)' },
   { keys: ['G', 'D'], what: 'Dashboard' },
+  { keys: ['G', 'N'], what: 'Insights' },
   { keys: ['G', 'A'], what: 'Accounts' },
   { keys: ['G', 'R'], what: 'Reports' },
   { keys: ['G', 'I'], what: 'Inbox' },

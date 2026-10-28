@@ -5,6 +5,7 @@ import type { AdminUser } from '../../../preload/types'
 
 export type Page =
   | 'dashboard'
+  | 'insights'
   | 'accounts'
   | 'signups'
   | 'reports'
@@ -21,6 +22,7 @@ const ITEMS: {
   icon: string
 }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: ICONS.dashboard },
+  { id: 'insights', label: 'Insights', icon: ICONS.insights },
   { id: 'accounts', label: 'Accounts', icon: ICONS.accounts },
   { id: 'signups', label: 'Sign-ups', icon: ICONS.signups },
   { id: 'reports', label: 'Reports', icon: ICONS.reports },

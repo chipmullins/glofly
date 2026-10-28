@@ -230,7 +230,14 @@ const ALLOWED: [string, RegExp][] = [
   ['POST', new RegExp(`^/admin/accounts/${ID}/message$`)],
   ['GET', new RegExp(`^/admin/inbox$`)],
   ['GET', new RegExp(`^/admin/inbox/${ID}$`)],
-  ['POST', new RegExp(`^/admin/constellations/${ID}/(freeze|invites|transfer)$`)]
+  ['POST', new RegExp(`^/admin/constellations/${ID}/(freeze|invites|transfer)$`)],
+  // Oct 27–28, 2026: Usage & costs, Insights, what's live where, pending deletions, Support, export
+  ['GET', new RegExp(`^/admin/usage$`)],
+  ['PUT', new RegExp(`^/admin/usage/budget$`)],
+  ['GET', new RegExp(`^/admin/insights${QUERY}$`)],
+  ['GET', new RegExp(`^/admin/(live|deletions)$`)],
+  ['GET', new RegExp(`^/admin/accounts/${ID}/support$`)],
+  ['POST', new RegExp(`^/admin/accounts/${ID}/export$`)]
 ]
 
 export function isAllowedCall(method: unknown, path: unknown): boolean {

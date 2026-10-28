@@ -175,6 +175,30 @@ function setUpIpc(): void {
     }
     return { ok: true, saved: true }
   })
+  // Oct 28, 2026: Accounts → Export data. The server writes the export into the audit log.
+  ipcMain.handle('control:export-account', async (event, id: unknown, note: unknown) => {
+    if (!fromApp(event) || !mainWindow || typeof id !== 'string' || !text(note, 500)) {
+      return { ok: false, message: 'Not allowed.' }
+    }
+    const path = `/admin/accounts/${id}/export`
+    if (!isAllowedCall('POST', path)) return { ok: false, message: 'Not allowed.' }
+    const result = await call('POST', path, { note })
+    if (!result.ok) return { ok: false, message: result.message ?? "Couldn't export that account." }
+    const { fileName, data } = result.data as { fileName?: string; data?: unknown }
+    const choice = await dialog.showSaveDialog(mainWindow, {
+      title: "Save this person's data",
+      defaultPath:
+        typeof fileName === 'string' ? fileName.replace(/[^\w.-]/g, '_') : 'glofly-export.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+    if (choice.canceled || !choice.filePath) return { ok: true, saved: false }
+    try {
+      await writeFile(choice.filePath, JSON.stringify(data, null, 2), 'utf8')
+    } catch {
+      return { ok: false, message: "Couldn't save there. Try another folder." }
+    }
+    return { ok: true, saved: true }
+  })
   ipcMain.handle('control:copy', async (event, value: unknown) => {
     // Electron 44: writeText answers with a promise (it used to be instant).
     // (0.7.3: up to 5,000 characters, so an error's whole stack can be copied.)
