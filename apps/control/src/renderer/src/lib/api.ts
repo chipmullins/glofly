@@ -188,7 +188,8 @@ export const ALERT_KINDS = [
   'account_new',
   'constellation_growing',
   'inbox_reply',
-  'morning_summary'
+  'morning_summary',
+  'costs'
 ] as const
 export type AlertKind = (typeof ALERT_KINDS)[number]
 /** Urgent kinds break through Focus on the phone */
@@ -211,7 +212,8 @@ export const ALERT_LABELS: Record<AlertKind, { title: string; sub: string }> = {
     sub: '25 or more joins in an hour'
   },
   inbox_reply: { title: 'Inbox reply', sub: 'Someone answered a Glofly Team message' },
-  morning_summary: { title: 'Morning summary', sub: '9:00 AM · the last 24 hours in numbers' }
+  morning_summary: { title: 'Morning summary', sub: '9:00 AM · the last 24 hours in numbers' },
+  costs: { title: 'Costs and limits', sub: 'A free plan running out, your budget, GIFs near the hourly limit' }
 }
 
 export type ControlAlert = {

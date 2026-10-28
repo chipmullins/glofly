@@ -1,5 +1,7 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
+import { serverSettings } from "../db/schema";
+import { gifMeter } from "../messages/gifMeter";
 import { takeSent } from "../sentBytes";
 import { estimateCosts, PRICES, projectToMonth } from "./usageCosts";
 
@@ -20,6 +22,21 @@ export async function saveSentBytes(): Promise<void> {
       set value = jsonb_set(server_settings.value, '{bytes}',
         to_jsonb(coalesce((server_settings.value->>'bytes')::bigint, 0) + ${n}::bigint)),
         updated_at = now()`);
+}
+
+/** Chip's monthly budget for Glofly (Control → Usage & costs), or null for none. */
+export async function getBudget(): Promise<number | null> {
+  const [row] = await db.select().from(serverSettings).where(eq(serverSettings.key, "usageBudget"));
+  const v = (row?.value ?? {}) as { monthly?: unknown };
+  return typeof v.monthly === "number" && v.monthly > 0 ? v.monthly : null;
+}
+
+export async function setBudget(monthly: number | null): Promise<void> {
+  const value = { monthly };
+  await db
+    .insert(serverSettings)
+    .values({ key: "usageBudget", value })
+    .onConflictDoUpdate({ target: serverSettings.key, set: { value, updatedAt: new Date() } });
 }
 
 export async function usageReport(now = new Date()) {
@@ -76,5 +93,7 @@ export async function usageReport(now = new Date()) {
     soFar: estimateCosts(measured),
     endOfMonth: estimateCosts(projected),
     prices: PRICES,
+    budget: await getBudget(),
+    gifs: await gifMeter(now).catch(() => null),
   };
 }

@@ -82,6 +82,7 @@ const kinds = {
   constellation_growing: true,
   inbox_reply: true,
   morning_summary: true,
+  costs: true,
 }
 
 function answer(method: string, path: string): Record<string, unknown> | null {

@@ -1547,3 +1547,19 @@ export const inboxState = pgTable("inbox_state", {
     .references(() => users.id, { onDelete: "cascade" }),
   clearedAt: timestamp("cleared_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Oct 28, 2026 (Control → Insights): which days each person used Glofly, in Glofly's time zone
+// (GLOFLY_TIME_ZONE), and the first app they used that day. Written once a day per person
+// (activity.ts). Daily/weekly/monthly active people and "came back after N days" come from here.
+export const activeDays = pgTable(
+  "active_days",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    // "desktop" / "web" / "ios" / "android"
+    platform: text("platform").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] }), index("active_days_day_idx").on(t.day)],
+);

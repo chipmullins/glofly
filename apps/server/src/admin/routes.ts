@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { usageReport } from "./usage";
+import { setBudget, usageReport } from "./usage";
 import { and, count, desc, eq, gt, isNotNull, isNull, lt, or, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -95,6 +95,14 @@ function timeZone(value: unknown): string {
 // Usage & costs (Oct 27, 2026): this month's calls, data sent, phone users and stored files, with an
 // estimated bill (admin/usage.ts).
 adminRouter.get("/usage", async (_req, res) => {
+  res.json(await usageReport());
+});
+
+// PUT /admin/usage/budget { monthly: number | null } — the monthly budget the cost alerts watch.
+adminRouter.put("/usage/budget", async (req, res) => {
+  const parsed = z.object({ monthly: z.number().positive().max(100_000).nullable() }).safeParse(req.body);
+  if (!parsed.success) return invalid(res, parsed.error);
+  await setBudget(parsed.data.monthly === null ? null : Math.round(parsed.data.monthly * 100) / 100);
   res.json(await usageReport());
 });
 

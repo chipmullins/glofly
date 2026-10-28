@@ -6,6 +6,7 @@ import { isGifId, type GifInfo } from "@glofly/shared";
 import { requireAuth } from "../auth/sessions";
 import { db } from "../db";
 import { users } from "../db/schema";
+import { noteGiphyCall } from "./gifMeter";
 
 // GIFs (0.5.0) from GIPHY. Google shut down Tenor's API for other apps in 2026, so GIPHY it is.
 //
@@ -70,6 +71,7 @@ async function giphy(path: string, params: Record<string, string>): Promise<unkn
   const query = new URLSearchParams({ api_key: KEY, ...params });
   try {
     const res = await fetch(`${GIPHY}${path}?${query}`, { signal: AbortSignal.timeout(5000), redirect: "error" });
+    noteGiphyCall(res.status === 429);
     if (res.status === 404 || res.status === 400) return "missing";
     if (!res.ok) return null;
     return await res.json();

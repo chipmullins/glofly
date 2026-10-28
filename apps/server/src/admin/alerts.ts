@@ -10,6 +10,8 @@ import { failedKey } from "../email/send";
 import { failedPushesToday } from "../push/fcm";
 import { TIME_ZONE } from "../social/glows";
 import { adminConfigured } from "./secrets";
+import { usageReport } from "./usage";
+import { PRICES } from "./usageCosts";
 import { invalid } from "./routes";
 
 // 0.8.2: Control's alerts. Each one is kept (Recent alerts, desktop notifications while Control is
@@ -27,6 +29,7 @@ export const ALERT_KINDS = [
   "constellation_growing",
   "inbox_reply",
   "morning_summary",
+  "costs",
 ] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
 
@@ -45,6 +48,7 @@ const DEFAULT_PREFS: AlertPrefs = {
     constellation_growing: true,
     inbox_reply: true,
     morning_summary: true,
+    costs: true,
   },
   desktop: true,
 };
@@ -211,11 +215,48 @@ async function sweepMorning(now: Date): Promise<void> {
   await raiseAlert("morning_summary", "Good morning", await morningSummaryText(now), { open: "dashboard" });
 }
 
+/** Each threshold once per month (and the GIF one once per hour). Checked every 15 minutes. */
+export function costWarnings(r: Awaited<ReturnType<typeof usageReport>>): { key: string; title: string; body: string }[] {
+  const out: { key: string; title: string; body: string }[] = [];
+  const m = r.measured;
+  const n = (x: number) => Math.round(x).toLocaleString("en-US");
+  const money = (x: number) => `$${x.toFixed(2)}`;
+  if (m.participantMinutes > PRICES.livekit.freeMinutes)
+    out.push({ key: "livekit-free", title: "Calls passed LiveKit's free minutes", body: `${n(m.participantMinutes)} call minutes this month. The free plan stops at ${n(PRICES.livekit.freeMinutes)}: switch LiveKit to the Ship plan ($${PRICES.livekit.shipMonthly}/month) so calls keep working.` });
+  if (m.participantMinutes > PRICES.livekit.shipMinutes)
+    out.push({ key: "livekit-ship", title: "Calls passed the Ship plan's minutes", body: `${n(m.participantMinutes)} call minutes this month; each extra minute costs $${PRICES.livekit.perExtraMinute}.` });
+  if (m.phoneUsers > PRICES.expo.freeUsers)
+    out.push({ key: "expo-free", title: "Phone users passed Expo's free plan", body: `${n(m.phoneUsers)} phone users this month. Expo's free plan covers updates for ${n(PRICES.expo.freeUsers)}: past that, updates stop reaching new phones until you move to Starter ($${PRICES.expo.starterMonthly}/month).` });
+  if (m.phoneUsers > PRICES.expo.starterUsers)
+    out.push({ key: "expo-starter", title: "Phone users passed Expo Starter", body: `${n(m.phoneUsers)} phone users this month; each one past ${n(PRICES.expo.starterUsers)} costs $${PRICES.expo.perExtraUser}.` });
+  if (m.bytesOut / 1024 ** 3 > PRICES.aws.freeDataOutGb)
+    out.push({ key: "aws-out", title: "Files sent passed AWS's free 100 GB", body: `${(m.bytesOut / 1024 ** 3).toFixed(0)} GB sent this month; each GB past 100 costs $${PRICES.aws.perDataOutGb}. CloudFront (on the maybe-later list) would cut this.` });
+  if (r.budget) {
+    if (r.soFar.total > r.budget)
+      out.push({ key: "budget-over", title: "Over your monthly budget", body: `About ${money(r.soFar.total)} so far this month, past your ${money(r.budget)} budget.` });
+    else if (r.endOfMonth.total > r.budget)
+      out.push({ key: "budget-pace", title: "On pace to pass your budget", body: `About ${money(r.endOfMonth.total)} by the end of the month at this rate (budget ${money(r.budget)}).` });
+  }
+  if (r.gifs && r.gifs.thisHour >= r.gifs.limit * 0.8)
+    out.push({ key: `gifs-${new Date().toISOString().slice(0, 13)}`, title: "GIFs near GIPHY's hourly limit", body: `${r.gifs.thisHour} of ${r.gifs.limit} GIF searches this hour. Past the limit the GIF picker comes up empty until the hour turns; a production GIPHY key removes the limit.` });
+  return out;
+}
+
+async function sweepCosts(now: Date): Promise<void> {
+  if (now.getUTCMinutes() % 15 !== 0) return;
+  const report = await usageReport(now);
+  for (const w of costWarnings(report)) {
+    const key = `admin:alertstate:cost:${report.month}:${w.key}`;
+    if ((await redis.set(key, "1", { NX: true, EX: 40 * 24 * 60 * 60 })) !== "OK") continue;
+    await raiseAlert("costs", w.title, w.body, { open: "dashboard" });
+  }
+}
+
 /** Every minute (index.ts). Each part on its own, so one failing doesn't stop the others. */
 export async function sweepAlerts(): Promise<void> {
   if (!adminConfigured()) return;
   const now = new Date();
-  for (const part of [sweepReports, sweepFailures, sweepAccounts, sweepGrowth, sweepMorning]) {
+  for (const part of [sweepReports, sweepFailures, sweepAccounts, sweepGrowth, sweepMorning, sweepCosts]) {
     await part(now).catch((err) => console.error("Control alerts:", err));
   }
   if (now.getUTCMinutes() === 0) {

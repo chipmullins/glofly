@@ -12,6 +12,7 @@ import { devicePairRouter, devicesRouter, deviceSignatureLimiter } from "./devic
 import { alertsRouter } from "./alerts";
 import { opsRouter } from "./ops";
 import { inboxRouter } from "./inbox";
+import { insightsRouter } from "./insights";
 
 // Everything under /admin: Glofly Control (the admin app). In order:
 //   1. only from the admin's network (ADMIN_IPS; Caddy checks this too on the live server)
@@ -50,4 +51,5 @@ controlRouter.use(
   alertsRouter,
   opsRouter,
   inboxRouter,
+  insightsRouter,
 );
