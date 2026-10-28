@@ -141,6 +141,22 @@ function FileCard({ conversationId, a, mine, onLongPress }: { conversationId: st
 
 // Only one voice message plays at a time.
 let playing: AudioPlayer | null = null
+
+/**
+ * Pauses the voice message that was playing before this one. Its player is closed as soon as its
+ * bubble leaves the screen (scrolled away, or the chat closed), and pausing a closed player throws:
+ * that crashed iPhones (Oct 27, "Calling the 'pause' function has failed … native shared object").
+ */
+function pauseOther(next: AudioPlayer) {
+  const p = playing
+  if (!p || p === next) return
+  playing = null
+  try {
+    p.pause()
+  } catch {
+    // Already closed: nothing is playing there.
+  }
+}
 // 0.7.3: voice message speed (1× → 1.5× → 2×), the same for every voice message until changed.
 const SPEEDS = [1, 1.5, 2] as const
 let voiceSpeed: number = 1
@@ -174,7 +190,7 @@ function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId:
   useEffect(() => {
     if (wantPlay.current && status.isLoaded) {
       wantPlay.current = false
-      if (playing && playing !== player) playing.pause()
+      pauseOther(player)
       playing = player
       // iPhone: voice messages play even with the ring/silent switch on silent (Glofly's other
       // sounds respect it again once it ends).
@@ -183,6 +199,12 @@ function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId:
       applySpeed(player, voiceSpeed)
     }
   }, [status.isLoaded, player])
+  // This bubble is leaving (or its player is being replaced): never point at its closed player.
+  useEffect(() => {
+    return () => {
+      if (playing === player) playing = null
+    }
+  }, [player])
   // A speed picked on another voice message (or here) applies the next time this one plays.
   useEffect(() => {
     if (status.isLoaded) applySpeed(player, speed)
@@ -215,7 +237,7 @@ function VoiceBubble({ conversationId, a, mine, onLongPress }: { conversationId:
     }
     if (status.playing) player.pause()
     else {
-      if (playing && playing !== player) playing.pause()
+      pauseOther(player)
       playing = player
       // iPhone: voice messages play even with the ring/silent switch on silent (Glofly's other
       // sounds respect it again once it ends).
