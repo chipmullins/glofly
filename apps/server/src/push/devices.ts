@@ -1,4 +1,5 @@
 import { Router, type Response } from "express";
+import { pgCode } from "../dbErrors";
 import { rateLimit } from "../rateLimit";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
@@ -81,7 +82,7 @@ devicesRouter.put("/push", limiter, async (req, res) => {
   };
   const sessionId = sessionOf(res);
   const userId = userOf(res);
-  await db.transaction(async (tx) => {
+  const register = () => db.transaction(async (tx) => {
     // A phone has one token: if someone else signed in on it before, their pushes stop here.
     await tx.delete(pushDevices).where(and(eq(pushDevices.token, token), ne(pushDevices.sessionId, sessionId)));
     await tx
@@ -99,6 +100,22 @@ devicesRouter.put("/push", limiter, async (req, res) => {
         .where(and(eq(pushDevices.voipToken, voip.voipToken), ne(pushDevices.sessionId, sessionId)));
     }
   });
+  // Oct 28, 2026 (Control → Errors): two sign-ins on the same phone registering at the same moment
+  // (signing out and back in quickly) can both miss the other's not-yet-saved row, and the second
+  // then breaks "one row per phone token" (23505). Trying once more sees the first one and replaces
+  // it, as intended. And a sign-in that ended while its registration was on the way (signed out
+  // mid-request) has nothing to register (23503 on session_id): that's not an error either.
+  try {
+    await register();
+  } catch (err) {
+    const code = pgCode(err);
+    if (code === "23503") {
+      res.status(204).end();
+      return;
+    }
+    if (code !== "23505") throw err;
+    await register();
+  }
   res.status(204).end();
 });
 

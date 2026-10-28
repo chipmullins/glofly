@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { withDatabaseReason } from "./dbErrors";
 import { Router } from "express";
 import { rateLimit } from "./rateLimit";
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
@@ -71,7 +72,7 @@ export function recordServerError(err: unknown, where: string | null): void {
     app: "server",
     appVersion: process.env.npm_package_version ?? null,
     os: null,
-    message: String(e?.message ?? err),
+    message: withDatabaseReason(err, String(e?.message ?? err)),
     stack: e?.stack ?? null,
     where,
     userId: null,
