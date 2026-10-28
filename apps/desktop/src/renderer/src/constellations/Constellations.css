@@ -1267,6 +1267,30 @@
   -webkit-app-region: no-drag;
 }
 
+/* ───────────── Mac title bar ─────────────
+   macOS draws the red / yellow / green buttons over the top-left corner (about 70 × 30 px, from
+   main/index.ts trafficLightPosition 18,18). The night side fills the whole window, so it leaves
+   them room like the main screen's sidebar does (MainScreen.css): "Back to Glofly" on the
+   dashboard and the Home button on the far-left strip used to sit under them. The empty top areas
+   drag the window; buttons in them stay clickable (main.css lists .cx-dash-header). */
+.mac-titlebar .cx-dash-header {
+  padding-left: 96px;
+  -webkit-app-region: drag;
+}
+.mac-titlebar .cx-strip {
+  position: relative;
+  padding-top: 44px;
+}
+.mac-titlebar .cx-strip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+
 /* Dark theme: the Constellations button glows orange, so it stands out from the dark sidebar. */
 :root[data-theme='dark'] .nav-item.cx-nav {
   background: linear-gradient(135deg, #ffb347, #f47a1f);
