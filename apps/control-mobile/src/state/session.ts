@@ -54,8 +54,11 @@ const END_TEXT: Record<Exclude<EndReason, 'phone_removed'>, string> = {
 }
 
 transport.onEnd((reason, message) => {
-  if (reason === 'phone_removed') void phoneRemoved(message)
-  else useSession.setState({ phase: 'signin', admin: null, expiresAt: null, notice: END_TEXT[reason] })
+  if (reason === 'phone_removed') return void phoneRemoved(message)
+  // With Face ID sign-in on, the Sign-in screen just asks for Face ID again: no notice needed.
+  void keystore.remember().then((r) =>
+    useSession.setState({ phase: 'signin', admin: null, expiresAt: null, notice: r ? null : END_TEXT[reason] }),
+  )
 })
 
 async function phoneRemoved(message?: string) {
@@ -116,11 +119,34 @@ export async function unlockKey(): Promise<{ ok: true } | { ok: false; message: 
   return { ok: false, message: r.message }
 }
 
+/**
+ * Oct 28, 2026: Face ID sign-in. Face ID unlocks the key, the key signs the saved secret, and the
+ * server starts a session (14 days after the last password + code sign-in, then those again).
+ */
+export async function signInWithFaceId(): Promise<
+  { ok: true; result: SignedIn } | { ok: false; needsPassword: boolean; message: string }
+> {
+  const saved = await keystore.remember()
+  if (!saved) return { ok: false, needsPassword: true, message: '' }
+  const key = await unlockKey()
+  if (!key.ok) return { ok: false, needsPassword: false, message: key.message }
+  const r = await transport.resume(saved.secret)
+  if (r.ok) return { ok: true, result: r }
+  if (r.error === 'remember_expired' || r.status === 401) {
+    await keystore.forgetRemember()
+    return { ok: false, needsPassword: true, message: r.error === 'phone_not_approved' ? '' : r.message }
+  }
+  return { ok: false, needsPassword: false, message: r.message }
+}
+
 export function signedIn(result: SignedIn): void {
+  if (result.remember && result.rememberUntil) void keystore.setRemember(result.remember, result.rememberUntil)
   useSession.setState({ phase: 'app', admin: result.admin, expiresAt: Date.parse(result.expiresAt), notice: null })
 }
 
 export async function signOut(notice: string | null = null): Promise<void> {
+  // Signing out on purpose also ends Face ID sign-in (the server forgets it too).
+  await keystore.forgetRemember()
   await transport.signOut()
   useSession.setState({ phase: 'signin', admin: null, expiresAt: null, notice })
 }
@@ -139,5 +165,14 @@ AppState.addEventListener('change', (state) => {
   if (away < BACKGROUND_LIMIT_MS) return
   const wasIn = useSession.getState().phase === 'app'
   transport.end('ended') // forgets the key and token (and moves a signed-in app to Sign in)
-  if (wasIn) useSession.setState({ phase: 'signin', admin: null, expiresAt: null, notice: 'You were signed out after 5 minutes in the background.' })
+  if (wasIn) {
+    void keystore.remember().then((r) =>
+      useSession.setState({
+        phase: 'signin',
+        admin: null,
+        expiresAt: null,
+        notice: r ? null : 'You were signed out after 5 minutes in the background.',
+      }),
+    )
+  }
 })

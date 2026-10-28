@@ -10,6 +10,9 @@ const KEY = 'control.privateKey'
 const DEVICE = 'control.deviceId'
 const NAME = 'control.phoneName'
 const USERNAME = 'control.username'
+// Oct 28, 2026: the Face ID sign-in secret and until when it works. A plain entry: it's useless
+// without a signature from the private key, which only Face ID unlocks.
+const REMEMBER = 'control.remember'
 
 const PLAIN: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }
 const LOCKED: SecureStore.SecureStoreOptions = {
@@ -60,7 +63,28 @@ export const keystore = {
     }
   },
   async wipe(): Promise<void> {
-    for (const k of [KEY, DEVICE, NAME]) await SecureStore.deleteItemAsync(k).catch(() => {})
+    for (const k of [KEY, DEVICE, NAME, REMEMBER]) await SecureStore.deleteItemAsync(k).catch(() => {})
+  },
+  /** Face ID sign-in: the secret, while it still works (null: password and code next time). */
+  async remember(): Promise<{ secret: string; until: string } | null> {
+    try {
+      const raw = await SecureStore.getItemAsync(REMEMBER, PLAIN)
+      const v = raw ? (JSON.parse(raw) as { secret?: unknown; until?: unknown }) : null
+      if (typeof v?.secret !== 'string' || typeof v.until !== 'string') return null
+      if (Date.parse(v.until) <= Date.now()) {
+        await SecureStore.deleteItemAsync(REMEMBER).catch(() => {})
+        return null
+      }
+      return { secret: v.secret, until: v.until }
+    } catch {
+      return null
+    }
+  },
+  async setRemember(secret: string, until: string): Promise<void> {
+    await SecureStore.setItemAsync(REMEMBER, JSON.stringify({ secret, until }), PLAIN).catch(() => {})
+  },
+  async forgetRemember(): Promise<void> {
+    await SecureStore.deleteItemAsync(REMEMBER).catch(() => {})
   },
   async username(): Promise<string> {
     try {

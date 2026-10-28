@@ -412,6 +412,7 @@ export function PhonesCard({
                 <span className="sub">
                   Approved {shortDate(p.createdAt)} ·{' '}
                   {p.lastUsedAt ? `last used ${ago(p.lastUsedAt)}` : 'not used yet'}
+                  {p.faceIdUntil ? ` · Face ID sign-in until ${shortDate(p.faceIdUntil)}` : ''}
                 </span>
               </span>
               <Chip small tone={p.alerts ? 'good' : 'plain'}>
@@ -424,7 +425,7 @@ export function PhonesCard({
                   onAction({
                     title: `Remove ${p.name}`,
                     intro:
-                      'It can’t use Control any more and its sessions end now. You can approve it again later with a new code.',
+                      'It can’t use Control any more (Face ID sign-in included) and its sessions end now. You can approve it again later with a new code.',
                     confirmLabel: 'Remove phone',
                     danger: true,
                     notePlaceholder: 'e.g. "Lost my phone"',

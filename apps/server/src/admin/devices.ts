@@ -187,6 +187,7 @@ const listDevices = (adminId: string) =>
       lastUsedAt: adminDevices.lastUsedAt,
       lastIp: adminDevices.lastIp,
       pushToken: adminDevices.pushToken,
+      rememberUntil: adminDevices.rememberUntil,
     })
     .from(adminDevices)
     .where(eq(adminDevices.adminId, adminId))
@@ -205,6 +206,8 @@ devicesRouter.get("/devices", async (_req, res) => {
       lastIp: d.lastIp,
       alerts: !!d.pushToken,
       thisDevice: d.id === current,
+      // Oct 28, 2026: Face ID sign-in works until then (null: password and code next time)
+      faceIdUntil: d.rememberUntil && d.rememberUntil.getTime() > Date.now() ? d.rememberUntil.toISOString() : null,
     })),
     max: DEVICES_MAX,
   });

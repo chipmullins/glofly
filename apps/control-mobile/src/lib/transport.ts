@@ -57,7 +57,17 @@ export function failure(raw: Raw | null): Failure {
 export const isPhoneRemoved = (f: Failure): boolean =>
   f.status === 401 && f.error === 'phone_not_approved' && !/clock/i.test(f.message)
 
-export type SignedIn = { ok: true; token: string; expiresAt: string; admin: AdminUser; backupCodesLeft: number }
+export type SignedIn = {
+  ok: true
+  token: string
+  expiresAt: string
+  admin: AdminUser
+  backupCodesLeft: number
+  /** Oct 28, 2026: the Face ID sign-in secret (only after a password + code sign-in that asked for it) */
+  remember?: string
+  /** Until when Face ID can sign this phone back in */
+  rememberUntil?: string
+}
 
 export function createTransport(deps: TransportDeps) {
   const base = deps.serverUrl.replace(/\/+$/, '')
@@ -130,6 +140,22 @@ export function createTransport(deps: TransportDeps) {
     return f
   }
 
+  /** A session from a sign-in answer (password + code, or Face ID). */
+  function started(json: Record<string, unknown>): SignedIn {
+    token = String(json.token)
+    expiresAt = Date.parse(String(json.expiresAt))
+    scheduleExpiry()
+    return {
+      ok: true,
+      token,
+      expiresAt: String(json.expiresAt),
+      admin: json.admin as AdminUser,
+      backupCodesLeft: Number(json.backupCodesLeft ?? 0),
+      ...(typeof json.remember === 'string' ? { remember: json.remember } : {}),
+      ...(typeof json.rememberUntil === 'string' ? { rememberUntil: json.rememberUntil } : {}),
+    }
+  }
+
   const transport = {
     /** The approved phone's id (from secure storage, not secret). */
     setDevice(id: string | null) {
@@ -185,24 +211,32 @@ export function createTransport(deps: TransportDeps) {
       return challenge !== null
     },
 
-    async signInCode(kind: 'code' | 'backupCode', value: string): Promise<SignedIn | Failure> {
+    async signInCode(kind: 'code' | 'backupCode', value: string, opts: { remember?: boolean } = {}): Promise<SignedIn | Failure> {
       if (!challenge) return { ok: false, status: 401, error: 'start_over', message: 'Start over.' }
-      const raw = await send('POST', '/admin/auth/code', { challenge, [kind]: value }, { sign: true, auth: false })
+      const raw = await send(
+        'POST',
+        '/admin/auth/code',
+        { challenge, [kind]: value, ...(opts.remember ? { remember: true } : {}) },
+        { sign: true, auth: false },
+      )
       if (raw?.status === 200 && typeof raw.json?.token === 'string') {
         challenge = null
-        token = raw.json.token
-        expiresAt = Date.parse(String(raw.json.expiresAt))
-        scheduleExpiry()
-        return {
-          ok: true,
-          token: raw.json.token,
-          expiresAt: String(raw.json.expiresAt),
-          admin: raw.json.admin as AdminUser,
-          backupCodesLeft: Number(raw.json.backupCodesLeft ?? 0),
-        }
+        return started(raw.json)
       }
       const f = failure(raw)
       if (f.error === 'start_over') challenge = null
+      if (isPhoneRemoved(f)) forget('phone_removed', f.message)
+      return f
+    },
+
+    /** Oct 28, 2026: Face ID sign-in. The key must be unlocked (that's the Face ID part). */
+    async resume(remember: string): Promise<SignedIn | Failure> {
+      token = null
+      expiresAt = null
+      challenge = null
+      const raw = await send('POST', '/admin/auth/resume', { remember }, { sign: true, auth: false })
+      if (raw?.status === 200 && typeof raw.json?.token === 'string') return started(raw.json)
+      const f = failure(raw)
       if (isPhoneRemoved(f)) forget('phone_removed', f.message)
       return f
     },

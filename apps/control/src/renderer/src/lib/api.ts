@@ -238,6 +238,8 @@ export type ApprovedPhone = {
   lastIp: string | null
   alerts: boolean
   thisDevice: boolean
+  /** Oct 28, 2026: Face ID signs this phone in until then (null: password and code next time) */
+  faceIdUntil?: string | null
 }
 
 export type UptimeDay = { day: string; status: 'up' | 'you' | 'down'; downSec: number }

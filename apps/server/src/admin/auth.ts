@@ -1,10 +1,10 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Router, type RequestHandler } from "express";
 import { rateLimit } from "../rateLimit";
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { admins, adminSessions, users } from "../db/schema";
+import { adminDevices, admins, adminSessions, users } from "../db/schema";
 import { redis } from "../redis";
 import { hashPassword, verifyPassword } from "../auth/passwords";
 import { bearerToken } from "../auth/sessions";
@@ -19,6 +19,10 @@ import { noteRefusedCode, noteSignIn } from "./alerts";
 //      → a short-lived "challenge" (5 minutes, 5 tries)
 //   2. POST /admin/auth/code      { challenge, code }  (authenticator app) or { challenge, backupCode }
 //      → an admin session: 60 minutes, then sign in again. Tied to the network it started on.
+//   Oct 28, 2026, approved phones only: step 2 with { remember: true } also answers a "remember"
+//   secret. POST /admin/auth/resume { remember } (signed with the phone's key, which the phone only
+//   unlocks with Face ID) then starts a new phone session without the password and code, for 14
+//   days after that sign-in. Signing out on the phone or removing it ends that.
 
 export const adminAuthRouter = Router();
 
@@ -41,6 +45,10 @@ const limiter = (name: string, limit: number) =>
   });
 const passwordLimiter = limiter("admin:password", 5);
 const codeLimiter = limiter("admin:code", 10);
+const resumeLimiter = limiter("admin:resume", 10);
+
+/** How long Face ID can sign a phone back in after a password + code sign-in. */
+export const REMEMBER_DAYS = 14;
 
 const deviceNameSchema = z.string().trim().max(60).optional();
 
@@ -108,6 +116,7 @@ adminAuthRouter.post("/code", codeLimiter, async (req, res) => {
       challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
       code: z.string().max(20).optional(),
       backupCode: z.string().max(40).optional(),
+      remember: z.boolean().optional(),
     })
     .safeParse(req.body);
   if (!parsed.success || (!parsed.data.code && !parsed.data.backupCode)) {
@@ -181,19 +190,7 @@ adminAuthRouter.post("/code", codeLimiter, async (req, res) => {
     res.status(401).json({ error: "start_over", message: "This phone is approved for someone else." });
     return;
   }
-  const token = randomBytes(32).toString("base64url");
-  const minutes = device ? PHONE_SESSION_MINUTES : ADMIN_SESSION_MINUTES;
-  const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
-  await db.insert(adminSessions).values({
-    adminId: admin.id,
-    tokenHash: hash(token),
-    ip: res.locals.adminIp,
-    deviceName: device ? device.name : state.deviceName,
-    deviceId: device?.id ?? null,
-    expiresAt,
-  });
-  // Expired admin sessions are tidied up whenever someone signs in.
-  await db.delete(adminSessions).where(lt(adminSessions.expiresAt, new Date()));
+  const session = await startSession(admin.id, device, state.deviceName, res.locals.adminIp as string);
 
   const [after] = await db.select({ backupCodes: admins.backupCodes }).from(admins).where(eq(admins.id, admin.id));
   const left = after?.backupCodes.length ?? 0;
@@ -205,7 +202,83 @@ adminAuthRouter.post("/code", codeLimiter, async (req, res) => {
     ip: res.locals.adminIp,
   });
   noteSignIn({ adminId: admin.id, where: where ?? "Control", ip: res.locals.adminIp as string, backup: usedBackup });
-  res.json({ token, expiresAt: expiresAt.toISOString(), ...(await adminProfile(admin.id)) });
+  // Face ID next time (phones only): a fresh secret replaces any older one.
+  let remember: { remember: string; rememberUntil: string } | null = null;
+  if (device && parsed.data.remember) {
+    const secret = randomBytes(32).toString("base64url");
+    const until = new Date(Date.now() + REMEMBER_DAYS * 24 * 60 * 60 * 1000);
+    await db.update(adminDevices).set({ rememberHash: hash(secret), rememberUntil: until }).where(eq(adminDevices.id, device.id));
+    remember = { remember: secret, rememberUntil: until.toISOString() };
+  }
+  res.json({ ...session, ...(remember ?? {}), ...(await adminProfile(admin.id)) });
+});
+
+/** A new admin session: 0.8.2, on an approved phone it's shorter and belongs to that phone. */
+async function startSession(
+  adminId: string,
+  device: SignedDevice | undefined,
+  deviceName: string | null,
+  ip: string,
+): Promise<{ token: string; expiresAt: string }> {
+  const token = randomBytes(32).toString("base64url");
+  const minutes = device ? PHONE_SESSION_MINUTES : ADMIN_SESSION_MINUTES;
+  const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
+  await db.insert(adminSessions).values({
+    adminId,
+    tokenHash: hash(token),
+    ip,
+    deviceName: device ? device.name : deviceName,
+    deviceId: device?.id ?? null,
+    expiresAt,
+  });
+  // Expired admin sessions are tidied up whenever someone signs in.
+  await db.delete(adminSessions).where(lt(adminSessions.expiresAt, new Date()));
+  return { token, expiresAt: expiresAt.toISOString() };
+}
+
+const REMEMBER_OVER = {
+  error: "remember_expired",
+  message: "Sign in with your password and code (Face ID sign-in lasts 14 days).",
+};
+
+// POST /admin/auth/resume { remember } — Face ID sign-in on an approved phone (see the top).
+adminAuthRouter.post("/resume", resumeLimiter, async (req, res) => {
+  const device = res.locals.adminDevice as SignedDevice | undefined;
+  const parsed = z.object({ remember: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).safeParse(req.body);
+  if (!device || !parsed.success) {
+    res.status(401).json(REMEMBER_OVER);
+    return;
+  }
+  const [row] = await db
+    .select({
+      rememberHash: adminDevices.rememberHash,
+      rememberUntil: adminDevices.rememberUntil,
+      deleteAfter: users.deleteAfter,
+      suspendedAt: users.suspendedAt,
+    })
+    .from(adminDevices)
+    .innerJoin(admins, eq(admins.id, adminDevices.adminId))
+    .innerJoin(users, eq(users.id, admins.userId))
+    .where(and(eq(adminDevices.id, device.id), eq(adminDevices.adminId, device.adminId)));
+  const valid =
+    row?.rememberHash &&
+    row.rememberUntil &&
+    row.rememberUntil.getTime() > Date.now() &&
+    timingSafeEqual(Buffer.from(row.rememberHash), Buffer.from(hash(parsed.data.remember))) &&
+    !row.deleteAfter &&
+    !row.suspendedAt;
+  if (!valid) {
+    if (row?.rememberUntil && row.rememberUntil.getTime() <= Date.now()) {
+      await db.update(adminDevices).set({ rememberHash: null, rememberUntil: null }).where(eq(adminDevices.id, device.id));
+    }
+    res.status(401).json(REMEMBER_OVER);
+    return;
+  }
+  const session = await startSession(device.adminId, device, null, res.locals.adminIp as string);
+  const where = `${device.name} (phone)`;
+  await logAction({ adminId: device.adminId, action: "Signed in", note: `${where} · Face ID`, ip: res.locals.adminIp });
+  noteSignIn({ adminId: device.adminId, where, ip: res.locals.adminIp as string, backup: false });
+  res.json({ ...session, rememberUntil: row.rememberUntil!.toISOString(), ...(await adminProfile(device.adminId)) });
 });
 
 async function adminProfile(adminId: string) {
@@ -286,6 +359,9 @@ adminAuthRouter.get("/me", requireAdmin, async (_req, res) => {
 adminAuthRouter.post("/logout", requireAdmin, async (_req, res) => {
   const admin = res.locals.admin as AdminLocals;
   await db.delete(adminSessions).where(eq(adminSessions.id, res.locals.adminSessionId as string));
+  // Signing out on a phone also ends Face ID sign-in there (the password and code next time).
+  const device = res.locals.adminDevice as SignedDevice | undefined;
+  if (device) await db.update(adminDevices).set({ rememberHash: null, rememberUntil: null }).where(eq(adminDevices.id, device.id));
   await logAction({ adminId: admin.id, action: "Signed out", ip: res.locals.adminIp });
   res.status(204).end();
 });

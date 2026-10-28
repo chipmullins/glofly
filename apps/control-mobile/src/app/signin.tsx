@@ -5,7 +5,7 @@ import { router } from 'expo-router'
 import { Button, Field, Gradient, Text } from '@/ui/kit'
 import { Icon, Logo } from '@/ui/icons'
 import { c } from '@/ui/theme'
-import { signedIn, transport, unlockKey, useSession } from '@/state/session'
+import { signedIn, signInWithFaceId, transport, unlockKey, useSession } from '@/state/session'
 import { keystore } from '@/lib/keystore'
 import { haptic } from '@/lib/haptics'
 import { registerForAlerts, routeFor } from '@/lib/alerts'
@@ -13,6 +13,7 @@ import { useQuickNotes } from '@/lib/hooks'
 
 // Sign in (Main.dc.html): Face ID unlocks the approved iPhone's key, then the admin password and
 // the authenticator code, as on desktop. Every request here is signed with the key.
+// Oct 28, 2026: after that, Face ID alone signs back in for 14 days (the "quick" screen).
 
 export default function SignIn() {
   const insets = useSafeAreaInsets()
@@ -29,20 +30,59 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null)
   const passwordSent = useRef<string | null>(null)
   const codeRef = useRef<TextInput>(null)
+  /** Face ID sign-in works until then (null: password and code; undefined: still checking) */
+  const [quickUntil, setQuickUntil] = useState<string | null | undefined>(undefined)
+  const quickBusy = useRef(false)
 
   useEffect(() => {
     void keystore.username().then((u) => {
       setUsername(u)
       if (!u) setEditName(true)
     })
-    void unlock()
+    void keystore.remember().then((r) => {
+      setQuickUntil(r?.until ?? null)
+      if (r) void quick()
+      else void unlock()
+    })
     // Back from a long time in the background: the key was forgotten, so ask Face ID again.
     const sub = AppState.addEventListener('change', (st) => {
-      if (st === 'active' && !transport.unlocked) setUnlocked(false)
+      if (st !== 'active' || transport.unlocked) return
+      setUnlocked(false)
+      void keystore.remember().then((r) => r && void quick())
     })
     return () => sub.remove()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  async function quick() {
+    if (quickBusy.current) return
+    quickBusy.current = true
+    setBusy(true)
+    setUnlockError(null)
+    const r = await signInWithFaceId()
+    quickBusy.current = false
+    setBusy(false)
+    if (r.ok) {
+      haptic.success()
+      return finish(r.result)
+    }
+    setUnlocked(transport.unlocked)
+    if (r.needsPassword) {
+      setQuickUntil(null)
+      if (r.message) setError(r.message)
+    } else setUnlockError(r.message)
+  }
+
+  function finish(result: Parameters<typeof signedIn>[0]) {
+    signedIn(result)
+    void useQuickNotes.getState().load(true)
+    void registerForAlerts(true)
+    const pending = useSession.getState().pendingOpen
+    if (pending) {
+      useSession.getState().setPendingOpen(null)
+      setTimeout(() => router.navigate(routeFor(pending) as never), 300)
+    }
+  }
 
   async function unlock() {
     setUnlockError(null)
@@ -69,7 +109,7 @@ export default function SignIn() {
       }
       passwordSent.current = `${username}\n${password}`
     }
-    const r = await transport.signInCode(backup ? 'backupCode' : 'code', backup ? code.trim() : digits)
+    const r = await transport.signInCode(backup ? 'backupCode' : 'code', backup ? code.trim() : digits, { remember: true })
     setBusy(false)
     if (!r.ok) {
       haptic.error()
@@ -80,14 +120,67 @@ export default function SignIn() {
     }
     haptic.success()
     await keystore.setUsername(username.trim().replace(/^@/, ''))
-    signedIn(r)
-    void useQuickNotes.getState().load(true)
-    void registerForAlerts(true)
-    const pending = useSession.getState().pendingOpen
-    if (pending) {
-      useSession.getState().setPendingOpen(null)
-      setTimeout(() => router.navigate(routeFor(pending) as never), 300)
-    }
+    finish(r)
+  }
+
+  if (quickUntil === undefined) return <View style={{ flex: 1, backgroundColor: c.violetDeep }} />
+  if (quickUntil) {
+    const until = new Date(quickUntil).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    return (
+      <View style={{ flex: 1, backgroundColor: c.violetDeep }}>
+        <Gradient from="#2a1a55" to={c.violetDeep} stop={0.7} />
+        <View style={{ flex: 1, paddingTop: insets.top + 60, paddingHorizontal: 24, paddingBottom: insets.bottom + 20, gap: 28 }}>
+          <View style={{ alignItems: 'center', gap: 12 }}>
+            <Logo size={96} />
+            <View style={{ alignItems: 'center' }}>
+              <Text display weight="bold" size={26} color={c.white} accessibilityRole="header">
+                Glofly
+              </Text>
+              <Text display weight="semi" size={13} color={c.gold} style={{ letterSpacing: 1.8, textTransform: 'uppercase' }}>
+                Control
+              </Text>
+            </View>
+            {username ? (
+              <Text size={14} color={c.onVioletMuted}>
+                @{username} · {approved?.phoneName ?? 'this iPhone'}
+              </Text>
+            ) : null}
+          </View>
+          {notice ? (
+            <View style={{ padding: 12, borderRadius: 14, backgroundColor: 'rgba(255,194,74,0.12)', borderWidth: 1, borderColor: 'rgba(255,194,74,0.4)' }}>
+              <Text size={13.5} color={c.gold}>
+                {notice}
+              </Text>
+            </View>
+          ) : null}
+          <View style={{ flex: 1 }} />
+          <View style={{ gap: 10 }}>
+            {unlockError ? (
+              <Text size={13.5} color="#ff9b92" style={{ textAlign: 'center' }} accessibilityLiveRegion="assertive">
+                {unlockError}
+              </Text>
+            ) : null}
+            <Button label="Unlock with Face ID" icon="faceId" kind="gold" busy={busy} onPress={() => void quick()} />
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setQuickUntil(null)
+                setUnlockError(null)
+                if (!transport.unlocked) void unlock()
+              }}
+              style={{ alignSelf: 'center', padding: 10, minHeight: 44, justifyContent: 'center' }}
+            >
+              <Text size={14} weight="semi" color={c.gold}>
+                Use the password and code
+              </Text>
+            </Pressable>
+          </View>
+          <Text size={12.5} color={c.onVioletMuted} style={{ textAlign: 'center', lineHeight: 19 }}>
+            Face ID signs you in until {until}.{'\n'}Then the password and code once more.
+          </Text>
+        </View>
+      </View>
+    )
   }
 
   return (
@@ -194,7 +287,7 @@ export default function SignIn() {
 
           <View style={{ flex: 1 }} />
           <Text size={12.5} color={c.onVioletMuted} style={{ textAlign: 'center', lineHeight: 19 }}>
-            Works from anywhere, only on this approved iPhone.{'\n'}Signs out after 30 minutes, or 5 minutes in the background.
+            Works from anywhere, only on this approved iPhone.{'\n'}After this, Face ID signs you back in for 14 days.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

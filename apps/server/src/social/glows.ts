@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { TIME_ZONE } from "../timeZone";
 import { dayIn, glowNow, lightGlow, type Glow } from "@glofly/shared";
 import { db } from "../db";
 import { friendships, glows, users } from "../db/schema";
@@ -11,16 +12,7 @@ import { emitToUser } from "../realtime";
 // "A day" is Glofly's day: midnight to midnight in GLOFLY_TIME_ZONE (US Central by default),
 // the same for everyone so both people always agree on what "today" is.
 
-export const TIME_ZONE = (() => {
-  const tz = process.env.GLOFLY_TIME_ZONE?.trim() || "America/Chicago";
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return tz;
-  } catch {
-    console.warn(`GLOFLY_TIME_ZONE "${tz}" isn't a time zone; using America/Chicago.`);
-    return "America/Chicago";
-  }
-})();
+export { TIME_ZONE };
 
 /** Today in Glofly's time zone (YYYY-MM-DD). */
 export const today = (now = new Date()) => dayIn(now, TIME_ZONE);

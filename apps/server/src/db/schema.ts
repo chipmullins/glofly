@@ -739,6 +739,11 @@ export const adminDevices = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     lastIp: text("last_ip"),
+    // Oct 28, 2026: Face ID sign-in. After a password + code sign-in the phone keeps a secret (its
+    // hash here) that, signed with the phone's key, starts a new session until remember_until
+    // (14 days after that sign-in; then the password and code again).
+    rememberHash: text("remember_hash"),
+    rememberUntil: timestamp("remember_until", { withTimezone: true }),
   },
   (t) => [index("admin_devices_admin_idx").on(t.adminId)],
 );

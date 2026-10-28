@@ -17,7 +17,7 @@ import * as schema from "../db/schema";
 import { appErrors, pushDevices, sessions, users } from "../db/schema";
 import { getMinVersion } from "../app-version";
 import { WEB_ORIGIN } from "../web/session";
-import { TIME_ZONE } from "../social/glows";
+import { TIME_ZONE } from "../timeZone";
 import { logAction, noteSchema } from "./audit";
 import { admin, invalid, ip, target } from "./routes";
 
