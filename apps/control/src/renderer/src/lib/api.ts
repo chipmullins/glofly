@@ -473,9 +473,29 @@ export type FamilyFriend = {
   since: string | null
 }
 
+// ───────────── Usage & costs (Oct 27, 2026) ─────────────
+
+export type UsageMeasured = {
+  participantMinutes: number
+  bytesOut: number
+  phoneUsers: number
+  storedBytes: number
+}
+export type UsageCostLine = { key: string; label: string; detail: string; monthly: number }
+export type UsageReport = {
+  month: string
+  measured: UsageMeasured
+  projected: UsageMeasured
+  /** When counting data sent started this month (null: nothing sent yet) */
+  countingSince: string | null
+  soFar: { lines: UsageCostLine[]; total: number }
+  endOfMonth: { lines: UsageCostLine[]; total: number }
+}
+
 // ───────────── Calls ─────────────
 
 export const api = {
+  usage: () => call<UsageReport>('GET', '/admin/usage'),
   dashboard: () =>
     call<Dashboard>(
       'GET',

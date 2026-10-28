@@ -8,6 +8,7 @@ import {
 } from '../lib/api'
 import { Avatar, Chip, StatusChip } from '../components/common'
 import { Icon, ICONS } from '../components/icons'
+import type { UsageReport } from '../lib/api'
 import { ago, bytes, plural, uptime, when } from '../lib/format'
 import type { Page } from '../components/Sidebar'
 
@@ -303,6 +304,8 @@ function DashboardBody({
         </section>
       </div>
 
+      <UsageCard />
+
       <section className="card card-pad" aria-labelledby="activity-title">
         <div className="card-title">
           <h2 id="activity-title">Last 14 days</h2>
@@ -500,4 +503,64 @@ function activityLabel(daily: DashboardData['daily']): string {
   const messages = daily.reduce((n, d) => n + d.messages, 0)
   const calls = daily.reduce((n, d) => n + d.calls, 0)
   return `Last 14 days: ${plural(messages, 'message')} and ${plural(calls, 'call')} in all.`
+}
+
+const money = (n: number): string =>
+  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: n < 100 ? 2 : 0 })
+
+/**
+ * Usage & costs (Oct 27, 2026): this month's calls, data sent, phone users and stored files, and
+ * the bill they're likely to add up to (server admin/usage.ts). Loads on its own, refreshes every
+ * 5 minutes, and stays hidden on a server that doesn't have it yet.
+ */
+function UsageCard(): JSX.Element | null {
+  const [usage, setUsage] = useState<UsageReport | null>(null)
+  useEffect(() => {
+    const load = (): void => {
+      void api.usage().then((r) => setUsage(r.ok ? r.data : null))
+    }
+    load()
+    const timer = setInterval(load, 5 * 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  if (!usage) return null
+  const monthName = new Date(`${usage.month}-15T12:00:00Z`).toLocaleDateString('en-US', {
+    month: 'long'
+  })
+  const projected = new Map(usage.endOfMonth.lines.map((l) => [l.key, l]))
+  return (
+    <section className="card card-pad" aria-labelledby="usage-title">
+      <div className="card-title">
+        <h2 id="usage-title">Usage &amp; costs · {monthName}</h2>
+        <span className="hint" style={{ fontSize: 13 }}>
+          Estimate
+        </span>
+      </div>
+      <p style={{ margin: '0 0 6px', fontSize: 15 }}>
+        About <strong>{money(usage.soFar.total)}</strong> so far · on pace for about{' '}
+        <strong>{money(usage.endOfMonth.total)}</strong> this month
+      </p>
+      {usage.soFar.lines.map((line) => (
+        <div key={line.key} className="health-row">
+          <span className="name" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+            {line.label}
+            <span className="hint" style={{ fontSize: 12.5 }}>
+              {line.detail}
+            </span>
+          </span>
+          <span className="state" title="On pace for this month">
+            {money(projected.get(line.key)?.monthly ?? line.monthly)}
+          </span>
+        </div>
+      ))}
+      <p className="hint" style={{ margin: '10px 0 0', fontSize: 12.5 }}>
+        Glofly&apos;s own counts at today&apos;s plan prices, scaled to the whole month. Data sent
+        is counted{' '}
+        {usage.countingSince
+          ? `since ${new Date(usage.countingSince).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+          : 'from the first photo sent'}
+        . The real bills are in AWS Billing and the LiveKit and Expo dashboards.
+      </p>
+    </section>
+  )
 }

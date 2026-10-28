@@ -30,6 +30,7 @@ import { sweepEvents } from "./constellations/events";
 import { myGamesRouter, sweepPlaytime } from "./games/routes";
 import { watchPageRouter } from "./calls/player";
 import { sweepCalls } from "./calls/service";
+import { saveSentBytes } from "./admin/usage";
 import { livekitConfigured } from "./calls/livekit";
 import { avatarsRouter, profileRouter } from "./profile/routes";
 import { sweepUnsentUploads } from "./messages/attachments";
@@ -248,6 +249,7 @@ connectRedis()
     every(15_000, "Send later", async () => void (await sendDueMessages()));
     // 2.0 My games: a minute of playtime for everyone playing something right now.
     every(60_000, "Playtime", sweepPlaytime);
+    every(60_000, "Usage count", saveSentBytes);
     // 0.8.0: custom statuses whose "Clear after" time has come (cheap: a partial index).
     every(15_000, "Status clear", async () => void (await sweepExpiredStatuses()));
     // 0.7.5: constellations' birthdays ("Firefly Guild turns 1 today!").

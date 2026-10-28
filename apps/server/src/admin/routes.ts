@@ -1,4 +1,5 @@
 import { Router, type Response } from "express";
+import { usageReport } from "./usage";
 import { and, count, desc, eq, gt, isNotNull, isNull, lt, or, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -90,6 +91,12 @@ function timeZone(value: unknown): string {
   }
   return "America/New_York";
 }
+
+// Usage & costs (Oct 27, 2026): this month's calls, data sent, phone users and stored files, with an
+// estimated bill (admin/usage.ts).
+adminRouter.get("/usage", async (_req, res) => {
+  res.json(await usageReport());
+});
 
 adminRouter.get("/dashboard", async (req, res) => {
   const tz = timeZone(req.query.tz);

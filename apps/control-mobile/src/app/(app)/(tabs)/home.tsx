@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Pressable, View } from 'react-native'
 import { router } from 'expo-router'
-import { api, type Dashboard, type ServerInfo, type Uptime } from '@control/api'
+import { api, type Dashboard, type ServerInfo, type Uptime, type UsageReport } from '@control/api'
 import { ago, plural, time } from '@control/format'
 import { Card, CardTitle, Dot, IconButton, Muted, Row, Screen, Status, Text, VioletHeader } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
@@ -212,6 +212,8 @@ export default function Home() {
         </Card>
       ) : null}
 
+      <UsageCard />
+
       {dash ? (
         <Card style={{ paddingBottom: 2 }}>
           <CardTitle>More</CardTitle>
@@ -231,3 +233,26 @@ export default function Home() {
 }
 
 const sameDay = (iso: string) => new Date(iso).toDateString() === new Date().toDateString()
+
+const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: n < 100 ? 2 : 0 })
+
+/**
+ * Usage & costs (Oct 27, 2026), like desktop Control's: this month so far and on pace for the
+ * month, per service. Hidden on a server that doesn't have it yet.
+ */
+function UsageCard() {
+  const { data } = useLoad<UsageReport>(() => api.usage(), [], { everyMs: 5 * 60_000 })
+  if (!data) return null
+  const projected = new Map(data.endOfMonth.lines.map((l) => [l.key, l.monthly]))
+  return (
+    <Card style={{ paddingBottom: 2 }}>
+      <CardTitle right={<Muted>Estimate</Muted>}>Usage & costs</CardTitle>
+      <Text style={{ marginBottom: 6 }}>
+        About {money(data.soFar.total)} so far · on pace for {money(data.endOfMonth.total)}
+      </Text>
+      {data.soFar.lines.map((line, i) => (
+        <Row key={line.key} first={i === 0} title={line.label} sub={line.detail} right={<Text>{money(projected.get(line.key) ?? line.monthly)}</Text>} />
+      ))}
+    </Card>
+  )
+}
