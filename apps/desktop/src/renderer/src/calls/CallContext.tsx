@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DisconnectReason,
   Room,
+  createLocalAudioTrack,
+  type LocalAudioTrack,
   RoomEvent,
   Track,
   VideoPresets,
@@ -423,9 +425,29 @@ export function CallProvider({
       roomRef.current = next
       setRoom(next)
 
+      // Browser version: the microphone opens BEFORE joining. Joining first let the other person's
+      // voice start playing before the mic did, and on a phone's browser the first call of a visit
+      // came out silent for you (they could hear you only from the second call on): the browser
+      // only allows a page's sound for sure once it's using the mic, and on Android starting the mic
+      // switches the phone into call audio, cutting off a voice that was already playing. Opening it
+      // first (like the iPhone app since Oct 13) means both are settled before any voice arrives.
+      // The desktop app (Electron) never had this, so it keeps its order.
+      let earlyMic: LocalAudioTrack | null = null
+      if (isWeb) {
+        try {
+          earlyMic = await createLocalAudioTrack(audioCapture(prefs))
+        } catch {
+          // Refused or busy: setMicrophoneEnabled below tries again and says what's wrong.
+        }
+        if (attempt !== attemptRef.current || roomRef.current !== next) {
+          earlyMic?.stop()
+          return
+        }
+      }
       try {
         await next.connect(join.url, join.token)
       } catch (err) {
+        earlyMic?.stop()
         if (attempt !== attemptRef.current) return
         reportCall(`couldn't connect: ${errText(err)}`)
         hangUp()
@@ -435,17 +457,30 @@ export function CallProvider({
         return
       }
       if (attempt !== attemptRef.current || roomRef.current !== next) {
+        earlyMic?.stop()
         closing.current.add(next)
         void next.disconnect()
         return
       }
       setSoundBlocked(!next.canPlaybackAudio)
       try {
-        await next.localParticipant.setMicrophoneEnabled(true)
+        if (earlyMic) await next.localParticipant.publishTrack(earlyMic)
+        else await next.localParticipant.setMicrophoneEnabled(true)
         // Push to talk: the microphone is ready but stays off until the key is held.
         if (pttLive.current) await next.localParticipant.setMicrophoneEnabled(false)
       } catch (err) {
+        earlyMic?.stop()
         problem(deviceProblem(err, 'microphone'))
+      }
+      // Browser version: with the mic on, start (or restart) every voice that's playing, in case
+      // the browser held it back or the phone's switch to call audio cut it off.
+      if (isWeb) {
+        void next.startAudio().then(
+          () => {
+            if (roomRef.current === next) setSoundBlocked(!next.canPlaybackAudio)
+          },
+          () => {}
+        )
       }
       if (camera) {
         try {
