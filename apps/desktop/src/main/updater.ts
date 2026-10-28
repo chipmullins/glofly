@@ -9,10 +9,11 @@ import { markQuitting } from './app-settings'
 // A release uploads the new setup file + its .blockmap + latest.yml there. Without
 // the setting (development, home-network test builds) nothing is checked.
 //
-// Glofly checks shortly after starting and every 4 hours and downloads in the
-// background (only the changed parts, thanks to the .blockmap). When a new version
-// is ready, the window shows "Restart to update"; otherwise it installs quietly the
-// next time Glofly quits.
+// 0.8.6: every time Glofly opens, the small updater window (launchUpdate.ts) checks first and
+// installs a new version before Glofly opens, like Discord. While Glofly stays open it still
+// checks every 4 hours and downloads in the background (only the changed parts, thanks to the
+// .blockmap). When a new version is ready, the window shows "Restart to update"; otherwise it
+// installs quietly the next time Glofly quits.
 
 const CHECK_EVERY = 4 * 60 * 60 * 1000
 
@@ -49,16 +50,14 @@ export function restartToUpdate(): void {
   autoUpdater.quitAndInstall(true, true)
 }
 
-let checkForUpdates: (() => void) | null = null
+let configured: boolean | null = null
 
-/** "Check for updates" (the update screen): looks right away, if this copy can update itself. */
-export function checkNow(): 'checking' | 'unavailable' {
-  if (!checkForUpdates) return 'unavailable'
-  checkForUpdates()
-  return 'checking'
-}
-
-export function startAutoUpdates(): void {
+/**
+ * Points electron-updater at Glofly's update feed, once. False when this copy can't update
+ * itself (not installed, no feed set, or an unsigned Mac test build).
+ */
+export function setUpUpdates(): boolean {
+  if (configured !== null) return configured
   const url = updatesUrl()
   // Mac: macOS only installs an update signed by the same developer as the running copy, so
   // only builds signed with Glofly's Developer ID check (the Mac build Action sets
@@ -66,7 +65,10 @@ export function startAutoUpdates(): void {
   // testers download the first signed .dmg by hand once, and it updates itself from then on.
   // The Mac copy reads latest-mac.yml and downloads Glofly-<version>-mac.zip from the same place.
   const macSigned = import.meta.env.MAIN_VITE_MAC_AUTO_UPDATE === 'true'
-  if (!app.isPackaged || !url || (process.platform === 'darwin' && !macSigned)) return
+  if (!app.isPackaged || !url || (process.platform === 'darwin' && !macSigned)) {
+    configured = false
+    return false
+  }
 
   autoUpdater.setFeedURL({ provider: 'generic', url })
   autoUpdater.autoDownload = true
@@ -79,6 +81,22 @@ export function startAutoUpdates(): void {
     readyVersion = info.version
     announce()
   })
+  configured = true
+  return true
+}
+
+let checkForUpdates: (() => void) | null = null
+
+/** "Check for updates" (the update screen): looks right away, if this copy can update itself. */
+export function checkNow(): 'checking' | 'unavailable' {
+  if (!checkForUpdates) return 'unavailable'
+  checkForUpdates()
+  return 'checking'
+}
+
+/** The background checks while Glofly is open (after the launch check, if there was one). */
+export function startAutoUpdates(): void {
+  if (!setUpUpdates()) return
 
   const check = (): void => {
     if (readyVersion) return // already waiting for a restart

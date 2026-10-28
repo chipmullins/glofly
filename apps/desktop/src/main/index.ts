@@ -150,6 +150,7 @@ import { isReportRequest, listNotices, noticeReply, noticeSeen, sendReport } fro
 import { TEAM_REPLY_MAX } from '@glofly/shared/types'
 import { handleMediaRequest, MEDIA_SCHEME } from './media'
 import { checkNow, restartToUpdate, startAutoUpdates, updateReady } from './updater'
+import { focusLaunchWindow, updateOnLaunch } from './launchUpdate'
 import { isPttBinding, startPtt, stopPtt } from './ptt'
 import {
   askMacMediaAccess,
@@ -231,6 +232,9 @@ if (!app.requestSingleInstanceLock()) app.quit()
 else
   app.on('second-instance', (_event, argv) => {
     if (!handleDeepLinkArgv(argv)) handleSecondInstance(argv)
+    // 0.8.6: while the updater window is up, it comes forward (a link or Jump List task waits
+    // for Glofly's window, which picks it up when it opens).
+    focusLaunchWindow()
   })
 setupDeepLinks()
 
@@ -1308,6 +1312,16 @@ app.whenReady().then(() => {
   configurePauseChecks(API_URL)
   registerIpcHandlers()
   startIdleWatch()
+  // 0.8.6: the updater window checks for a new version first (and installs it) before Glofly
+  // opens. When nothing's new, or it can't check, it hands over to openGlofly.
+  void updateOnLaunch(openGlofly)
+})
+
+/** Opens Glofly's window and starts everything that goes with it (once). */
+let opened = false
+function openGlofly(): BrowserWindow | null {
+  if (opened) return mainWindow
+  opened = true
   createWindow()
   setUpTray(() => mainWindow, isMac ? menuBarIcon : icon)
   setupShortcuts()
@@ -1346,7 +1360,8 @@ app.whenReady().then(() => {
     if (mainWindow) showWindow()
     else createWindow()
   })
-})
+  return mainWindow
+}
 
 // The push-to-talk keyboard hook never outlives Glofly.
 app.on('will-quit', () => stopPtt())

@@ -337,9 +337,12 @@ export function setAppSettings(changes: AppSettingsChanges): AppSettings {
   return getAppSettings()
 }
 
+/** Opened by "Open Glofly when my computer starts" (Windows sign-in or Mac login). */
+export const startedAtLogin = (): boolean =>
+  process.argv.includes(STARTUP_ARG) || openedAtMacLogin()
+
 /** Started with the computer and allowed to sit in the tray: don't pop the window up. */
-export const startHidden = (): boolean =>
-  (process.argv.includes(STARTUP_ARG) || openedAtMacLogin()) && saved.closeToTray
+export const startHidden = (): boolean => startedAtLogin() && saved.closeToTray
 
 /** Mac: opened by "Open Glofly at login" (macOS passes no startup flag, so ask it). */
 function openedAtMacLogin(): boolean {

@@ -172,4 +172,11 @@
   process only allows listed routes (`main/api.ts ALLOWED`): add new Control routes there too. Control for iPhone:
   Face ID sign-in for 14 days (`POST /admin/auth/resume`, `admin_devices.remember_*`, test `test/faceid.e2e.ts`).
 - **Next (Oct 28, 2026):** start with the project doc `glofly-status-oct28.md` (what's done, next up, waiting on Chip).
-  0.8.6 = desktop update-on-launch window; its approved design is the "Glofly Desktop Updater" canvas: keep it matching.
+- **0.8.6 (Oct 28, 2026): update on every launch, Windows + Mac** (project doc `glofly-release-0.8.6.md`).
+  `src/main/launchUpdate.ts` runs before Glofly's window opens (`openGlofly` in index.ts starts everything
+  else, once); the window is its own page `src/renderer/updater.html` + `src/renderer/src/updater/` (no
+  preload: the main process calls `window.gfUpdate(view)`; view type in `src/preload/launch-update.d.ts`).
+  Approved design: the "Glofly Desktop Updater" canvas; keep it matching. Never blocks opening (5 s check
+  timeout, 30 s stall, slow downloads finish in the background); `launch-update.json` in the user folder counts
+  install tries (2 failures → skipped at launch, reported as where "updater"); sign-in launches show no window.
+  `updater.ts setUpUpdates()` configures electron-updater once for both. `npm run updater-preview` shows it.

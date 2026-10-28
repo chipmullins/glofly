@@ -51,6 +51,15 @@ export default defineConfig(({ mode }) => ({
     resolve: {
       alias: [...shared, { find: '@renderer', replacement: resolve('src/renderer/src') }]
     },
-    plugins: [react(), twemoji(), cspServer(mode)]
+    plugins: [react(), twemoji(), cspServer(mode)],
+    build: {
+      rollupOptions: {
+        // 0.8.6: the launch updater window (src/main/launchUpdate.ts) is a page of its own.
+        input: {
+          index: resolve('src/renderer/index.html'),
+          updater: resolve('src/renderer/updater.html')
+        }
+      }
+    }
   }
 }))
