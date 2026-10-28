@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { enterFullscreen, exitFullscreen, fullscreenElement, onFullscreenChange } from '../lib/fullscreen'
 import {
   canControlWatch,
   isWatchVideoId,
@@ -450,23 +451,21 @@ export function WatchStage({
   // Full screen on just the video (only for you), however it ends (button, Esc).
   useEffect(() => {
     const onChange = (): void => {
-      setFull(!!fullRef.current && document.fullscreenElement === fullRef.current)
+      setFull(!!fullRef.current && fullscreenElement() === fullRef.current)
       setIdle(false)
     }
-    document.addEventListener('fullscreenchange', onChange)
-    return () => document.removeEventListener('fullscreenchange', onChange)
+    return onFullscreenChange(onChange)
   }, [])
   // Parked: out of full screen.
   useEffect(() => {
     const el = fullRef.current
-    if (parked && el && document.fullscreenElement === el)
-      void document.exitFullscreen().catch(() => {})
+    if (parked && el && fullscreenElement() === el) void exitFullscreen()
   }, [parked])
   // Leaving the video (it stopped, or the call ended) leaves full screen too.
   useEffect(() => {
     const el = fullRef.current
     return () => {
-      if (el && document.fullscreenElement === el) void document.exitFullscreen().catch(() => {})
+      if (el && fullscreenElement() === el) void exitFullscreen()
     }
   }, [])
 
@@ -545,8 +544,8 @@ export function WatchStage({
   const toggleFull = (): void => {
     const el = fullRef.current
     if (!el) return
-    if (document.fullscreenElement === el) void document.exitFullscreen().catch(() => {})
-    else void el.requestFullscreen().catch(() => {})
+    if (fullscreenElement() === el) void exitFullscreen()
+    else void enterFullscreen(el)
   }
 
   const onKey = (e: React.KeyboardEvent): void => {

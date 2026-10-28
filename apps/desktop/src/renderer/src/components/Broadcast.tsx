@@ -1,5 +1,6 @@
 // 0.5.0 Broadcast now: share your screen (and its sound) for any friend to drop in and watch,
 // without a call. Your broadcast runs in a LiveKit room of its own: you send, friends only watch.
+import { enterFullscreen, exitFullscreen, fullscreenElement, onFullscreenChange } from '../lib/fullscreen'
 import { useEffect, useRef, useState } from 'react'
 import {
   Room,
@@ -276,14 +277,14 @@ export function BroadcastViewer({
   const shownState = !live && state !== 'joining' && state !== 'problem' ? 'ended' : state
 
   useEffect(() => {
-    const onFs = (): void => setFull(document.fullscreenElement === stageRef.current)
-    document.addEventListener('fullscreenchange', onFs)
+    const onFs = (): void => setFull(fullscreenElement() === stageRef.current)
+    const stopFs = onFullscreenChange(onFs)
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !document.fullscreenElement) onClose()
+      if (e.key === 'Escape' && !fullscreenElement()) onClose()
     }
     document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('fullscreenchange', onFs)
+      stopFs()
       document.removeEventListener('keydown', onKey)
     }
   }, [onClose])
@@ -379,7 +380,9 @@ export function BroadcastViewer({
               aria-label={full ? 'Exit full screen' : 'Full screen'}
               title={full ? 'Exit full screen' : 'Full screen'}
               onClick={() =>
-                full ? void document.exitFullscreen() : void stageRef.current?.requestFullscreen()
+                full
+                  ? void exitFullscreen()
+                  : stageRef.current && void enterFullscreen(stageRef.current)
               }
             >
               {full ? <ExitFullscreenIcon size={20} /> : <FullscreenIcon size={20} />}

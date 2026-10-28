@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { enterFullscreen, exitFullscreen, fullscreenElement, onFullscreenChange } from '../lib/fullscreen'
 import { Track, TrackEvent, type Participant, type VideoTrack } from 'livekit-client'
 import type {
   Call,
@@ -591,7 +592,7 @@ function useAutoHide(
     const onMove = (): void => wake()
     // Keys only count in full screen (typing a message under the call shouldn't wake it).
     const onKey = (): void => {
-      if (el && document.fullscreenElement === el) wake()
+      if (el && fullscreenElement() === el) wake()
     }
     el?.addEventListener('mousemove', onMove)
     el?.addEventListener('mousedown', onMove)
@@ -1224,19 +1225,18 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   // Follow full screen however it ends (the button, Escape, or Windows).
   useEffect(() => {
     const onChange = (): void => {
-      const isFull = !!panelRef.current && document.fullscreenElement === panelRef.current
+      const isFull = !!panelRef.current && fullscreenElement() === panelRef.current
       setFull(isFull)
       if (!isFull) setFullTarget(null)
     }
-    document.addEventListener('fullscreenchange', onChange)
-    return () => document.removeEventListener('fullscreenchange', onChange)
+    return onFullscreenChange(onChange)
   }, [])
 
   // The call ending (or leaving its chat) takes the window out of full screen.
   useEffect(() => {
     const el = panelRef.current
     return () => {
-      if (el && document.fullscreenElement === el) void document.exitFullscreen().catch(() => {})
+      if (el && fullscreenElement() === el) void exitFullscreen()
     }
   }, [current?.conversationId])
 
@@ -1244,10 +1244,15 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
   const enterFull = useCallback((target: string | null): void => {
     setFullTarget(target)
     const el = panelRef.current
-    if (el && document.fullscreenElement !== el) void el.requestFullscreen().catch(() => {})
+    if (el && fullscreenElement() !== el) {
+      // Not possible in this browser (iPhone Safari) or refused: stay as it was.
+      void enterFullscreen(el).then((ok) => {
+        if (!ok) setFullTarget(null)
+      })
+    }
   }, [])
   const exitFull = (): void => {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+    void exitFullscreen()
   }
 
   // ---- what's in the call ----

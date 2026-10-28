@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { enterFullscreen, exitFullscreen, fullscreenElement } from '../lib/fullscreen'
 import { Track, type Participant, type VideoTrack } from 'livekit-client'
 import type { PublicUser, SignedInUser, VoiceNebulaState } from '../../../preload/api-types'
 import { useCalls } from '../calls/callState'
@@ -326,8 +327,8 @@ export default function VoiceStage({
           onClick={() => {
             const el = screenBox.current
             if (!el) return
-            if (document.fullscreenElement) void document.exitFullscreen()
-            else void el.requestFullscreen?.()
+            if (fullscreenElement()) void exitFullscreen()
+            else void enterFullscreen(el)
           }}
         >
           <svg
