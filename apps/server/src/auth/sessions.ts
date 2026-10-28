@@ -5,6 +5,7 @@ import { and, eq, gt, lt } from "drizzle-orm";
 import { db } from "../db";
 import { sessions, users } from "../db/schema";
 import { appVersionFrom, isPhonePlatform, platformFrom, refuseIfTooOld } from "../app-version";
+import { isMediaRead } from "../mediaReads";
 import { cookieRequestAllowed, cookieToken } from "../web/session";
 import { phoneActed } from "../presence";
 
@@ -128,8 +129,9 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   }
   // The browser: only from the web app's page, with the CSRF value for anything but reading.
   if (viaCookie && !cookieRequestAllowed(req, res, token)) return;
-  // Too old for this server (Control → minimum app version): "Please update Glofly".
-  if (await refuseIfTooOld(req, res)) return;
+  // Too old for this server (Control → minimum app version): "Please update Glofly". Not for
+  // loading photos and files, which can't say their version (app-version.ts isMediaRead).
+  if (!isMediaRead(req.method, req.originalUrl) && (await refuseIfTooOld(req, res))) return;
   // Which app version this device runs (Control → App versions in use).
   const version = appVersionFrom(req.headers["x-glofly-version"]);
   // A cookie session is always the web app, whatever the request says.
