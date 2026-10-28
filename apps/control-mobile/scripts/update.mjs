@@ -22,7 +22,9 @@ const env = {
   EXPO_PUBLIC_SERVER_URL: 'https://api.glofly.app',
   EXPO_NO_DOTENV: '1',
 }
-const args = ['eas', 'update', '--channel', channel, '--environment', channel, ...rest]
+// iOS only: Control for iPhone has no Android app, and eas update otherwise exports every platform
+// (Oct 28, 2026: it stopped with 'Platform "android" is not configured').
+const args = ['eas', 'update', '--channel', channel, '--environment', channel, '--platform', 'ios', ...rest]
 if (!rest.includes('--message') && !rest.includes('-m')) args.push('--message', `Update ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`)
 // Windows runs npx through cmd (shell: true), which splits on spaces: anything with a space
 // (the message) has to be quoted, or eas sees "Update", "2026-10-14" and "05:28" as three things.
