@@ -31,7 +31,7 @@ import {
   signupMode,
   friendLinkInfo
 } from './auth'
-import { reportError, setErrorReports, watchMainErrors } from './errors'
+import { reportError, setErrorReports, watchMainErrors, watchProcessCrashes } from './errors'
 import {
   deleteMessage,
   editMessage,
@@ -1291,6 +1291,7 @@ function registerIpcHandlers(): void {
 }
 
 watchMainErrors()
+watchProcessCrashes()
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.glofly.app')

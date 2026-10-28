@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, type WebContents } from 'electron'
 import { release } from 'node:os'
 import {
   ERROR_MESSAGE_MAX,
@@ -62,5 +62,37 @@ export function watchMainErrors(): void {
     const e = err as { message?: string; stack?: string }
     if (on)
       reportError({ message: e?.message ?? String(err), stack: e?.stack, where: 'main (promise)' })
+  })
+}
+
+/**
+ * Oct 28, 2026: crashes that no error handler sees. A window's own process dying (out of memory,
+ * killed by the system) left a blank window and no report, and so did helper processes (screen
+ * sound capture, the GPU). Both are reported now (while reports are on), and a crashed window loads
+ * again, at most once a minute so a window that keeps crashing doesn't loop.
+ */
+export function watchProcessCrashes(): void {
+  const lastReload = new WeakMap<WebContents, number>()
+  app.on('render-process-gone', (_event, contents, details) => {
+    if (details.reason === 'clean-exit') return
+    if (on) {
+      reportError({
+        message: `Window crashed: ${details.reason} (exit code ${details.exitCode})`,
+        where: 'main (window)'
+      })
+    }
+    const now = Date.now()
+    if (contents.isDestroyed() || now - (lastReload.get(contents) ?? 0) < 60_000) return
+    lastReload.set(contents, now)
+    contents.reload()
+  })
+  app.on('child-process-gone', (_event, details) => {
+    if (details.reason === 'clean-exit' || details.reason === 'killed') return
+    if (on) {
+      reportError({
+        message: `${details.name ?? details.serviceName ?? details.type} process gone: ${details.reason} (exit code ${details.exitCode})`,
+        where: `main (${details.type})`
+      })
+    }
   })
 }
