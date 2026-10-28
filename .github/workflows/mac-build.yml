@@ -132,8 +132,12 @@ jobs:
           codesign -dvv mac-universal/Glofly.app 2>&1 | tee sig.txt
           grep -q 'Authority=Developer ID Application' sig.txt
           grep -q 'flags=.*runtime' sig.txt
-          xcrun stapler validate mac-universal/Glofly.app
-          spctl --assess --type execute --verbose=4 mac-universal/Glofly.app
+          # Both ask Apple's servers, which sometimes drop the connection (Oct 27, 0.8.4: stapler
+          # failed with "The network connection was lost", error 68, on a correctly notarized app).
+          # Try a few times before calling the build broken.
+          retry() { for i in 1 2 3 4; do "$@" && return 0; echo "Attempt $i failed; trying again in 20 s"; sleep 20; done; return 1; }
+          retry xcrun stapler validate mac-universal/Glofly.app
+          retry spctl --assess --type execute --verbose=4 mac-universal/Glofly.app
           ls Glofly-*-mac.zip Glofly-*-mac.zip.blockmap latest-mac.yml
 
       - name: Check the app (both chips, signature, permission prompts)
