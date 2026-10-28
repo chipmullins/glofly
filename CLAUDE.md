@@ -164,3 +164,10 @@
   (+ allow_reply), replies POST /notices/:id/reply → team_replies → Control Inbox; apps show "Glofly Team · Official"
   with a reply box, older apps show it like a warning. Constellations: `frozen_at` (read-only, no joins:
   `perms.ts frozen`) and `invites_off_at` (links dead, none made). Add a friend works for any account now.
+- **0.8.5 Control round (Oct 28, 2026)** (project doc `glofly-release-0.8.5.md`, migrations 0038–0039): Control → Insights
+  (`admin/insights.ts`: calls, people, features, funnel; also `/admin/live`, `/admin/deletions`, account Support view and
+  data export), cost alerts + monthly budget + GIF meter (`admin/usage.ts`, `sweepCosts`, `messages/gifMeter.ts`).
+  `active_days` is written from requireAuth via `activity.ts`: keep its imports to leaves (an import of social/glows
+  made a cycle that crashed the server at start; the time zone is in `src/timeZone.ts`). Desktop Control's main
+  process only allows listed routes (`main/api.ts ALLOWED`): add new Control routes there too. Control for iPhone:
+  Face ID sign-in for 14 days (`POST /admin/auth/resume`, `admin_devices.remember_*`, test `test/faceid.e2e.ts`).
