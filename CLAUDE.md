@@ -171,3 +171,5 @@
   made a cycle that crashed the server at start; the time zone is in `src/timeZone.ts`). Desktop Control's main
   process only allows listed routes (`main/api.ts ALLOWED`): add new Control routes there too. Control for iPhone:
   Face ID sign-in for 14 days (`POST /admin/auth/resume`, `admin_devices.remember_*`, test `test/faceid.e2e.ts`).
+- **Next (Oct 28, 2026):** start with the project doc `glofly-status-oct28.md` (what's done, next up, waiting on Chip).
+  0.8.6 = desktop update-on-launch window; its approved design is the "Glofly Desktop Updater" canvas: keep it matching.
