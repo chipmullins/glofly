@@ -46,3 +46,8 @@ from it is in the app yet.
 **Oct 28, 2026 signature sounds, round 2** (`signature2026.py <out>`): no packs; about nine one-off sounds per event
 (bloops, whistles, synthetic sung syllables, knocks, glass, chiptune, FM, swoops), 118 in all. Preview page: the
 "Glofly Signature Sounds" artifact. Nothing from it is in the app yet.
+
+**Oct 28, 2026 sung sounds, round 3** (`sung2026.py <out>`, uses round 2's building blocks): little synthetic voices
+singing short words ("hel-lo", "bye-bye", "yoo-hoo", "ring-a-ling"...) in normal, tiny, deep, choir, robot and
+whispered voices, about ten per event (122 in all). Preview page: the "Glofly Sung Sounds" artifact. Nothing from it
+is in the app yet.
