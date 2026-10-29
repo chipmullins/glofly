@@ -51,3 +51,10 @@ from it is in the app yet.
 singing short words ("hel-lo", "bye-bye", "yoo-hoo", "ring-a-ling"...) in normal, tiny, deep, choir, robot and
 whispered voices, about ten per event (122 in all). Preview page: the "Glofly Sung Sounds" artifact. Nothing from it
 is in the app yet.
+
+**Oct 28, 2026 sing-along lines, round 4** (`sing2026.py <model-folder> <out>`): clear sung one-liners ("New message!",
+"Hello there!", "Ring ring! Pick up!", "See ya!"), ten per event (130 in all). An open-source speech model
+(Kokoro-82M, Apache 2.0, via the kokoro-onnx package) speaks each line; pyworld moves each syllable onto a melody.
+Model files (not in the repo, ~120 MB): kokoro-v1.0.int8.onnx + voices-v1.0.bin from
+https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0 (rename to kokoro.int8.onnx / voices.bin).
+Preview page: the "Glofly Sing-Along Sounds" artifact. Nothing from it is in the app yet.
