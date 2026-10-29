@@ -36,3 +36,9 @@ Convert a pick for the app: `ffmpeg -i in.wav -c:a libopus -b:a 128k out.ogg` â†
 | Fade (any short sound, meant for Log out) | fade.ogg | ring.py noanswer-1-fade |
 
 **0.2.2 push-to-talk sounds** (Oct 10, Chip kept all eight pairs). `ptt.py` writes `ptt-<n>-<name>-down.wav` (key goes down, you're live) and `-up.wav` (let go); in the app they are `ptt-<name>-down.ogg` / `ptt-<name>-up.ogg` for Firefly (default), Blink, Pluck, Bell, Glass, Radio, Tap and Spark. Picked in Settings â†’ Voice & video (shown when Push to talk is on), plus None. They play only on your own computer.
+
+**Oct 28, 2026 sound family preview** (`family2026.py <out>`): ten themed packs (Lantern Glass, Firefly Marimba,
+Starlight Celesta, Night Kalimba, Velvet Vibes, Dewdrop, Aurora Pad, Silver Bells, Pocket Pop, Moonlit Harp), each
+covering message, @mention, constellation, friend request, friend online, log in, log off, incoming and outgoing call
+(three cycles each), call connected/ended, join and leave. Preview page: the "Glofly Sound Family" artifact. Nothing
+from it is in the app yet.
