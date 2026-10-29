@@ -26,6 +26,9 @@ from signature2026 import (SR, T, bell, bp, celesta, env, finish, glass, glide, 
 
 rng = np.random.default_rng(3003)
 
+# Round 5 (sung2026b.py) turns these up for clearer words; the defaults are round 3's.
+CLARITY = dict(trans=0.06, noise=1.0, gap=0.02, bw=1.0, f4=False)
+
 F = {  # formant sets: (Hz, gain, bandwidth)
     'a': [(780, 1.0, 80), (1150, .55, 90), (2850, .15, 120)],
     'ae': [(660, 1.0, 80), (1720, .5, 100), (2410, .2, 120)],
@@ -66,8 +69,9 @@ STYLE = {
 
 def formant_filter(src, name, shift):
     out = np.zeros_like(src)
-    for f, g, bw in F[name]:
-        out += bp(src, f * shift, (f * shift) / bw) * g
+    sets = F[name] + ([(3500, .08, 160)] if CLARITY['f4'] else [])
+    for f, g, bw in sets:
+        out += bp(src, f * shift, (f * shift) / (bw * CLARITY['bw'])) * g
     rms = np.sqrt(np.mean(out ** 2)) + 1e-9
     return out / rms * QUIET.get(name, 1.0)
 
@@ -86,6 +90,10 @@ def blend(src, states, dur, shift):
 
 
 def noise_part(kind, dur, vowel, shift):
+    return _noise_part(kind, dur, vowel, shift) * CLARITY['noise']
+
+
+def _noise_part(kind, dur, vowel, shift):
     x = noise(dur)
     e = env(dur, .008, dur / 2.5)
     if kind == 'h':
@@ -130,7 +138,7 @@ def syllable(spec, f0, dur, f1=None, style='normal', vib_delay=.08, amp=1.0):
     states = []
     if onset in VOICED_ONSET:
         states.append((0.0, VOICED_ONSET[onset]))
-        states.append((min(.06, voiced * .35), vowel))
+        states.append((min(CLARITY['trans'], voiced * .35), vowel))
     else:
         states.append((0.0, vowel))
     if glide_to:
@@ -151,7 +159,7 @@ def syllable(spec, f0, dur, f1=None, style='normal', vib_delay=.08, amp=1.0):
     parts = []
     if pre:
         parts.append((0, noise_part(onset, pre, vowel, shift)))
-    gap = .02 if onset in ('t', 'k', 'p', 'ch') else 0
+    gap = CLARITY['gap'] if onset in ('t', 'k', 'p', 'ch') else 0
     start = pre * (0.55 if onset in ('h', 's', 'sh', 'f', 'th', 'z', 'v') else 1) + gap
     parts.append((start, voice))
     if coda in CODA_NOISE:

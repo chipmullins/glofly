@@ -58,3 +58,8 @@ is in the app yet.
 Model files (not in the repo, ~120 MB): kokoro-v1.0.int8.onnx + voices-v1.0.bin from
 https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0 (rename to kokoro.int8.onnx / voices.bin).
 Preview page: the "Glofly Sing-Along Sounds" artifact. Nothing from it is in the app yet.
+
+Round 4 was not liked (Chip: too much like a real person). **Round 5, sung lines** (`sung2026b.py <out>`): round 3's
+synthetic voice singing round 4's witty lines with clearer pronunciation (`sung2026.CLARITY`: longer consonant
+transitions, louder consonants, narrower formants, a fourth formant; round 3's defaults unchanged), ten per event
+(130 in all). Preview page: the "Glofly Sung Lines" artifact. Nothing from it is in the app yet.
