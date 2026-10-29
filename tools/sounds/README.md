@@ -42,3 +42,7 @@ Starlight Celesta, Night Kalimba, Velvet Vibes, Dewdrop, Aurora Pad, Silver Bell
 covering message, @mention, constellation, friend request, friend online, log in, log off, incoming and outgoing call
 (three cycles each), call connected/ended, join and leave. Preview page: the "Glofly Sound Family" artifact. Nothing
 from it is in the app yet.
+
+**Oct 28, 2026 signature sounds, round 2** (`signature2026.py <out>`): no packs; about nine one-off sounds per event
+(bloops, whistles, synthetic sung syllables, knocks, glass, chiptune, FM, swoops), 118 in all. Preview page: the
+"Glofly Signature Sounds" artifact. Nothing from it is in the app yet.
