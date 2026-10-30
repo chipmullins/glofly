@@ -1052,3 +1052,11 @@
     animation: none;
   }
 }
+
+/* Oct 30, 2026: small group titles inside a section (Settings → General → Sounds) */
+.settings-subhead {
+  margin: 14px 0 4px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--glo-muted);
+}

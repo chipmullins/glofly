@@ -227,69 +227,99 @@ type SoundKey =
 
 // Sound rows from the design (plus login, log out and the call moments). Short-sound rows pick
 // from every short sound, the ringing rows from the long ones.
-const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' | 'call' }[] = [
-  { key: 'message', label: 'Message sound', kind: 'alert' },
+type SoundGroup = 'messages' | 'friends' | 'calls' | 'you'
+// Oct 30, 2026: the sound rows in small groups under Settings → General → Sounds.
+const SOUND_GROUPS: { key: SoundGroup; label: string }[] = [
+  { key: 'messages', label: 'Messages' },
+  { key: 'friends', label: 'Friends' },
+  { key: 'calls', label: 'Calls' },
+  { key: 'you', label: 'Logging in and out' }
+]
+const SOUND_ROWS: {
+  key: SoundKey
+  label: string
+  desc?: string
+  kind: 'alert' | 'call'
+  group: SoundGroup
+}[] = [
+  { key: 'message', label: 'Message sound', kind: 'alert', group: 'messages' },
   {
     key: 'messageSent',
     label: 'Message sent sound',
     desc: 'Plays when you send a message. Off unless you pick one.',
-    kind: 'alert'
+    kind: 'alert',
+    group: 'messages'
   },
   {
     key: 'constellationMessage',
     label: 'Constellation message sound',
     desc: 'Plays for messages in your constellations.',
-    kind: 'alert'
+    kind: 'alert',
+    group: 'messages'
   },
-  { key: 'friendRequest', label: 'Friend request sound', kind: 'alert' },
+  { key: 'friendRequest', label: 'Friend request sound', kind: 'alert', group: 'friends' },
   {
     key: 'friendOnline',
     label: 'Friend online sound',
     desc: 'Plays when a friend comes online (who counts is set in Friends coming online).',
-    kind: 'alert'
+    kind: 'alert',
+    group: 'friends'
   },
   {
     key: 'login',
     label: 'Login sound',
     desc: 'Plays when Glofly opens signed in, or after you log in.',
-    kind: 'alert'
+    kind: 'alert',
+    group: 'you'
   },
   {
     key: 'logout',
     label: 'Log out sound',
     desc: 'Plays when you log out, or quit the Glofly app.',
-    kind: 'alert'
+    kind: 'alert',
+    group: 'you'
   },
-  { key: 'ringtone', label: 'Ringtone', desc: 'Plays when someone calls you.', kind: 'call' },
+  {
+    key: 'ringtone',
+    label: 'Ringtone',
+    desc: 'Plays when someone calls you.',
+    kind: 'call',
+    group: 'calls'
+  },
   {
     key: 'outgoing',
     label: 'Outgoing call sound',
     desc: 'Plays while you wait for someone to answer.',
-    kind: 'call'
+    kind: 'call',
+    group: 'calls'
   },
   {
     key: 'callConnected',
     label: 'Call connected',
     desc: 'Plays when you join a call, or someone answers yours.',
-    kind: 'alert'
+    kind: 'alert',
+    group: 'calls'
   },
   {
     key: 'callEnded',
     label: 'Call ended',
     desc: 'Plays when you leave a call, or it ends.',
-    kind: 'alert'
+    kind: 'alert',
+    group: 'calls'
   },
   {
     key: 'memberJoined',
     label: 'Someone joins',
     desc: 'Plays when someone joins a group call you’re in.',
-    kind: 'alert'
+    kind: 'alert',
+    group: 'calls'
   },
   {
     key: 'memberLeft',
     label: 'Someone leaves',
     desc: 'Plays when someone leaves a group call you’re in.',
-    kind: 'alert'
+    kind: 'alert',
+    group: 'calls'
   }
 ]
 // The other short-sound rows (message, friend, login, log out). Revisit with the message sounds.
@@ -870,90 +900,10 @@ export default function SettingsDialog({
                   </div>
                 </section>
 
+                {/* Oct 30, 2026: notifications and sounds come right after Appearance (the settings
+                    people change most), as two sections; sounds in groups. */}
                 <section className="settings-section">
-                  <h2>Privacy</h2>
-                  <div className="settings-card">
-                    {PRIVACY.map((row) => (
-                      <div key={row.key} className="settings-row">
-                        <div className="settings-row-text">
-                          <span className="settings-row-label">{row.label}</span>
-                          {row.desc && <span className="settings-row-desc">{row.desc}</span>}
-                        </div>
-                        {settings ? (
-                          <Toggle
-                            on={settings[row.key]}
-                            label={row.label}
-                            onChange={(on) => void change(row.key, on)}
-                          />
-                        ) : (
-                          <span className="toggle toggle--loading" aria-hidden="true" />
-                        )}
-                      </div>
-                    ))}
-                    <BirthdayRow />
-                    {settings?.showGlows !== undefined && (
-                      <div className="settings-row">
-                        <div className="settings-row-text">
-                          <span className="settings-row-label">Show glows</span>
-                          <span className="settings-row-desc">
-                            A little firefly and a number by a friend&apos;s name: how many days
-                            you&apos;ve both messaged each other. It gets brighter the more days in
-                            a row.
-                          </span>
-                        </div>
-                        <Toggle
-                          on={settings.showGlows}
-                          label="Show glows"
-                          onChange={(on) => void change('showGlows', on)}
-                        />
-                      </div>
-                    )}
-                    <div className="settings-row">
-                      <div className="settings-row-text">
-                        <label className="settings-row-label" htmlFor="settings-requests">
-                          Who can send me friend requests
-                        </label>
-                        <span className="settings-row-desc">
-                          With No one, people can’t send you requests, but you can still send them.
-                        </span>
-                      </div>
-                      <select
-                        id="settings-requests"
-                        className="settings-select"
-                        disabled={!settings}
-                        value={settings?.friendRequests ?? 'everyone'}
-                        onChange={(e) =>
-                          void change('friendRequests', e.target.value as 'everyone' | 'nobody')
-                        }
-                      >
-                        <option value="everyone">Everyone</option>
-                        <option value="nobody">No one</option>
-                      </select>
-                    </div>
-                    <ErrorReportsRow />
-                  </div>
-                </section>
-
-                {/* 0.8.0: your invite link (restricted accounts don't get one) */}
-                {!user.restricted && (
-                  <section className="settings-section">
-                    <h2>Friends</h2>
-                    <div className="settings-card">
-                      <InviteLinkRow userId={user.id} />
-                    </div>
-                  </section>
-                )}
-
-                {/* "Playing …" needs the desktop app (a browser can't see other programs). */}
-                {!isWeb && (
-                  <section className="settings-section">
-                    <h2>Activity</h2>
-                    <ActivitySettings />
-                  </section>
-                )}
-
-                <section className="settings-section">
-                  <h2>Notifications &amp; sounds</h2>
+                  <h2>Notifications</h2>
                   <div className="settings-card">
                     {isWeb && appSettings ? (
                       <BrowserNotificationsRow
@@ -1049,6 +999,32 @@ export default function SettingsDialog({
                     )}
                     <div className="settings-row">
                       <div className="settings-row-text">
+                        <span className="settings-row-label">
+                          Silence everything in Do Not Disturb
+                        </span>
+                        <span className="settings-row-desc">
+                          No sounds while your status is Do Not Disturb.
+                        </span>
+                      </div>
+                      {appSettings ? (
+                        <Toggle
+                          on={appSettings.sounds.dndSilence}
+                          label="Silence everything in Do Not Disturb"
+                          onChange={(on) => changeSound({ dndSilence: on })}
+                        />
+                      ) : (
+                        <span className="toggle toggle--loading" aria-hidden="true" />
+                      )}
+                    </div>
+                    <QuietHoursSettings />
+                  </div>
+                </section>
+
+                <section className="settings-section">
+                  <h2>Sounds</h2>
+                  <div className="settings-card">
+                    <div className="settings-row">
+                      <div className="settings-row-text">
                         <span className="settings-row-label">Notification sounds</span>
                         <span className="settings-row-desc">
                           Turn this off to mute every Glofly sound at once.
@@ -1072,96 +1048,165 @@ export default function SettingsDialog({
                       disabled={appSettings ? !appSettings.sounds.enabled : true}
                       onCommit={(v) => changeVolume('volume', v)}
                     />
-                    {SOUND_ROWS.map((row) => (
-                      <Fragment key={row.key}>
-                        <SoundRow
-                          row={row}
-                          value={appSettings?.sounds[row.key]}
-                          playing={playing === row.key}
-                          onChange={(value) => {
-                            if (playing === row.key) stopPreview()
-                            changeSound({ [row.key]: value })
-                          }}
-                          onPlay={() => togglePreview(row.key)}
-                        />
-                        {row.key === 'outgoing' && (
-                          <VolumeRow
-                            id="settings-call-volume"
-                            label="Ringing volume"
-                            desc="The ringtone and outgoing call sound, on top of Volume."
-                            value={appSettings?.sounds.callVolume}
-                            disabled={appSettings ? !appSettings.sounds.enabled : true}
-                            onCommit={(v) => changeVolume('callVolume', v)}
-                          />
-                        )}
-                      </Fragment>
-                    ))}
-                    <div className="settings-row">
-                      <div className="settings-row-text">
-                        <span className="settings-row-label">
-                          Silence everything in Do Not Disturb
-                        </span>
-                        <span className="settings-row-desc">
-                          No sounds while your status is Do Not Disturb.
-                        </span>
+                  </div>
+                  {SOUND_GROUPS.map((group) => (
+                    <Fragment key={group.key}>
+                      <h3 className="settings-subhead">{group.label}</h3>
+                      <div className="settings-card">
+                        {SOUND_ROWS.filter((row) => row.group === group.key).map((row) => (
+                          <Fragment key={row.key}>
+                            <SoundRow
+                              row={row}
+                              value={appSettings?.sounds[row.key]}
+                              playing={playing === row.key}
+                              onChange={(value) => {
+                                if (playing === row.key) stopPreview()
+                                changeSound({ [row.key]: value })
+                              }}
+                              onPlay={() => togglePreview(row.key)}
+                            />
+                            {row.key === 'outgoing' && (
+                              <VolumeRow
+                                id="settings-call-volume"
+                                label="Ringing volume"
+                                desc="The ringtone and outgoing call sound, on top of Volume."
+                                value={appSettings?.sounds.callVolume}
+                                disabled={appSettings ? !appSettings.sounds.enabled : true}
+                                onCommit={(v) => changeVolume('callVolume', v)}
+                              />
+                            )}
+                          </Fragment>
+                        ))}
                       </div>
-                      {appSettings ? (
+                    </Fragment>
+                  ))}
+                </section>
+
+                <section className="settings-section">
+                  <h2>Privacy</h2>
+                  <div className="settings-card">
+                    {PRIVACY.map((row) => (
+                      <div key={row.key} className="settings-row">
+                        <div className="settings-row-text">
+                          <span className="settings-row-label">{row.label}</span>
+                          {row.desc && <span className="settings-row-desc">{row.desc}</span>}
+                        </div>
+                        {settings ? (
+                          <Toggle
+                            on={settings[row.key]}
+                            label={row.label}
+                            onChange={(on) => void change(row.key, on)}
+                          />
+                        ) : (
+                          <span className="toggle toggle--loading" aria-hidden="true" />
+                        )}
+                      </div>
+                    ))}
+                    <BirthdayRow />
+                    {settings?.showGlows !== undefined && (
+                      <div className="settings-row">
+                        <div className="settings-row-text">
+                          <span className="settings-row-label">Show glows</span>
+                          <span className="settings-row-desc">
+                            A little firefly and a number by a friend&apos;s name: how many days
+                            you&apos;ve both messaged each other. It gets brighter the more days in
+                            a row.
+                          </span>
+                        </div>
                         <Toggle
-                          on={appSettings.sounds.dndSilence}
-                          label="Silence everything in Do Not Disturb"
-                          onChange={(on) => changeSound({ dndSilence: on })}
+                          on={settings.showGlows}
+                          label="Show glows"
+                          onChange={(on) => void change('showGlows', on)}
                         />
-                      ) : (
-                        <span className="toggle toggle--loading" aria-hidden="true" />
-                      )}
-                    </div>
-                    <QuietHoursSettings />
+                      </div>
+                    )}
                   </div>
                 </section>
 
-                {/* Starting with the computer and the tray belong to the desktop app. */}
+                <section className="settings-section">
+                  <h2>Friends</h2>
+                  <div className="settings-card">
+                    {/* 0.8.0: your invite link (restricted accounts don't get one) */}
+                    {!user.restricted && <InviteLinkRow userId={user.id} />}
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <label className="settings-row-label" htmlFor="settings-requests">
+                          Who can send me friend requests
+                        </label>
+                        <span className="settings-row-desc">
+                          With No one, people can’t send you requests, but you can still send them.
+                        </span>
+                      </div>
+                      <select
+                        id="settings-requests"
+                        className="settings-select"
+                        disabled={!settings}
+                        value={settings?.friendRequests ?? 'everyone'}
+                        onChange={(e) =>
+                          void change('friendRequests', e.target.value as 'everyone' | 'nobody')
+                        }
+                      >
+                        <option value="everyone">Everyone</option>
+                        <option value="nobody">No one</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
+                {/* "Playing …" needs the desktop app (a browser can't see other programs). */}
                 {!isWeb && (
                   <section className="settings-section">
-                    <h2>App</h2>
-                    <div className="settings-card">
-                      <div className="settings-row">
-                        <div className="settings-row-text">
-                          <span className="settings-row-label">{START_LABEL}</span>
-                          {appSettings && !appSettings.startupAvailable && (
-                            <span className="settings-row-desc">
-                              Works in the installed app (not while developing).
-                            </span>
-                          )}
-                        </div>
-                        {appSettings ? (
-                          <Toggle
-                            on={appSettings.openAtLogin}
-                            label={START_LABEL}
-                            disabled={!appSettings.startupAvailable}
-                            onChange={(on) => void changeApp({ openAtLogin: on })}
-                          />
-                        ) : (
-                          <span className="toggle toggle--loading" aria-hidden="true" />
-                        )}
-                      </div>
-                      <div className="settings-row">
-                        <div className="settings-row-text">
-                          <span className="settings-row-label">{TRAY_LABEL}</span>
-                          <span className="settings-row-desc">{TRAY_DESC}</span>
-                        </div>
-                        {appSettings ? (
-                          <Toggle
-                            on={appSettings.closeToTray}
-                            label={TRAY_LABEL}
-                            onChange={(on) => void changeApp({ closeToTray: on })}
-                          />
-                        ) : (
-                          <span className="toggle toggle--loading" aria-hidden="true" />
-                        )}
-                      </div>
-                    </div>
+                    <h2>Activity</h2>
+                    <ActivitySettings />
                   </section>
                 )}
+
+                <section className="settings-section">
+                  <h2>App</h2>
+                  <div className="settings-card">
+                    {/* Starting with the computer and the tray belong to the desktop app. */}
+                    {!isWeb && (
+                      <>
+                        <div className="settings-row">
+                          <div className="settings-row-text">
+                            <span className="settings-row-label">{START_LABEL}</span>
+                            {appSettings && !appSettings.startupAvailable && (
+                              <span className="settings-row-desc">
+                                Works in the installed app (not while developing).
+                              </span>
+                            )}
+                          </div>
+                          {appSettings ? (
+                            <Toggle
+                              on={appSettings.openAtLogin}
+                              label={START_LABEL}
+                              disabled={!appSettings.startupAvailable}
+                              onChange={(on) => void changeApp({ openAtLogin: on })}
+                            />
+                          ) : (
+                            <span className="toggle toggle--loading" aria-hidden="true" />
+                          )}
+                        </div>
+                        <div className="settings-row">
+                          <div className="settings-row-text">
+                            <span className="settings-row-label">{TRAY_LABEL}</span>
+                            <span className="settings-row-desc">{TRAY_DESC}</span>
+                          </div>
+                          {appSettings ? (
+                            <Toggle
+                              on={appSettings.closeToTray}
+                              label={TRAY_LABEL}
+                              onChange={(on) => void changeApp({ closeToTray: on })}
+                            />
+                          ) : (
+                            <span className="toggle toggle--loading" aria-hidden="true" />
+                          )}
+                        </div>
+                      </>
+                    )}
+                    <ErrorReportsRow />
+                  </div>
+                </section>
 
                 <section className="settings-card settings-logout">
                   <div className="settings-row-text">
