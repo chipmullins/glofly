@@ -41,7 +41,7 @@ const saved: Saved = {
     constellationMessage: 'skyLantern',
     friendRequest: 'nightBreeze',
     friendOnline: 'hollowWood',
-    login: 'gloflyChord',
+    login: 'gloflyHum',
     logout: 'goodbyeSoft',
     callConnected: 'whistleUp',
     callEnded: 'whistleDown',
@@ -112,7 +112,7 @@ const ROW_SOUNDS: Record<string, readonly string[]> = {
     'ripple',
     'none'
   ],
-  login: ['gloflyChord', 'dawnHum', 'none'],
+  login: ['gloflyHum', 'gloflyChord', 'dawnHum', 'none'],
   logout: ['goodbyeSoft', 'hushHum', 'none'],
   messageSent: [
     'softWhoosh',

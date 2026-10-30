@@ -80,6 +80,7 @@ import msgMmhmQFile from '../assets/sounds/msg-mmhm-q.ogg'
 import msgStarNudgeFile from '../assets/sounds/msg-star-nudge.ogg'
 import msgRippleFile from '../assets/sounds/msg-ripple.ogg'
 import loginGloflyChordFile from '../assets/sounds/login-glofly-chord.ogg'
+import loginGloflyHumFile from '../assets/sounds/login-glofly-hum.ogg'
 import loginDawnHumFile from '../assets/sounds/login-dawn-hum.ogg'
 import logoffGoodbyeSoftFile from '../assets/sounds/logoff-goodbye-soft.ogg'
 import logoffHushHumFile from '../assets/sounds/logoff-hush-hum.ogg'
@@ -224,7 +225,9 @@ export const SOUND_FILES: Record<
   mmHmQ: { label: 'Mm-hm?', url: msgMmhmQFile },
   starNudge: { label: 'Star nudge', url: msgStarNudgeFile },
   ripple: { label: 'Ripple', url: msgRippleFile },
-  gloflyChord: { label: 'Glo-fly', url: loginGloflyChordFile },
+  // Oct 30, 2026: the hummed one is the default; the talking chord is "Glo-fly Robot".
+  gloflyHum: { label: 'Glo-fly hummed', url: loginGloflyHumFile },
+  gloflyChord: { label: 'Glo-fly Robot', url: loginGloflyChordFile },
   dawnHum: { label: 'Dawn hum', url: loginDawnHumFile },
   goodbyeSoft: { label: 'Good-bye', url: logoffGoodbyeSoftFile },
   hushHum: { label: 'Hush hum', url: logoffHushHumFile },
@@ -268,7 +271,7 @@ export const ROW_CHOICES = {
     'ripple',
     'none'
   ],
-  login: ['gloflyChord', 'dawnHum', 'none'],
+  login: ['gloflyHum', 'gloflyChord', 'dawnHum', 'none'],
   logout: ['goodbyeSoft', 'hushHum', 'none'],
   messageSent: [
     'softWhoosh',
@@ -295,7 +298,7 @@ let settings: SoundSettings = {
   constellationMessage: 'skyLantern',
   friendRequest: 'nightBreeze',
   friendOnline: 'hollowWood',
-  login: 'gloflyChord',
+  login: 'gloflyHum',
   logout: 'goodbyeSoft',
   callConnected: 'whistleUp',
   callEnded: 'whistleDown',

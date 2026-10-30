@@ -193,6 +193,7 @@ export type AlertSound =
   | 'mmHmQ'
   | 'starNudge'
   | 'ripple'
+  | 'gloflyHum'
   | 'gloflyChord'
   | 'dawnHum'
   | 'goodbyeSoft'
