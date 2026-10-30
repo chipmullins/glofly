@@ -77,3 +77,8 @@ each for new message, message sent (new), @mention, constellation message, frien
 log off (felt piano, soft mallets, kalimba, warm pads, breaths, hums; rounded attacks, low-passed, quieter). Two log ins
 sing a soft "Glo-fly", two log offs "Good-bye" (round 3's voice with a triangle source, breathy). Preview page: the
 "Glofly Soft Sounds" artifact. Nothing from it is in the app yet.
+
+**Oct 30, 2026 peaceful voices, round 7** (`peaceful2026.py <kokoro folder> <out>`): Chip picked "Glo-fly (hummed)"
+from `talkbox2026.py` as the login default and wanted more like it. Ten "Glo-fly" and ten "Good-bye": duets, little
+choirs, lullaby, whisper (Kokoro's af_nicole), breeze, echo, kalimba; mixed about 3 dB quieter than round 6.
+Preview page: "Glofly Peaceful Voices" (https://claude.ai/artifact/7NhjKWjrk6VTB9zfh1ehmC).
