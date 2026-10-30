@@ -159,13 +159,80 @@ def build():
                        (.9, lp(sing(B, ['A4', 'E4'], breathy=.55), 1800), .3)]))
 
 
+def build_warm():
+    """Round 7b (Oct 30, 2026): Chip liked "Glo-fly (warm)" and found the rest squeaky. So: lower
+    notes (A3-A4, an alto's range), formants left where they are or lowered a little (shift <= 1.0, no
+    chipmunk), less vibrato, softer top end, slow glides."""
+    p, bell, kal, felt = soft.pad, soft.softbell, soft.softkal, soft.felt
+    G, B = 'Glow fly.', 'Good bye.'
+
+    def w(text, notes, **kw):
+        kw.setdefault('voice', 'af_bella')
+        kw.setdefault('shift', .97)
+        kw.setdefault('glide', 14)
+        kw.setdefault('vibrato', .005)
+        kw.setdefault('cutoff', 3000)
+        kw.setdefault('breathy', .32)
+        return sing(text, notes, **kw)
+
+    def wduet(text, a, b, **kw):
+        return mix([(0, w(text, a, **kw)), (.015, w(text, b, shift=kw.get('shift', .97) * .98, breathy=.4), .5)])
+
+    # Log in
+    sound('loginwarm', 'wm-glofly-warm', 'Glo-fly Warm (your favorite)', 'The one you liked: a deeper, warmer hum with a slow glide.',
+          lambda: mix([(0, p([n('A3'), n('E4')], 1.8, .4, .8), .2),
+                       (.03, sing(G, ['C#4', 'A4'], voice='af_bella', shift=1.0, glide=14))]))
+    sound('loginwarm', 'wm-glofly-low', 'Glo-fly Low', 'Lower still, calm and round, over a soft pad.',
+          lambda: mix([(0, p([n('F3'), n('C4')], 1.9, .4, .9), .2), (.03, w(G, ['A3', 'F4'], shift=.94))]))
+    sound('loginwarm', 'wm-glofly-duet', 'Glo-fly Warm Duet', 'Two low hums in harmony, like two friends.',
+          lambda: mix([(0, p([n('A3'), n('E4')], 1.8, .4, .8), .16), (.03, wduet(G, ['C#4', 'A4'], ['A3', 'E4']))]))
+    sound('loginwarm', 'wm-glofly-felt', 'Glo-fly Fireside', 'A warm hum with a soft felt-piano chord, like a fireplace.',
+          lambda: mix([(0, felt(n('C3'), 2.4), .3), (0, felt(n('G3'), 2.4), .22), (0, felt(n('E4'), 2.4), .16),
+                       (.1, w(G, ['C4', 'G4']))]))
+    sound('loginwarm', 'wm-glofly-velvet', 'Glo-fly Velvet', 'The deepest one: a low, velvety hum.',
+          lambda: mix([(0, p([n('D3'), n('A3')], 2.0, .45, .9), .18), (.03, w(G, ['G3', 'D4'], shift=.92, breathy=.38))]))
+    sound('loginwarm', 'wm-glofly-glow', 'Glo-fly Glow', 'A warm hum that rises slowly and blooms into a low bell.',
+          lambda: mix([(0, w(G, ['B3', 'F#4'], glide=22)), (.8, bell(n('F#4'), 2.2), .16)]))
+    sound('loginwarm', 'wm-glofly-kalimba', 'Glo-fly Warm Kalimba', 'A warm hum, then a low kalimba answering softly.',
+          lambda: mix([(0, w(G, ['C4', 'G4'])), (.8, kal(n('C4')), .22), (1.0, kal(n('G4')), .2)]))
+    sound('loginwarm', 'wm-glofly-hush', 'Glo-fly Hush', 'Very soft and breathy, low, like saying it under your breath.',
+          lambda: mix([(0, p([n('E3'), n('B3'), n('G#4')], 1.9, .4, .8), .24), (.04, w(G, ['B3', 'G#4'], breathy=.55))]))
+    sound('loginwarm', 'wm-glofly-sway', 'Glo-fly Sway', 'Three low notes, Glo-o-fly, gently swaying.',
+          lambda: mix([(0, p([n('G3'), n('D4')], 2.0, .4, .9), .18), (.03, w('Glow, oh fly.', ['D4', 'B4'], speed=.8, glide=18))]))
+    sound('loginwarm', 'wm-glofly-echo', 'Glo-fly Warm Echo', 'A warm hum, then a softer, farther echo.',
+          lambda: mix([(0, w(G, ['C#4', 'A4'])), (.95, lp(w(G, ['C#4', 'A4'], breathy=.5), 1500), .28)]))
+
+    # Log off
+    sound('logoffwarm', 'wm-goodbye-warm', 'Good-bye Warm', 'Same voice as your favorite: a deeper, warmer hum gliding down.',
+          lambda: mix([(0, p([n('D3'), n('A3')], 1.8, .4, .8), .2),
+                       (.03, sing(B, ['A4', 'D4'], voice='af_bella', shift=1.0, glide=14))]))
+    sound('logoffwarm', 'wm-goodbye-low', 'Good-bye Low', 'Lower still, calm and round, settling down.',
+          lambda: mix([(0, p([n('F3'), n('C4')], 1.9, .4, .9), .2), (.03, w(B, ['F4', 'A3'], shift=.94))]))
+    sound('logoffwarm', 'wm-goodbye-duet', 'Good-bye Warm Duet', 'Two low hums in harmony, waving off together.',
+          lambda: mix([(0, p([n('D3'), n('A3')], 1.8, .4, .8), .16), (.03, wduet(B, ['A4', 'D4'], ['F#4', 'A3']))]))
+    sound('logoffwarm', 'wm-goodbye-felt', 'Good-bye Fireside', 'A warm hum with a soft felt-piano chord.',
+          lambda: mix([(0, felt(n('F3'), 2.4), .28), (0, felt(n('C4'), 2.4), .2), (.1, w(B, ['A4', 'F4']))]))
+    sound('logoffwarm', 'wm-goodbye-velvet', 'Good-bye Velvet', 'The deepest one: a low, velvety good-bye.',
+          lambda: mix([(0, p([n('G3'), n('D3')], 2.0, .45, .9), .18), (.03, w(B, ['D4', 'G3'], shift=.92, breathy=.38))]))
+    sound('logoffwarm', 'wm-goodbye-dusk', 'Good-bye Dusk', 'A warm hum fading into a slow, dimming pad.',
+          lambda: mix([(0, w(B, ['E4', 'B3'], glide=22)), (.3, p([n('E3'), n('B3'), n('G#4')], 2.2, .5, 1.1), .24)]))
+    sound('logoffwarm', 'wm-goodbye-kalimba', 'Good-bye Warm Kalimba', 'A warm hum, then a low kalimba playing it back.',
+          lambda: mix([(0, w(B, ['G4', 'C4'])), (.8, kal(n('G4')), .2), (1.0, kal(n('C4')), .22)]))
+    sound('logoffwarm', 'wm-goodbye-hush', 'Good-bye Hush', 'Very soft and breathy, low, like a whispered good night.',
+          lambda: mix([(0, p([n('A3'), n('E4')], 1.9, .4, .8), .24), (.04, w(B, ['E4', 'A3'], breathy=.55))]))
+    sound('logoffwarm', 'wm-goodbye-sleepy', 'Good-bye Sleepy', 'A slow, sleepy good-bye drifting down.',
+          lambda: mix([(0, w(B, ['D4', 'G3'], speed=.7, glide=20)), (.6, felt(n('G3'), 2.0), .2)]))
+    sound('logoffwarm', 'wm-goodbye-echo', 'Good-bye Warm Echo', 'A warm good-bye, then a softer, farther echo.',
+          lambda: mix([(0, w(B, ['A4', 'D4'])), (.95, lp(w(B, ['A4', 'D4'], breathy=.5), 1500), .28)]))
+
+
 def main():
     global kokoro
     from kokoro_onnx import Kokoro
     model_dir, out = sys.argv[1], sys.argv[2]
     kokoro = Kokoro(os.path.join(model_dir, 'kokoro.int8.onnx'), os.path.join(model_dir, 'voices.bin'))
     os.makedirs(out, exist_ok=True)
-    build()
+    (build_warm if '--warm' in sys.argv else build)()
     manifest = {}
     for eid, items in S.items():
         manifest[eid] = []
