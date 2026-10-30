@@ -23,8 +23,8 @@ import {
   previewSound,
   setSoundSettings,
   SOUND_FILES,
-  stopPreview,
-  type SoundFile
+  CALL_ROW_CHOICES,
+  stopPreview
 } from '../lib/sounds'
 import { setNotificationSettings } from '../lib/notify'
 import { isMac, isWeb } from '../lib/platform'
@@ -278,6 +278,7 @@ const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' |
     kind: 'alert'
   }
 ]
+// The other short-sound rows (message, friend, login, log out). Revisit with the message sounds.
 const ALERT_CHOICES: AlertSound[] = [
   'lowComet',
   'chime',
@@ -309,19 +310,6 @@ const ALERT_CHOICES: AlertSound[] = [
   'deepSpace',
   'none'
 ]
-/** Ringing rows: that row's own set first (incoming for the ringtone, outgoing for the other),
- * then Chip's two originals, then None. */
-const ringChoices = (side: 'in' | 'out'): CallSound[] => [
-  ...(Object.keys(SOUND_FILES) as SoundFile[]).filter(
-    (k): k is Exclude<CallSound, 'none'> =>
-      SOUND_FILES[k].ring === side && k !== 'ring' && k !== 'jingle'
-  ),
-  'ring',
-  'jingle',
-  'none'
-]
-const RINGTONE_CHOICES = ringChoices('in')
-const OUTGOING_CHOICES = ringChoices('out')
 
 function PlayIcon({ playing }: { playing: boolean }): React.JSX.Element {
   return (
@@ -345,12 +333,9 @@ function SoundRow({
   onChange: (value: AlertSound | CallSound) => void
   onPlay: () => void
 }): React.JSX.Element {
-  const choices =
-    row.kind === 'alert'
-      ? ALERT_CHOICES
-      : row.key === 'ringtone'
-        ? RINGTONE_CHOICES
-        : OUTGOING_CHOICES
+  // Oct 29, 2026: the call rows offer only their new sound (and None).
+  const callRow = (CALL_ROW_CHOICES as Record<string, readonly (AlertSound | CallSound)[]>)[row.key]
+  const choices = callRow ?? ALERT_CHOICES
   const id = `settings-sound-${row.key}`
   return (
     <div className="settings-row">

@@ -45,7 +45,16 @@ export const PHONE_MESSAGE_SOUNDS: readonly PhoneSound[] = [
   { id: 'deepSpace', label: 'Deep space', file: 'deep-space', native: 'glofly_msg_deep_space' },
 ]
 
+// Oct 29, 2026: Doo-wop (Chip's pick) is the only ringtone. It plays from the native name every
+// build already has (glofly_ringtone), so older phones play their old copy until their next build
+// and lock-screen pushes always find a file. Anyone who had picked another one gets Doo-wop
+// (phoneRingtone falls back to the first). The retired list is below, to add back later.
 export const PHONE_RINGTONES: readonly PhoneSound[] = [
+  { id: 'doowop', label: 'Doo-wop', file: 'ring-in-doowop', native: 'glofly_ringtone' },
+]
+
+/** Not offered since Oct 29, 2026. Their files are still in the apps (re-add an entry above to bring one back). */
+export const RETIRED_PHONE_RINGTONES: readonly PhoneSound[] = [
   { id: 'fireflyDance', label: 'Firefly dance', file: 'ring-in-firefly', native: 'glofly_ringtone' },
   { id: 'glowBells', label: 'Glow bells', file: 'ring-in-glowbells', native: 'glofly_ring_glow_bells' },
   { id: 'marimbaRing', label: 'Marimba', file: 'ring-in-marimba', native: 'glofly_ring_marimba' },
@@ -62,7 +71,7 @@ export const PHONE_RINGTONES: readonly PhoneSound[] = [
 ]
 
 export const DEFAULT_PHONE_MESSAGE_SOUND = 'lowComet'
-export const DEFAULT_PHONE_RINGTONE = 'fireflyDance'
+export const DEFAULT_PHONE_RINGTONE = 'doowop'
 /** 0.7.0: messages in constellations have their own sound, picked from the message sounds. */
 export const DEFAULT_PHONE_CONSTELLATION_SOUND = 'skyLantern'
 

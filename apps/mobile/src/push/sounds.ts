@@ -37,32 +37,22 @@ const MESSAGE_FILES: Record<string, number> = {
   skyLantern: require('../../assets/sounds/sky-lantern.ogg'),
   deepSpace: require('../../assets/sounds/deep-space.ogg'),
 }
+// Oct 29, 2026: the call sounds are Chip's picks (tools/sounds/defaults2026.py). The older ringtones
+// stay in assets/sounds (and natively), just not offered (@glofly/shared RETIRED_PHONE_RINGTONES).
 const RINGTONE_FILES: Record<string, number> = {
-  fireflyDance: require('../../assets/sounds/ring-in-firefly.ogg'),
-  glowBells: require('../../assets/sounds/ring-in-glowbells.ogg'),
-  marimbaRing: require('../../assets/sounds/ring-in-marimba.ogg'),
-  kalimbaRing: require('../../assets/sounds/ring-in-kalimba.ogg'),
-  glassChimes: require('../../assets/sounds/ring-in-glass.ogg'),
-  classic: require('../../assets/sounds/ring-in-classic.ogg'),
-  electro: require('../../assets/sounds/ring-in-electro.ogg'),
-  chiptune: require('../../assets/sounds/ring-in-chiptune.ogg'),
-  groove: require('../../assets/sounds/ring-in-groove.ogg'),
-  steelDrums: require('../../assets/sounds/ring-in-steel.ogg'),
-  vibesRing: require('../../assets/sounds/ring-in-vibes.ogg'),
-  digitalBells: require('../../assets/sounds/ring-in-fmbells.ogg'),
-  ring: require('../../assets/sounds/ringtone.ogg'),
+  doowop: require('../../assets/sounds/ring-in-doowop.ogg'),
 }
 
 const FILES = {
   message: MESSAGE_FILES.chime,
   constellation: MESSAGE_FILES.skyLantern,
-  ringtone: RINGTONE_FILES.fireflyDance,
-  outgoing: require('../../assets/sounds/ring-out-synth-arp.ogg'),
-  connected: require('../../assets/sounds/glow-on.ogg'),
-  ended: require('../../assets/sounds/glow-off.ogg'),
+  ringtone: RINGTONE_FILES.doowop,
+  outgoing: require('../../assets/sounds/ring-out-hum.ogg'),
+  connected: require('../../assets/sounds/whistle-up.ogg'),
+  ended: require('../../assets/sounds/whistle-down.ogg'),
   noAnswer: require('../../assets/sounds/no-answer.ogg'),
-  joined: require('../../assets/sounds/blink-in.ogg'),
-  left: require('../../assets/sounds/blink-out.ogg'),
+  joined: require('../../assets/sounds/bubble-in.ogg'),
+  left: require('../../assets/sounds/bubble-out.ogg'),
 } as const
 
 export type SoundName = keyof typeof FILES

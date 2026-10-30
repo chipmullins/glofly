@@ -6,7 +6,6 @@ import type {
   AlertSound,
   AppSettings,
   AppSettingsChanges,
-  CallSound,
   NotificationSettings,
   SoundSettings,
   TextSize,
@@ -45,12 +44,12 @@ const saved: Saved = {
     friendOnline: 'hollowWood',
     login: 'hello',
     logout: 'goodnight',
-    callConnected: 'glowOn',
-    callEnded: 'glowOff',
-    memberJoined: 'blinkIn',
-    memberLeft: 'blinkOut',
-    ringtone: 'fireflyDance',
-    outgoing: 'synthArp'
+    callConnected: 'whistleUp',
+    callEnded: 'whistleDown',
+    memberJoined: 'bubbleIn',
+    memberLeft: 'bubbleOut',
+    ringtone: 'doowop',
+    outgoing: 'humHum'
   },
   notifications: { enabled: true, preview: true }
 }
@@ -94,38 +93,19 @@ const ALERT_SOUNDS: AlertSound[] = [
   'deepSpace',
   'none'
 ]
-// Keep in step with SOUND_FILES in the window (renderer/src/lib/sounds.ts).
-const CALL_SOUNDS: CallSound[] = [
-  'ring',
-  'jingle',
-  'synthArp',
-  'lantern',
-  'fireflyOut',
-  'marimbaOut',
-  'glassOut',
-  'breathe',
-  'kalimbaOut',
-  'evening',
-  'pixel',
-  'vibesOut',
-  'musicBox',
-  'nightDrive',
-  'steelOut',
-  'digital',
-  'fireflyDance',
-  'glowBells',
-  'marimbaRing',
-  'kalimbaRing',
-  'glassChimes',
-  'classic',
-  'electro',
-  'chiptune',
-  'groove',
-  'steelDrums',
-  'vibesRing',
-  'digitalBells',
-  'none'
-]
+/**
+ * Oct 29, 2026: the call rows offer only Chip's picks (and None). A saved older call sound isn't
+ * accepted any more, so it falls back to the new default. Keep in step with CALL_ROW_CHOICES in
+ * the window (renderer/src/lib/sounds.ts) and apps/web/src/bridge/settings.ts.
+ */
+const CALL_ROW_SOUNDS: Record<string, readonly string[]> = {
+  callConnected: ['whistleUp', 'none'],
+  callEnded: ['whistleDown', 'none'],
+  memberJoined: ['bubbleIn', 'none'],
+  memberLeft: ['bubbleOut', 'none'],
+  ringtone: ['doowop', 'none'],
+  outgoing: ['humHum', 'none']
+}
 
 /**
  * 0.2.2 changed the default ringing sounds (Glow ring → Firefly dance, Glofly jingle → Synth
@@ -133,8 +113,9 @@ const CALL_SOUNDS: CallSound[] = [
  * who had picked something else keeps it. Bumped only when defaults change.
  * 3 (0.7.0): the message sound's default became Low comet (Firefly chime before).
  * 4 (0.7.0): friend online became Hollow wood (Dewdrop before), friend request Night breeze (Firefly chime).
+ * 5 (Oct 29, 2026): new call sounds; older ones aren't accepted for the call rows (CALL_ROW_SOUNDS).
  */
-const SOUND_DEFAULTS_VERSION = 4
+const SOUND_DEFAULTS_VERSION = 5
 
 /** Checks a sound setting (from the window or the saved file) before using it. */
 function soundSettingOk(key: string, value: unknown): boolean {
@@ -151,14 +132,14 @@ function soundSettingOk(key: string, value: unknown): boolean {
     case 'friendOnline':
     case 'login':
     case 'logout':
+      return ALERT_SOUNDS.includes(value as AlertSound)
     case 'callConnected':
     case 'callEnded':
     case 'memberJoined':
     case 'memberLeft':
-      return ALERT_SOUNDS.includes(value as AlertSound)
     case 'ringtone':
     case 'outgoing':
-      return CALL_SOUNDS.includes(value as CallSound)
+      return typeof value === 'string' && CALL_ROW_SOUNDS[key].includes(value)
     default:
       return false
   }
@@ -205,10 +186,6 @@ export function loadAppSettings(): void {
     if (typeof value.sounds === 'object' && value.sounds !== null) {
       for (const [k, v] of Object.entries(value.sounds)) {
         if (soundSettingOk(k, v)) (saved.sounds as Record<string, unknown>)[k] = v
-      }
-      if ((value.soundDefaultsVersion ?? 1) < SOUND_DEFAULTS_VERSION) {
-        if (saved.sounds.ringtone === 'ring') saved.sounds.ringtone = 'fireflyDance'
-        if (saved.sounds.outgoing === 'jingle') saved.sounds.outgoing = 'synthArp'
       }
       if ((value.soundDefaultsVersion ?? 1) < 3 && saved.sounds.message === 'chime') {
         saved.sounds.message = 'lowComet'

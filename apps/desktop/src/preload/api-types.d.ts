@@ -176,10 +176,17 @@ export type AlertSound =
   | 'aurora'
   | 'skyLantern'
   | 'deepSpace'
+  /** Oct 29, 2026: the call sounds (Chip's picks; the only choices for the call rows) */
+  | 'whistleUp'
+  | 'whistleDown'
+  | 'bubbleIn'
+  | 'bubbleOut'
   | 'none'
 /** Ringing sounds (they loop). 0.2.2 adds the in- and out- sets; ring and jingle are Chip's originals. */
 export type CallSound = 'ring' | 'jingle' | OutgoingSound | IncomingSound | 'none'
 export type OutgoingSound =
+  /** Oct 29, 2026: the only outgoing choice */
+  | 'humHum'
   | 'synthArp'
   | 'lantern'
   | 'fireflyOut'
@@ -195,6 +202,8 @@ export type OutgoingSound =
   | 'steelOut'
   | 'digital'
 export type IncomingSound =
+  /** Oct 29, 2026: the only ringtone choice */
+  | 'doowop'
   | 'fireflyDance'
   | 'glowBells'
   | 'marimbaRing'

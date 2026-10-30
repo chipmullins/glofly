@@ -62,6 +62,12 @@ import ringInFmbellsFile from '../assets/sounds/ring-in-fmbells.ogg'
 import pluckFile from '../assets/sounds/pluck.ogg'
 import fadeFile from '../assets/sounds/fade.ogg'
 import noAnswerFile from '../assets/sounds/no-answer.ogg'
+import whistleUpFile from '../assets/sounds/whistle-up.ogg'
+import whistleDownFile from '../assets/sounds/whistle-down.ogg'
+import bubbleInFile from '../assets/sounds/bubble-in.ogg'
+import bubbleOutFile from '../assets/sounds/bubble-out.ogg'
+import ringInDoowopFile from '../assets/sounds/ring-in-doowop.ogg'
+import ringOutHumFile from '../assets/sounds/ring-out-hum.ogg'
 import pttFireflyDownFile from '../assets/sounds/ptt-firefly-down.ogg'
 import pttFireflyUpFile from '../assets/sounds/ptt-firefly-up.ogg'
 import pttBlinkDownFile from '../assets/sounds/ptt-blink-down.ogg'
@@ -170,8 +176,26 @@ export const SOUND_FILES: Record<
   groove: { label: 'Groove', url: ringInGrooveFile, ring: 'in', loop: 2.6 },
   steelDrums: { label: 'Steel drums', url: ringInSteelFile, ring: 'in', loop: 2.8 },
   vibesRing: { label: 'Vibes', url: ringInVibesFile, ring: 'in', loop: 2.8 },
-  digitalBells: { label: 'Digital bells', url: ringInFmbellsFile, ring: 'in', loop: 2.8 }
+  digitalBells: { label: 'Digital bells', url: ringInFmbellsFile, ring: 'in', loop: 2.8 },
+  // Oct 29, 2026 (tools/sounds/defaults2026.py): Chip's picks, now the call sounds and the only
+  // choices in those rows. The older call sounds above stay in the app, just not offered there.
+  whistleUp: { label: 'Whistle up', url: whistleUpFile },
+  whistleDown: { label: 'Whistle down', url: whistleDownFile },
+  bubbleIn: { label: 'Bubble', url: bubbleInFile },
+  bubbleOut: { label: 'Bubble', url: bubbleOutFile },
+  doowop: { label: 'Doo-wop', url: ringInDoowopFile, ring: 'in', loop: 2.4 },
+  humHum: { label: 'Hum hum', url: ringOutHumFile, ring: 'out', loop: 2.0 }
 }
+
+/** Oct 29, 2026: the call rows offer only these (and None). Shared with the settings check. */
+export const CALL_ROW_CHOICES = {
+  callConnected: ['whistleUp', 'none'],
+  callEnded: ['whistleDown', 'none'],
+  memberJoined: ['bubbleIn', 'none'],
+  memberLeft: ['bubbleOut', 'none'],
+  ringtone: ['doowop', 'none'],
+  outgoing: ['humHum', 'none']
+} as const satisfies Record<string, readonly (SoundFile | 'none')[]>
 
 let settings: SoundSettings = {
   enabled: true,
@@ -184,12 +208,12 @@ let settings: SoundSettings = {
   friendOnline: 'hollowWood',
   login: 'hello',
   logout: 'goodnight',
-  callConnected: 'glowOn',
-  callEnded: 'glowOff',
-  memberJoined: 'blinkIn',
-  memberLeft: 'blinkOut',
-  ringtone: 'fireflyDance',
-  outgoing: 'synthArp'
+  callConnected: 'whistleUp',
+  callEnded: 'whistleDown',
+  memberJoined: 'bubbleIn',
+  memberLeft: 'bubbleOut',
+  ringtone: 'doowop',
+  outgoing: 'humHum'
 }
 
 /** Called at startup and whenever Settings changes them. */
@@ -281,7 +305,8 @@ function unlockSound(): void {
   }
 }
 if (typeof document !== 'undefined') {
-  for (const e of UNLOCK_EVENTS) document.addEventListener(e, unlockSound, { capture: true, passive: true })
+  for (const e of UNLOCK_EVENTS)
+    document.addEventListener(e, unlockSound, { capture: true, passive: true })
 }
 
 /**

@@ -63,3 +63,11 @@ Round 4 was not liked (Chip: too much like a real person). **Round 5, sung lines
 synthetic voice singing round 4's witty lines with clearer pronunciation (`sung2026.CLARITY`: longer consonant
 transitions, louder consonants, narrower formants, a fourth formant; round 3's defaults unchanged), ten per event
 (130 in all). Preview page: the "Glofly Sung Lines" artifact. Nothing from it is in the app yet.
+
+**Oct 29, 2026: new call sounds (Chip's picks from round 2).** `defaults2026.py <repo root>` makes them:
+Doo-wop (ringtone, `ring-in-doowop.ogg`, 2.4 s loop), Hum hum (outgoing, `ring-out-hum.ogg`, 2.0 s loop), Whistle up /
+Whistle down (call connected / ended), Bubble in / Bubble out (someone joins / leaves). They are the defaults and the
+only choices in those rows (desktop, web, phones). The older call sounds stay in the apps but aren't offered; the phone
+natives they replaced (glofly_ringtone, glofly_outgoing, glofly_connected, glofly_ended, glofly_joined, glofly_left,
+Android glofly_ringtone) are kept in `retired-2026-10-29/`. To bring one back: re-add it to the row's list
+(`CALL_ROW_CHOICES` + `CALL_ROW_SOUNDS` in desktop/web, `PHONE_RINGTONES` from `RETIRED_PHONE_RINGTONES`).

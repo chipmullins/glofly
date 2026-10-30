@@ -3,7 +3,6 @@ import type {
   AlertSound,
   AppSettings,
   AppSettingsChanges,
-  CallSound,
   NotificationSettings,
   SoundSettings,
   TextSize,
@@ -43,12 +42,12 @@ const saved: Saved = {
     friendOnline: 'hollowWood',
     login: 'hello',
     logout: 'goodnight',
-    callConnected: 'glowOn',
-    callEnded: 'glowOff',
-    memberJoined: 'blinkIn',
-    memberLeft: 'blinkOut',
-    ringtone: 'fireflyDance',
-    outgoing: 'synthArp'
+    callConnected: 'whistleUp',
+    callEnded: 'whistleDown',
+    memberJoined: 'bubbleIn',
+    memberLeft: 'bubbleOut',
+    ringtone: 'doowop',
+    outgoing: 'humHum'
   },
   notifications: { enabled: true, preview: true }
 }
@@ -84,38 +83,19 @@ const ALERT_SOUNDS: AlertSound[] = [
   'deepSpace',
   'none'
 ]
-// Keep in step with SOUND_FILES in the window (renderer/src/lib/sounds.ts).
-const CALL_SOUNDS: CallSound[] = [
-  'ring',
-  'jingle',
-  'synthArp',
-  'lantern',
-  'fireflyOut',
-  'marimbaOut',
-  'glassOut',
-  'breathe',
-  'kalimbaOut',
-  'evening',
-  'pixel',
-  'vibesOut',
-  'musicBox',
-  'nightDrive',
-  'steelOut',
-  'digital',
-  'fireflyDance',
-  'glowBells',
-  'marimbaRing',
-  'kalimbaRing',
-  'glassChimes',
-  'classic',
-  'electro',
-  'chiptune',
-  'groove',
-  'steelDrums',
-  'vibesRing',
-  'digitalBells',
-  'none'
-]
+/**
+ * Oct 29, 2026: the call rows offer only Chip's picks (and None); a saved older call sound falls
+ * back to the new default. Keep in step with CALL_ROW_CHOICES (renderer/src/lib/sounds.ts) and the
+ * desktop's app-settings.ts.
+ */
+const CALL_ROW_SOUNDS: Record<string, readonly string[]> = {
+  callConnected: ['whistleUp', 'none'],
+  callEnded: ['whistleDown', 'none'],
+  memberJoined: ['bubbleIn', 'none'],
+  memberLeft: ['bubbleOut', 'none'],
+  ringtone: ['doowop', 'none'],
+  outgoing: ['humHum', 'none']
+}
 const THEMES: ThemeChoice[] = ['light', 'dark', 'system']
 const ACCENTS: AccentChoice[] = ['orange', 'red', 'lagoon', 'violet', 'blossom', 'graphite']
 const TEXT_SIZES: Record<TextSize, number> = { small: 0.9, default: 1, large: 1.1, larger: 1.25 }
@@ -134,14 +114,14 @@ function soundSettingOk(key: string, value: unknown): boolean {
     case 'friendOnline':
     case 'login':
     case 'logout':
+      return ALERT_SOUNDS.includes(value as AlertSound)
     case 'callConnected':
     case 'callEnded':
     case 'memberJoined':
     case 'memberLeft':
-      return ALERT_SOUNDS.includes(value as AlertSound)
     case 'ringtone':
     case 'outgoing':
-      return CALL_SOUNDS.includes(value as CallSound)
+      return typeof value === 'string' && CALL_ROW_SOUNDS[key].includes(value)
     default:
       return false
   }
@@ -191,7 +171,7 @@ function load(): void {
 
 function save(): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...saved, soundDefaults: 4 }))
+    localStorage.setItem(KEY, JSON.stringify({ ...saved, soundDefaults: 5 }))
   } catch {
     // Storage blocked: the change lasts until the page is closed.
   }
