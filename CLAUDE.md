@@ -185,3 +185,6 @@
   `tools/sounds/`. Friends coming online = `users.online_alerts_mode` all/selected/none (old boolean kept in step).
   Desktop: login sound on a restored session (not `--glofly-hidden` launches, not web); quitting plays the log-off
   sound first (`src/main/goodbye.ts`; skipped for update installs via `markQuitting` and for shutdown).
+  Also 0.8.7: Go live `notify` (POST /broadcasts, default true), viewer names + "started watching" toast; "Free to hang"
+  (was "Want to hang?"); Mac welcome notification once (`glofly.macNotifyAsked`) so macOS asks for permission (no
+  permission = no pop-ups and no Dock badge); screen sound problems report to Control → Errors (where "screen sound").
