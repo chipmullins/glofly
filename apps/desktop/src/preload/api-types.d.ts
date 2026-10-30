@@ -857,6 +857,10 @@ export type GloflyApi = {
     clear: (key: string) => void
     /** The unread count on the taskbar icon; `image` is the badge drawn by the window. */
     badge: (count: number, image: string | null) => void
+    /** Desktop app (Oct 30, 2026): shows a sample notification (welcome: the first-run one). */
+    test?: (welcome?: boolean) => Promise<boolean>
+    /** Desktop app: the computer's notification settings for Glofly. */
+    openSettings?: () => void
   }
   /**
    * Jump List (Windows taskbar) and Dock menu (Mac) actions. On a `shortcut` event, and once

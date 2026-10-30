@@ -318,7 +318,9 @@ const glofly: GloflyApi = {
     show: (notification: ShowNotification) => ipcRenderer.send('notifications:show', notification),
     clear: (key: string) => ipcRenderer.send('notifications:clear', key),
     badge: (count: number, image: string | null) =>
-      ipcRenderer.send('notifications:badge', count, image)
+      ipcRenderer.send('notifications:badge', count, image),
+    test: (welcome?: boolean) => ipcRenderer.invoke('notifications:test', welcome === true),
+    openSettings: () => ipcRenderer.send('notifications:open-settings')
   },
   shortcuts: {
     take: () => ipcRenderer.invoke('shortcuts:take')

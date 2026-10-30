@@ -79,7 +79,7 @@ import { WebNotifyBar } from '../components/WebNotifications'
 import type { CallsValue } from '../calls/callState'
 import { CallFloat, CallStrip } from '../components/CallPanel'
 import { ChevronIcon, GameIcon, PhoneIcon, VideoIcon } from '../components/icons'
-import { isShortcutKey, isWeb, shortcutLabel } from '../lib/platform'
+import { isMac, isShortcutKey, isWeb, shortcutLabel } from '../lib/platform'
 import { useSocial, useSocialSync } from '../lib/social'
 import { HangToast, SocialActions, SocialStrip, YearInGlowDialog } from '../components/Social'
 import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcast'
@@ -1022,6 +1022,27 @@ export default function MainScreen({
       }
     })
   }, [user.id, refresh, refreshConversations, refreshNotices, onSessionExpired, notifyMessage])
+
+  // Oct 30, 2026: the first time a Mac signs in, one notification on purpose, so macOS asks
+  // "Allow notifications from Glofly?" now (it only asks at the first notification, and until
+  // it's allowed there are no pop-ups and no unread badge on the Dock icon).
+  useEffect(() => {
+    if (!isMac || isWeb) return
+    try {
+      if (localStorage.getItem('glofly.macNotifyAsked')) return
+    } catch {
+      return
+    }
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem('glofly.macNotifyAsked', '1')
+      } catch {
+        return
+      }
+      void window.glofly.notifications.test?.(true)
+    }, 2500)
+    return () => clearTimeout(t)
+  }, [])
 
   // Oct 30, 2026: while you're live, "Mom started watching" when someone drops in.
   const liveViewerCount =

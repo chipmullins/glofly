@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage, Notification } from 'electron'
+import { app, BrowserWindow, nativeImage, Notification, shell } from 'electron'
 import type { ShowNotification } from '../preload/api-types'
 import { showWindow } from './app-settings'
 import { markRead, sendMessage } from './messages'
@@ -126,6 +126,38 @@ export function clearNotification(key: string): void {
 /** Takes every Glofly notification away (signing out). */
 export function clearAllNotifications(): void {
   for (const key of [...shown.keys()]) clearNotification(key)
+}
+
+/**
+ * Oct 30, 2026: a notification on purpose (Settings' "Send a test", and once after the first
+ * sign-in on a Mac, so macOS asks "Allow notifications from Glofly?" right then instead of on
+ * the first real message, which would be lost if the answer was slow). macOS also hides the Dock's
+ * unread badge until Glofly's notifications are allowed (the "Badges" switch).
+ */
+export function showTestNotification(appIcon: string, welcome: boolean): boolean {
+  if (!Notification.isSupported()) return false
+  const toast = new Notification({
+    title: welcome ? 'Glofly notifications are on' : 'Notifications work!',
+    body: welcome
+      ? 'New messages and calls will show up here when Glofly isn’t in front.'
+      : 'This is how new messages and calls will show up.',
+    icon: appIcon,
+    silent: true
+  })
+  toast.on('click', showWindow)
+  toast.show()
+  return true
+}
+
+/** The computer's own notification settings for Glofly (Mac: System Settings → Notifications). */
+export function openNotificationSettings(): void {
+  if (process.platform === 'darwin') {
+    void shell.openExternal(
+      'x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.glofly.app'
+    )
+  } else if (process.platform === 'win32') {
+    void shell.openExternal('ms-settings:notifications')
+  }
 }
 
 /** The unread count on the taskbar icon (a small red badge drawn by the window), or the Mac Dock. */

@@ -67,6 +67,8 @@ import {
   clearNotification,
   isShowNotification,
   setBadge,
+  showTestNotification,
+  openNotificationSettings,
   showNotification
 } from './notifications'
 import {
@@ -1139,6 +1141,13 @@ function registerIpcHandlers(): void {
       // In game with the overlay showing: a pop-up there instead of a Windows notification.
       if (!overlayNotification(notification)) showNotification(notification, icon)
     }
+  })
+  // Oct 30, 2026: Settings' "Send a test" and the first sign-in on a Mac (see notifications.ts).
+  ipcMain.handle('notifications:test', (event, welcome: unknown) =>
+    fromApp(event) ? showTestNotification(icon, welcome === true) : false
+  )
+  ipcMain.on('notifications:open-settings', (event) => {
+    if (isAppUrl(event.senderFrame?.url ?? '')) openNotificationSettings()
   })
   ipcMain.on('notifications:clear', (event, key: unknown) => {
     if (isAppUrl(event.senderFrame?.url ?? '') && typeof key === 'string' && key.length <= 60) {

@@ -81,6 +81,51 @@ const PRIVACY: Row[] = [
   { key: 'showTyping', label: 'Show when I’m typing' }
 ]
 
+/**
+ * Oct 30, 2026 (desktop app): "Not seeing notifications?" A test, and the computer's own
+ * settings for Glofly (macOS only shows them, and the Dock's unread badge, once they're allowed).
+ */
+function NotificationCheckRow(): React.JSX.Element | null {
+  const [sent, setSent] = useState(false)
+  const n = window.glofly.notifications
+  if (!n.test || !n.openSettings) return null
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <span className="settings-row-label">Not seeing notifications?</span>
+        <span className="settings-row-desc">
+          {sent
+            ? isMac
+              ? 'Nothing showed up? Turn on Allow notifications (and Badges, for the unread count on the Dock icon) for Glofly in System Settings.'
+              : 'Nothing showed up? Check that notifications are on for Glofly in Windows settings, and that Do not disturb is off.'
+            : isMac
+              ? 'Send a test. If it doesn’t show, macOS has Glofly’s notifications turned off.'
+              : 'Send a test. If it doesn’t show, Windows has Glofly’s notifications turned off.'}
+        </span>
+      </div>
+      <div className="settings-row-buttons">
+        <button
+          type="button"
+          className="small-button small-button--quiet"
+          onClick={() => {
+            setSent(true)
+            void n.test?.(false)
+          }}
+        >
+          Send a test
+        </button>
+        <button
+          type="button"
+          className="small-button small-button--quiet"
+          onClick={() => n.openSettings?.()}
+        >
+          {isMac ? 'Open System Settings' : 'Open settings'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /** 0.5.0 Birthday glow: friends see the day (never the year) and get a reminder. */
 function BirthdayRow(): React.JSX.Element {
   const social = useSocial()
@@ -930,6 +975,7 @@ export default function SettingsDialog({
                         )}
                       </div>
                     )}
+                    {!isWeb && <NotificationCheckRow />}
                     <div className="settings-row">
                       <div className="settings-row-text">
                         <span className="settings-row-label">Show message preview</span>
