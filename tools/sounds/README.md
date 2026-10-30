@@ -71,3 +71,9 @@ only choices in those rows (desktop, web, phones). The older call sounds stay in
 natives they replaced (glofly_ringtone, glofly_outgoing, glofly_connected, glofly_ended, glofly_joined, glofly_left,
 Android glofly_ringtone) are kept in `retired-2026-10-29/`. To bring one back: re-add it to the row's list
 (`CALL_ROW_CHOICES` + `CALL_ROW_SOUNDS` in desktop/web, `PHONE_RINGTONES` from `RETIRED_PHONE_RINGTONES`).
+
+**Oct 30, 2026 soft sounds, round 6** (`soft2026.py <out>`): Chip found the sharp sounds overwhelming. Ten soft ones
+each for new message, message sent (new), @mention, constellation message, friend request, friend online, log in and
+log off (felt piano, soft mallets, kalimba, warm pads, breaths, hums; rounded attacks, low-passed, quieter). Two log ins
+sing a soft "Glo-fly", two log offs "Good-bye" (round 3's voice with a triangle source, breathy). Preview page: the
+"Glofly Soft Sounds" artifact. Nothing from it is in the app yet.
