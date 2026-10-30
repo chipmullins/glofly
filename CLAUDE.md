@@ -180,3 +180,8 @@
   timeout, 30 s stall, slow downloads finish in the background); `launch-update.json` in the user folder counts
   install tries (2 failures → skipped at launch, reported as where "updater"); sign-in launches show no window.
   `updater.ts setUpUpdates()` configures electron-updater once for both. `npm run updater-preview` shows it.
+- **0.8.7 (Oct 29–30, 2026)** (project doc `glofly-release-0.8.7.md`, migration 0040): new call/message/login/log-off
+  sounds + "Message sent" row (`ROW_CHOICES` in desktop `lib/sounds.ts`, shared `PHONE_MESSAGE_SOUNDS`); generators in
+  `tools/sounds/`. Friends coming online = `users.online_alerts_mode` all/selected/none (old boolean kept in step).
+  Desktop: login sound on a restored session (not `--glofly-hidden` launches, not web); quitting plays the log-off
+  sound first (`src/main/goodbye.ts`; skipped for update installs via `markQuitting` and for shutdown).
