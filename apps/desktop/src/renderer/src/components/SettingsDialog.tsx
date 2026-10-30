@@ -245,16 +245,21 @@ const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' |
   {
     key: 'friendOnline',
     label: 'Friend online sound',
-    desc: 'Plays when a friend you turned on alerts for comes online.',
+    desc: 'Plays when a friend comes online (who counts is set in Friends coming online).',
     kind: 'alert'
   },
   {
     key: 'login',
     label: 'Login sound',
-    desc: 'Plays as Glofly opens after you log in.',
+    desc: 'Plays when Glofly opens signed in, or after you log in.',
     kind: 'alert'
   },
-  { key: 'logout', label: 'Log out sound', desc: 'Plays when you log out.', kind: 'alert' },
+  {
+    key: 'logout',
+    label: 'Log out sound',
+    desc: 'Plays when you log out, or quit the Glofly app.',
+    kind: 'alert'
+  },
   { key: 'ringtone', label: 'Ringtone', desc: 'Plays when someone calls you.', kind: 'call' },
   {
     key: 'outgoing',
