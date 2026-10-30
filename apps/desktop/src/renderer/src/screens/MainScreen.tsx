@@ -99,6 +99,7 @@ import { clearOutbox, retryOffline } from '../lib/outbox'
 import QuickSwitcher from '../components/QuickSwitcher'
 import ShortcutSheet from '../components/ShortcutSheet'
 import { noteRecent } from '../lib/quickSwitch'
+import { loadOnlineAlertsMode, setOnlineAlertsMode, useOnlineAlertsMode } from '../lib/onlineAlerts'
 
 type MainScreenProps = {
   user: SignedInUser
@@ -462,6 +463,9 @@ export default function MainScreen({
   onAccountDeleted,
   onUserChange
 }: MainScreenProps): React.JSX.Element {
+  // Oct 30, 2026: "Friends coming online" (All / Selected / None) decides whether profiles show the bell.
+  const onlineAlertsMode = useOnlineAlertsMode()
+  useEffect(() => loadOnlineAlertsMode(), [])
   const [filter, setFilter] = useState<FriendFilter>('all')
   /** What shows when no chat is open: Friends, or the Groups page (sidebar, under Friends) */
   const [page, setPage] = useState<'friends' | 'groups'>('friends')
@@ -1451,6 +1455,8 @@ export default function MainScreen({
       )
     flip(on) // right away
     const result = await window.glofly.friends.setOnlineAlert(id, on)
+    // Oct 30, 2026: ringing the bell while "Friends coming online" was None makes it Selected friends.
+    if (result.ok && result.data.mode) setOnlineAlertsMode(result.data.mode)
     if (!result.ok) {
       flip(!on)
       if (result.error === 'unauthorized') onSessionExpired()
@@ -2378,7 +2384,12 @@ export default function MainScreen({
               setViewing(null)
               setReporting({ person: viewing, message: null })
             }}
-            onlineAlert={lists?.friends.find((f) => f.id === viewing.id)?.onlineAlert}
+            onlineAlert={
+              // With "All friends" every friend is covered: no bell.
+              onlineAlertsMode === 'all'
+                ? undefined
+                : lists?.friends.find((f) => f.id === viewing.id)?.onlineAlert
+            }
             onOnlineAlert={(on) => void toggleOnlineAlert(viewing.id, on)}
             onClose={() => setViewing(null)}
             onSessionExpired={onSessionExpired}

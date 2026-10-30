@@ -152,6 +152,8 @@ const settingsSchema = z
     showTyping: z.boolean(),
     friendRequests: z.enum(["everyone", "nobody"]),
     onlineAlerts: z.boolean(),
+    // Oct 30, 2026: All friends / Selected friends / None (newer apps; older ones send onlineAlerts).
+    onlineAlertsMode: z.enum(["all", "selected", "none"]),
     showGlows: z.boolean(),
   })
   .partial()
@@ -165,6 +167,7 @@ async function mySettings(userId: string) {
       showTyping: users.showTyping,
       friendRequests: users.friendRequests,
       onlineAlerts: users.onlineAlerts,
+      onlineAlertsMode: users.onlineAlertsMode,
       showGlows: users.showGlows,
     })
     .from(users)
@@ -186,7 +189,13 @@ usersRouter.patch("/me/settings", searchLimiter, async (req, res) => {
   }
   const myId = me(res).id;
   const before = await mySettings(myId);
-  await db.update(users).set(parsed.data).where(eq(users.id, myId));
+  // "Friends coming online": the mode and the older on/off switch always agree. An older app's
+  // switch: off = None, on = Selected friends (or All, if that was already picked).
+  const changes = { ...parsed.data };
+  if (changes.onlineAlertsMode !== undefined) changes.onlineAlerts = changes.onlineAlertsMode !== "none";
+  else if (changes.onlineAlerts === false) changes.onlineAlertsMode = "none";
+  else if (changes.onlineAlerts === true && before.onlineAlertsMode === "none") changes.onlineAlertsMode = "selected";
+  await db.update(users).set(changes).where(eq(users.id, myId));
   const after = await mySettings(myId);
 
   // Friends see the change right away.
@@ -526,8 +535,19 @@ friendsRouter.put("/:userId/online-alert", searchLimiter, async (req, res) => {
     return;
   }
   await setOnlineAlert(myId, them.data, body.data.on);
+  // Oct 30, 2026: ringing the bell while "Friends coming online" is None switches it to Selected
+  // friends, so the bell always does what it shows.
+  let mode: "all" | "selected" | "none" | undefined;
+  if (body.data.on) {
+    const [mine] = await db.select({ mode: users.onlineAlertsMode }).from(users).where(eq(users.id, myId));
+    mode = mine?.mode;
+    if (mode === "none") {
+      mode = "selected";
+      await db.update(users).set({ onlineAlertsMode: "selected", onlineAlerts: true }).where(eq(users.id, myId));
+    }
+  }
   emitToUser(myId, "friends:changed", {}); // your other devices show the bell too
-  res.json({ on: body.data.on });
+  res.json({ on: body.data.on, ...(mode ? { mode } : {}) });
 });
 
 // POST /blocks/:userId — block someone. Also removes any friendship or request between you.

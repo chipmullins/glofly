@@ -1,4 +1,4 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "../db";
 import { onlineAlerts, users } from "../db/schema";
 import { redis } from "../redis";
@@ -7,7 +7,8 @@ import { blockedEitherWay } from "./rules";
 import { inBackground, notifyFriendOnline } from "../push/notify";
 
 // "Notify me when they come online" (0.3.0). Off for everyone until you turn it on for a person
-// (the bell on their profile). When they go from offline to online (or away / busy), you get:
+// (the bell on their profile). Oct 30, 2026: "Friends coming online" is All friends / Selected friends
+// (the bell; the default) / None (users.online_alerts_mode). When they go from offline to online (or away / busy), you get:
 // - on an open app: the "friend:online" live event (desktop toast + sound, phone in-app banner),
 // - on phones that aren't open: a push notification.
 // Never for someone set to Invisible (they stay offline), never while you're on Do not disturb or
@@ -45,11 +46,20 @@ export async function clearOnlineAlerts(a: string, b: string): Promise<void> {
 /** Called by presence when someone's status changes. */
 export async function onPresenceChange(userId: string, before: Status | null, after: Status, emit: Emit): Promise<void> {
   if (after === "offline" || (before !== null && before !== "offline")) return;
-  const owners = await db
-    .select({ id: users.id, master: users.onlineAlerts, status: users.statusPreference })
+  // People who picked this person with the bell (Selected friends, or All), and friends set to All.
+  const picked = await db
+    .select({ id: users.id, mode: users.onlineAlertsMode, status: users.statusPreference })
     .from(onlineAlerts)
     .innerJoin(users, eq(users.id, onlineAlerts.ownerId))
     .where(eq(onlineAlerts.targetId, userId));
+  const friendIds = await friendIdsOf(userId);
+  const everyone = friendIds.length
+    ? await db
+        .select({ id: users.id, mode: users.onlineAlertsMode, status: users.statusPreference })
+        .from(users)
+        .where(and(inArray(users.id, friendIds), eq(users.onlineAlertsMode, "all")))
+    : [];
+  const owners = [...new Map([...picked, ...everyone].map((o) => [o.id, o])).values()].filter((o) => o.mode !== "none");
   if (!owners.length) return;
 
   const [who] = await db
@@ -57,10 +67,10 @@ export async function onPresenceChange(userId: string, before: Status | null, af
     .from(users)
     .where(eq(users.id, userId));
   if (!who || who.deleteAfter) return;
-  const friends = new Set(await friendIdsOf(userId));
+  const friends = new Set(friendIds);
 
   for (const owner of owners) {
-    if (!owner.master || owner.status === "dnd" || !friends.has(owner.id)) continue;
+    if (owner.status === "dnd" || !friends.has(owner.id)) continue;
     if (await blockedEitherWay(owner.id, userId)) continue;
     // Cooldown: SET NX only succeeds if they weren't alerted about this person recently.
     const fresh = await redis.set(cooldownKey(owner.id, userId), "1", { NX: true, EX: ONLINE_ALERT_COOLDOWN_S });

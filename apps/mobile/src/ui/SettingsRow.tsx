@@ -15,6 +15,7 @@ export function SettingsRow({
   danger,
   disabled,
   right,
+  selected,
 }: {
   icon?: IconName
   label: string
@@ -25,6 +26,8 @@ export function SettingsRow({
   danger?: boolean
   disabled?: boolean
   right?: ReactNode
+  /** One choice of several (Oct 30, 2026): a check when picked, no chevron. */
+  selected?: boolean
 }) {
   const { c } = useTheme()
   const content = (
@@ -46,7 +49,13 @@ export function SettingsRow({
         </Text>
       ) : null}
       {right}
-      {toggle ? <Switch value={toggle.value} onChange={toggle.onChange} label={label} /> : onPress ? <Icon name="chevronRight" size={18} color={c.faint} /> : null}
+      {selected !== undefined ? (
+        selected ? <Icon name="check" size={20} color={c.accentText} /> : <View style={{ width: 20 }} />
+      ) : toggle ? (
+        <Switch value={toggle.value} onChange={toggle.onChange} label={label} />
+      ) : onPress ? (
+        <Icon name="chevronRight" size={18} color={c.faint} />
+      ) : null}
     </>
   )
   const style = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 16, paddingHorizontal: 20, minHeight: 56, opacity: disabled ? 0.5 : 1 }
@@ -58,7 +67,7 @@ export function SettingsRow({
     )
   if (onPress)
     return (
-      <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} android_ripple={{ color: c.line }} style={style}>
+      <Pressable accessibilityRole={selected !== undefined ? 'radio' : 'button'} accessibilityState={selected !== undefined ? { checked: selected, disabled } : undefined} disabled={disabled} onPress={onPress} android_ripple={{ color: c.line }} style={style}>
         {content}
       </Pressable>
     )

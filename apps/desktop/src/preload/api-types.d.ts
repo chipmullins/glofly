@@ -498,7 +498,10 @@ export type GloflyApi = {
     block: (userId: string) => Promise<ApiResult<null>>
     unblock: (userId: string) => Promise<ApiResult<null>>
     /** "Notify me when they come online" for a friend (0.3.0) */
-    setOnlineAlert: (userId: string, on: boolean) => Promise<ApiResult<{ on: boolean }>>
+    setOnlineAlert: (
+      userId: string,
+      on: boolean
+    ) => Promise<ApiResult<{ on: boolean; mode?: OnlineAlertsMode }>>
     /** "Invite your friends": emails them a link to join Glofly (0.3.0) */
     invite: (email: string) => Promise<ApiResult<null>>
     /** 0.8.0: your invite link (made the first time) and how many joined from it */

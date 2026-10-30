@@ -3,6 +3,7 @@ import type {
   FriendLinkAccepted,
   FriendLinkPreview,
   MyFriendLink,
+  OnlineAlertsMode,
   ActiveCall,
   Announcement,
   ApiResult,
@@ -266,7 +267,10 @@ export function createBridge(): GloflyApi {
       block: (id) => badId(id) ?? nothing(request('POST', `/blocks/${id}`)),
       unblock: (id) => badId(id) ?? nothing(request('DELETE', `/blocks/${id}`)),
       setOnlineAlert: (id, on) =>
-        badId(id) ?? request<{ on: boolean }>('PUT', `/friends/${id}/online-alert`, { on }),
+        badId(id) ??
+        request<{ on: boolean; mode?: OnlineAlertsMode }>('PUT', `/friends/${id}/online-alert`, {
+          on
+        }),
       invite: (email) => nothing(request('POST', '/friends/invite', { email })),
       // 0.8.0: shareable friend invite links
       myLink: () => request<MyFriendLink>('GET', '/friends/link'),
@@ -274,8 +278,7 @@ export function createBridge(): GloflyApi {
       previewLink: (code) =>
         badLinkCode(code) ?? request<FriendLinkPreview>('GET', `/friends/link/${code}`),
       acceptLink: (code) =>
-        badLinkCode(code) ??
-        request<FriendLinkAccepted>('POST', `/friends/link/${code}/accept`, {})
+        badLinkCode(code) ?? request<FriendLinkAccepted>('POST', `/friends/link/${code}/accept`, {})
     },
     settings: {
       get: () => request<PrivacySettings>('GET', '/users/me/settings'),
@@ -684,10 +687,15 @@ export function createBridge(): GloflyApi {
           : Promise.resolve(invalid as ApiResult<T>),
       setIcon: (id, data, type, which) =>
         badId(id) ??
-        request('PUT', `/constellations/${id}/${which === 'banner' ? 'banner' : 'icon'}`, undefined, {
-          data,
-          type
-        })
+        request(
+          'PUT',
+          `/constellations/${id}/${which === 'banner' ? 'banner' : 'icon'}`,
+          undefined,
+          {
+            data,
+            type
+          }
+        )
     },
     notices: {
       list: async () => {

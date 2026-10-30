@@ -437,6 +437,9 @@ export type GroupSummary = ConversationBase & {
 
 export type ConversationSummary = DmSummary | GroupSummary
 
+/** "Friends coming online": every friend, only the ones picked with the bell, or nobody. */
+export type OnlineAlertsMode = 'all' | 'selected' | 'none'
+
 /** Settings → General → Privacy */
 export type PrivacySettings = {
   /** Works both ways: off means you don't see other people's either. */
@@ -447,6 +450,8 @@ export type PrivacySettings = {
   friendRequests: 'everyone' | 'nobody'
   /** "Friends coming online" master switch (0.3.0 servers; missing = on) */
   onlineAlerts?: boolean
+  /** Oct 30, 2026: who "Friends coming online" covers (missing from older servers: use onlineAlerts) */
+  onlineAlertsMode?: OnlineAlertsMode
   /** 0.8.3: show glows by friends' names (off by default; missing from older servers) */
   showGlows?: boolean
 }

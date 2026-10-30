@@ -95,6 +95,10 @@ export const users = pgTable(
     // Settings → Notifications → "Friends coming online" (0.3.0): the master switch for the
     // per-person alerts in online_alerts. On by default; nobody is followed until you pick them.
     onlineAlerts: boolean("online_alerts").notNull().default(true),
+    // Oct 30, 2026 (migration 0040): who "Friends coming online" covers: all friends, only the ones
+    // picked with the bell ("selected", the default and the behavior before), or nobody. online_alerts
+    // above is kept in step for older apps (false exactly when this is "none").
+    onlineAlertsMode: text("online_alerts_mode").$type<"all" | "selected" | "none">().notNull().default("selected"),
     // 0.8.3: show glows (the firefly + day count by a friend's name). Off unless you turn it on
     // (people kept asking what the number meant). Glows still count in the background.
     showGlows: boolean("show_glows").notNull().default(false),

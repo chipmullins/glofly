@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppState, Platform, View } from 'react-native'
 import { router } from 'expo-router'
-import { phoneConstellationSound, phoneMessageSound, phoneRingtone } from '@glofly/shared'
+import { phoneConstellationSound, phoneMessageSound, phoneRingtone, type OnlineAlertsMode } from '@glofly/shared'
 import { usePhonePrefs, setPhonePref } from '@/state/prefs'
 import { notificationStatus, openNotificationSettings, fullScreenCallsAllowed, openFullScreenCallSettings, requestNotifications, type PermissionState } from '@/push/permissions'
 import { refreshPush } from '@/push'
@@ -26,10 +26,16 @@ export default function NotificationSettings() {
   const p = usePhonePrefs()
   const [perm, setPerm] = useState<PermissionState>('unknown')
   const [fullScreen, setFullScreen] = useState<boolean | null>(null)
-  // "Friends coming online" lives on the server (every device), 0.3.0 servers only.
+  // "Friends coming online" lives on the server (every device), 0.3.0 servers only. Oct 30, 2026:
+  // All friends / Selected friends / None (onlineAlertsMode); older servers only have on/off.
   const [onlineAlerts, setOnlineAlerts] = useState<boolean | undefined>(undefined)
+  const [alertsMode, setAlertsMode] = useState<OnlineAlertsMode | undefined>(undefined)
   useEffect(() => {
-    void api.getPrivacy().then((r) => r.ok && setOnlineAlerts(r.data.onlineAlerts))
+    void api.getPrivacy().then((r) => {
+      if (!r.ok) return
+      setOnlineAlerts(r.data.onlineAlerts)
+      setAlertsMode(r.data.onlineAlertsMode)
+    })
   }, [])
   async function changeOnlineAlerts(on: boolean) {
     setOnlineAlerts(on)
@@ -39,6 +45,20 @@ export default function NotificationSettings() {
       void inform("Couldn't change that", r.message)
     }
   }
+  async function changeAlertsMode(next: OnlineAlertsMode) {
+    const before = alertsMode
+    setAlertsMode(next)
+    const r = await api.setPrivacy({ onlineAlertsMode: next })
+    if (!r.ok) {
+      setAlertsMode(before)
+      void inform("Couldn't change that", r.message)
+    }
+  }
+  const MODES: { mode: OnlineAlertsMode; label: string; detail?: string }[] = [
+    { mode: 'all', label: 'All friends' },
+    { mode: 'selected', label: 'Selected friends', detail: 'Tap the bell on a friend’s profile to pick them.' },
+    { mode: 'none', label: 'None' },
+  ]
 
   useEffect(() => {
     const check = () => {
@@ -74,7 +94,20 @@ export default function NotificationSettings() {
       <SettingsRow label="Notifications on this phone" detail="Messages, friend requests and calls" toggle={{ value: p.notifications, onChange: (v) => void setPhonePref('notifications', v) }} />
       <SettingsRow label="Show message preview" detail='Off: "New message" instead of the text' toggle={{ value: p.preview, onChange: (v) => void setPhonePref('preview', v) }} disabled={!p.notifications} />
       {perm === 'denied' ? <SettingsRow label={`Open ${OS} notification settings`} onPress={() => void openNotificationSettings()} /> : null}
-      {onlineAlerts !== undefined ? (
+      {alertsMode !== undefined ? (
+        <>
+          <SectionLabel>Friends coming online</SectionLabel>
+          {MODES.map((m) => (
+            <SettingsRow
+              key={m.mode}
+              label={m.label}
+              detail={alertsMode === m.mode ? m.detail : undefined}
+              onPress={() => void changeAlertsMode(m.mode)}
+              selected={alertsMode === m.mode}
+            />
+          ))}
+        </>
+      ) : onlineAlerts !== undefined ? (
         <>
           <SectionLabel>Friends</SectionLabel>
           <SettingsRow

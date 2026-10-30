@@ -4,6 +4,7 @@ import type {
   FriendLinkPreview,
   FriendLists,
   MyFriendLink,
+  OnlineAlertsMode,
   SearchResult
 } from '../preload/api-types'
 import { request } from './api'
@@ -44,8 +45,13 @@ export const unblockUser = (id: string): Promise<ApiResult<null>> =>
   empty(request('DELETE', `/blocks/${id}`))
 
 /** "Notify me when they come online" (0.3.0 servers). */
-export async function setOnlineAlert(id: string, on: boolean): Promise<ApiResult<{ on: boolean }>> {
-  return request<{ on: boolean }>('PUT', `/friends/${id}/online-alert`, { on })
+export async function setOnlineAlert(
+  id: string,
+  on: boolean
+): Promise<ApiResult<{ on: boolean; mode?: OnlineAlertsMode }>> {
+  return request<{ on: boolean; mode?: OnlineAlertsMode }>('PUT', `/friends/${id}/online-alert`, {
+    on
+  })
 }
 
 /** "Invite your friends": emails them a link to join Glofly (0.3.0 servers). */

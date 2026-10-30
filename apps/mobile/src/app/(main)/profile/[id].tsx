@@ -44,7 +44,12 @@ export default function ProfileCard() {
   const live = useStore((s) => s.presence[id])
   const friends = useStore((s) => s.friends)
   const isFriend = friends.friends.some((f) => f.id === id)
-  const onlineAlert = friends.friends.find((f) => f.id === id)?.onlineAlert
+  // Oct 30, 2026: with "Friends coming online" set to All friends, every friend is covered: no bell.
+  const [alertsMode, setAlertsMode] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    void api.getPrivacy().then((r) => r.ok && setAlertsMode(r.data.onlineAlertsMode))
+  }, [])
+  const onlineAlert = alertsMode === 'all' ? undefined : friends.friends.find((f) => f.id === id)?.onlineAlert
   const incoming = friends.incoming.some((f) => f.id === id)
   const outgoing = friends.outgoing.some((f) => f.id === id)
   const blocked = friends.blocked.some((f) => f.id === id)
@@ -86,7 +91,7 @@ export default function ProfileCard() {
     if (!r.ok) {
       flip(!on)
       void inform("Couldn't change that", r.message)
-    }
+    } else if (r.data.mode) setAlertsMode(r.data.mode) // the bell switched None to Selected friends
   }
 
   async function request(fn: () => Promise<{ ok: boolean; message?: string }>, fail: string) {

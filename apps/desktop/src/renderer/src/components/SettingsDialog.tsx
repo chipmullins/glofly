@@ -5,6 +5,7 @@ import type {
   AppSettings,
   AppSettingsChanges,
   CallSound,
+  OnlineAlertsMode,
   SoundSettings,
   PrivacySettings,
   SignedInUser,
@@ -19,6 +20,7 @@ import QuietHoursSettings from './QuietHoursSettings'
 import { errorReportsOn, setErrorReportsOn } from '../lib/errorReports'
 import VoiceVideoSettings from './VoiceVideoSettings'
 import OverlaySettings from './OverlaySettings'
+import { modeFrom, setOnlineAlertsMode } from '../lib/onlineAlerts'
 import {
   previewSound,
   setSoundSettings,
@@ -586,8 +588,10 @@ export default function SettingsDialog({
 
   useEffect(() => {
     window.glofly.settings.get().then((result) => {
-      if (result.ok) setSettings(result.data)
-      else if (result.error === 'unauthorized') onSessionExpired()
+      if (result.ok) {
+        setSettings(result.data)
+        setOnlineAlertsMode(modeFrom(result.data))
+      } else if (result.error === 'unauthorized') onSessionExpired()
       else setNotice(result.message)
     })
     window.glofly.app.getSettings().then((s) => s && setAppSettings(s))
@@ -612,6 +616,7 @@ export default function SettingsDialog({
     const result = await window.glofly.settings.set({ [key]: value })
     if (result.ok) {
       setSettings(result.data)
+      setOnlineAlertsMode(modeFrom(result.data))
       setNotice(null)
     } else {
       setSettings(before) // put it back
@@ -989,21 +994,53 @@ export default function SettingsDialog({
                         <span className="toggle toggle--loading" aria-hidden="true" />
                       )}
                     </div>
-                    {settings?.onlineAlerts !== undefined && (
+                    {settings?.onlineAlertsMode !== undefined ? (
                       <div className="settings-row">
                         <div className="settings-row-text">
-                          <span className="settings-row-label">Friends coming online</span>
+                          <label className="settings-row-label" htmlFor="settings-online-alerts">
+                            Friends coming online
+                          </label>
                           <span className="settings-row-desc">
-                            Tell me when a friend comes online. Pick who with the bell on their
-                            profile; nobody is picked until you do.
+                            {settings.onlineAlertsMode === 'all'
+                              ? 'Tell me when any friend comes online.'
+                              : settings.onlineAlertsMode === 'selected'
+                                ? 'Tell me when the friends I pick come online. Click the bell on a friend’s profile to pick them.'
+                                : 'Never tell me when friends come online.'}
                           </span>
                         </div>
-                        <Toggle
-                          on={settings.onlineAlerts}
-                          label="Friends coming online"
-                          onChange={(on) => void change('onlineAlerts', on)}
-                        />
+                        <select
+                          id="settings-online-alerts"
+                          className="settings-select"
+                          value={settings.onlineAlertsMode}
+                          onChange={(e) => {
+                            const next = e.target.value as OnlineAlertsMode
+                            setOnlineAlertsMode(next)
+                            void change('onlineAlertsMode', next)
+                          }}
+                        >
+                          <option value="all">All friends</option>
+                          <option value="selected">Selected friends</option>
+                          <option value="none">None</option>
+                        </select>
                       </div>
+                    ) : (
+                      settings?.onlineAlerts !== undefined && (
+                        // A server from before Oct 30, 2026: the on/off switch.
+                        <div className="settings-row">
+                          <div className="settings-row-text">
+                            <span className="settings-row-label">Friends coming online</span>
+                            <span className="settings-row-desc">
+                              Tell me when a friend comes online. Pick who with the bell on their
+                              profile; nobody is picked until you do.
+                            </span>
+                          </div>
+                          <Toggle
+                            on={settings.onlineAlerts}
+                            label="Friends coming online"
+                            onChange={(on) => void change('onlineAlerts', on)}
+                          />
+                        </div>
+                      )
                     )}
                     <div className="settings-row">
                       <div className="settings-row-text">

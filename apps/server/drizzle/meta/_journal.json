@@ -281,6 +281,13 @@
       "when": 1793165089494,
       "tag": "0039_control_face_id",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793334478984,
+      "tag": "0040_online_alerts_mode",
+      "breakpoints": true
     }
   ]
 }

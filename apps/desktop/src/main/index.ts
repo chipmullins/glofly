@@ -561,7 +561,9 @@ function registerIpcHandlers(): void {
     const allowed = (k: string, v: unknown): boolean =>
       onOff.includes(k)
         ? typeof v === 'boolean'
-        : k === 'friendRequests' && (v === 'everyone' || v === 'nobody')
+        : k === 'friendRequests'
+          ? v === 'everyone' || v === 'nobody'
+          : k === 'onlineAlertsMode' && (v === 'all' || v === 'selected' || v === 'none')
     const c = changes as Record<string, unknown> | null
     const ok =
       fromApp(event) &&
