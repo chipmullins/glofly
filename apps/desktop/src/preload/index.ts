@@ -114,7 +114,9 @@ const glofly: GloflyApi = {
     initialAppearance: {
       accent: accentFromArgs(),
       dark: process.argv.includes('--glofly-dark')
-    }
+    },
+    launchedHidden: process.argv.includes('--glofly-hidden'),
+    goodbyeDone: () => ipcRenderer.send('app:goodbye-done')
   },
   account: {
     get: () => ipcRenderer.invoke('account:get'),

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, nativeImage, nativeTheme, Tray } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { goodbyeFirst, skipGoodbye } from './goodbye'
 import type {
   AccentChoice,
   AlertSound,
@@ -255,7 +256,9 @@ export function sendAppearance(windows = BrowserWindow.getAllWindows()): void {
 /** Startup flags for a new window, so its first frame already has the right colors. */
 export const appearanceArgs = (): string[] => [
   `--glofly-accent=${saved.accent}`,
-  ...(isDark() ? ['--glofly-dark'] : [])
+  ...(isDark() ? ['--glofly-dark'] : []),
+  // Started with the computer, waiting in the tray: no login sound (Oct 30, 2026).
+  ...(startHidden() ? ['--glofly-hidden'] : [])
 ]
 export const zoomFactor = (): number => TEXT_SIZES[saved.textSize]
 
@@ -424,7 +427,12 @@ function updateTray(): void {
 export function setUpTray(window: () => BrowserWindow | null, icon: string): void {
   getWindow = window
   trayIcon = icon
-  app.on('before-quit', () => {
+  app.on('before-quit', (event) => {
+    // Oct 30, 2026: the log-off sound first (the windows hide now; Glofly quits after it).
+    if (goodbyeFirst(getWindow())) {
+      event.preventDefault()
+      return
+    }
     quitting = true
   })
   updateTray()
@@ -437,6 +445,7 @@ export function setUpTray(window: () => BrowserWindow | null, icon: string): voi
  */
 export function markQuitting(): void {
   quitting = true
+  skipGoodbye() // an update installing: no log-off sound
 }
 
 /** Called from the window's close event. True means "hide it to the tray instead". */

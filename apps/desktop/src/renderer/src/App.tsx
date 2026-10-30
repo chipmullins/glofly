@@ -6,7 +6,8 @@ import MainScreen from './screens/MainScreen'
 import FireflyTakeoff from './components/FireflyTakeoff'
 import UpdateRequiredScreen from './components/UpdateRequired'
 import PausedScreen from './components/Paused'
-import { playSound } from './lib/sounds'
+import { playSound, playSoundToEnd } from './lib/sounds'
+import { isWeb } from './lib/platform'
 import { startWelcomeFlow } from './lib/welcome'
 import {
   noteJoinedWith,
@@ -51,6 +52,18 @@ export default function App(): React.JSX.Element {
     })
   }, [])
 
+  // Oct 30, 2026 (desktop): quitting Glofly plays the log-off sound if you're signed in; the main
+  // process waits for it (at most 2.5 s) before quitting.
+  const signedIn = screen.name === 'app'
+  useEffect(() => {
+    return window.glofly.onEvent((event) => {
+      if (event.type !== 'app:goodbye') return
+      const done = (): void => window.glofly.app.goodbyeDone?.()
+      if (!signedIn) return done()
+      void playSoundToEnd('logout').finally(done)
+    })
+  }, [signedIn])
+
   // 0.8.0: glofly:// links and chat.glofly.app/?friend=<code> (a friend's invite link).
   useEffect(() => startDeepLinks(), [])
   // Signed out with a friend's invite link waiting: sign-up (the link makes you friends), and
@@ -81,6 +94,10 @@ export default function App(): React.JSX.Element {
       .then((user) => {
         if (cancelled) return
         const signUp = !user && peekDeepLink()?.kind === 'friend'
+        // Oct 30, 2026: opening Glofly signed in plays the login sound too (after the launch
+        // updater, which runs before this window exists). Not when it starts hidden in the tray
+        // with the computer, and not in a browser (every page load would chime).
+        if (user && !isWeb && !window.glofly.app.launchedHidden) playSound('login')
         setScreen(
           user ? { name: 'app', user } : { name: 'auth', form: signUp ? 'register' : 'login' }
         )

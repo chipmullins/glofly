@@ -339,23 +339,43 @@ export function volumeFor(name: SoundName): number {
 
 /** Plays the sound picked for this moment, unless sounds are off or you're in Do not disturb. */
 export function playSound(name: SoundName): void {
-  if (!settings.enabled || (quiet && settings.dndSilence)) return
+  startSound(name)
+}
+
+/**
+ * Oct 30, 2026: plays a sound and resolves once it has finished (at once if it doesn't play).
+ * Quitting Glofly waits on this so the log-off sound isn't cut off.
+ */
+export function playSoundToEnd(name: SoundName): Promise<void> {
+  const audio = startSound(name)
+  if (!audio) return Promise.resolve()
+  return new Promise((resolve) => {
+    audio.addEventListener('ended', () => resolve(), { once: true })
+    audio.addEventListener('error', () => resolve(), { once: true })
+    setTimeout(resolve, 3000)
+  })
+}
+
+function startSound(name: SoundName): HTMLAudioElement | null {
+  if (!settings.enabled || (quiet && settings.dndSilence)) return null
   // 0.7.3 quiet hours: nothing that arrives makes a sound (your own actions still do).
-  if (QUIET_SOUNDS.has(name) && inQuiet()) return
+  if (QUIET_SOUNDS.has(name) && inQuiet()) return null
   // Settings saved before 0.7.0 have no constellation sound yet: Lantern.
   const choice = settings[name] ?? (name === 'constellationMessage' ? 'skyLantern' : undefined)
-  if (!choice || choice === 'none' || !(choice in SOUND_FILES)) return
+  if (!choice || choice === 'none' || !(choice in SOUND_FILES)) return null
   // A burst of messages makes one sound, not a pile-up.
   const now = Date.now()
-  if (now - (lastPlayed.get(name) ?? 0) < 800) return
+  if (now - (lastPlayed.get(name) ?? 0) < 800) return null
   lastPlayed.set(name, now)
   const volume = volumeFor(name)
-  if (volume === 0) return
+  if (volume === 0) return null
   const audio = new Audio(SOUND_FILES[choice].url)
   audio.volume = volume
   void audio.play().catch(() => {
     // The computer has no sound device, or it's busy: nothing to do.
+    audio.dispatchEvent(new Event('error'))
   })
+  return audio
 }
 
 /**

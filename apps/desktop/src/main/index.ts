@@ -122,6 +122,7 @@ import {
   showWindow,
   startHidden
 } from './app-settings'
+import { goodbyeFirst, watchShutdown } from './goodbye'
 import { connectRealtime, disconnectRealtime, sendTyping, shareActivity } from './realtime'
 import {
   isOverlayWindow,
@@ -317,8 +318,12 @@ function createWindow(): void {
     if (shouldHideOnClose()) {
       event.preventDefault()
       window.hide()
+    } else if (window === mainWindow && process.platform !== 'darwin' && goodbyeFirst(window)) {
+      // Closing quits Glofly (no tray): the log-off sound first, then it quits.
+      event.preventDefault()
     }
   })
+  watchShutdown(window)
 
   // Links that try to open a new window go to the real browser instead (https only).
   window.webContents.setWindowOpenHandler((details) => {

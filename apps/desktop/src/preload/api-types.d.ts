@@ -325,6 +325,8 @@ export type ShortcutAction =
 
 export type GloflyEvent =
   | ServerEvent
+  /** Oct 30, 2026 (desktop): Glofly is quitting: play the log-off sound, then call app.goodbyeDone */
+  | { type: 'app:goodbye' }
   /** 0.7.3: pins changed in a chat; my own devices: marked unread / send-later list changed */
   | { type: 'pins:changed'; conversationId: string }
   | { type: 'conversation:unread'; conversationId: string; lastReadAt: string }
@@ -524,6 +526,10 @@ export type GloflyApi = {
     openPrivacySettings: (pane: 'microphone' | 'camera' | 'screen' | 'accessibility') => void
     /** Theme and accent at startup, known before anything is drawn (so nothing flashes). */
     initialAppearance: { accent: AccentChoice; dark: boolean }
+    /** Desktop: started with the computer and waiting in the tray (no login sound then). */
+    launchedHidden?: boolean
+    /** Desktop: the log-off sound for quitting has finished (answers the app:goodbye event). */
+    goodbyeDone?: () => void
   }
   account: {
     get: () => Promise<ApiResult<AccountDetails>>
