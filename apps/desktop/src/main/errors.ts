@@ -52,6 +52,11 @@ export function reportError(report: ErrorReport): void {
   }).catch(() => undefined)
 }
 
+/** A problem the main process noticed (only while error reports are on). */
+export function reportProblem(message: string, where: string): void {
+  if (on) reportError({ message, where })
+}
+
 /** The main process's own unexpected errors. */
 export function watchMainErrors(): void {
   process.on('uncaughtException', (err) => {

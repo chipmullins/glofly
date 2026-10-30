@@ -113,7 +113,7 @@ export type ScreenSoundFormat = {
   channels: number
   float: boolean
   /** 'app': only the shared window's app. 'computer': everything except Glofly. */
-  scope: 'app' | 'computer'
+  scope: 'app' | 'computer' | 'everything'
 }
 
 export type AppSettingsChanges = Partial<

@@ -15,6 +15,7 @@
 //   { type: 'format', sampleRate, channels, float, scope }   once, before any sound
 //   { type: 'chunk', data: Uint8Array }                        interleaved PCM, ~20 ms each
 //   { type: 'error', message }                                 couldn't start or stopped early
+//   { type: 'note', message }                                  a fallback was used (reported)
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { join, sep } from 'node:path'
 import { promisify } from 'node:util'
@@ -35,10 +36,12 @@ type Out =
       sampleRate: number
       channels: number
       float: boolean
-      scope: 'app' | 'computer'
+      scope: 'app' | 'computer' | 'everything'
     }
   | { type: 'chunk'; data: Uint8Array }
   | { type: 'error'; message: string }
+  /** Something worth reporting that didn't stop the sound (a fallback was used). */
+  | { type: 'note'; message: string }
 
 const port = process.parentPort
 const send = (m: Out): void => port.postMessage(m)
@@ -74,6 +77,7 @@ const windowHandle = (sourceId: string): number | null => {
 
 type Capture = {
   start: (pid: number, tree: boolean, cb: (b: Buffer) => void) => void
+  startSystemAudio: (cb: (b: Buffer) => void) => void
   stop: () => void
 }
 
@@ -104,12 +108,33 @@ function startWindows(start: WorkerStart): void {
   const own = new Set([...start.gloflyPids, process.ppid, process.pid])
   // A window: that app and everything it started. The whole screen (or an app we couldn't
   // identify): everything except Glofly's process tree (the main process is its root).
-  const scope = appPid && !own.has(appPid) ? 'app' : 'computer'
+  let scope: 'app' | 'computer' | 'everything' = appPid && !own.has(appPid) ? 'app' : 'computer'
   const out = batcher(48_000 * 2 * 2 * 0.02)
-  capture = new addon.LoopbackCapture()
+  // Oct 30, 2026: the format is only announced once the capture has really started (it used to go
+  // first, so a capture that failed to start still looked started: a silent track). If Windows
+  // refuses the per-app capture, fall back to the whole computer's sound (Glofly's included; the
+  // window says so) rather than none.
+  const tryStart = (how: () => void): string | null => {
+    capture = new addon.LoopbackCapture()
+    try {
+      how()
+      return null
+    } catch (err) {
+      capture = null
+      return (err as Error)?.message ?? String(err)
+    }
+  }
+  const failed =
+    scope === 'app'
+      ? tryStart(() => capture!.start(appPid!, true, out.push))
+      : tryStart(() => capture!.start(start.gloflyPids[0] ?? process.ppid, false, out.push))
+  if (failed) {
+    send({ type: 'note', message: `${scope} capture failed: ${failed}` })
+    const again = tryStart(() => capture!.startSystemAudio(out.push))
+    if (again) throw new Error(`${failed}; system capture: ${again}`)
+    scope = 'everything'
+  }
   send({ type: 'format', sampleRate: 48_000, channels: 2, float: false, scope })
-  if (scope === 'app') capture.start(appPid!, true, out.push)
-  else capture.start(start.gloflyPids[0] ?? process.ppid, false, out.push)
   setInterval(out.flush, 40).unref()
 }
 

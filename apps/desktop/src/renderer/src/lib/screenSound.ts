@@ -16,6 +16,7 @@ import {
   type VideoResolution
 } from 'livekit-client'
 import type { ScreenSoundFormat, ScreenSoundSupport } from '../../../preload/api-types'
+import { sendErrorReport } from './errorReports'
 
 let support: Promise<ScreenSoundSupport> | null = null
 export function screenSoundSupport(): Promise<ScreenSoundSupport> {
@@ -30,18 +31,26 @@ const Generator = (globalThis as { MediaStreamTrackGenerator?: TrackGeneratorCto
   .MediaStreamTrackGenerator
 
 /** A live audio track fed by Glofly's own capture, or null if it couldn't start. */
-async function capturedSound(
-  sourceId: string
-): Promise<{ track: MediaStreamTrack; format: ScreenSoundFormat; stop: () => void } | null> {
-  if (!Generator || typeof AudioData === 'undefined') return null
+async function capturedSound(sourceId: string): Promise<{
+  track: MediaStreamTrack
+  format: ScreenSoundFormat
+  stop: () => void
+  received: () => number
+} | null> {
+  if (!Generator || typeof AudioData === 'undefined') {
+    sendErrorReport(new Error('Screen sound: no MediaStreamTrackGenerator'), 'screen sound')
+    return null
+  }
   const sound = window.glofly.calls.screenSound
   const generator = new Generator({ kind: 'audio' })
   const writer = generator.writable.getWriter()
   let format: ScreenSoundFormat | null = null
   let frames = 0
   let leftover: Uint8Array | null = null
+  let chunks = 0
   const offChunk = sound.onChunk((pcm) => {
     if (!format) return
+    chunks++
     const bytesPerFrame = format.channels * (format.float ? 4 : 2)
     let data = pcm
     if (leftover) {
@@ -84,7 +93,7 @@ async function capturedSound(
     return null
   }
   format = started.format
-  return { track: generator, format, stop }
+  return { track: generator, format, stop, received: () => chunks }
 }
 
 export type ShareResult = { sound: 'app' | 'computer' | 'everything' | null }
@@ -145,6 +154,20 @@ export async function shareDesktopScreen(
     if (pub !== published && published.track) void local.unpublishTrack(published.track)
   }
   local.on(ParticipantEvent.LocalTrackUnpublished, onUnpublished)
+  // Oct 30, 2026 (Chip: "PC audio doesn't work"): if nothing at all has arrived after 30 s of
+  // sharing, tell Control → Errors (silence is skipped by the capture, so this can also mean
+  // nothing was playing).
+  setTimeout(() => {
+    if (
+      published.track &&
+      local.getTrackPublication(Track.Source.ScreenShare) &&
+      !captured.received()
+    )
+      sendErrorReport(
+        new Error(`Screen sound: nothing arrived in 30 s (${captured.format.scope})`),
+        'screen sound'
+      )
+  }, 30_000)
   return { sound: captured.format.scope }
 }
 

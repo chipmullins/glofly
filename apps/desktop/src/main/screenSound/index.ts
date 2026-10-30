@@ -12,14 +12,16 @@ import { app, utilityProcess, type UtilityProcess, type WebContents } from 'elec
 import { release } from 'node:os'
 import { join } from 'node:path'
 import type { WorkerStart } from './worker'
+import { reportProblem } from '../errors'
 
 export type ScreenSoundSupport = 'app' | 'system' | 'none'
 export type ScreenSoundFormat = {
   sampleRate: number
   channels: number
   float: boolean
-  /** 'app': only the shared window's app. 'computer': everything except Glofly. */
-  scope: 'app' | 'computer'
+  /** 'app': only the shared window's app. 'computer': everything except Glofly. 'everything':
+   *  the whole computer, Glofly included (Windows refused the other two). */
+  scope: 'app' | 'computer' | 'everything'
 }
 
 // Resolves the package's own entry, not `${pkg}/package.json`: packages with an "exports" list
@@ -139,7 +141,11 @@ export function startScreenSound(
           })
         } else if (m?.type === 'error') {
           console.warn('[screen sound]', m.message)
+          // Oct 30, 2026: these used to vanish; Control → Errors shows them now.
+          reportProblem(`Screen sound: ${m.message}`, 'screen sound')
           answer({ ok: false })
+        } else if (m?.type === 'note') {
+          reportProblem(`Screen sound: ${m.message}`, 'screen sound')
         }
       }
     )
