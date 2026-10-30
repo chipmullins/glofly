@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Platform, type ViewStyle } from 'react-native'
+import { AppState, Platform, type ViewStyle } from 'react-native'
 import {
   AndroidAudioTypePresets,
   AudioDeviceModule,
@@ -44,9 +44,15 @@ export function setupWebRTC() {
  */
 export async function startCallAudio(video: boolean): Promise<void> {
   if (Platform.OS === 'ios') {
-    const base: AppleAudioCategoryOption[] = ['mixWithOthers', 'allowBluetooth', 'allowBluetoothA2DP', 'allowAirPlay']
+    if (prepTimer) clearTimeout(prepTimer)
+    prepTimer = null
+    // Oct 29: no longer "mixWithOthers". A call is the main audio (like FaceTime: other apps'
+    // sound pauses), and a mixable session is one iOS can decline to switch on for a CallKit call
+    // while another app holds the audio (TikTok): silent both ways.
+    const base: AppleAudioCategoryOption[] = ['allowBluetooth', 'allowBluetoothA2DP', 'allowAirPlay']
     const options: AppleAudioCategoryOption[] = video ? [...base, 'defaultToSpeaker'] : base
     const duplex: AppleAudioConfiguration = { audioCategory: 'playAndRecord', audioCategoryOptions: options, audioMode: video ? 'videoChat' : 'voiceChat' }
+    inCallAudio = true
     setupIOSAudioManagement(video, {
       recording: duplex,
       recordingWithoutVoiceProcessing: { ...duplex, audioMode: 'default' },
@@ -70,6 +76,40 @@ export async function startCallAudio(video: boolean): Promise<void> {
 }
 
 // ---- iPhone lock-screen calls (CallKit) ----
+// Oct 29 (silent call answered from the banner over TikTok; Control → Errors: "iOS never switched
+// the audio on"): iOS switches a CallKit call's audio on with the category the app has at the moment
+// of Answer, and that was whatever was left over (a previous call's mixable session, playback after
+// a voice message or a broadcast). Builds from Oct 29 set a call's category natively on Answer
+// (CallKit.swift prepareCallAudioSession); for every build, the app also leaves a call-shaped
+// category in place between calls (not switched on, so other apps are unaffected).
+
+const IDLE_CALL_SHAPE: AppleAudioConfiguration = { audioCategory: 'playAndRecord', audioCategoryOptions: ['allowBluetooth', 'allowBluetoothA2DP', 'allowAirPlay'], audioMode: 'voiceChat' }
+let prepTimer: ReturnType<typeof setTimeout> | null = null
+let inCallAudio = false
+/** Watching a broadcast (playback session): never reshaped from under it. */
+let watchingAudio = false
+
+/** Leave a call-shaped (inactive) audio category in place, ready for the next lock-screen answer. */
+export function prepareForCallKit(delayMs = 0): void {
+  if (Platform.OS !== 'ios') return
+  if (prepTimer) clearTimeout(prepTimer)
+  prepTimer = setTimeout(() => {
+    prepTimer = null
+    if (inCallAudio || watchingAudio) return
+    void AudioSession.setAppleAudioConfiguration(IDLE_CALL_SHAPE).catch(() => {})
+  }, delayMs)
+}
+
+let watchingAppState = false
+/** At start: prepare now, and again whenever Glofly goes to the background outside a call. */
+export function watchIdleAudioShape(): void {
+  if (Platform.OS !== 'ios' || watchingAppState) return
+  watchingAppState = true
+  prepareForCallKit()
+  AppState.addEventListener('change', (state) => {
+    if (state === 'background') prepareForCallKit()
+  })
+}
 // A call answered on iOS's own call screen belongs to CallKit, and iOS switches the audio session
 // on for it by itself, a moment after Answer (CallKit.swift didActivate → "callAudio"). If the
 // call connected before that, LiveKit's audio engine started on a session iOS then took over, and
@@ -91,13 +131,24 @@ export async function holdAudioForCallKit(): Promise<string> {
   if (Platform.OS !== 'ios') return 'not iPhone'
   const active = Native.callKitAudioActive()
   if (active === null) return 'not in this build'
-  if (active) return 'already on'
+  if (active) {
+    // iOS switched it on before the app got here: tell LiveKit, or it tries to switch the session
+    // on again itself (from the background, which iOS can refuse).
+    try {
+      RTCAudioSession.audioSessionDidActivate()
+    } catch {
+      // older build
+    }
+    return 'already on'
+  }
   heldForCallKit = true
   await AudioDeviceModule.setEngineAvailability(AudioEngineAvailability.none).catch(() => {})
   if (holdTimer) clearTimeout(holdTimer)
   holdTimer = setTimeout(() => {
     // iOS never said the audio was on: go ahead anyway, and tell Control (a likely silent call).
-    reportError({ message: 'Call: iPhone lock-screen answer, iOS never switched the audio on (went ahead after 4 s)' }, 'call')
+    // Opening Glofly then gets the sound going (kickStuckAudio, from the foreground).
+    stuckSinceCallKit = true
+    reportError({ message: `Call: iPhone lock-screen answer, iOS never switched the audio on (went ahead after 4 s; app ${AppState.currentState})` }, 'call')
     void releaseAudioForCallKit()
   }, CALLKIT_AUDIO_WAIT_MS)
   return 'held until iOS switches audio on'
@@ -125,6 +176,25 @@ export async function onCallKitAudio(active: boolean): Promise<void> {
   if (active) await releaseAudioForCallKit()
 }
 
+/**
+ * The CallKit wait ran out (iOS never switched the audio on), so the engine may have failed to
+ * start from the background. When Glofly comes to the front during that call and nothing is
+ * playing, restart the engine: in the foreground the app can switch the audio on itself.
+ * Returns whether it restarted.
+ */
+let stuckSinceCallKit = false
+export async function kickStuckAudio(): Promise<boolean> {
+  if (Platform.OS !== 'ios' || !stuckSinceCallKit) return false
+  if (audioEnginePlaying() === true) {
+    stuckSinceCallKit = false
+    return false
+  }
+  stuckSinceCallKit = false
+  await AudioDeviceModule.setEngineAvailability(AudioEngineAvailability.none).catch(() => {})
+  await AudioDeviceModule.setEngineAvailability(AudioEngineAvailability.default).catch(() => {})
+  return true
+}
+
 /** Call diagnostics: whether the engine is waiting on CallKit. */
 export function callKitAudioInfo(): Record<string, string> {
   if (Platform.OS !== 'ios') return {}
@@ -134,8 +204,12 @@ export function callKitAudioInfo(): Record<string, string> {
 
 export async function stopCallAudio(): Promise<void> {
   if (Platform.OS === 'ios') {
+    inCallAudio = false
+    stuckSinceCallKit = false
     // Never leave the engine held after a call (the next call would be silent).
     await releaseAudioForCallKit()
+    // Once LiveKit has let the session go: back to a call shape for the next lock-screen answer.
+    prepareForCallKit(2000)
     // LiveKit lets the session go once the engine stops (deactivateOnStop).
     Native.stopCallSpeaker()
     await AudioDeviceModule.setRecordingAlwaysPreparedMode(false).catch(() => {})
@@ -150,6 +224,7 @@ export async function stopCallAudio(): Promise<void> {
  */
 export async function startWatchAudio(): Promise<void> {
   if (Platform.OS === 'ios') {
+    watchingAudio = true
     const listen: AppleAudioConfiguration = { audioCategory: 'playback', audioCategoryOptions: ['mixWithOthers', 'allowAirPlay'], audioMode: 'moviePlayback' }
     setupIOSAudioManagement(false, { recording: listen, recordingWithoutVoiceProcessing: listen, playout: listen, deactivateOnStop: true })
     return
@@ -161,7 +236,12 @@ export async function startWatchAudio(): Promise<void> {
 }
 
 export async function stopWatchAudio(): Promise<void> {
-  if (Platform.OS === 'ios') return // LiveKit lets the session go when the engine stops
+  if (Platform.OS === 'ios') {
+    // LiveKit lets the session go when the engine stops; then back to a call shape.
+    watchingAudio = false
+    prepareForCallKit(2000)
+    return
+  }
   await AudioSession.stopAudioSession().catch(() => {})
 }
 

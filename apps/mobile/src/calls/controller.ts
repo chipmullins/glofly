@@ -1,4 +1,4 @@
-import { PermissionsAndroid, Platform } from 'react-native'
+import { AppState, PermissionsAndroid, Platform } from 'react-native'
 import { tap } from '@/lib/haptics'
 import { router } from 'expo-router'
 import { create } from 'zustand'
@@ -15,7 +15,7 @@ import { confirm, inform } from '@/ui/dialogs'
 import { playSound, startLoop } from '@/push/sounds'
 import { isQuietNow } from '@/state/quiet'
 import { usePhonePrefs } from '@/state/prefs'
-import { audioEngineInfo, audioEnginePlaying, callKitAudioInfo, holdAudioForCallKit, onCallKitAudio, releaseAudioForCallKit, setupWebRTC, startCallAudio, stopCallAudio } from './media'
+import { audioEngineInfo, audioEnginePlaying, callKitAudioInfo, holdAudioForCallKit, kickStuckAudio, onCallKitAudio, releaseAudioForCallKit, setupWebRTC, startCallAudio, stopCallAudio, watchIdleAudioShape } from './media'
 import { APP_SETTINGS } from '@/lib/config'
 import { cx } from '@/api/constellations'
 import { reportError } from '@/lib/errorReports'
@@ -687,6 +687,15 @@ export function startCalls() {
     if (event !== 'call:updated') return
     const { call, caller } = payload as { call: Call; caller: PublicUser | null }
     onCallUpdated(call, caller)
+  })
+  // iPhone: keep a call-shaped audio category ready between calls (lock-screen answers, Oct 29).
+  watchIdleAudioShape()
+  // iPhone: a lock-screen call whose audio iOS never switched on gets going once Glofly is opened.
+  AppState.addEventListener('change', (state) => {
+    if (state !== 'active' || !useCall.getState().call) return
+    void kickStuckAudio().then((kicked) => {
+      if (kicked) diag('audio engine restarted in the foreground (iOS never switched lock-screen audio on)')
+    })
   })
   // iPhone: iOS switched a lock-screen call's audio on or off (lets the held engine go).
   Native.onNativeEvent('callAudio', ({ active }) => {

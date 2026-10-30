@@ -173,6 +173,12 @@ final class GloflyCallKit: NSObject, CXProviderDelegate, PKPushRegistryDelegate 
     info.answered = true
     calls[id] = info
     timers.removeValue(forKey: id)?.cancel()
+    // Oct 29: give the session a call's shape BEFORE fulfilling (Apple's documented order). iOS
+    // switches a CallKit call's audio on with whatever category the app has at this moment; it was
+    // whatever was left over (often a previous call's mixable play-and-record, or playback after a
+    // voice message), and with another app holding the audio (TikTok) iOS sometimes never switched
+    // it on at all: no didActivate, a silent call both ways. Not activated here: iOS does that.
+    GloflyCallKit.prepareCallAudioSession(video: info.video)
     pendingAnswer = ["callId": id, "video": info.video ? "1" : "0"]
     GloflyNativeModule.emit("callAnswer", [:])
     action.fulfill()
@@ -219,6 +225,14 @@ final class GloflyCallKit: NSObject, CXProviderDelegate, PKPushRegistryDelegate 
   func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
     audioActive = false
     GloflyNativeModule.emit("callAudio", ["active": "0"])
+  }
+
+  /// A call's audio shape (play + record, voice or video chat, not mixable with other apps), set
+  /// without switching the session on. Used when a CallKit call is answered.
+  static func prepareCallAudioSession(video: Bool) {
+    var options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]
+    if video { options.insert(.defaultToSpeaker) }
+    try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: video ? .videoChat : .voiceChat, options: options)
   }
 
   /// TestFlight / ad hoc builds made for development have Apple's sandbox push environment.
