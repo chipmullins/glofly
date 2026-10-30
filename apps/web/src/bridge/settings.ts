@@ -192,6 +192,8 @@ function load(): void {
     // Then Hollow wood for friend online (Dewdrop before) and Night breeze for friend requests (Firefly chime).
     if (v < 4 && saved.sounds.friendOnline === 'dewdrop') saved.sounds.friendOnline = 'hollowWood'
     if (v < 4 && saved.sounds.friendRequest === 'chime') saved.sounds.friendRequest = 'nightBreeze'
+    // 7 (0.8.8): Glo-fly hummed became the login default (Glo-fly Robot in 0.8.7).
+    if (v < 7 && saved.sounds.login === 'gloflyChord') saved.sounds.login = 'gloflyHum'
   }
   const n = value.notifications as Partial<NotificationSettings> | undefined
   if (n && typeof n === 'object') {
@@ -202,7 +204,7 @@ function load(): void {
 
 function save(): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...saved, soundDefaults: 6 }))
+    localStorage.setItem(KEY, JSON.stringify({ ...saved, soundDefaults: 7 }))
   } catch {
     // Storage blocked: the change lasts until the page is closed.
   }

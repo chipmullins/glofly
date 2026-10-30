@@ -148,8 +148,9 @@ const ROW_SOUNDS: Record<string, readonly string[]> = {
  * 4 (0.7.0): friend online became Hollow wood (Dewdrop before), friend request Night breeze (Firefly chime).
  * 5 (Oct 29, 2026): new call sounds; older ones aren't accepted for the call rows (ROW_SOUNDS).
  * 6 (Oct 30, 2026): new message, login and log out sounds and the message sent row (ROW_SOUNDS).
+ * 7 (0.8.8): the login sound's default became Glo-fly hummed (Glo-fly Robot in 0.8.7).
  */
-const SOUND_DEFAULTS_VERSION = 6
+const SOUND_DEFAULTS_VERSION = 7
 
 /** Checks a sound setting (from the window or the saved file) before using it. */
 function soundSettingOk(key: string, value: unknown): boolean {
@@ -225,6 +226,9 @@ export function loadAppSettings(): void {
       if ((value.soundDefaultsVersion ?? 1) < 4) {
         if (saved.sounds.friendOnline === 'dewdrop') saved.sounds.friendOnline = 'hollowWood'
         if (saved.sounds.friendRequest === 'chime') saved.sounds.friendRequest = 'nightBreeze'
+      }
+      if ((value.soundDefaultsVersion ?? 1) < 7 && saved.sounds.login === 'gloflyChord') {
+        saved.sounds.login = 'gloflyHum'
       }
     }
     if (isNotificationChanges(value.notifications)) {
