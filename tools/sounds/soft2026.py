@@ -542,6 +542,65 @@ def _():
     return mix([(0, felt(n('E5'))), (.2, felt(n('A4'))), (0, pad([n('A3'), n('E4')], 1.4, .2, .6), .25)])
 
 
+# ---- Oct 30: more soft "Glo-fly" (log in) and "Good-bye" (log off) voices
+v.STYLE['softcute'] = dict(shift=1.14, src='tri', vib=(5.4, .012), breath=.14, chorus=0)
+v.STYLE['softdeep'] = dict(shift=.9, src='tri', vib=(4.4, .009), breath=.16, chorus=0)
+
+
+def sung(steps, style='soft', cutoff=2600):
+    """steps: (time, syllable, note, seconds)."""
+    return soften(v.sing([(t, sy, nt, d) for t, sy, nt, d in steps], style), cutoff, .015)
+
+
+@sound('login', 'gloflytiny', 'Glo-fly (tiny voice)', 'A tiny, soft "Glo-fly!" with a celesta twinkle.', wet=.28)
+def _():
+    vox = sung([(0, 'g o u -', 'G5', .2), (.27, 'f a i -', 'D6', .42)], 'softcute', 2800)
+    return mix([(0, vox), (.3, soften(celesta(n('D6'), 1.6), 2600), .3), (.3, soften(celesta(n('G6'), 1.6), 2600), .2)])
+
+
+@sound('login', 'gloflywarm', 'Glo-fly (warm voice)', 'A low, warm "Glo-fly" over a felt-piano chord.', wet=.3)
+def _():
+    vox = sung([(0, 'g o u -', 'C4', .24), (.31, 'f a i -', 'G4', .5)], 'softdeep', 2200)
+    chord = mix([(0, felt(n('C4'))), (0, felt(n('E4')), .7), (0, felt(n('G4')), .7)])
+    return mix([(0, vox), (.3, chord, .5)])
+
+
+@sound('login', 'gloflysong', 'Glo-o-fly (sung)', 'A little three-note "Glo-o-fly", like a tiny tune.', wet=.3)
+def _():
+    vox = sung([(0, 'g o u -', 'E5', .2), (.22, '- o u -', 'G5', .18), (.45, 'f a i -', 'C6', .48)], 'soft', 2600)
+    return mix([(0, pad([n('C4'), n('G4')], 1.6, .35, .7), .25), (0, vox), (.46, softkal(n('C6')), .35)])
+
+
+@sound('login', 'gloflyecho', 'Glo-fly (echo)', 'A soft "Glo-fly" that echoes away, with a kalimba.', wet=.3)
+def _():
+    vox = sung([(0, 'g o u -', 'A4', .2), (.27, 'f a i -', 'E5', .42)], 'soft', 2400)
+    return echo(mix([(0, vox), (.28, softkal(n('A5')), .35)]), .3, .3, 2, 1800)
+
+
+@sound('logoff', 'goodbyetiny', 'Good-bye (tiny voice)', 'A tiny, soft "good-bye" waving off.', wet=.28)
+def _():
+    vox = sung([(0, 'g u - d', 'D6', .18), (.26, 'b a i -', 'A5', .42)], 'softcute', 2800)
+    return mix([(0, vox), (.28, soften(celesta(n('A5'), 1.6), 2400), .25)])
+
+
+@sound('logoff', 'goodbyewarm', 'Good-bye (warm voice)', 'A low, warm "good-bye" over two felt notes.', wet=.3)
+def _():
+    vox = sung([(0, 'g u - d', 'G4', .22), (.3, 'b a i -', 'D4', .52)], 'softdeep', 2200)
+    return mix([(0, vox), (.02, felt(n('G4')), .35), (.32, felt(n('D4')), .45)])
+
+
+@sound('logoff', 'goodbyesong', 'Good-bye-ye (sung)', 'A gentle "good-bye-ye", drifting down three notes.', wet=.3)
+def _():
+    vox = sung([(0, 'g u - d', 'E5', .2), (.26, 'b a i -', 'C5', .22), (.5, '- a i -', 'G4', .5)], 'soft', 2500)
+    return mix([(0, vox), (.2, pad([n('C4'), n('G4')], 1.4, .3, .6), .22)])
+
+
+@sound('logoff', 'goodbyeecho', 'Good-bye (echo)', 'A soft "good-bye" fading off into an echo.', wet=.3)
+def _():
+    vox = sung([(0, 'g u - d', 'B4', .2), (.27, 'b a i -', 'E4', .46)], 'soft', 2300)
+    return echo(mix([(0, vox), (.28, softbell(n('E5'), 1.8, .9), .3)]), .3, .3, 2, 1700)
+
+
 EVENTS = [
     ('message', 'New message'), ('sent', 'Message sent (new)'), ('mention', '@mention'),
     ('constellation', 'Constellation message'), ('friend', 'Friend request'), ('online', 'Friend comes online'),
