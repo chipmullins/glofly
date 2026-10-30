@@ -156,3 +156,7 @@ vite.config.ts.timestamp-*
 
 # Redis snapshots
 dump.rdb
+
+# Python caches (tools/sounds scripts)
+__pycache__/
+*.pyc
