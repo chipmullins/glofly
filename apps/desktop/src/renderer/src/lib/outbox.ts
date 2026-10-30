@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Attachment, Message, ReplyPreview } from '../../../preload/api-types'
+import { playSound } from './sounds'
 
 // 0.7.5 sending state. Messages on their way live here, not in the chat on screen, so a
 // message keeps sending (and a failed one keeps its "Not sent · Retry") when you switch chats
@@ -127,6 +128,8 @@ export function enqueue(conversationId: string, message: NewPending): Pending {
     slow: false
   }
   update(conversationId, (list) => [...list, item])
+  // Oct 30, 2026: the "Message sent" sound (off unless picked in Settings).
+  playSound('messageSent')
   void deliver(item)
   return item
 }

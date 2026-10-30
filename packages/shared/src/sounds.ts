@@ -14,7 +14,27 @@ export type PhoneSound = {
   native: string
 }
 
+// Oct 30, 2026: Chip's picks from the soft round (tools/sounds/soft2026.py). Mm-hm is the default; Hollow wood
+// and Night breeze stay. New native copies come with the next phone builds; older builds play their
+// default for a sound they don't have yet.
 export const PHONE_MESSAGE_SOUNDS: readonly PhoneSound[] = [
+  { id: 'mmHm', label: 'Mm-hm', file: 'msg-mmhm', native: 'glofly_msg_mmhm' },
+  { id: 'hollowWood', label: 'Hollow wood', file: 'hollow-wood', native: 'glofly_msg_hollow_wood' },
+  { id: 'nightBreeze', label: 'Night breeze', file: 'night-breeze', native: 'glofly_msg_night_breeze' },
+  { id: 'nudge', label: 'Nudge', file: 'msg-nudge', native: 'glofly_msg_nudge' },
+  { id: 'tapShoulder', label: 'Tap on the shoulder', file: 'msg-tap-shoulder', native: 'glofly_msg_tap_shoulder' },
+  { id: 'heyHum', label: 'Hey (hummed)', file: 'msg-hey-hum', native: 'glofly_msg_hey_hum' },
+  { id: 'brightGlow', label: 'Bright glow', file: 'msg-bright-glow', native: 'glofly_msg_bright_glow' },
+  { id: 'doubleNudge', label: 'Double nudge', file: 'msg-double-nudge', native: 'glofly_msg_double_nudge' },
+  { id: 'callOut', label: 'Call out', file: 'msg-call-out', native: 'glofly_msg_call_out' },
+  { id: 'lanternUp', label: 'Lantern up', file: 'msg-lantern-up', native: 'glofly_msg_lantern_up' },
+  { id: 'mmHmQ', label: 'Mm-hm?', file: 'msg-mmhm-q', native: 'glofly_msg_mmhm_q' },
+  { id: 'starNudge', label: 'Star nudge', file: 'msg-star-nudge', native: 'glofly_msg_star_nudge' },
+  { id: 'ripple', label: 'Ripple', file: 'msg-ripple', native: 'glofly_msg_ripple' },
+]
+
+/** Constellation message sounds: the earlier message sounds (unchanged Oct 30, 2026). */
+export const PHONE_CONSTELLATION_SOUNDS: readonly PhoneSound[] = [
   // 0.7.0: the default. Its lock-screen copy comes with the next phone build (older builds play Firefly chime).
   { id: 'lowComet', label: 'Low comet', file: 'low-comet', native: 'glofly_msg_low_comet' },
   { id: 'chime', label: 'Firefly chime', file: 'message', native: 'glofly_message' },
@@ -70,15 +90,26 @@ export const RETIRED_PHONE_RINGTONES: readonly PhoneSound[] = [
   { id: 'ring', label: 'Glow ring', file: 'ringtone', native: 'glofly_ring_glow' },
 ]
 
-export const DEFAULT_PHONE_MESSAGE_SOUND = 'lowComet'
+export const DEFAULT_PHONE_MESSAGE_SOUND = 'mmHm'
 export const DEFAULT_PHONE_RINGTONE = 'doowop'
 /** 0.7.0: messages in constellations have their own sound, picked from the message sounds. */
 export const DEFAULT_PHONE_CONSTELLATION_SOUND = 'skyLantern'
 
-/** The message sound with this id (the default for unknown or missing ids). */
+/**
+ * The message sound with this id: Mm-hm for an unknown id (a sound no longer offered), and Firefly
+ * chime for a phone that never said (an older app), since every build has that file.
+ */
 export function phoneMessageSound(id: string | null | undefined): PhoneSound {
-  // A phone that never said (an older app) keeps Firefly chime, which every build has.
-  return PHONE_MESSAGE_SOUNDS.find((s) => s.id === id) ?? PHONE_MESSAGE_SOUNDS.find((s) => s.id === 'chime')!
+  if (id == null) return PHONE_CONSTELLATION_SOUNDS.find((s) => s.id === 'chime')!
+  return PHONE_MESSAGE_SOUNDS.find((s) => s.id === id) ?? PHONE_MESSAGE_SOUNDS[0]
+}
+
+/** The constellation message sound with this id (Lantern for unknown or missing ids). */
+export function phoneConstellationSound(id: string | null | undefined): PhoneSound {
+  return (
+    PHONE_CONSTELLATION_SOUNDS.find((s) => s.id === id) ??
+    PHONE_CONSTELLATION_SOUNDS.find((s) => s.id === DEFAULT_PHONE_CONSTELLATION_SOUND)!
+  )
 }
 
 /** The ringtone with this id (the default for unknown or missing ids). */

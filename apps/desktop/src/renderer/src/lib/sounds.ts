@@ -68,6 +68,31 @@ import bubbleInFile from '../assets/sounds/bubble-in.ogg'
 import bubbleOutFile from '../assets/sounds/bubble-out.ogg'
 import ringInDoowopFile from '../assets/sounds/ring-in-doowop.ogg'
 import ringOutHumFile from '../assets/sounds/ring-out-hum.ogg'
+import msgMmhmFile from '../assets/sounds/msg-mmhm.ogg'
+import msgNudgeFile from '../assets/sounds/msg-nudge.ogg'
+import msgTapShoulderFile from '../assets/sounds/msg-tap-shoulder.ogg'
+import msgHeyHumFile from '../assets/sounds/msg-hey-hum.ogg'
+import msgBrightGlowFile from '../assets/sounds/msg-bright-glow.ogg'
+import msgDoubleNudgeFile from '../assets/sounds/msg-double-nudge.ogg'
+import msgCallOutFile from '../assets/sounds/msg-call-out.ogg'
+import msgLanternUpFile from '../assets/sounds/msg-lantern-up.ogg'
+import msgMmhmQFile from '../assets/sounds/msg-mmhm-q.ogg'
+import msgStarNudgeFile from '../assets/sounds/msg-star-nudge.ogg'
+import msgRippleFile from '../assets/sounds/msg-ripple.ogg'
+import loginGloflyChordFile from '../assets/sounds/login-glofly-chord.ogg'
+import loginDawnHumFile from '../assets/sounds/login-dawn-hum.ogg'
+import logoffGoodbyeSoftFile from '../assets/sounds/logoff-goodbye-soft.ogg'
+import logoffHushHumFile from '../assets/sounds/logoff-hush-hum.ogg'
+import sentWhooshFile from '../assets/sounds/sent-whoosh.ogg'
+import sentFlickFile from '../assets/sounds/sent-flick.ogg'
+import sentLiftFile from '../assets/sounds/sent-lift.ogg'
+import sentPuffFile from '../assets/sounds/sent-puff.ogg'
+import sentSendOffFile from '../assets/sounds/sent-send-off.ogg'
+import sentFloatFile from '../assets/sounds/sent-float.ogg'
+import sentPaperPlaneFile from '../assets/sounds/sent-paper-plane.ogg'
+import sentSkipFile from '../assets/sounds/sent-skip.ogg'
+import sentBreezeFile from '../assets/sounds/sent-breeze.ogg'
+import sentHopFile from '../assets/sounds/sent-hop.ogg'
 import pttFireflyDownFile from '../assets/sounds/ptt-firefly-down.ogg'
 import pttFireflyUpFile from '../assets/sounds/ptt-firefly-up.ogg'
 import pttBlinkDownFile from '../assets/sounds/ptt-blink-down.ogg'
@@ -87,6 +112,7 @@ import pttSparkUpFile from '../assets/sounds/ptt-spark-up.ogg'
 
 export type SoundName =
   | 'message' // a message arrives
+  | 'messageSent' // you send a message (Oct 30, 2026; off unless picked)
   | 'constellationMessage' // a message in a constellation's nebula (0.7.0)
   | 'friendRequest' // someone sends you a friend request
   | 'friendOnline' // a friend you asked about comes online
@@ -184,17 +210,79 @@ export const SOUND_FILES: Record<
   bubbleIn: { label: 'Bubble', url: bubbleInFile },
   bubbleOut: { label: 'Bubble', url: bubbleOutFile },
   doowop: { label: 'Doo-wop', url: ringInDoowopFile, ring: 'in', loop: 2.4 },
-  humHum: { label: 'Hum hum', url: ringOutHumFile, ring: 'out', loop: 2.0 }
+  humHum: { label: 'Hum hum', url: ringOutHumFile, ring: 'out', loop: 2.0 },
+  // Oct 30, 2026: Chip's picks from the soft round. The only choices in the message, login, log
+  // out and message sent rows; the older sounds stay in the app for constellation / friend rows.
+  mmHm: { label: 'Mm-hm', url: msgMmhmFile },
+  nudge: { label: 'Nudge', url: msgNudgeFile },
+  tapShoulder: { label: 'Tap on the shoulder', url: msgTapShoulderFile },
+  heyHum: { label: 'Hey (hummed)', url: msgHeyHumFile },
+  brightGlow: { label: 'Bright glow', url: msgBrightGlowFile },
+  doubleNudge: { label: 'Double nudge', url: msgDoubleNudgeFile },
+  callOut: { label: 'Call out', url: msgCallOutFile },
+  lanternUp: { label: 'Lantern up', url: msgLanternUpFile },
+  mmHmQ: { label: 'Mm-hm?', url: msgMmhmQFile },
+  starNudge: { label: 'Star nudge', url: msgStarNudgeFile },
+  ripple: { label: 'Ripple', url: msgRippleFile },
+  gloflyChord: { label: 'Glo-fly', url: loginGloflyChordFile },
+  dawnHum: { label: 'Dawn hum', url: loginDawnHumFile },
+  goodbyeSoft: { label: 'Good-bye', url: logoffGoodbyeSoftFile },
+  hushHum: { label: 'Hush hum', url: logoffHushHumFile },
+  softWhoosh: { label: 'Soft whoosh', url: sentWhooshFile },
+  flick: { label: 'Flick', url: sentFlickFile },
+  lift: { label: 'Lift', url: sentLiftFile },
+  puff: { label: 'Puff', url: sentPuffFile },
+  sendOff: { label: 'Send-off', url: sentSendOffFile },
+  float: { label: 'Float', url: sentFloatFile },
+  paperPlane: { label: 'Paper plane', url: sentPaperPlaneFile },
+  skip: { label: 'Skip', url: sentSkipFile },
+  breeze: { label: 'Breeze', url: sentBreezeFile },
+  hop: { label: 'Hop', url: sentHopFile }
 }
 
-/** Oct 29, 2026: the call rows offer only these (and None). Shared with the settings check. */
-export const CALL_ROW_CHOICES = {
+/**
+ * The rows that offer a fixed set (and None): the call rows (Oct 29, 2026) and the message, login,
+ * log out and message sent rows (Oct 30). Kept in step with the settings check (main app-settings.ts
+ * and apps/web/src/bridge/settings.ts). Rows not listed offer every older short sound.
+ */
+export const ROW_CHOICES = {
   callConnected: ['whistleUp', 'none'],
   callEnded: ['whistleDown', 'none'],
   memberJoined: ['bubbleIn', 'none'],
   memberLeft: ['bubbleOut', 'none'],
   ringtone: ['doowop', 'none'],
-  outgoing: ['humHum', 'none']
+  outgoing: ['humHum', 'none'],
+  message: [
+    'mmHm',
+    'hollowWood',
+    'nightBreeze',
+    'nudge',
+    'tapShoulder',
+    'heyHum',
+    'brightGlow',
+    'doubleNudge',
+    'callOut',
+    'lanternUp',
+    'mmHmQ',
+    'starNudge',
+    'ripple',
+    'none'
+  ],
+  login: ['gloflyChord', 'dawnHum', 'none'],
+  logout: ['goodbyeSoft', 'hushHum', 'none'],
+  messageSent: [
+    'softWhoosh',
+    'flick',
+    'lift',
+    'puff',
+    'sendOff',
+    'float',
+    'paperPlane',
+    'skip',
+    'breeze',
+    'hop',
+    'none'
+  ]
 } as const satisfies Record<string, readonly (SoundFile | 'none')[]>
 
 let settings: SoundSettings = {
@@ -202,12 +290,13 @@ let settings: SoundSettings = {
   dndSilence: true,
   volume: 100,
   callVolume: 100,
-  message: 'lowComet',
+  message: 'mmHm',
+  messageSent: 'none',
   constellationMessage: 'skyLantern',
   friendRequest: 'nightBreeze',
   friendOnline: 'hollowWood',
-  login: 'hello',
-  logout: 'goodnight',
+  login: 'gloflyChord',
+  logout: 'goodbyeSoft',
   callConnected: 'whistleUp',
   callEnded: 'whistleDown',
   memberJoined: 'bubbleIn',

@@ -181,6 +181,32 @@ export type AlertSound =
   | 'whistleDown'
   | 'bubbleIn'
   | 'bubbleOut'
+  /** Oct 30, 2026: the soft round (tools/sounds/soft2026.py, talkbox2026.py): message, login, log out, message sent */
+  | 'mmHm'
+  | 'nudge'
+  | 'tapShoulder'
+  | 'heyHum'
+  | 'brightGlow'
+  | 'doubleNudge'
+  | 'callOut'
+  | 'lanternUp'
+  | 'mmHmQ'
+  | 'starNudge'
+  | 'ripple'
+  | 'gloflyChord'
+  | 'dawnHum'
+  | 'goodbyeSoft'
+  | 'hushHum'
+  | 'softWhoosh'
+  | 'flick'
+  | 'lift'
+  | 'puff'
+  | 'sendOff'
+  | 'float'
+  | 'paperPlane'
+  | 'skip'
+  | 'breeze'
+  | 'hop'
   | 'none'
 /** Ringing sounds (they loop). 0.2.2 adds the in- and out- sets; ring and jingle are Chip's originals. */
 export type CallSound = 'ring' | 'jingle' | OutgoingSound | IncomingSound | 'none'
@@ -233,6 +259,8 @@ export type SoundSettings = {
   friendRequest: AlertSound
   /** A friend you asked about comes online (0.3.0; older saved settings don't have it) */
   friendOnline?: AlertSound
+  /** Oct 30, 2026: your own message is sent (older saved settings don't have it: off) */
+  messageSent?: AlertSound
   login: AlertSound
   /** You log out */
   logout: AlertSound

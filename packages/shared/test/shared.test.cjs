@@ -68,7 +68,11 @@ test('phone sounds', () => {
   assert.equal(s.phoneMessageSound(null).native, 'glofly_message')
   assert.equal(s.phoneRingtone(undefined).native, 'glofly_ringtone')
   assert.equal(s.phoneRingtone('nope').id, s.DEFAULT_PHONE_RINGTONE)
-  assert.equal(s.isPhoneMessageSound('dewdrop'), true)
+  assert.equal(s.phoneMessageSound('lowComet').id, s.DEFAULT_PHONE_MESSAGE_SOUND) // no longer offered (Oct 30, 2026)
+  assert.equal(s.isPhoneMessageSound('mmHm'), true)
+  assert.equal(s.isPhoneMessageSound('dewdrop'), false)
+  assert.equal(s.phoneConstellationSound('nope').id, s.DEFAULT_PHONE_CONSTELLATION_SOUND)
+  for (const x of s.PHONE_CONSTELLATION_SOUNDS) assert.match(x.native, /^[a-z][a-z0-9_]*$/)
   assert.equal(s.isPhoneRingtone('dewdrop'), false)
   // Android res/raw and iPhone bundle names: lowercase letters, digits and underscores, all different.
   const all = [...s.PHONE_MESSAGE_SOUNDS, ...s.PHONE_RINGTONES]

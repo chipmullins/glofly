@@ -2,7 +2,7 @@ import { Platform } from 'react-native'
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio'
 import * as Haptics from 'expo-haptics'
 import * as Native from 'glofly-native'
-import { DEFAULT_PHONE_CONSTELLATION_SOUND, phoneMessageSound, phoneRingtone } from '@glofly/shared'
+import { phoneConstellationSound, phoneMessageSound, phoneRingtone } from '@glofly/shared'
 import { usePhonePrefs } from '@/state/prefs'
 
 // Glofly's sounds inside the app (the same files as the desktop app): the message chime, the
@@ -36,6 +36,18 @@ const MESSAGE_FILES: Record<string, number> = {
   aurora: require('../../assets/sounds/aurora.ogg'),
   skyLantern: require('../../assets/sounds/sky-lantern.ogg'),
   deepSpace: require('../../assets/sounds/deep-space.ogg'),
+  // Oct 30, 2026: the message sounds (Mm-hm is the default; the ones above stay for constellations).
+  mmHm: require('../../assets/sounds/msg-mmhm.ogg'),
+  nudge: require('../../assets/sounds/msg-nudge.ogg'),
+  tapShoulder: require('../../assets/sounds/msg-tap-shoulder.ogg'),
+  heyHum: require('../../assets/sounds/msg-hey-hum.ogg'),
+  brightGlow: require('../../assets/sounds/msg-bright-glow.ogg'),
+  doubleNudge: require('../../assets/sounds/msg-double-nudge.ogg'),
+  callOut: require('../../assets/sounds/msg-call-out.ogg'),
+  lanternUp: require('../../assets/sounds/msg-lantern-up.ogg'),
+  mmHmQ: require('../../assets/sounds/msg-mmhm-q.ogg'),
+  starNudge: require('../../assets/sounds/msg-star-nudge.ogg'),
+  ripple: require('../../assets/sounds/msg-ripple.ogg'),
 }
 // Oct 29, 2026: the call sounds are Chip's picks (tools/sounds/defaults2026.py). The older ringtones
 // stay in assets/sounds (and natively), just not offered (@glofly/shared RETIRED_PHONE_RINGTONES).
@@ -44,7 +56,7 @@ const RINGTONE_FILES: Record<string, number> = {
 }
 
 const FILES = {
-  message: MESSAGE_FILES.chime,
+  message: MESSAGE_FILES.mmHm,
   constellation: MESSAGE_FILES.skyLantern,
   ringtone: RINGTONE_FILES.doowop,
   outgoing: require('../../assets/sounds/ring-out-hum.ogg'),
@@ -59,8 +71,7 @@ export type SoundName = keyof typeof FILES
 
 /** The constellation message sound picked in Settings (Lantern unless changed). */
 function constellationSound() {
-  const id = usePhonePrefs.getState().constellationSound
-  return phoneMessageSound(MESSAGE_FILES[id] ? id : DEFAULT_PHONE_CONSTELLATION_SOUND)
+  return phoneConstellationSound(usePhonePrefs.getState().constellationSound)
 }
 
 const players = new Map<string, AudioPlayer>()
@@ -121,7 +132,7 @@ export function previewSound(kind: 'message' | 'ringtone' | 'constellation', id:
   if (Platform.OS === 'ios') {
     stopPreview()
     // The constellation sound by its file name (0.7.0 builds); the others are the picked ones (after setSounds).
-    const name = kind === 'constellation' ? phoneMessageSound(id).native : kind
+    const name = kind === 'constellation' ? phoneConstellationSound(id).native : kind
     if (Native.playCallTone(name, false, 1)) return
   }
   const file = kind === 'ringtone' ? RINGTONE_FILES[id] : MESSAGE_FILES[id]

@@ -36,12 +36,13 @@ const saved: Saved = {
     dndSilence: true,
     volume: 100,
     callVolume: 100,
-    message: 'lowComet',
+    message: 'mmHm',
+    messageSent: 'none',
     constellationMessage: 'skyLantern',
     friendRequest: 'nightBreeze',
     friendOnline: 'hollowWood',
-    login: 'hello',
-    logout: 'goodnight',
+    login: 'gloflyChord',
+    logout: 'goodbyeSoft',
     callConnected: 'whistleUp',
     callEnded: 'whistleDown',
     memberJoined: 'bubbleIn',
@@ -84,17 +85,48 @@ const ALERT_SOUNDS: AlertSound[] = [
   'none'
 ]
 /**
- * Oct 29, 2026: the call rows offer only Chip's picks (and None); a saved older call sound falls
- * back to the new default. Keep in step with CALL_ROW_CHOICES (renderer/src/lib/sounds.ts) and the
+ * Oct 29–30, 2026: the call, message, message sent, login and log out rows offer only Chip's picks (and None); a saved older sound falls
+ * back to the new default. Keep in step with ROW_CHOICES (renderer/src/lib/sounds.ts) and the
  * desktop's app-settings.ts.
  */
-const CALL_ROW_SOUNDS: Record<string, readonly string[]> = {
+const ROW_SOUNDS: Record<string, readonly string[]> = {
   callConnected: ['whistleUp', 'none'],
   callEnded: ['whistleDown', 'none'],
   memberJoined: ['bubbleIn', 'none'],
   memberLeft: ['bubbleOut', 'none'],
   ringtone: ['doowop', 'none'],
-  outgoing: ['humHum', 'none']
+  outgoing: ['humHum', 'none'],
+  message: [
+    'mmHm',
+    'hollowWood',
+    'nightBreeze',
+    'nudge',
+    'tapShoulder',
+    'heyHum',
+    'brightGlow',
+    'doubleNudge',
+    'callOut',
+    'lanternUp',
+    'mmHmQ',
+    'starNudge',
+    'ripple',
+    'none'
+  ],
+  login: ['gloflyChord', 'dawnHum', 'none'],
+  logout: ['goodbyeSoft', 'hushHum', 'none'],
+  messageSent: [
+    'softWhoosh',
+    'flick',
+    'lift',
+    'puff',
+    'sendOff',
+    'float',
+    'paperPlane',
+    'skip',
+    'breeze',
+    'hop',
+    'none'
+  ]
 }
 const THEMES: ThemeChoice[] = ['light', 'dark', 'system']
 const ACCENTS: AccentChoice[] = ['orange', 'red', 'lagoon', 'violet', 'blossom', 'graphite']
@@ -108,20 +140,21 @@ function soundSettingOk(key: string, value: unknown): boolean {
     case 'volume':
     case 'callVolume':
       return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100
-    case 'message':
     case 'constellationMessage':
     case 'friendRequest':
     case 'friendOnline':
+      return ALERT_SOUNDS.includes(value as AlertSound)
+    case 'message':
+    case 'messageSent':
     case 'login':
     case 'logout':
-      return ALERT_SOUNDS.includes(value as AlertSound)
     case 'callConnected':
     case 'callEnded':
     case 'memberJoined':
     case 'memberLeft':
     case 'ringtone':
     case 'outgoing':
-      return typeof value === 'string' && CALL_ROW_SOUNDS[key].includes(value)
+      return typeof value === 'string' && ROW_SOUNDS[key].includes(value)
     default:
       return false
   }
@@ -155,9 +188,7 @@ function load(): void {
     for (const [k, v] of Object.entries(value.sounds)) {
       if (soundSettingOk(k, v)) (saved.sounds as Record<string, unknown>)[k] = v
     }
-    // 0.7.0: Low comet is the new default message sound; the old default (Firefly chime) moves over once.
     const v = (value as { soundDefaults?: number }).soundDefaults ?? 1
-    if (v < 3 && saved.sounds.message === 'chime') saved.sounds.message = 'lowComet'
     // Then Hollow wood for friend online (Dewdrop before) and Night breeze for friend requests (Firefly chime).
     if (v < 4 && saved.sounds.friendOnline === 'dewdrop') saved.sounds.friendOnline = 'hollowWood'
     if (v < 4 && saved.sounds.friendRequest === 'chime') saved.sounds.friendRequest = 'nightBreeze'
@@ -171,7 +202,7 @@ function load(): void {
 
 function save(): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...saved, soundDefaults: 5 }))
+    localStorage.setItem(KEY, JSON.stringify({ ...saved, soundDefaults: 6 }))
   } catch {
     // Storage blocked: the change lasts until the page is closed.
   }

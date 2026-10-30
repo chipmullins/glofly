@@ -23,7 +23,7 @@ import {
   previewSound,
   setSoundSettings,
   SOUND_FILES,
-  CALL_ROW_CHOICES,
+  ROW_CHOICES,
   stopPreview
 } from '../lib/sounds'
 import { setNotificationSettings } from '../lib/notify'
@@ -210,6 +210,7 @@ export function Segmented<T extends string>({
 
 type SoundKey =
   | 'message'
+  | 'messageSent'
   | 'constellationMessage'
   | 'friendRequest'
   | 'friendOnline'
@@ -226,6 +227,12 @@ type SoundKey =
 // from every short sound, the ringing rows from the long ones.
 const SOUND_ROWS: { key: SoundKey; label: string; desc?: string; kind: 'alert' | 'call' }[] = [
   { key: 'message', label: 'Message sound', kind: 'alert' },
+  {
+    key: 'messageSent',
+    label: 'Message sent sound',
+    desc: 'Plays when you send a message. Off unless you pick one.',
+    kind: 'alert'
+  },
   {
     key: 'constellationMessage',
     label: 'Constellation message sound',
@@ -333,8 +340,8 @@ function SoundRow({
   onChange: (value: AlertSound | CallSound) => void
   onPlay: () => void
 }): React.JSX.Element {
-  // Oct 29, 2026: the call rows offer only their new sound (and None).
-  const callRow = (CALL_ROW_CHOICES as Record<string, readonly (AlertSound | CallSound)[]>)[row.key]
+  // Oct 29–30, 2026: most rows offer only Chip's picks (and None).
+  const callRow = (ROW_CHOICES as Record<string, readonly (AlertSound | CallSound)[]>)[row.key]
   const choices = callRow ?? ALERT_CHOICES
   const id = `settings-sound-${row.key}`
   return (

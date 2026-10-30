@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Pressable } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
-import { DEFAULT_PHONE_CONSTELLATION_SOUND, PHONE_MESSAGE_SOUNDS, PHONE_RINGTONES, phoneMessageSound, phoneRingtone } from '@glofly/shared'
+import { PHONE_CONSTELLATION_SOUNDS, PHONE_MESSAGE_SOUNDS, PHONE_RINGTONES, phoneConstellationSound, phoneMessageSound, phoneRingtone } from '@glofly/shared'
 import { setPhonePref, usePhonePrefs } from '@/state/prefs'
 import { previewSound, stopPreview } from '@/push/sounds'
 import { Icon } from '@/ui/icons'
@@ -22,9 +22,9 @@ export default function SoundPicker() {
   const current = ringtone
     ? phoneRingtone(p.ringtone).id
     : night
-      ? (PHONE_MESSAGE_SOUNDS.find((s) => s.id === p.constellationSound) ?? phoneMessageSound(DEFAULT_PHONE_CONSTELLATION_SOUND)).id
+      ? phoneConstellationSound(p.constellationSound).id
       : phoneMessageSound(p.messageSound).id
-  const list = ringtone ? PHONE_RINGTONES : PHONE_MESSAGE_SOUNDS
+  const list = ringtone ? PHONE_RINGTONES : night ? PHONE_CONSTELLATION_SOUNDS : PHONE_MESSAGE_SOUNDS
 
   useEffect(() => () => stopPreview(), [])
 

@@ -38,12 +38,13 @@ const saved: Saved = {
     dndSilence: true,
     volume: 100,
     callVolume: 100,
-    message: 'lowComet',
+    message: 'mmHm',
+    messageSent: 'none',
     constellationMessage: 'skyLantern',
     friendRequest: 'nightBreeze',
     friendOnline: 'hollowWood',
-    login: 'hello',
-    logout: 'goodnight',
+    login: 'gloflyChord',
+    logout: 'goodbyeSoft',
     callConnected: 'whistleUp',
     callEnded: 'whistleDown',
     memberJoined: 'bubbleIn',
@@ -94,17 +95,48 @@ const ALERT_SOUNDS: AlertSound[] = [
   'none'
 ]
 /**
- * Oct 29, 2026: the call rows offer only Chip's picks (and None). A saved older call sound isn't
- * accepted any more, so it falls back to the new default. Keep in step with CALL_ROW_CHOICES in
+ * Oct 29–30, 2026: the call, message, message sent, login and log out rows offer only Chip's picks (and None). A saved older call sound isn't
+ * accepted any more, so it falls back to the new default. Keep in step with ROW_CHOICES in
  * the window (renderer/src/lib/sounds.ts) and apps/web/src/bridge/settings.ts.
  */
-const CALL_ROW_SOUNDS: Record<string, readonly string[]> = {
+const ROW_SOUNDS: Record<string, readonly string[]> = {
   callConnected: ['whistleUp', 'none'],
   callEnded: ['whistleDown', 'none'],
   memberJoined: ['bubbleIn', 'none'],
   memberLeft: ['bubbleOut', 'none'],
   ringtone: ['doowop', 'none'],
-  outgoing: ['humHum', 'none']
+  outgoing: ['humHum', 'none'],
+  message: [
+    'mmHm',
+    'hollowWood',
+    'nightBreeze',
+    'nudge',
+    'tapShoulder',
+    'heyHum',
+    'brightGlow',
+    'doubleNudge',
+    'callOut',
+    'lanternUp',
+    'mmHmQ',
+    'starNudge',
+    'ripple',
+    'none'
+  ],
+  login: ['gloflyChord', 'dawnHum', 'none'],
+  logout: ['goodbyeSoft', 'hushHum', 'none'],
+  messageSent: [
+    'softWhoosh',
+    'flick',
+    'lift',
+    'puff',
+    'sendOff',
+    'float',
+    'paperPlane',
+    'skip',
+    'breeze',
+    'hop',
+    'none'
+  ]
 }
 
 /**
@@ -113,9 +145,10 @@ const CALL_ROW_SOUNDS: Record<string, readonly string[]> = {
  * who had picked something else keeps it. Bumped only when defaults change.
  * 3 (0.7.0): the message sound's default became Low comet (Firefly chime before).
  * 4 (0.7.0): friend online became Hollow wood (Dewdrop before), friend request Night breeze (Firefly chime).
- * 5 (Oct 29, 2026): new call sounds; older ones aren't accepted for the call rows (CALL_ROW_SOUNDS).
+ * 5 (Oct 29, 2026): new call sounds; older ones aren't accepted for the call rows (ROW_SOUNDS).
+ * 6 (Oct 30, 2026): new message, login and log out sounds and the message sent row (ROW_SOUNDS).
  */
-const SOUND_DEFAULTS_VERSION = 5
+const SOUND_DEFAULTS_VERSION = 6
 
 /** Checks a sound setting (from the window or the saved file) before using it. */
 function soundSettingOk(key: string, value: unknown): boolean {
@@ -126,20 +159,21 @@ function soundSettingOk(key: string, value: unknown): boolean {
     case 'volume':
     case 'callVolume':
       return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100
-    case 'message':
     case 'constellationMessage':
     case 'friendRequest':
     case 'friendOnline':
+      return ALERT_SOUNDS.includes(value as AlertSound)
+    case 'message':
+    case 'messageSent':
     case 'login':
     case 'logout':
-      return ALERT_SOUNDS.includes(value as AlertSound)
     case 'callConnected':
     case 'callEnded':
     case 'memberJoined':
     case 'memberLeft':
     case 'ringtone':
     case 'outgoing':
-      return typeof value === 'string' && CALL_ROW_SOUNDS[key].includes(value)
+      return typeof value === 'string' && ROW_SOUNDS[key].includes(value)
     default:
       return false
   }
@@ -186,9 +220,6 @@ export function loadAppSettings(): void {
     if (typeof value.sounds === 'object' && value.sounds !== null) {
       for (const [k, v] of Object.entries(value.sounds)) {
         if (soundSettingOk(k, v)) (saved.sounds as Record<string, unknown>)[k] = v
-      }
-      if ((value.soundDefaultsVersion ?? 1) < 3 && saved.sounds.message === 'chime') {
-        saved.sounds.message = 'lowComet'
       }
       if ((value.soundDefaultsVersion ?? 1) < 4) {
         if (saved.sounds.friendOnline === 'dewdrop') saved.sounds.friendOnline = 'hollowWood'
