@@ -601,6 +601,52 @@ def _():
     return echo(mix([(0, vox), (.28, softbell(n('E5'), 1.8, .9), .3)]), .3, .3, 2, 1700)
 
 
+# ---- Oct 30 (2): the first Glo-fly voices sounded like "go die": no L in either word, and the soft
+# filter took the F away. These build the blends: a "g" tap into a held L for "Glo", and an audible
+# F (its hiss kept above the soft filter) into an L for "fly".
+
+
+def blend_word(first, spec, f0, dur, f1=None, style='soft', l_hold=.07, cutoff=2600, hiss=.35):
+    """A syllable with a two-consonant start: `first` ('g' or 'f') then the L already in `spec`."""
+    shift = v.STYLE[style]['shift']
+    voiced = soften(v.syllable(spec, f0, dur + l_hold, f1, style), cutoff, .02)
+    if first == 'f':
+        fr = lp(base.hp(noise(.1), 2200), 7000) * base.env(.1, .025, .05) * hiss
+        return mix([(0, fr), (.075, voiced)])
+    tap = lp(v._noise_part('g', .03, 'o', shift), 3000) * .5
+    return mix([(0, tap), (.012, voiced)])
+
+
+def glofly(n1, n2, style='soft', step=.3, d1=.22, d2=.5, cutoff=2600):
+    glo = blend_word('g', 'l o u -', n(n1), d1, None, style, cutoff=cutoff)
+    fly = blend_word('f', 'l a i -', n(n2), d2, None, style, cutoff=cutoff)
+    return mix([(0, glo), (step, fly)])
+
+
+v.CLARITY.update(trans=0.11)  # a longer L glide into each vowel (all voices on this page render with it)
+
+
+@sound('login', 'gloflyclear', 'Glo-fly (clear)', 'A soft "Glo-fly" with the G-L and F-L blends sounded out.', wet=.28)
+def _():
+    return mix([(0, pad([n('G3'), n('D4')], 1.6, .3, .7), .22), (.04, glofly('G4', 'D5'))])
+
+
+@sound('login', 'gloflyclearbright', 'Glo-fly (clear, bright)', 'A lighter, higher "Glo-fly" with a kalimba.', wet=.28)
+def _():
+    return mix([(0, glofly('C5', 'G5', 'softcute', cutoff=2900)), (.34, softkal(n('G5')), .3)])
+
+
+@sound('login', 'gloflyclearwarm', 'Glo-fly (clear, warm)', 'A low, warm "Glo-fly" over a felt chord.', wet=.3)
+def _():
+    chord = mix([(0, felt(n('D4'))), (0, felt(n('F#4')), .7), (0, felt(n('A4')), .7)])
+    return mix([(0, glofly('D4', 'A4', 'softdeep', cutoff=2400)), (.32, chord, .45)])
+
+
+@sound('login', 'gloflyslow', 'Glooo-flyyy (slow)', 'A slow, sung "Glooo-flyyy", each blend taking its time.', wet=.3)
+def _():
+    return mix([(0, pad([n('C4'), n('G4')], 2.0, .4, .8), .22), (.04, glofly('E4', 'C5', step=.42, d1=.32, d2=.62))])
+
+
 EVENTS = [
     ('message', 'New message'), ('sent', 'Message sent (new)'), ('mention', '@mention'),
     ('constellation', 'Constellation message'), ('friend', 'Friend request'), ('online', 'Friend comes online'),
