@@ -1,6 +1,11 @@
 // 0.5.0 Broadcast now: share your screen (and its sound) for any friend to drop in and watch,
 // without a call. Your broadcast runs in a LiveKit room of its own: you send, friends only watch.
-import { enterFullscreen, exitFullscreen, fullscreenElement, onFullscreenChange } from '../lib/fullscreen'
+import {
+  enterFullscreen,
+  exitFullscreen,
+  fullscreenElement,
+  onFullscreenChange
+} from '../lib/fullscreen'
 import { useEffect, useRef, useState } from 'react'
 import {
   Room,
@@ -30,7 +35,9 @@ function useMinuteClock(): number {
   return now
 }
 
-/** "Go live": a title, what to share, and whether its sound goes too. */
+const NOTIFY_KEY = 'glofly.goLive.notify'
+
+/** "Go live": a title, what to share, whether its sound goes too, and whether friends are told. */
 export function GoLiveDialog({
   onClose,
   onProblem
@@ -41,10 +48,27 @@ export function GoLiveDialog({
   const [title, setTitle] = useState('')
   // Browser only (the desktop picker has its own "Include sound").
   const [sound, setSound] = useState(true)
+  // Oct 30, 2026: pinging friends is a choice (remembered). Off: they can still find you under
+  // Who's live, they just aren't told.
+  const [notify, setNotify] = useState(() => {
+    try {
+      return localStorage.getItem(NOTIFY_KEY) !== 'off'
+    } catch {
+      return true
+    }
+  })
+  const changeNotify = (on: boolean): void => {
+    setNotify(on)
+    try {
+      localStorage.setItem(NOTIFY_KEY, on ? 'on' : 'off')
+    } catch {
+      // not remembered this time
+    }
+  }
 
   async function start(sourceId: string | null, withSound: boolean): Promise<void> {
     onClose()
-    const problem = await goLive(title.trim() || null, sourceId, withSound)
+    const problem = await goLive(title.trim() || null, sourceId, withSound, notify)
     if (problem) onProblem(problem)
   }
 
@@ -59,6 +83,17 @@ export function GoLiveDialog({
           onChange={(e) => setTitle(e.target.value)}
           autoFocus
         />
+      </label>
+      <label className="share-sound">
+        <input type="checkbox" checked={notify} onChange={(e) => changeNotify(e.target.checked)} />
+        <span>
+          Notify my friends
+          <small>
+            {notify
+              ? 'Friends get a notification that you went live.'
+              : 'No notification. Friends can still see you under Who’s live and drop in.'}
+          </small>
+        </span>
       </label>
       {isWeb && <SoundChoice support="browser" picked={null} on={sound} onChange={setSound} />}
     </div>
@@ -151,15 +186,27 @@ export function LivePanel({ onClose }: { onClose: () => void }): React.JSX.Eleme
         </p>
         <div className="live-viewers">
           <span className="live-viewers-label">
-            {viewers.length === 0 ? 'Nobody watching yet' : `${viewers.length} watching`}
+            {viewers.length === 0 ? 'Nobody watching yet' : `Watching now · ${viewers.length}`}
           </span>
-          <div className="live-viewers-faces">
-            {viewers.map((v) => (
-              <span key={v.id} title={v.displayName}>
-                <Avatar id={v.id} name={v.displayName} avatarVersion={v.avatarVersion} size={34} />
-              </span>
-            ))}
-          </div>
+          {/* Oct 30, 2026: names, not just faces */}
+          {viewers.length > 0 && (
+            <ul className="live-viewers-list">
+              {viewers.map((v) => (
+                <li key={v.id}>
+                  <Avatar
+                    id={v.id}
+                    name={v.displayName}
+                    avatarVersion={v.avatarVersion}
+                    size={30}
+                  />
+                  <span className="live-viewer-name">
+                    <EmojiText text={v.displayName} />
+                    <small>@{v.username}</small>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="confirm-actions">
           <button type="button" className="small-button small-button--quiet" onClick={onClose}>

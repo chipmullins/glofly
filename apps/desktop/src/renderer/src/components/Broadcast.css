@@ -92,6 +92,35 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+/* Oct 30, 2026: who's watching, by name */
+.live-viewers-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.live-viewers-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.live-viewer-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--glo-ink);
+}
+.live-viewer-name small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--glo-muted);
+}
 
 /* ---------- Watching ---------- */
 .bc-viewer {

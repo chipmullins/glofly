@@ -1023,6 +1023,31 @@ export default function MainScreen({
     })
   }, [user.id, refresh, refreshConversations, refreshNotices, onSessionExpired, notifyMessage])
 
+  // Oct 30, 2026: while you're live, "Mom started watching" when someone drops in.
+  const liveViewerCount =
+    myLive.status === 'live'
+      ? (social.broadcasts.find((b) => b.userId === user.id)?.viewers ?? 0)
+      : null
+  const seenViewers = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    if (liveViewerCount === null) {
+      seenViewers.current = null
+      return
+    }
+    let cancelled = false
+    void window.glofly.broadcasts.mine().then((r) => {
+      if (cancelled || !r.ok) return
+      const before = seenViewers.current
+      seenViewers.current = new Set(r.data.viewers.map((v) => v.id))
+      const fresh = before ? r.data.viewers.filter((v) => !before.has(v.id)) : []
+      if (fresh.length === 1) setToast(`${fresh[0].displayName} started watching your broadcast`)
+      else if (fresh.length > 1) setToast(`${fresh.length} friends started watching your broadcast`)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [liveViewerCount])
+
   useEffect(() => {
     if (!toast) return
     const timer = setTimeout(() => setToast(null), 6000)

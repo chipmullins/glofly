@@ -116,7 +116,7 @@ export function SocialActions({
           onClick={() => setPicking(true)}
         >
           <HangIcon />
-          Want to hang?
+          Free to hang
         </button>
       )}
       {live ? (
@@ -238,7 +238,7 @@ function HangDialog({
           <span />
           <span />
         </div>
-        <h1 id="hang-title">Want to hang?</h1>
+        <h1 id="hang-title">Free to hang?</h1>
         <p className="hang-sub">
           Friends you pick get a gentle ping that you&apos;re free for a call for the next hour,
           with a button to call you.

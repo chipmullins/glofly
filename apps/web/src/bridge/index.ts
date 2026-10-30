@@ -499,8 +499,13 @@ export function createBridge(): GloflyApi {
         )
     },
     broadcasts: {
-      start: async (title) =>
-        checkedJoin(await request<BroadcastJoin>('POST', '/broadcasts', title ? { title } : {})),
+      start: async (title, notify = true) =>
+        checkedJoin(
+          await request<BroadcastJoin>('POST', '/broadcasts', {
+            ...(title ? { title } : {}),
+            notify
+          })
+        ),
       stop: () => nothing(request('DELETE', '/broadcasts')),
       mine: () =>
         request<{ broadcast: Broadcast | null; viewers: PublicUser[] }>('GET', '/broadcasts/mine'),

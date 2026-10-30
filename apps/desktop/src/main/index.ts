@@ -838,8 +838,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('stickers:send', (event, id: unknown, chat: unknown, replyTo: unknown) =>
     fromApp(event) ? social.sendSticker(id, chat, replyTo) : invalid
   )
-  ipcMain.handle('broadcasts:start', (event, title: unknown) =>
-    fromApp(event) ? social.startBroadcast(title) : invalid
+  ipcMain.handle('broadcasts:start', (event, title: unknown, notify: unknown) =>
+    fromApp(event) ? social.startBroadcast(title, notify ?? true) : invalid
   )
   ipcMain.handle('broadcasts:stop', (event) => (fromApp(event) ? social.stopBroadcast() : invalid))
   ipcMain.handle('broadcasts:mine', (event) => (fromApp(event) ? social.myBroadcast() : invalid))

@@ -35,11 +35,12 @@ export function useMyBroadcast(): Host {
 export async function goLive(
   title: string | null,
   sourceId: string | null,
-  sound: boolean
+  sound: boolean,
+  notify = true
 ): Promise<string | null> {
   if (host.status !== 'idle') return null
   setHost({ status: 'starting' })
-  const r = await window.glofly.broadcasts.start(title)
+  const r = await window.glofly.broadcasts.start(title, notify)
   if (!r.ok) {
     setHost({ status: 'idle' })
     return r.message

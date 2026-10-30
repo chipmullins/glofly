@@ -94,7 +94,7 @@ export function SocialStrip() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 2, paddingBottom: 8, gap: 6, alignItems: 'flex-start' }} style={{ flexGrow: 0, height: hanging.length || birthdays.length ? STRIP_HEIGHT_TWO_LINES : STRIP_HEIGHT }}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={mine ? `Free to hang for ${minutesLeft(mine.until, now)} more minutes. Tap to stop` : 'Want to hang? Tell friends you are free for a call'}
+          accessibilityLabel={mine ? `Free to hang for ${minutesLeft(mine.until, now)} more minutes. Tap to stop` : 'Free to hang. Tell friends you are free for a call'}
           onPress={async () => {
             if (!mine) return setPicking(true)
             useSocial.setState({ myHang: null })
@@ -148,7 +148,7 @@ function HangSheet({ friends, onDone }: { friends: PublicUser[]; onDone: () => v
     <BottomSheet onClose={onDone}>
       <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 16, gap: 12, maxHeight: 620 }}>
         <Text display size={22} style={{ lineHeight: 30 }}>
-          Want to hang?
+          Free to hang
         </Text>
         <Text size={14} tone="muted" style={{ lineHeight: 20 }}>
           Friends you pick get a gentle ping that you're free for a call for the next hour, with a button to call you.

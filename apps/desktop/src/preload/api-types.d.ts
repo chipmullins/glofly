@@ -711,7 +711,8 @@ export type GloflyApi = {
   }
   /** 0.5.0 Broadcast now: your screen (and its sound) for any friend to drop in and watch. */
   broadcasts: {
-    start: (title: string | null) => Promise<ApiResult<BroadcastJoin>>
+    /** notify false (Oct 30, 2026): friends aren't pinged (they still see you in Who's live). */
+    start: (title: string | null, notify?: boolean) => Promise<ApiResult<BroadcastJoin>>
     stop: () => Promise<ApiResult<null>>
     mine: () => Promise<ApiResult<{ broadcast: Broadcast | null; viewers: PublicUser[] }>>
     watch: (userId: string) => Promise<ApiResult<BroadcastJoin>>

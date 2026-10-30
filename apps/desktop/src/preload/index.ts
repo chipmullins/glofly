@@ -221,7 +221,8 @@ const glofly: GloflyApi = {
       ipcRenderer.invoke('stickers:send', id, conversationId, replyToId)
   },
   broadcasts: {
-    start: (title: string | null) => ipcRenderer.invoke('broadcasts:start', title),
+    start: (title: string | null, notify?: boolean) =>
+      ipcRenderer.invoke('broadcasts:start', title, notify),
     stop: () => ipcRenderer.invoke('broadcasts:stop'),
     mine: () => ipcRenderer.invoke('broadcasts:mine'),
     watch: (userId: string) => ipcRenderer.invoke('broadcasts:watch', userId)

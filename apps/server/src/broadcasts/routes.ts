@@ -17,7 +17,8 @@ import { live, shown } from "./state";
 // your friends can drop in and watch, without a call. LiveKit carries it in a room of its own;
 // the broadcaster may send, friends may only watch.
 //
-//   POST   /broadcasts                 { title? }  go live (a pass to send)
+//   POST   /broadcasts                 { title?, notify? }  go live (a pass to send); notify: false
+//                                      (Oct 30, 2026) skips the pushes to friends (default true)
 //   DELETE /broadcasts                 stop
 //   GET    /broadcasts/mine            who's watching
 //   POST   /broadcasts/:userId/watch   a friend's pass to watch
@@ -63,6 +64,7 @@ broadcastsRouter.post("/", startLimiter, async (req, res) => {
     res.status(400).json({ error: "invalid", message: `Keep the title under ${BROADCAST_TITLE_MAX} characters.` });
     return;
   }
+  const notify = req.body?.notify !== false; // older apps don't send it: they always told friends
   const user = me(res);
   // Already live (another device, or a quick restart): keep the same room.
   let b = live.get(user.id);
@@ -73,7 +75,7 @@ broadcastsRouter.post("/", startLimiter, async (req, res) => {
   } else if (title.data !== undefined) b.title = title.data || null;
   const token = await broadcastToken(b.room, user, "host");
   const friends = await tellFriends(user.id);
-  if (fresh) {
+  if (fresh && notify) {
     for (const id of friends) inBackground(notifyFriendNews(id, user, b.title ? `is live: ${b.title}` : "is live. Tap to watch!", "soon"));
   }
   const join: BroadcastJoin = { url: LIVEKIT_URL, token, room: b.room, broadcast: shown(b) };

@@ -83,9 +83,15 @@ export async function sendSticker(
   return r.ok ? { ok: true, data: r.data.message } : r
 }
 
-export async function startBroadcast(title: unknown): Promise<ApiResult<BroadcastJoin>> {
+export async function startBroadcast(
+  title: unknown,
+  notify: unknown = true
+): Promise<ApiResult<BroadcastJoin>> {
   if (title !== null && (typeof title !== 'string' || title.length > 60)) return bad()
-  return checkedJoin(await request<BroadcastJoin>('POST', '/broadcasts', title ? { title } : {}))
+  if (typeof notify !== 'boolean') return bad()
+  return checkedJoin(
+    await request<BroadcastJoin>('POST', '/broadcasts', { ...(title ? { title } : {}), notify })
+  )
 }
 
 export const stopBroadcast = (): Promise<ApiResult<null>> => request('DELETE', '/broadcasts')
