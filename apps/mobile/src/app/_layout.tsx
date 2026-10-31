@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Stack } from 'expo-router'
+import { Stack, usePathname } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -20,7 +20,7 @@ import { prefs } from '@/lib/storage'
 import { loadPhonePrefs } from '@/state/prefs'
 import { setupWebRTC } from '@/calls/media'
 import { lockPortrait } from '@/lib/orientation'
-import { installErrorReports } from '@/lib/errorReports'
+import { installErrorReports, noteWhere } from '@/lib/errorReports'
 import { ErrorBoundary } from '@/ui/ErrorBoundary'
 
 // 0.7.3: errors nothing caught are reported (Settings → Privacy can turn it off).
@@ -42,6 +42,9 @@ export default function RootLayout() {
   })
   const status = useSession((s) => s.status)
   const { c, dark } = useTheme()
+  // Oct 31, 2026: error reports say which screen was open (they all said "app" before).
+  const pathname = usePathname()
+  useEffect(() => noteWhere((pathname || 'app').replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ':id')), [pathname])
 
   useEffect(() => {
     lockPortrait() // only the call screen turns sideways

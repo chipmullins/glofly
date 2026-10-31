@@ -15,7 +15,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode; bg: string }
     reportError(
       {
         message: e?.message ?? String(error),
-        stack: `${e?.stack ?? ''}\n${info?.componentStack ?? ''}`,
+        // Oct 31, 2026: which components first. A long JS stack used to fill the report's space
+        // and the component stack (the part that names the screen) was cut off.
+        stack: `${(info?.componentStack ?? '').trim()}\n---\n${(e?.stack ?? '').split('\n').slice(0, 12).join('\n')}`,
       },
       'screen',
     )
