@@ -42,3 +42,22 @@ nsis:
 npmRebuild: false
 # No auto-updates: rebuild and reinstall when Control changes.
 publish: null
+# Oct 31, 2026: Glofly Control for Chip's Mac (the "Control Mac build" GitHub Action, run by hand).
+# One universal app as a .dmg, signed with Glofly's Developer ID and notarized like the Glofly Mac
+# app (same repository secrets). Never published anywhere: the .dmg is only in the Action's
+# Artifacts (private repository). Like on Windows, closing the window signs out and quits.
+mac:
+  icon: build/icon.icns
+  minimumSystemVersion: '13.0' # Electron 44
+  category: public.app-category.developer-tools
+  artifactName: Glofly-Control-${version}-mac.${ext}
+  target:
+    - target: dmg
+      arch: universal
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+dmg:
+  artifactName: Glofly-Control-${version}-mac.${ext}

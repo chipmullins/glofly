@@ -1,0 +1,88 @@
+name: Control Mac build
+
+# Glofly Control for Chip's Mac (Oct 31, 2026). Started by hand only: GitHub → Actions →
+# "Control Mac build" → Run workflow. The signed, notarized Glofly-Control-<version>-mac.dmg is
+# under the run's "Artifacts" (GitHub zips it; unzip, open the .dmg, drag Glofly Control to
+# Applications). It is never uploaded anywhere else.
+#
+# Uses the same repository secrets as the Glofly Mac build (see mac-build.yml):
+#   MAC_CERTIFICATE_P12, MAC_CERTIFICATE_PASSWORD, APPLE_API_KEY_P8, APPLE_API_KEY_ID, APPLE_API_ISSUER
+# macOS minutes count 10× against the free Actions allowance; this build takes about 10 minutes.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: control-mac-build
+  cancel-in-progress: true
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    timeout-minutes: 60 # notarizing can take a while
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Check the build will use the live server
+        run: |
+          test ! -e apps/control/.env.production.local
+          test ! -e apps/control/.env.local
+          grep -q '^MAIN_VITE_SERVER_URL=https://api.glofly.app$' apps/control/.env.production
+
+      - name: Signing set up?
+        env:
+          P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          if [ -z "$P12" ] || [ -z "$P8" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER" ]; then
+            echo "::error::The Mac signing secrets aren't all set (see the top of mac-build.yml)."
+            exit 1
+          fi
+
+      - name: Typecheck and build
+        run: npm run build -w apps/control
+
+      - name: Confirm the live server address is baked in
+        run: grep -q 'https://api.glofly.app' apps/control/out/main/index.js
+
+      - name: Package, sign and notarize
+        working-directory: apps/control
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          export APPLE_API_KEY="$RUNNER_TEMP/notary-key.p8"
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY"
+          chmod 600 "$APPLE_API_KEY"
+          npx electron-builder --mac --universal --publish never
+          rm -f "$APPLE_API_KEY"
+
+      - name: Check the Developer ID signature and notarization
+        working-directory: apps/control/dist
+        run: |
+          codesign -dvv "mac-universal/Glofly Control.app" 2>&1 | tee sig.txt
+          grep -q 'Authority=Developer ID Application' sig.txt
+          grep -q 'flags=.*runtime' sig.txt
+          retry() { for i in 1 2 3 4; do "$@" && return 0; echo "Attempt $i failed; trying again in 20 s"; sleep 20; done; return 1; }
+          retry xcrun stapler validate "mac-universal/Glofly Control.app"
+          retry spctl --assess --type execute --verbose=4 "mac-universal/Glofly Control.app"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Glofly-Control-mac
+          path: apps/control/dist/Glofly-Control-*-mac.dmg
+          if-no-files-found: error
+          retention-days: 14
