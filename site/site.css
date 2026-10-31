@@ -625,3 +625,5 @@ footer .foot-brand img { width: 28px; height: 28px; }
 .sec-row .state.off { color: var(--muted); background: var(--sand); }
 .sec-mail { margin: 0 22px 20px; padding: 14px 16px; border-radius: 14px; background: var(--sand); font-size: 13px; color: var(--muted); }
 .sec-mail b { color: var(--ink); }
+/* Oct 31, 2026: the iPhone beta link inside the "coming soon" pill */
+.pill a { color: var(--glow-pale); text-decoration: underline; text-underline-offset: 2px; }
