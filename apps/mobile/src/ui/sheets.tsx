@@ -32,7 +32,7 @@ export function openReport(target: ReportTarget): Promise<boolean> {
 
 /** Drawn by the newest host on screen (see useTopHost in dialogs.tsx). */
 export function SheetHost() {
-  const top = useTopHost()
+  const top = useTopHost('sheets')
   return top ? <SheetLayer /> : null
 }
 

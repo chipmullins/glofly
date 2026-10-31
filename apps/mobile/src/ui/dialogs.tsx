@@ -143,21 +143,24 @@ export const useOverlayOpen = (): boolean => useOverlays((s) => s.stack.some((o)
 // dialog drawn by the app's root went underneath them on iPhone: invisible, but it still took every
 // touch. So those screens mount their own DialogHost / SheetHost, and only the newest host on
 // screen draws (the root one again once they close).
-const useHosts = create<{ hosts: number[] }>(() => ({ hosts: [] }))
+// Each kind of host (dialogs here, the bigger sheets in sheets.tsx) has its own list: with one
+// shared list only the very last host mounted drew anything, so the Report and emoji sheets never
+// showed (Oct 31, 2026).
+const useHosts = create<{ hosts: Record<string, number[]> }>(() => ({ hosts: {} }))
 let nextHost = 1
 
-/** True for the newest mounted host: the one that should draw dialogs and sheets right now. */
-export function useTopHost(): boolean {
+/** True for the newest mounted host of this kind: the one that should draw right now. */
+export function useTopHost(kind: 'dialogs' | 'sheets'): boolean {
   const [me] = useState(() => nextHost++)
   useEffect(() => {
-    useHosts.setState((s) => ({ hosts: [...s.hosts, me] }))
-    return () => useHosts.setState((s) => ({ hosts: s.hosts.filter((h) => h !== me) }))
-  }, [me])
-  return useHosts((s) => s.hosts[s.hosts.length - 1] === me)
+    useHosts.setState((s) => ({ hosts: { ...s.hosts, [kind]: [...(s.hosts[kind] ?? []), me] } }))
+    return () => useHosts.setState((s) => ({ hosts: { ...s.hosts, [kind]: (s.hosts[kind] ?? []).filter((h) => h !== me) } }))
+  }, [me, kind])
+  return useHosts((s) => s.hosts[kind]?.at(-1) === me)
 }
 
 export function DialogHost() {
-  const top = useTopHost()
+  const top = useTopHost('dialogs')
   return top ? <DialogLayer /> : null
 }
 
