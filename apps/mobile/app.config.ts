@@ -41,7 +41,7 @@ const config: ExpoConfig = {
   name: 'Glofly',
   slug: 'glofly',
   scheme: 'glofly',
-  version: '1.1.0', // the store version (1.0.0 went to the App Store Oct 15; 1.1.0 = Glofly 0.8.1)
+  version: '1.1.1', // the store version (1.0.0 went to the App Store Oct 15; 1.1.0 = Glofly 0.8.1, in review Oct 31; 1.1.1 = 0.8.7's phone build: CallKit fix, new native sounds)
   runtimeVersion: RUNTIME_VERSION,
   updates: {
     url: `https://u.expo.dev/${EXPO_PROJECT_ID}`,
