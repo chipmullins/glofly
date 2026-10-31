@@ -98,8 +98,19 @@ export async function afterOverlaysClose(): Promise<void> {
   if (wait > 0) await new Promise((r) => setTimeout(r, wait))
 }
 
+/**
+ * Oct 31, 2026 (Chip: Block on a profile froze the iPhone app): answers arrive only once the dialog
+ * or sheet has finished sliding away. What comes next is often closing a screen (Block closes the
+ * profile) or opening another dialog, and on an iPhone doing that while our Modal is still
+ * dismissing leaves an invisible window over everything: the app looks frozen.
+ */
+function whenGone<T>(resolve: (value: T) => void): (value: T) => void {
+  if (Platform.OS !== 'ios') return resolve
+  return (value) => void afterOverlaysClose().then(() => resolve(value))
+}
+
 export function confirm(options: ConfirmOptions): Promise<boolean> {
-  return new Promise((resolve) => push({ kind: 'confirm', options, resolve }))
+  return new Promise((resolve) => push({ kind: 'confirm', options, resolve: whenGone(resolve) }))
 }
 
 /** A message with just an OK button. */
@@ -109,7 +120,7 @@ export function inform(title: string, message?: string): Promise<void> {
 
 /** A bottom sheet of choices; resolves to the picked key, or null if dismissed. */
 export function chooseFrom(items: SheetItem[], title?: string, header?: ReactNode): Promise<string | null> {
-  return new Promise((resolve) => push({ kind: 'sheet', items, title, header, resolve }))
+  return new Promise((resolve) => push({ kind: 'sheet', items, title, header, resolve: whenGone(resolve) }))
 }
 
 /** 0.8.0 Esc on a keyboard: closes the dialog or sheet on top, as if dismissed. */
