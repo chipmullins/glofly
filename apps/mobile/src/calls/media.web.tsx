@@ -10,6 +10,10 @@ export async function stopCallAudio(): Promise<void> {}
 export async function startWatchAudio(): Promise<void> {}
 export async function stopWatchAudio(): Promise<void> {}
 export function setWatchDucking(_watching: boolean): void {}
+export async function setWatchMixing(_on: boolean): Promise<void> {}
+export async function kickAudioAfterVideo(): Promise<boolean> {
+  return false
+}
 export function audioEngineInfo(): Record<string, string> {
   return {}
 }

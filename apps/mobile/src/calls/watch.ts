@@ -5,7 +5,7 @@ import { onLive } from '@/api/realtime'
 import { useStore } from '@/state/store'
 import { inform } from '@/ui/dialogs'
 import { useCall } from './controller'
-import { setWatchDucking } from './media'
+import { setWatchDucking, setWatchMixing } from './media'
 
 // Watch Together (0.5.0) on phones: what the call you're in is watching, kept up to date from
 // the server, and the buttons that change it (same rules as the desktop app: every button goes
@@ -68,6 +68,11 @@ export function startWatch() {
   useCall.subscribe((s) => followWatch(s.call?.id ?? null))
   // iPhone: the call's echo canceller turns the video's sound down; less so while a video is on.
   useWatchStore.subscribe((s) => setWatchDucking(!!s.watch))
+  // iPhone (Oct 31): the video's own audio session silenced the call both ways; while a video is
+  // on, the call's session mixes with it (media.tsx setWatchMixing).
+  useWatchStore.subscribe((s, prev) => {
+    if (!!s.watch !== !!prev.watch) void setWatchMixing(!!s.watch)
+  })
   // Back online: catch up (the server may have restarted and forgotten the video).
   useStore.subscribe((s, prev) => {
     if (s.connected && !prev.connected) void refresh()

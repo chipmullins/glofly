@@ -49,16 +49,9 @@ export async function startCallAudio(video: boolean): Promise<void> {
     // Oct 29: no longer "mixWithOthers". A call is the main audio (like FaceTime: other apps'
     // sound pauses), and a mixable session is one iOS can decline to switch on for a CallKit call
     // while another app holds the audio (TikTok): silent both ways.
-    const base: AppleAudioCategoryOption[] = ['allowBluetooth', 'allowBluetoothA2DP', 'allowAirPlay']
-    const options: AppleAudioCategoryOption[] = video ? [...base, 'defaultToSpeaker'] : base
-    const duplex: AppleAudioConfiguration = { audioCategory: 'playAndRecord', audioCategoryOptions: options, audioMode: video ? 'videoChat' : 'voiceChat' }
+    callVideo = video
     inCallAudio = true
-    setupIOSAudioManagement(video, {
-      recording: duplex,
-      recordingWithoutVoiceProcessing: { ...duplex, audioMode: 'default' },
-      playout: duplex,
-      deactivateOnStop: true,
-    })
+    setupIOSAudioManagement(video, callPolicy(video, watchMixing))
     await AudioDeviceModule.setRecordingAlwaysPreparedMode(true).catch(() => {})
     // Builds before Oct 13 don't have CallSpeaker: video still starts on the speaker (the policy's
     // defaultToSpeaker) and voice on the earpiece, as before.
@@ -73,6 +66,58 @@ export async function startCallAudio(video: boolean): Promise<void> {
     ios: { defaultOutput: video ? 'speaker' : 'earpiece' },
   })
   await AudioSession.startAudioSession()
+}
+
+/**
+ * The call's iPhone audio policy. `mix` (only while Watch Together is on): the session may mix
+ * with other audio, see setWatchMixing.
+ */
+function callConfig(video: boolean, mix: boolean): AppleAudioConfiguration {
+  const base: AppleAudioCategoryOption[] = ['allowBluetooth', 'allowBluetoothA2DP', 'allowAirPlay']
+  if (mix) base.unshift('mixWithOthers')
+  const options: AppleAudioCategoryOption[] = video ? [...base, 'defaultToSpeaker'] : base
+  return { audioCategory: 'playAndRecord', audioCategoryOptions: options, audioMode: video ? 'videoChat' : 'voiceChat' }
+}
+function callPolicy(video: boolean, mix: boolean) {
+  const duplex = callConfig(video, mix)
+  return { recording: duplex, recordingWithoutVoiceProcessing: { ...duplex, audioMode: 'default' as const }, playout: duplex, deactivateOnStop: true }
+}
+let callVideo = false
+let watchMixing = false
+
+// ---- Watch Together on iPhone (Oct 31) ----
+// Report: Mac ↔ iPhone video call with Watch Together on: neither could hear the other (even with
+// the video paused) until Watch Together stopped. The shared video plays in a web view, and WebKit
+// switches on an audio session of its own for it (playback). Since Oct 29 the call's session is no
+// longer mixable (CallKit fix above), and a non-mixable session is interrupted by any other
+// non-mixable one starting: iOS stopped the call's audio engine (mic and speaker) and only gave it
+// back when the web view went away. Watch Together worked before Oct 29, when calls were mixable.
+// So while a video is on, the call's session is mixable again (applied right away, not only on the
+// engine's next start), and back to not mixable when the video stops. Lock-screen answers are
+// unaffected: they happen before any Watch Together.
+
+/** Watch Together started (true) or stopped (false) in the call you're in. */
+export async function setWatchMixing(on: boolean): Promise<void> {
+  if (Platform.OS !== 'ios' || watchMixing === on) return
+  watchMixing = on
+  if (!inCallAudio) return
+  setupIOSAudioManagement(callVideo, callPolicy(callVideo, on))
+  // The policy above is only used when the engine next starts or changes shape; the call is
+  // already running, so change the live session's options now too.
+  await AudioSession.setAppleAudioConfiguration(callConfig(callVideo, on)).catch(() => {})
+}
+
+/**
+ * Safety net while a Watch Together video is on: if the call's audio engine stopped playing anyway
+ * (iOS interrupted it), restart it. Returns whether it restarted.
+ */
+export async function kickAudioAfterVideo(): Promise<boolean> {
+  if (Platform.OS !== 'ios' || !inCallAudio || heldForCallKit) return false
+  if (audioEnginePlaying() !== false) return false
+  await AudioSession.setAppleAudioConfiguration(callConfig(callVideo, watchMixing)).catch(() => {})
+  await AudioDeviceModule.setEngineAvailability(AudioEngineAvailability.none).catch(() => {})
+  await AudioDeviceModule.setEngineAvailability(AudioEngineAvailability.default).catch(() => {})
+  return true
 }
 
 // ---- iPhone lock-screen calls (CallKit) ----

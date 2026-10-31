@@ -4,6 +4,8 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import type { PlayerCommand, WatchState } from '@glofly/shared'
 import { SERVER_URL } from '@/lib/config'
 import { usePlayerSync, type PlayerState } from './watchSync'
+import { diag } from './controller'
+import { kickAudioAfterVideo } from './media'
 
 // The shared video on a phone: the Glofly server's player page (/watch/player) in a web view.
 // The page can only show the YouTube video: it may not open anything else (links go to the
@@ -20,6 +22,16 @@ export function WatchView({ watch, style, unmute, onState }: { watch: WatchState
   }
   const { state, onMessage } = usePlayerSync(watch, send, unmute)
   useEffect(() => onState(state), [state, onState])
+  // iPhone safety net (Oct 31): a moment after the video starts, pauses or catches up, check the
+  // call's sound is still going (iOS can stop it when the web view's video takes the audio).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void kickAudioAfterVideo().then((kicked) => {
+        if (kicked) diag(`watch together: call audio had stopped (video ${state.status}); engine restarted`)
+      })
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [state.status])
   return (
     <View style={[{ backgroundColor: '#000', overflow: 'hidden' }, style]}>
       <WebView
