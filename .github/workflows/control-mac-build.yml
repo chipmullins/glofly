@@ -1,7 +1,7 @@
 name: Control Mac build
 
-# Glofly Control for Chip's Mac (Oct 31, 2026). Started by hand only: GitHub → Actions →
-# "Control Mac build" → Run workflow. The signed, notarized Glofly-Control-<version>-mac.dmg is
+# Glofly Control for Chip's Mac (Oct 31, 2026). Started by hand: GitHub → Actions →
+# "Control Mac build" → Run workflow (or push the ci/control-mac branch, see below). The signed, notarized Glofly-Control-<version>-mac.dmg is
 # under the run's "Artifacts" (GitHub zips it; unzip, open the .dmg, drag Glofly Control to
 # Applications). It is never uploaded anywhere else.
 #
@@ -11,6 +11,10 @@ name: Control Mac build
 
 on:
   workflow_dispatch:
+  # A hand-run Action only shows up once this file is on main; until then (and any time), pushing a
+  # branch named ci/control-mac starts it too. Delete the branch afterwards.
+  push:
+    branches: ['ci/control-mac']
 
 concurrency:
   group: control-mac-build
