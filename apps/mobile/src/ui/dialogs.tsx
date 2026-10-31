@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { riseIn } from './motion'
@@ -138,7 +138,30 @@ export function dismissTopOverlay(): boolean {
 /** A dialog or sheet of ours is open. */
 export const useOverlayOpen = (): boolean => useOverlays((s) => s.stack.some((o) => !o.closing))
 
+// Oct 31, 2026 (Chip: Block / Remove friend / Report on a profile froze the iPhone app): the profile
+// card and the Constellations side are see-through screens laid OVER the app (transparentModal). A
+// dialog drawn by the app's root went underneath them on iPhone: invisible, but it still took every
+// touch. So those screens mount their own DialogHost / SheetHost, and only the newest host on
+// screen draws (the root one again once they close).
+const useHosts = create<{ hosts: number[] }>(() => ({ hosts: [] }))
+let nextHost = 1
+
+/** True for the newest mounted host: the one that should draw dialogs and sheets right now. */
+export function useTopHost(): boolean {
+  const [me] = useState(() => nextHost++)
+  useEffect(() => {
+    useHosts.setState((s) => ({ hosts: [...s.hosts, me] }))
+    return () => useHosts.setState((s) => ({ hosts: s.hosts.filter((h) => h !== me) }))
+  }, [me])
+  return useHosts((s) => s.hosts[s.hosts.length - 1] === me)
+}
+
 export function DialogHost() {
+  const top = useTopHost()
+  return top ? <DialogLayer /> : null
+}
+
+function DialogLayer() {
   const stack = useOverlays((s) => s.stack)
   const open = stack.filter((o) => !o.closing)
   const top = open[open.length - 1]

@@ -14,6 +14,8 @@ import { NebulaSheetHost } from '@/constellations/nebulaActions'
 import { MemberSheetHost } from '@/constellations/Members'
 import { AskTextHost } from '@/constellations/ask'
 import { N } from '@/constellations/ui'
+import { DialogHost } from '@/ui/dialogs'
+import { SheetHost } from '@/ui/sheets'
 
 // Glofly 2.0 on phones: the night side. Everything inside is drawn in the night colors (dark in
 // every theme). The main stack shows it over Glofly home (transparent), so the trip home can slide
@@ -78,6 +80,9 @@ export default function NightLayout() {
         <AskTextHost />
         <ContextMenuHost />
         <NightToast />
+        {/* The night side lies over the app (transparentModal): Glofly's dialogs draw from here on iPhone. */}
+        <SheetHost />
+        <DialogHost />
       </Animated.View>
     </ThemeOverride>
   )

@@ -15,10 +15,10 @@ import { block, removeFriend } from '@/lib/friendActions'
 import { longDate } from '@/lib/format'
 import { startCallWith } from '@/calls/controller'
 import { Avatar } from '@/ui/Avatar'
-import { SHEET_MAX_WIDTH, inform } from '@/ui/dialogs'
+import { DialogHost, SHEET_MAX_WIDTH, inform } from '@/ui/dialogs'
 import { Icon, type IconName } from '@/ui/icons'
 import { Button, Field, IconButton, Spinner, Switch, Text } from '@/ui/kit'
-import { openReport } from '@/ui/sheets'
+import { SheetHost, openReport } from '@/ui/sheets'
 import { useTheme } from '@/ui/theme'
 
 // A person's profile card (from the design): photo, name, status, what they're playing,
@@ -246,6 +246,9 @@ export default function ProfileCard() {
         )}
         <IconButton name="close" label="Close" onPress={close} color={c.ink} style={{ position: 'absolute', top: 8, right: 8 }} />
       </View>
+      {/* This card lies over the app (transparentModal): its dialogs must be drawn from here on iPhone. */}
+      <SheetHost />
+      <DialogHost />
     </View>
   )
 }

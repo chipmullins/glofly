@@ -6,7 +6,7 @@ import type { ReportReason } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { pickerGroups, recentEmoji, searchEmoji, noteEmojiUsed, type PickerEmoji } from '@/lib/emoji'
 import { SUPPORT_EMAIL } from '@/lib/config'
-import { BottomSheet } from './dialogs'
+import { BottomSheet, useTopHost } from './dialogs'
 import { Icon } from './icons'
 import { Button, Checkbox, Notice, Text, webNoOutline } from './kit'
 import { font, useTheme } from './theme'
@@ -30,7 +30,13 @@ export function openReport(target: ReportTarget): Promise<boolean> {
   return new Promise((resolve) => useSheets.setState({ sheet: { kind: 'report', target, resolve } }))
 }
 
+/** Drawn by the newest host on screen (see useTopHost in dialogs.tsx). */
 export function SheetHost() {
+  const top = useTopHost()
+  return top ? <SheetLayer /> : null
+}
+
+function SheetLayer() {
   const sheet = useSheets((s) => s.sheet)
   if (!sheet) return null
   const close = () => useSheets.setState({ sheet: null })
