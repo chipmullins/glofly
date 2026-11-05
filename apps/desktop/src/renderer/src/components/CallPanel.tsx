@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { enterFullscreen, exitFullscreen, fullscreenElement, onFullscreenChange } from '../lib/fullscreen'
+import {
+  enterFullscreen,
+  exitFullscreen,
+  fullscreenElement,
+  onFullscreenChange
+} from '../lib/fullscreen'
 import { Track, TrackEvent, type Participant, type VideoTrack } from 'livekit-client'
 import type {
   Call,
@@ -77,6 +82,7 @@ export function TrackVideo({
   track,
   mirror = false,
   fit = 'auto',
+  glow,
   onShape
 }: {
   track: VideoTrack
@@ -84,10 +90,24 @@ export function TrackVideo({
   mirror?: boolean
   /** 'auto' (cameras): fill the box unless that would crop a lot, e.g. an upright phone in a wide tile */
   fit?: VideoFit | 'auto'
+  /**
+   * Cameras shown whole (an upright phone in a wide tile): fill the bars with a blurred, darker
+   * copy of the same picture instead of black. On by default for 'auto'; never for screens.
+   */
+  glow?: boolean
   /** The video's own width and height, when it starts and whenever it changes */
   onShape?: (w: number, h: number) => void
 }): React.JSX.Element {
   const ref = useRef<HTMLVideoElement>(null)
+  const glowRef = useRef<HTMLVideoElement | null>(null)
+  // The fill mounts and unmounts as the fit changes (turning a phone): feed it whenever it appears.
+  const glowEl = useCallback(
+    (g: HTMLVideoElement | null) => {
+      glowRef.current = g
+      if (g && track.mediaStreamTrack) g.srcObject = new MediaStream([track.mediaStreamTrack])
+    },
+    [track]
+  )
   const shapeRef = useRef(onShape)
   const [autoFit, setAutoFit] = useState<VideoFit>('cover')
   const [back, setBack] = useState(() => isBackCamera(track.mediaStreamTrack))
@@ -105,6 +125,13 @@ export function TrackVideo({
     // Switching cameras (Settings, or a tablet's front/back) keeps the track but swaps what's in it.
     const checkFacing = (): void => setBack(isBackCamera(track.mediaStreamTrack))
     checkFacing()
+    // The blurred fill plays the same camera without track.attach, so LiveKit's adaptive quality
+    // only goes by the real video element (the fill is blurred: its size doesn't matter).
+    const feedGlow = (): void => {
+      const g = glowRef.current
+      if (g && track.mediaStreamTrack) g.srcObject = new MediaStream([track.mediaStreamTrack])
+    }
+    feedGlow()
     const report = (): void => {
       if (el.videoWidth > 0 && el.videoHeight > 0) shapeRef.current?.(el.videoWidth, el.videoHeight)
       refit()
@@ -112,27 +139,47 @@ export function TrackVideo({
     }
     el.addEventListener('loadedmetadata', report)
     el.addEventListener('resize', report)
-    track.on(TrackEvent.Restarted, checkFacing)
+    const restarted = (): void => {
+      checkFacing()
+      feedGlow()
+    }
+    track.on(TrackEvent.Restarted, restarted)
     // The box changes too: side by side vs full frame, full screen, the window resized.
     const boxWatch = new ResizeObserver(refit)
     boxWatch.observe(el)
     return () => {
       el.removeEventListener('loadedmetadata', report)
       el.removeEventListener('resize', report)
-      track.off(TrackEvent.Restarted, checkFacing)
+      track.off(TrackEvent.Restarted, restarted)
       boxWatch.disconnect()
       track.detach(el)
+      if (glowRef.current) glowRef.current.srcObject = null
     }
   }, [track])
   const shown = fit === 'auto' ? autoFit : fit
+  const glowing = (glow ?? fit === 'auto') && shown === 'contain'
+  const flip = mirror && !back ? ' call-video--mirror' : ''
   return (
-    <video
-      ref={ref}
-      className={`call-video call-video--${shown}${mirror && !back ? ' call-video--mirror' : ''}`}
-      autoPlay
-      playsInline
-      muted
-    />
+    <>
+      {/* Mounted only while needed: a hidden blur still costs a decoder and GPU time */}
+      {glowing && (
+        <video
+          ref={glowEl}
+          className={`call-video-glow${flip}`}
+          aria-hidden="true"
+          autoPlay
+          playsInline
+          muted
+        />
+      )}
+      <video
+        ref={ref}
+        className={`call-video call-video--${shown}${glowing ? ' call-video--glowing' : ''}${flip}`}
+        autoPlay
+        playsInline
+        muted
+      />
+    </>
   )
 }
 
@@ -257,14 +304,24 @@ function Tile({
   className?: string
 }): React.JSX.Element {
   const { person, label, camera, mirror, speaking, ringing, status } = tile
+  // The camera's own shape, for layouts that size the tile to it (side by side: --cam in the CSS).
+  // Kept between 9:16 and 16:9 so a strange camera can't make a sliver. Only used while a camera
+  // is on (a new camera reports its own shape as soon as it plays).
+  const [cam, setCam] = useState<number | null>(null)
+  const onShape = useCallback((w: number, h: number) => {
+    const r = Math.min(16 / 9, Math.max(9 / 16, Math.round((w / h) * 1000) / 1000))
+    setCam((old) => (old === r ? old : r))
+  }, [])
   return (
     <div
+      style={camera && cam ? ({ '--cam': cam } as React.CSSProperties) : undefined}
       className={[
         'call-tile',
         tile.me && 'call-tile--me',
         speaking && 'call-tile--speaking',
         speaking && !tile.muted && 'tile-talking',
         actions?.pin?.pinned && 'call-tile--pinned',
+        camera && cam !== null && cam < 1 && 'call-tile--upright',
         className
       ]
         .filter(Boolean)
@@ -289,7 +346,13 @@ function Tile({
       }
     >
       {camera ? (
-        <TrackVideo track={camera} mirror={mirror} fit={tile.me && isTouch ? 'contain' : 'auto'} />
+        <TrackVideo
+          track={camera}
+          mirror={mirror}
+          fit={tile.me && isTouch ? 'contain' : 'auto'}
+          glow
+          onShape={onShape}
+        />
       ) : (
         <>
           <TileGlow id={person.id} avatarVersion={person.avatarVersion} mine={tile.me} />

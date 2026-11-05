@@ -280,8 +280,22 @@
 }
 .call-media--side > .call-tile {
   flex: none;
-  width: min(calc((100cqw - 12px) / 2), calc(100cqh * 16 / 9));
-  aspect-ratio: 16 / 9;
+  /* --cam: the camera's own shape (an upright phone gets a tall tile, not bars); 16:9 otherwise */
+  width: min(calc((100cqw - 12px) / 2), calc(100cqh * var(--cam, 16 / 9)));
+  aspect-ratio: var(--cam, 16 / 9);
+  transition:
+    width 0.25s ease,
+    box-shadow 0.15s;
+}
+/* Someone's phone is upright: use the area's full height (a 32:9 strip would make them tiny) */
+.call-media--side:has(> .call-tile--upright) {
+  aspect-ratio: auto;
+  height: var(--area-h);
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-media--side > .call-tile {
+    transition: box-shadow 0.15s;
+  }
 }
 /* Groups: everyone in a grid; three rows show, the rest scroll */
 .call-media--grid {
@@ -854,6 +868,30 @@
 }
 .call-video--mirror {
   transform: scaleX(-1);
+}
+/* A camera shown whole (an upright phone in a wide tile): the bars beside it are a blurred,
+   darker copy of the same picture instead of black (screens never get this). */
+.call-video-glow {
+  position: absolute;
+  inset: -12%;
+  width: 124%;
+  height: 124%;
+  object-fit: cover;
+  filter: blur(28px) saturate(1.1) brightness(0.55);
+  pointer-events: none;
+  /* its own layer: the talking ring repaints the tile, never this blur */
+  will-change: transform;
+  transform: translateZ(0);
+}
+.call-video-glow.call-video--mirror {
+  transform: translateZ(0) scaleX(-1);
+}
+.call-video--glowing {
+  background: transparent;
+}
+.call-tile--small .call-video-glow,
+.call-pip .call-video-glow {
+  filter: blur(16px) saturate(1.1) brightness(0.55);
 }
 
 .call-tag {
