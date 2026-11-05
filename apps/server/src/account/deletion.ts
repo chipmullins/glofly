@@ -1,6 +1,12 @@
 import { and, eq, inArray, isNotNull, lt, ne } from "drizzle-orm";
 import { db } from "../db";
-import { attachments, conversationMembers, conversations, sessions, users } from "../db/schema";
+import {
+  attachments,
+  conversationMembers,
+  conversations,
+  sessions,
+  users,
+} from "../db/schema";
 import { chatPartnersOf } from "../friends/routes";
 import { announcePresence, friendIdsOf } from "../presence";
 import { disconnectSessions, emitToUser } from "../realtime";
@@ -9,6 +15,12 @@ import { removeGroupPhoto } from "../messages/routes";
 import { storage } from "../storage";
 import { constellationsOnAccountRemoval } from "../constellations/routes";
 import { endCallsFor } from "../calls/service";
+import { sendInBackground } from "../email/send";
+import {
+  deletionCancelledEmail,
+  deletionCompletedEmail,
+  deletionScheduledEmail,
+} from "../email/templates";
 
 // Deleting an account is a two-step thing, like the design says: "You'll have 30 days to
 // change your mind." The account is hidden right away and every device is signed out;
@@ -16,21 +28,55 @@ import { endCallsFor } from "../calls/service";
 
 export const DELETION_GRACE_DAYS = 30;
 
+// Nov 5, 2026: emails at each step (Apple asks that people hear when a deletion is done): when
+// it's set, if it's restored, and when the account is removed for good.
+async function personOf(userId: string) {
+  const [u] = await db
+    .select({
+      email: users.email,
+      displayName: users.displayName,
+      username: users.username,
+    })
+    .from(users)
+    .where(eq(users.id, userId));
+  return u ?? null;
+}
+
 /** Tells everyone connected to this person to refresh, so they disappear (or reappear). */
-async function tellFriendsAndChats(userId: string, friends: string[], partners: string[]) {
+async function tellFriendsAndChats(
+  userId: string,
+  friends: string[],
+  partners: string[],
+) {
   for (const id of friends) emitToUser(id, "friends:changed", {});
   for (const id of partners) emitToUser(id, "conversations:changed", {});
 }
 
 /** Hides the account, signs out every device, and sets the date it will be removed. */
-export async function scheduleDeletion(userId: string): Promise<Date> {
-  const deleteAfter = new Date(Date.now() + DELETION_GRACE_DAYS * 24 * 60 * 60 * 1000);
+export async function scheduleDeletion(
+  userId: string,
+  { email = true }: { email?: boolean } = {},
+): Promise<Date> {
+  const deleteAfter = new Date(
+    Date.now() + DELETION_GRACE_DAYS * 24 * 60 * 60 * 1000,
+  );
   await db.update(users).set({ deleteAfter }).where(eq(users.id, userId));
+  if (email) {
+    const person = await personOf(userId);
+    if (person)
+      sendInBackground(
+        deletionScheduledEmail(person, deleteAfter, DELETION_GRACE_DAYS),
+      );
+  }
   await db.delete(sessions).where(eq(sessions.userId, userId));
   await disconnectSessions(userId);
   await endCallsFor(userId);
   await announcePresence(userId, emitToUser, true);
-  await tellFriendsAndChats(userId, await friendIdsOf(userId), await chatPartnersOf(userId));
+  await tellFriendsAndChats(
+    userId,
+    await friendIdsOf(userId),
+    await chatPartnersOf(userId),
+  );
   return deleteAfter;
 }
 
@@ -39,15 +85,25 @@ export async function scheduleDeletion(userId: string): Promise<Date> {
  * hides them first, exactly like scheduling, then removes everything.
  */
 export async function deleteNow(userId: string): Promise<void> {
-  await scheduleDeletion(userId);
-  await db.update(users).set({ deleteAfter: new Date(Date.now() - 1000) }).where(eq(users.id, userId));
+  // No "you have 30 days" email: the "deleted" one follows straight away.
+  await scheduleDeletion(userId, { email: false });
+  await db
+    .update(users)
+    .set({ deleteAfter: new Date(Date.now() - 1000) })
+    .where(eq(users.id, userId));
   await purgeDeletedAccounts(userId);
 }
 
 /** Changed their mind: the account comes back exactly as it was. */
 export async function cancelDeletion(userId: string): Promise<void> {
   await db.update(users).set({ deleteAfter: null }).where(eq(users.id, userId));
-  await tellFriendsAndChats(userId, await friendIdsOf(userId), await chatPartnersOf(userId));
+  const person = await personOf(userId);
+  if (person) sendInBackground(deletionCancelledEmail(person));
+  await tellFriendsAndChats(
+    userId,
+    await friendIdsOf(userId),
+    await chatPartnersOf(userId),
+  );
 }
 
 /**
@@ -56,7 +112,13 @@ export async function cancelDeletion(userId: string): Promise<void> {
  */
 export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
   const due = await db
-    .select({ id: users.id, avatarVersion: users.avatarVersion })
+    .select({
+      id: users.id,
+      avatarVersion: users.avatarVersion,
+      email: users.email,
+      displayName: users.displayName,
+      username: users.username,
+    })
     .from(users)
     .where(
       and(
@@ -76,8 +138,16 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
     const dms = await db
       .select({ id: conversations.id })
       .from(conversations)
-      .innerJoin(conversationMembers, eq(conversationMembers.conversationId, conversations.id))
-      .where(and(eq(conversationMembers.userId, user.id), isNotNull(conversations.dmKey)));
+      .innerJoin(
+        conversationMembers,
+        eq(conversationMembers.conversationId, conversations.id),
+      )
+      .where(
+        and(
+          eq(conversationMembers.userId, user.id),
+          isNotNull(conversations.dmKey),
+        ),
+      );
     const dmIds = dms.map((c) => c.id);
     const groupPhotos: { groupId: string; version: string }[] = [];
     const files = dmIds.length
@@ -94,32 +164,59 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
     const groups = await db
       .select({ id: conversations.id })
       .from(conversations)
-      .innerJoin(conversationMembers, eq(conversationMembers.conversationId, conversations.id))
-      .where(and(eq(conversationMembers.userId, user.id), eq(conversations.kind, "group")));
+      .innerJoin(
+        conversationMembers,
+        eq(conversationMembers.conversationId, conversations.id),
+      )
+      .where(
+        and(
+          eq(conversationMembers.userId, user.id),
+          eq(conversations.kind, "group"),
+        ),
+      );
     const groupIds = groups.map((g) => g.id);
     // Their messages in groups go with the account, so their photos and files do too.
     if (groupIds.length) {
       files.push(
         ...(await db
-          .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
+          .select({
+            id: attachments.id,
+            conversationId: attachments.conversationId,
+            kind: attachments.kind,
+          })
           .from(attachments)
-          .where(and(inArray(attachments.conversationId, groupIds), eq(attachments.uploaderId, user.id)))),
+          .where(
+            and(
+              inArray(attachments.conversationId, groupIds),
+              eq(attachments.uploaderId, user.id),
+            ),
+          )),
       );
     }
 
     await db.transaction(async (tx) => {
-      if (dmIds.length) await tx.delete(conversations).where(inArray(conversations.id, dmIds));
+      if (dmIds.length)
+        await tx.delete(conversations).where(inArray(conversations.id, dmIds));
       for (const groupId of groupIds) {
         const rest = await tx
           .select({ userId: conversationMembers.userId })
           .from(conversationMembers)
-          .where(and(eq(conversationMembers.conversationId, groupId), ne(conversationMembers.userId, user.id)))
+          .where(
+            and(
+              eq(conversationMembers.conversationId, groupId),
+              ne(conversationMembers.userId, user.id),
+            ),
+          )
           .orderBy(conversationMembers.joinedAt);
         if (!rest.length) {
           // They were the last one in it.
           files.push(
             ...(await tx
-              .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
+              .select({
+                id: attachments.id,
+                conversationId: attachments.conversationId,
+                kind: attachments.kind,
+              })
               .from(attachments)
               .where(eq(attachments.conversationId, groupId))),
           );
@@ -127,13 +224,19 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
             .delete(conversations)
             .where(eq(conversations.id, groupId))
             .returning({ photoVersion: conversations.photoVersion });
-          if (gone?.photoVersion) groupPhotos.push({ groupId, version: gone.photoVersion });
+          if (gone?.photoVersion)
+            groupPhotos.push({ groupId, version: gone.photoVersion });
         } else {
           // If they made the group, whoever has been in it longest takes over.
           await tx
             .update(conversations)
             .set({ createdBy: rest[0].userId })
-            .where(and(eq(conversations.id, groupId), eq(conversations.createdBy, user.id)));
+            .where(
+              and(
+                eq(conversations.id, groupId),
+                eq(conversations.createdBy, user.id),
+              ),
+            );
         }
       }
       // Everything else of theirs goes with the account (the database cascades it).
@@ -148,6 +251,10 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
         .catch((err) => console.error("Couldn't remove a profile photo", err));
     }
     await tellFriendsAndChats(user.id, friends, partners);
-    console.log(`Removed an account at the end of its ${DELETION_GRACE_DAYS} days.`);
+    // Sent after the removal went through (the address is only kept in memory until now).
+    sendInBackground(deletionCompletedEmail(user));
+    console.log(
+      `Removed an account at the end of its ${DELETION_GRACE_DAYS} days.`,
+    );
   }
 }
