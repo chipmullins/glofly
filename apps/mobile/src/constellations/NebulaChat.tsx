@@ -45,6 +45,7 @@ import { openNebulaSheet } from './nebulaActions'
 import { CountBadge, FireflyMark, Glyph, N, SpeakerGlyph, StarGlyph } from './ui'
 // 0.8.0 community tools: event cards, search across the constellation
 import { EventCard, takeJump, useEventMessages } from './communityTools'
+import { useCallStripHeight } from '@/calls/CallOverlay'
 
 // A text nebula (canvas boards 4 and 4b): the chat with role colors and badges, @you rows,
 // polls, the voice Join card, and the read-only / timed-out states. Messages go through the same
@@ -80,6 +81,7 @@ export function NebulaChat({
   wide?: { membersShown: boolean; toggleMembers: () => void }
 }) {
   const insets = useSafeAreaInsets()
+  const stripH = useCallStripHeight()
   const { rows, messages, people, members, meId } = useNebulaChat(c, n)
   // 0.7.5 "New since you left": what was new when you opened it (kept until Mark as read)
   const [newSince, setNewSince] = useState<NewSince | null>(() =>
@@ -458,7 +460,7 @@ export function NebulaChat({
   )
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: N.bg }} behavior={Platform.OS === 'ios' && !wide ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: N.bg }} behavior={Platform.OS === 'ios' && !wide ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' && !wide ? stripH : 0}>
       {header}
       <ReconnectingStrip night />
       <GestureDetector gesture={membersSwipe}>

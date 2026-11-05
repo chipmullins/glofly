@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, View } from 'react-native'
 import { router, usePathname } from 'expo-router'
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context'
@@ -199,6 +199,15 @@ function Toast({ text }: { text: string }) {
 }
 
 /** Puts the call strip above the app while a call goes on (and not on the call screen itself). */
+// Nov 5, 2026 (Chip: typing in a chat during a call on iPhone, the keyboard covered the message
+// box's buttons, so sending a lantern meant tapping empty space first): the call strip pushes the
+// screen down, but KeyboardAvoidingView measures itself from its parent, not the screen's top, so it
+// left out the strip's height and the box sat that much behind the keyboard. Screens with a message
+// box pass this as their keyboardVerticalOffset.
+const StripHeight = createContext(0)
+/** How far the call strip pushes the screens down (0 without a call). */
+export const useCallStripHeight = (): number => useContext(StripHeight)
+
 export function WithCallStrip({ children }: { children: React.ReactNode }) {
   const call = useCall((s) => s.call)
   const voice = useCall((s) => !!s.voice)
@@ -206,12 +215,17 @@ export function WithCallStrip({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets()
   // Glofly 2.0: on the night side a voice nebula has its own green bar (and its stage).
   const night = path === '/constellations' || path.startsWith('/constellations/')
+  const [stripH, setStripH] = useState(0)
   if (!call || path === '/call' || (voice && night)) return <>{children}</>
   return (
     <View style={{ flex: 1 }}>
-      <CallStrip />
+      <View onLayout={(e) => setStripH(Math.round(e.nativeEvent.layout.height))}>
+        <CallStrip />
+      </View>
       <SafeAreaInsetsContext.Provider value={{ ...insets, top: 0 }}>
-        <View style={{ flex: 1 }}>{children}</View>
+        <StripHeight.Provider value={stripH}>
+          <View style={{ flex: 1 }}>{children}</View>
+        </StripHeight.Provider>
       </SafeAreaInsetsContext.Provider>
     </View>
   )

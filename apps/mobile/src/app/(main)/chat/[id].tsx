@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppState, FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
+import { AppState, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
 import { router, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router'
 import { isWideNow, useWide } from '@/lib/layout'
 import { placeOfChat } from '@/state/constellations'
@@ -32,6 +32,7 @@ import { QUICK_REACTIONS } from '@/lib/emoji'
 import { startCallIn, joinCallIn, moveCallHere, useCall } from '@/calls/controller'
 import { RingSomeSheet } from '@/calls/RingSome'
 import { JoinBar } from '@/calls/JoinBar'
+import { useCallStripHeight } from '@/calls/CallOverlay'
 import { Composer, type ComposerHandle } from '@/chat/Composer'
 import { MessageRow, type RowInfo } from '@/chat/MessageRow'
 import { TypingBubble } from '@/chat/TypingBubble'
@@ -77,6 +78,7 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
+  const stripH = useCallStripHeight()
   const meId = useSession((s) => s.user?.id ?? '')
   const chat = useStore((s) => s.conversations[id])
   const messages = useStore((s) => s.messages[id])
@@ -278,6 +280,8 @@ export default function ChatScreen() {
   }
 
   async function plusMenu() {
+    // The keyboard would cover the bottom of the sheet (Lantern message is last); put it away first.
+    Keyboard.dismiss()
     const pick = await attachMenu(uploads, [
       { key: 'gif', label: 'GIF or sticker', icon: 'gif' },
       ...(isGroup ? [{ key: 'poll', label: 'Poll', icon: 'poll' }] : []),
@@ -286,7 +290,11 @@ export default function ChatScreen() {
     ])
     if (pick === 'gif') setGifOpen(true)
     if (pick === 'poll') setPollOpen(true)
-    if (pick === 'lantern') setLantern((on) => !on)
+    if (pick === 'lantern') {
+      setLantern((on) => !on)
+      // Back to typing (or straight to Send, if the message is already written)
+      if (!lantern) setTimeout(() => composer.current?.focus(), 350)
+    }
     if (pick === 'game') {
       const kind = await chooseFrom(
         GAMES.map((g) => ({ key: g.kind, label: g.label, detail: g.detail, icon: 'gamepad' })),
@@ -475,7 +483,7 @@ export default function ChatScreen() {
   const ringSomeHint = canRingSome ? 'Long-press to choose who to ring' : undefined
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? stripH : 0}>
       <View style={{ backgroundColor: c.barBg, borderBottomWidth: 0.5, borderBottomColor: c.line, paddingTop: insets.top }}>
         <View style={{ height: 64, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, gap: 2 }}>
           {/* iPad (two panes): the chat list is right there on the left, so no back arrow. */}
@@ -550,6 +558,7 @@ export default function ChatScreen() {
         keyExtractor={(r) => r.message.id}
         contentContainerStyle={{ paddingVertical: 10 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         onEndReachedThreshold={0.4}
         onEndReached={() => void loadOlder(id)}
         onScrollToIndexFailed={() => {}}
