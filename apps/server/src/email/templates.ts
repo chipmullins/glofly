@@ -2,6 +2,8 @@ import type { Email } from "./send";
 
 // Glofly's emails: one shared layout and the words for each email.
 //
+// Nov 6, 2026: no external stylesheet (Google Fonts) and a short preview-text spacer: both are
+// things spam filters weigh against a new sender. Fonts fall back to each mail app's own.
 // Nov 5, 2026 polish: the website's twilight look (night-sky header with fireflies, glow-orange
 // button, Outfit headings / DM Sans text with safe fallbacks), a hidden preview line for inboxes,
 // codes in a big box that's easy to read and copy, details (device, time, dates) as a small table,
@@ -184,7 +186,6 @@ function render({
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
 <title>${escapeHtml(subject)}</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&amp;family=Outfit:wght@600;700&amp;display=swap" rel="stylesheet">
 <style>
   @media (prefers-color-scheme: dark) {
     .g-page { background:#120c0a !important; }
@@ -202,7 +203,7 @@ function render({
 </style>
 </head>
 <body class="g-page" style="margin:0;padding:0;background:${C.page};">
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:${C.page};opacity:0;">${escapeHtml(preview)}${"&#8199;&#65279;&#847; ".repeat(40)}</div>
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:${C.page};opacity:0;">${escapeHtml(preview)}${"&#847;&zwnj;&nbsp;".repeat(12)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="g-page" style="background:${C.page};">
   <tr><td align="center" style="padding:28px 12px 36px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;">
