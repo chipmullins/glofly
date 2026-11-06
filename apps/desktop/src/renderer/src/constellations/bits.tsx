@@ -2,7 +2,9 @@ import { useState } from 'react'
 import {
   CONSTELLATION_THEME,
   constellationInitials,
-  type ConstellationColor
+  starChartFor,
+  type ConstellationColor,
+  type NebulaStar
 } from '@glofly/shared/constellations'
 import { constellationIconUrl } from '../lib/media'
 import { hexA } from './colors'
@@ -335,5 +337,71 @@ export function CxToast({ text }: { text: string | null }): React.JSX.Element | 
     <div className="cx-toast" role="status">
       {text}
     </div>
+  )
+}
+
+/**
+ * Nov 6, 2026: a constellation's own star pattern on its dashboard card (replaces the colored
+ * banner). Same pattern on every app (shared `starChartFor`); with the living sky, a nebula with
+ * news glows and a busy one is a bigger star.
+ */
+export function StarChart({
+  id,
+  sky,
+  color,
+  width = 168,
+  height = 104
+}: {
+  id: string
+  sky?: NebulaStar[] | null
+  color: string
+  width?: number
+  height?: number
+}): React.JSX.Element {
+  const chart = starChartFor(id, sky)
+  const pt = (i: number): [number, number] => [chart.stars[i].x * width, chart.stars[i].y * height]
+  return (
+    <svg
+      className="cx-chart"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      aria-hidden="true"
+    >
+      {chart.links.map(([a, b]) => {
+        const [x1, y1] = pt(a)
+        const [x2, y2] = pt(b)
+        return (
+          <line
+            key={`${a}-${b}`}
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+            stroke={color}
+            strokeOpacity={0.32}
+            strokeWidth={1.2}
+          />
+        )
+      })}
+      {chart.stars.map((s, i) => {
+        const [x, y] = pt(i)
+        const r = s.big ? 3.4 : 2.2
+        return (
+          <g key={i}>
+            {(s.bright || s.big) && (
+              <circle cx={x} cy={y} r={r * 3.2} fill={color} opacity={s.bright ? 0.28 : 0.16} />
+            )}
+            <circle
+              className={s.bright ? 'cx-chart-news' : undefined}
+              cx={x}
+              cy={y}
+              r={r}
+              fill={s.bright ? '#ffd27a' : color}
+            />
+          </g>
+        )
+      })}
+    </svg>
   )
 }

@@ -1424,3 +1424,74 @@
     animation: none;
   }
 }
+
+/* ───────────── Nov 6, 2026: your constellations as star-chart cards (no colored banner) ─────────────
+   The card is one warm dark surface; its own star pattern sits top right behind the text, and the
+   icon glows in a ring of the constellation's color. The dashboard's sky and fireflies stay behind. */
+.cx-card.cx-card--mine {
+  position: relative;
+  background: #1c1512;
+}
+.cx-card--mine .cx-chart {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  pointer-events: none;
+}
+.cx-card--mine .cx-chart-news {
+  animation: cx-chart-twinkle 2.4s ease-in-out infinite;
+}
+@keyframes cx-chart-twinkle {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cx-card--mine .cx-chart-news {
+    animation: none;
+  }
+}
+.cx-card--mine .cx-card-badge {
+  top: 14px;
+  bottom: auto;
+  z-index: 2;
+}
+.cx-card--mine .cx-card-body {
+  position: relative;
+  padding: 18px;
+  gap: 12px;
+}
+.cx-card-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.cx-card-ring {
+  flex: none;
+  padding: 3px;
+  border-radius: 21px;
+  background: conic-gradient(from 210deg, var(--ring), transparent 55%, var(--ring));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--ring) 30%, transparent);
+}
+.cx-card--mine .cx-card-icon {
+  margin-top: 0;
+  border: 2px solid #1c1512;
+}
+.cx-card-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.cx-card--mine .cx-card-role {
+  align-self: flex-start;
+  margin-top: 3px;
+  padding: 2px 9px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.cx-card--mine .cx-card-role--owner {
+  color: #ffb347;
+  background: rgba(255, 179, 71, 0.14);
+}

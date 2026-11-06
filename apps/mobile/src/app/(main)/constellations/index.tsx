@@ -16,7 +16,7 @@ import { NightTabBar } from '@/constellations/NightTabBar'
 import { flyHome, useContentInStyle, warpClock } from '@/constellations/transition'
 import { CreateJoinSheet, AskToJoinSheet, JoinButton } from '@/constellations/CreateJoin'
 import { haptic } from '@/constellations/motion'
-import { BannerStars, Caps, Chip, ChipRow, ConstellationIcon, FireflyMark, Face, Live, MemberLine, N, NightButton, SpeakerGlyph, StarGlyph, hexA } from '@/constellations/ui'
+import { BannerStars, Caps, StarChart, Chip, ChipRow, ConstellationIcon, FireflyMark, Face, Live, MemberLine, N, NightButton, SpeakerGlyph, StarGlyph, hexA } from '@/constellations/ui'
 import { StatusDot } from '@/ui/Avatar'
 
 // Board 2: your constellations (full-width cards), invites, and "Adventure to new
@@ -215,28 +215,33 @@ function Card({ card, onPress, onLongPress }: { card: ConstellationCard; onPress
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={380}
-      style={({ pressed }) => ({ borderRadius: 20, backgroundColor: N.card, borderWidth: 1, borderColor: N.edge, overflow: 'hidden', transform: [{ scale: pressed ? 0.985 : 1 }], boxShadow: glow ? '0 0 0 1px rgba(255,179,71,0.16), 0 0 26px rgba(255,165,74,0.16)' : '0 0 0 1px rgba(255,179,71,0.08)' })}
+      style={({ pressed }) => ({ borderRadius: 20, backgroundColor: '#1c1512', borderWidth: 1, borderColor: N.edge, overflow: 'hidden', transform: [{ scale: pressed ? 0.985 : 1 }], boxShadow: glow ? '0 0 0 1px rgba(255,179,71,0.16), 0 0 26px rgba(255,165,74,0.16)' : '0 0 0 1px rgba(255,179,71,0.08)' })}
     >
-      <View style={{ height: 76, backgroundColor: t.banner }}>
-        <BannerStars id={card.id} color={card.color} width={354} />
-        {card.mentionCount > 0 ? (
-          <View style={{ position: 'absolute', right: 12, top: 12, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, backgroundColor: N.violet }}>
-            <Text size={12} weight="bold" style={{ color: N.violetInk }}>@you</Text>
-          </View>
-        ) : card.unreadCount > 0 ? (
-          <View style={{ position: 'absolute', right: 12, top: 12, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, backgroundColor: t.badge }}>
-            <Text size={12} weight="bold" style={{ color: t.badgeText }}>{card.unreadCount > 99 ? '99+' : card.unreadCount} new</Text>
-          </View>
-        ) : null}
-      </View>
-      <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 8 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: -26 }}>
-          <ConstellationIcon c={card} size={52} radius={17} border={N.card} />
-          <View style={{ flex: 1 }} />
-          <Text size={12} weight="bold" style={{ color: roleColor, marginBottom: 4 }}>{role}</Text>
+      {/* Nov 6, 2026: no colored banner. Its own star pattern sits top right, the icon glows in a
+          ring of its color (the night sky and fireflies stay behind the cards). */}
+      <StarChart id={card.id} sky={card.sky} color={t.accent} />
+      {card.mentionCount > 0 ? (
+        <View style={{ position: 'absolute', right: 12, top: 12, zIndex: 2, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, backgroundColor: N.violet }}>
+          <Text size={12} weight="bold" style={{ color: N.violetInk }}>@you</Text>
         </View>
-        <Text display size={20}>{card.name}</Text>
-        <MemberLine members={card.memberCount} online={card.onlineCount} />
+      ) : card.unreadCount > 0 ? (
+        <View style={{ position: 'absolute', right: 12, top: 12, zIndex: 2, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, backgroundColor: t.badge }}>
+          <Text size={12} weight="bold" style={{ color: t.badgeText }}>{card.unreadCount > 99 ? '99+' : card.unreadCount} new</Text>
+        </View>
+      ) : null}
+      <View style={{ padding: 14, gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View style={{ padding: 3, borderRadius: 21, borderWidth: 2, borderColor: hexA(t.accent, 0.75), boxShadow: `0 0 18px ${hexA(t.accent, 0.35)}` }}>
+            <ConstellationIcon c={card} size={54} radius={16} />
+          </View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text display size={19} numberOfLines={1}>{card.name}</Text>
+            <MemberLine members={card.memberCount} online={card.onlineCount} />
+            <View style={{ alignSelf: 'flex-start', marginTop: 3, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 10, backgroundColor: card.role.owner ? hexA(N.amber, 0.14) : 'rgba(255,255,255,0.07)' }}>
+              <Text size={12} weight="bold" style={{ color: roleColor }}>{card.role.owner ? 'Owner' : card.role.name}</Text>
+            </View>
+          </View>
+        </View>
         {card.voice ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12, backgroundColor: N.card2 }}>
             <SpeakerGlyph size={15} color={N.greenText} />

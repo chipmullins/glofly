@@ -19,10 +19,10 @@ import {
   PlusIcon,
   SearchIconLine,
   SpeakerIcon,
+  StarChart,
   StarIcon
 } from './bits'
 import { DashboardSky, FireflyMark } from './sky'
-import NebulaSky from './NebulaSky'
 import './Discover.css'
 
 // The Constellations dashboard (Dashboard.dc.html, approved): the night sky, "Back to Glofly" top
@@ -111,50 +111,54 @@ function Card({
       aria-label={`${card.name}, ${card.memberCount} members, ${card.onlineCount} online${badge ? `, ${badge}` : ''}`}
       {...dragProps}
     >
-      <div className="cx-banner" style={{ background: t.banner }}>
-        {card.sky?.length ? (
-          <NebulaSky
-            id={card.id}
-            stars={card.sky.map((star, i) => ({ ...star, key: String(i), label: '' }))}
-            scale={0.6}
-          />
-        ) : (
-          <BannerStars id={card.id} color={card.color} />
-        )}
-        {badge && (
-          <span
-            className="cx-card-badge"
-            style={
-              card.mentionCount > 0
-                ? {
-                    background: CONSTELLATION_THEME.violet.badge,
-                    color: CONSTELLATION_THEME.violet.badgeText
-                  }
-                : { background: '#f47a1f', color: '#2a1406' }
-            }
-          >
-            {badge}
-          </span>
-        )}
-      </div>
-      <div className="cx-card-body">
-        <ConstellationIcon
-          id={card.id}
-          name={card.name}
-          color={card.color}
-          iconVersion={card.iconVersion}
-          className="cx-card-icon"
+      {/* Nov 6, 2026: no colored banner. The constellation's own star pattern sits behind the top
+          right of the card, and its icon glows in a ring of its color. */}
+      <StarChart id={card.id} sky={card.sky} color={t.accent} />
+      {badge && (
+        <span
+          className="cx-card-badge"
           style={
-            card.color === 'ember' && !card.iconVersion
-              ? { background: '#120c0a', color: '#ffb347' }
-              : undefined
+            card.mentionCount > 0
+              ? {
+                  background: CONSTELLATION_THEME.violet.badge,
+                  color: CONSTELLATION_THEME.violet.badgeText
+                }
+              : { background: '#f47a1f', color: '#2a1406' }
           }
-        />
-        <span className="cx-card-name">{card.name}</span>
-        <span className="cx-card-count">
-          {card.memberCount} {card.memberCount === 1 ? 'member' : 'members'} ·{' '}
-          <span className="cx-online">{card.onlineCount} online</span>
+        >
+          {badge}
         </span>
+      )}
+      <div className="cx-card-body">
+        <div className="cx-card-head">
+          <span className="cx-card-ring" style={{ '--ring': t.accent } as React.CSSProperties}>
+            <ConstellationIcon
+              id={card.id}
+              name={card.name}
+              color={card.color}
+              iconVersion={card.iconVersion}
+              className="cx-card-icon"
+              style={
+                card.color === 'ember' && !card.iconVersion
+                  ? { background: '#120c0a', color: '#ffb347' }
+                  : undefined
+              }
+            />
+          </span>
+          <span className="cx-card-titles">
+            <span className="cx-card-name">{card.name}</span>
+            <span className="cx-card-count">
+              {card.memberCount} {card.memberCount === 1 ? 'member' : 'members'} ·{' '}
+              <span className="cx-online">{card.onlineCount} online</span>
+            </span>
+            <span
+              className={card.role.owner ? 'cx-card-role cx-card-role--owner' : 'cx-card-role'}
+              style={card.role.owner ? undefined : { color: t.accent }}
+            >
+              {card.role.owner ? 'Owner' : card.role.name}
+            </span>
+          </span>
+        </div>
         {card.voice ? (
           <span className="cx-card-line">
             <SpeakerIcon size={15} color="#6fd39a" />
@@ -175,9 +179,6 @@ function Card({
             <span>{quietLabel(card.activityAt, now)}</span>
           </span>
         )}
-        <span className="cx-card-role" style={{ color: card.role.owner ? '#ffb347' : t.accent }}>
-          {card.role.owner ? "You're the Owner" : card.role.name}
-        </span>
       </div>
     </button>
   )

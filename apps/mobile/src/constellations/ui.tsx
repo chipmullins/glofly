@@ -3,8 +3,8 @@ import { ActivityIndicator, Pressable, ScrollView, TextInput, View, type StylePr
 import { Image } from 'expo-image'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Svg, { Circle, Ellipse, Path } from 'react-native-svg'
-import { CONSTELLATION_THEME, ROLE_COLORS, colorsFor, constellationInitials, initials, type ConstellationColor, type PublicUser, type RoleColor } from '@glofly/shared'
+import Svg, { Circle, Ellipse, Line, Path } from 'react-native-svg'
+import { CONSTELLATION_THEME, ROLE_COLORS, colorsFor, constellationInitials, initials, starChartFor, type ConstellationColor, type NebulaStar, type PublicUser, type RoleColor } from '@glofly/shared'
 import { authHeaders, url } from '@/api/http'
 import { Avatar } from '@/ui/Avatar'
 import { Icon, type IconName } from '@/ui/icons'
@@ -662,5 +662,33 @@ export function MemberLine({ members, online, extra, size = 13 }: { members: num
       {members} {members === 1 ? 'member' : 'members'} · <Text size={size} style={{ color: N.greenText }}>{online} online</Text>
       {extra ? ` · ${extra}` : ''}
     </Text>
+  )
+}
+
+
+/**
+ * Nov 6, 2026: a constellation's own star pattern on its dashboard card (replaces the colored
+ * banner). Same pattern as desktop and web (shared `starChartFor`): a nebula with news glows, a
+ * busy one is a bigger star.
+ */
+export function StarChart({ id, sky, color, width = 150, height = 96 }: { id: string; sky?: NebulaStar[] | null; color: string; width?: number; height?: number }) {
+  const chart = starChartFor(id, sky)
+  const pt = (i: number): [number, number] => [chart.stars[i].x * width, chart.stars[i].y * height]
+  return (
+    <Svg width={width} height={height} pointerEvents="none" style={{ position: 'absolute', right: 4, top: 4 }}>
+      {chart.links.map(([a, b]) => {
+        const [x1, y1] = pt(a)
+        const [x2, y2] = pt(b)
+        return <Line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeOpacity={0.32} strokeWidth={1.2} />
+      })}
+      {chart.stars.map((st, i) => {
+        const [x, y] = pt(i)
+        const r = st.big ? 3.4 : 2.2
+        return [
+          st.bright || st.big ? <Circle key={`g${i}`} cx={x} cy={y} r={r * 3.2} fill={color} opacity={st.bright ? 0.28 : 0.16} /> : null,
+          <Circle key={`s${i}`} cx={x} cy={y} r={r} fill={st.bright ? '#ffd27a' : color} />,
+        ]
+      })}
+    </Svg>
   )
 }

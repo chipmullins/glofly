@@ -591,3 +591,19 @@ test('0.8.0 role-only nebulas and templates', () => {
     assert.equal(t.rules.length <= s.RULES_MAX, true)
   }
 })
+
+test('dashboard star pattern (Nov 6)', () => {
+  const a = s.starChartFor('5a0d3ef7-1f30-4816-b751-cdc70944d78c')
+  assert.deepEqual(a, s.starChartFor('5a0d3ef7-1f30-4816-b751-cdc70944d78c'))
+  assert.notDeepEqual(a, s.starChartFor('88c1a64c-2203-4c02-bb88-8b138b97c9f7'))
+  assert.equal(a.stars.length >= 4 && a.stars.length <= 6, true)
+  for (const st of a.stars) assert.equal(st.x > 0 && st.x < 1 && st.y > 0 && st.y < 1, true)
+  for (let i = 1; i < a.stars.length; i++) assert.equal(a.stars[i].x > a.stars[i - 1].x, true)
+  const sky = Array.from({ length: 10 }, (_, i) => ({ kind: 'text', news: i === 1, chatting: i === 2, voice: 0 }))
+  const b = s.starChartFor('x', sky)
+  assert.equal(b.stars.length, 7)
+  assert.equal(b.stars[1].bright, true)
+  assert.equal(b.stars[2].big, true)
+  assert.equal(s.starChartFor('x', sky.slice(0, 1)).stars.length, 3)
+  for (const [i, j] of b.links) assert.equal(i < b.stars.length && j < b.stars.length, true)
+})

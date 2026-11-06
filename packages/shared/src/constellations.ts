@@ -1045,3 +1045,47 @@ export type NebulaNews = {
 
 /** How many nebulas one person can pin to the home dock. */
 export const PINNED_NEBULAS_MAX = 8
+
+// ───────────── Nov 6, 2026: the dashboard card's star pattern ─────────────
+
+/** One constellation's own little star pattern (coordinates 0–1), for its dashboard card. */
+export type StarChart = {
+  stars: { x: number; y: number; big: boolean; bright: boolean }[]
+  /** Pairs of star indexes joined by a line */
+  links: [number, number][]
+}
+
+/**
+ * The same pattern every time for the same constellation, on every app (it comes from the id).
+ * With the living sky (`sky`), there's a star per nebula (3–7 shown): a nebula with news glows,
+ * one where people are chatting or in voice is a bigger star.
+ */
+export function starChartFor(id: string, sky?: NebulaStar[] | null): StarChart {
+  let seed = 2166136261
+  for (let i = 0; i < id.length; i++) seed = Math.imul(seed ^ id.charCodeAt(i), 16777619) >>> 0
+  const rnd = (): number => {
+    seed = (seed + 0x6d2b79f5) >>> 0
+    let t = seed
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  const count = sky && sky.length ? Math.min(7, Math.max(3, sky.length)) : 4 + Math.floor(rnd() * 3)
+  const stars: StarChart['stars'] = []
+  for (let i = 0; i < count; i++) {
+    // Spread left to right so lines never cross back over each other; jitter keeps it hand-drawn.
+    const x = 0.08 + (0.84 * (i + 0.5)) / count + (rnd() - 0.5) * (0.5 / count)
+    const y = 0.15 + rnd() * 0.7
+    const nebula = sky?.[i]
+    stars.push({
+      x: Math.round(x * 1000) / 1000,
+      y: Math.round(y * 1000) / 1000,
+      big: nebula ? nebula.chatting || nebula.voice > 0 : i === 0,
+      bright: nebula ? nebula.news : false
+    })
+  }
+  const links: [number, number][] = []
+  // One unbroken line left to right: a branch back to the end crossed over the others.
+  for (let i = 0; i < count - 1; i++) links.push([i, i + 1])
+  return { stars, links }
+}
