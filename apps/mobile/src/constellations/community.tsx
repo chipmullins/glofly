@@ -494,7 +494,7 @@ export function WelcomeSheet({ c }: { c: ConstellationDetail }) {
               style={{ minHeight: 48, paddingHorizontal: 24, borderRadius: 24, backgroundColor: blocked ? N.line2 : a.color, justifyContent: 'center' }}
             >
               <Text size={15} weight="bold" style={{ color: blocked ? N.dim : a.on }}>
-                {busy ? 'One moment…' : step === 'rules' ? (agreed ? 'Continue' : 'Agree to continue') : last ? 'Fly in' : 'Next'}
+                {busy ? 'One moment…' : step === 'rules' ? (agreed ? 'Continue' : 'Agree to continue') : last ? 'Open' : 'Next'}
               </Text>
             </Pressable>
           </View>

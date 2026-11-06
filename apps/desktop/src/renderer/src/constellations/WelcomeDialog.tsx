@@ -121,7 +121,7 @@ export default function WelcomeDialog({
     else setAt(at + 1)
   }
   const nextLabel =
-    step === 'rules' ? (agreed ? 'Continue' : 'Agree to continue') : last ? 'Fly in' : 'Next'
+    step === 'rules' ? (agreed ? 'Continue' : 'Agree to continue') : last ? 'Open' : 'Next'
 
   return (
     <div className="cx-welcome-backdrop">

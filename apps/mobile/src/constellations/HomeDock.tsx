@@ -121,9 +121,9 @@ function Header({ big }: { big?: boolean }) {
       <Text display size={big ? 22 : 17} style={{ flex: 1 }} accessibilityRole="header">
         Constellations
       </Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Fly in to Constellations" onPress={() => flyTo()} style={{ height: 44, paddingHorizontal: 16, borderRadius: 22, backgroundColor: N.amber, justifyContent: 'center' }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open Constellations" onPress={() => flyTo()} style={{ height: 44, paddingHorizontal: 16, borderRadius: 22, backgroundColor: N.amber, justifyContent: 'center' }}>
         <Text size={13} weight="bold" style={{ color: N.amberInk }}>
-          Fly in
+          Open
         </Text>
       </Pressable>
     </View>
@@ -140,7 +140,7 @@ function Peek() {
       <View style={{ paddingTop: 8, paddingHorizontal: 14, paddingBottom: 14, gap: 14 }}>
         <Handle width={36} />
         <Header />
-        {cards.length ? <Icons /> : <Text size={14} style={{ color: N.ink2 }}>You're not in any constellations yet. Fly in to create or find one.</Text>}
+        {cards.length ? <Icons /> : <Text size={14} style={{ color: N.ink2 }}>You're not in any constellations yet. Open Constellations to create or find one.</Text>}
         {pins.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginRight: -14 }} contentContainerStyle={{ gap: 8, paddingRight: 14 }}>
             {pins.map((p) => (
@@ -238,7 +238,7 @@ function Full() {
           <Icons />
         </>
       ) : (
-        <Text size={14} style={{ color: N.ink2 }}>You're not in any constellations yet. Fly in to create or find one.</Text>
+        <Text size={14} style={{ color: N.ink2 }}>You're not in any constellations yet. Open Constellations to create or find one.</Text>
       )}
       <Caps>Pinned nebulas</Caps>
       {pins.length ? (
@@ -273,7 +273,7 @@ function Full() {
   )
 }
 
-/** A pinned nebula opened on Glofly home: its chat, Unpin, Fly in. */
+/** A pinned nebula opened on Glofly home: its chat, Unpin, Open. */
 function NebulaMini({ pin, onClose }: { pin: PinnedNebula; onClose: () => void }) {
   const { height } = useWindowDimensions()
   const detail = useCx((s) => s.details[pin.constellationId] ?? null)
@@ -315,9 +315,9 @@ function NebulaMini({ pin, onClose }: { pin: PinnedNebula; onClose: () => void }
         <Pressable accessibilityRole="button" accessibilityLabel="Unpin from dock" onPress={() => void unpin()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: N.card2, alignItems: 'center', justifyContent: 'center' }}>
           <Glyph name="pin" size={16} color={N.amber} />
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Fly in to ${pin.nebula.name}`} onPress={() => flyTo(`/constellations/${pin.constellationId}`, `/constellations/${pin.constellationId}/nebula/${pin.nebula.id}`)} style={{ height: 44, paddingHorizontal: 14, borderRadius: 22, backgroundColor: N.amber, justifyContent: 'center' }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${pin.nebula.name}`} onPress={() => flyTo(`/constellations/${pin.constellationId}`, `/constellations/${pin.constellationId}/nebula/${pin.nebula.id}`)} style={{ height: 44, paddingHorizontal: 14, borderRadius: 22, backgroundColor: N.amber, justifyContent: 'center' }}>
           <Text size={13} weight="bold" style={{ color: N.amberInk }}>
-            Fly in
+            Open
           </Text>
         </Pressable>
       </View>
