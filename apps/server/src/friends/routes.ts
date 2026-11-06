@@ -232,6 +232,7 @@ usersRouter.get("/search", searchLimiter, async (req, res) => {
         ne(users.id, myId),
         isNull(users.deleteAfter), // accounts being deleted are hidden
         eq(users.restricted, false), // restricted (family-managed) accounts never show up
+        eq(users.bot, false), // nor constellation bots
         or(
           ilike(users.username, `${term}%`),
           ilike(users.displayName, `${term}%`),
@@ -361,7 +362,7 @@ friendsRouter.post("/requests", requestLimiter, async (req, res) => {
       restricted: users.restricted,
     })
     .from(users)
-    .where(sql`lower(${users.username}) = ${parsed.data.username.toLowerCase()}`)
+    .where(and(sql`lower(${users.username}) = ${parsed.data.username.toLowerCase()}`, eq(users.bot, false)))
     .limit(1);
   const target = found && {
     id: found.id,

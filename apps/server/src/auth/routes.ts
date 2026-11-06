@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { rateLimit } from "../rateLimit";
-import { eq, or, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { redis } from "../redis";
 import { requireCurrentApp } from "../app-version";
@@ -287,7 +287,8 @@ authRouter.post("/login", requireCurrentApp, loginLimiter, async (req, res) => {
       twoStep: users.twoStep,
     })
     .from(users)
-    .where(eq(lower(column), identifier.toLowerCase()))
+    // Bots (constellation Integrations) never sign in: they're "not found".
+    .where(and(eq(lower(column), identifier.toLowerCase()), eq(users.bot, false)))
     .limit(1);
 
   const passwordOk = user

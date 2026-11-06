@@ -92,7 +92,7 @@ export async function requestPasswordReset(identifier: string): Promise<void> {
   const [found] = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(sql`lower(${column})`, identifier.toLowerCase()))
+    .where(and(eq(sql`lower(${column})`, identifier.toLowerCase()), eq(users.bot, false)))
     .limit(1);
   if (!found) return;
   const user = await person(found.id);

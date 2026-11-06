@@ -117,6 +117,10 @@ export const users = pgTable(
     // Control), doesn't show up in search, can only be in groups with their own friends, and
     // can't change their email or delete the account. Off for everyone else.
     restricted: boolean("restricted").notNull().default(false),
+    // Communities round (Nov 2026): a constellation's bot (Integrations → API keys). Bots never
+    // sign in (no usable password, login refuses them), never show up in search or friends, and
+    // are only ever members of their one constellation.
+    bot: boolean("bot").notNull().default(false),
     // ---- 0.5.0 ----
     // Birthday glow: friends see the day (never the year) and get a reminder. Off unless chosen.
     shareBirthday: boolean("share_birthday").notNull().default(false),
@@ -1571,4 +1575,67 @@ export const activeDays = pgTable(
     platform: text("platform").notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.day] }), index("active_days_day_idx").on(t.day)],
+);
+
+// ───────────── Communities round (Nov 2026): constellation Integrations ─────────────
+
+// API keys for bots and game servers. A key works for its one constellation only and acts as its
+// bot (a users row with bot = true, a member with a role, so the usual rank rules apply). Only the
+// SHA-256 of the key is stored (like sessions); the key is shown once when made or reset.
+export const constellationApiKeys = pgTable(
+  "constellation_api_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    botUserId: uuid("bot_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // "gfk_" + the key's first 8 characters, for the list ("gfk_7Hq2kRZp••••••••").
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull(),
+    // shared INTEGRATION_SCOPES ids
+    scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
+    postNebulaIds: uuid("post_nebula_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    readNebulaIds: uuid("read_nebula_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    // Empty = from anywhere. Exact addresses (IPv4 or IPv6), compared as the server sees them.
+    allowedIps: text("allowed_ips").array().notNull().default(sql`'{}'::text[]`),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resetAt: timestamp("reset_at", { withTimezone: true }),
+    // Written at most once a minute per key.
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    lastUsedIp: text("last_used_ip"),
+  },
+  (t) => [
+    uniqueIndex("constellation_api_keys_hash_idx").on(t.keyHash),
+    index("constellation_api_keys_constellation_idx").on(t.constellationId),
+  ],
+);
+
+// Integrations → Activity: every use of a key and every change to one. Kept 30 days.
+export const integrationActivity = pgTable(
+  "integration_activity",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    keyId: uuid("key_id").references(() => constellationApiKeys.id, { onDelete: "set null" }),
+    // The key's name when it happened (the key may be gone later).
+    keyName: text("key_name"),
+    actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+    action: text("action").notNull(),
+    targetUserId: uuid("target_user_id").references(() => users.id, { onDelete: "set null" }),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    ip: text("ip"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("integration_activity_constellation_idx").on(t.constellationId, t.createdAt),
+    index("integration_activity_created_idx").on(t.createdAt),
+  ],
 );

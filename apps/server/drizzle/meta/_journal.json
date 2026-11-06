@@ -288,6 +288,13 @@
       "when": 1793334478984,
       "tag": "0040_online_alerts_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794008130070,
+      "tag": "0041_integrations",
+      "breakpoints": true
     }
   ]
 }

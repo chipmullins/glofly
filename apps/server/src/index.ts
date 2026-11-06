@@ -49,6 +49,9 @@ import { sweepExpiredStatuses } from "./statusSweep";
 import { devicesRouter } from "./push/devices";
 import { pushKind } from "./push/fcm";
 import { voipKind } from "./push/apns";
+import { integrationsRouter } from "./integrations/routes";
+import { botApiRouter } from "./integrations/api";
+import { sweepIntegrationActivity } from "./integrations/keys";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
 /** Runs a background job every so often, never two runs of it at once. */
@@ -140,9 +143,14 @@ app.use("/calls", callsRouter);
 // 2.0: Constellations (communities with nebulas, roles, voice rooms) and My games.
 // 0.8.0: /constellations/inbox and the community tools (before the main router, so "inbox" isn't
 // taken for a constellation id).
+// Communities round (Nov 2026): constellation settings → Integrations (API keys for bots and game
+// servers), before the main router so "integrations" is never taken for anything else.
+app.use("/constellations", integrationsRouter);
 app.use("/constellations", communityToolsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
+// Communities round: the bot API (/api/v1, "Authorization: Bot gfk_…"), for game servers and bots.
+app.use(botApiRouter);
 // 0.7.5: a constellation invite link's page (glofly.app/c/<code>; Caddy sends /c/* here).
 app.use("/c", invitePageRouter);
 // 0.8.0: a friend invite link's page (glofly.app/i/<code>; Caddy sends /i/* here).
@@ -268,6 +276,8 @@ connectRedis()
       sweepEmailTokens().catch((err) => console.error("Email link cleanup failed", err));
     sweepLinks();
     setInterval(sweepLinks, 60 * 60 * 1000);
+    // Communities round: Integrations → Activity is kept 30 days (hourly).
+    every(60 * 60 * 1000, "Integration activity cleanup", sweepIntegrationActivity);
     // Resolved reports are removed a year after they were resolved (hourly).
     const sweepReports = () =>
       purgeOldReports().catch((err) => console.error("Report cleanup failed", err));
