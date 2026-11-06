@@ -410,7 +410,7 @@ ${head.og ?? ""}<style>${PAGE_CSS}</style></head>
 const DOWNLOADS = `<div class="grid">
 <a class="dl" href="https://glofly.app/download">Download for Windows</a>
 <a class="dl" href="https://glofly.app/download/mac">Download for Mac</a>
-<span class="soon">iPhone and iPad · coming soon</span>
+<a class="dl" href="https://apps.apple.com/us/app/glofly/id6822127148">Get it for iPhone and iPad</a>
 <span class="soon">Android · coming soon</span>
 </div>`;
 
@@ -464,7 +464,7 @@ friendLinkPageRouter.get("/:code", async (req, res) => {
 <a class="open" href="glofly://i/${esc(code)}">Open in Glofly</a>
 ${DOWNLOADS}
 <p class="small computer">Or <a href="${esc(browserFriendLink(code))}">use Glofly in your browser</a>. Already have an account? Open it and you'll be added.</p>
-<p class="small phone">The phone apps are coming soon · <a href="${esc(browserFriendLink(code))}">use it in your browser</a></p>`,
+<p class="small phone">On iPhone or iPad? <a href="https://apps.apple.com/us/app/glofly/id6822127148">Get Glofly on the App Store</a>, then tap Open in Glofly. Android is coming soon · <a href="${esc(browserFriendLink(code))}">use it in your browser</a></p>`,
   );
 });
 
