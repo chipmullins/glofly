@@ -52,6 +52,7 @@ import { voipKind } from "./push/apns";
 import { integrationsRouter } from "./integrations/routes";
 import { botApiRouter } from "./integrations/api";
 import { incomingHooksRouter } from "./integrations/webhooks";
+import { interactionsRouter } from "./integrations/interactions";
 import { sweepIntegrationActivity } from "./integrations/keys";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
@@ -147,6 +148,7 @@ app.use("/calls", callsRouter);
 // Communities round (Nov 2026): constellation settings → Integrations (API keys for bots and game
 // servers), before the main router so "integrations" is never taken for anything else.
 app.use("/constellations", integrationsRouter);
+app.use("/constellations", interactionsRouter);
 app.use("/constellations", communityToolsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);

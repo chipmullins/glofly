@@ -1,9 +1,26 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
 import { z } from "zod";
-import { MESSAGE_MAX, type IntegrationScope } from "@glofly/shared";
+import {
+  COMMAND_DESCRIPTION_MAX,
+  COMMAND_NAME_PATTERN,
+  COMMANDS_PER_KEY_MAX,
+  MESSAGE_BUTTON_ID_PATTERN,
+  MESSAGE_BUTTON_LABEL_MAX,
+  MESSAGE_BUTTONS_MAX,
+  MESSAGE_MAX,
+  type IntegrationScope,
+} from "@glofly/shared";
 import { db } from "../db";
-import { constellationApiKeys, constellationMemberRoles, constellationMembers, constellationRoles, constellations, nebulas, users } from "../db/schema";
+import { constellationApiKeys, constellationCommands, constellationMemberRoles, constellationMembers, constellationRoles, constellations, nebulas, users } from "../db/schema";
+import { webhookAddressProblem } from "../messages/links";
+import { outranks, standingOf } from "../constellations/perms";
+import { syncNebulaAccess } from "../constellations/access";
+import { constellationChanged, logModeration } from "../constellations/activity";
+import { emitToUser } from "../realtime";
+import { fireConstellationEvent } from "./events";
+import { newSigningSecret } from "./webhooks";
+import { heldRoles } from "./interactions";
 import { takeSlot, noteRedisError } from "../rateLimit";
 import { postScheduledText } from "../messages/routes";
 import { hashKey, logIntegration, looksLikeKey } from "./keys";
@@ -19,7 +36,11 @@ import { clientIp } from "./ip";
 //   GET  /api/v1/me                          the bot, its constellation and scopes
 //   GET  /api/v1/roles                       members:read
 //   GET  /api/v1/members/:userId             members:read  → member + roles, or 404
-//   POST /api/v1/nebulas/:nebulaId/messages  messages:write (only nebulas picked for the key) { text }
+//   POST /api/v1/nebulas/:nebulaId/messages  messages:write (only nebulas picked for the key)
+//                                            { text, replyToId?, buttons? [{ id, label, style }] }
+//   PUT  /api/v1/interactions                { url } → { secret }: where commands and button clicks go
+//   GET  /api/v1/commands · PUT { commands: [{ name, description }] }   commands (replaces this bot's)
+//   PUT/DELETE /api/v1/members/:userId/roles/:roleId                    roles:write (roles below the bot's)
 //
 // Every request is rate limited per key (and per constellation), checked against the key's address
 // list, and logged in Integrations → Activity. Errors are JSON { error, message }.
@@ -215,7 +236,21 @@ botApiRouter.get("/api/v1/members/:userId", async (req, res) => {
   });
 });
 
-const postBody = z.object({ text: z.string().trim().min(1, "Send some text.").max(MESSAGE_MAX, `Messages can be up to ${MESSAGE_MAX} characters.`) });
+const postBody = z.object({
+  text: z.string().trim().min(1, "Send some text.").max(MESSAGE_MAX, `Messages can be up to ${MESSAGE_MAX} characters.`),
+  replyToId: idParam.nullable().optional(),
+  buttons: z
+    .array(
+      z.object({
+        id: z.string().regex(MESSAGE_BUTTON_ID_PATTERN, "Button ids: letters, digits and _ . : - (up to 64)."),
+        label: z.string().trim().min(1).max(MESSAGE_BUTTON_LABEL_MAX),
+        style: z.enum(["primary", "secondary", "danger"]).default("secondary"),
+      }),
+    )
+    .max(MESSAGE_BUTTONS_MAX, `Up to ${MESSAGE_BUTTONS_MAX} buttons.`)
+    .refine((b) => new Set(b.map((x) => x.id)).size === b.length, "Button ids must be different.")
+    .optional(),
+});
 
 botApiRouter.post("/api/v1/nebulas/:nebulaId/messages", async (req, res) => {
   if (!(await needs(res, "messages:write"))) return;
@@ -239,14 +274,144 @@ botApiRouter.post("/api/v1/nebulas/:nebulaId/messages", async (req, res) => {
     return;
   }
   // The same path as a person's message: who can post, frozen, timeouts, read-only nebulas, AutoMod.
-  const sent = await postScheduledText(n.conversationId, k.botUserId, body.data.text, null);
+  const sent = await postScheduledText(n.conversationId, k.botUserId, body.data.text, body.data.replyToId ?? null, body.data.buttons ?? null);
   if (!sent.ok) {
     fail(res, 403, "cant_post", sent.reason);
     return;
   }
   await logIntegration({ constellationId: k.constellationId, keyId: k.id, keyName: k.name, action: "message.post", details: { nebula: n.name }, ip: k.ip });
-  res.status(201).json({ ok: true });
+  res.status(201).json({ ok: true, messageId: sent.messageId });
 });
+
+// PUT /api/v1/interactions { url }: where Glofly sends slash commands and button clicks. A new
+// signing secret every time (the old one stops being used at once).
+botApiRouter.put("/api/v1/interactions", async (req, res) => {
+  const k = keyOf(res);
+  if (!k.scopes.has("commands") && !k.scopes.has("messages:write")) {
+    await needs(res, "commands");
+    return;
+  }
+  const url = z.object({ url: z.string().trim().max(500).nullable() }).safeParse(req.body);
+  if (!url.success) {
+    fail(res, 400, "invalid", "Send { url } (https), or { url: null } to stop.");
+    return;
+  }
+  if (url.data.url === null) {
+    await db.update(constellationApiKeys).set({ interactionsUrl: null, interactionsSecret: null }).where(eq(constellationApiKeys.id, k.id));
+    res.json({ ok: true });
+    return;
+  }
+  const problem = webhookAddressProblem(url.data.url);
+  if (problem) {
+    fail(res, 400, "invalid", problem);
+    return;
+  }
+  const secret = newSigningSecret();
+  await db.update(constellationApiKeys).set({ interactionsUrl: url.data.url, interactionsSecret: secret }).where(eq(constellationApiKeys.id, k.id));
+  await logIntegration({ constellationId: k.constellationId, keyId: k.id, keyName: k.name, action: "interactions.set", ip: k.ip });
+  res.json({ ok: true, secret });
+});
+
+botApiRouter.get("/api/v1/commands", async (_req, res) => {
+  if (!(await needs(res, "commands"))) return;
+  const k = keyOf(res);
+  const rows = await db.select({ name: constellationCommands.name, description: constellationCommands.description }).from(constellationCommands).where(eq(constellationCommands.keyId, k.id)).orderBy(asc(constellationCommands.name));
+  res.json({ commands: rows });
+});
+
+const commandsBody = z.object({
+  commands: z
+    .array(
+      z.object({
+        name: z.string().trim().toLowerCase().regex(COMMAND_NAME_PATTERN, "Command names: lower case letters, digits and - (up to 32), without the /."),
+        description: z.string().trim().min(1).max(COMMAND_DESCRIPTION_MAX),
+      }),
+    )
+    .max(COMMANDS_PER_KEY_MAX, `Up to ${COMMANDS_PER_KEY_MAX} commands per bot.`),
+});
+
+// PUT /api/v1/commands { commands }: replaces this bot's commands.
+botApiRouter.put("/api/v1/commands", async (req, res) => {
+  if (!(await needs(res, "commands"))) return;
+  const k = keyOf(res);
+  const parsed = commandsBody.safeParse(req.body);
+  if (!parsed.success) {
+    fail(res, 400, "invalid", parsed.error.issues[0]?.message ?? "Send { commands: [{ name, description }] }.");
+    return;
+  }
+  const names = parsed.data.commands.map((c) => c.name);
+  if (new Set(names).size !== names.length) {
+    fail(res, 400, "invalid", "Each command needs its own name.");
+    return;
+  }
+  // Another bot here already has one of these names?
+  const taken = await db
+    .select({ name: constellationCommands.name, keyId: constellationCommands.keyId })
+    .from(constellationCommands)
+    .where(eq(constellationCommands.constellationId, k.constellationId));
+  const clash = taken.find((t) => t.keyId !== k.id && names.includes(t.name));
+  if (clash) {
+    fail(res, 409, "taken", `Another bot here already has /${clash.name}.`);
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx.delete(constellationCommands).where(eq(constellationCommands.keyId, k.id));
+    if (parsed.data.commands.length)
+      await tx.insert(constellationCommands).values(parsed.data.commands.map((c) => ({ constellationId: k.constellationId, keyId: k.id, name: c.name, description: c.description })));
+  });
+  await logIntegration({ constellationId: k.constellationId, keyId: k.id, keyName: k.name, action: "commands.set", details: { count: names.length }, ip: k.ip });
+  await constellationChanged(k.constellationId);
+  res.json({ ok: true });
+});
+
+/** Gives or takes a role, with the same rules as a person with "Manage roles" at the bot's rank. */
+async function changeRole(req: Request, res: Response, give: boolean): Promise<void> {
+  if (!(await needs(res, "roles:write"))) return;
+  const k = keyOf(res);
+  if (k.frozen) {
+    fail(res, 403, "frozen", "This constellation is paused by the Glofly team.");
+    return;
+  }
+  const userId = idParam.safeParse(req.params.userId);
+  const roleId = idParam.safeParse(req.params.roleId);
+  if (!userId.success || !roleId.success) {
+    fail(res, 404, "not_found", "Not found.");
+    return;
+  }
+  const bot = await standingOf(k.constellationId, k.botUserId);
+  const target = await standingOf(k.constellationId, userId.data);
+  if (!bot || !target) {
+    fail(res, 404, "not_found", "Not a member.");
+    return;
+  }
+  const [role] = await db.select().from(constellationRoles).where(and(eq(constellationRoles.id, roleId.data), eq(constellationRoles.constellationId, k.constellationId)));
+  if (!role || role.kind === "member") {
+    fail(res, 404, "not_found", "That role isn't here.");
+    return;
+  }
+  if (role.position >= bot.rank || !outranks(bot, target)) {
+    fail(res, 403, "too_high", "The bot can only change roles below its own, for people ranked below it.");
+    return;
+  }
+  const has = target.roleIds.includes(role.id);
+  if (give && !has) await db.insert(constellationMemberRoles).values({ constellationId: k.constellationId, userId: target.userId, roleId: role.id }).onConflictDoNothing();
+  if (!give && has)
+    await db
+      .delete(constellationMemberRoles)
+      .where(and(eq(constellationMemberRoles.constellationId, k.constellationId), eq(constellationMemberRoles.userId, target.userId), eq(constellationMemberRoles.roleId, role.id)));
+  if (give !== has) {
+    await syncNebulaAccess(k.constellationId, { userIds: [target.userId] });
+    await logModeration(k.constellationId, k.botUserId, "roles_changed", target.userId, { roles: [role.name], by: "bot", give });
+    await logIntegration({ constellationId: k.constellationId, keyId: k.id, keyName: k.name, action: give ? "role.given" : "role.taken", targetUserId: target.userId, details: { role: role.name }, ip: k.ip });
+    await constellationChanged(k.constellationId);
+    emitToUser(target.userId, "constellations:changed", {}, true);
+    fireConstellationEvent(k.constellationId, "member.roles", target.userId, await heldRoles(k.constellationId, target.userId));
+  }
+  res.json({ ok: true, changed: give !== has });
+}
+
+botApiRouter.put("/api/v1/members/:userId/roles/:roleId", (req, res, next) => void changeRole(req, res, true).catch(next));
+botApiRouter.delete("/api/v1/members/:userId/roles/:roleId", (req, res, next) => void changeRole(req, res, false).catch(next));
 
 // Anything else under /api/v1 (after a valid key).
 botApiRouter.use("/api/v1", (_req, res) => fail(res, 404, "not_found", "There's nothing at that address in the Glofly API."));

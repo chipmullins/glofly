@@ -151,3 +151,53 @@ export type WebhookPayload = {
     roleIds?: string[]
   }
 }
+
+// ───────────── Bots in chats: buttons, slash commands, interactions ─────────────
+
+export type MessageButtonStyle = 'primary' | 'secondary' | 'danger'
+/** A button under a bot's message. Clicking it tells the bot; Glofly checks nothing else. */
+export type MessageButton = { id: string; label: string; style: MessageButtonStyle }
+export const MESSAGE_BUTTONS_MAX = 5
+export const MESSAGE_BUTTON_LABEL_MAX = 40
+export const MESSAGE_BUTTON_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/
+
+/** Slash command names: what follows the /, lower case. */
+export const COMMAND_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/
+export const COMMAND_DESCRIPTION_MAX = 100
+export const COMMANDS_PER_KEY_MAX = 25
+/** What can follow the command name ("/whitelist apply" → "apply"). */
+export const COMMAND_TEXT_MAX = 500
+
+/** A slash command in a constellation's / menu. */
+export type ConstellationCommand = {
+  name: string
+  description: string
+  bot: { id: string; displayName: string; avatarVersion: string | null }
+}
+
+/** "/whitelist apply" → { name: 'whitelist', text: 'apply' } (null if it isn't a command). */
+export function parseSlashCommand(input: string): { name: string; text: string } | null {
+  const m = /^\/([a-z0-9][a-z0-9-]{0,31})(?:\s+([\s\S]*))?$/i.exec(input.trim())
+  if (!m) return null
+  return { name: m[1].toLowerCase(), text: (m[2] ?? '').trim() }
+}
+
+/**
+ * What a bot's interactions address receives (POST, JSON), signed like outgoing webhooks
+ * (`Glofly-Signature`, with the secret from PUT /api/v1/interactions). Answer with 2xx quickly and
+ * reply through the API (POST /api/v1/nebulas/:nebulaId/messages, replyToId = messageId).
+ */
+export type InteractionPayload = {
+  id: string
+  type: 'command' | 'button' | 'ping'
+  constellationId: string
+  nebulaId: string | null
+  /** command: the member's message ("/whitelist apply"); button: the bot's message */
+  messageId: string | null
+  user: { id: string; username: string; displayName: string } | null
+  /** The member's roles (ids), for the bot's own checks */
+  roleIds: string[]
+  command?: { name: string; text: string }
+  button?: { id: string }
+  createdAt: string
+}

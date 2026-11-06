@@ -9,6 +9,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
+import { clearSignupLimit } from "./e2eLimits";
 
 const URL_ = process.env.GLOFLY_E2E_URL;
 const skip = !URL_ ? "set GLOFLY_E2E_URL to a running dev server" : false;
@@ -54,6 +55,7 @@ let modRole: string;
 
 before(async () => {
   if (skip) return;
+  await clearSignupLimit();
   pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   owner = await account("owner");
   helper = await account("helper");

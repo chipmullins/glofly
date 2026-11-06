@@ -302,6 +302,13 @@
       "when": 1794008601707,
       "tag": "0042_webhooks",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794008818735,
+      "tag": "0043_bot_commands",
+      "breakpoints": true
     }
   ]
 }

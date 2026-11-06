@@ -72,8 +72,7 @@ import {
   publicGame,
   shortBody,
   attachmentSummary,
-  type GameState,
-} from "@glofly/shared";
+  type GameState, type MessageButton } from "@glofly/shared";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
 export const conversationsRouter = Router();
@@ -120,6 +119,7 @@ export const messageFields = {
   game: messages.game,
   lantern: messages.lantern,
   lanternFadeAt: messages.lanternFadeAt,
+  buttons: messages.buttons,
 };
 export type MessageRow = {
   id: string;
@@ -138,6 +138,7 @@ export type MessageRow = {
   game: GameInfo | null;
   lantern: boolean;
   lanternFadeAt: Date | null;
+  buttons?: MessageButton[] | null;
 };
 
 const messageBody = z
@@ -247,6 +248,8 @@ export async function hydrate(rows: MessageRow[]) {
       game: deleted || !r.game ? null : publicGame(r.game as unknown as GameState),
       lantern: r.lantern,
       lanternFadeAt: r.lanternFadeAt?.toISOString() ?? null,
+      // Communities round: a bot's buttons (left out entirely when there are none).
+      ...(r.buttons?.length && !deleted ? { buttons: r.buttons } : {}),
     };
   });
 }
@@ -1592,7 +1595,9 @@ export async function postScheduledText(
   myId: string,
   text: string,
   replyToId: string | null,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+  // Communities round: a bot's buttons (the bot API only).
+  buttons: MessageButton[] | null = null,
+): Promise<{ ok: true; messageId: string } | { ok: false; reason: string }> {
   const chat = await access(conversationId, myId);
   if (!chat) return { ok: false, reason: "You're no longer in this chat." };
   if (!(await canPost(chat, myId))) return { ok: false, reason: await cantPostMessage(chat, myId) };
@@ -1610,7 +1615,7 @@ export async function postScheduledText(
   const inserted = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(messages)
-      .values({ conversationId, senderId: myId, body: text, replyToId: reply, mentions })
+      .values({ conversationId, senderId: myId, body: text, replyToId: reply, mentions, buttons: buttons?.length ? buttons : null })
       .returning(messageFields);
     await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));
     await tx
@@ -1627,7 +1632,7 @@ export async function postScheduledText(
   inBackground(notifyMessage(message, chat));
   inBackground(addLinkPreview(inserted.id, conversationId, text, myId));
   if (chat.partner) inBackground(noteGlow(myId, chat.partner));
-  return { ok: true };
+  return { ok: true, messageId: inserted.id };
 }
 
 /** 0.7.3 Mark as unread: everything from this message on counts as unread again (for me only). */

@@ -10,6 +10,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import pg from "pg";
+import { clearSignupLimit } from "./e2eLimits";
 
 const URL_ = process.env.GLOFLY_E2E_URL;
 const skip = !URL_ ? "set GLOFLY_E2E_URL to a running dev server" : false;
@@ -65,6 +66,7 @@ let modRole: string;
 
 before(async () => {
   if (skip) return;
+  await clearSignupLimit();
   pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   receiver = createServer((req, res) => {
     let body = "";

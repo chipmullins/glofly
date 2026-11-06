@@ -88,6 +88,8 @@ export type PublicUser = {
    * holds your nickname (the server swaps it in for you alone). Older apps ignore it.
    */
   realName?: string
+  /** Communities round (Nov 2026): a constellation's bot (shown with a BOT tag). Older servers leave it out. */
+  bot?: boolean
 }
 
 /**
@@ -264,6 +266,8 @@ export type Message = {
   lantern?: boolean
   /** A lantern that has been read by everyone: when it fades (ISO date) */
   lanternFadeAt?: string | null
+  /** Communities round (Nov 2026): buttons under a bot's message (constellations only) */
+  buttons?: import('./integrations').MessageButton[] | null
 }
 
 /** 0.5.0: the reactions that can fly across a chat as fireflies. */

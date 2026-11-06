@@ -176,6 +176,17 @@ function activityText(action: string, key: string, actor: string, target: string
       return `${actor} sent a test to ${key} (${Number(d.status) ? `answered ${d.status}` : "no answer"})`;
     case "hook.disabled":
       return `${key} was switched off after ${String(d.failures)} failed deliveries in a row`;
+    case "interactions.set":
+      return `${key} set where its commands and buttons go`;
+    case "commands.set":
+      return `${key} updated its slash commands (${String(d.count ?? 0)})`;
+    case "interaction.command":
+    case "interaction.button":
+      return `${who} used ${action === "interaction.command" ? "a command" : "a button"} of ${key}${Number(d.status) >= 200 && Number(d.status) < 300 ? "" : " (the bot didn't answer)"}`;
+    case "role.given":
+      return `${key} gave ${who} the role ${String(d.role)}`;
+    case "role.taken":
+      return `${key} took the role ${String(d.role)} from ${who}`;
     case "refused.address":
       return `${key} was refused: it came from an address that isn't allowed`;
     case "refused.scope":

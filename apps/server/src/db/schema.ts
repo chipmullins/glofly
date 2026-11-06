@@ -391,6 +391,9 @@ export const messages = pgTable(
     poll: jsonb("poll").$type<PollInfo>(),
     // A mini game (tic-tac-toe, word guess, trivia): its state, changed by moves.
     game: jsonb("game").$type<GameInfo>(),
+    // Communities round (Nov 2026): buttons under a bot's message (Integrations). Clicking one
+    // tells the bot (its interactions address); the body stays plain text for older apps.
+    buttons: jsonb("buttons").$type<{ id: string; label: string; style: "primary" | "secondary" | "danger" }[]>(),
     // Lantern messages fade away once everyone else has read them: lanternFadeAt is when.
     lantern: boolean("lantern").notNull().default(false),
     lanternFadeAt: timestamp("lantern_fade_at", { withTimezone: true }),
@@ -1609,6 +1612,10 @@ export const constellationApiKeys = pgTable(
     // Written at most once a minute per key.
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     lastUsedIp: text("last_used_ip"),
+    // Where Glofly tells the bot about slash commands and button clicks (https, set by the bot
+    // through the API), and the secret those deliveries are signed with (kept to sign them).
+    interactionsUrl: text("interactions_url"),
+    interactionsSecret: text("interactions_secret"),
   },
   (t) => [
     uniqueIndex("constellation_api_keys_hash_idx").on(t.keyHash),
@@ -1674,4 +1681,25 @@ export const constellationWebhooks = pgTable(
     index("constellation_webhooks_constellation_idx").on(t.constellationId, t.kind),
     uniqueIndex("constellation_webhooks_token_idx").on(t.tokenHash),
   ],
+);
+
+// Slash commands a constellation's bots added (Integrations; scope "commands"). Shown in the
+// message box's / menu to members. Running one posts the member's own message ("/whitelist apply")
+// and tells the bot (its interactions address), which answers through the API.
+export const constellationCommands = pgTable(
+  "constellation_commands",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    keyId: uuid("key_id")
+      .notNull()
+      .references(() => constellationApiKeys.id, { onDelete: "cascade" }),
+    // lower case letters, digits and - (the shared COMMAND_NAME pattern), without the /
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("constellation_commands_name_idx").on(t.constellationId, t.name)],
 );
