@@ -666,7 +666,7 @@ function Adventure({
           <p>Find a crew by what you’re into.</p>
         </div>
         <button type="button" className="cx-adv-browse" onClick={onBrowse}>
-          Browse all
+          Browse the directory
           <svg
             width="14"
             height="14"

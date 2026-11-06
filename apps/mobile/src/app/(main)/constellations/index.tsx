@@ -305,7 +305,8 @@ function InviteCard({ invite, onJoin }: { invite: ConstellationInvite; onJoin: (
 /** "Adventure to new constellations": kinds, popular tags and up to three to try. */
 function Adventure({ discover, onJoin }: { discover: { tags: string[]; suggestions: DirectoryEntry[] } | null; onJoin: (e: DirectoryEntry) => void }) {
   return (
-    <View style={{ gap: 12, marginTop: 6 }}>
+    // Nov 6, 2026 (Chip): a purple panel, like the computer and browser dashboards.
+    <View style={{ gap: 12, marginTop: 6, padding: 16, borderRadius: 22, backgroundColor: 'rgba(58,36,104,0.38)', borderWidth: 1, borderColor: '#3a2a4a', overflow: 'hidden' }}>
       <View>
         <Text display size={22} accessibilityRole="header">
           Adventure to new constellations
@@ -328,7 +329,7 @@ function Adventure({ discover, onJoin }: { discover: { tags: string[]; suggestio
         </View>
       ) : null}
       {discover?.suggestions.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -18 }} contentContainerStyle={{ paddingHorizontal: 18, gap: 12 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
           {discover.suggestions.map((e) => (
             <Suggestion key={e.id} entry={e} onJoin={() => onJoin(e)} />
           ))}
