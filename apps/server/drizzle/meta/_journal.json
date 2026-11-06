@@ -295,6 +295,13 @@
       "when": 1794008130070,
       "tag": "0041_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794008601707,
+      "tag": "0042_webhooks",
+      "breakpoints": true
     }
   ]
 }

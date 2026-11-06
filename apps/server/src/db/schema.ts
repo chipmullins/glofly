@@ -1639,3 +1639,39 @@ export const integrationActivity = pgTable(
     index("integration_activity_created_idx").on(t.createdAt),
   ],
 );
+
+// Integrations → Webhooks. Incoming: a secret address that posts into one nebula as its own bot
+// (only the SHA-256 of the address's token is stored). Outgoing: Glofly tells a server about
+// constellation events (never message contents), signed with HMAC-SHA256 (`Glofly-Signature`).
+export const constellationWebhooks = pgTable(
+  "constellation_webhooks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    // "incoming" | "outgoing"
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    // incoming: the nebula it posts in and the bot it posts as
+    nebulaId: uuid("nebula_id").references(() => nebulas.id, { onDelete: "cascade" }),
+    botUserId: uuid("bot_user_id").references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash"),
+    // outgoing: where events go, which ones, and the signing secret (kept to sign each delivery)
+    url: text("url"),
+    events: text("events").array().notNull().default(sql`'{}'::text[]`),
+    signingSecret: text("signing_secret"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    // outgoing: the last delivery's HTTP status (0 = no answer) and failures in a row
+    lastStatus: integer("last_status"),
+    failures: integer("failures").notNull().default(0),
+    // outgoing: switched off after too many failures in a row (the page offers to turn it on)
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("constellation_webhooks_constellation_idx").on(t.constellationId, t.kind),
+    uniqueIndex("constellation_webhooks_token_idx").on(t.tokenHash),
+  ],
+);

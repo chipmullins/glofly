@@ -7,6 +7,10 @@ import {
   API_KEY_LIFETIMES,
   API_KEY_NAME_MAX,
   API_KEYS_PER_CONSTELLATION_MAX,
+  WEBHOOKS_PER_CONSTELLATION_MAX,
+  WEBHOOK_EVENTS,
+  isWebhookEvent,
+  type WebhookPayload,
   INTEGRATION_SCOPES,
   NEBULA_SCOPES,
   isIntegrationScope,
@@ -14,7 +18,7 @@ import {
   type IntegrationScope,
 } from "@glofly/shared";
 import { db } from "../db";
-import { constellationApiKeys, constellationMemberRoles, constellationRoles, constellations, nebulas, users } from "../db/schema";
+import { constellationApiKeys, constellationMemberRoles, constellationRoles, constellationWebhooks, constellations, nebulas, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { verifyPassword } from "../auth/passwords";
 import { isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
@@ -26,6 +30,9 @@ import { syncNebulaAccess } from "../constellations/access";
 import { constellationChanged } from "../constellations/activity";
 import { activityFor, createBotUser, keyInfo, logIntegration, newKey } from "./keys";
 import { normalizeIp } from "./ip";
+import { webhookAddressProblem } from "../messages/links";
+import { deliver, hookTokenHash, hookUrl, newHookToken, newSigningSecret, webhookInfo } from "./webhooks";
+import { randomUUID } from "node:crypto";
 
 // Communities round (Nov 2026): constellation settings → Integrations (approved mockup boards 1–3).
 // Only the Owner, or a role with "Edit constellation settings", can see or change keys. Making,
@@ -40,6 +47,14 @@ import { normalizeIp } from "./ip";
 //   POST   /constellations/:id/integrations/keys/:keyId/reset  { password } → { secret }
 //   DELETE /constellations/:id/integrations/keys/:keyId
 //   GET    /constellations/:id/integrations/activity?before=
+//   POST   /constellations/:id/integrations/hooks           incoming { kind, name, nebulaId, roleId, password }
+//                                                              → { hook, url } (the address, once)
+//                                                            outgoing { kind, name, url, events, password }
+//                                                              → { hook, secret } (the signing secret, once)
+//   PATCH  /constellations/:id/integrations/hooks/:hookId    { name?, events?, url?, enabled?, password }
+//   POST   /constellations/:id/integrations/hooks/:hookId/reset { password } → { url } or { secret }
+//   POST   /constellations/:id/integrations/hooks/:hookId/test  outgoing: sends a "ping" → { status }
+//   DELETE /constellations/:id/integrations/hooks/:hookId
 
 export const integrationsRouter = Router();
 integrationsRouter.use("/:id/integrations", requireAuth);
@@ -214,7 +229,7 @@ async function writable(s: Standing, res: Response): Promise<boolean> {
 integrationsRouter.get("/:id/integrations", async (req, res) => {
   const s = await manager(req, res);
   if (!s) return;
-  res.json({ keys: await listKeys(s.constellationId) });
+  res.json({ keys: await listKeys(s.constellationId), hooks: await listHooks(s.constellationId) });
 });
 
 // POST /constellations/:id/integrations/keys
@@ -391,3 +406,208 @@ integrationsRouter.get("/:id/integrations/activity", async (req, res) => {
   res.json({ items: await activityFor(s.constellationId, before) });
 });
 
+
+// ───────────── Webhooks ─────────────
+
+async function listHooks(constellationId: string) {
+  const rows = await db
+    .select()
+    .from(constellationWebhooks)
+    .where(eq(constellationWebhooks.constellationId, constellationId))
+    .orderBy(asc(constellationWebhooks.createdAt));
+  return Promise.all(rows.map(async (r) => webhookInfo(r, r.botUserId ? await botRole(constellationId, r.botUserId) : null)));
+}
+
+const apiBase = (req: Request) => (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+
+const hookBody = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("incoming"), name: keyName, nebulaId: idParam, roleId: idParam.nullable().default(null) }),
+  z.object({
+    kind: z.literal("outgoing"),
+    name: keyName,
+    url: z.string().trim().max(500),
+    events: z.array(z.string()).min(1, "Pick at least one event.").max(WEBHOOK_EVENTS.length),
+  }),
+]);
+
+integrationsRouter.post("/:id/integrations/hooks", changeLimiter, async (req, res) => {
+  const s = await manager(req, res);
+  if (!s || !(await writable(s, res))) return;
+  const parsed = hookBody.safeParse(req.body);
+  if (!parsed.success) {
+    bad(res, parsed.error.issues[0]?.message ?? "Check the webhook's details.");
+    return;
+  }
+  if (!(await passwordOk(s.userId, req.body?.password))) {
+    bad(res, "That password isn't right.", 403);
+    return;
+  }
+  const count = await db.$count(constellationWebhooks, eq(constellationWebhooks.constellationId, s.constellationId));
+  if (count >= WEBHOOKS_PER_CONSTELLATION_MAX) {
+    bad(res, `A constellation can have up to ${WEBHOOKS_PER_CONSTELLATION_MAX} webhooks. Delete one you don't use first.`);
+    return;
+  }
+  const d = parsed.data;
+  if (d.kind === "incoming") {
+    const checked = await check(s, { roleId: d.roleId, scopes: ["messages:write"], postNebulaIds: [d.nebulaId], readNebulaIds: [], allowedIps: [] });
+    if (typeof checked === "string") {
+      bad(res, checked);
+      return;
+    }
+    const [n] = await db.select({ kind: nebulas.kind }).from(nebulas).where(eq(nebulas.id, d.nebulaId));
+    if (n?.kind !== "text") {
+      bad(res, "Pick a text nebula.");
+      return;
+    }
+    const token = newHookToken();
+    let hookId: string;
+    try {
+      hookId = await db.transaction(async (tx) => {
+        await tx.select({ id: constellations.id }).from(constellations).where(eq(constellations.id, s.constellationId)).for("update");
+        const botId = await createBotUser(tx, d.name);
+        await addMember(tx, s.constellationId, botId, { welcomed: true });
+        await setBotRole(tx, s.constellationId, botId, checked.roleId);
+        const [row] = await tx
+          .insert(constellationWebhooks)
+          .values({ constellationId: s.constellationId, kind: "incoming", name: d.name, nebulaId: d.nebulaId, botUserId: botId, tokenHash: hookTokenHash(token), createdBy: s.userId })
+          .returning({ id: constellationWebhooks.id });
+        return row.id;
+      });
+    } catch (err) {
+      if (err instanceof ConstellationFull) {
+        bad(res, "This constellation is full, so there's no room for the webhook's bot.");
+        return;
+      }
+      throw err;
+    }
+    await logIntegration({ constellationId: s.constellationId, keyName: d.name, actorId: s.userId, action: "hook.created", details: { kind: "incoming" } });
+    await constellationChanged(s.constellationId);
+    const hook = (await listHooks(s.constellationId)).find((h) => h.id === hookId);
+    res.set("Cache-Control", "no-store");
+    res.status(201).json({ hook, url: hookUrl(apiBase(req), hookId, token) });
+    return;
+  }
+  const problem = webhookAddressProblem(d.url);
+  if (problem) {
+    bad(res, problem);
+    return;
+  }
+  if (!d.events.every(isWebhookEvent)) {
+    bad(res, "Pick events from the list.");
+    return;
+  }
+  const secret = newSigningSecret();
+  const [row] = await db
+    .insert(constellationWebhooks)
+    .values({ constellationId: s.constellationId, kind: "outgoing", name: d.name, url: d.url, events: [...new Set(d.events)], signingSecret: secret, createdBy: s.userId })
+    .returning();
+  await logIntegration({ constellationId: s.constellationId, keyName: d.name, actorId: s.userId, action: "hook.created", details: { kind: "outgoing" } });
+  res.set("Cache-Control", "no-store");
+  res.status(201).json({ hook: webhookInfo(row, null), secret });
+});
+
+async function hookFor(req: Request, res: Response, s: Standing) {
+  const hookId = idParam.safeParse(req.params.hookId);
+  const [row] = hookId.success
+    ? await db
+        .select()
+        .from(constellationWebhooks)
+        .where(and(eq(constellationWebhooks.id, hookId.data), eq(constellationWebhooks.constellationId, s.constellationId)))
+    : [];
+  if (!row) bad(res, "That webhook isn't there any more.", 404);
+  return row ?? null;
+}
+
+integrationsRouter.patch("/:id/integrations/hooks/:hookId", changeLimiter, async (req, res) => {
+  const s = await manager(req, res);
+  if (!s || !(await writable(s, res))) return;
+  const row = await hookFor(req, res, s);
+  if (!row) return;
+  const parsed = z
+    .object({ name: keyName.optional(), url: z.string().trim().max(500).optional(), events: z.array(z.string()).min(1).max(WEBHOOK_EVENTS.length).optional(), enabled: z.boolean().optional() })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    bad(res, parsed.error.issues[0]?.message ?? "Check the webhook's details.");
+    return;
+  }
+  if (!(await passwordOk(s.userId, req.body?.password))) {
+    bad(res, "That password isn't right.", 403);
+    return;
+  }
+  const d = parsed.data;
+  if (row.kind === "incoming" && (d.url || d.events)) {
+    bad(res, "Incoming webhooks don't have an address or events to change.");
+    return;
+  }
+  if (d.url) {
+    const problem = webhookAddressProblem(d.url);
+    if (problem) {
+      bad(res, problem);
+      return;
+    }
+  }
+  if (d.events && !d.events.every(isWebhookEvent)) {
+    bad(res, "Pick events from the list.");
+    return;
+  }
+  await db
+    .update(constellationWebhooks)
+    .set({
+      ...(d.name ? { name: d.name } : {}),
+      ...(d.url ? { url: d.url } : {}),
+      ...(d.events ? { events: [...new Set(d.events)] } : {}),
+      ...(d.enabled === true ? { disabledAt: null, failures: 0 } : d.enabled === false ? { disabledAt: new Date() } : {}),
+    })
+    .where(eq(constellationWebhooks.id, row.id));
+  if (d.name && row.botUserId) await db.update(users).set({ displayName: d.name }).where(eq(users.id, row.botUserId));
+  await logIntegration({ constellationId: s.constellationId, keyName: d.name ?? row.name, actorId: s.userId, action: "hook.changed" });
+  res.json({ hook: (await listHooks(s.constellationId)).find((h) => h.id === row.id) });
+});
+
+integrationsRouter.post("/:id/integrations/hooks/:hookId/reset", changeLimiter, async (req, res) => {
+  const s = await manager(req, res);
+  if (!s) return;
+  const row = await hookFor(req, res, s);
+  if (!row) return;
+  if (!(await passwordOk(s.userId, req.body?.password))) {
+    bad(res, "That password isn't right.", 403);
+    return;
+  }
+  await logIntegration({ constellationId: s.constellationId, keyName: row.name, actorId: s.userId, action: "hook.reset", details: { kind: row.kind } });
+  res.set("Cache-Control", "no-store");
+  if (row.kind === "incoming") {
+    const token = newHookToken();
+    await db.update(constellationWebhooks).set({ tokenHash: hookTokenHash(token) }).where(eq(constellationWebhooks.id, row.id));
+    res.json({ url: hookUrl(apiBase(req), row.id, token) });
+  } else {
+    const secret = newSigningSecret();
+    await db.update(constellationWebhooks).set({ signingSecret: secret }).where(eq(constellationWebhooks.id, row.id));
+    res.json({ secret });
+  }
+});
+
+integrationsRouter.post("/:id/integrations/hooks/:hookId/test", changeLimiter, async (req, res) => {
+  const s = await manager(req, res);
+  if (!s) return;
+  const row = await hookFor(req, res, s);
+  if (!row) return;
+  if (row.kind !== "outgoing" || !row.url || !row.signingSecret) {
+    bad(res, "Only outgoing webhooks can be tested.");
+    return;
+  }
+  const payload: WebhookPayload = { id: randomUUID(), type: "ping", constellationId: s.constellationId, createdAt: new Date().toISOString(), data: {} };
+  const status = await deliver({ id: row.id, url: row.url, signingSecret: row.signingSecret, constellationId: s.constellationId, name: row.name }, payload);
+  await logIntegration({ constellationId: s.constellationId, keyName: row.name, actorId: s.userId, action: "hook.test", details: { status } });
+  res.json({ status, ok: status >= 200 && status < 300 });
+});
+
+integrationsRouter.delete("/:id/integrations/hooks/:hookId", changeLimiter, async (req, res) => {
+  const s = await manager(req, res);
+  if (!s) return;
+  const row = await hookFor(req, res, s);
+  if (!row) return;
+  await db.delete(constellationWebhooks).where(eq(constellationWebhooks.id, row.id));
+  if (row.botUserId) await removeMember(s.constellationId, row.botUserId);
+  await logIntegration({ constellationId: s.constellationId, keyName: row.name, actorId: s.userId, action: "hook.deleted" });
+  res.json({ ok: true });
+});

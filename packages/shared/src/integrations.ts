@@ -100,3 +100,54 @@ export type IntegrationActivity = {
   text: string
   from: string | null
 }
+
+// ───────────── Webhooks ─────────────
+
+/** Events an outgoing webhook can send. Never message contents. */
+export type WebhookEvent = 'member.joined' | 'member.left' | 'member.roles'
+export const WEBHOOK_EVENTS: readonly { id: WebhookEvent; name: string }[] = [
+  { id: 'member.joined', name: 'Member joined' },
+  { id: 'member.left', name: 'Member left (or was removed)' },
+  { id: 'member.roles', name: "Someone's roles changed" }
+]
+export const isWebhookEvent = (s: unknown): s is WebhookEvent =>
+  typeof s === 'string' && WEBHOOK_EVENTS.some((e) => e.id === s)
+
+export const WEBHOOKS_PER_CONSTELLATION_MAX = 10
+/** Outgoing webhooks switch themselves off after this many failed deliveries in a row. */
+export const WEBHOOK_FAILURES_MAX = 50
+
+export type WebhookInfo = {
+  id: string
+  kind: 'incoming' | 'outgoing'
+  name: string
+  /** incoming */
+  nebulaId: string | null
+  botUserId: string | null
+  /** incoming: the bot's role (null = only Member) */
+  roleId: string | null
+  /** outgoing */
+  url: string | null
+  events: WebhookEvent[]
+  createdAt: string
+  lastUsedAt: string | null
+  lastStatus: number | null
+  failures: number
+  disabled: boolean
+}
+
+/**
+ * What an outgoing webhook receives (POST, JSON). Check it came from Glofly: the header
+ * `Glofly-Signature: t=<unix seconds>,v1=<hex>` where v1 = HMAC-SHA256(secret, `${t}.${body}`);
+ * refuse anything older than 5 minutes.
+ */
+export type WebhookPayload = {
+  id: string
+  type: WebhookEvent | 'ping'
+  constellationId: string
+  createdAt: string
+  data: {
+    user?: { id: string; username: string; displayName: string }
+    roleIds?: string[]
+  }
+}

@@ -282,3 +282,63 @@ export const previewImageKey = (conversationId: string, messageId: string) => `p
 export async function savePreviewImage(conversationId: string, messageId: string, image: Buffer): Promise<void> {
   await storage.put(previewImageKey(conversationId, messageId), image, "image/webp");
 }
+
+// ---- Communities round (Nov 2026): outgoing webhooks ----
+
+/**
+ * POSTs a small JSON body to a public address only (the same checks as link previews: the name is
+ * resolved once, private/loopback/link-local addresses are refused, the connection goes to the
+ * checked address, standard ports only). No redirects are followed. Returns the status (0 = it
+ * never got an answer).
+ */
+export async function safePost(target: string, body: string, headers: Record<string, string>): Promise<number> {
+  let url: URL;
+  try {
+    url = new URL(target);
+  } catch {
+    return 0;
+  }
+  if (url.protocol !== "https:" && !(ALLOW_PRIVATE && url.protocol === "http:")) return 0;
+  if (url.username || url.password) return 0;
+  if (url.port && url.port !== "443" && !ALLOW_PRIVATE) return 0;
+  const address = await publicAddress(url.hostname);
+  if (!address) return 0;
+  const lib = url.protocol === "https:" ? https : http;
+  return new Promise((resolve) => {
+    const req = lib.request(
+      url,
+      {
+        method: "POST",
+        headers: { "User-Agent": UA, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), ...headers },
+        timeout: TIME_LIMIT_MS,
+        lookup: ((_host: string, opts: { all?: boolean }, cb: (...args: unknown[]) => void) =>
+          opts?.all
+            ? cb(null, [{ address: address.address, family: address.family }])
+            : cb(null, address.address, address.family)) as unknown as import("node:net").LookupFunction,
+      },
+      (res) => {
+        res.resume(); // the answer's body isn't needed
+        resolve(res.statusCode ?? 0);
+      },
+    );
+    req.on("timeout", () => req.destroy());
+    req.on("error", () => resolve(0));
+    setTimeout(() => req.destroy(), TIME_LIMIT_MS + 500).unref();
+    req.end(body);
+  });
+}
+
+/** An address an outgoing webhook may use: https on a public name (checked again on every send). */
+export function webhookAddressProblem(target: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(target);
+  } catch {
+    return "That isn't a web address.";
+  }
+  if (url.protocol !== "https:" && !(ALLOW_PRIVATE && url.protocol === "http:")) return "Use an https:// address.";
+  if (url.username || url.password) return "Leave the user name and password out of the address.";
+  if (url.port && url.port !== "443" && !ALLOW_PRIVATE) return "Use the standard https port (443).";
+  if (isIP(url.hostname.replace(/^\[|\]$/g, "")) && !ALLOW_PRIVATE) return "Use a name (like events.example.com), not an IP address.";
+  return null;
+}

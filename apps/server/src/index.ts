@@ -51,6 +51,7 @@ import { pushKind } from "./push/fcm";
 import { voipKind } from "./push/apns";
 import { integrationsRouter } from "./integrations/routes";
 import { botApiRouter } from "./integrations/api";
+import { incomingHooksRouter } from "./integrations/webhooks";
 import { sweepIntegrationActivity } from "./integrations/keys";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
@@ -151,6 +152,8 @@ app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
 // Communities round: the bot API (/api/v1, "Authorization: Bot gfk_…"), for game servers and bots.
 app.use(botApiRouter);
+// Communities round: incoming webhooks (POST /hooks/<id>/<token> posts into one nebula).
+app.use(incomingHooksRouter);
 // 0.7.5: a constellation invite link's page (glofly.app/c/<code>; Caddy sends /c/* here).
 app.use("/c", invitePageRouter);
 // 0.8.0: a friend invite link's page (glofly.app/i/<code>; Caddy sends /i/* here).

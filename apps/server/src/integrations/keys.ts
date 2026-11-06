@@ -162,6 +162,20 @@ function activityText(action: string, key: string, actor: string, target: string
       return `${key} read the roles list`;
     case "message.post":
       return `${key} posted in #${String(d.nebula ?? "a nebula")}`;
+    case "hook.created":
+      return `${actor} made the webhook ${key}`;
+    case "hook.reset":
+      return `${actor} gave the webhook ${key} a new ${d.kind === "outgoing" ? "signing secret" : "address"}`;
+    case "hook.changed":
+      return `${actor} changed the webhook ${key}`;
+    case "hook.deleted":
+      return `${actor} deleted the webhook ${key}`;
+    case "hook.post":
+      return `${key} posted in #${String(d.nebula ?? "a nebula")}`;
+    case "hook.test":
+      return `${actor} sent a test to ${key} (${Number(d.status) ? `answered ${d.status}` : "no answer"})`;
+    case "hook.disabled":
+      return `${key} was switched off after ${String(d.failures)} failed deliveries in a row`;
     case "refused.address":
       return `${key} was refused: it came from an address that isn't allowed`;
     case "refused.scope":

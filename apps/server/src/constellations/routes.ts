@@ -80,6 +80,7 @@ import { bannerKey, memberCard } from "./community";
 import { bannerPhoto } from "../profile/photo";
 import { announceVoice, setSharing, voiceStatesOf } from "./voice";
 import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula } from "./home";
+import { fireConstellationEvent } from "../integrations/events";
 import { seesNebulaChat, syncNebulaAccess } from "./access";
 
 // Constellations (Glofly 2.0): communities with nebulas, categories, members and roles.
@@ -1038,6 +1039,7 @@ constellationsRouter.put("/:id/me/roles", changeLimiter, async (req, res) => {
     return;
   }
   await db.transaction((tx) => setMyPickedRoles(tx, s.constellationId, s.userId, parsed.data.roleIds));
+  fireConstellationEvent(s.constellationId, "member.roles", s.userId, await heldRoleIds(s.constellationId, s.userId));
   await resync(s.constellationId, [s.userId]);
   await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
@@ -1962,8 +1964,19 @@ constellationsRouter.put("/:id/members/:uid/roles", changeLimiter, async (req, r
   await resync(s.constellationId, [t.userId]);
   await constellationChanged(s.constellationId);
   emitToUser(t.userId, "constellations:changed", {}, true);
+  // Communities round: outgoing webhooks (a game server updates permissions).
+  fireConstellationEvent(s.constellationId, "member.roles", t.userId, await heldRoleIds(s.constellationId, t.userId));
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
+
+/** Communities round: someone's roles now (for outgoing webhooks). */
+async function heldRoleIds(constellationId: string, userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ roleId: constellationMemberRoles.roleId })
+    .from(constellationMemberRoles)
+    .where(and(eq(constellationMemberRoles.constellationId, constellationId), eq(constellationMemberRoles.userId, userId)));
+  return rows.map((r) => r.roleId);
+}
 
 // ───────────── Moderation ─────────────
 
