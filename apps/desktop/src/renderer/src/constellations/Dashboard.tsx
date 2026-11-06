@@ -454,7 +454,7 @@ export default function Dashboard({
         <div className="cx-dash-title-row">
           <div className="cx-dash-title">
             <h1>Your constellations</h1>
-            <p>Communities you belong to. Pick one to fly in.</p>
+            <p>Communities you belong to.</p>
           </div>
           <button type="button" className="cx-pill" onClick={() => onCreate('join')}>
             <LinkOutIcon />
@@ -487,8 +487,7 @@ export default function Dashboard({
           <div className="cx-empty">
             <h2>No constellations yet</h2>
             <p>
-              Make one for your crew, join one with a friend’s invite, or find a public one to fly
-              into.
+              Make one for your crew, join one with a friend’s invite, or find a public one to join.
             </p>
             {!browse && (
               <button

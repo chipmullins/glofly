@@ -133,7 +133,7 @@ export default function Dashboard() {
               Your constellations
             </Text>
             <Text size={14} style={{ color: N.ink2, marginTop: 4 }}>
-              Communities you belong to. Pick one to fly in.
+              Communities you belong to.
             </Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 10 }}>
