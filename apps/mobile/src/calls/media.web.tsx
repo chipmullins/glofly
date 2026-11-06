@@ -59,3 +59,11 @@ export function CallVideo({ track, style, mirror, contain }: { track: VideoTrack
     />
   )
 }
+
+// iPhone-only audio session helpers (media.tsx): nothing to do in a browser preview. Without these
+// the web preview crashed at sign-in (startCalls calls watchIdleAudioShape).
+export function watchIdleAudioShape(): void {}
+export function prepareForCallKit(_delayMs = 0): void {}
+export async function kickStuckAudio(): Promise<boolean> {
+  return false
+}
