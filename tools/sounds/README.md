@@ -82,3 +82,11 @@ sing a soft "Glo-fly", two log offs "Good-bye" (round 3's voice with a triangle 
 from `talkbox2026.py` as the login default and wanted more like it. Ten "Glo-fly" and ten "Good-bye": duets, little
 choirs, lullaby, whisper (Kokoro's af_nicole), breeze, echo, kalimba; mixed about 3 dB quieter than round 6.
 Preview page: "Glofly Peaceful Voices" (https://claude.ai/artifact/7NhjKWjrk6VTB9zfh1ehmC).
+
+**Nov 5, 2026 login sounds, rounds 7–9.** Round 7 (`glofly2026.py`, "Glo-fly" re-sung from the Kokoro speech
+engine with WORLD) was too intense and too much like a real person. Round 8 (`glofly2026b.py`, an instrument with a
+faint vocoded word underneath) wasn't shown. Round 9 (`glofly2026c.py <out>`): round 3's homemade voice singing
+"Glo-fly" low and smooth like Hel-lo (deep). Chip's picks: **Duskwing** (deep-long, the login default) and **Low glow**
+(deep-c); the talking chord stays as **Glo-bot**. `python glofly2026c.py --install ../..` rewrites
+`login-duskwing.ogg` / `login-low-glow.ogg` (it renders every sound in page order, so the files match the preview).
+Glo-fly hummed and Dawn hum stay in the app but aren't offered (sound defaults 8 moves Glo-fly hummed to Duskwing).

@@ -81,6 +81,8 @@ import msgStarNudgeFile from '../assets/sounds/msg-star-nudge.ogg'
 import msgRippleFile from '../assets/sounds/msg-ripple.ogg'
 import loginGloflyChordFile from '../assets/sounds/login-glofly-chord.ogg'
 import loginGloflyHumFile from '../assets/sounds/login-glofly-hum.ogg'
+import loginDuskwingFile from '../assets/sounds/login-duskwing.ogg'
+import loginLowGlowFile from '../assets/sounds/login-low-glow.ogg'
 import loginDawnHumFile from '../assets/sounds/login-dawn-hum.ogg'
 import logoffGoodbyeSoftFile from '../assets/sounds/logoff-goodbye-soft.ogg'
 import logoffHushHumFile from '../assets/sounds/logoff-hush-hum.ogg'
@@ -225,9 +227,12 @@ export const SOUND_FILES: Record<
   mmHmQ: { label: 'Mm-hm?', url: msgMmhmQFile },
   starNudge: { label: 'Star nudge', url: msgStarNudgeFile },
   ripple: { label: 'Ripple', url: msgRippleFile },
-  // Oct 30, 2026: the hummed one is the default; the talking chord is "Glo-fly Robot".
+  // Nov 5, 2026: Duskwing is the default, Low glow the other sung one, Glo-bot the talking chord.
+  // Glo-fly hummed (Oct 30 default) and Dawn hum stay here but aren't offered.
+  duskwing: { label: 'Duskwing', url: loginDuskwingFile },
+  lowGlow: { label: 'Low glow', url: loginLowGlowFile },
   gloflyHum: { label: 'Glo-fly hummed', url: loginGloflyHumFile },
-  gloflyChord: { label: 'Glo-fly Robot', url: loginGloflyChordFile },
+  gloflyChord: { label: 'Glo-bot', url: loginGloflyChordFile },
   dawnHum: { label: 'Dawn hum', url: loginDawnHumFile },
   goodbyeSoft: { label: 'Good-bye', url: logoffGoodbyeSoftFile },
   hushHum: { label: 'Hush hum', url: logoffHushHumFile },
@@ -271,7 +276,7 @@ export const ROW_CHOICES = {
     'ripple',
     'none'
   ],
-  login: ['gloflyHum', 'gloflyChord', 'dawnHum', 'none'],
+  login: ['duskwing', 'lowGlow', 'gloflyChord', 'none'],
   logout: ['goodbyeSoft', 'hushHum', 'none'],
   messageSent: [
     'softWhoosh',
@@ -298,7 +303,7 @@ let settings: SoundSettings = {
   constellationMessage: 'skyLantern',
   friendRequest: 'nightBreeze',
   friendOnline: 'hollowWood',
-  login: 'gloflyHum',
+  login: 'duskwing',
   logout: 'goodbyeSoft',
   callConnected: 'whistleUp',
   callEnded: 'whistleDown',

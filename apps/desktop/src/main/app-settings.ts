@@ -44,7 +44,7 @@ const saved: Saved = {
     constellationMessage: 'skyLantern',
     friendRequest: 'nightBreeze',
     friendOnline: 'hollowWood',
-    login: 'gloflyHum',
+    login: 'duskwing',
     logout: 'goodbyeSoft',
     callConnected: 'whistleUp',
     callEnded: 'whistleDown',
@@ -123,7 +123,7 @@ const ROW_SOUNDS: Record<string, readonly string[]> = {
     'ripple',
     'none'
   ],
-  login: ['gloflyHum', 'gloflyChord', 'dawnHum', 'none'],
+  login: ['duskwing', 'lowGlow', 'gloflyChord', 'none'],
   logout: ['goodbyeSoft', 'hushHum', 'none'],
   messageSent: [
     'softWhoosh',
@@ -149,8 +149,9 @@ const ROW_SOUNDS: Record<string, readonly string[]> = {
  * 5 (Oct 29, 2026): new call sounds; older ones aren't accepted for the call rows (ROW_SOUNDS).
  * 6 (Oct 30, 2026): new message, login and log out sounds and the message sent row (ROW_SOUNDS).
  * 7 (0.8.8): the login sound's default became Glo-fly hummed (Glo-fly Robot in 0.8.7).
+ * 8 (Nov 5, 2026): login sounds Duskwing (default), Low glow, Glo-bot; anyone on Glo-fly hummed moves to Duskwing.
  */
-const SOUND_DEFAULTS_VERSION = 7
+const SOUND_DEFAULTS_VERSION = 8
 
 /** Checks a sound setting (from the window or the saved file) before using it. */
 function soundSettingOk(key: string, value: unknown): boolean {
@@ -229,6 +230,9 @@ export function loadAppSettings(): void {
       }
       if ((value.soundDefaultsVersion ?? 1) < 7 && saved.sounds.login === 'gloflyChord') {
         saved.sounds.login = 'gloflyHum'
+      }
+      if ((value.soundDefaultsVersion ?? 1) < 8 && saved.sounds.login === 'gloflyHum') {
+        saved.sounds.login = 'duskwing'
       }
     }
     if (isNotificationChanges(value.notifications)) {

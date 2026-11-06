@@ -41,7 +41,7 @@ const saved: Saved = {
     constellationMessage: 'skyLantern',
     friendRequest: 'nightBreeze',
     friendOnline: 'hollowWood',
-    login: 'gloflyHum',
+    login: 'duskwing',
     logout: 'goodbyeSoft',
     callConnected: 'whistleUp',
     callEnded: 'whistleDown',
@@ -112,7 +112,7 @@ const ROW_SOUNDS: Record<string, readonly string[]> = {
     'ripple',
     'none'
   ],
-  login: ['gloflyHum', 'gloflyChord', 'dawnHum', 'none'],
+  login: ['duskwing', 'lowGlow', 'gloflyChord', 'none'],
   logout: ['goodbyeSoft', 'hushHum', 'none'],
   messageSent: [
     'softWhoosh',
@@ -194,6 +194,8 @@ function load(): void {
     if (v < 4 && saved.sounds.friendRequest === 'chime') saved.sounds.friendRequest = 'nightBreeze'
     // 7 (0.8.8): Glo-fly hummed became the login default (Glo-fly Robot in 0.8.7).
     if (v < 7 && saved.sounds.login === 'gloflyChord') saved.sounds.login = 'gloflyHum'
+    // 8 (Nov 5, 2026): Duskwing is the login default; Glo-fly hummed isn't offered any more.
+    if (v < 8 && saved.sounds.login === 'gloflyHum') saved.sounds.login = 'duskwing'
   }
   const n = value.notifications as Partial<NotificationSettings> | undefined
   if (n && typeof n === 'object') {
@@ -204,7 +206,7 @@ function load(): void {
 
 function save(): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...saved, soundDefaults: 7 }))
+    localStorage.setItem(KEY, JSON.stringify({ ...saved, soundDefaults: 8 }))
   } catch {
     // Storage blocked: the change lasts until the page is closed.
   }
