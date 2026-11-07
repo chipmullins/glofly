@@ -4,7 +4,8 @@ import { attachmentSummary, isConstellationColor, shortBody, type NebulaMention,
 import { db } from "../db";
 import { attachments, constellationMembers, constellations, conversationMembers, messages, nebulaPins, nebulas } from "../db/schema";
 import { publicUsers, unreadFor } from "./views";
-import { alertFor } from "./activity";
+import { alertFor, laterMute } from "./activity";
+import { mentionsUserSql } from "./groupMentions";
 
 // The nebula dock on Glofly home (2.0, approved Oct 17 boards 9–14): nebulas you pinned there,
 // and every @mention of you across your constellations. Only constellations you're in and that
@@ -108,7 +109,7 @@ export async function mentionsFor(
   if (!chats.length) return { mentions: [], unread: 0, more: false };
   const byChat = new Map(chats.map((c) => [c.conversationId, c]));
   const since = new Date(Date.now() - MENTIONS_DAYS * 24 * 60 * 60 * 1000);
-  const mentionsMe = sql`${userId}::uuid = any(${messages.mentions})`;
+  const mentionsMe = mentionsUserSql(userId);
   const rows = await db
     .select({
       id: messages.id,
@@ -200,6 +201,7 @@ export async function newsFor(userId: string): Promise<NebulaNews[]> {
       level: conversationMembers.notifyLevel,
       mutedUntil: conversationMembers.mutedUntil,
       defaultLevel: constellationMembers.notify,
+      constellationMute: constellationMembers.mutedUntil,
       lastReadAt: conversationMembers.lastReadAt,
     })
     .from(nebulas)
@@ -221,7 +223,7 @@ export async function newsFor(userId: string): Promise<NebulaNews[]> {
     if (!u || !u.unread) return false;
     const level = c.level ?? c.defaultLevel;
     // An @mention always counts (like its notification); other messages follow your settings.
-    return u.mentions > 0 || !!alertFor(level, c.mutedUntil, false, now);
+    return u.mentions > 0 || !!alertFor(level, laterMute(c.mutedUntil, c.constellationMute), false, now);
   });
   if (!worth.length) return [];
   // The newest message in each (unread ones only)

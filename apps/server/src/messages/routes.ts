@@ -54,6 +54,7 @@ import { logModeration, nebulaActivity } from "../constellations/activity";
 import { automodGate, automodWordInEdit } from "../constellations/automod";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
+import { groupMentionsFor, NO_GROUP_MENTIONS } from "../constellations/groupMentions";
 import { voiceAsM4a } from "./voiceM4a";
 import { examineVideo, videoContainer } from "./video";
 import { pollView, votesFor } from "./polls";
@@ -116,6 +117,8 @@ export const messageFields = {
   deletedAt: messages.deletedAt,
   event: messages.event,
   mentions: messages.mentions,
+  mentionEveryone: messages.mentionEveryone,
+  mentionRoles: messages.mentionRoles,
   gif: messages.gif,
   linkPreview: messages.linkPreview,
   poll: messages.poll,
@@ -137,6 +140,8 @@ export type MessageRow = {
   deletedAt: Date | null;
   event: ChatEvent | null;
   mentions: string[];
+  mentionEveryone: string | null;
+  mentionRoles: string[];
   gif: GifInfo | null;
   linkPreview: LinkPreviewInfo | null;
   poll: PollInfo | null;
@@ -238,6 +243,10 @@ export async function hydrate(rows: MessageRow[]) {
       ...(legacy ? { [eventField(r.event)]: r.event } : {}),
       // Group members this message @mentions.
       mentions: deleted ? [] : (r.mentions ?? []),
+      // Communities round 4.2 (nebulas): @everyone / @here and the roles it mentions.
+      ...(!deleted && (r.mentionEveryone || r.mentionRoles?.length)
+        ? { mentionEveryone: r.mentionEveryone === "here" || r.mentionEveryone === "everyone" ? r.mentionEveryone : null, mentionRoles: r.mentionRoles ?? [] }
+        : {}),
       replyTo: reply
         ? {
             id: reply.id,
@@ -1531,13 +1540,16 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
 
   // Groups and nebulas: who this @mentions (only people in it right now).
   const mentions = chat.kind !== "dm" && !gif ? await mentionsIn(text, chat.memberIds, myId) : [];
+  // Communities round 4.2: @everyone, @here and @Role (nebulas; only if you may).
+  const group = chat.kind === "nebula" && !gif ? await groupMentionsFor(text, id.data, chat.memberIds, myId) : NO_GROUP_MENTIONS;
+  const mentioned = [...new Set([...mentions, ...group.groupMentions])];
 
   let inserted: MessageRow;
   try {
     inserted = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)
-        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, gif, lantern, threadId: thread?.id ?? null, alsoInNebula })
+        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, ...group, gif, lantern, threadId: thread?.id ?? null, alsoInNebula })
         .returning(messageFields);
       const inserted = row;
       // Attach your uploads, in the order given. Each must be yours, for this chat, and unsent.
@@ -1600,8 +1612,9 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     toolHook("onNebulaMessage", id.data, inserted.id, "created");
     if (!alsoInNebula) {
       res.status(201).json({ message: mineCopy });
-      const told = new Set([...(await followersOf(thread.id)), ...mentions]);
-      inBackground(notifyMessage(message, { ...chat, memberIds: chat.memberIds.filter((u) => told.has(u)) }));
+      // 4.2: "Trails and signals I follow" off = only mentions reach you (board 23).
+      const told = new Set([...(await followersOf(thread.id, true)), ...mentioned]);
+      inBackground(notifyMessage({ ...message, groupMentions: group.groupMentions }, { ...chat, memberIds: chat.memberIds.filter((u) => told.has(u)) }));
       inBackground(addLinkPreview(inserted.id, id.data, text, myId));
       return;
     }
@@ -1611,7 +1624,7 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     emitToUser(userId, "message:new", modernOnly(chat) ? { message: m, nebula: true } : { message: m }, modernOnly(chat));
   }
   if (chat.kind === "nebula") {
-    inBackground(nebulaActivity(id.data, myId, inserted.createdAt, mentions, nebulaPreview(message)));
+    inBackground(nebulaActivity(id.data, myId, inserted.createdAt, mentions, nebulaPreview(message), group.groupMentions));
     if (!thread) toolHook("onNebulaMessage", id.data, inserted.id, "created");
   }
   // Replying means you've read everything before it ("Seen" is for DMs).
@@ -1619,7 +1632,9 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   res.status(201).json({ message: mineCopy });
   // Phones: a notification for everyone else, and this chat's notification cleared on your others.
   // A lantern message's words stay in the chat (the notification just says there's one).
-  inBackground(notifyMessage(lantern ? { ...message, body: "🏮 Lantern message", attachments: [] } : message, chat));
+  inBackground(
+    notifyMessage({ ...(lantern ? { ...message, body: "🏮 Lantern message", attachments: [] } : message), groupMentions: group.groupMentions }, chat),
+  );
   inBackground(notifyRead(myId, id.data, res.locals.sessionId));
   // 0.5.0: the first link gets a preview a moment later (message:updated).
   if (!gif && !lantern) inBackground(addLinkPreview(inserted.id, id.data, text, myId));
@@ -1683,10 +1698,11 @@ export async function postScheduledText(
     if (!original || original.deletedAt || original.event) reply = null; // send it anyway, without the reply
   }
   const mentions = chat.kind !== "dm" ? await mentionsIn(text, chat.memberIds, myId) : [];
+  const group = chat.kind === "nebula" ? await groupMentionsFor(text, conversationId, chat.memberIds, myId) : NO_GROUP_MENTIONS;
   const inserted = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(messages)
-      .values({ conversationId, senderId: myId, body: text, replyToId: reply, mentions, buttons: buttons?.length ? buttons : null })
+      .values({ conversationId, senderId: myId, body: text, replyToId: reply, mentions, ...group, buttons: buttons?.length ? buttons : null })
       .returning(messageFields);
     await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));
     await tx
@@ -1699,11 +1715,11 @@ export async function postScheduledText(
   for (const userId of chat.memberIds)
     emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
   if (chat.kind === "nebula") {
-    inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, mentions, nebulaPreview(message)));
+    inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, mentions, nebulaPreview(message), group.groupMentions));
     toolHook("onNebulaMessage", conversationId, inserted.id, "created");
   }
   if (chat.partner) await shareReadPosition(conversationId, myId, chat.partner, inserted.createdAt);
-  inBackground(notifyMessage(message, chat));
+  inBackground(notifyMessage({ ...message, groupMentions: group.groupMentions }, chat));
   inBackground(addLinkPreview(inserted.id, conversationId, text, myId));
   if (chat.partner) inBackground(noteGlow(myId, chat.partner));
   return { ok: true, messageId: inserted.id };
@@ -1847,9 +1863,10 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
   if (body.data !== message.body) {
     // Mentions follow the new text (an edit doesn't notify anyone again).
     const mentions = chat.kind !== "dm" ? await mentionsIn(body.data, chat.memberIds, myId) : [];
+    const group = chat.kind === "nebula" ? await groupMentionsFor(body.data, conversationId, chat.memberIds, myId) : NO_GROUP_MENTIONS;
     await db
       .update(messages)
-      .set({ body: body.data, editedAt: new Date(), mentions })
+      .set({ body: body.data, editedAt: new Date(), mentions, ...group })
       .where(eq(messages.id, message.id));
     // The link changed: a new preview (or none).
     if (firstLink(body.data) !== (message.linkPreview?.url ?? null)) {
@@ -1908,7 +1925,7 @@ async function wipeMessage(messageId: string): Promise<void> {
   const removed = await db.transaction(async (tx) => {
     await tx
       .update(messages)
-      .set({ body: "", deletedAt: new Date(), editedAt: null, mentions: [], gif: null, linkPreview: null, poll: null, game: null })
+      .set({ body: "", deletedAt: new Date(), editedAt: null, mentions: [], ...NO_GROUP_MENTIONS, gif: null, linkPreview: null, poll: null, game: null })
       .where(eq(messages.id, messageId));
     await tx.delete(messageReactions).where(eq(messageReactions.messageId, messageId));
     await tx.delete(pollVotes).where(eq(pollVotes.messageId, messageId));

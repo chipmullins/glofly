@@ -9,7 +9,7 @@ import { liveSessions } from "../realtime";
 import { pushConfigured, sendPush, type PushData } from "./fcm";
 import { forgetTokens } from "./devices";
 import { isPaused } from "../admin/pause";
-import { alertFor } from "../constellations/activity";
+import { alertFor, laterMute } from "../constellations/activity";
 import { nebulaOfChat } from "../constellations/chats";
 
 // What phones are told, and when. Every push is a data message the Glofly app turns into a
@@ -47,6 +47,8 @@ type NewMessage = {
   createdAt: Date | string;
   event: unknown;
   mentions?: string[];
+  /** 4.2 (nebulas, server only): reached by @everyone, @here or a role */
+  groupMentions?: string[];
   attachments: Pick<Attachment, "kind" | "name" | "voice">[];
 };
 
@@ -349,6 +351,7 @@ async function notifyNebula(message: NewMessage, memberIds: string[]): Promise<v
       level: conversationMembers.notifyLevel,
       mutedUntil: conversationMembers.mutedUntil,
       defaultLevel: constellationMembers.notify,
+      constellationMute: constellationMembers.mutedUntil,
     })
     .from(pushDevices)
     .innerJoin(users, eq(users.id, pushDevices.userId))
@@ -376,8 +379,8 @@ async function notifyNebula(message: NewMessage, memberIds: string[]): Promise<v
   for (const d of devices) {
     if (live.get(d.userId)?.has(d.sessionId)) continue;
     if (quietOrDnd(d)) continue;
-    const mention = !!message.mentions?.includes(d.userId);
-    if (!alertFor(d.level ?? d.defaultLevel, d.mutedUntil, mention, now)) continue;
+    const mention = !!message.mentions?.includes(d.userId) || !!message.groupMentions?.includes(d.userId);
+    if (!alertFor(d.level ?? d.defaultLevel, laterMute(d.mutedUntil, d.constellationMute), mention, now)) continue;
     if (!blocked.has(d.userId)) blocked.set(d.userId, await blockedEitherWay(d.userId, message.senderId));
     if (blocked.get(d.userId)) continue;
     const nicks = await nicknamesFor(d.userId).catch(() => undefined);

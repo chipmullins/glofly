@@ -226,6 +226,7 @@ export type ConstellationPermission =
   | 'manageRoles'
   | 'manageConstellation'
   | 'events'
+  | 'mentionEveryone'
 
 export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; what: string | null }[] = [
   { id: 'deleteMessages', name: 'Delete messages', what: "Anyone's, in every nebula" },
@@ -239,6 +240,9 @@ export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; 
   { id: 'manageConstellation', name: 'Edit constellation settings', what: 'Name, icon, color, description, who can join' },
   // 0.8.0: everyone can by default (approved board 13: "anyone allowed to post can make an event").
   { id: 'events', name: 'Create events', what: 'Plan events with RSVP in nebulas they can post in' },
+  // Communities round 4.2 (approved board 24): off for Members by default. Without it, @everyone
+  // is plain text (the server checks every mention).
+  { id: 'mentionEveryone', name: 'Mention @everyone, @here and all roles', what: 'Without it, @everyone is plain text' },
 ]
 export const ALL_PERMISSIONS: readonly ConstellationPermission[] = PERMISSIONS.map((p) => p.id)
 /** Any of these opens Settings from the constellation's main view (0.7.1: the gear by its name). */
@@ -261,7 +265,7 @@ export const DEFAULT_ROLES: readonly { kind: 'admin' | 'moderator' | 'member'; n
     kind: 'moderator',
     name: 'Moderator',
     color: 'violet',
-    permissions: ['deleteMessages', 'timeoutKick', 'muteVoice', 'invite', 'approveRequests', 'events'],
+    permissions: ['deleteMessages', 'timeoutKick', 'muteVoice', 'invite', 'approveRequests', 'events', 'mentionEveryone'],
   },
   { kind: 'member', name: 'Member', color: 'gray', permissions: ['invite', 'events'] },
 ]
@@ -532,6 +536,8 @@ export type ConstellationRole = {
   memberCount: number
   /** 0.7.5: members can pick this role themselves (welcome screen, "Your roles") */
   selfAssign?: boolean
+  /** Communities round 4.2: anyone can @mention it (missing = no) */
+  mentionable?: boolean
 }
 
 export type ConstellationCategory = {
@@ -595,6 +601,21 @@ export const CHATTING_WINDOW_MS = 3 * 60_000
 
 export type NotifyLevel = 'all' | 'mentions' | 'none'
 
+/**
+ * Communities round 4.2 (approved board 23): your notification window for a constellation, on
+ * top of "Notify me about" (`me.notify`) and each nebula's own choice.
+ */
+export type ConstellationNotifySettings = {
+  /** Muted until then (ISO; 2100 = until you turn it on). No sounds, pop-ups or badges; @mentions of you still get through. */
+  mutedUntil: string | null
+  /** @everyone and @here show in the chat but don't notify you */
+  ignoreEveryone: boolean
+  /** @Raiders, @Police… don't notify you */
+  ignoreRoles: boolean
+  /** New replies in trails and signals you follow notify you (by your level) */
+  followAlerts: boolean
+}
+
 export type ConstellationMember = {
   user: PublicUser
   /** Role ids (not the "member" role, which everyone has) */
@@ -637,6 +658,8 @@ export type ConstellationDetail = {
     rank: number
     timedOutUntil: string | null
     notify: NotifyLevel
+    /** Communities round 4.2: the rest of the notification window (missing from older servers) */
+    notifications?: ConstellationNotifySettings
   }
   /** Open join requests (only for people who can approve them) */
   pendingRequests: number

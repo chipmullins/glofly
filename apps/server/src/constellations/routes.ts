@@ -82,6 +82,7 @@ import { announceVoice, setSharing, voiceStatesOf } from "./voice";
 import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula } from "./home";
 import { fireConstellationEvent } from "../integrations/events";
 import { seesNebulaChat, syncNebulaAccess } from "./access";
+import { knowsThreads } from "../threads/legacy";
 
 // Constellations (Glofly 2.0): communities with nebulas, categories, members and roles.
 // Every action is permission-checked here. Restricted (family) accounts can't use any of it.
@@ -1238,18 +1239,40 @@ constellationsRouter.post("/:id/read", async (req, res) => {
   res.status(204).end();
 });
 
-// PUT /constellations/:id/notify  { level } — my default for its nebulas.
+// PUT /constellations/:id/notify  { level?, mute?, ignoreEveryone?, ignoreRoles?, followAlerts? }
+// My notification window for its nebulas (4.2, approved board 23). Older apps send only `level`.
+// mute: "1h" | "8h" | "24h" | "forever" | null (null = unmute).
+const notifySettingsField = z
+  .object({
+    level: notifyField.optional(),
+    mute: z.enum(["1h", "8h", "24h", "forever"]).nullable().optional(),
+    ignoreEveryone: z.boolean().optional(),
+    ignoreRoles: z.boolean().optional(),
+    followAlerts: z.boolean().optional(),
+  })
+  .refine((o) => Object.values(o).some((v) => v !== undefined));
+const CONSTELLATION_MUTE_HOURS = { "1h": 1, "8h": 8, "24h": 24 } as const;
+const MUTED_FOREVER = new Date("2100-01-01T00:00:00Z"); // like a chat's "until I turn it back on"
 constellationsRouter.put("/:id/notify", async (req, res) => {
   const s = await standingFor(req, res);
   if (!s) return;
-  const level = notifyField.safeParse(req.body?.level);
-  if (!level.success) {
+  const body = notifySettingsField.safeParse(req.body);
+  if (!body.success) {
     bad(res, "Pick All messages, Only @mentions or Nothing.");
     return;
   }
+  const { level, mute, ignoreEveryone, ignoreRoles, followAlerts } = body.data;
   await db
     .update(constellationMembers)
-    .set({ notify: level.data })
+    .set({
+      ...(level !== undefined ? { notify: level } : {}),
+      ...(mute !== undefined
+        ? { mutedUntil: mute === null ? null : mute === "forever" ? MUTED_FOREVER : new Date(Date.now() + CONSTELLATION_MUTE_HOURS[mute] * 3_600_000) }
+        : {}),
+      ...(ignoreEveryone !== undefined ? { ignoreEveryone } : {}),
+      ...(ignoreRoles !== undefined ? { ignoreRoles } : {}),
+      ...(followAlerts !== undefined ? { followAlerts } : {}),
+    })
     .where(and(eq(constellationMembers.constellationId, s.constellationId), eq(constellationMembers.userId, s.userId)));
   emitToUser(s.userId, "constellation:updated", { constellationId: s.constellationId }, true);
   emitToUser(s.userId, "constellations:changed", {}, true);
@@ -1842,6 +1865,7 @@ constellationsRouter.post("/:id/roles", changeLimiter, async (req, res) => {
       color: z.enum(ROLE_COLOR_CHOICES as [string, ...string[]]),
       permissions: permissionsField,
       selfAssign: z.boolean().optional(),
+      mentionable: z.boolean().optional(),
     })
     .safeParse(req.body);
   if (!parsed.success) {
@@ -1876,6 +1900,7 @@ constellationsRouter.post("/:id/roles", changeLimiter, async (req, res) => {
       position: 1,
       permissions: parsed.data.permissions,
       selfAssign: parsed.data.selfAssign ?? false,
+      mentionable: parsed.data.mentionable ?? false,
     });
   });
   await logModeration(s.constellationId, s.userId, "role_created", null, { name: parsed.data.name });
@@ -1894,6 +1919,7 @@ constellationsRouter.patch("/:id/roles/:rid", changeLimiter, async (req, res) =>
       color: z.enum(ROLE_COLOR_CHOICES as [string, ...string[]]).optional(),
       permissions: permissionsField.optional(),
       selfAssign: z.boolean().optional(),
+      mentionable: z.boolean().optional(),
     })
     .safeParse(req.body);
   if (!parsed.success) {
@@ -1909,6 +1935,12 @@ constellationsRouter.patch("/:id/roles/:rid", changeLimiter, async (req, res) =>
   if (selfAssign && (parsed.data.permissions ?? r.permissions).length) {
     bad(res, "Roles members pick themselves can't have permissions. Turn their permissions off first.");
     return;
+  }
+  // 4.2: apps from before this round don't know "Mention @everyone, @here and all roles"; saving
+  // a role from one of them keeps it as it was.
+  if (parsed.data.permissions && !knowsThreads(req)) {
+    const kept = r.permissions.includes("mentionEveryone");
+    parsed.data.permissions = [...parsed.data.permissions.filter((p) => p !== "mentionEveryone"), ...(kept ? (["mentionEveryone"] as const) : [])];
   }
   if (parsed.data.permissions) {
     // Only what I have myself can be added or taken away.
@@ -1926,6 +1958,8 @@ constellationsRouter.patch("/:id/roles/:rid", changeLimiter, async (req, res) =>
       ...(parsed.data.color !== undefined && r.kind !== "member" ? { color: parsed.data.color } : {}),
       ...(parsed.data.permissions !== undefined ? { permissions: parsed.data.permissions } : {}),
       ...(parsed.data.selfAssign !== undefined ? { selfAssign: parsed.data.selfAssign } : {}),
+      // The Member role is everyone: "@Member" isn't a mention.
+      ...(parsed.data.mentionable !== undefined && r.kind !== "member" ? { mentionable: parsed.data.mentionable } : {}),
     })
     .where(eq(constellationRoles.id, r.id));
   await logModeration(s.constellationId, s.userId, "role_changed", null, { name: parsed.data.name ?? r.name });

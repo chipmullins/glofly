@@ -27,6 +27,7 @@ import {
 import { emitToUser } from "../realtime";
 import { can, standingOf } from "./perms";
 import { publicUsers } from "./views";
+import { mentionsUserSql } from "./groupMentions";
 
 // The Inbox (0.8.0, approved Oct 20 board 15): @mentions, replies to your messages, events you're
 // going to and join requests you can let in, across all your constellations. An item is unread
@@ -81,7 +82,7 @@ async function allItems(userId: string): Promise<InboxItem[]> {
       senderId: messages.senderId,
       body: messages.body,
       createdAt: messages.createdAt,
-      mentionsMe: sql<boolean>`${userId}::uuid = any(${messages.mentions})`,
+      mentionsMe: sql<boolean>`${mentionsUserSql(userId)}`,
       replyToMine: sql<boolean>`${original.senderId} = ${userId}::uuid`,
       originalBody: original.body,
     })
@@ -95,7 +96,7 @@ async function allItems(userId: string): Promise<InboxItem[]> {
         isNull(messages.event),
         inNebulaTimeline(),
         gt(messages.createdAt, since),
-        or(sql`${userId}::uuid = any(${messages.mentions})`, eq(original.senderId, userId)),
+        or(mentionsUserSql(userId), eq(original.senderId, userId)),
       ),
     )
     .orderBy(desc(messages.createdAt))

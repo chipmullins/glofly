@@ -401,6 +401,13 @@ export const messages = pgTable(
     // replies stay out of the nebula's own timeline unless alsoInNebula ("Also send to #general").
     threadId: uuid("thread_id").references((): AnyPgColumn => nebulaThreads.id, { onDelete: "cascade" }),
     alsoInNebula: boolean("also_in_nebula").notNull().default(false),
+    // Communities round 4.2 (board 24): "@everyone" / "@here" and the roles a nebula message
+    // mentions (only when its sender may: checked on the server), and who those reached: the
+    // people it counts as mentioning (minus anyone who ignores them). groupMentions never leaves
+    // the server (apps learn from the first two whether it mentions them).
+    mentionEveryone: text("mention_everyone"),
+    mentionRoles: uuid("mention_roles").array().notNull().default(sql`'{}'::uuid[]`),
+    groupMentions: uuid("group_mentions").array().notNull().default(sql`'{}'::uuid[]`),
   },
   // Loading a chat = newest messages in one conversation, so index exactly that.
   // Searching messages = "contains these words": a trigram index keeps that fast.
@@ -409,6 +416,7 @@ export const messages = pgTable(
     index("messages_body_trgm_idx").using("gin", sql`${t.body} gin_trgm_ops`),
     // "Messages that mention me" (unread mention counts).
     index("messages_mentions_idx").using("gin", t.mentions),
+    index("messages_group_mentions_idx").using("gin", t.groupMentions),
     // Lantern messages still glowing (0.5.0): the few the fading sweep looks at.
     index("messages_lantern_idx")
       .on(t.conversationId, t.createdAt)
@@ -1110,6 +1118,9 @@ export const constellationRoles = pgTable(
     permissions: text("permissions").array().notNull().default(sql`'{}'::text[]`),
     // 0.7.5: members can give themselves this role (welcome screen, "Your roles").
     selfAssign: boolean("self_assign").notNull().default(false),
+    // Communities round 4.2 (board 24): anyone can @mention this role (people with "Mention
+    // @everyone, @here and all roles" always can).
+    mentionable: boolean("mentionable").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("constellation_roles_constellation_idx").on(t.constellationId)],
@@ -1135,6 +1146,14 @@ export const constellationMembers = pgTable(
     // agreed to the house rules.
     welcomedAt: timestamp("welcomed_at", { withTimezone: true }),
     rulesAgreedAt: timestamp("rules_agreed_at", { withTimezone: true }),
+    // Communities round 4.2 (board 23): the constellation's notification window. Muted until then
+    // (no sounds, pop-ups or badges; @mentions of you still get through; year 9999 = until I turn
+    // it on); @everyone/@here and role mentions don't notify; replies in followed trails and
+    // signals notify (by the level above).
+    mutedUntil: timestamp("muted_until", { withTimezone: true }),
+    ignoreEveryone: boolean("ignore_everyone").notNull().default(false),
+    ignoreRoles: boolean("ignore_roles").notNull().default(false),
+    followAlerts: boolean("follow_alerts").notNull().default(true),
   },
   (t) => [
     primaryKey({ columns: [t.constellationId, t.userId] }),

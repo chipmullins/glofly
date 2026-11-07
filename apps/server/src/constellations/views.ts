@@ -38,6 +38,7 @@ import { connectedUserIds } from "../realtime";
 import { can, OWNER_RANK, standingOf, type Standing } from "./perms";
 import { voiceStatesFor, voiceStatesOf } from "./voice";
 import { seesAllNebulas, unlocksFor, visibleChats } from "./access";
+import { mentionsUserSql } from "./groupMentions";
 
 // What the apps get about constellations (2.0): dashboard cards, directory entries, and the whole
 // constellation when it's open.
@@ -77,7 +78,7 @@ export async function unreadFor(userId: string, conversationIds: string[]) {
     .select({
       conversationId: messages.conversationId,
       count: sql<number>`count(*)::int`,
-      mentions: sql<number>`count(*) filter (where ${userId}::uuid = any(${messages.mentions}))::int`,
+      mentions: sql<number>`count(*) filter (where ${mentionsUserSql(userId)})::int`,
     })
     .from(messages)
     .innerJoin(
@@ -135,7 +136,7 @@ async function visiblyOnline(userIds: string[]): Promise<Set<string>> {
 /** My dashboard: every constellation I'm in. */
 export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
   const mine = await db
-    .select({ c: constellations, position: constellationMembers.position, notify: constellationMembers.notify })
+    .select({ c: constellations, position: constellationMembers.position, notify: constellationMembers.notify, mutedUntil: constellationMembers.mutedUntil })
     .from(constellationMembers)
     .innerJoin(constellations, eq(constellations.id, constellationMembers.constellationId))
     .where(and(eq(constellationMembers.userId, userId), isNull(constellations.takenDownAt)));
@@ -178,7 +179,8 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
   const connected = await visiblyOnline([...new Set(members.map((m) => m.userId))]);
 
   const cards: ConstellationCard[] = [];
-  for (const { c, position, notify } of mine) {
+  const isMutedNow = (d: Date | null) => !!d && d.getTime() > Date.now();
+  for (const { c, position, notify, mutedUntil } of mine) {
     const memberIds = members.filter((m) => m.constellationId === c.id).map((m) => m.userId);
     const myNebulas = allNebulas.filter((n) => n.constellationId === c.id);
     let unreadCount = 0;
@@ -188,7 +190,8 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
       if (!u) continue;
       const level = notifyLevel(settings.find((s) => s.conversationId === n.conversationId)?.level) ?? notifyLevel(notify) ?? "all";
       mentionCount += u.mentions;
-      if (level === "all") unreadCount += u.unread;
+      // 4.2: a muted constellation shows no badge (only @mentions count).
+      if (level === "all" && !isMutedNow(mutedUntil)) unreadCount += u.unread;
     }
     // Your highest role
     const myRoles = roles.filter((r) => r.constellationId === c.id && (r.kind === "member" || heldIds.has(r.id)));
@@ -228,6 +231,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
   for (const card of cards) {
     const states = (voiceByCard.get(card.id) ?? []).filter((s) => allNebulas.some((n) => n.id === s.nebulaId));
     const cardNotify = notifyLevel(mine.find((m) => m.c.id === card.id)?.notify) ?? "all";
+    const cardMuted = isMutedNow(mine.find((m) => m.c.id === card.id)?.mutedUntil ?? null);
     card.sky = allNebulas
       .filter((n) => n.constellationId === card.id)
       .sort((a, b) => {
@@ -241,7 +245,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
         const level = notifyLevel(settings.find((s) => s.conversationId === n.conversationId)?.level) ?? cardNotify;
         return {
           kind: n.kind,
-          news: n.kind === "text" && !!u && (u.mentions > 0 || (u.unread > 0 && level !== "none")),
+          news: n.kind === "text" && !!u && (u.mentions > 0 || (u.unread > 0 && level !== "none" && !cardMuted)),
           chatting: (chatting.get(n.conversationId) ?? 0) >= CHATTING_PEOPLE,
           voice: states.find((s) => s.nebulaId === n.id)?.userIds.length ?? 0,
         };
@@ -261,7 +265,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
       const [m] = await db
         .select({ senderId: messages.senderId, conversationId: messages.conversationId })
         .from(messages)
-        .where(and(inArray(messages.conversationId, convIds), sql`${userId}::uuid = any(${messages.mentions})`, isNull(messages.deletedAt)))
+        .where(and(inArray(messages.conversationId, convIds), mentionsUserSql(userId), isNull(messages.deletedAt)))
         .orderBy(desc(messages.createdAt))
         .limit(1);
       if (m) {
@@ -374,6 +378,10 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       notify: constellationMembers.notify,
       welcomedAt: constellationMembers.welcomedAt,
       rulesAgreedAt: constellationMembers.rulesAgreedAt,
+      mutedUntil: constellationMembers.mutedUntil,
+      ignoreEveryone: constellationMembers.ignoreEveryone,
+      ignoreRoles: constellationMembers.ignoreRoles,
+      followAlerts: constellationMembers.followAlerts,
     })
     .from(constellationMembers)
     .where(eq(constellationMembers.constellationId, constellationId));
@@ -405,6 +413,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
         permissions: r.permissions.filter(isPermission),
         memberCount: r.kind === "member" ? memberRows.length : assignments.filter((a) => a.roleId === r.id).length,
         selfAssign: r.kind === "custom" && r.selfAssign,
+        mentionable: r.mentionable,
       }))
       .sort((a, b) => b.position - a.position),
   ];
@@ -486,6 +495,13 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       rank: me.rank,
       timedOutUntil: me.timedOutUntil?.toISOString() ?? null,
       notify: notifyLevel(myRow?.notify) ?? "all",
+      // 4.2: the rest of the notification window (board 23)
+      notifications: {
+        mutedUntil: myRow?.mutedUntil && myRow.mutedUntil.getTime() > Date.now() ? myRow.mutedUntil.toISOString() : null,
+        ignoreEveryone: myRow?.ignoreEveryone ?? false,
+        ignoreRoles: myRow?.ignoreRoles ?? false,
+        followAlerts: myRow?.followAlerts ?? true,
+      },
     },
     pendingRequests,
     ...identityOf(c),

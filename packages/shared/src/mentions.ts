@@ -40,9 +40,108 @@ export function splitMentions(text: string, people: PublicUser[]): TextPiece[] {
   return pieces.length ? pieces : [{ text, user: null }]
 }
 
-/** Does this message @mention me? */
-export const mentionsMe = (m: Pick<Message, 'mentions'>, meId: string): boolean =>
-  !!m.mentions?.includes(meId)
+/** Does this message @mention me? (Nebulas: also @everyone, @here and roles I have, when given.) */
+export const mentionsMe = (
+  m: Pick<Message, 'mentions'> & Partial<Pick<Message, 'mentionEveryone' | 'mentionRoles'>>,
+  meId: string,
+  myRoleIds?: readonly string[]
+): boolean =>
+  !!m.mentions?.includes(meId) ||
+  (!!myRoleIds && (!!m.mentionEveryone || !!m.mentionRoles?.some((r) => myRoleIds.includes(r))))
+
+// ---------------------------------------------------------------------------------------
+// Communities round 4.2: @everyone, @here and @Role (nebulas; approved board 24)
+
+/** A role as far as mentions care. */
+export type MentionableRole = { id: string; name: string }
+
+const groupWordAt = (text: string, at: number, word: string): boolean => {
+  if (text.slice(at, at + word.length).toLowerCase() !== word.toLowerCase()) return false
+  const after = text.charAt(at + word.length)
+  return !after || !/[\w]/.test(after)
+}
+const startsWord = (text: string, at: number) => at === 0 || /[\s(]/.test(text.charAt(at - 1))
+
+export type GroupPiece =
+  | { kind: 'text'; text: string }
+  | { kind: 'everyone' | 'here'; text: string }
+  | { kind: 'role'; text: string; roleId: string }
+
+/**
+ * Splits text at "@everyone", "@here" and "@Role name" (any of `roles`, longest name first, any
+ * case; a word can start there, and it can't go on into more letters). The server uses the same
+ * split to find what a message mentions; apps use it to draw them.
+ */
+export function splitGroupMentions(text: string, roles: readonly MentionableRole[]): GroupPiece[] {
+  if (!text.includes('@')) return [{ kind: 'text', text }]
+  const sorted = [...roles].filter((r) => r.name.trim()).sort((a, b) => b.name.length - a.name.length)
+  const out: GroupPiece[] = []
+  let plain = ''
+  let i = 0
+  while (i < text.length) {
+    if (text[i] === '@' && startsWord(text, i)) {
+      let hit: GroupPiece | null = null
+      if (groupWordAt(text, i + 1, 'everyone')) hit = { kind: 'everyone', text: text.slice(i, i + 9) }
+      else if (groupWordAt(text, i + 1, 'here')) hit = { kind: 'here', text: text.slice(i, i + 5) }
+      else {
+        const role = sorted.find((r) => groupWordAt(text, i + 1, r.name))
+        if (role) hit = { kind: 'role', text: text.slice(i, i + 1 + role.name.length), roleId: role.id }
+      }
+      if (hit) {
+        if (plain) out.push({ kind: 'text', text: plain })
+        plain = ''
+        out.push(hit)
+        i += hit.text.length
+        continue
+      }
+    }
+    plain += text[i]
+    i++
+  }
+  if (plain) out.push({ kind: 'text', text: plain })
+  return out
+}
+
+/** What a text mentions as groups: "@everyone" beats "@here"; roles (ids, each once, at most 20). */
+export function groupMentionsIn(
+  text: string,
+  roles: readonly MentionableRole[]
+): { everyone: 'everyone' | 'here' | null; roleIds: string[] } {
+  let everyone: 'everyone' | 'here' | null = null
+  const roleIds = new Set<string>()
+  for (const p of splitGroupMentions(text, roles)) {
+    if (p.kind === 'everyone') everyone = 'everyone'
+    else if (p.kind === 'here' && !everyone) everyone = 'here'
+    else if (p.kind === 'role') roleIds.add(p.roleId)
+  }
+  return { everyone, roleIds: [...roleIds].slice(0, 20) }
+}
+
+/**
+ * While typing "@ev" in a nebula: the group choices that match (board 24's list puts @everyone,
+ * @here and roles above people). `canEveryone` = you have "Mention @everyone, @here and all
+ * roles"; otherwise only roles anyone can mention.
+ */
+export function groupMentionSuggestions<R extends MentionableRole & { mentionable?: boolean; kind?: string }>(
+  query: string,
+  roles: readonly R[],
+  canEveryone: boolean,
+  limit = 4
+): ({ kind: 'everyone' | 'here' } | { kind: 'role'; role: R })[] {
+  const q = query.toLowerCase()
+  const out: ({ kind: 'everyone' | 'here' } | { kind: 'role'; role: R })[] = []
+  if (canEveryone) {
+    if ('everyone'.startsWith(q)) out.push({ kind: 'everyone' })
+    if ('here'.startsWith(q)) out.push({ kind: 'here' })
+  }
+  for (const r of roles) {
+    if (r.kind === 'member' || r.kind === 'owner') continue
+    if (!canEveryone && !r.mentionable) continue
+    const name = r.name.toLowerCase()
+    if (!q || name.startsWith(q) || name.split(/\s+/).some((w) => w.startsWith(q))) out.push({ kind: 'role', role: r })
+  }
+  return out.slice(0, limit)
+}
 
 /**
  * While typing: "@ma" right before the cursor (at the start or after a space) means you're

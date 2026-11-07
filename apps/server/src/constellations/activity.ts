@@ -42,6 +42,9 @@ export function alertFor(level: string, mutedUntil: Date | null, mentioned: bool
   return mutedUntil && mutedUntil.getTime() > now ? null : "message";
 }
 
+/** 4.2 (board 23): a nebula's own mute or the whole constellation's, whichever lasts longer. */
+export const laterMute = (a: Date | null, b: Date | null): Date | null => (!a ? b : !b ? a : a > b ? a : b);
+
 /**
  * Something was posted in a nebula: the constellation counts as active now, and every member's
  * dashboard and icon strip refresh its unread counts (`constellation:activity`). For a real
@@ -54,6 +57,8 @@ export async function nebulaActivity(
   at: Date,
   mentions: string[],
   preview?: string,
+  /** 4.2: people reached by @everyone, @here or a role (server only) */
+  groupMentions: string[] = [],
 ): Promise<void> {
   const nebula = await nebulaOfChat(conversationId);
   if (!nebula) return;
@@ -74,6 +79,7 @@ export async function nebulaActivity(
       defaultLevel: constellationMembers.notify,
       level: conversationMembers.notifyLevel,
       mutedUntil: conversationMembers.mutedUntil,
+      constellationMute: constellationMembers.mutedUntil,
     })
     .from(constellationMembers)
     .innerJoin(
@@ -84,7 +90,8 @@ export async function nebulaActivity(
   const [sender] = await db.select({ name: users.displayName }).from(users).where(eq(users.id, senderId));
   const now = Date.now();
   for (const s of settings) {
-    const alert = s.userId === senderId ? null : alertFor(s.level ?? s.defaultLevel, s.mutedUntil, mentions.includes(s.userId), now);
+    const mentioned = mentions.includes(s.userId) || groupMentions.includes(s.userId);
+    const alert = s.userId === senderId ? null : alertFor(s.level ?? s.defaultLevel, laterMute(s.mutedUntil, s.constellationMute), mentioned, now);
     emitToUser(
       s.userId,
       "constellation:activity",

@@ -615,3 +615,27 @@ test('link codes: typed any way, shown as 482-913', () => {
   assert.equal(s.normalizeLinkCode('48291a'), null)
   assert.equal(s.formatLinkCode('482913'), '482-913')
 })
+
+// Communities round 4.2: @everyone, @here and role mentions
+test('group mentions: everyone, here, roles with spaces, word edges', () => {
+  const roles = [{ id: 'r1', name: 'Raiders' }, { id: 'r2', name: 'Night Raiders' }, { id: 'r3', name: 'Healers' }]
+  assert.deepStrictEqual(s.groupMentionsIn('@everyone raid in 10', roles), { everyone: 'everyone', roleIds: [] })
+  assert.deepStrictEqual(s.groupMentionsIn('hey @here and @EVERYONE', roles), { everyone: 'everyone', roleIds: [] })
+  assert.deepStrictEqual(s.groupMentionsIn('@here', roles), { everyone: 'here', roleIds: [] })
+  assert.deepStrictEqual(s.groupMentionsIn('@Night Raiders and @healers!', roles), { everyone: null, roleIds: ['r2', 'r3'] })
+  assert.deepStrictEqual(s.groupMentionsIn('@raiders, go', roles), { everyone: null, roleIds: ['r1'] })
+  // Not inside an email, not when the word goes on
+  assert.deepStrictEqual(s.groupMentionsIn('me@everyone.com @everyones @Healersx', roles), { everyone: null, roleIds: [] })
+  const pieces = s.splitGroupMentions('stack @Healers now', roles)
+  assert.deepStrictEqual(pieces.map((p) => p.kind), ['text', 'role', 'text'])
+  assert.strictEqual(pieces[1].text, '@Healers')
+})
+
+test('group mention suggestions follow the permission', () => {
+  const roles = [{ id: 'm', name: 'Member', kind: 'member' }, { id: 'r1', name: 'Raiders', kind: 'custom', mentionable: true }, { id: 'r3', name: 'Healers', kind: 'custom' }]
+  assert.deepStrictEqual(s.groupMentionSuggestions('e', roles, true).map((s) => s.kind), ['everyone'])
+  assert.deepStrictEqual(s.groupMentionSuggestions('', roles, false).map((s) => s.role.id), ['r1'])
+  assert.deepStrictEqual(s.groupMentionSuggestions('h', roles, true).map((s) => s.kind + (s.role ? s.role.id : '')), ['here', 'roler3'])
+  assert.ok(s.mentionsMe({ mentions: [], mentionRoles: ['r1'] }, 'me', ['r1']))
+  assert.ok(!s.mentionsMe({ mentions: [], mentionRoles: ['r1'] }, 'me'))
+})

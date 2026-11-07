@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { ForumSettings, ForumTag, ThreadSummary } from "@glofly/shared";
 import { isForumTagColor } from "@glofly/shared";
 import { db } from "../db";
-import { messages, nebulaThreads, nebulas, threadFollows } from "../db/schema";
+import { constellationMembers, messages, nebulaThreads, nebulas, threadFollows } from "../db/schema";
 
 // Communities round (Nov 2026): threads + forum posts, the shared pieces (no routes here, so the
 // message routes can use it without an import cycle).
@@ -132,9 +132,17 @@ export async function follow(threadId: string, userId: string, following: boolea
 }
 
 /** Followers to tell about a reply (besides the sender). */
-export async function followersOf(threadId: string): Promise<string[]> {
+export async function followersOf(threadId: string, alertsOnly = false): Promise<string[]> {
   const rows = await db.select({ userId: threadFollows.userId }).from(threadFollows).where(and(eq(threadFollows.threadId, threadId), eq(threadFollows.following, true)));
-  return rows.map((r) => r.userId);
+  if (!alertsOnly || !rows.length) return rows.map((r) => r.userId);
+  // 4.2 (board 23): "Trails and signals I follow" off in the constellation = no alerts for replies.
+  const quiet = await db
+    .select({ userId: constellationMembers.userId })
+    .from(constellationMembers)
+    .innerJoin(nebulaThreads, eq(nebulaThreads.constellationId, constellationMembers.constellationId))
+    .where(and(eq(nebulaThreads.id, threadId), eq(constellationMembers.followAlerts, false), inArray(constellationMembers.userId, rows.map((r) => r.userId))));
+  const off = new Set(quiet.map((q) => q.userId));
+  return rows.map((r) => r.userId).filter((id) => !off.has(id));
 }
 
 /** My followed, still-open threads in these text nebulas (the sidebar), newest activity first. */

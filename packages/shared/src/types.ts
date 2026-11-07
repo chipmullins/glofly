@@ -255,6 +255,10 @@ export type Message = {
   event: ChatEvent | null
   /** Group members this message @mentions. Missing from servers before 0.2.0. */
   mentions?: string[]
+  /** Communities round 4.2 (nebulas): it @mentions everyone who can see it, or those online */
+  mentionEveryone?: 'everyone' | 'here' | null
+  /** Communities round 4.2 (nebulas): the roles it @mentions (ids) */
+  mentionRoles?: string[]
   // ---- 0.5.0 (missing from older servers; older apps show the body, a plain-text version) ----
   /** A GIF (shown from GIPHY; the body holds its link for older apps) */
   gif?: GifInfo | null
