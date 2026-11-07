@@ -398,12 +398,15 @@ export function createBridge(): GloflyApi {
         ),
       removeMember: (id, userId) =>
         badId(id, userId) ?? nothing(request('DELETE', `/conversations/${id}/members/${userId}`)),
-      messages: (id, before) =>
-        badId(id, before) ??
-        request<MessagePage>(
-          'GET',
-          `/conversations/${id}/messages${before ? `?before=${before}` : ''}`
-        ),
+      messages: (id, before, thread) => {
+        const params = new URLSearchParams()
+        if (before) params.set('before', before)
+        if (thread) params.set('thread', thread)
+        return (
+          badId(id, before, thread) ??
+          request<MessagePage>('GET', `/conversations/${id}/messages${params.size ? `?${params}` : ''}`)
+        )
+      },
       search: (query, chat, before) => {
         const q = query.trim()
         if (q.length < 2 || q.length > 100) return Promise.resolve(invalid)
@@ -423,7 +426,10 @@ export function createBridge(): GloflyApi {
             replyToId,
             ...(attachmentIds?.length ? { attachmentIds } : {}),
             ...(options?.lantern ? { lantern: true } : {}),
-            ...(options?.clientId ? { clientId: options.clientId } : {})
+            ...(options?.clientId ? { clientId: options.clientId } : {}),
+            ...(options?.threadId && isId(options.threadId)
+              ? { threadId: options.threadId, ...(options.alsoInNebula ? { alsoInNebula: true } : {}) }
+              : {})
           }),
           'message'
         ),

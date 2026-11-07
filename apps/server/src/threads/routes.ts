@@ -89,17 +89,23 @@ async function announce(t: ThreadRow, conversationId: string, closeDays: number)
 }
 
 /** Tags for a forum post: known ids, staff-only ones only for staff, 0–3, required if set. */
-function checkTags(n: typeof nebulas.$inferSelect, tagIds: string[], staff: boolean, previous: string[] = []): string | string[] {
+function checkTags(n: typeof nebulas.$inferSelect, tagIds: string[], staff: boolean, previous: string[] = [], mine = false): string | string[] {
   const forum = forumSettingsOf(n);
   const ids = [...new Set(tagIds)];
   if (ids.length > POST_TAGS_MAX) return `Pick up to ${POST_TAGS_MAX} tags.`;
   for (const id of ids) {
     const tag = forum.tags.find((t) => t.id === id);
     if (!tag) return "One of those tags isn't there any more.";
-    if (tag.staffOnly && !staff && !previous.includes(id)) return `Only staff can add the ${tag.name} tag.`;
+    // A post's own author may mark it Solved (or not) even when that tag is staff-only.
+    const solvedByAuthor = mine && tag.name.toLowerCase() === "solved";
+    if (tag.staffOnly && !staff && !solvedByAuthor && !previous.includes(id)) return `Only staff can add the ${tag.name} tag.`;
   }
   // Someone who isn't staff can't take a staff-only tag off either.
-  if (!staff) for (const id of previous) if (forum.tags.find((t) => t.id === id)?.staffOnly && !ids.includes(id)) return "Only staff can take that tag off.";
+  if (!staff)
+    for (const id of previous) {
+      const t = forum.tags.find((x) => x.id === id);
+      if (t?.staffOnly && !ids.includes(id) && !(mine && t.name.toLowerCase() === "solved")) return "Only staff can take that tag off.";
+    }
   if (forum.requireTag && !ids.length && forum.tags.some((t) => !t.staffOnly || staff)) return "Pick at least one tag.";
   return ids;
 }
@@ -245,7 +251,7 @@ threadsRouter.patch("/:id/threads/:tid", async (req, res) => {
   }
   if (d.tagIds !== undefined) {
     if (n.kind !== "forum") return bad(res, "Only forum posts have tags.");
-    const checked = checkTags(n, d.tagIds, staff, t.tagIds);
+    const checked = checkTags(n, d.tagIds, staff, t.tagIds, mine);
     if (typeof checked === "string") return bad(res, checked, 403);
     set.tagIds = checked;
   }

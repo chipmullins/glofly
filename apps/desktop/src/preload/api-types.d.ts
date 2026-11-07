@@ -633,7 +633,12 @@ export type GloflyApi = {
     /** Your own id leaves the group; anyone else's removes them (only whoever made it). */
     removeMember: (conversationId: string, userId: string) => Promise<ApiResult<null>>
     /** Newest page, or the page before `beforeMessageId`. Oldest first. */
-    messages: (conversationId: string, beforeMessageId?: string) => Promise<ApiResult<MessagePage>>
+    messages: (
+      conversationId: string,
+      beforeMessageId?: string,
+      /** Communities round: a thread's replies instead of the chat's own timeline */
+      threadId?: string
+    ) => Promise<ApiResult<MessagePage>>
     /** Messages containing these words (2+ characters), in one chat or all of them. */
     search: (
       query: string,
@@ -954,6 +959,9 @@ export type SendOptions = {
   lantern?: boolean
   /** 0.7.5: the same id on a retry, so the server never makes a copy */
   clientId?: string
+  /** Communities round: a reply in a thread / forum post; alsoInNebula shows it in the nebula too */
+  threadId?: string
+  alsoInNebula?: boolean
 }
 export type GifPage = { gifs: GifInfo[]; next: number | null }
 export type ChatGameKind = 'tictactoe' | 'wordguess' | 'trivia'

@@ -77,9 +77,14 @@ export async function removeMember(
 
 export function loadMessages(
   conversationId: string,
-  beforeMessageId?: string
+  beforeMessageId?: string,
+  threadId?: string
 ): Promise<ApiResult<MessagePage>> {
-  const query = beforeMessageId ? `?before=${beforeMessageId}` : ''
+  const params = new URLSearchParams()
+  if (beforeMessageId) params.set('before', beforeMessageId)
+  // Communities round: a thread's replies
+  if (threadId) params.set('thread', threadId)
+  const query = params.size ? `?${params}` : ''
   return request<MessagePage>('GET', `/conversations/${conversationId}/messages${query}`)
 }
 
@@ -103,7 +108,7 @@ export async function sendMessage(
   body: string,
   replyToId?: string,
   attachmentIds?: string[],
-  options?: { lantern?: boolean; clientId?: string }
+  options?: { lantern?: boolean; clientId?: string; threadId?: string; alsoInNebula?: boolean }
 ): Promise<ApiResult<Message>> {
   return unwrap(
     await request('POST', `/conversations/${conversationId}/messages`, {
@@ -111,7 +116,8 @@ export async function sendMessage(
       replyToId,
       ...(attachmentIds?.length ? { attachmentIds } : {}),
       ...(options?.lantern ? { lantern: true } : {}),
-      ...(options?.clientId ? { clientId: options.clientId } : {})
+      ...(options?.clientId ? { clientId: options.clientId } : {}),
+      ...(options?.threadId ? { threadId: options.threadId, ...(options.alsoInNebula ? { alsoInNebula: true } : {}) } : {})
     })
   )
 }

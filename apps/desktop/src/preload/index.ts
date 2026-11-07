@@ -166,8 +166,8 @@ const glofly: GloflyApi = {
       ipcRenderer.invoke('conversations:add-members', conversationId, userIds),
     removeMember: (conversationId: string, userId: string) =>
       ipcRenderer.invoke('conversations:remove-member', conversationId, userId),
-    messages: (conversationId: string, beforeMessageId?: string) =>
-      ipcRenderer.invoke('conversations:messages', conversationId, beforeMessageId),
+    messages: (conversationId: string, beforeMessageId?: string, threadId?: string) =>
+      ipcRenderer.invoke('conversations:messages', conversationId, beforeMessageId, threadId),
     search: (query: string, conversationId?: string, beforeMessageId?: string) =>
       ipcRenderer.invoke('conversations:search', query, conversationId, beforeMessageId),
     send: (

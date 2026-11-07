@@ -28,9 +28,20 @@ export type Pending = {
   lantern: boolean
   /** Failed because the connection was down: retried once on reconnect */
   offline?: boolean
+  /**
+   * Communities round: a reply in a thread. `conversationId` is then the outbox's own key
+   * ("<chat>#<thread>", see threadKey) and the message goes to `sendTo` with this threadId.
+   */
+  sendTo?: string
+  threadId?: string
+  alsoInNebula?: boolean
 }
 
-export type NewPending = Pick<Pending, 'body' | 'replyTo' | 'attachments' | 'lantern'>
+export type NewPending = Pick<Pending, 'body' | 'replyTo' | 'attachments' | 'lantern'> &
+  Partial<Pick<Pending, 'sendTo' | 'threadId' | 'alsoInNebula'>>
+
+/** The outbox key for a thread's messages (kept apart from the nebula's own). */
+export const threadKey = (conversationId: string, threadId: string): string => `${conversationId}#${threadId}`
 
 /** How long before a message still on its way says "Sending…". */
 export const SLOW_AFTER_MS = 1500
@@ -139,11 +150,15 @@ async function deliver(item: Pending, attempt = 0): Promise<void> {
     if (find(item.conversationId, item.tempId)) patch(item, { slow: true })
   }, SLOW_AFTER_MS)
   const result = await window.glofly.conversations.send(
-    item.conversationId,
+    item.sendTo ?? item.conversationId,
     item.body,
     item.replyTo?.id,
     item.attachments.map((a) => a.id),
-    { ...(item.lantern ? { lantern: true } : {}), clientId: item.clientId }
+    {
+      ...(item.lantern ? { lantern: true } : {}),
+      clientId: item.clientId,
+      ...(item.threadId ? { threadId: item.threadId, alsoInNebula: item.alsoInNebula === true } : {})
+    }
   )
   clearTimeout(slowTimer)
   if (!find(item.conversationId, item.tempId)) return // deleted meanwhile

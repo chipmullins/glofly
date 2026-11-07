@@ -62,6 +62,10 @@ import CxSearch from './CxSearch'
 import { InboxStripButton } from './Inbox'
 import './Inside.css'
 import BotButtons from './BotButtons'
+import ThreadPanel, { ThreadIcon, ThreadsButton } from './ThreadPanel'
+import { ForumIcon, ForumView, NewPostDialog, PostView } from './Forum'
+import { threads as threadApi } from '../lib/threads'
+import type { ThreadSummary } from '@glofly/shared/threads'
 import { integrations } from '../lib/integrations'
 import type { ConstellationCommand } from '@glofly/shared/integrations'
 
@@ -536,7 +540,57 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   }
 
   // The chat of the open nebula, as the chat screen expects it.
-  const chatNebula = nebula && (nebula.kind === 'text' || voiceChatOpen) ? nebula : null
+  const chatNebula = nebula && (nebula.kind !== 'voice' || voiceChatOpen) ? nebula : null
+  // Communities round: the open thread (text nebulas, on the right) and forum post (in the middle).
+  const [openThread, setOpenThread] = useState<{
+    thread: ThreadSummary
+    parent: Message | null
+  } | null>(null)
+  const [openPost, setOpenPost] = useState<ThreadSummary | null>(null)
+  const [newPost, setNewPost] = useState(false)
+  const staff = can(c, 'manageNebulas') || can(c, 'deleteMessages')
+  // A thread picked in another nebula (sidebar) opens once that nebula is showing.
+  const pendingThread = useRef<ThreadSummary | null>(null)
+  useEffect(() => {
+    setOpenThread(null)
+    setOpenPost(null)
+    setNewPost(false)
+    const t = pendingThread.current
+    pendingThread.current = null
+    if (t && t.nebulaId === nebula?.id) void openThreadByIdRef.current(t)
+  }, [nebula?.id])
+  // A thread or post that's deleted while open closes.
+  useEffect(
+    () =>
+      window.glofly.onEvent((event) => {
+        if (event.type !== 'thread:deleted') return
+        setOpenThread((t) => (t?.thread.id === event.threadId ? null : t))
+        setOpenPost((t) => (t?.id === event.threadId ? null : t))
+      }),
+    []
+  )
+  /** Opens a thread (from its chip, the sidebar or the Threads list). */
+  const openThreadById = useCallback(
+    async (t: ThreadSummary, parent?: Message | null) => {
+      setOpenThread({ thread: t, parent: parent ?? null })
+      const fresh = await threadApi.get(c.id, t.id)
+      if (fresh.ok)
+        setOpenThread((o) => (o?.thread.id === t.id ? { ...o, thread: fresh.data.thread } : o))
+      if (parent === undefined && t.parentMessageId) {
+        const nb = c.nebulas.find((x) => x.id === t.nebulaId)
+        if (nb) {
+          const page = await window.glofly.conversations.messages(nb.conversationId)
+          const found = page.ok
+            ? page.data.messages.find((m) => m.id === t.parentMessageId)
+            : undefined
+          if (found) setOpenThread((o) => (o?.thread.id === t.id ? { ...o, parent: found } : o))
+        }
+      }
+    },
+    [c.id, c.nebulas]
+  )
+  const openThreadByIdRef = useRef(openThreadById)
+  openThreadByIdRef.current = openThreadById
   const summary = useMemo<GroupSummary | null>(() => {
     if (!chatNebula) return null
     const cantPost = c.me.timedOutUntil
@@ -664,7 +718,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     // Communities round: bots get their own group (they're never "offline" people).
     const bots = offline.filter((m) => !placed.has(m.user.id) && m.user.bot).sort(byName)
     const off = offline.filter((m) => !placed.has(m.user.id) && !m.user.bot).sort(byName)
-    if (bots.length) out.push({ key: 'bots', title: 'Bots', color: 'var(--glo-muted)', members: bots })
+    if (bots.length)
+      out.push({ key: 'bots', title: 'Bots', color: 'var(--glo-muted)', members: bots })
     if (off.length)
       out.push({ key: 'offline', title: 'Offline', color: 'var(--glo-muted)', members: off })
     return out
@@ -1146,6 +1201,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                       {canArrange && <GripDots />}
                       {n.kind === 'text' ? (
                         <StarIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
+                      ) : n.kind === 'forum' ? (
+                        <ForumIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
                       ) : (
                         <SpeakerIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
                       )}
@@ -1191,6 +1248,30 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                       onLive={(sharer, anchor, how) => showLive(n, sharer, anchor, how)}
                       onLiveLeave={leaveLive}
                     />
+                    {n.kind === 'text' &&
+                      (n.threads ?? []).map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={
+                            openThread?.thread.id === t.id
+                              ? 'cx-neb-thread cx-neb-thread--on'
+                              : 'cx-neb-thread'
+                          }
+                          onClick={() => {
+                            if (nebula?.id !== n.id) {
+                              pendingThread.current = t
+                              props.onSelectNebula(n.id)
+                            } else void openThreadById(t)
+                          }}
+                        >
+                          <ThreadIcon size={13} />
+                          <span>{t.title}</span>
+                          {t.unread > 0 && (
+                            <span className="cx-neb-thread-dot" aria-label={`${t.unread} new`} />
+                          )}
+                        </button>
+                      ))}
                   </div>
                 )
               })}
@@ -1347,6 +1428,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           <div className="cx-neb-menu-head">
             {n.kind === 'text' ? (
               <StarIcon size={15} color="#ffb347" />
+            ) : n.kind === 'forum' ? (
+              <ForumIcon size={15} color="#ffb347" />
             ) : (
               <SpeakerIcon size={15} color="#ffb347" />
             )}
@@ -1633,64 +1716,29 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     })()
 
   // ---- The main area ----
-  let main: React.ReactNode
-  if (!nebula) {
-    main = (
-      <main className="cx-main cx-main--empty">
-        <p>
-          This constellation has no nebulas yet.
-          {can(c, 'manageNebulas') ? ' Make one from the menu by its name.' : ''}
-        </p>
-      </main>
-    )
-  } else if (nebula.kind === 'voice' && !voiceChatOpen) {
-    main = (
-      <VoiceStage
-        me={me}
-        nebulaName={nebula.name}
-        constellationName={c.name}
-        state={c.voice.find((v) => v.nebulaId === nebula.id) ?? null}
-        people={people}
-        joinedHere={inVoiceHere?.id === nebula.id}
-        timedOut={!!c.me.timedOutUntil}
-        onJoin={() => joinVoice(nebula)}
-        onOpenChat={() => setVoiceChatOpen(true)}
-      />
-    )
-  } else if (summary && chatNebula) {
-    main = (
-      <main className="cx-main">
-        {voiceChatOpen && (
-          <button
-            type="button"
-            className="cx-back-to-voice"
-            onClick={() => setVoiceChatOpen(false)}
-          >
-            <SpeakerIcon size={16} color="currentColor" />
-            Back to {chatNebula.name}
-          </button>
-        )}
-        <ChatView
-          key={summary.id}
-          me={me}
-          conversation={summary}
-          presence={props.presence}
-          now={now}
-          onRead={() => {
+  // The chat screen's props (the nebula's timeline, and its threads / forum posts).
+  const chatProps: React.ComponentProps<typeof ChatView> | null =
+    summary && chatNebula
+      ? {
+          me: me,
+          conversation: summary,
+          presence: props.presence,
+          now: now,
+          onRead: () => {
             if (chatNebula.unreadCount > 0) props.onReload()
-          }}
-          onViewProfile={props.onViewProfile}
-          onGroupSettings={() => props.onSettings('overview')}
-          onTogglePin={() => undefined}
-          onSessionExpired={props.onSessionExpired}
-          onSearch={() => setSearching(true)}
-          onMute={() => undefined}
-          onReport={(m) => {
+          },
+          onViewProfile: props.onViewProfile,
+          onGroupSettings: () => props.onSettings('overview'),
+          onTogglePin: () => undefined,
+          onSessionExpired: props.onSessionExpired,
+          onSearch: () => setSearching(true),
+          onMute: () => undefined,
+          onReport: (m) => {
             const sender = people.get(m.senderId)
             if (sender) props.onReport(m, sender)
-          }}
-          jumpRequest={jump}
-          nebula={{
+          },
+          jumpRequest: jump,
+          nebula: {
             name: chatNebula.name,
             sharedWith: chatNebula.sharedWith,
             // 0.7.5: on its milestone cards
@@ -1719,6 +1767,21 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             bodyFor: (m) => (eventsByMessage.has(m.id) ? 'made an event 📅' : null),
             // Communities round: slash commands and a bot's buttons.
             commands,
+            // Threads (text nebulas): start one from a message, open one from its chip.
+            ...(chatNebula.kind === 'text' && (!chatNebula.threadsStaffOnly || staff) && !cantPost
+              ? {
+                  onStartThread: (m: Message) =>
+                    void threadApi
+                      .start(c.id, chatNebula.id, { parentMessageId: m.id })
+                      .then((r) => {
+                        if (r.ok) void openThreadById(r.data.thread, m)
+                        else props.onProblem(r.message)
+                      })
+                }
+              : {}),
+            ...(chatNebula.kind === 'text'
+              ? { onOpenThread: (t: ThreadSummary) => void openThreadById(t) }
+              : {}),
             runCommand: async (input) => {
               const r = await integrations.runCommand(c.id, chatNebula.id, input)
               if (!r.ok) return r.message
@@ -1728,7 +1791,12 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               const e = eventsByMessage.get(m.id)
               if (!e)
                 return m.buttons?.length && people.get(m.senderId)?.bot ? (
-                  <BotButtons constellationId={c.id} messageId={m.id} buttons={m.buttons} onProblem={props.onProblem} />
+                  <BotButtons
+                    constellationId={c.id}
+                    messageId={m.id}
+                    buttons={m.buttons}
+                    onProblem={props.onProblem}
+                  />
                 ) : null
               const vs = e.voiceNebulaId
                 ? c.voice.find((v) => v.nebulaId === e.voiceNebulaId)
@@ -1753,14 +1821,91 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               )
             },
             headerExtra: (
-              <NotifyButton
-                level={chatNebula.notify}
-                fallback={c.me.notify}
-                onChange={(level) => void setNotify(level)}
-              />
+              <>
+                {chatNebula.kind === 'text' && (
+                  <ThreadsButton
+                    constellationId={c.id}
+                    nebulaId={chatNebula.id}
+                    onOpen={(t) => void openThreadById(t)}
+                  />
+                )}
+                <NotifyButton
+                  level={chatNebula.notify}
+                  fallback={c.me.notify}
+                  onChange={(level) => void setNotify(level)}
+                />
+              </>
             )
-          }}
-        />
+          }
+        }
+      : null
+
+  let main: React.ReactNode
+  if (!nebula) {
+    main = (
+      <main className="cx-main cx-main--empty">
+        <p>
+          This constellation has no nebulas yet.
+          {can(c, 'manageNebulas') ? ' Make one from the menu by its name.' : ''}
+        </p>
+      </main>
+    )
+  } else if (nebula.kind === 'voice' && !voiceChatOpen) {
+    main = (
+      <VoiceStage
+        me={me}
+        nebulaName={nebula.name}
+        constellationName={c.name}
+        state={c.voice.find((v) => v.nebulaId === nebula.id) ?? null}
+        people={people}
+        joinedHere={inVoiceHere?.id === nebula.id}
+        timedOut={!!c.me.timedOutUntil}
+        onJoin={() => joinVoice(nebula)}
+        onOpenChat={() => setVoiceChatOpen(true)}
+      />
+    )
+  } else if (nebula.kind === 'forum' && chatProps) {
+    // Communities round: a forum's posts, or one post (boards 17–18).
+    main = openPost ? (
+      <PostView
+        c={c}
+        nebula={nebula}
+        post={openPost}
+        chatProps={chatProps}
+        meId={me.id}
+        staff={staff}
+        onBack={() => setOpenPost(null)}
+        onSummary={(t) =>
+          setOpenPost((p) =>
+            p?.id === t.id ? { ...p, ...t, following: t.following || p.following } : p
+          )
+        }
+        onProblem={props.onProblem}
+      />
+    ) : (
+      <ForumView
+        c={c}
+        nebula={nebula}
+        people={people}
+        onOpen={(t) => setOpenPost(t)}
+        onNewPost={() => setNewPost(true)}
+        onProblem={props.onProblem}
+      />
+    )
+  } else if (summary && chatNebula) {
+    main = (
+      <main className="cx-main">
+        {voiceChatOpen && (
+          <button
+            type="button"
+            className="cx-back-to-voice"
+            onClick={() => setVoiceChatOpen(false)}
+          >
+            <SpeakerIcon size={16} color="currentColor" />
+            Back to {chatNebula.name}
+          </button>
+        )}
+        <ChatView key={summary.id} {...chatProps!} />
         {newSince.info?.nebulaId === chatNebula.id && !voiceChatOpen && (
           <NewSincePill
             info={newSince.info}
@@ -1842,10 +1987,42 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           onJump={(targetNebulaId, messageId) => showMessage(targetNebulaId, messageId)}
         />
       ) : (
-        nebula && (nebula.kind === 'text' || voiceChatOpen) && membersPanel
+        nebula &&
+        (nebula.kind === 'text' || voiceChatOpen) &&
+        (openThread && chatProps && nebula.kind === 'text' ? (
+          <ThreadPanel
+            c={c}
+            nebula={nebula}
+            thread={openThread.thread}
+            parent={openThread.parent}
+            chatProps={chatProps}
+            meId={me.id}
+            staff={staff}
+            people={people}
+            onSummary={(t) =>
+              setOpenThread((o) => (o && o.thread.id === t.id ? { ...o, thread: t } : o))
+            }
+            onClose={() => setOpenThread(null)}
+            onProblem={props.onProblem}
+          />
+        ) : (
+          membersPanel
+        ))
       )}
       {menuEl}
       {nebMenuEl}
+      {newPost && nebula?.kind === 'forum' && (
+        <NewPostDialog
+          c={c}
+          nebula={nebula}
+          staff={staff}
+          onClose={() => setNewPost(false)}
+          onPosted={(t) => {
+            setNewPost(false)
+            setOpenPost(t)
+          }}
+        />
+      )}
       {livePeek && (
         <LivePreview
           key={`${livePeek.nebula.id}:${livePeek.sharer.id}`}

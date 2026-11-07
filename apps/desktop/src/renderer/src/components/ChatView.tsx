@@ -1,5 +1,6 @@
 import { parseSlashCommand, type ConstellationCommand } from '@glofly/shared/integrations'
 import { shortBody } from '@glofly/shared/gifs'
+import type { ThreadSummary } from '@glofly/shared/threads'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
   Attachment,
@@ -116,6 +117,24 @@ type ChatViewProps = {
   nebula?: NebulaMode
   /** 0.7.3: after "Mark unread", leave the chat (so it isn't read again straight away) */
   onLeave?: () => void
+  /** Communities round: show one thread / forum post of this nebula instead of its timeline */
+  threadMode?: ThreadMode
+}
+
+/** Communities round: a thread or forum post shown with this chat screen (canvas boards 16, 18). */
+export type ThreadMode = {
+  threadId: string
+  constellationId: string
+  /** The message the thread was started from (shown first), or null for forum posts */
+  parent: Message | null
+  /** Text-nebula threads: the nebula's name for "Also send to #name" */
+  alsoInName: string | null
+  placeholder: string
+  /** Forum posts: the marked answer, and marking one (only for who posted it and staff) */
+  answerMessageId?: string | null
+  onMarkAnswer?: (m: Message) => void
+  /** The thread's new counts (each reply) */
+  onSummary?: (t: ThreadSummary) => void
 }
 
 /** How a nebula's chat differs from a group chat (2.0, Constellation.dc.html). */
@@ -149,6 +168,9 @@ export type NebulaMode = {
   commands?: ConstellationCommand[]
   /** Runs "/name text": posts my message and tells the bot. Resolves with a problem, or null. */
   runCommand?: (input: string) => Promise<string | null>
+  /** Communities round: start a thread from a message / open one from its chip */
+  onStartThread?: (m: Message) => void
+  onOpenThread?: (t: ThreadSummary) => void
   /** Communities round: integrations (bridges) reading this nebula; members always see a notice */
   sharedWith?: string[]
 }
@@ -338,8 +360,14 @@ export default function ChatView({
   onMute,
   onReport,
   nebula,
-  onLeave
+  onLeave,
+  threadMode
 }: ChatViewProps): React.JSX.Element {
+  const threadId = threadMode?.threadId
+  // Communities round: a thread's messages wait in the outbox under their own key.
+  const outboxKey = threadId ? outbox.threadKey(conversation.id, threadId) : conversation.id
+  const [alsoInNebula, setAlsoInNebula] = useState(false)
+  const threadExtras = threadId ? { sendTo: conversation.id, threadId, alsoInNebula } : {}
   const partner = conversation.partner
   const isGroup = conversation.kind === 'group'
   const social = useSocial()
@@ -359,10 +387,10 @@ export default function ChatView({
   const partnerPresence = partner ? presence[partner.id] : undefined
   const title = chatTitle(conversation)
   // 0.7.5 instant fly-in: messages fetched ahead (a nebula you're flying into) show at once
-  const [prefetched] = useState(() => prefetchedMessages(conversation.id))
+  const [prefetched] = useState(() => (threadMode ? null : prefetchedMessages(conversation.id)))
   const [messages, setMessages] = useState<Message[]>(() => prefetched?.messages ?? [])
   // 0.7.5: messages on their way live in the outbox, so they keep going when you switch chats.
-  const pending = outbox.useOutbox(conversation.id)
+  const pending = outbox.useOutbox(outboxKey)
   const [hasMore, setHasMore] = useState(() => prefetched?.hasMore ?? false)
   const [loading, setLoading] = useState(() => !prefetched)
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -488,8 +516,10 @@ export default function ChatView({
   // The latest callbacks from the parent, so a parent passing new functions on every render (a
   // nebula's chat in Constellations) doesn't reload the messages each time.
   const parentCallbacks = useRef({ onRead, onSessionExpired })
+  const threadCallbacks = useRef(threadMode)
   useEffect(() => {
     parentCallbacks.current = { onRead, onSessionExpired }
+    threadCallbacks.current = threadMode
   })
 
   const handleFailure = useCallback((error: string, message: string) => {
@@ -505,14 +535,23 @@ export default function ChatView({
   // Mark read when the window is in front and this chat is open.
   const markRead = useCallback(async () => {
     if (!document.hasFocus() || holdRead.current) return
+    if (threadMode) {
+      // A thread's read position is its own (the nebula's stays where it was).
+      await window.glofly.constellations.request(
+        'POST',
+        `/constellations/${threadMode.constellationId}/threads/${threadMode.threadId}/read`
+      )
+      return
+    }
     const result = await window.glofly.conversations.markRead(conversation.id)
     if (result.ok) parentCallbacks.current.onRead(conversation.id)
-  }, [conversation.id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation.id, threadMode?.threadId])
 
   // Load the newest messages.
   useEffect(() => {
     let cancelled = false
-    window.glofly.conversations.messages(conversation.id).then((result) => {
+    window.glofly.conversations.messages(conversation.id, undefined, threadId).then((result) => {
       if (cancelled) return
       setLoading(false)
       if (!result.ok) return handleFailure(result.error, result.message)
@@ -531,11 +570,40 @@ export default function ChatView({
     return () => {
       cancelled = true
     }
-  }, [conversation.id, handleFailure, markRead, rememberPeople])
+  }, [conversation.id, threadId, handleFailure, markRead, rememberPeople])
 
   // Live updates: new messages, edits/deletes/reactions, and typing.
   useEffect(() => {
     return window.glofly.onEvent((event) => {
+      // Communities round: a thread shows its own replies; the nebula keeps its chips current.
+      if (event.type === 'thread:message' && threadId && event.thread.id === threadId) {
+        const m = event.message
+        setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))
+        threadCallbacks.current?.onSummary?.(event.thread)
+        if (m.senderId !== me.id && stickToBottom.current) void markRead()
+        return
+      }
+      if (
+        (event.type === 'thread:message' || event.type === 'thread:updated') &&
+        !threadId &&
+        event.thread.parentMessageId
+      ) {
+        const t = event.thread
+        setMessages((list) =>
+          list.map((x) =>
+            x.id === t.parentMessageId
+              ? { ...x, thread: { ...t, following: x.thread?.following ?? false, unread: 0 } }
+              : x
+          )
+        )
+        return
+      }
+      if (event.type === 'thread:deleted' && !threadId && event.parentMessageId) {
+        const pid = event.parentMessageId
+        setMessages((list) => list.map((x) => (x.id === pid ? { ...x, thread: null } : x)))
+        return
+      }
+      if (event.type === 'message:new' && threadId) return
       if (event.type === 'message:new' && event.message.conversationId === conversation.id) {
         const m = event.message
         setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))
@@ -562,6 +630,7 @@ export default function ChatView({
       }
       if (
         event.type === 'typing' &&
+        !threadId &&
         event.conversationId === conversation.id &&
         event.userId !== me.id
       ) {
@@ -576,7 +645,7 @@ export default function ChatView({
         )
       }
     })
-  }, [conversation.id, me.id, markRead, rememberPeople, stopTyping])
+  }, [conversation.id, threadId, me.id, markRead, rememberPeople, stopTyping])
 
   useEffect(() => {
     const timers = typingTimers.current
@@ -627,7 +696,11 @@ export default function ChatView({
   async function loadOlder(): Promise<void> {
     if (loadingOlder || !hasMore || messages.length === 0) return
     setLoadingOlder(true)
-    const result = await window.glofly.conversations.messages(conversation.id, messages[0].id)
+    const result = await window.glofly.conversations.messages(
+      conversation.id,
+      messages[0].id,
+      threadId
+    )
     setLoadingOlder(false)
     if (!result.ok) return handleFailure(result.error, result.message)
     keepScrollFrom.current = listRef.current?.scrollHeight ?? null
@@ -819,7 +892,13 @@ export default function ChatView({
     )
     if (!up.ok) return handleFailure(up.error, up.message)
     stickToBottom.current = true
-    outbox.enqueue(conversation.id, { body: '', replyTo, attachments: [up.data], lantern: false })
+    outbox.enqueue(outboxKey, {
+      body: '',
+      replyTo,
+      attachments: [up.data],
+      lantern: false,
+      ...threadExtras
+    })
   }
 
   function send(): void {
@@ -844,11 +923,12 @@ export default function ChatView({
       return
     }
     stickToBottom.current = true
-    outbox.enqueue(conversation.id, {
+    outbox.enqueue(outboxKey, {
       body,
       replyTo: replyingTo ? preview(replyingTo) : null,
       attachments: readyFiles,
-      lantern
+      lantern: lantern && !threadId,
+      ...threadExtras
     })
     setDraft('')
     setMention(null)
@@ -1048,7 +1128,7 @@ export default function ChatView({
   }
 
   function retry(tempId: string): void {
-    outbox.retry(conversation.id, tempId)
+    outbox.retry(outboxKey, tempId)
   }
 
   async function saveEdit(m: Message, body: string): Promise<void> {
@@ -1166,7 +1246,11 @@ export default function ChatView({
         }
         const oldest = messagesRef.current[0]
         if (!hasMoreRef.current || !oldest) break
-        const result = await window.glofly.conversations.messages(conversation.id, oldest.id)
+        const result = await window.glofly.conversations.messages(
+          conversation.id,
+          oldest.id,
+          threadId
+        )
         if (!result.ok) break
         setMessages((list) => [
           ...result.data.messages.filter((m) => !list.some((x) => x.id === m.id)),
@@ -1346,7 +1430,7 @@ export default function ChatView({
   /** Tells the other person we're typing (at most every few seconds). */
   function noteTyping(text: string): void {
     const nowMs = Date.now()
-    if (text.trim() && nowMs - lastTypingSent.current > TYPING_SEND_EVERY_MS) {
+    if (!threadId && text.trim() && nowMs - lastTypingSent.current > TYPING_SEND_EVERY_MS) {
       lastTypingSent.current = nowMs
       window.glofly.conversations.typing(conversation.id)
     }
@@ -1626,8 +1710,23 @@ export default function ChatView({
         // A reply always shows its name, so the quote is clearly attached to it.
         // 0.7.5 nebulas: the "New since you left" line goes right before the first new message.
         const newLine = nebula?.lineBefore?.(m, previous) ?? null
+        const isAnswer = !!threadMode?.answerMessageId && threadMode.answerMessageId === m.id
         const grouped =
-          !newLine && !newDay && !m.replyTo && !previous?.event && continuesGroup(previous, m)
+          !newLine &&
+          !newDay &&
+          !m.replyTo &&
+          !previous?.event &&
+          !isAnswer &&
+          continuesGroup(previous, m)
+        const chip =
+          !threadMode && m.thread && !m.deleted && nebula?.onOpenThread ? (
+            <ThreadChip
+              thread={m.thread}
+              nameOf={nameOf}
+              personOf={personOf}
+              onOpen={() => nebula.onOpenThread!(m.thread!)}
+            />
+          ) : null
         return (
           <div key={item.key}>
             {divider}
@@ -1643,10 +1742,27 @@ export default function ChatView({
               authorName={nameOf(m.senderId)}
               authorRole={nebula ? nebula.roleOf(m.senderId) : null}
               canDeleteOthers={!!nebula && m.senderId !== me.id && nebula.canDelete(m.senderId)}
+              isAnswer={isAnswer}
+              onMarkAnswer={
+                threadMode?.onMarkAnswer && !item.pending && m.senderId
+                  ? () => threadMode.onMarkAnswer!(m)
+                  : undefined
+              }
+              onStartThread={
+                !threadMode &&
+                nebula?.onStartThread &&
+                !m.thread &&
+                !m.threadId &&
+                !m.lantern &&
+                !item.pending
+                  ? () => nebula.onStartThread!(m)
+                  : undefined
+              }
               extra={
                 m.deleted || m.event
-                  ? null
-                  : (nebula?.cardFor?.(m) ??
+                  ? chip
+                  : (chip ??
+                    nebula?.cardFor?.(m) ??
                     (nebula ? voiceCardFor(nebula, m.body) : null) ??
                     // 0.7.5: a constellation invite link becomes a card (any chat).
                     (inviteCodeIn(m.body) ? (
@@ -1694,7 +1810,7 @@ export default function ChatView({
               onJumpTo={jumpTo}
               onRetry={() => retry(item.key)}
               onDiscard={() => {
-                const discarded = outbox.discard(conversation.id, item.key)
+                const discarded = outbox.discard(outboxKey, item.key)
                 for (const a of discarded?.attachments ?? []) {
                   void window.glofly.conversations.removeUpload(conversation.id, a.id)
                 }
@@ -1771,7 +1887,7 @@ export default function ChatView({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {nebula ? (
+      {threadMode ? null : nebula ? (
         <header className="chat-header cx-nebula-header">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="#f47a1f" aria-hidden="true">
             <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" />
@@ -2240,7 +2356,32 @@ export default function ChatView({
       >
         {loading && messages.length === 0 && <MessagesSkeleton />}
         {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}
-        {!loading && !hasMore && nebula && (
+        {/* Communities round: a thread starts with the message it came from */}
+        {threadMode && !hasMore && threadMode.parent && (
+          <div className="thread-parent">
+            <span className="thread-parent-label">
+              {threadMode.parent.senderId === me.id ? 'You' : nameOf(threadMode.parent.senderId)} ·{' '}
+              {clockTime(threadMode.parent.createdAt)}
+            </span>
+            <p>
+              <EmojiText
+                text={
+                  threadMode.parent.deleted ? 'This message was deleted.' : threadMode.parent.body
+                }
+              />
+            </p>
+          </div>
+        )}
+        {threadMode && !loading && !hasMore && threadMode.parent && (
+          <div className="thread-count">
+            <span>
+              {messages.length === 0 && pending.length === 0
+                ? 'No replies yet'
+                : `${messages.length} ${messages.length === 1 ? 'reply' : 'replies'}`}
+            </span>
+          </div>
+        )}
+        {!loading && !hasMore && nebula && !threadMode && (
           <div className="chat-start cx-nebula-start">
             <span className="cx-nebula-start-mark" aria-hidden="true">
               <svg width="34" height="34" viewBox="0 0 24 24" fill="#ffb347">
@@ -2359,10 +2500,21 @@ export default function ChatView({
       <div className="composer-area">
         {nebula?.sharedWith?.length ? (
           <p className="cx-shared-note">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
             </svg>
-            Messages here are also shared with {nebula.sharedWith.join(' and ')}, set up by this constellation&rsquo;s staff.
+            Messages here are also shared with {nebula.sharedWith.join(' and ')}, set up by this
+            constellation&rsquo;s staff.
           </p>
         ) : null}
         <div className="typing-line" aria-live="polite">
@@ -2447,7 +2599,12 @@ export default function ChatView({
               </div>
             )}
             {commandMatches.length > 0 && (
-              <div className="mention-picker" role="listbox" id="command-picker" aria-label="Commands">
+              <div
+                className="mention-picker"
+                role="listbox"
+                id="command-picker"
+                aria-label="Commands"
+              >
                 <span className="mention-picker-head">Commands</span>
                 {commandMatches.map((c, i) => (
                   <button
@@ -2500,6 +2657,16 @@ export default function ChatView({
                   </button>
                 ))}
               </div>
+            )}
+            {threadMode?.alsoInName && (
+              <label className="thread-also">
+                <input
+                  type="checkbox"
+                  checked={alsoInNebula}
+                  onChange={(e) => setAlsoInNebula(e.target.checked)}
+                />
+                Also send to #{threadMode.alsoInName}
+              </label>
             )}
             <div className={recording ? 'composer-row composer-row--recording' : 'composer-row'}>
               {recording ? (
@@ -2565,7 +2732,13 @@ export default function ChatView({
                     ref={inputRef}
                     rows={1}
                     aria-label={`Message ${title}`}
-                    placeholder={partner ? `Message @${partner.username}` : `Message ${title}`}
+                    placeholder={
+                      threadMode
+                        ? threadMode.placeholder
+                        : partner
+                          ? `Message @${partner.username}`
+                          : `Message ${title}`
+                    }
                     value={draft}
                     maxLength={MESSAGE_MAX + 200}
                     onChange={onChange}
@@ -2584,17 +2757,19 @@ export default function ChatView({
                         : undefined
                     }
                   />
-                  <button
-                    type="button"
-                    className={gifAnchor ? 'gif-button gif-button--open' : 'gif-button'}
-                    aria-label="GIF"
-                    aria-expanded={!!gifAnchor}
-                    aria-haspopup="dialog"
-                    title="Send a GIF"
-                    onClick={(e) => (gifAnchor ? closeGifs() : setGifAnchor(e.currentTarget))}
-                  >
-                    <GifIcon />
-                  </button>
+                  {!threadId && (
+                    <button
+                      type="button"
+                      className={gifAnchor ? 'gif-button gif-button--open' : 'gif-button'}
+                      aria-label="GIF"
+                      aria-expanded={!!gifAnchor}
+                      aria-haspopup="dialog"
+                      title="Send a GIF"
+                      onClick={(e) => (gifAnchor ? closeGifs() : setGifAnchor(e.currentTarget))}
+                    >
+                      <GifIcon />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={emojiAnchor ? 'emoji-button emoji-button--open' : 'emoji-button'}
@@ -2642,7 +2817,7 @@ export default function ChatView({
               >
                 {recording && !holding ? <SendIcon /> : <MicIcon size={20} />}
               </button>
-              {!recording && draft.trim().length > 0 && (
+              {!recording && !threadId && draft.trim().length > 0 && (
                 <button
                   type="button"
                   className="composer-later"
@@ -2742,7 +2917,7 @@ export default function ChatView({
             <FileIcon size={18} />
             Photos, videos or files
           </button>
-          {isGroup && (
+          {isGroup && !threadId && (
             <button
               type="button"
               role="menuitem"
@@ -2756,18 +2931,20 @@ export default function ChatView({
               Poll
             </button>
           )}
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item"
-            onClick={() => {
-              setPlusAnchor(null)
-              setGameAnchor(plusRef.current)
-            }}
-          >
-            <GameIcon />
-            Play a game
-          </button>
+          {!threadId && (
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                setPlusAnchor(null)
+                setGameAnchor(plusRef.current)
+              }}
+            >
+              <GameIcon />
+              Play a game
+            </button>
+          )}
           {!nebula && (
             <button
               type="button"
@@ -2852,4 +3029,77 @@ export default function ChatView({
       )}
     </div>
   )
+}
+
+/** Communities round: the chip under a message a thread was started from (canvas board 16). */
+function ThreadChip({
+  thread,
+  personOf,
+  onOpen
+}: {
+  thread: ThreadSummary
+  nameOf: (id: string) => string
+  personOf: (id: string) => PublicUser | null | undefined
+  onOpen: () => void
+}): React.JSX.Element {
+  const ago = threadAgo(thread.lastMessageAt)
+  return (
+    <button
+      type="button"
+      className="thread-chip"
+      onClick={onOpen}
+      aria-label={`Open thread ${thread.title}, ${thread.replyCount} replies`}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className="thread-chip-icon"
+      >
+        <path d="M4 4v9a4 4 0 0 0 4 4h10" />
+        <path d="m14 13 4 4-4 4" />
+      </svg>
+      <b className="thread-chip-title">
+        <EmojiText text={thread.title} />
+      </b>
+      {thread.recentIds.length > 0 && (
+        <span className="thread-chip-faces" aria-hidden="true">
+          {thread.recentIds.map((id) => {
+            const p = personOf(id)
+            return (
+              <Avatar
+                key={id}
+                id={id}
+                name={p?.displayName ?? '?'}
+                avatarVersion={p?.avatarVersion ?? null}
+                size={20}
+              />
+            )
+          })}
+        </span>
+      )}
+      <span className="thread-chip-count">
+        {thread.replyCount === 0
+          ? 'No replies yet'
+          : `${thread.replyCount} ${thread.replyCount === 1 ? 'reply' : 'replies'}`}
+      </span>
+      {thread.replyCount > 0 && <span className="thread-chip-ago">· last {ago}</span>}
+    </button>
+  )
+}
+
+/** "2 min ago", "3 h ago", "yesterday", "Nov 3" */
+export function threadAgo(iso: string): string {
+  const s = (Date.now() - Date.parse(iso)) / 1000
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`
+  if (s < 86_400) return `${Math.floor(s / 3600)} h ago`
+  if (s < 2 * 86_400) return 'yesterday'
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }

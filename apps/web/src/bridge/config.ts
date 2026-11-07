@@ -7,7 +7,9 @@ export const BUILD = __GLOFLY_BUILD__
 /** Sent with every request: Control's "App versions in use" lists the web app as Web. */
 export const APP_HEADERS: Record<string, string> = {
   'X-Glofly-Version': VERSION,
-  'X-Glofly-Platform': 'web'
+  'X-Glofly-Platform': 'web',
+  // Communities round: this app knows threads and forum nebulas
+  'X-Glofly-Features': 'threads'
 }
 
 /** "Chrome", "Safari", "Edge"… for Settings → Account → Where you're signed in. */

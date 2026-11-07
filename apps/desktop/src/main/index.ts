@@ -784,9 +784,12 @@ function registerIpcHandlers(): void {
   ipcMain.handle('conversations:remove-member', (event, id: unknown, userId: unknown) =>
     fromApp(event) && isUserId(id) && isUserId(userId) ? removeMember(id, userId) : invalid
   )
-  ipcMain.handle('conversations:messages', (event, id: unknown, before: unknown) =>
-    fromApp(event) && isUserId(id) && (before === undefined || isUserId(before))
-      ? loadMessages(id, before)
+  ipcMain.handle('conversations:messages', (event, id: unknown, before: unknown, thread: unknown) =>
+    fromApp(event) &&
+    isUserId(id) &&
+    (before == null || isUserId(before)) &&
+    (thread == null || isUserId(thread))
+      ? loadMessages(id, before ?? undefined, thread ?? undefined)
       : invalid
   )
   ipcMain.handle('conversations:search', (event, query: unknown, id: unknown, before: unknown) =>
@@ -820,7 +823,14 @@ function registerIpcHandlers(): void {
       (attachmentIds == null || isAttachmentIds(attachmentIds))
         ? sendMessage(id, body, replyTo ?? undefined, attachmentIds ?? undefined, {
             lantern: (options as { lantern?: unknown } | null)?.lantern === true,
-            clientId: clientIdOf((options as { clientId?: unknown } | null)?.clientId)
+            clientId: clientIdOf((options as { clientId?: unknown } | null)?.clientId),
+            // Communities round: a reply in a thread (maybe also shown in the nebula)
+            ...(isUserId((options as { threadId?: unknown } | null)?.threadId)
+              ? {
+                  threadId: (options as { threadId: string }).threadId,
+                  alsoInNebula: (options as { alsoInNebula?: unknown }).alsoInNebula === true
+                }
+              : {})
           })
         : invalid
   )

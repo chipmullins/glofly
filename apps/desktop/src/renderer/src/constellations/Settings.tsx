@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  CloseDaysField,
+  ForumSettingsFields,
+  STARTER_TAGS,
+  forumDraftOf,
+  type ForumDraft
+} from './Forum'
+import {
   CATEGORY_NAME_MAX,
   CONSTELLATION_COLORS,
   CONSTELLATION_DESCRIPTION_MAX,
@@ -544,7 +551,7 @@ function Overview({
 function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
   const editable = can(c, 'manageNebulas')
   const [newName, setNewName] = useState('')
-  const [newKind, setNewKind] = useState<'text' | 'voice'>('text')
+  const [newKind, setNewKind] = useState<'text' | 'voice' | 'forum'>('text')
   const [newCategory, setNewCategory] = useState<string>(c.categories[0]?.id ?? '')
   const [catName, setCatName] = useState('')
   /** 0.7.1: "+ New category" picked in the new nebula's Category list: its name, typed in place */
@@ -556,7 +563,14 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
     readOnly: boolean
     visibility: NebulaVisibility
     roleIds: string[]
+    // Communities round: threads + forums
+    threadsStaffOnly: boolean
+    threadCloseDays: number
+    forum: ForumDraft | null
   }>({
+    threadsStaffOnly: false,
+    threadCloseDays: 7,
+    forum: null,
     name: '',
     topic: '',
     readOnly: false,
@@ -612,7 +626,13 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
             e.preventDefault()
             if (!newName.trim()) return
             const ok = await run(() =>
-              api.addNebula(c.id, { name: newName, kind: newKind, categoryId: newCategory || null })
+              api.addNebula(c.id, {
+                name: newName,
+                kind: newKind,
+                categoryId: newCategory || null,
+                // Communities round: a new forum starts with a few tags (changed in its settings)
+                ...(newKind === 'forum' ? { forum: { tags: STARTER_TAGS } } : {})
+              })
             )
             if (ok) setNewName('')
           }}
@@ -629,6 +649,15 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                   onClick={() => setNewKind('text')}
                 >
                   Text
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={newKind === 'forum'}
+                  title="Posts with titles and tags, each its own conversation"
+                  onClick={() => setNewKind('forum')}
+                >
+                  Forum
                 </button>
                 <button
                   type="button"
@@ -816,7 +845,24 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                           topic: draft.topic.trim() || null,
                           readOnly: draft.readOnly,
                           visibility: draft.visibility,
-                          roleIds: draft.roleIds
+                          roleIds: draft.roleIds,
+                          ...(n.kind === 'text'
+                            ? {
+                                threadsStaffOnly: draft.threadsStaffOnly,
+                                threadCloseDays: draft.threadCloseDays
+                              }
+                            : {}),
+                          ...(n.kind === 'forum' && draft.forum
+                            ? {
+                                threadCloseDays: draft.threadCloseDays,
+                                forum: {
+                                  guidelines: draft.forum.guidelines.trim() || null,
+                                  requireTag: draft.forum.requireTag,
+                                  sort: draft.forum.sort,
+                                  tags: draft.forum.tags.filter((t) => t.name.trim())
+                                }
+                              }
+                            : {})
                         })
                       )
                       if (ok) setEditing(null)
@@ -847,6 +893,40 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                         Announcements (only moderators post)
                       </label>
                     )}
+                    {n.kind === 'text' && (
+                      <>
+                        <label className="cx-field">
+                          <span>Who can start threads</span>
+                          <select
+                            value={draft.threadsStaffOnly ? 'staff' : 'all'}
+                            onChange={(e) =>
+                              setDraft({ ...draft, threadsStaffOnly: e.target.value === 'staff' })
+                            }
+                          >
+                            <option value="all">Everyone who can post</option>
+                            <option value="staff">Staff only</option>
+                          </select>
+                        </label>
+                        <CloseDaysField
+                          what="threads"
+                          value={draft.threadCloseDays}
+                          onChange={(d) => setDraft({ ...draft, threadCloseDays: d })}
+                        />
+                      </>
+                    )}
+                    {n.kind === 'forum' && draft.forum && (
+                      <>
+                        <ForumSettingsFields
+                          draft={draft.forum}
+                          onChange={(f) => setDraft({ ...draft, forum: f })}
+                        />
+                        <CloseDaysField
+                          what="posts"
+                          value={draft.threadCloseDays}
+                          onChange={(d) => setDraft({ ...draft, threadCloseDays: d })}
+                        />
+                      </>
+                    )}
                     <WhoCanSee
                       c={c}
                       what="nebula"
@@ -872,16 +952,18 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                 ) : (
                   <>
                     <span className="cx-settings-item-kind" aria-hidden="true">
-                      {n.kind === 'text' ? '✦' : '🔊'}
+                      {n.kind === 'text' ? '✦' : n.kind === 'forum' ? '💬' : '🔊'}
                     </span>
                     <span className="cx-settings-item-text">
                       <strong>{n.name}</strong>
                       <span>
                         {n.kind === 'voice'
                           ? 'Voice nebula'
-                          : n.readOnly
-                            ? 'Announcements'
-                            : 'Text nebula'}
+                          : n.kind === 'forum'
+                            ? 'Forum'
+                            : n.readOnly
+                              ? 'Announcements'
+                              : 'Text nebula'}
                         {n.topic ? ` · ${n.topic}` : ''}
                       </span>
                     </span>
@@ -903,7 +985,10 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                               topic: n.topic ?? '',
                               readOnly: n.readOnly,
                               visibility: n.visibility ?? 'everyone',
-                              roleIds: n.roleIds ?? []
+                              roleIds: n.roleIds ?? [],
+                              threadsStaffOnly: n.threadsStaffOnly ?? false,
+                              threadCloseDays: n.threadCloseDays ?? 7,
+                              forum: n.kind === 'forum' ? forumDraftOf(n) : null
                             })
                           }}
                         >

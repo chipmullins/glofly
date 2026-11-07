@@ -70,6 +70,13 @@ type MessageItemProps = {
   onPin?: (pin: boolean) => void
   /** "Mark unread from here" (others' messages) */
   onMarkUnread?: () => void
+  // ---- Communities round: threads + forums ----
+  /** "Start a thread" from this message (text nebulas) */
+  onStartThread?: () => void
+  /** Forum posts: mark this reply as the answer (or take it off) */
+  onMarkAnswer?: () => void
+  /** This reply is the post's answer */
+  isAnswer?: boolean
 }
 
 const HOLD_FOR_FIREFLIES_MS = 450
@@ -242,7 +249,10 @@ export default function MessageItem({
   extra,
   pinned = null,
   onPin,
-  onMarkUnread
+  onMarkUnread,
+  onStartThread,
+  onMarkAnswer,
+  isAnswer = false
 }: MessageItemProps): React.JSX.Element {
   const m = item.message
   const mine = m.senderId === meId
@@ -313,6 +323,7 @@ export default function MessageItem({
   }
   if (m.lantern && !m.deleted) classes.push('message--lantern')
   if (m.lantern && m.lanternFadeAt && !m.deleted) classes.push('message--lantern-fading')
+  if (isAnswer && !m.deleted) classes.push('message--answer')
 
   // 0.7.5: a message on its way looks sent right away; it only fades (with "Sending…") when the
   // server takes more than a moment.
@@ -384,6 +395,14 @@ export default function MessageItem({
           </button>
         )}
 
+        {isAnswer && !m.deleted && (
+          <span className="message-answer-label">
+            <Icon size={13}>
+              <path d="M20 6 9 17l-5-5" />
+            </Icon>
+            Marked as the answer
+          </span>
+        )}
         {!grouped && (
           <div className="message-meta">
             <span
@@ -559,6 +578,15 @@ export default function MessageItem({
               </Icon>
             </button>
           )}
+          {onStartThread && !m.deleted && !item.pending && (
+            <button type="button" className="message-thread-button" aria-label="Start a thread" title="Start a thread" onClick={onStartThread}>
+              <Icon>
+                <path d="M4 4v9a4 4 0 0 0 4 4h10" />
+                <path d="m14 13 4 4-4 4" />
+              </Icon>
+              <span>Start a thread</span>
+            </button>
+          )}
           <button
             type="button"
             aria-label="More message options"
@@ -636,6 +664,22 @@ export default function MessageItem({
 
           {popup === 'menu' && (
             <div role="menu" className="menu message-menu">
+              {onMarkAnswer && !m.deleted && !item.pending && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="menu-item"
+                  onClick={() => {
+                    setPopup(null)
+                    onMarkAnswer()
+                  }}
+                >
+                  <Icon>
+                    <path d="M20 6 9 17l-5-5" />
+                  </Icon>
+                  {isAnswer ? 'Not the answer' : 'Mark as the answer'}
+                </button>
+              )}
               {mine && canAct && !special && (
                 <button
                   type="button"

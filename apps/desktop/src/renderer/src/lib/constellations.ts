@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ForumSettings, ForumTag } from '@glofly/shared/threads'
 import type {
   ApiResult,
   ConstellationBan,
@@ -171,6 +172,7 @@ export const api = {
       readOnly?: boolean
       visibility?: NebulaVisibility
       roleIds?: string[]
+      forum?: Partial<Omit<ForumSettings, 'tags'>> & { tags?: (Omit<ForumTag, 'id'> & { id?: string })[] }
     }
   ) => call<Detail & { nebulaId: string }>('POST', `${base(id)}/nebulas`, values),
   updateNebula: (
@@ -183,6 +185,10 @@ export const api = {
       categoryId: string | null
       visibility: NebulaVisibility
       roleIds: string[]
+      // Communities round: threads + forums
+      threadsStaffOnly: boolean
+      threadCloseDays: number
+      forum: Partial<Omit<ForumSettings, 'tags'>> & { tags?: (Omit<ForumTag, 'id'> & { id?: string })[] }
     }>
   ) => call<Detail>('PATCH', `${base(id)}/nebulas/${nebulaId}`, changes),
   removeNebula: (id: string, nebulaId: string) =>

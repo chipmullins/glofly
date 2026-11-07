@@ -41,7 +41,11 @@ function serverUrl(setting: string | undefined): string {
 }
 
 /** Sent with every request so Glofly Control can show which app versions are in use. */
-export const VERSION_HEADER = { 'X-Glofly-Version': app.getVersion() }
+export const VERSION_HEADER = {
+  'X-Glofly-Version': app.getVersion(),
+  // Communities round: this app knows threads and forum nebulas
+  'X-Glofly-Features': 'threads'
+}
 
 // Shown in Settings → Account → Where you're signed in, only to you: "Windows · DESKTOP-4KQ2".
 const DEVICE_NAME = deviceName()
