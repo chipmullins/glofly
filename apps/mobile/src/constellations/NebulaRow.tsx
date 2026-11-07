@@ -227,7 +227,8 @@ export const NebulaRow = memo(function NebulaRow({
                   <LinkCard message={m} preview={m.linkPreview} mine={false} />
                 </View>
               ) : null}
-              {m.buttons?.length && sender?.bot && onButton ? (
+              {/* Only bots' messages carry buttons (only the bot API can add them). */}
+              {m.buttons?.length && onButton ? (
                 <View accessibilityLabel="Bot buttons" style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {m.buttons.map((b) => (
                     <Pressable
