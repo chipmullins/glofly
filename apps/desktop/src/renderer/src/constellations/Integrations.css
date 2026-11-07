@@ -1,0 +1,394 @@
+/* Constellation settings → Integrations (communities round, Nov 2026; approved canvas boards 1–3).
+   Theme variables, so light and dark both work. */
+
+.ix-page {
+  gap: 20px;
+}
+.ix-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ix-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ix-section-head h2 {
+  margin: 0;
+  flex: 1;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 17px;
+}
+.ix-empty,
+.ix-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--glo-muted);
+  line-height: 1.45;
+}
+.ix-muted {
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.ix-good {
+  color: #1d7a45;
+  font-weight: 600;
+}
+.ix-bad {
+  color: var(--glo-danger-text);
+  font-weight: 600;
+}
+.ix-code {
+  font-size: 12.5px;
+  background: var(--glo-hover);
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: var(--glo-icon);
+}
+
+.ix-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 19px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ix-btn:hover {
+  background: var(--glo-hover);
+}
+.ix-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ix-btn--small {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  font-size: 13px;
+}
+.ix-btn--gold {
+  border: 0;
+  background: #f47a1f;
+  color: #2a1406;
+  font-weight: 700;
+}
+.ix-btn--gold:hover {
+  background: #e2650f;
+}
+.ix-btn--danger {
+  border: 0;
+  background: var(--glo-danger-bg);
+  color: var(--glo-danger-text);
+}
+.ix-btn--danger:hover {
+  background: var(--glo-danger-bg);
+  filter: brightness(0.96);
+}
+.ix-link {
+  align-self: flex-start;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--glo-accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ix-card {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-subtle);
+}
+.ix-bot {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 13px;
+  background: #0e7490;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ix-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ix-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ix-card-title b {
+  font-size: 15px;
+}
+.ix-bot-tag {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--glo-icon);
+  color: var(--glo-surface);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.ix-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ix-pill {
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: var(--glo-surface);
+  border: 1px solid var(--glo-line);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--glo-icon);
+}
+.ix-card-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ix-hooks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.ix-hook {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--glo-line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ix-hook b {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.ix-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--glo-muted);
+  letter-spacing: 0.4px;
+}
+.ix-hook-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.ix-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ix-log li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-top: 1px solid var(--glo-line);
+  font-size: 13.5px;
+}
+.ix-log-when {
+  width: 80px;
+  flex: none;
+  color: var(--glo-muted);
+}
+.ix-log-what {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Dialogs over the settings window */
+.ix-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(36, 23, 15, 0.45);
+}
+.ix-sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px 26px;
+  border-radius: 20px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 24px 60px rgba(36, 23, 15, 0.35);
+}
+.ix-sheet--wide {
+  max-width: 580px;
+}
+.ix-sheet-title {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 22px;
+}
+.ix-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--glo-icon);
+}
+.ix-field input,
+.ix-field select {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ix-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ix-scopes,
+.ix-chips {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ix-chips {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ix-scopes legend,
+.ix-chips legend {
+  padding: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--glo-icon);
+}
+.ix-scope {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--glo-subtle);
+  cursor: pointer;
+}
+.ix-scope--on {
+  background: var(--glo-accent-soft);
+}
+.ix-scope input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: #f47a1f;
+}
+.ix-scope > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ix-scope b {
+  font-size: 14px;
+}
+.ix-scope span span {
+  font-size: 12.5px;
+  color: var(--glo-muted);
+  line-height: 1.35;
+}
+.ix-chip {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ix-chip--on {
+  border-color: #f47a1f;
+  background: var(--glo-accent-soft);
+}
+.ix-secret {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #24170f;
+  color: #ffd9b3;
+}
+.ix-secret code {
+  flex: 1;
+  font-size: 13.5px;
+  word-break: break-all;
+  line-height: 1.4;
+  user-select: all;
+}
+.ix-copy {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  border: 0;
+  background: #ffb347;
+  color: #2a1406;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ix-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--glo-subtle);
+  font-size: 13px;
+  color: var(--glo-icon);
+  line-height: 1.4;
+}
+.ix-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

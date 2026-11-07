@@ -186,7 +186,7 @@ export function MembersPanel({
                   type="button"
                   className={[
                     'cx-member',
-                    m.status === 'offline' && 'cx-member--offline',
+                    m.status === 'offline' && !m.user.bot && 'cx-member--offline',
                     openId === m.user.id && 'cx-member--open'
                   ]
                     .filter(Boolean)
@@ -197,11 +197,12 @@ export function MembersPanel({
                 >
                   <span style={{ position: 'relative', display: 'inline-flex' }}>
                     <Face person={m.user} size={32} me={mine} />
-                    <StatusDot status={m.status} ring="var(--glo-subtle)" size={11} />
+                    {!m.user.bot && <StatusDot status={m.status} ring="var(--glo-subtle)" size={11} />}
                   </span>
                   <span className="cx-member-text">
                     <span className="cx-member-name" style={{ color: nameColor(m.user.id) }}>
                       {mine ? `${firstName(m.user)} (you)` : m.user.displayName}
+                      {m.user.bot && <span className="cx-bot-tag">BOT</span>}
                     </span>
                     {s && <span className="cx-member-sub cx-member-sub--row">{s}</span>}
                   </span>

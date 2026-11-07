@@ -61,6 +61,12 @@ import { EventCard, EventDialog, EventsChip } from './Events'
 import CxSearch from './CxSearch'
 import { InboxStripButton } from './Inbox'
 import './Inside.css'
+import BotButtons from './BotButtons'
+import { integrations } from '../lib/integrations'
+import type { ConstellationCommand } from '@glofly/shared/integrations'
+
+/** Communities round: a bot's badge in chats (approved board 4). */
+const BOT_BADGE = { name: 'Bot', light: '#7fd4e8', badgeBg: '#2c3f46', badgeText: '#bfeaf5' }
 
 // Inside a constellation (Constellation.dc.html, approved): the far-left strip (Home at the top,
 // a galaxy button to the dashboard, your constellations with the open one ringed in gold, a dashed
@@ -201,7 +207,15 @@ export type ConstellationViewProps = {
 }
 
 export type SettingsPageName =
-  'overview' | 'nebulas' | 'roles' | 'members' | 'invites' | 'moderation' | 'automod' | 'delete'
+  | 'overview'
+  | 'nebulas'
+  | 'roles'
+  | 'members'
+  | 'invites'
+  | 'moderation'
+  | 'automod'
+  | 'integrations'
+  | 'delete'
 
 export default function ConstellationView(props: ConstellationViewProps): React.JSX.Element {
   const { me, myStatus, detail: c, cards, nebulaId, now } = props
@@ -240,6 +254,21 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   }
 
   const people = useMemo(() => new Map(c.members.map((m) => [m.user.id, m.user])), [c.members])
+  // Communities round: this constellation's slash commands (reloaded whenever it changes).
+  const [commands, setCommands] = useState<ConstellationCommand[]>([])
+  useEffect(() => {
+    let stale = false
+    if (!c.members.some((m) => m.user.bot)) {
+      setCommands([])
+      return
+    }
+    void integrations.commands(c.id).then((r) => {
+      if (!stale && r.ok) setCommands(r.data.commands)
+    })
+    return () => {
+      stale = true
+    }
+  }, [c])
   const nebula =
     c.nebulas.find((n) => n.id === nebulaId) ??
     c.nebulas.find((n) => n.kind === 'text') ??
@@ -474,6 +503,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const roleBadge = useCallback(
     (userId: string) => {
       if (!people.has(userId)) return null
+      // Communities round: a constellation's bot always shows BOT.
+      if (people.get(userId)?.bot) return BOT_BADGE
       const role = topRole(c, userId)
       if (role.kind === 'member') return null
       const colors = ROLE_COLORS[role.color] ?? ROLE_COLORS.gray
@@ -627,7 +658,10 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     const rest = online.filter((m) => !placed.has(m.user.id)).sort(byName)
     if (rest.length)
       out.push({ key: 'online', title: 'Online', color: 'var(--glo-muted)', members: rest })
-    const off = offline.filter((m) => !placed.has(m.user.id)).sort(byName)
+    // Communities round: bots get their own group (they're never "offline" people).
+    const bots = offline.filter((m) => !placed.has(m.user.id) && m.user.bot).sort(byName)
+    const off = offline.filter((m) => !placed.has(m.user.id) && !m.user.bot).sort(byName)
+    if (bots.length) out.push({ key: 'bots', title: 'Bots', color: 'var(--glo-muted)', members: bots })
     if (off.length)
       out.push({ key: 'offline', title: 'Offline', color: 'var(--glo-muted)', members: off })
     return out
@@ -1679,9 +1713,19 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             onSearchAll: () => setSearchAll(true),
             // 0.8.0 events: a card under its "made an event 📅" message
             bodyFor: (m) => (eventsByMessage.has(m.id) ? 'made an event 📅' : null),
+            // Communities round: slash commands and a bot's buttons.
+            commands,
+            runCommand: async (input) => {
+              const r = await integrations.runCommand(c.id, chatNebula.id, input)
+              if (!r.ok) return r.message
+              return r.data.delivered ? null : "The bot didn't answer. It may be offline."
+            },
             cardFor: (m) => {
               const e = eventsByMessage.get(m.id)
-              if (!e) return null
+              if (!e)
+                return m.buttons?.length && people.get(m.senderId)?.bot ? (
+                  <BotButtons constellationId={c.id} messageId={m.id} buttons={m.buttons} onProblem={props.onProblem} />
+                ) : null
               const vs = e.voiceNebulaId
                 ? c.voice.find((v) => v.nebulaId === e.voiceNebulaId)
                 : null

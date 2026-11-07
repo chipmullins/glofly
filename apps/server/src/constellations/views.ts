@@ -44,7 +44,9 @@ const userFields = { id: users.id, username: users.username, displayName: users.
 export async function publicUsers(ids: string[]): Promise<Map<string, PublicUser>> {
   const out = new Map<string, PublicUser>();
   if (!ids.length) return out;
-  for (const u of await db.select(userFields).from(users).where(inArray(users.id, [...new Set(ids)]))) out.set(u.id, u);
+  // Communities round: bots carry bot: true (the BOT tag); everyone else leaves it out.
+  for (const { bot, ...u } of await db.select({ ...userFields, bot: users.bot }).from(users).where(inArray(users.id, [...new Set(ids)])))
+    out.set(u.id, bot ? { ...u, bot: true } : u);
   return out;
 }
 

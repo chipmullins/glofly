@@ -141,7 +141,7 @@ export async function activityFor(constellationId: string, before: Date | null):
     keyName: r.keyName,
     action: r.action,
     text: activityText(r.action, r.keyName ?? "A key", r.actorName ?? "Someone", r.targetId ? names.get(r.targetId) ?? null : null, r.details ?? {}),
-    from: r.ip ? `from ${r.ip}` : r.actorName ? "Glofly" : null,
+    from: r.ip ? `from ${r.ip}` : null,
   }));
 }
 

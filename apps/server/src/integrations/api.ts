@@ -242,7 +242,7 @@ const postBody = z.object({
   buttons: z
     .array(
       z.object({
-        id: z.string().regex(MESSAGE_BUTTON_ID_PATTERN, "Button ids: letters, digits and _ . : - (up to 64)."),
+        id: z.string().regex(MESSAGE_BUTTON_ID_PATTERN, "Button ids: letters, digits, _ and - (up to 64)."),
         label: z.string().trim().min(1).max(MESSAGE_BUTTON_LABEL_MAX),
         style: z.enum(["primary", "secondary", "danger"]).default("secondary"),
       }),

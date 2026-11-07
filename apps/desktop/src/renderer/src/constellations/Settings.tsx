@@ -39,6 +39,7 @@ import IdentitySettings from './SettingsIdentity'
 import { TagInput, VisibilityChoices } from './CreateJoin'
 import type { SettingsPageName } from './ConstellationView'
 import AutoModPage from './AutoModPage'
+import IntegrationsPage from './IntegrationsPage'
 import WhoCanSee, { LockIcon, gateLabel } from './RoleVisibility'
 import type { NebulaVisibility } from '@glofly/shared/constellations'
 import './Settings2.css'
@@ -206,7 +207,9 @@ export default function ConstellationSettings({
       name: 'AutoMod',
       show: can(c, 'manageConstellation') || can(c, 'deleteMessages')
     },
-    { id: 'moderation', name: 'Moderation', show: modViewer }
+    { id: 'moderation', name: 'Moderation', show: modViewer },
+    // Communities round (Nov 2026): API keys, webhooks, bots (Owner / Edit constellation settings).
+    { id: 'integrations', name: 'Integrations', show: can(c, 'manageConstellation') }
   ]
   const title =
     page === 'delete' ? 'Delete constellation' : (pages.find((p) => p.id === page)?.name ?? '')
@@ -250,7 +253,7 @@ export default function ConstellationSettings({
                 onClick={() => setPage(p.id)}
               >
                 {p.name}
-                {p.id === 'automod' && <span className="cx-settings-new">NEW</span>}
+                {p.id === 'integrations' && <span className="cx-settings-new">NEW</span>}
                 {p.id === 'members' && c.pendingRequests > 0 && (
                   <span className="cx-settings-count">{c.pendingRequests}</span>
                 )}
@@ -312,6 +315,7 @@ export default function ConstellationSettings({
           {page === 'invites' && <InvitesPage c={c} friends={friends} onProblem={onProblem} />}
           {page === 'automod' && <AutoModPage c={c} meId={me.id} onProblem={onProblem} />}
           {page === 'moderation' && <ModerationPage c={c} me={me} />}
+          {page === 'integrations' && <IntegrationsPage c={c} onProblem={onProblem} />}
           {page === 'delete' && <DeletePage c={c} onDeleted={onDeleted} />}
         </div>
       </div>

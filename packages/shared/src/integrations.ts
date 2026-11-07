@@ -159,7 +159,7 @@ export type MessageButtonStyle = 'primary' | 'secondary' | 'danger'
 export type MessageButton = { id: string; label: string; style: MessageButtonStyle }
 export const MESSAGE_BUTTONS_MAX = 5
 export const MESSAGE_BUTTON_LABEL_MAX = 40
-export const MESSAGE_BUTTON_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/
+export const MESSAGE_BUTTON_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 
 /** Slash command names: what follows the /, lower case. */
 export const COMMAND_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/

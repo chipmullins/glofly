@@ -170,7 +170,7 @@ test("the bot answers with buttons; clicks reach it; unknown buttons don't", { s
   const reply = await asBot(`/api/v1/nebulas/${general.id}/messages`, "POST", {
     text: "Application received",
     replyToId: commandMessage,
-    buttons: [{ id: "approve:" + player.id, label: "Approve", style: "primary" }, { id: "decline", label: "Decline", style: "danger" }],
+    buttons: [{ id: "approve-" + player.id, label: "Approve", style: "primary" }, { id: "decline", label: "Decline", style: "danger" }],
   });
   assert.equal(reply.status, 201, JSON.stringify(reply.json));
   botMessage = reply.json.messageId;

@@ -1082,3 +1082,60 @@
 .cx-side-settings {
   flex: none;
 }
+
+/* Communities round (Nov 2026): buttons under a bot's message (approved canvas board 4). */
+.cx-bot-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.cx-bot-button {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 17px;
+  border: 1px solid var(--glo-border);
+  background: transparent;
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cx-bot-button:hover:not(:disabled) {
+  background: var(--glo-hover);
+}
+.cx-bot-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.cx-bot-button--primary {
+  border: 0;
+  background: #2f9e5c;
+  color: #ffffff;
+  font-weight: 700;
+}
+.cx-bot-button--primary:hover:not(:disabled) {
+  background: #278a50;
+}
+.cx-bot-button--danger {
+  color: var(--glo-danger-text);
+}
+.command-option-what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-bot-tag {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #2c3f46;
+  color: #bfeaf5;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  vertical-align: 1px;
+}

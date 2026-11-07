@@ -1,3 +1,4 @@
+import { parseSlashCommand, type ConstellationCommand } from '@glofly/shared/integrations'
 import { shortBody } from '@glofly/shared/gifs'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -144,6 +145,10 @@ export type NebulaMode = {
   /** 0.8.0 events: a card under a message (an event's), and the text shown in its place */
   cardFor?: (m: Message) => React.ReactNode
   bodyFor?: (m: Message) => string | null
+  /** Communities round (Nov 2026): the constellation's slash commands (bots') for the / menu */
+  commands?: ConstellationCommand[]
+  /** Runs "/name text": posts my message and tells the bot. Resolves with a problem, or null. */
+  runCommand?: (input: string) => Promise<string | null>
 }
 
 const TYPING_SEND_EVERY_MS = 3000 // how often we tell the other person we're typing
@@ -360,6 +365,20 @@ export default function ChatView({
   const [loading, setLoading] = useState(() => !prefetched)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [draft, setDraft] = useState('')
+  // Communities round: the / menu (a nebula's bot commands) while the box holds just "/word".
+  const [commandIndex, setCommandIndex] = useState(0)
+  const [commandsClosedFor, setCommandsClosedFor] = useState<string | null>(null)
+  const commandMatches = useMemo(() => {
+    const list = nebula?.commands
+    if (!list?.length || !/^\/[a-z0-9-]*$/i.test(draft) || commandsClosedFor === draft) return []
+    const typed = draft.slice(1).toLowerCase()
+    return list.filter((c) => c.name.startsWith(typed)).slice(0, 8)
+  }, [nebula?.commands, draft, commandsClosedFor])
+  function pickCommand(name: string): void {
+    setDraft(`/${name} `)
+    setCommandIndex(0)
+    inputRef.current?.focus()
+  }
   const [notice, setNotice] = useState<string | null>(null)
   /** Who's typing right now (several people at once in a group) */
   const [typingIds, setTypingIds] = useState<string[]>([])
@@ -804,6 +823,20 @@ export default function ChatView({
   function send(): void {
     const body = draft.trim()
     if (!canSend || !conversation.canMessage) return
+    // Communities round: a bot's slash command (only when it's one of this constellation's).
+    const command = nebula?.runCommand && !readyFiles.length ? parseSlashCommand(body) : null
+    if (command && nebula?.commands?.some((c) => c.name === command.name) && nebula.runCommand) {
+      stickToBottom.current = true
+      setDraft('')
+      setReplyingTo(null)
+      void nebula.runCommand(body).then((problem) => {
+        if (problem) {
+          setNotice(problem)
+          setDraft((d) => d || body)
+        }
+      })
+      return
+    }
     if (body.length > MESSAGE_MAX) {
       setNotice(`Messages can be up to ${MESSAGE_MAX.toLocaleString()} characters.`)
       return
@@ -1245,6 +1278,25 @@ export default function ChatView({
   }, [onSearch])
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    // Communities round: the / menu (arrows move, Enter or Tab picks, Escape closes).
+    if (commandMatches.length > 0) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const step = e.key === 'ArrowDown' ? 1 : -1
+        setCommandIndex((i) => (i + step + commandMatches.length) % commandMatches.length)
+        return
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && !e.nativeEvent.isComposing) {
+        e.preventDefault()
+        pickCommand(commandMatches[Math.min(commandIndex, commandMatches.length - 1)].name)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setCommandsClosedFor(draft)
+        return
+      }
+    }
     // "@" suggestions: arrows move, Enter or Tab picks, Escape closes.
     if (mention && suggestions.length > 0) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -2382,6 +2434,28 @@ export default function ChatView({
                 >
                   ×
                 </button>
+              </div>
+            )}
+            {commandMatches.length > 0 && (
+              <div className="mention-picker" role="listbox" id="command-picker" aria-label="Commands">
+                <span className="mention-picker-head">Commands</span>
+                {commandMatches.map((c, i) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    role="option"
+                    id={`command-option-${i}`}
+                    aria-selected={i === commandIndex}
+                    className="mention-option"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseEnter={() => setCommandIndex(i)}
+                    onClick={() => pickCommand(c.name)}
+                  >
+                    <span className="mention-option-name">/{c.name}</span>
+                    <span className="mention-option-user command-option-what">{c.description}</span>
+                    <span className="mention-option-user">{c.bot.displayName}</span>
+                  </button>
+                ))}
               </div>
             )}
             {suggestions.length > 0 && mention && (
