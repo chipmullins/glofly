@@ -656,7 +656,27 @@ export type AccountSupport = {
 
 // ───────────── Calls ─────────────
 
+/** Communities round (Nov 2026): a Sign in with Glofly app (Control → Sign-in apps). */
+export type OAuthAppRow = {
+  id: string
+  clientId: string
+  name: string
+  website: string | null
+  owner: string
+  redirectUris: string[]
+  scopes: string[]
+  confidential: boolean
+  firstParty: boolean
+  disabled: boolean
+  disabledReason: string | null
+  people: number
+  createdAt: string
+}
+
 export const api = {
+  oauthApps: () => call<{ apps: OAuthAppRow[] }>('GET', '/admin/oauth-apps'),
+  setOAuthApp: (id: string, changes: { disabled?: boolean; reason?: string; firstParty?: boolean; note: string }) =>
+    call<Done>('POST', `/admin/oauth-apps/${id}`, changes),
   usage: () => call<UsageReport>('GET', '/admin/usage'),
   setBudget: (monthly: number | null) =>
     call<UsageReport>('PUT', '/admin/usage/budget', { monthly }),

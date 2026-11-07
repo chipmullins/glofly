@@ -12,6 +12,7 @@ export type Page =
   | 'inbox'
   | 'errors'
   | 'constellations'
+  | 'signinApps'
   | 'announcements'
   | 'server'
   | 'audit'
@@ -29,6 +30,7 @@ const ITEMS: {
   { id: 'inbox', label: 'Inbox', icon: ICONS.inbox },
   { id: 'errors', label: 'Errors', icon: ICONS.errors },
   { id: 'constellations', label: 'Constellations', icon: ICONS.constellations },
+  { id: 'signinApps', label: 'Sign-in apps', icon: ICONS.lock },
   { id: 'announcements', label: 'Announcements', icon: ICONS.announcements },
   { id: 'server', label: 'Server', icon: ICONS.server },
   { id: 'audit', label: 'Audit log', icon: ICONS.audit }

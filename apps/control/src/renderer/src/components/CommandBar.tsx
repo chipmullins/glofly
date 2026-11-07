@@ -52,6 +52,7 @@ const PAGE_ICONS: Record<Page, string> = {
   inbox: ICONS.inbox,
   errors: ICONS.errors,
   constellations: ICONS.constellations,
+  signinApps: ICONS.lock,
   announcements: ICONS.announcements,
   server: ICONS.server,
   audit: ICONS.audit

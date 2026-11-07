@@ -19,6 +19,7 @@ import { Dialog, Toast } from './components/common'
 import { CommandBar, type CommandAction } from './components/CommandBar'
 import { forgetQuickNotes, loadQuickNotes } from './lib/quickNotes'
 import { GO_KEYS, isMac, modalOpen, plainShortcut, SHORTCUTS } from './lib/shortcuts'
+import { SignInApps } from './screens/SignInApps'
 import type { AdminUser } from '../../preload/types'
 
 type Session = { admin: AdminUser; expiresAt: string; backupCodesLeft: number }
@@ -327,6 +328,7 @@ export default function App(): JSX.Element {
             onOpenAccount={(id) => openAccounts('', id)}
           />
         )}
+        {page === 'signinApps' && <SignInApps toast={showToast} />}
         {page === 'announcements' && <Announcements toast={showToast} />}
         {page === 'server' && (
           <Server

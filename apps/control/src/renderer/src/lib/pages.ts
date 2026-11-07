@@ -11,6 +11,7 @@ export const PAGE_LABELS: Record<Page, string> = {
   inbox: 'Inbox',
   errors: 'Errors',
   constellations: 'Constellations',
+  signinApps: 'Sign-in apps',
   announcements: 'Announcements',
   server: 'Server',
   audit: 'Audit log'
