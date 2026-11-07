@@ -36,9 +36,9 @@ export const seesAllNebulas = (s: Pick<Standing, "owner" | "permissions">): bool
 
 /** Everything the rule needs about one constellation. */
 async function rulesOf(constellationId: string, x: Exec = db) {
-  const [c] = await x.select({ ownerId: constellations.ownerId }).from(constellations).where(eq(constellations.id, constellationId));
+  const [c] = await x.select({ ownerId: constellations.ownerId, toolBotId: constellations.toolBotId }).from(constellations).where(eq(constellations.id, constellationId));
   const nebulaRows = await x
-    .select({ id: nebulas.id, conversationId: nebulas.conversationId, categoryId: nebulas.categoryId, visibility: nebulas.visibility, roleIds: nebulas.roleIds })
+    .select({ id: nebulas.id, conversationId: nebulas.conversationId, categoryId: nebulas.categoryId, visibility: nebulas.visibility, roleIds: nebulas.roleIds, userIds: nebulas.userIds })
     .from(nebulas)
     .where(eq(nebulas.constellationId, constellationId));
   const categoryRows = await x
@@ -71,8 +71,9 @@ async function rulesOf(constellationId: string, x: Exec = db) {
     categories,
     memberIds: members.map((m) => m.userId),
     heldBy,
+    // Communities round: the Glofly tools' member posts wherever a tool is set up.
     seesAll: (userId: string) =>
-      userId === c?.ownerId || everyoneManages || [...(heldBy.get(userId) ?? [])].some((id) => managerRoles.has(id)),
+      userId === c?.ownerId || (!!c?.toolBotId && userId === c.toolBotId) || everyoneManages || [...(heldBy.get(userId) ?? [])].some((id) => managerRoles.has(id)),
   };
 }
 type Rules = Awaited<ReturnType<typeof rulesOf>>;
@@ -89,7 +90,8 @@ function visibleBy(rules: Rules, userId: string): Set<string> {
   const out = new Set<string>();
   for (const n of rules.nebulas) {
     const category = n.categoryId ? rules.categories.get(n.categoryId) : null;
-    if (canSeeNebula(all, held, gateOf(n), category)) out.add(n.conversationId);
+    // Communities round: a ticket's opener sees it whatever their roles.
+    if (canSeeNebula(all, held, gateOf(n), category) || n.userIds.includes(userId)) out.add(n.conversationId);
   }
   return out;
 }

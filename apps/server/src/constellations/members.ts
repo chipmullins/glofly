@@ -18,6 +18,7 @@ import { emitToUser } from "../realtime";
 import { constellationChanged } from "./activity";
 import { celebrateJoin } from "./community";
 import { fireConstellationEvent } from "../integrations/events";
+import { toolHook } from "../toolHooks";
 import { syncNebulaAccess } from "./access";
 
 // Joining and leaving (2.0). A constellation's members are also members of each of its nebulas'
@@ -60,6 +61,8 @@ export async function afterJoin(constellationId: string, userId: string): Promis
   await constellationChanged(constellationId);
   // Communities round: outgoing webhooks (Integrations).
   fireConstellationEvent(constellationId, "member.joined", userId);
+  // Communities round: Glofly tools (welcome message, logging). Loaded when needed: no import cycle.
+  toolHook("onJoin", constellationId, userId);
   emitToUser(userId, "constellations:changed", {}, true);
   // 0.7.5: "Priya joined. Say hi!" and member milestones (never stops the join if it fails).
   await celebrateJoin(constellationId, userId).catch((err) => console.error("Join line failed", err));
@@ -97,6 +100,7 @@ export async function removeMember(constellationId: string, userId: string): Pro
   await removeFiles(removed);
   for (const id of chatIds) await removeFromChatCall(id, userId);
   fireConstellationEvent(constellationId, "member.left", userId);
+  toolHook("onLeave", constellationId, userId);
   await constellationChanged(constellationId, [userId]);
   emitToUser(userId, "constellations:changed", {}, true);
   return true;

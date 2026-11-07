@@ -1059,6 +1059,8 @@ export const constellations = pgTable(
     // 0.8.2, Control: frozen = members can read but nobody can post or join until it's unfrozen;
     // invites off = its invite links stop working and no new ones can be made.
     frozenAt: timestamp("frozen_at", { withTimezone: true }),
+    // Communities round: the "Glofly" member the built-in tools post as (made on first use).
+    toolBotId: uuid("tool_bot_id"),
     invitesOffAt: timestamp("invites_off_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     // The newest message in any of its nebulas (the dashboard's "Quiet since yesterday").
@@ -1191,6 +1193,8 @@ export const nebulas = pgTable(
     // is kept in its conversation's members (constellations/access.ts syncNebulaAccess).
     visibility: text("visibility").notNull().default("everyone"),
     roleIds: uuid("role_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    // Communities round (Glofly tools): people who see it whatever their roles (a ticket's opener).
+    userIds: uuid("user_ids").array().notNull().default(sql`'{}'::uuid[]`),
     conversationId: uuid("conversation_id")
       .notNull()
       .unique()
@@ -1800,4 +1804,77 @@ export const oauthTokens = pgTable(
     index("oauth_tokens_user_app_idx").on(t.userId, t.appId),
     index("oauth_tokens_family_idx").on(t.family),
   ],
+);
+
+// ───────────── Communities round (Nov 2026): Glofly tools (built in, no bot to invite) ─────────────
+
+// Each tool's switch and settings per constellation (approved canvas board 15).
+// tool: "tickets" | "welcome" | "buttonRoles" | "logging" | "giveaways"
+export const constellationTools = pgTable(
+  "constellation_tools",
+  {
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    tool: text("tool").notNull(),
+    enabled: boolean("enabled").notNull().default(false),
+    settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+    // The message with its buttons (tickets, button roles), once posted
+    messageId: uuid("message_id"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.constellationId, t.tool] })],
+);
+
+export const constellationTickets = pgTable(
+  "constellation_tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    nebulaId: uuid("nebula_id").references(() => nebulas.id, { onDelete: "set null" }),
+    openerId: uuid("opener_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+  },
+  (t) => [index("constellation_tickets_constellation_idx").on(t.constellationId)],
+);
+
+export const constellationGiveaways = pgTable(
+  "constellation_giveaways",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id"),
+    prize: text("prize").notNull(),
+    winners: integer("winners").notNull(),
+    // Only people with this role can enter (null = everyone)
+    roleId: uuid("role_id"),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    winnerIds: uuid("winner_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  },
+  (t) => [index("constellation_giveaways_open_idx").on(t.endsAt).where(sql`ended_at is null`)],
+);
+
+export const giveawayEntries = pgTable(
+  "giveaway_entries",
+  {
+    giveawayId: uuid("giveaway_id")
+      .notNull()
+      .references(() => constellationGiveaways.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.giveawayId, t.userId] })],
 );

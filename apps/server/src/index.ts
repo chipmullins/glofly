@@ -53,6 +53,9 @@ import { integrationsRouter } from "./integrations/routes";
 import { botApiRouter } from "./integrations/api";
 import { incomingHooksRouter } from "./integrations/webhooks";
 import { interactionsRouter } from "./integrations/interactions";
+import { toolsRouter } from "./tools/routes";
+import { sweepGiveaways } from "./tools/tools";
+import { startToolHooks } from "./tools/hooks";
 import { sweepIntegrationActivity } from "./integrations/keys";
 import { connectedAppsRouter, developerRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
@@ -152,6 +155,8 @@ app.use("/calls", callsRouter);
 // servers), before the main router so "integrations" is never taken for anything else.
 app.use("/constellations", integrationsRouter);
 app.use("/constellations", interactionsRouter);
+// Communities round: Glofly tools (tickets, welcome, button roles, logging, giveaways).
+app.use("/constellations", toolsRouter);
 app.use("/constellations", communityToolsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
@@ -231,6 +236,9 @@ async function shutdown(signal: string): Promise<void> {
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 process.once("SIGINT", () => void shutdown("SIGINT"));
 
+// Communities round: Glofly tools hear about joins, moderation and message changes.
+startToolHooks();
+
 connectRedis()
   .then(() => {
     server.listen(PORT, () => {
@@ -290,6 +298,7 @@ connectRedis()
     // Communities round: Integrations → Activity is kept 30 days (hourly).
     every(60 * 60 * 1000, "Integration activity cleanup", sweepIntegrationActivity);
     every(60 * 60 * 1000, "Sign in with Glofly cleanup", sweepOAuth);
+    every(60_000, "Giveaways", sweepGiveaways);
     // Resolved reports are removed a year after they were resolved (hourly).
     const sweepReports = () =>
       purgeOldReports().catch((err) => console.error("Report cleanup failed", err));

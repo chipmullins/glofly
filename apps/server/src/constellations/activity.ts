@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { constellationAuditLog, constellationMembers, constellations, conversationMembers, users } from "../db/schema";
 import { emitToUser } from "../realtime";
+import { toolHook } from "../toolHooks";
 import { nebulaOfChat } from "./chats";
 
 /** Who can see a nebula (its conversation's members; role-only nebulas, 0.8.0). */
@@ -109,4 +110,6 @@ export async function logModeration(
   details: Record<string, unknown> | null = null,
 ): Promise<void> {
   await db.insert(constellationAuditLog).values({ constellationId, actorId, action, targetUserId, details });
+  // Communities round: Glofly tools → Logging (loaded when needed: no import cycle).
+  toolHook("onModeration", constellationId, actorId, action, targetUserId, details);
 }

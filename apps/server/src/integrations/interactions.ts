@@ -21,6 +21,7 @@ import { postScheduledText } from "../messages/routes";
 import { frozen, FROZEN_MESSAGE, standingOf } from "../constellations/perms";
 import { lockedDown, LOCKDOWN_MESSAGE } from "../admin/lockdown";
 import { signature } from "./events";
+import { isToolBot, toolButton } from "../tools/tools";
 import { logIntegration } from "./keys";
 
 // Communities round (Nov 2026): bots in chats (approved mockup board 4).
@@ -177,6 +178,12 @@ interactionsRouter.post("/:id/messages/:messageId/buttons/:buttonId", clickLimit
   if (!m || m.deletedAt || !sees || !m.buttons?.some((b) => b.id === buttonId)) {
     bad(res, "That button isn't there any more.", 404);
     return;
+  }
+  // Communities round: Glofly tools' own buttons (tickets, button roles, giveaways) are handled here.
+  if (await isToolBot(s.constellationId, m.senderId)) {
+    if (s.timedOutUntil) return void bad(res, "You're timed out for now.", 403);
+    const r = await toolButton(s.constellationId, m.id, buttonId, s.userId);
+    return void res.status(r.ok ? 200 : 403).json(r.ok ? { ok: true, delivered: true, message: r.message } : { error: "forbidden", message: r.message });
   }
   const [k] = await db.select({ id: constellationApiKeys.id }).from(constellationApiKeys).where(eq(constellationApiKeys.botUserId, m.senderId));
   if (!k) {

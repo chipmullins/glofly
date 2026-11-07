@@ -316,6 +316,13 @@
       "when": 1794010978750,
       "tag": "0044_sign_in_with_glofly",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1794011959342,
+      "tag": "0045_glofly_tools",
+      "breakpoints": true
     }
   ]
 }

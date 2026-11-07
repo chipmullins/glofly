@@ -294,7 +294,7 @@ constellationsRouter.put("/order", changeLimiter, async (req, res) => {
 // ───────────── Creating ─────────────
 
 /** A nebula and its conversation; everyone in the constellation is in it. */
-async function createNebula(
+export async function createNebula(
   tx: Tx,
   constellationId: string,
   values: {
@@ -306,6 +306,8 @@ async function createNebula(
     readOnly?: boolean;
     visibility?: "everyone" | "roles";
     roleIds?: string[];
+    /** Communities round (tickets): people who see it whatever their roles */
+    userIds?: string[];
   },
 ) {
   const [chat] = await tx.insert(conversations).values({ kind: "nebula", name: values.name }).returning({ id: conversations.id });

@@ -73,6 +73,7 @@ import {
   shortBody,
   attachmentSummary,
   type GameState, type MessageButton } from "@glofly/shared";
+import { toolHook } from "../toolHooks";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
 export const conversationsRouter = Router();
@@ -1781,6 +1782,7 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
       if (!message.lantern) inBackground(addLinkPreview(message.id, conversationId, body.data, message.senderId));
     }
   }
+  if (chat.kind === "nebula" && body.data !== message.body) toolHook("onMessageChanged", conversationId, myId, "edited");
   res.json({ message: await sendUpdated(message.id, conversationId) });
 });
 
@@ -1811,7 +1813,10 @@ conversationsRouter.delete("/:id/messages/:messageId", async (req, res) => {
     res.json({ message: await sendUpdated(message.id, conversationId) });
     return;
   }
-  if (!message.deletedAt) await wipeMessage(message.id);
+  if (!message.deletedAt) {
+    await wipeMessage(message.id);
+    if (chat.kind === "nebula") toolHook("onMessageChanged", conversationId, myId, "deleted");
+  }
   res.json({ message: await sendUpdated(message.id, conversationId) });
 });
 

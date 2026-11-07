@@ -90,6 +90,8 @@ export type PublicUser = {
   realName?: string
   /** Communities round (Nov 2026): a constellation's bot (shown with a BOT tag). Older servers leave it out. */
   bot?: boolean
+  /** Communities round: the Glofly tools' member (shown with a TOOL tag) */
+  tool?: boolean
 }
 
 /**
