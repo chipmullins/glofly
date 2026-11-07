@@ -18,6 +18,7 @@ import type {
   LinkLifetime,
   ModerationEntry,
   MyGame,
+  MuteDuration,
   MyGamesVisibility,
   NebulaKind,
   NotifyLevel,
@@ -142,6 +143,17 @@ export const api = {
   leave: (id: string) => call<null>('POST', `${base(id)}/leave`),
   readAll: (id: string) => call<null>('POST', `${base(id)}/read`),
   notify: (id: string, level: NotifyLevel) => call<null>('PUT', `${base(id)}/notify`, { level }),
+  /** 4.2 (board 23): the rest of the notification window (mute: null unmutes) */
+  notifySettings: (
+    id: string,
+    body: {
+      level?: NotifyLevel
+      mute?: MuteDuration | null
+      ignoreEveryone?: boolean
+      ignoreRoles?: boolean
+      followAlerts?: boolean
+    }
+  ) => call<null>('PUT', `${base(id)}/notify`, body),
   nebulaNotify: (id: string, nebulaId: string, level: NotifyLevel | null) =>
     call<null>('PUT', `${base(id)}/nebulas/${nebulaId}/notify`, { level }),
   addCategory: (id: string, name: string) =>
@@ -217,6 +229,8 @@ export const api = {
       color: RoleColor
       permissions: ConstellationPermission[]
       selfAssign: boolean
+      /** 4.2: anyone can @mention this role */
+      mentionable: boolean
     }>
   ) => call<Detail>('PATCH', `${base(id)}/roles/${roleId}`, changes),
   removeRole: (id: string, roleId: string) => call<Detail>('DELETE', `${base(id)}/roles/${roleId}`),

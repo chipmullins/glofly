@@ -840,6 +840,18 @@
   background: rgba(var(--glo-accent-rgb), 0.22);
   color: var(--glo-ink);
 }
+/* 4.2 (board 24): @everyone / @here and @Role pills (not buttons; roles in their color) */
+.mention--group,
+.mention--role {
+  cursor: default;
+}
+.mention--group:hover,
+.mention--role:hover {
+  text-decoration: none;
+}
+.mention--group {
+  color: var(--glo-link);
+}
 /* A message that mentions you: a soft accent wash and a bar on the left */
 .message--mentions-me {
   background: rgba(var(--glo-accent-rgb), 0.08);
@@ -898,6 +910,18 @@
 .mention-option-user {
   color: var(--glo-muted);
   font-size: 13px;
+}
+/* 4.2: @everyone, @here and roles in the @ menu (board 24) */
+.mention-option--group {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.mention-option-group {
+  min-width: 120px;
+  font-weight: 700;
+}
+.mention-option-group--all {
+  color: var(--glo-link);
 }
 /* Muted chat: the bell button in the header */
 .chat-header-wrap {

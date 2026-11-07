@@ -1342,6 +1342,26 @@ function RolesPage({ c, busy, run }: PageProps): React.JSX.Element {
               />
             </label>
           )}
+          {/* 4.2 (approved board 24): members can @mention it */}
+          {role.kind !== 'member' && role.kind !== 'owner' && (
+            <label className="cx-perm cx-perm--last cx-self-assign">
+              <span style={{ flex: 1 }}>
+                <span className="cx-perm-name">Anyone can mention this role</span>
+                <span className="cx-perm-what">
+                  Lets members ping @{role.name} (people with “Mention @everyone, @here and all
+                  roles” always can)
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={!!role.mentionable}
+                disabled={!mine || busy}
+                onChange={() =>
+                  void run(() => api.updateRole(c.id, role.id, { mentionable: !role.mentionable }))
+                }
+              />
+            </label>
+          )}
           <h2 className="cx-role-heading">What {plural} can do</h2>
           {role.kind === 'owner' ? (
             <p className="cx-settings-text">

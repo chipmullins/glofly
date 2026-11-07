@@ -1,0 +1,301 @@
+/* Communities round 4.2 (approved board 23): a constellation's notification window. */
+
+.nf-sheet {
+  max-width: 540px;
+  gap: 10px;
+}
+.nf-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.nf-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-family: var(--glo-font-display);
+  font-weight: 700;
+  font-size: 15px;
+}
+.nf-icon .cx-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.nf-head-text {
+  flex: 1;
+  min-width: 0;
+}
+.nf-head h2 {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 22px;
+}
+.nf-head p {
+  margin: 1px 0 0;
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+.nf-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--glo-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nf-close:hover {
+  background: var(--glo-hover);
+  color: var(--glo-ink);
+}
+
+/* Mute the whole constellation */
+.nf-mute {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--glo-raised, rgba(var(--glo-accent-rgb), 0.06));
+}
+.nf-mute--on {
+  background: rgba(var(--glo-accent-rgb), 0.14);
+}
+.nf-mute-icon {
+  font-size: 18px;
+}
+.nf-mute-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nf-mute-text span {
+  color: var(--glo-muted);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.nf-select select {
+  width: auto;
+  max-width: 180px;
+  height: 32px;
+  padding: 0 28px 0 12px;
+  border: 1px solid var(--glo-border);
+  border-radius: 9px;
+  background-color: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nf-sub {
+  margin: 12px 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+
+/* Notify me about */
+.nf-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.nf-level {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--glo-border);
+  border-radius: 12px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.nf-level:hover {
+  background: var(--glo-hover);
+}
+.nf-level--on {
+  border-color: rgba(var(--glo-accent-rgb), 0.55);
+  background: rgba(var(--glo-accent-rgb), 0.08);
+}
+.nf-level > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nf-level > span:last-child span {
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+.nf-radio {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 2px solid var(--glo-border);
+  box-sizing: border-box;
+}
+.nf-level--on .nf-radio {
+  border-color: var(--glo-accent);
+  box-shadow: inset 0 0 0 3px var(--glo-surface);
+  background: var(--glo-accent);
+}
+
+/* Toggles */
+.nf-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+.nf-row > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nf-row > span span {
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+
+/* Nebulas that differ */
+.nf-nebulas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nf-nebulas li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--glo-line);
+}
+.nf-nebula-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nf-mark {
+  display: inline-block;
+  width: 22px;
+  color: #9b7cf0;
+  font-size: 12px;
+}
+.nf-mark--chart {
+  font-size: 13px;
+}
+.nf-kind {
+  font-weight: 700;
+}
+.nf-remove {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--glo-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.nf-remove:hover {
+  background: var(--glo-hover);
+  color: var(--glo-ink);
+}
+.nf-empty {
+  margin: 0;
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+.nf-add {
+  align-self: flex-start;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--glo-link);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.nf-pick {
+  align-self: flex-start;
+}
+.nf-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.nf-done {
+  min-width: 80px;
+}
+
+/* The bell on a nebula (board 23, right): constellation link + mute choices */
+.cx-menu-note {
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--glo-muted);
+  font-size: 12px;
+}
+.menu-item-note {
+  color: var(--glo-muted);
+}
+.menu-item--plain {
+  display: block;
+  height: auto;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  line-height: 1.35;
+}
+.chat-mute-menu:has(.menu-item--link) {
+  width: 330px;
+}
+.menu-item-row {
+  display: block;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--glo-ink);
+  line-height: 1.5;
+}
+.menu-inline-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--glo-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.menu-inline-link:hover {
+  color: var(--glo-link);
+  text-decoration: underline;
+}
+.menu-item--link {
+  color: var(--glo-link);
+  font-weight: 700;
+}
+.chat-mute-menu .menu-divider {
+  display: block;
+}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Message, PublicUser } from '../../../preload/api-types'
-import { splitMentions } from '../lib/mentions'
+import { mentionsMe, splitGroupMentions, splitMentions } from '../lib/mentions'
+import type { NebulaMentions } from './ChatView'
 import { quoteSummary } from '../lib/attachments'
 import { shortBody } from '@glofly/shared/gifs'
 import { addRecent, isJumbo } from '../lib/emoji'
@@ -77,6 +78,8 @@ type MessageItemProps = {
   onMarkAnswer?: () => void
   /** This reply is the post's answer */
   isAnswer?: boolean
+  /** 4.2 nebulas: roles that can be @mentioned (drawn as pills) and mine (highlight) */
+  groupMentions?: NebulaMentions
 }
 
 const HOLD_FOR_FIREFLIES_MS = 450
@@ -87,31 +90,72 @@ function MentionText({
   text,
   people,
   meId,
-  onClick
+  onClick,
+  group,
+  message
 }: {
   text: string
   people: PublicUser[]
   meId: string
   onClick?: (user: PublicUser) => void
+  /** 4.2 nebulas: "@everyone", "@here" and roles, when the server counted them */
+  group?: NebulaMentions
+  message?: Message
 }): React.JSX.Element {
-  const pieces = splitMentions(text, people)
+  const counted = new Set(message?.mentionRoles ?? [])
+  // Only what the server counted shows as a pill (someone without permission typing @everyone
+  // sent plain text).
+  const groupPieces =
+    group && message && (message.mentionEveryone || counted.size)
+      ? splitGroupMentions(
+          text,
+          group.roles.filter((r) => counted.has(r.id))
+        ).map((p) =>
+          (p.kind === 'everyone' || p.kind === 'here') && !message.mentionEveryone
+            ? { kind: 'text' as const, text: p.text }
+            : p
+        )
+      : [{ kind: 'text' as const, text }]
   return (
     <>
-      {pieces.map((piece, i) =>
-        piece.user ? (
-          <button
-            key={i}
-            type="button"
-            className={piece.user.id === meId ? 'mention mention--me' : 'mention'}
-            title={piece.user.displayName}
-            onClick={() => piece.user && onClick?.(piece.user)}
-          >
-            {piece.text}
-          </button>
-        ) : (
-          <EmojiText key={i} text={piece.text} />
+      {groupPieces.map((g, gi) => {
+        if (g.kind === 'everyone' || g.kind === 'here') {
+          return (
+            <span key={gi} className="mention mention--me mention--group">
+              {g.text}
+            </span>
+          )
+        }
+        if (g.kind === 'role') {
+          const role = group?.roles.find((r) => r.id === g.roleId)
+          const mine = !!group?.myRoleIds.includes(g.roleId)
+          return (
+            <span
+              key={gi}
+              className={mine ? 'mention mention--role mention--me' : 'mention mention--role'}
+              style={role ? { color: role.color, background: role.bg } : undefined}
+              title={role ? `Role · ${role.count} ${role.count === 1 ? 'person' : 'people'}` : undefined}
+            >
+              {g.text}
+            </span>
+          )
+        }
+        return splitMentions(g.text, people).map((piece, i) =>
+          piece.user ? (
+            <button
+              key={`${gi}-${i}`}
+              type="button"
+              className={piece.user.id === meId ? 'mention mention--me' : 'mention'}
+              title={piece.user.displayName}
+              onClick={() => piece.user && onClick?.(piece.user)}
+            >
+              {piece.text}
+            </button>
+          ) : (
+            <EmojiText key={`${gi}-${i}`} text={piece.text} />
+          )
         )
-      )}
+      })}
     </>
   )
 }
@@ -252,7 +296,8 @@ export default function MessageItem({
   onMarkUnread,
   onStartThread,
   onMarkAnswer,
-  isAnswer = false
+  isAnswer = false,
+  groupMentions
 }: MessageItemProps): React.JSX.Element {
   const m = item.message
   const mine = m.senderId === meId
@@ -318,7 +363,7 @@ export default function MessageItem({
   if (popup || pickerAnchor) classes.push('message--active')
   if (highlighted) classes.push('message--highlight')
   if (editing) classes.push('message--editing')
-  if (!item.pending && !m.deleted && !mine && m.mentions?.includes(meId)) {
+  if (!item.pending && !m.deleted && !mine && mentionsMe(m, meId, groupMentions?.myRoleIds)) {
     classes.push('message--mentions-me')
   }
   if (m.lantern && !m.deleted) classes.push('message--lantern')
@@ -435,7 +480,14 @@ export default function MessageItem({
             title={grouped ? time : undefined}
           >
             {people?.length ? (
-              <MentionText text={m.body} people={people} meId={meId} onClick={onMentionClick} />
+              <MentionText
+                text={m.body}
+                people={people}
+                meId={meId}
+                onClick={onMentionClick}
+                group={groupMentions}
+                message={m}
+              />
             ) : (
               <EmojiText text={m.body} />
             )}

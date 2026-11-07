@@ -21,7 +21,8 @@ import type {
   PublicUser,
   SignedInUser
 } from '../../../preload/api-types'
-import ChatView from '../components/ChatView'
+import ChatView, { type NebulaMentions } from '../components/ChatView'
+import NotifySettings, { LEVEL_NAMES } from './NotifySettings'
 import SearchPanel from '../components/SearchPanel'
 import ConfirmDialog from '../components/ConfirmDialog'
 import StatusMenu from '../components/StatusMenu'
@@ -234,6 +235,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   /** 0.7.5: the member card whose ⋯ (more actions) is open */
   const [memberMore, setMemberMore] = useState<string | null>(null)
   const [headMenu, setHeadMenu] = useState(false)
+  // 4.2 (board 23): the constellation's notification window
+  const [notifyOpen, setNotifyOpen] = useState(false)
   /** Right-click on a nebula in the sidebar: its notification and mute menu */
   const [nebMenu, setNebMenu] = useState<{ nebula: Nebula; x: number; y: number } | null>(null)
   const [statusOpen, setStatusOpen] = useState(false)
@@ -506,6 +509,31 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     })
   }
 
+  // 4.2: what the @ menu and message pills know about roles (board 24).
+  const nebulaMentions = useMemo<NebulaMentions>(() => {
+    const mine = c.members.find((m) => m.user.id === me.id)
+    return {
+      roles: c.roles
+        .filter((r) => r.kind !== 'member' && r.kind !== 'owner')
+        .map((r) => {
+          const colors = ROLE_COLORS[r.color] ?? ROLE_COLORS.gray
+          return {
+            id: r.id,
+            name: r.name,
+            kind: r.kind,
+            mentionable: r.mentionable,
+            color: colors.light,
+            bg: colors.badgeBg,
+            count: r.memberCount
+          }
+        })
+        // The @ menu lists bigger roles first (board 24).
+        .sort((a, b) => b.count - a.count),
+      myRoleIds: mine?.roleIds ?? [],
+      canEveryone: c.me.owner || c.me.permissions.includes('mentionEveryone'),
+      onlineIds: c.members.filter((m) => m.status !== 'offline').map((m) => m.user.id)
+    }
+  }, [c.members, c.roles, c.me, me.id])
   const roleBadge = useCallback(
     (userId: string) => {
       if (!people.has(userId)) return null
@@ -1027,29 +1055,18 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 Plan an event
               </button>
             )}
-            <span className="cx-menu-sub">Notifications</span>
-            {(['all', 'mentions', 'none'] as const).map((level) => (
-              <button
-                key={level}
-                type="button"
-                role="menuitemradio"
-                aria-checked={c.me.notify === level}
-                className="cx-menu-item cx-menu-item--indent"
-                onClick={async () => {
-                  setHeadMenu(false)
-                  const r = await api.notify(c.id, level)
-                  if (!r.ok) props.onProblem(r.message)
-                  else props.onReload()
-                }}
-              >
-                {level === 'all'
-                  ? 'All messages'
-                  : level === 'mentions'
-                    ? 'Only @mentions'
-                    : 'Nothing'}
-                {c.me.notify === level && <span className="cx-menu-check">✓</span>}
-              </button>
-            ))}
+            <button
+              type="button"
+              role="menuitem"
+              className="cx-menu-item"
+              onClick={() => {
+                setHeadMenu(false)
+                setNotifyOpen(true)
+              }}
+            >
+              Notification settings…
+              <span className="cx-menu-note">{LEVEL_NAMES[c.me.notify]}</span>
+            </button>
             <button
               type="button"
               role="menuitem"
@@ -1523,6 +1540,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             Same as {c.name} ({levelLabel[c.me.notify].toLowerCase()})
             {level === null && <span className="cx-menu-check">✓</span>}
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="cx-menu-item"
+            onClick={() => {
+              setNebMenu(null)
+              setNotifyOpen(true)
+            }}
+          >
+            Notification settings for {c.name}…
+          </button>
         </div>
       )
     })()
@@ -1767,6 +1795,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             bodyFor: (m) => (eventsByMessage.has(m.id) ? 'made an event 📅' : null),
             // Communities round: slash commands and a bot's buttons.
             commands,
+            // 4.2: @everyone, @here and @Role (approved board 24)
+            mentions: nebulaMentions,
             // Threads (text nebulas): start one from a message, open one from its chip.
             ...(chatNebula.kind === 'text' && (!chatNebula.threadsStaffOnly || staff) && !cantPost
               ? {
@@ -1832,7 +1862,10 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 <NotifyButton
                   level={chatNebula.notify}
                   fallback={c.me.notify}
+                  constellationName={c.name}
                   onChange={(level) => void setNotify(level)}
+                  onMute={(d) => void muteNebula(chatNebula, d)}
+                  onSettings={() => setNotifyOpen(true)}
                 />
               </>
             )
@@ -1955,6 +1988,14 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             setWelcomeShownFor(c.id)
             if (next) props.onChanged(next)
           }}
+          onProblem={props.onProblem}
+        />
+      )}
+      {notifyOpen && (
+        <NotifySettings
+          c={c}
+          onClose={() => setNotifyOpen(false)}
+          onChanged={props.onReload}
           onProblem={props.onProblem}
         />
       )}
@@ -2116,11 +2157,18 @@ export default function ConstellationView(props: ConstellationViewProps): React.
 function NotifyButton({
   level,
   fallback,
-  onChange
+  constellationName,
+  onChange,
+  onMute,
+  onSettings
 }: {
   level: NotifyLevel | null
   fallback: NotifyLevel
+  constellationName: string
   onChange: (level: NotifyLevel | null) => void
+  /** 4.2 (board 23): mute this nebula, and open the constellation's window */
+  onMute: (duration: MuteDuration) => void
+  onSettings: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -2166,6 +2214,19 @@ function NotifyButton({
       {open && (
         <div role="menu" className="menu chat-mute-menu">
           <span className="menu-subhead">Notify me about</span>
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={level === null}
+            className="menu-item menu-item--indent menu-item--plain"
+            onClick={() => {
+              setOpen(false)
+              onChange(null)
+            }}
+          >
+            {level === null && '✓ '}Use {constellationName}’s setting{' '}
+            <span className="menu-item-note">({label[fallback]})</span>
+          </button>
           {(['all', 'mentions', 'none'] as const).map((l) => (
             <button
               key={l}
@@ -2178,21 +2239,40 @@ function NotifyButton({
                 onChange(l)
               }}
             >
+              {level === l && '✓ '}
               {label[l]}
-              {level === l && ' ✓'}
             </button>
           ))}
+          <span className="menu-divider" role="separator" />
+          <span className="menu-item-row">
+            Mute for{' '}
+            {MUTE_CHOICES.map((m, i) => (
+              <span key={m.duration}>
+                {i > 0 && ' · '}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="menu-inline-link"
+                  onClick={() => {
+                    setOpen(false)
+                    onMute(m.duration)
+                  }}
+                >
+                  {{ '1h': '1 hour', '8h': '8 hours', '24h': '24 hours', forever: 'until I turn it on' }[m.duration]}
+                </button>
+              </span>
+            ))}
+          </span>
           <button
             type="button"
-            role="menuitemradio"
-            aria-checked={level === null}
-            className="menu-item menu-item--indent"
+            role="menuitem"
+            className="menu-item menu-item--link"
             onClick={() => {
               setOpen(false)
-              onChange(null)
+              onSettings()
             }}
           >
-            Same as the constellation ({label[fallback]}){level === null && ' ✓'}
+            Notification settings for {constellationName}…
           </button>
         </div>
       )}

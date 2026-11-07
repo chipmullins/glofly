@@ -86,6 +86,7 @@ import {
   isMuted,
   mentionQuery,
   mentionSuggestions,
+  groupMentionSuggestions,
   MUTE_CHOICES,
   mutedLabel
 } from '../lib/mentions'
@@ -173,7 +174,36 @@ export type NebulaMode = {
   onOpenThread?: (t: ThreadSummary) => void
   /** Communities round: integrations (bridges) reading this nebula; members always see a notice */
   sharedWith?: string[]
+  /** 4.2 (approved board 24): @everyone, @here and @Role here */
+  mentions?: NebulaMentions
 }
+
+/** 4.2: what a nebula's @ menu and its messages need to know about group mentions. */
+export type NebulaMentions = {
+  roles: NebulaMentionRole[]
+  /** My roles (to highlight messages that mention one of them) */
+  myRoleIds: string[]
+  /** I have "Mention @everyone, @here and all roles" (or own it) */
+  canEveryone: boolean
+  /** Who's online now (for "@here · Only people online now (31)") */
+  onlineIds: string[]
+}
+export type NebulaMentionRole = {
+  id: string
+  name: string
+  kind: string
+  mentionable?: boolean
+  /** Text and pill colors (the role's) */
+  color: string
+  bg: string
+  count: number
+}
+
+/** One choice in the @ menu: a person, or (nebulas) @everyone / @here / a role. */
+type MentionChoice =
+  | { kind: 'person'; person: PublicUser }
+  | { kind: 'everyone' | 'here' }
+  | { kind: 'role'; role: NebulaMentionRole }
 
 const TYPING_SEND_EVERY_MS = 3000 // how often we tell the other person we're typing
 const TYPING_SHOW_FOR_MS = 4500 // how long "is typing…" stays after their last keystroke
@@ -492,8 +522,17 @@ export default function ChatView({
   // Groups: everyone who can be @mentioned (you too, so your own name shows as a mention).
   const mentionPeople = isGroup ? [me, ...conversation.members] : []
   const memberIds = [me.id, ...conversation.members.map((p) => p.id)]
-  const suggestions =
-    mention && isGroup ? mentionSuggestions(mention.query, conversation.members) : []
+  const suggestions: MentionChoice[] =
+    mention && isGroup
+      ? [
+          ...(nebula?.mentions
+            ? groupMentionSuggestions(mention.query, nebula.mentions.roles, nebula.mentions.canEveryone, 5)
+            : []),
+          ...mentionSuggestions(mention.query, conversation.members).map(
+            (person): MentionChoice => ({ kind: 'person', person })
+          )
+        ].slice(0, 8)
+      : []
   const nameOf = useCallback(
     (userId: string) => personOf(userId)?.displayName ?? 'Former member',
     [personOf]
@@ -1451,12 +1490,17 @@ export default function ChatView({
     )
   }
 
-  /** Puts "@username " in place of what was typed after the @. */
-  function pickMention(person: PublicUser): void {
+  /** Puts "@username " (or "@everyone ", "@Role name ") in place of what was typed after the @. */
+  function pickMention(choice: MentionChoice): void {
     if (!mention) return
     const input = inputRef.current
     const cursor = input?.selectionStart ?? draft.length
-    const insert = `@${person.username} `
+    const insert =
+      choice.kind === 'person'
+        ? `@${choice.person.username} `
+        : choice.kind === 'role'
+          ? `@${choice.role.name} `
+          : `@${choice.kind} `
     const next = draft.slice(0, mention.start) + insert + draft.slice(cursor)
     if (next.length > MESSAGE_MAX + 200) return
     cursorAfterInsert.current = mention.start + insert.length
@@ -1741,6 +1785,7 @@ export default function ChatView({
               meId={me.id}
               authorName={nameOf(m.senderId)}
               authorRole={nebula ? nebula.roleOf(m.senderId) : null}
+              groupMentions={nebula?.mentions}
               canDeleteOthers={!!nebula && m.senderId !== me.id && nebula.canDelete(m.senderId)}
               isAnswer={isAnswer}
               onMarkAnswer={
@@ -2633,27 +2678,59 @@ export default function ChatView({
                 aria-label="People to mention"
               >
                 <span className="mention-picker-head">Mention someone</span>
-                {suggestions.map((p, i) => (
+                {suggestions.map((choice, i) => (
                   <button
-                    key={p.id}
+                    key={
+                      choice.kind === 'person'
+                        ? choice.person.id
+                        : choice.kind === 'role'
+                          ? choice.role.id
+                          : choice.kind
+                    }
                     type="button"
                     role="option"
                     id={`mention-option-${i}`}
                     aria-selected={i === mention.index}
-                    className="mention-option"
+                    className={
+                      choice.kind === 'person' ? 'mention-option' : 'mention-option mention-option--group'
+                    }
                     // Keep the cursor in the message box.
                     onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setMention({ ...mention, index: i })}
-                    onClick={() => pickMention(p)}
+                    onClick={() => pickMention(choice)}
                   >
-                    <Avatar
-                      id={p.id}
-                      name={p.displayName}
-                      avatarVersion={p.avatarVersion}
-                      size={28}
-                    />
-                    <span className="mention-option-name">{p.displayName}</span>
-                    <span className="mention-option-user">@{p.username}</span>
+                    {choice.kind === 'person' ? (
+                      <>
+                        <Avatar
+                          id={choice.person.id}
+                          name={choice.person.displayName}
+                          avatarVersion={choice.person.avatarVersion}
+                          size={28}
+                        />
+                        <span className="mention-option-name">{choice.person.displayName}</span>
+                        <span className="mention-option-user">@{choice.person.username}</span>
+                      </>
+                    ) : choice.kind === 'role' ? (
+                      <>
+                        <span className="mention-option-group" style={{ color: choice.role.color }}>
+                          @{choice.role.name}
+                        </span>
+                        <span className="mention-option-user">
+                          Role · {choice.role.count} {choice.role.count === 1 ? 'person' : 'people'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="mention-option-group mention-option-group--all">
+                          @{choice.kind}
+                        </span>
+                        <span className="mention-option-user">
+                          {choice.kind === 'everyone'
+                            ? `Notifies all ${conversation.members.length} people who can see #${nebula?.name ?? ''}`
+                            : `Only people online now (${conversation.members.filter((p) => nebula?.mentions?.onlineIds.includes(p.id)).length})`}
+                        </span>
+                      </>
+                    )}
                   </button>
                 ))}
               </div>
