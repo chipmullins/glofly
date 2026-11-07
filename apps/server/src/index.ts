@@ -54,6 +54,7 @@ import { botApiRouter } from "./integrations/api";
 import { incomingHooksRouter } from "./integrations/webhooks";
 import { interactionsRouter } from "./integrations/interactions";
 import { sweepIntegrationActivity } from "./integrations/keys";
+import { connectedAppsRouter, developerRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
 /** Runs a background job every so often, never two runs of it at once. */
@@ -119,6 +120,8 @@ app.use("/auth", authRouter);
 // 0.7.3: two-step sign-in settings and approving a QR code sign-in (from a phone).
 app.use("/account/two-step", twoStepRouter);
 app.use("/account/qr", qrAccountRouter);
+// Communities round: Settings → Connected apps (Sign in with Glofly), before the account router.
+app.use("/account/connected-apps", connectedAppsRouter);
 app.use("/account", accountRouter);
 // 0.7.3: what a phone's camera opens from a sign-in QR code.
 app.use("/qr", qrPageRouter);
@@ -156,6 +159,9 @@ app.use("/games", myGamesRouter);
 app.use(botApiRouter);
 // Communities round: incoming webhooks (POST /hooks/<id>/<token> posts into one nebula).
 app.use(incomingHooksRouter);
+// Communities round: Sign in with Glofly (OAuth 2.0 + OpenID Connect) and Settings → Developer.
+app.use(oauthRouter);
+app.use("/developer", developerRouter);
 // 0.7.5: a constellation invite link's page (glofly.app/c/<code>; Caddy sends /c/* here).
 app.use("/c", invitePageRouter);
 // 0.8.0: a friend invite link's page (glofly.app/i/<code>; Caddy sends /i/* here).
@@ -283,6 +289,7 @@ connectRedis()
     setInterval(sweepLinks, 60 * 60 * 1000);
     // Communities round: Integrations → Activity is kept 30 days (hourly).
     every(60 * 60 * 1000, "Integration activity cleanup", sweepIntegrationActivity);
+    every(60 * 60 * 1000, "Sign in with Glofly cleanup", sweepOAuth);
     // Resolved reports are removed a year after they were resolved (hourly).
     const sweepReports = () =>
       purgeOldReports().catch((err) => console.error("Report cleanup failed", err));

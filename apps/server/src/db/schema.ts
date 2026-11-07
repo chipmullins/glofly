@@ -1703,3 +1703,101 @@ export const constellationCommands = pgTable(
   },
   (t) => [uniqueIndex("constellation_commands_name_idx").on(t.constellationId, t.name)],
 );
+
+// ───────────── Communities round (Nov 2026): Sign in with Glofly (OAuth 2.0 + OpenID Connect) ─────────────
+
+// Apps people can sign in to with Glofly, registered by developers (Settings → Developer).
+// Confidential apps (a server) have a client secret (SHA-256 stored, shown once); public apps
+// (phone apps, single-page sites) have none and must use PKCE. Every app must use PKCE anyway.
+export const oauthApps = pgTable(
+  "oauth_apps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // "gfa_" + 12 characters: what the app sends as client_id
+    clientId: text("client_id").notNull(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    website: text("website"),
+    // Exact return addresses (https, or a custom scheme like gloslate:// for phone apps)
+    redirectUris: text("redirect_uris").array().notNull().default(sql`'{}'::text[]`),
+    // What it may ask for: "email", "roles" (name and photo always)
+    scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
+    clientSecretHash: text("client_secret_hash"),
+    // Glofly's own apps (Gloslate): "Made by Glofly" on the consent page. Only Control sets it.
+    firstParty: boolean("first_party").notNull().default(false),
+    // Switched off in Glofly Control (nobody can sign in with it; its tokens stop working).
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+    disabledReason: text("disabled_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("oauth_apps_client_idx").on(t.clientId), index("oauth_apps_owner_idx").on(t.ownerId)],
+);
+
+// What someone allowed an app (Settings → Connected apps). Removing it signs the app out.
+export const oauthGrants = pgTable(
+  "oauth_grants",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    appId: uuid("app_id")
+      .notNull()
+      .references(() => oauthApps.id, { onDelete: "cascade" }),
+    scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
+    // "roles": whose roles it may see (constellations picked on the consent page)
+    constellationIds: uuid("constellation_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.appId] })],
+);
+
+// One-use authorization codes (60 seconds), stored as SHA-256, bound to the app, the return
+// address and the PKCE challenge.
+export const oauthCodes = pgTable("oauth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  appId: uuid("app_id")
+    .notNull()
+    .references(() => oauthApps.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
+  codeChallenge: text("code_challenge").notNull(),
+  nonce: text("nonce"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+// Access tokens (1 hour) and refresh tokens (60 days, a new one each use: an old one used again
+// revokes the whole family). Both stored as SHA-256; neither ever works as a Glofly sign-in.
+export const oauthTokens = pgTable(
+  "oauth_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    appId: uuid("app_id")
+      .notNull()
+      .references(() => oauthApps.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Tokens made from the same first sign-in share a family (revoked together)
+    family: uuid("family").notNull(),
+    accessHash: text("access_hash").notNull(),
+    accessExpiresAt: timestamp("access_expires_at", { withTimezone: true }).notNull(),
+    refreshHash: text("refresh_hash"),
+    refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }),
+    // Set when its refresh token was traded for a new pair
+    replacedAt: timestamp("replaced_at", { withTimezone: true }),
+    scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("oauth_tokens_access_idx").on(t.accessHash),
+    uniqueIndex("oauth_tokens_refresh_idx").on(t.refreshHash),
+    index("oauth_tokens_user_app_idx").on(t.userId, t.appId),
+    index("oauth_tokens_family_idx").on(t.family),
+  ],
+);

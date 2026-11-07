@@ -12,6 +12,7 @@ import { devicePairRouter, devicesRouter, deviceSignatureLimiter } from "./devic
 import { alertsRouter } from "./alerts";
 import { opsRouter } from "./ops";
 import { inboxRouter } from "./inbox";
+import { oauthAppsAdminRouter } from "./oauthApps";
 import { insightsRouter } from "./insights";
 
 // Everything under /admin: Glofly Control (the admin app). In order:
@@ -52,4 +53,6 @@ controlRouter.use(
   opsRouter,
   inboxRouter,
   insightsRouter,
+  // Communities round: Sign in with Glofly apps.
+  oauthAppsAdminRouter,
 );

@@ -309,6 +309,13 @@
       "when": 1794008818735,
       "tag": "0043_bot_commands",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794010978750,
+      "tag": "0044_sign_in_with_glofly",
+      "breakpoints": true
     }
   ]
 }
