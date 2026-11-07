@@ -105,7 +105,7 @@ export function clearSessionCookie(res: Response): void {
 /** Does this request say it's the web app (X-Glofly-Platform: web)? */
 export const saysWeb = (req: Request): boolean => req.headers["x-glofly-platform"] === "web";
 
-const ALLOWED_HEADERS = "Content-Type, X-Glofly-CSRF, X-Glofly-Version, X-Glofly-Platform";
+const ALLOWED_HEADERS = "Content-Type, X-Glofly-CSRF, X-Glofly-Version, X-Glofly-Platform, X-Glofly-Features";
 const ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE";
 
 /**

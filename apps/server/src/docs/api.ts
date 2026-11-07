@@ -124,10 +124,10 @@ a{color:#b4530e}
 <h2 id="reading">Reading messages (bridges)</h2>
 <p>With <code>messages:read</code> a key can read only the nebulas picked for it. Never DMs or group chats, never lantern messages (they fade on purpose). Everyone in those nebulas sees <i>“Messages here are also shared with &lt;key name&gt;”</i>.</p>
 <h3>GET /api/v1/nebulas/:nebulaId/messages?after=&lt;messageId&gt;&amp;limit=50</h3>
-<p>Oldest first, up to 100. Without <code>after</code>: the latest <code>limit</code> messages.</p>
+<p>Oldest first, up to 100. Without <code>after</code>: the latest <code>limit</code> messages. Replies in threads and forum posts carry their <code>threadId</code>.</p>
 <pre><code>{ "messages": [{ "id": "…", "nebulaId": "…",
   "author": { "id": "…", "username": "riley", "displayName": "Riley", "bot": false },
-  "text": "gg", "replyToId": null, "attachments": [{ "kind": "image", "name": "clip.png" }],
+  "text": "gg", "replyToId": null, "threadId": null, "attachments": [{ "kind": "image", "name": "clip.png" }],
   "gif": false, "createdAt": "…", "editedAt": null }] }</code></pre>
 <h3>Pushes</h3>
 <p>If the key has an interactions address, Glofly also POSTs <code>message.created</code>, <code>message.edited</code> and <code>message.deleted</code> there (signed the same way). The bot's own posts are not sent back to it.</p>

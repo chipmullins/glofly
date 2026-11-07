@@ -1,4 +1,5 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
+import { inNebulaTimeline } from "../threads/timeline";
 import { rateLimit } from "../rateLimit";
 import { and, eq, gte, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -177,6 +178,7 @@ communityToolsRouter.get("/:id/search", searchLimiter, async (req, res) => {
       inArray(messages.conversationId, [...byChat.keys()]),
       isNull(messages.deletedAt),
       isNull(messages.event),
+      inNebulaTimeline(),
       ...words.map((w) => ilike(messages.body, escape(w))),
       from ? eq(messages.senderId, from.data) : undefined,
       hasFilter,

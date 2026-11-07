@@ -3,7 +3,7 @@ import express, { Router, type NextFunction, type Request, type Response } from 
 import { rateLimit } from "../rateLimit";
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import {
+import { FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
   ALL_PERMISSIONS,
   CATEGORIES_MAX,
   CATEGORY_NAME_MAX,
@@ -308,7 +308,7 @@ export async function createNebula(
     roleIds?: string[];
     /** Communities round (tickets): people who see it whatever their roles */
     userIds?: string[];
-  },
+  } & Partial<Pick<typeof nebulas.$inferInsert, "threadsStaffOnly" | "threadCloseDays" | "forumTags" | "forumGuidelines" | "forumRequireTag" | "forumSort">>,
 ) {
   const [chat] = await tx.insert(conversations).values({ kind: "nebula", name: values.name }).returning({ id: conversations.id });
   rememberNebulaChat(chat.id);
@@ -1459,9 +1459,51 @@ constellationsRouter.put("/:id/layout", changeLimiter, async (req, res) => {
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
 
+// Communities round: forum settings (forums) and thread settings (text nebulas).
+const forumTagBody = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
+  name: z.string().trim().min(1).max(FORUM_TAG_NAME_MAX),
+  color: z.enum(["blue", "red", "green", "violet", "amber", "gray"]),
+  staffOnly: z.boolean().default(false),
+});
+const threadFields = {
+  threadsStaffOnly: z.boolean().optional(),
+  threadCloseDays: z.union([z.literal(1), z.literal(3), z.literal(7), z.literal(30)]).optional(),
+  forum: z
+    .object({
+      tags: z.array(forumTagBody).max(FORUM_TAGS_MAX).optional(),
+      guidelines: z.string().max(FORUM_GUIDELINES_MAX).nullable().optional(),
+      requireTag: z.boolean().optional(),
+      sort: z.enum(["activity", "newest"]).optional(),
+    })
+    .optional(),
+};
+/** Forum fields → columns (new tags get ids; names unique, case ignored). */
+type ForumColumns = Partial<Pick<typeof nebulas.$inferInsert, "forumTags" | "forumGuidelines" | "forumRequireTag" | "forumSort">>;
+function forumColumns(f: z.infer<typeof threadFields.forum>): ForumColumns | string {
+  if (!f) return {};
+  const out: ForumColumns = {};
+  if (f.tags) {
+    const seen = new Set<string>();
+    const tags = [];
+    for (const t of f.tags) {
+      const key = t.name.toLowerCase();
+      if (seen.has(key)) return `There are two tags called ${t.name}.`;
+      seen.add(key);
+      tags.push({ id: t.id ?? randomUUID().slice(0, 8), name: t.name, color: t.color, staffOnly: t.staffOnly });
+    }
+    out.forumTags = tags;
+  }
+  if (f.guidelines !== undefined) out.forumGuidelines = f.guidelines?.trim() || null;
+  if (f.requireTag !== undefined) out.forumRequireTag = f.requireTag;
+  if (f.sort !== undefined) out.forumSort = f.sort;
+  return out;
+}
+
 const nebulaBody = z.object({
   name: z.string().max(100),
-  kind: z.enum(["text", "voice"]),
+  kind: z.enum(["text", "voice", "forum"]),
+  ...threadFields,
   categoryId: idParam.nullable().optional(),
   topic: optionalText(NEBULA_TOPIC_MAX, "The topic").optional(),
   readOnly: z.boolean().optional(),
@@ -1500,6 +1542,16 @@ constellationsRouter.post("/:id/nebulas", changeLimiter, async (req, res) => {
     .from(nebulas)
     .where(eq(nebulas.constellationId, s.constellationId));
   const roleIds = await cleanRoleIds(s.constellationId, parsed.data.roleIds);
+  const forum = forumColumns(parsed.data.forum);
+  if (typeof forum === "string") {
+    bad(res, forum);
+    return;
+  }
+  const extras = {
+    ...(parsed.data.kind === "forum" ? forum : {}),
+    ...(parsed.data.threadsStaffOnly !== undefined ? { threadsStaffOnly: parsed.data.threadsStaffOnly } : {}),
+    ...(parsed.data.threadCloseDays !== undefined ? { threadCloseDays: parsed.data.threadCloseDays } : {}),
+  };
   const nebula = await db.transaction((tx) =>
     createNebula(tx, s.constellationId, {
       name,
@@ -1510,6 +1562,7 @@ constellationsRouter.post("/:id/nebulas", changeLimiter, async (req, res) => {
       readOnly: parsed.data.readOnly,
       visibility: parsed.data.visibility,
       roleIds,
+      ...extras,
     }),
   );
   await constellationChanged(s.constellationId);
@@ -1536,6 +1589,24 @@ constellationsRouter.patch("/:id/nebulas/:nid", changeLimiter, async (req, res) 
     changes.name = name;
   }
   if (parsed.data.topic !== undefined) changes.topic = parsed.data.topic;
+  if (parsed.data.kind !== undefined && parsed.data.kind !== n.kind) {
+    bad(res, "A nebula's kind can't be changed. Make a new one instead.");
+    return;
+  }
+  if (parsed.data.threadsStaffOnly !== undefined) changes.threadsStaffOnly = parsed.data.threadsStaffOnly;
+  if (parsed.data.threadCloseDays !== undefined) changes.threadCloseDays = parsed.data.threadCloseDays;
+  if (parsed.data.forum !== undefined) {
+    if (n.kind !== "forum") {
+      bad(res, "Only forums have tags and guidelines.");
+      return;
+    }
+    const forum = forumColumns(parsed.data.forum);
+    if (typeof forum === "string") {
+      bad(res, forum);
+      return;
+    }
+    Object.assign(changes, forum);
+  }
   if (parsed.data.readOnly !== undefined) changes.readOnly = parsed.data.readOnly;
   // 0.8.0: who can see it. Left out = unchanged, so older apps editing a nebula keep it.
   if (parsed.data.visibility !== undefined) changes.visibility = parsed.data.visibility;

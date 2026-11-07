@@ -270,6 +270,12 @@ export type Message = {
   lanternFadeAt?: string | null
   /** Communities round (Nov 2026): buttons under a bot's message (constellations only) */
   buttons?: import('./integrations').MessageButton[] | null
+  /** Communities round: a reply in a thread / forum post (missing = the nebula's own timeline) */
+  threadId?: string | null
+  /** A thread reply also shown in the nebula ("Also send to #general") */
+  alsoInNebula?: boolean
+  /** On a message a thread was started from: the thread's chip */
+  thread?: import('./threads').ThreadSummary | null
 }
 
 /** 0.5.0: the reactions that can fly across a chat as fireflies. */

@@ -421,11 +421,12 @@ export function canSeeNebula(
 }
 
 /** A nebula's name as people type it: "#valorant" for text, "Campfire" for voice. */
-export const nebulaLabel = (n: { kind: NebulaKind; name: string }): string => (n.kind === 'text' ? `#${n.name}` : n.name)
+export const nebulaLabel = (n: { kind: NebulaKind; name: string }): string => (n.kind !== 'voice' ? `#${n.name}` : n.name)
 
 // ───────────── What the API sends ─────────────
 
-export type NebulaKind = 'text' | 'voice'
+/** Communities round: 'forum' (posts with titles and tags). Older apps are sent forums as read-only text. */
+export type NebulaKind = 'text' | 'voice' | 'forum'
 
 /** Who's in a voice nebula right now. */
 export type VoiceNebulaState = {
@@ -568,6 +569,12 @@ export type Nebula = {
   roleIds?: string[]
   /** Communities round: integrations (bridges) that read its messages, by name. Members see a notice. */
   sharedWith?: string[]
+  /** Communities round: threads (text nebulas) and forum settings */
+  threadsStaffOnly?: boolean
+  threadCloseDays?: number
+  forum?: import('./threads').ForumSettings
+  /** Your followed threads here that are still open (the sidebar list under the nebula) */
+  threads?: import('./threads').ThreadSummary[]
 }
 
 /** 0.7.5 living sky: one star per nebula, in sidebar order (dashboard cards). */
@@ -804,7 +811,7 @@ export function voiceLine(people: PublicUser[], nebulaName: string, total = peop
 export function cleanNebulaName(raw: string, kind: NebulaKind): string | null {
   const hidden = /[\u0000-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁩﻿]/g
   let t = raw.normalize('NFKC').replace(hidden, '').trim()
-  if (kind === 'text') {
+  if (kind !== 'voice') {
     t = t
       .toLowerCase()
       .replace(/\s+/g, '-')

@@ -1,4 +1,6 @@
 import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
+import { forumSettingsOf, myOpenThreads } from "../threads/core";
+import { inNebulaTimeline } from "../threads/timeline";
 import { sharedWithByNebula } from "../integrations/readers";
 import {
   ALL_PERMISSIONS,
@@ -88,6 +90,7 @@ export async function unreadFor(userId: string, conversationIds: string[]) {
         ne(messages.senderId, userId),
         isNull(messages.event),
         isNull(messages.deletedAt),
+        inNebulaTimeline(),
         gt(messages.createdAt, conversationMembers.lastReadAt),
       ),
     )
@@ -407,6 +410,8 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
   ];
   const myRow = memberRows.find((m) => m.userId === userId);
   const sharedWith = await sharedWithByNebula(constellationId);
+  // Communities round: my followed, still-open threads under each text nebula (the sidebar).
+  const myThreads = await myOpenThreads(userId, nebulaRows.filter((n) => n.kind === "text").map((n) => n.id));
   const pendingRequests = can(me, "approveRequests")
     ? await db.$count(constellationJoinRequests, eq(constellationJoinRequests.constellationId, constellationId))
     : 0;
@@ -453,6 +458,9 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       ...(manager ? { visibility: n.visibility === "roles" ? ("roles" as const) : ("everyone" as const), roleIds: n.roleIds } : {}),
       // Members always see when a bridge reads a nebula (communities round, messages:read).
       ...(sharedWith.get(n.id)?.length ? { sharedWith: sharedWith.get(n.id) } : {}),
+      // Threads + forums
+      ...(n.kind === "text" ? { threadsStaffOnly: n.threadsStaffOnly, threadCloseDays: n.threadCloseDays, threads: myThreads.filter((t) => t.nebulaId === n.id).slice(0, 5) } : {}),
+      ...(n.kind === "forum" ? { threadCloseDays: n.threadCloseDays, forum: forumSettingsOf(n) } : {}),
     })),
     roles,
     members: memberRows

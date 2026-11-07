@@ -253,6 +253,8 @@ export type BridgeMessage = {
   author: { id: string; username: string; displayName: string; bot: boolean }
   text: string
   replyToId: string | null
+  /** A reply in a thread or forum post (null in the nebula itself) */
+  threadId: string | null
   /** Photos and files (names only for now) */
   attachments: { kind: 'image' | 'file'; name: string }[]
   gif: boolean

@@ -1,4 +1,5 @@
 import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { inNebulaTimeline } from "../threads/timeline";
 import { alias } from "drizzle-orm/pg-core";
 import {
   attachmentSummary,
@@ -92,6 +93,7 @@ async function allItems(userId: string): Promise<InboxItem[]> {
         ne(messages.senderId, userId),
         isNull(messages.deletedAt),
         isNull(messages.event),
+        inNebulaTimeline(),
         gt(messages.createdAt, since),
         or(sql`${userId}::uuid = any(${messages.mentions})`, eq(original.senderId, userId)),
       ),

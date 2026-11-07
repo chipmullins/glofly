@@ -60,6 +60,8 @@ import { sweepIntegrationActivity } from "./integrations/keys";
 import { gameLinksRouter, sweepGameLinkCodes } from "./integrations/gameLinks";
 import { startReaderPushes } from "./integrations/readers";
 import { docsRouter } from "./docs/api";
+import { sweepUnfinishedPosts, threadsRouter } from "./threads/routes";
+import { legacyForums } from "./threads/legacy";
 import { connectedAppsRouter, developerRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
@@ -120,6 +122,8 @@ app.get("/status", async (_req, res) => {
 
 // While paused, everything below answers 503 "paused" (except Control).
 app.use(refuseWhilePaused(pausedPage));
+// Communities round: forum nebulas look like read-only text nebulas to apps from before forums.
+app.use(legacyForums);
 
 app.use("/auth/qr", qrAuthRouter);
 app.use("/auth", authRouter);
@@ -162,6 +166,7 @@ app.use("/constellations", integrationsRouter);
 app.use("/constellations", interactionsRouter);
 // Communities round: Glofly tools (tickets, welcome, button roles, logging, giveaways).
 app.use("/constellations", toolsRouter);
+app.use("/constellations", threadsRouter);
 app.use("/constellations", communityToolsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
@@ -306,6 +311,7 @@ connectRedis()
     every(15 * 60 * 1000, "Game link code cleanup", sweepGameLinkCodes);
     every(60 * 60 * 1000, "Sign in with Glofly cleanup", sweepOAuth);
     every(60_000, "Giveaways", sweepGiveaways);
+    every(10 * 60_000, "Unfinished forum posts", sweepUnfinishedPosts);
     // Resolved reports are removed a year after they were resolved (hourly).
     const sweepReports = () =>
       purgeOldReports().catch((err) => console.error("Report cleanup failed", err));

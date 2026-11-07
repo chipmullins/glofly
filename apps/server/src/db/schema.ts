@@ -397,6 +397,10 @@ export const messages = pgTable(
     // Lantern messages fade away once everyone else has read them: lanternFadeAt is when.
     lantern: boolean("lantern").notNull().default(false),
     lanternFadeAt: timestamp("lantern_fade_at", { withTimezone: true }),
+    // Communities round (Nov 2026): a reply in a thread or forum post (nebulas only). Thread
+    // replies stay out of the nebula's own timeline unless alsoInNebula ("Also send to #general").
+    threadId: uuid("thread_id").references((): AnyPgColumn => nebulaThreads.id, { onDelete: "cascade" }),
+    alsoInNebula: boolean("also_in_nebula").notNull().default(false),
   },
   // Loading a chat = newest messages in one conversation, so index exactly that.
   // Searching messages = "contains these words": a trigram index keeps that fast.
@@ -413,6 +417,7 @@ export const messages = pgTable(
     index("messages_sender_created_idx").on(t.senderId, t.createdAt),
     // Replies to a message: deleting messages (a group, a nebula) clears the links to them.
     index("messages_reply_to_idx").on(t.replyToId).where(sql`${t.replyToId} is not null`),
+    index("messages_thread_idx").on(t.threadId, t.createdAt).where(sql`${t.threadId} is not null`),
     // Search (0.8.0): newest live messages first, so a common word finds a page without
     // sorting every match (messages/search.ts). Built CONCURRENTLY by migrate.ts.
     index("messages_search_recent_idx")
@@ -1031,7 +1036,8 @@ export const friendLinkUses = pgTable(
 // is permission-checked on the server (constellations/perms.ts). Older apps never see any of it.
 
 export const constellationVisibility = pgEnum("constellation_visibility", ["invite", "public", "approval"]);
-export const nebulaKind = pgEnum("nebula_kind", ["text", "voice"]);
+// Communities round (Nov 2026): "forum" (posts with titles and tags; each post is a thread).
+export const nebulaKind = pgEnum("nebula_kind", ["text", "voice", "forum"]);
 export const constellationRoleKind = pgEnum("constellation_role_kind", ["admin", "moderator", "member", "custom"]);
 
 export const constellations = pgTable(
@@ -1195,6 +1201,14 @@ export const nebulas = pgTable(
     roleIds: uuid("role_ids").array().notNull().default(sql`'{}'::uuid[]`),
     // Communities round (Glofly tools): people who see it whatever their roles (a ticket's opener).
     userIds: uuid("user_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    // Communities round: threads + forums. Who may start threads (text nebulas), how long a quiet
+    // thread or post stays open, and a forum's tags, guidelines, required tag and default sort.
+    threadsStaffOnly: boolean("threads_staff_only").notNull().default(false),
+    threadCloseDays: integer("thread_close_days").notNull().default(7),
+    forumTags: jsonb("forum_tags").$type<{ id: string; name: string; color: string; staffOnly: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
+    forumGuidelines: text("forum_guidelines"),
+    forumRequireTag: boolean("forum_require_tag").notNull().default(false),
+    forumSort: text("forum_sort").notNull().default("activity"),
     conversationId: uuid("conversation_id")
       .notNull()
       .unique()
@@ -1937,4 +1951,56 @@ export const gameLinks = pgTable(
     uniqueIndex("game_links_player_idx").on(t.constellationId, t.game, t.identity),
     uniqueIndex("game_links_user_idx").on(t.userId, t.constellationId, t.game),
   ],
+);
+
+// Communities round (Nov 2026): threads off a message in a text nebula, and forum posts (a forum
+// nebula's posts are threads with a title and tags). Replies are messages in the nebula's own
+// conversation with thread_id set, so every permission check on the nebula covers them.
+export const nebulaThreads = pgTable(
+  "nebula_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    // A thread off a message (text nebulas); null for forum posts.
+    parentMessageId: uuid("parent_message_id").references((): AnyPgColumn => messages.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    // Forum posts: ids from the nebula's forum_tags.
+    tagIds: text("tag_ids").array().notNull().default(sql`'{}'::text[]`),
+    authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+    // A forum post's opening message (set when it's posted; a post without one isn't listed).
+    firstMessageId: uuid("first_message_id"),
+    answerMessageId: uuid("answer_message_id"),
+    replyCount: integer("reply_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+    // Closed by hand (a reply reopens it); threads also count as closed after the nebula's quiet days.
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    pinnedAt: timestamp("pinned_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("nebula_threads_nebula_idx").on(t.nebulaId, t.lastMessageAt),
+    uniqueIndex("nebula_threads_parent_idx").on(t.parentMessageId),
+  ],
+);
+
+// Who follows a thread (starting it or replying follows it) and how far they've read.
+export const threadFollows = pgTable(
+  "thread_follows",
+  {
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => nebulaThreads.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    following: boolean("following").notNull().default(true),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.threadId, t.userId] }), index("thread_follows_user_idx").on(t.userId)],
 );

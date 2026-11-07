@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
+import { inNebulaTimeline } from "../threads/timeline";
 import { attachmentSummary, isConstellationColor, shortBody, type NebulaMention, type NebulaNews, type PinnedNebula } from "@glofly/shared";
 import { db } from "../db";
 import { attachments, constellationMembers, constellations, conversationMembers, messages, nebulaPins, nebulas } from "../db/schema";
@@ -238,6 +239,7 @@ export async function newsFor(userId: string): Promise<NebulaNews[]> {
         inArray(messages.conversationId, worth.map((c) => c.conversationId)),
         isNull(messages.event),
         isNull(messages.deletedAt),
+        inNebulaTimeline(),
       ),
     )
     .orderBy(messages.conversationId, desc(messages.createdAt));

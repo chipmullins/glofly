@@ -3,7 +3,7 @@
 // every app shows the same way.
 
 import type { PublicUser } from './types'
-import type { ConstellationColor } from './constellations'
+import type { ConstellationColor, NebulaKind } from './constellations'
 
 // ───────────── AutoMod lite ─────────────
 
@@ -370,7 +370,7 @@ export type InboxItem = {
   unread: boolean
   constellation: InboxWhere
   /** Mentions and replies: where, who and what */
-  nebula?: { id: string; name: string; conversationId: string; kind: 'text' | 'voice' }
+  nebula?: { id: string; name: string; conversationId: string; kind: NebulaKind }
   messageId?: string
   sender?: PublicUser
   text?: string

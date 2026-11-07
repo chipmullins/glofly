@@ -82,6 +82,7 @@ async function forBots(rows: Row[], nebulaId: string): Promise<BridgeMessage[]> 
       author: { id: r.senderId, username: u?.username ?? "deleted", displayName: u?.displayName ?? "Deleted account", bot: !!u?.bot },
       text: r.body,
       replyToId: r.replyToId,
+      threadId: r.threadId ?? null,
       attachments: files.filter((f) => f.messageId === r.id).map((f) => ({ kind: f.kind, name: f.name })),
       gif: !!r.gif,
       createdAt: r.createdAt.toISOString(),

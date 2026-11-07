@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { chipsFor, followersOf, noteReply, summaries as threadSummaries, threadIn, threadRowOf } from "../threads/core";
+import { inNebulaTimeline } from "../threads/timeline";
 import express, { Router, type Response } from "express";
 import { rateLimit } from "../rateLimit";
 import { and, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
@@ -121,6 +123,8 @@ export const messageFields = {
   lantern: messages.lantern,
   lanternFadeAt: messages.lanternFadeAt,
   buttons: messages.buttons,
+  threadId: messages.threadId,
+  alsoInNebula: messages.alsoInNebula,
 };
 export type MessageRow = {
   id: string;
@@ -137,6 +141,8 @@ export type MessageRow = {
   linkPreview: LinkPreviewInfo | null;
   poll: PollInfo | null;
   game: GameInfo | null;
+  threadId?: string | null;
+  alsoInNebula?: boolean;
   lantern: boolean;
   lanternFadeAt: Date | null;
   buttons?: MessageButton[] | null;
@@ -191,6 +197,8 @@ export async function hydrate(rows: MessageRow[]) {
     .orderBy(messageReactions.createdAt);
 
   const files = await attachmentsOf([...ids, ...replyIds]);
+  // Communities round: thread chips on messages threads were started from (nebulas only).
+  const chips = await chipsFor(rows.filter((r) => !r.threadId).map((r) => r.id));
   const votes = await votesFor(rows.filter((r) => r.poll && !r.deletedAt).map((r) => r.id));
 
   const original = alias(messages, "original");
@@ -251,6 +259,9 @@ export async function hydrate(rows: MessageRow[]) {
       lanternFadeAt: r.lanternFadeAt?.toISOString() ?? null,
       // Communities round: a bot's buttons (left out entirely when there are none).
       ...(r.buttons?.length && !deleted ? { buttons: r.buttons } : {}),
+      // Communities round: threads (left out for ordinary messages).
+      ...(r.threadId ? { threadId: r.threadId, ...(r.alsoInNebula ? { alsoInNebula: true } : {}) } : {}),
+      ...(chips.has(r.id) ? { thread: chips.get(r.id) } : {}),
     };
   });
 }
@@ -1322,6 +1333,7 @@ conversationsRouter.get("/messages/search", searchLimiter, async (req, res) => {
       chat ? eq(messages.conversationId, chat.data) : inArray(messages.conversationId, myChats),
       isNull(messages.deletedAt),
       isNull(messages.event),
+      inNebulaTimeline(),
       ilike(messages.body, pattern),
       olderThan,
     ),
@@ -1341,6 +1353,16 @@ conversationsRouter.get("/:id/messages", async (req, res) => {
   }
   const limit = z.coerce.number().int().min(1).max(100).catch(50).parse(req.query.limit);
   const before = idParam.safeParse(req.query.before);
+  // Communities round: ?thread=<id> lists a thread's replies; otherwise the chat's own timeline.
+  let inThread = undefined;
+  if (req.query.thread !== undefined) {
+    const tid = idParam.safeParse(req.query.thread);
+    if (!tid.success || !(await threadIn(id.data, tid.data))) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    inThread = eq(messages.threadId, tid.data);
+  }
 
   // "Older than this message" — by time, with the id breaking ties.
   let olderThan = undefined;
@@ -1360,7 +1382,7 @@ conversationsRouter.get("/:id/messages", async (req, res) => {
   const rows = await db
     .select(messageFields)
     .from(messages)
-    .where(and(eq(messages.conversationId, id.data), olderThan))
+    .where(and(eq(messages.conversationId, id.data), olderThan, inThread ?? inNebulaTimeline()))
     .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(limit + 1);
 
@@ -1386,6 +1408,9 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     ? ({ success: true, data: "" } as const)
     : (attachmentIds.length ? captionBody : messageBody).safeParse(req.body?.body);
   const replyTo = z.uuid().optional().safeParse(req.body?.replyToId ?? undefined);
+  // Communities round: a reply in a thread / forum post (nebulas), maybe also shown in the nebula.
+  const threadParam = z.uuid().optional().safeParse(req.body?.threadId ?? undefined);
+  const wantsAlsoInNebula = req.body?.alsoInNebula === true;
   const myId = me(res).id;
   // 0.7.5: apps send a clientId with each new message; a retry of the same message (the first
   // try reached us, its answer didn't reach them) gets the first one back instead of a copy.
@@ -1448,11 +1473,29 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     res.status(400).json({ error: "invalid", message: "Lantern messages are for your own chats, not nebulas." });
     return;
   }
-  // A reply must point at a message in this same chat that still exists.
+  let thread: Awaited<ReturnType<typeof threadIn>> = null;
+  if (!threadParam.success) {
+    res.status(400).json({ error: "invalid", message: "That thread isn't there any more." });
+    return;
+  }
+  if (threadParam.data) {
+    thread = chat.kind === "nebula" ? await threadIn(id.data, threadParam.data) : null;
+    if (!thread) {
+      res.status(404).json({ error: "not_found", message: "That thread isn't there any more." });
+      return;
+    }
+    // A forum post's opening message comes from who started it.
+    if (thread.nebulaKind === "forum" && !thread.firstMessageId && thread.authorId !== myId) {
+      res.status(404).json({ error: "not_found", message: "That post isn't there yet." });
+      return;
+    }
+  }
+  const alsoInNebula = !!thread && wantsAlsoInNebula && thread.nebulaKind === "text";
+  // A reply must point at a message in this same chat (and the same thread) that still exists.
   const replyToId = replyTo.success ? (replyTo.data ?? null) : null;
   if (replyToId) {
     const original = await findMessage(id.data, replyToId);
-    if (!original || original.deletedAt || original.event) {
+    if (!original || original.deletedAt || original.event || (original.threadId ?? null) !== (thread?.id ?? null)) {
       res.status(400).json({ error: "invalid", message: "That message isn't available to reply to." });
       return;
     }
@@ -1494,7 +1537,7 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     inserted = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)
-        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, gif, lantern })
+        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, gif, lantern, threadId: thread?.id ?? null, alsoInNebula })
         .returning(messageFields);
       const inserted = row;
       // Attach your uploads, in the order given. Each must be yours, for this chat, and unsent.
@@ -1513,6 +1556,8 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
           .returning({ id: attachments.id });
         if (!claimed.length) throw new AttachmentGone();
       }
+      // A thread-only reply doesn't move the nebula itself (its unread count or read position).
+      if (thread && !alsoInNebula) return inserted;
       await tx
         .update(conversations)
         .set({ lastMessageAt: inserted.createdAt })
@@ -1542,13 +1587,32 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   // Instantly to everyone in the chat (all their signed-in devices). Your own copy carries the
   // clientId it was sent with (0.7.5), so your apps can match it to the one waiting to send.
   const mineCopy = clientId ? { ...message, clientId } : message;
+  if (thread) {
+    // Communities round: thread replies go to apps that know threads; the thread's chip and
+    // counts update for everyone who can see the nebula. Followers (and anyone @mentioned) are
+    // notified, by their own nebula settings.
+    await noteReply(thread, inserted.id, myId, inserted.createdAt);
+    const [summary] = await threadSummaries([(await threadRowOf(thread.id)) ?? thread], null, new Map([[thread.nebulaId, thread.closeDays]]));
+    for (const userId of chat.memberIds) {
+      const m = userId === myId ? mineCopy : message;
+      emitToUser(userId, "thread:message", { constellationId: thread.constellationId, thread: summary, message: m }, true);
+    }
+    toolHook("onNebulaMessage", id.data, inserted.id, "created");
+    if (!alsoInNebula) {
+      res.status(201).json({ message: mineCopy });
+      const told = new Set([...(await followersOf(thread.id)), ...mentions]);
+      inBackground(notifyMessage(message, { ...chat, memberIds: chat.memberIds.filter((u) => told.has(u)) }));
+      inBackground(addLinkPreview(inserted.id, id.data, text, myId));
+      return;
+    }
+  }
   for (const userId of chat.memberIds) {
     const m = userId === myId ? mineCopy : message;
     emitToUser(userId, "message:new", modernOnly(chat) ? { message: m, nebula: true } : { message: m }, modernOnly(chat));
   }
   if (chat.kind === "nebula") {
     inBackground(nebulaActivity(id.data, myId, inserted.createdAt, mentions, nebulaPreview(message)));
-    toolHook("onNebulaMessage", id.data, inserted.id, "created");
+    if (!thread) toolHook("onNebulaMessage", id.data, inserted.id, "created");
   }
   // Replying means you've read everything before it ("Seen" is for DMs).
   if (chat.partner) await shareReadPosition(id.data, myId, chat.partner, inserted.createdAt);
