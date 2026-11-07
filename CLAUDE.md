@@ -200,3 +200,6 @@
   `messages.group_mentions` (server only): anything counting "mentions me" must use `mentionsUserSql`.
   **Onboarding 4.3** (`constellations/onboarding.ts`): with it on, `nebulas.optional` nebulas are only seen by
   people who picked them (`constellation_members.shown_nebulas`), enforced in `access.ts` like role-only nebulas.
+  **FiveM/RedM** (project doc `glofly-fivem-redm.md`): `KNOWN_GAME_PATTERNS` (desktop), cfx.re/join cards (`games/cfx.ts`,
+  lookup OFF until `CFX_SERVER_LOOKUP=on`), the Glofly Whitelist resource in `game-integrations/fivem/` (test: `test/run.py`).
+  Next after FiveM: roadmap 4.4 moderation, 4.5 stage/announcement nebulas, 4.6 scale (mockups first).
