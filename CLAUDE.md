@@ -188,7 +188,7 @@
   Also 0.8.7: Go live `notify` (POST /broadcasts, default true), viewer names + "started watching" toast; "Free to hang"
   (was "Want to hang?"); Mac welcome notification once (`glofly.macNotifyAsked`) so macOS asks for permission (no
   permission = no pop-ups and no Dock badge); screen sound problems report to Control → Errors (where "screen sound").
-- **Communities round (Nov 2026, in progress on `dev`)** (project doc `glofly-communities-round-progress.md`, migrations 0041–0047):
+- **0.9.0 communities release (Nov 7, 2026)** (project docs `glofly-release-0.9.0.md`, `glofly-communities-round-progress.md`, migrations 0041–0050):
   API keys/bot API (`/api/v1`, `integrations/`), webhooks, Glofly tools (`tools/`), Sign in with Glofly (`oauth/`),
   Linked game servers (`integrations/gameLinks.ts`), bridges (`messages:read`, `integrations/readers.ts`), docs `/docs/api`.
   **Threads + forum nebulas** (`threads/`): replies are messages in the nebula's own conversation with `thread_id`; anything
@@ -202,4 +202,7 @@
   people who picked them (`constellation_members.shown_nebulas`), enforced in `access.ts` like role-only nebulas.
   **FiveM/RedM** (project doc `glofly-fivem-redm.md`): `KNOWN_GAME_PATTERNS` (desktop), cfx.re/join cards (`games/cfx.ts`,
   lookup OFF until `CFX_SERVER_LOOKUP=on`), the Glofly Whitelist resource in `game-integrations/fivem/` (test: `test/run.py`).
-  Next after FiveM: roadmap 4.4 moderation, 4.5 stage/announcement nebulas, 4.6 scale (mockups first).
+  **Legal (0.9.0):** `site/developer-terms.html` (Developer Terms); new Sign in with Glofly apps need `privacyUrl` + `agreeTerms`
+  (`oauth_apps.dev_terms_version`, shared `DEVELOPER_TERMS_VERSION`: bump it when the terms change). A new kind of data
+  shared with apps, bots or game servers must be added to `site/privacy.html` (and the consent page if it's per person).
+  Member counts leave out bots (`users.bot`). Next: roadmap 4.4 moderation, 4.5 stage/announcement nebulas, 4.6 scale (mockups first).
