@@ -31,6 +31,7 @@ export function roleLook(c: ConstellationDetail, userId: string): RoleLook {
   const member = c.members.find((m) => m.user.id === userId)
   if (!member) return null
   // Communities round: a constellation's bot always shows BOT.
+  if (member.user.tool) return { name: 'TOOL', color: '#ffb36b', badgeBg: hexA('#ffb36b', 0.16) }
   if (member.user.bot) return { name: 'BOT', color: '#7fd4e8', badgeBg: hexA('#7fd4e8', 0.16) }
   const role = topRole(c, userId)
   if (role.kind === 'member') return { name: null, color: '#f5ede6', badgeBg: 'transparent' }

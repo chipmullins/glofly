@@ -202,7 +202,7 @@ export function MembersPanel({
                   <span className="cx-member-text">
                     <span className="cx-member-name" style={{ color: nameColor(m.user.id) }}>
                       {mine ? `${firstName(m.user)} (you)` : m.user.displayName}
-                      {m.user.bot && <span className="cx-bot-tag">BOT</span>}
+                      {m.user.bot && <span className={m.user.tool ? 'cx-bot-tag cx-bot-tag--tool' : 'cx-bot-tag'}>{m.user.tool ? 'TOOL' : 'BOT'}</span>}
                     </span>
                     {s && <span className="cx-member-sub cx-member-sub--row">{s}</span>}
                   </span>

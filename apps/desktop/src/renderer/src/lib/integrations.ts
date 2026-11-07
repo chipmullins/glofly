@@ -65,7 +65,7 @@ export const integrations = {
       input
     }),
   clickButton: (id: string, messageId: string, buttonId: string) =>
-    call<{ ok: true; delivered: boolean }>(
+    call<{ ok: true; delivered: boolean; message?: string }>(
       'POST',
       `/constellations/${id}/messages/${messageId}/buttons/${buttonId}`
     )

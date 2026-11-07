@@ -3,7 +3,7 @@ import { View } from 'react-native'
 import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { INTEGRATION_SCOPES, apiKeyShown, type ApiKeyInfo } from '@glofly/shared'
-import { integrations } from '@/api/integrations'
+import { integrations, type ToolName } from '@/api/integrations'
 import { cxSay } from '@/state/constellations'
 import { chooseFrom, confirm } from '@/ui/dialogs'
 import { Text } from '@/ui/kit'
@@ -12,7 +12,7 @@ import { haptic } from '@/constellations/motion'
 import { can } from '@/constellations/roles'
 import { SettingsScreen, useSettingsDetail } from '@/constellations/settingsKit'
 import { NightModal } from '@/constellations/sheet'
-import { Caps, Card, N, NightButton, Row } from '@/constellations/ui'
+import { Caps, Card, N, NightButton, Row, Toggle } from '@/constellations/ui'
 
 // Communities round (Nov 2026): Integrations on phones (approved canvas board 11). Keys here;
 // webhooks and the Activity log are on a computer (the desktop app or chat.glofly.app).
@@ -55,15 +55,27 @@ export function SecretSheet({ title, secret, onDone }: { title: string; secret: 
   )
 }
 
+const TOOLS: { id: ToolName; name: string; text: string }[] = [
+  { id: 'tickets', name: 'Tickets', text: 'Private help nebulas with staff' },
+  { id: 'welcome', name: 'Welcome', text: 'Greets new members' },
+  { id: 'buttonRoles', name: 'Button roles', text: 'Pick self-assigned roles' },
+  { id: 'logging', name: 'Logging', text: 'Joins, edits, deletes to staff' },
+  { id: 'giveaways', name: 'Giveaways', text: 'Enter with a button' },
+]
+
 export default function IntegrationsScreen() {
   const { cid } = useLocalSearchParams<{ cid: string }>()
   const c = useSettingsDetail(cid)
   const [keys, setKeys] = useState<ApiKeyInfo[] | null>(null)
   const [shown, setShown] = useState<string | null>(null)
+  const [tools, setTools] = useState<Record<ToolName, { enabled: boolean; settings: Record<string, unknown> }> | null>(null)
   const load = useCallback(() => {
     void integrations.load(cid).then((r) => {
       if (r.ok) setKeys(r.data.keys)
       else cxSay(r.message)
+    })
+    void integrations.tools(cid).then((r) => {
+      if (r.ok) setTools(r.data.tools)
     })
   }, [cid])
   useFocusEffect(load)
@@ -104,8 +116,33 @@ export default function IntegrationsScreen() {
     }
   }
 
+  async function toggleTool(t: ToolName, on: boolean) {
+    if (on && t !== 'giveaways' && !Object.keys(tools?.[t].settings ?? {}).length) {
+      return cxSay('Set this one up first in Glofly on a computer or chat.glofly.app (Settings → Integrations).')
+    }
+    const r = await integrations.setTool(cid, t, on)
+    if (!r.ok) return cxSay(r.message)
+    haptic.success()
+    load()
+  }
+
   return (
     <SettingsScreen title="Integrations" c={c}>
+      <Caps>Glofly tools</Caps>
+      {tools ? (
+        <Card>
+          {TOOLS.map((t, i) => (
+            <Row
+              key={t.id}
+              label={t.name}
+              sub={t.text}
+              last={i === TOOLS.length - 1}
+              right={<Toggle value={tools[t.id].enabled} label={`${t.name} on`} onChange={(v) => void toggleTool(t.id, v)} />}
+            />
+          ))}
+        </Card>
+      ) : null}
+      <Text size={13} style={{ color: N.muted, lineHeight: 19 }}>Built in and free. They post as “Glofly”.</Text>
       <Caps>Bots &amp; API keys</Caps>
       {keys?.length ? (
         <Card>

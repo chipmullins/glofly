@@ -128,7 +128,10 @@ export function NebulaChat({
       void integrations.clickButton(c.id, m.id, buttonId).then((r) => {
         if (!r.ok) cxSay(r.message)
         else if (!r.data.delivered) cxSay("The bot didn't answer. Try again in a moment.")
-        else haptic.success()
+        else {
+          haptic.success()
+          if (r.data.message) cxSay(r.data.message)
+        }
       })
     },
     [c.id],

@@ -1139,3 +1139,13 @@
   letter-spacing: 0.3px;
   vertical-align: 1px;
 }
+.cx-bot-tag--tool {
+  background: #4a2c14;
+  color: #ffd2a3;
+}
+.cx-bot-said {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  color: var(--glo-muted);
+  font-weight: 600;
+}

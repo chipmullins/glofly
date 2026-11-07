@@ -14,6 +14,7 @@ import {
 } from '@glofly/shared'
 import { integrations, type KeyFields } from '../lib/integrations'
 import './Integrations.css'
+import ToolsSection from './ToolsSection'
 
 // Communities round (Nov 2026): constellation settings → Integrations, drawn from the approved
 // "Glofly communities round" canvas (boards 1–3). Keys, webhook addresses and signing secrets are
@@ -46,7 +47,7 @@ function BotGlyph(): React.JSX.Element {
 }
 
 /** A dialog over the settings window. */
-function Sheet({
+export function Sheet({
   title,
   children,
   onClose,
@@ -472,6 +473,12 @@ export default function IntegrationsPage({
   c: ConstellationDetail
   onProblem: (message: string) => void
 }): React.JSX.Element {
+  const [notice, setNotice] = useState<string | null>(null)
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(null), 3500)
+    return () => clearTimeout(t)
+  }, [notice])
   const [keys, setKeys] = useState<ApiKeyInfo[] | null>(null)
   const [hooks, setHooks] = useState<WebhookInfo[]>([])
   const [log, setLog] = useState<IntegrationActivity[]>([])
@@ -513,6 +520,13 @@ export default function IntegrationsPage({
         Connect your game server, a bot or another app to {c.name}. Keys only work for this constellation, Glofly shows each one
         once, and every use is in Activity below.
       </p>
+
+      <ToolsSection c={c} onProblem={onProblem} onNotice={setNotice} />
+      {notice && (
+        <div role="status" className="ix-toast">
+          {notice}
+        </div>
+      )}
 
       <section aria-labelledby="ix-keys" className="ix-section">
         <div className="ix-section-head">

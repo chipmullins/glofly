@@ -18,6 +18,8 @@ export default function BotButtons({
 }): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const [sent, setSent] = useState<string | null>(null)
+  // Glofly tools answer with a line for the clicker only ("You have the Raider role now.").
+  const [said, setSaid] = useState<string | null>(null)
   return (
     <div className="cx-bot-buttons" role="group" aria-label="Bot buttons">
       {buttons.map((b) => (
@@ -36,6 +38,11 @@ export default function BotButtons({
               else {
                 setSent(b.id)
                 setTimeout(() => setSent((x) => (x === b.id ? null : x)), 1500)
+                if (r.data.message) {
+                  const text = r.data.message
+                  setSaid(text)
+                  setTimeout(() => setSaid((x) => (x === text ? null : x)), 4000)
+                }
               }
             })
           }}
@@ -43,6 +50,11 @@ export default function BotButtons({
           {sent === b.id ? 'Sent ✓' : b.label}
         </button>
       ))}
+      {said && (
+        <span role="status" className="cx-bot-said">
+          {said}
+        </span>
+      )}
     </div>
   )
 }

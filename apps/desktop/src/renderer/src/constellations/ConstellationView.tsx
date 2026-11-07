@@ -67,6 +67,8 @@ import type { ConstellationCommand } from '@glofly/shared/integrations'
 
 /** Communities round: a bot's badge in chats (approved board 4). */
 const BOT_BADGE = { name: 'Bot', light: '#7fd4e8', badgeBg: '#2c3f46', badgeText: '#bfeaf5' }
+/** Glofly tools post as "Glofly" with a TOOL tag (approved board 15). */
+const TOOL_BADGE = { name: 'Tool', light: '#ffb36b', badgeBg: '#4a2c14', badgeText: '#ffd2a3' }
 
 // Inside a constellation (Constellation.dc.html, approved): the far-left strip (Home at the top,
 // a galaxy button to the dashboard, your constellations with the open one ringed in gold, a dashed
@@ -504,6 +506,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     (userId: string) => {
       if (!people.has(userId)) return null
       // Communities round: a constellation's bot always shows BOT.
+      if (people.get(userId)?.tool) return TOOL_BADGE
       if (people.get(userId)?.bot) return BOT_BADGE
       const role = topRole(c, userId)
       if (role.kind === 'member') return null
