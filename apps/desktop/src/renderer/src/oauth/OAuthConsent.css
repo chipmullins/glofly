@@ -1,0 +1,167 @@
+/* Sign in with Glofly consent (approved canvas board 5): the twilight card. */
+.oc-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  background:
+    radial-gradient(900px 520px at 80% -10%, rgba(255, 179, 71, 0.16), transparent 70%),
+    radial-gradient(800px 600px at 0% 110%, rgba(181, 124, 255, 0.18), transparent 70%),
+    linear-gradient(180deg, #1b1230, #120c0a);
+  font-family: var(--glo-font-body);
+  color: #f5ede6;
+}
+.oc-card {
+  width: 100%;
+  max-width: 460px;
+  box-sizing: border-box;
+  padding: 28px;
+  border-radius: 24px;
+  background: rgba(28, 21, 18, 0.94);
+  border: 1px solid #3a2d26;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+.oc-pair {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.oc-app {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #7c3aed;
+  color: #fff;
+  font: 700 20px var(--glo-font-display);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.oc-dots {
+  width: 40px;
+  border-top: 2px dotted #8a7566;
+}
+.oc-glofly {
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background: #1c1210;
+  border: 1px solid #4a372b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.oc-glofly span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffb347;
+  box-shadow: 0 0 12px #ffb347;
+}
+.oc-title {
+  margin: 0;
+  text-align: center;
+  font: 600 24px var(--glo-font-display);
+  line-height: 1.25;
+}
+.oc-made {
+  align-self: center;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: rgba(255, 179, 71, 0.14);
+  color: #ffb347;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.oc-text {
+  margin: 0;
+  font-size: 14px;
+  color: #d9c2b1;
+  line-height: 1.45;
+}
+.oc-me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #241712;
+}
+.oc-me-names {
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+}
+.oc-me-names span {
+  font-size: 13px;
+  color: #c9b8ab;
+}
+.oc-gets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.oc-caps {
+  font-size: 13px;
+  font-weight: 700;
+  color: #c9b8ab;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.oc-check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 4px;
+  font-size: 14px;
+}
+.oc-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: #ffb347;
+}
+.oc-muted {
+  font-size: 13px;
+  color: #c9b8ab;
+}
+.oc-buttons {
+  display: flex;
+  gap: 10px;
+}
+.oc-btn {
+  flex: 1;
+  height: 46px;
+  border-radius: 23px;
+  border: 1px solid #574a41;
+  background: transparent;
+  color: #f5ede6;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.oc-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.oc-btn--gold {
+  border: 0;
+  background: #ffb347;
+  color: #2a1406;
+  font-weight: 700;
+  box-shadow: 0 0 22px rgba(255, 179, 71, 0.35);
+}
+.oc-foot {
+  font-size: 12.5px;
+  color: #c9b8ab;
+  text-align: center;
+  line-height: 1.45;
+}

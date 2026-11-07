@@ -361,6 +361,15 @@ export type WebInfo = {
   touch: boolean
   /** Screen sharing works in this browser (desktop browsers) */
   screenShare: boolean
+  /**
+   * Communities round (Nov 2026): the Sign in with Glofly consent page (chat.glofly.app/oauth/authorize
+   * opens the app, which asks once you're signed in). `query` is the address's ?… part.
+   */
+  oauth?: {
+    request: (query: string) => Promise<ApiResult<import('@glofly/shared').OAuthRequestInfo>>
+    approve: (query: string, choices: { email: boolean; constellationIds: string[] }) => Promise<ApiResult<{ redirect: string }>>
+    deny: (query: string) => Promise<ApiResult<{ redirect: string }>>
+  }
   notifications: {
     /** The browser's answer to "Allow notifications?" so far */
     permission: () => 'granted' | 'denied' | 'default' | 'unsupported'
@@ -679,6 +688,13 @@ export type GloflyApi = {
    * 2.0 Constellations and My games: requests to the server's /constellations/… and /games/…
    * routes (lib/constellations.ts wraps them with their types).
    */
+  /**
+   * Communities round (Nov 2026): Sign in with Glofly settings. Only Settings → Connected apps
+   * (/account/connected-apps…) and Developer (/developer/apps…) go through here.
+   */
+  apps: {
+    request: <T = unknown>(method: ConstellationMethod, path: string, body?: unknown) => Promise<ApiResult<T>>
+  }
   constellations: {
     request: <T = unknown>(
       method: ConstellationMethod,

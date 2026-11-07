@@ -32,6 +32,7 @@ import { setNotificationSettings } from '../lib/notify'
 import { isMac, isWeb } from '../lib/platform'
 import { BrowserNotificationsRow } from './WebNotifications'
 import './dialogs.css'
+import { AppsIcon, ConnectedAppsSettings, DeveloperIcon, DeveloperSettings } from '../oauth/AppsSettings'
 import './SettingsDialog.css'
 
 // Settings → App says it the Mac way on a Mac. (A Mac keeps Glofly running in the Dock after
@@ -60,7 +61,7 @@ type SettingsDialogProps = {
   scrollTo?: string
 }
 
-export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'about'
+export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'apps' | 'developer' | 'about'
 type Page = SettingsPage
 
 type ToggleKey = 'readReceipts' | 'showLastSeen' | 'showTyping'
@@ -841,6 +842,25 @@ export default function SettingsDialog({
               <AccountIcon active={page === 'account'} />
               Account
             </button>
+            {/* Communities round (Nov 2026): Sign in with Glofly */}
+            <button
+              type="button"
+              className={page === 'apps' ? 'settings-nav-item settings-nav-item--active' : 'settings-nav-item'}
+              aria-current={page === 'apps' ? 'page' : undefined}
+              onClick={() => openPage('apps')}
+            >
+              <AppsIcon active={page === 'apps'} />
+              Connected apps
+            </button>
+            <button
+              type="button"
+              className={page === 'developer' ? 'settings-nav-item settings-nav-item--active' : 'settings-nav-item'}
+              aria-current={page === 'developer' ? 'page' : undefined}
+              onClick={() => openPage('developer')}
+            >
+              <DeveloperIcon active={page === 'developer'} />
+              Developer
+            </button>
             <button
               type="button"
               className={
@@ -871,6 +891,10 @@ export default function SettingsDialog({
               <OverlaySettings />
             ) : page === 'about' ? (
               <AboutSettings version={appSettings?.version ?? null} />
+            ) : page === 'apps' ? (
+              <ConnectedAppsSettings />
+            ) : page === 'developer' ? (
+              <DeveloperSettings />
             ) : page === 'account' ? (
               <AccountSettings
                 user={user}

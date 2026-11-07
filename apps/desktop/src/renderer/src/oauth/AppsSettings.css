@@ -1,0 +1,40 @@
+/* Settings → Connected apps and Developer (communities round, Nov 2026). Shares Integrations.css. */
+.as-icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 13px;
+  background: #7c3aed;
+  color: #ffffff;
+  font-family: var(--glo-font-display);
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.as-made {
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: #fff1e4;
+  color: #8a3d08;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.as-textarea {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+.as-form .ix-card-main,
+.as-secret .ix-card-main {
+  gap: 12px;
+}
+.settings-section .ix-card + .ix-card {
+  margin-top: 10px;
+}

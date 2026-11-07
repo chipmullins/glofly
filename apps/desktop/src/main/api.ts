@@ -93,6 +93,19 @@ export { upgradeEvents }
  * a known method, one of those paths in plain characters (ids, codes, simple query strings) and a
  * small JSON body.
  */
+/** Communities round: Settings → Connected apps and Developer (Sign in with Glofly) only. */
+export function isAppsRequest(method: unknown, path: unknown, body: unknown): boolean {
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(method as string)) return false
+  if (typeof path !== 'string' || path.length > 200) return false
+  if (!/^\/(account\/connected-apps|developer\/apps)(\/[A-Za-z0-9_-]+)*$/.test(path)) return false
+  if (body === undefined || body === null) return true
+  try {
+    return typeof body === 'object' && JSON.stringify(body).length <= 10_000
+  } catch {
+    return false
+  }
+}
+
 export function isConstellationRequest(
   method: unknown,
   path: unknown,

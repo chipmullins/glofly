@@ -147,7 +147,7 @@ import {
   startGameWatch
 } from './games'
 import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
-import { isConstellationRequest, isToolsRequest, isUserId } from './api'
+import { isAppsRequest, isConstellationRequest, isToolsRequest, isUserId } from './api'
 import { checkPausedNow, configurePauseChecks, getPaused, getUpdateRequired } from './app-status'
 import { isReportRequest, listNotices, noticeReply, noticeSeen, sendReport } from './safety'
 import { TEAM_REPLY_MAX } from '@glofly/shared/types'
@@ -745,6 +745,11 @@ function registerIpcHandlers(): void {
       return apiRequest(method, path as string, body ?? undefined)
     }
   )
+  // Communities round: Settings → Connected apps and Developer (Sign in with Glofly).
+  ipcMain.handle('apps:request', (event, method: unknown, path: unknown, body: unknown) => {
+    if (!fromApp(event) || !isAppsRequest(method, path, body)) return invalid
+    return apiRequest(method as 'GET', path as string, body ?? undefined)
+  })
   ipcMain.handle(
     'constellations:set-icon',
     (event, id: unknown, data: unknown, type: unknown, which: unknown = 'icon') => {

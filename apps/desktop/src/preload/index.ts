@@ -350,6 +350,10 @@ const glofly: GloflyApi = {
   reports: {
     send: (request: ReportRequest) => ipcRenderer.invoke('reports:send', request)
   },
+  apps: {
+    request: (method: ConstellationMethod, path: string, body?: unknown) =>
+      ipcRenderer.invoke('apps:request', method, path, body ?? null)
+  },
   constellations: {
     request: (method: ConstellationMethod, path: string, body?: unknown) =>
       ipcRenderer.invoke('constellations:request', method, path, body ?? null),

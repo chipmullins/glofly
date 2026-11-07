@@ -102,6 +102,31 @@ function isConstellationPath(method: unknown, path: unknown, body: unknown): boo
   }
 }
 
+/** Communities round: Settings → Connected apps and Developer only. */
+function isAppsPath(method: unknown, path: unknown, body: unknown): boolean {
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(method as string)) return false
+  if (typeof path !== 'string' || path.length > 200) return false
+  if (!/^\/(account\/connected-apps|developer\/apps)(\/[A-Za-z0-9_-]+)*$/.test(path)) return false
+  if (body === undefined || body === null) return true
+  try {
+    return typeof body === 'object' && JSON.stringify(body).length <= 10_000
+  } catch {
+    return false
+  }
+}
+
+/** The sign-in request's parameters (anything else in the address is dropped). */
+const OAUTH_KEYS = ['client_id', 'redirect_uri', 'response_type', 'scope', 'state', 'code_challenge', 'code_challenge_method', 'nonce']
+function oauthQuery(query: string): URLSearchParams {
+  const from = new URLSearchParams(typeof query === 'string' ? query.slice(0, 2000) : '')
+  const out = new URLSearchParams()
+  for (const k of OAUTH_KEYS) {
+    const v = from.get(k)
+    if (v !== null) out.set(k, v.slice(0, 500))
+  }
+  return out
+}
+
 // window.glofly for a browser: the same functions the desktop app's preload bridge offers
 // (apps/desktop/src/preload/index.ts), done here with fetch, a WebSocket and browser APIs instead
 // of the Electron main process. The desktop screens can't tell the difference, except where
@@ -207,6 +232,17 @@ export function createBridge(): GloflyApi {
       apple: isApple,
       touch: isTouch(),
       screenShare: screenShareSupported,
+      // Communities round: the Sign in with Glofly consent page (only the known parameters go on).
+      oauth: {
+        request: (query) => request('GET', `/oauth/request?${oauthQuery(query).toString()}`),
+        approve: (query, choices) =>
+          request('POST', '/oauth/approve', {
+            ...Object.fromEntries(oauthQuery(query)),
+            email: !!choices.email,
+            constellationIds: Array.isArray(choices.constellationIds) ? choices.constellationIds.slice(0, 50) : []
+          }),
+        deny: (query) => request('POST', '/oauth/deny', Object.fromEntries(oauthQuery(query)))
+      },
       notifications: {
         permission,
         ask: askPermission,
@@ -680,6 +716,13 @@ export function createBridge(): GloflyApi {
     tools: {
       request: <T>(method: ConstellationMethod, path: string, body?: unknown) =>
         isToolsPath(method, path, body)
+          ? request<T>(method, path, body ?? undefined)
+          : Promise.resolve(invalid as ApiResult<T>)
+    },
+    // Communities round: Settings → Connected apps and Developer (Sign in with Glofly).
+    apps: {
+      request: <T>(method: ConstellationMethod, path: string, body?: unknown) =>
+        isAppsPath(method, path, body)
           ? request<T>(method, path, body ?? undefined)
           : Promise.resolve(invalid as ApiResult<T>)
     },
