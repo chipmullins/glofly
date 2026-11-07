@@ -1,10 +1,10 @@
 import { View } from 'react-native'
 import { router, useLocalSearchParams, type Href } from 'expo-router'
-import { type ConstellationPermission, type NotifyLevel } from '@glofly/shared'
+import { type ConstellationPermission } from '@glofly/shared'
 import { cx } from '@/api/constellations'
 import { cxSay, refreshCards, useCx } from '@/state/constellations'
 import { useSession } from '@/state/session'
-import { chooseFrom, confirm } from '@/ui/dialogs'
+import { confirm } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { haptic } from '@/constellations/motion'
@@ -37,18 +37,6 @@ export default function SettingsMenu() {
     // Communities round (Nov 2026): API keys for bots and game servers.
     { key: 'integrations', label: 'Integrations', icon: <Glyph name="external" size={17} />, show: can(c, 'manageConstellation') },
   ].filter((p) => p.show)
-
-  async function pickNotify() {
-    const pick = await chooseFrom(
-      (['all', 'mentions', 'none'] as NotifyLevel[]).map((l) => ({ key: l, label: NOTIFY_WORDS[l], checked: c!.me.notify === l })),
-      `Notifications for ${c!.name}`,
-    )
-    if (!pick) return
-    const r = await cx.notify(c!.id, pick as NotifyLevel)
-    if (!r.ok) return cxSay(r.message)
-    useCx.setState({ details: { ...useCx.getState().details, [c!.id]: { ...c!, me: { ...c!.me, notify: pick as NotifyLevel } } } })
-    haptic.success()
-  }
 
   async function readAll() {
     const r = await cx.readAll(c!.id)
@@ -95,7 +83,7 @@ export default function SettingsMenu() {
         </Card>
       ) : null}
       <Card>
-        <Row icon={<IconBox><Icon name="bell" size={17} color={N.ink} /></IconBox>} label="Notifications" detail={NOTIFY_WORDS[c.me.notify]} chevron onPress={() => void pickNotify()} />
+        <Row icon={<IconBox><Icon name="bell" size={17} color={N.ink} /></IconBox>} label="Notifications" detail={c.me.notifications?.mutedUntil ? 'Muted' : NOTIFY_WORDS[c.me.notify]} chevron onPress={() => go('notifications')} />
         <Row icon={<IconBox><Glyph name="markRead" size={17} /></IconBox>} label="Mark everything read" disabled={!card?.unreadCount && !card?.mentionCount} onPress={() => void readAll()} />
         {!c.me.owner ? <Row icon={<IconBox danger><Glyph name="leave" size={17} color={N.redText} /></IconBox>} label={`Leave ${c.name}`} danger last onPress={() => void leave()} /> : <Row icon={<IconBox><Icon name="link" size={17} color={N.ink} /></IconBox>} label="Invite people" chevron last onPress={() => go('invites')} />}
       </Card>

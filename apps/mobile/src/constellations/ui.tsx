@@ -495,7 +495,7 @@ export function Radio({ on }: { on: boolean }) {
 }
 
 /** The canvas's green switch (permissions). */
-export function Toggle({ value, onChange, label, disabled }: { value: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+export function Toggle({ value, onChange, label, disabled, amber }: { value: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean; /** 4.2: the amber switch (notifications, board 29) */ amber?: boolean }) {
   return (
     <Pressable
       accessibilityRole="switch"
@@ -504,7 +504,7 @@ export function Toggle({ value, onChange, label, disabled }: { value: boolean; o
       disabled={disabled}
       onPress={() => onChange(!value)}
       hitSlop={10}
-      style={{ width: 46, height: 28, borderRadius: 14, backgroundColor: value ? N.green : N.edge, justifyContent: 'center', opacity: disabled ? 0.45 : 1 }}
+      style={{ width: 46, height: 28, borderRadius: 14, backgroundColor: value ? (amber ? N.amber : N.green) : N.edge, justifyContent: 'center', opacity: disabled ? 0.45 : 1 }}
     >
       <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: value ? '#fff' : N.ink2, marginLeft: value ? 21 : 3 }} />
     </Pressable>

@@ -27,14 +27,16 @@ function RoleEditor({ c, role }: { c: ConstellationDetail; role: ConstellationRo
   const [name, setName] = useState(role.name)
   const [color, setColor] = useState<RoleColor>(role.color)
   const [perms, setPerms] = useState<ConstellationPermission[]>(role.permissions)
+  // 4.2 (board 24): anyone can @mention it
+  const [mentionable, setMentionable] = useState(!!role.mentionable)
   const [busy, setBusy] = useState(false)
-  const dirty = name.trim() !== role.name || color !== role.color || perms.slice().sort().join() !== role.permissions.slice().sort().join()
+  const dirty = name.trim() !== role.name || color !== role.color || perms.slice().sort().join() !== role.permissions.slice().sort().join() || mentionable !== !!role.mentionable
   const plural = role.kind === 'owner' ? 'the Owner' : role.name.endsWith('s') ? role.name : `${role.name}s`
 
   async function save() {
     if (!name.trim()) return
     setBusy(true)
-    const ok = await runDetail(() => cx.updateRole(c.id, role.id, { name: name.trim(), ...(role.kind === 'member' ? {} : { color }), permissions: perms }))
+    const ok = await runDetail(() => cx.updateRole(c.id, role.id, { name: name.trim(), ...(role.kind === 'member' ? {} : { color, mentionable }), permissions: perms }))
     setBusy(false)
     if (ok) {
       haptic.success()
@@ -103,6 +105,19 @@ function RoleEditor({ c, role }: { c: ConstellationDetail; role: ConstellationRo
           })}
         </Card>
       )}
+      {role.kind !== 'owner' && role.kind !== 'member' ? (
+        <Card>
+          <View style={{ minHeight: 56, paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text size={15}>Anyone can mention this role</Text>
+              <Text size={12} style={{ color: N.muted }}>
+                Lets members ping @{role.name} (people with “Mention @everyone, @here and all roles” always can)
+              </Text>
+            </View>
+            <Toggle value={mentionable} label="Anyone can mention this role" disabled={!mine} onChange={setMentionable} />
+          </View>
+        </Card>
+      ) : null}
       {!mine && role.kind !== 'owner' ? (
         <Text size={12} style={{ color: N.faint }}>
           Only people ranked above {role.name} who can manage roles can change it.

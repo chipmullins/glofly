@@ -1,5 +1,5 @@
 import { ROLE_COLORS, playingFor, type ConstellationDetail, type ConstellationMember, type ConstellationPermission, type ConstellationRole, type Nebula } from '@glofly/shared'
-import { hexA } from './ui'
+import { hexA, roleNight } from './ui'
 import type { RoleLook } from './NebulaRow'
 
 // What someone can do in a constellation, read from what the server sent (the server checks every
@@ -140,4 +140,23 @@ export function gateLabel(c: ConstellationDetail, roleIds: string[] | undefined)
   const names = (roleIds ?? []).map((id) => c.roles.find((r) => r.id === id)?.name).filter((n): n is string => !!n)
   if (!names.length) return 'Owner and admins'
   return names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`
+}
+
+// ───────────── 4.2: @everyone, @here and @Role (approved board 30) ─────────────
+
+export type MentionGroupRole = { id: string; name: string; kind: string; mentionable?: boolean; color: string; count: number }
+/** What a nebula's @ list and its messages need to know about group mentions. */
+export type MentionGroups = { roles: MentionGroupRole[]; myRoleIds: string[]; canEveryone: boolean; onlineIds: string[] }
+
+export function mentionGroupsOf(c: ConstellationDetail, meId: string): MentionGroups {
+  return {
+    roles: c.roles
+      .filter((r) => r.kind !== 'member' && r.kind !== 'owner')
+      .map((r) => ({ id: r.id, name: r.name, kind: r.kind, mentionable: r.mentionable, color: roleNight(r.color).text, count: r.memberCount }))
+      // Bigger roles first, like the board's list.
+      .sort((a, b) => b.count - a.count),
+    myRoleIds: c.members.find((m) => m.user.id === meId)?.roleIds ?? [],
+    canEveryone: c.me.owner || c.me.permissions.includes('mentionEveryone'),
+    onlineIds: c.members.filter((m) => m.status !== 'offline').map((m) => m.user.id),
+  }
 }

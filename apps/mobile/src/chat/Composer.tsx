@@ -1,7 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { Platform, Pressable, ScrollView, TextInput, View, type NativeSyntheticEvent, type TextInputSelectionChangeEventData } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { MESSAGE_MAX, mentionQuery, mentionSuggestions, quoteSummary, type Message, type PublicUser } from '@glofly/shared'
+import { MESSAGE_MAX, groupMentionSuggestions, mentionQuery, mentionSuggestions, quoteSummary, type Message, type PublicUser } from '@glofly/shared'
+import type { MentionGroups } from '@/constellations/roles'
 import { Avatar } from '@/ui/Avatar'
 import { Icon } from '@/ui/icons'
 import { Text, webNoOutline } from '@/ui/kit'
@@ -43,10 +44,12 @@ type Props = {
   onKeyState?: (s: { focused: boolean; empty: boolean }) => void
   /** Communities round (nebulas): the constellation's slash commands, offered while typing "/" */
   commands?: { name: string; description: string; bot: { displayName: string } }[]
+  /** 4.2 (nebulas, board 30): @everyone, @here and roles, offered above people */
+  groups?: MentionGroups
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot, canSendEmpty, onSendLater, onKeyState, commands },
+  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot, canSendEmpty, onSendLater, onKeyState, commands, groups },
   ref,
 ) {
   const { c } = useTheme()
@@ -84,6 +87,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   const query = mentionable ? mentionQuery(text, selection.start) : null
   const suggestions = query ? mentionSuggestions(query.query, people) : []
+  const groupChoices = query && groups ? groupMentionSuggestions(query.query, groups.roles, groups.canEveryone, 5) : []
   const commandMatches = commands?.length && !editing && /^\/[a-z0-9-]*$/i.test(text) ? commands.filter((x) => x.name.startsWith(text.slice(1).toLowerCase())).slice(0, 6) : []
   function pickCommand(name: string) {
     const next = `/${name} `
@@ -92,13 +96,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     input.current?.focus()
   }
 
-  function insertMention(p: PublicUser) {
+  function insertMention(p: PublicUser | string) {
     if (!query) return
+    const word = typeof p === 'string' ? p : p.username
     const before = text.slice(0, query.start)
     const after = text.slice(selection.start)
-    const next = `${before}@${p.username} ${after}`
+    const next = `${before}@${word} ${after}`
     setText(next)
-    const at = before.length + p.username.length + 2
+    const at = before.length + word.length + 2
     setSelection({ start: at, end: at })
   }
 
@@ -139,9 +144,28 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           ))}
         </View>
       ) : null}
-      {suggestions.length ? (
+      {suggestions.length || groupChoices.length ? (
         <View accessibilityLabel="People to mention" style={{ borderRadius: 16, backgroundColor: c.sheet, borderWidth: 1, borderColor: c.line, overflow: 'hidden', maxHeight: 240 }}>
           <ScrollView keyboardShouldPersistTaps="always">
+            {groupChoices.map((g) => {
+              const word = g.kind === 'role' ? g.role.name : g.kind
+              const what =
+                g.kind === 'role'
+                  ? `${g.role.count} ${g.role.count === 1 ? 'person' : 'people'}`
+                  : g.kind === 'everyone'
+                    ? `All ${people.length} here`
+                    : `${people.filter((p) => groups!.onlineIds.includes(p.id)).length} online`
+              return (
+                <Pressable key={g.kind === 'role' ? g.role.id : g.kind} accessibilityRole="button" accessibilityLabel={`Mention @${word}, ${what}`} onPress={() => insertMention(word)} android_ripple={{ color: c.line }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
+                  <Text size={16} weight="bold" numberOfLines={1} style={{ width: 110, color: g.kind === 'role' ? g.role.color : '#ffb347' }}>
+                    @{word}
+                  </Text>
+                  <Text size={13} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+                    {what}
+                  </Text>
+                </Pressable>
+              )
+            })}
             {suggestions.map((p) => (
               <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={`Mention ${p.displayName}`} onPress={() => insertMention(p)} android_ripple={{ color: c.line }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
                 <Avatar user={p} size={32} />

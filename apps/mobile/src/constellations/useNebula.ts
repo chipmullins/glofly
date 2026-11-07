@@ -63,6 +63,7 @@ export function useNebulaChat(detail: ConstellationDetail | null, nebula: Nebula
   const people = useStore((s) => s.people)
   const members: PublicUser[] = useMemo(() => (detail ? detail.members.map((m) => m.user) : []), [detail])
 
+  const myRoleIds = useMemo(() => detail?.members.find((m) => m.user.id === meId)?.roleIds ?? [], [detail, meId])
   const rows: NebulaRowInfo[] = useMemo(() => {
     const ms = messages?.list ?? []
     const out: NebulaRowInfo[] = []
@@ -74,13 +75,14 @@ export function useNebulaChat(detail: ConstellationDetail | null, nebula: Nebula
         message: m,
         joined: !!prev && sameDay && !prev.event && !m.event && !prev.deleted && continuesGroup(prev, m),
         day: !prev || !sameDay ? dayLabel(m.createdAt) : null,
-        mentionsMe: mentionsMe(m, meId) && m.senderId !== meId,
+        // 4.2: @everyone, @here and roles I have count too
+        mentionsMe: mentionsMe(m, meId, myRoleIds) && m.senderId !== meId,
         outgoing: outbox[m.id]?.status ?? null,
         slow: !!outbox[m.id]?.slow,
       })
     }
     return out.reverse()
-  }, [messages?.list, meId, outbox])
+  }, [messages?.list, meId, outbox, myRoleIds])
 
   return { rows, messages, people, members, meId }
 }

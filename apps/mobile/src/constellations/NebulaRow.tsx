@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react'
 import { Linking, Pressable, View } from 'react-native'
-import { clockTime, quoteSummary, shortBody, splitMentions, type Message, type PublicUser } from '@glofly/shared'
+import { clockTime, quoteSummary, shortBody, splitGroupMentions, splitMentions, type Message, type PublicUser } from '@glofly/shared'
+import type { MentionGroups } from './roles'
 import { Attachments } from '@/chat/Attachments'
 import { GameCard, GifView, LinkCard, PollCard } from '@/chat/Extras'
 import { isJumbo } from '@/lib/emoji'
@@ -29,26 +30,51 @@ export type RoleLook = { name: string | null; color: string; badgeBg: string } |
 
 const URL_PATTERN = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g
 
-function Body({ text, members, meId, size }: { text: string; members: PublicUser[]; meId: string; size: number }) {
+function Body({ text, members, meId, size, groups, message }: { text: string; members: PublicUser[]; meId: string; size: number; groups?: MentionGroups; message?: Message }) {
   const out: ReactNode[] = []
-  splitMentions(text, members).forEach((p, i) => {
-    if (p.user) {
-      const mine = p.user.id === meId
+  // 4.2 (board 30): only what the server counted is drawn as @everyone / @here / @Role.
+  const counted = new Set(message?.mentionRoles ?? [])
+  const pieces =
+    groups && message && (message.mentionEveryone || counted.size)
+      ? splitGroupMentions(text, groups.roles.filter((r) => counted.has(r.id)))
+      : [{ kind: 'text' as const, text }]
+  pieces.forEach((g, gi) => {
+    if ((g.kind === 'everyone' || g.kind === 'here') && message?.mentionEveryone) {
       out.push(
-        <Text key={`m${i}`} size={size} weight="bold" style={{ color: N.tag, backgroundColor: mine ? 'rgba(255,179,71,0.28)' : 'rgba(255,179,71,0.14)', borderRadius: 5 }}>
-          {' '}{p.text}{' '}
+        <Text key={`g${gi}`} size={size} weight="bold" style={{ color: N.amber }}>
+          {g.text}
         </Text>,
       )
       return
     }
-    p.text.split(URL_PATTERN).forEach((part, j) => {
-      if (j % 2 === 1)
+    if (g.kind === 'role') {
+      const role = groups?.roles.find((r) => r.id === g.roleId)
+      out.push(
+        <Text key={`g${gi}`} size={size} weight="bold" style={{ color: role?.color ?? N.tag }}>
+          {g.text}
+        </Text>,
+      )
+      return
+    }
+    splitMentions(g.text, members).forEach((p, i) => {
+      if (p.user) {
+        const mine = p.user.id === meId
         out.push(
-          <Text key={`u${i}-${j}`} size={size} style={{ color: N.amber, textDecorationLine: 'underline' }} onPress={() => void Linking.openURL(part)} accessibilityRole="link">
-            {part}
+          <Text key={`m${gi}-${i}`} size={size} weight="bold" style={{ color: N.tag, backgroundColor: mine ? 'rgba(255,179,71,0.28)' : 'rgba(255,179,71,0.14)', borderRadius: 5 }}>
+            {' '}{p.text}{' '}
           </Text>,
         )
-      else if (part) out.push(part)
+        return
+      }
+      p.text.split(URL_PATTERN).forEach((part, j) => {
+        if (j % 2 === 1)
+          out.push(
+            <Text key={`u${gi}-${i}-${j}`} size={size} style={{ color: N.amber, textDecorationLine: 'underline' }} onPress={() => void Linking.openURL(part)} accessibilityRole="link">
+              {part}
+            </Text>,
+          )
+        else if (part) out.push(part)
+      })
     })
   })
   return (
@@ -77,6 +103,7 @@ export const NebulaRow = memo(function NebulaRow({
   onButton,
   onThread,
   answer,
+  groups,
 }: {
   row: NebulaRowInfo
   meId: string
@@ -101,6 +128,8 @@ export const NebulaRow = memo(function NebulaRow({
   onThread?: (m: Message) => void
   /** Forum posts: this reply is the marked answer */
   answer?: boolean
+  /** 4.2: @everyone / @here / @Role pills (nebulas) */
+  groups?: MentionGroups
 }) {
   const m = row.message
   const face = compact ? 32 : 36
@@ -230,7 +259,7 @@ export const NebulaRow = memo(function NebulaRow({
                       {m.body}
                     </Text>
                   ) : (
-                    <Body text={m.body} members={members} meId={meId} size={size} />
+                    <Body text={m.body} members={members} meId={meId} size={size} groups={groups} message={m} />
                   )}
                 </View>
               ) : null}

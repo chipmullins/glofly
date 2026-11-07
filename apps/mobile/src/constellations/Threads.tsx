@@ -13,7 +13,7 @@ import { cxSay } from '@/state/constellations'
 import { Text } from '@/ui/kit'
 import { haptic } from './motion'
 import { NebulaRow, type NebulaRowInfo } from './NebulaRow'
-import { roleLook } from './roles'
+import { mentionGroupsOf, roleLook } from './roles'
 import { can } from './roles'
 import { N, NightButton, NightHeader } from './ui'
 
@@ -112,6 +112,8 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
     [c.id, threadId, meId, forum],
   )
 
+  // 4.2 (board 30): @everyone / @here / @Role
+  const groups = useMemo(() => mentionGroupsOf(c, meId), [c, meId])
   const rows: NebulaRowInfo[] = useMemo(() => {
     const out: NebulaRowInfo[] = []
     for (let i = 0; i < list.length; i++) {
@@ -122,12 +124,12 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
         message: m,
         joined: !!prev && sameDay && !prev.deleted && continuesGroup(prev, m) && thread?.answerMessageId !== m.id,
         day: !prev || !sameDay ? dayLabel(m.createdAt) : null,
-        mentionsMe: mentionsMe(m, meId) && m.senderId !== meId,
+        mentionsMe: mentionsMe(m, meId, groups.myRoleIds) && m.senderId !== meId,
         outgoing: m.id.startsWith('local-') ? 'sending' : null,
       })
     }
     return out.reverse()
-  }, [list, meId, thread?.answerMessageId])
+  }, [list, meId, thread?.answerMessageId, groups])
 
   async function send(text: string) {
     const body = text.trim()
@@ -300,6 +302,7 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
             highlight={false}
             canAct
             answer={!!thread?.answerMessageId && thread.answerMessageId === item.message.id}
+            groups={groups}
             onLongPress={(m) => void longPress(m)}
           />
         )}
@@ -319,6 +322,7 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
         placeholder={forum ? 'Reply to this signal' : 'Reply in trail'}
         people={members.filter((m) => m.id !== meId)}
         mentionable
+        groups={groups}
         reply={reply}
         replyName={reply ? (reply.senderId === meId ? 'yourself' : (peopleAll[reply.senderId]?.displayName ?? 'them')) : ''}
         editing={null}

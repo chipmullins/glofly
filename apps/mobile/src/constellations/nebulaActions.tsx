@@ -1,3 +1,4 @@
+import { router, type Href } from 'expo-router'
 import { useState, type ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
 import { create } from 'zustand'
@@ -178,6 +179,19 @@ export function NebulaSheetHost() {
             )
           })}
         </View>
+        {/* 4.2 (board 23): the constellation's whole window */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            close()
+            router.push(`/constellations/${c.id}/settings/notifications` as Href)
+          }}
+          style={{ minHeight: 44, justifyContent: 'center' }}
+        >
+          <Text size={15} weight="bold" style={{ color: N.amber }}>
+            Notification settings for {c.name}…
+          </Text>
+        </Pressable>
       </View>
     </NightModal>
   )

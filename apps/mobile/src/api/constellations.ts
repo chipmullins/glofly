@@ -13,6 +13,7 @@ import type { NebulaNews,
   DirectoryEntry,
   JoinRequest,
   LinkLifetime,
+  MuteDuration,
   ModerationEntry,
   MyGame,
   MyGamesVisibility,
@@ -88,6 +89,9 @@ export const cx = {
   leave: (id: string) => request<null>('POST', `${base(id)}/leave`),
   readAll: (id: string) => request<null>('POST', `${base(id)}/read`),
   notify: (id: string, level: NotifyLevel) => request<null>('PUT', `${base(id)}/notify`, { level }),
+  /** 4.2 (board 29): the rest of the notification window (mute: null unmutes) */
+  notifySettings: (id: string, body: { level?: NotifyLevel; mute?: MuteDuration | null; ignoreEveryone?: boolean; ignoreRoles?: boolean; followAlerts?: boolean }) =>
+    request<null>('PUT', `${base(id)}/notify`, body),
   nebulaNotify: (id: string, nebulaId: string, level: NotifyLevel | null) => request<null>('PUT', `${base(id)}/nebulas/${nebulaId}/notify`, { level }),
   addCategory: (id: string, name: string) => request<Detail>('POST', `${base(id)}/categories`, { name }),
   renameCategory: (id: string, categoryId: string, name: string) => request<Detail>('PATCH', `${base(id)}/categories/${categoryId}`, { name }),
@@ -108,7 +112,7 @@ export const cx = {
   voiceDisconnect: (id: string, nebulaId: string, userId: string) =>
     request<null>('POST', `${base(id)}/nebulas/${nebulaId}/voice/disconnect`, { userId }),
   addRole: (id: string, values: { name: string; color: RoleColor; permissions: ConstellationPermission[] }) => request<Detail>('POST', `${base(id)}/roles`, values),
-  updateRole: (id: string, roleId: string, changes: Partial<{ name: string; color: RoleColor; permissions: ConstellationPermission[] }>) =>
+  updateRole: (id: string, roleId: string, changes: Partial<{ name: string; color: RoleColor; permissions: ConstellationPermission[]; mentionable: boolean }>) =>
     request<Detail>('PATCH', `${base(id)}/roles/${roleId}`, changes),
   removeRole: (id: string, roleId: string) => request<Detail>('DELETE', `${base(id)}/roles/${roleId}`),
   orderRoles: (id: string, ids: string[]) => request<Detail>('PUT', `${base(id)}/roles/order`, { ids }),

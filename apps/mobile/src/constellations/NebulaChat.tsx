@@ -40,7 +40,7 @@ import { openMemberSheet } from './Members'
 import { pickTimeout } from './moderation'
 import { NebulaRow, type NebulaRowInfo } from './NebulaRow'
 import { firstNewId, NewSinceLine, NewSincePill, PinsChip, type NewSince } from './feel'
-import { can, cantPost, isQuiet, outranks, roleLook } from './roles'
+import { can, cantPost, isQuiet, mentionGroupsOf, outranks, roleLook, type MentionGroups } from './roles'
 import { markNebulaRead, useNebulaChat } from './useNebula'
 import { openNebulaSheet } from './nebulaActions'
 import { CountBadge, FireflyMark, Glyph, N, SpeakerGlyph, StarGlyph } from './ui'
@@ -420,6 +420,8 @@ export function NebulaChat({
   const onQuote = useCallback((mid: string) => void latest.current.jumpTo(mid), [])
   const onPhoto = useCallback((m: Message, index: number) => setViewer({ message: m, index }), [])
   const onFace = useCallback((uid: string) => openMemberSheet(c.id, uid), [c.id])
+  // 4.2 (board 30): @everyone / @here / @Role in messages and the @ list
+  const groups = useMemo(() => mentionGroupsOf(c, meId), [c, meId])
   const renderRow = useCallback(
     ({ item: raw }: { item: NebulaRowInfo }) => {
       const ev = eventCards.get(raw.message.id)
@@ -427,9 +429,9 @@ export function NebulaChat({
       const row = item.message.id === firstNew && newSince ? (
       <View>
         <NewSinceLine since={newSince.since} />
-        <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} onThread={openThread} />
+        <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} onThread={openThread} groups={groups} />
       </View>
-    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} onThread={openThread} />
+    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} onThread={openThread} groups={groups} />
       if (!ev || raw.message.deleted) return row
       return (
         <View>
@@ -445,7 +447,7 @@ export function NebulaChat({
         </View>
       )
     },
-    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds, firstNew, newSince, eventCards, onButton],
+    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds, firstNew, newSince, eventCards, onButton, groups],
   )
 
   // Phones: swipe left on the chat for the members (the canvas's other way in, besides the button).
@@ -641,6 +643,7 @@ export function NebulaChat({
           placeholder={`Message #${n.name}`}
           people={others}
           mentionable
+          groups={groups}
           reply={reply}
           replyName={reply ? (reply.senderId === meId ? 'yourself' : firstName(nameOf(reply.senderId))) : ''}
           editing={editing}
@@ -758,6 +761,7 @@ function HeldRow({
   onPhoto,
   onButton,
   onThread,
+  groups,
 }: {
   item: NebulaRowInfo
   c: ConstellationDetail
@@ -774,6 +778,7 @@ function HeldRow({
   memberIds: string[]
   onButton: (m: Message, buttonId: string) => void
   onThread?: (m: Message) => void
+  groups?: MentionGroups
 }) {
   const ref = useRef<RNView>(null)
   const m = item.message
@@ -796,6 +801,7 @@ function HeldRow({
         onOpenPhoto={onPhoto}
         onButton={onButton}
         onThread={onThread}
+        groups={groups}
       />
     </View>
   )
