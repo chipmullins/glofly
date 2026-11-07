@@ -80,6 +80,8 @@ import { isShortcutKey, shortcutLabel } from '../lib/platform'
 import { useVoiceRecorder, voiceTime, VOICE_MAX_MS, type Recorded } from '../lib/voice'
 import { MessagesSkeleton } from './Skeleton'
 import EmptyScene from './EmptyScene'
+import CfxCard from './CfxCard'
+import { cfxJoinCodeIn } from '@glofly/shared/games'
 import * as outbox from '../lib/outbox'
 import { ArrowDownIcon, ChevronIcon, MicIcon, WatchIcon } from './icons'
 import {
@@ -1812,6 +1814,9 @@ export default function ChatView({
                     // 0.7.5: a constellation invite link becomes a card (any chat).
                     (inviteCodeIn(m.body) ? (
                       <InviteCard code={inviteCodeIn(m.body)!} onProblem={setNotice} />
+                    ) : cfxJoinCodeIn(m.body) ? (
+                      // Communities round: a FiveM / RedM server link (any chat)
+                      <CfxCard code={cfxJoinCodeIn(m.body)!} />
                     ) : null))
               }
               avatar={

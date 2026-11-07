@@ -27,6 +27,7 @@ import type {
   TimeoutLength,
   VoicePreviewPass
 } from '../../../preload/api-types'
+import type { CfxServerCard } from '@glofly/shared/games'
 import type {
   ConstellationAccent,
   InvitePreview,
@@ -272,6 +273,8 @@ export const api = {
     ),
   // My games
   myGames: () => call<{ visibility: MyGamesVisibility; games: MyGame[] }>('GET', '/games/me'),
+  /** Communities round: the card under a cfx.re/join link */
+  cfxCard: (code: string) => call<CfxServerCard>('GET', `/games/cfx/${encodeURIComponent(code)}`),
   setGamesVisibility: (visibility: MyGamesVisibility) =>
     call<{ visibility: MyGamesVisibility }>('PUT', '/games/me/settings', { visibility }),
   setGame: (key: string, changes: { favorite?: boolean; hidden?: boolean }) =>

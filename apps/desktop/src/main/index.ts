@@ -333,6 +333,11 @@ function createWindow(): void {
     if (details.url.startsWith('https://') || details.url === 'mailto:support@glofly.app') {
       shell.openExternal(details.url)
     }
+    // Communities round: a cfx.re/join card's Join opens FiveM / RedM into that server (only
+    // their own connect links, nothing else in those schemes).
+    if (/^(fivem|redm):\/\/connect\/cfx\.re\/join\/[a-z0-9]{4,12}$/.test(details.url)) {
+      void shell.openExternal(details.url)
+    }
     return { action: 'deny' }
   })
 

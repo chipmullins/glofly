@@ -1,4 +1,6 @@
 import { memo, type ReactNode } from 'react'
+import { CfxCard } from '@/constellations/CfxCard'
+import { cfxJoinCodeIn } from '@glofly/shared'
 import { Animated, Linking, Pressable, View } from 'react-native'
 import { clockTime, eventText, quoteSummary, shortBody, splitMentions, type Message, type PublicUser } from '@glofly/shared'
 import { Avatar } from '@/ui/Avatar'
@@ -340,6 +342,10 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
               {!m.deleted && inviteCodeIn(m.body) ? (
                 <View style={{ alignSelf: mine ? 'flex-end' : 'flex-start' }}>
                   <InviteCard code={inviteCodeIn(m.body)!} />
+                </View>
+              ) : !m.deleted && cfxJoinCodeIn(m.body) ? (
+                <View style={{ alignSelf: mine ? 'flex-end' : 'flex-start' }}>
+                  <CfxCard code={cfxJoinCodeIn(m.body)!} />
                 </View>
               ) : null}
               {lantern && row.outgoing === null ? <LanternTag fadeAt={m.lanternFadeAt} /> : null}

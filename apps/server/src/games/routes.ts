@@ -1,5 +1,7 @@
 import { isRestricted } from "../friends/rules";
 import { Router, type Response } from "express";
+import { rateLimit } from "../rateLimit";
+import { cfxCard } from "./cfx";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { gameKey, type MyGame, type MyGamesVisibility } from "@glofly/shared";
@@ -23,6 +25,20 @@ import { connectedSummary, emitToUser } from "../realtime";
 
 export const myGamesRouter = Router();
 myGamesRouter.use(requireAuth);
+
+// Communities round: the card under a cfx.re/join link (games/cfx.ts; lookup off until allowed).
+myGamesRouter.get(
+  "/cfx/:code",
+  rateLimit("games:cfx", {
+    windowMs: 60 * 1000,
+    limit: 30,
+    keyGenerator: (_req, res) => (res.locals.user as { id: string }).id,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { error: "too_many_requests", message: "That's a lot of server cards. Try again in a minute." },
+  }),
+  cfxCard,
+);
 
 const me = (res: Response) => res.locals.user as { id: string };
 const visibilityField = z.enum(["everyone", "friends", "only_me"]);

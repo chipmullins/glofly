@@ -1,4 +1,4 @@
-import type { NebulaNews,
+import type { CfxServerCard, NebulaNews,
   ApiResult,
   ConstellationBan,
   ConstellationCard,
@@ -139,6 +139,8 @@ export const cx = {
 
   // ---- My games ----
   myGames: () => request<{ visibility: MyGamesVisibility; games: MyGame[] }>('GET', '/games/me'),
+  /** Communities round: the card under a cfx.re/join link */
+  cfxCard: (code: string) => request<CfxServerCard>('GET', `/games/cfx/${encodeURIComponent(code)}`),
   setGamesVisibility: (visibility: MyGamesVisibility) => request<{ visibility: MyGamesVisibility }>('PUT', '/games/me/settings', { visibility }),
   setGame: (key: string, changes: { favorite?: boolean; hidden?: boolean }) => request<{ games: MyGame[] }>('PUT', `/games/me/${encodeKey(key)}`, changes),
   removeGame: (key: string) => request<{ games: MyGame[] }>('DELETE', `/games/me/${encodeKey(key)}`),

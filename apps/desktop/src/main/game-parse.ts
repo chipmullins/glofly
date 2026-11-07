@@ -1,3 +1,4 @@
+import { KNOWN_GAME_PATTERNS } from './game-list'
 // Reading what Windows' own tools print, for games.ts. Kept separate (no Electron) so the
 // parsing can be tested on its own.
 
@@ -33,6 +34,10 @@ export function matchGame(
   const hide = new Set(hidden.map((n) => n.toLowerCase()))
   const ok = (name: string | undefined): name is string => !!name && !hide.has(name.toLowerCase())
   for (const g of custom) if (exes.has(g.exe) && ok(g.name)) return g.name
+  for (const exe of exes) {
+    const named = KNOWN_GAME_PATTERNS.find((p) => p.pattern.test(exe))?.name
+    if (ok(named)) return named
+  }
   for (const exe of exes) {
     const name = Object.hasOwn(known, exe) ? known[exe] : undefined
     if (ok(name)) return name

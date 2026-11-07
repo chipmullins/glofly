@@ -1,4 +1,6 @@
 import { memo, type ReactNode } from 'react'
+import { CfxCard } from '@/constellations/CfxCard'
+import { cfxJoinCodeIn } from '@glofly/shared'
 import { Linking, Pressable, View } from 'react-native'
 import { clockTime, quoteSummary, shortBody, splitGroupMentions, splitMentions, type Message, type PublicUser } from '@glofly/shared'
 import type { MentionGroups } from './roles'
@@ -327,7 +329,7 @@ export const NebulaRow = memo(function NebulaRow({
                 </Pressable>
               ) : null}
               {/* 0.7.5: a constellation invite link becomes a card */}
-              {!m.deleted && inviteCodeIn(m.body) ? <InviteCard code={inviteCodeIn(m.body)!} /> : null}
+              {!m.deleted && inviteCodeIn(m.body) ? <InviteCard code={inviteCodeIn(m.body)!} /> : !m.deleted && cfxJoinCodeIn(m.body) ? <CfxCard code={cfxJoinCodeIn(m.body)!} /> : null}
             </>
           )}
           {m.reactions.length ? (

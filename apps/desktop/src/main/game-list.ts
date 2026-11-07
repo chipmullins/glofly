@@ -211,3 +211,14 @@ export const KNOWN_GAMES: Record<string, string> = {
   'tf_win64.exe': 'Team Fortress 2',
   'tf.exe': 'Team Fortress 2'
 }
+
+/**
+ * Communities round: games whose program name carries a build number. FiveM and RedM (Cfx.re)
+ * run the game as `FiveM_b3095_GTAProcess.exe` / `RedM_b1491_GTAProcess.exe` (or without the
+ * build). Checked before the exact names, so FiveM wins over GTA V and RedM over RDR2.
+ */
+export const KNOWN_GAME_PATTERNS: { pattern: RegExp; name: string }[] = [
+  { pattern: /^fivem(_b\d+)?_(gta|game)process\.exe$/, name: 'FiveM' },
+  { pattern: /^redm(_b\d+)?_(gta|game)process\.exe$/, name: 'RedM' }
+]
+

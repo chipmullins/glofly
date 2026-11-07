@@ -291,3 +291,42 @@ export const TRIVIA: readonly TriviaQuestion[] = [
   { category: 'Words', q: 'What do you call a group of crows?', choices: ['A flock', 'A murder', 'A pack', 'A herd'], answer: 1 },
   { category: 'Words', q: 'Which of these is a palindrome?', choices: ['Level', 'Glow', 'Light', 'Spark'], answer: 0 }
 ]
+
+// ───────────── Cfx.re (FiveM / RedM) join links (Communities round) ─────────────
+
+/** "cfx.re/join/abc123" in a message: the server's join code (lowercase), or null. */
+export function cfxJoinCodeIn(text: string): string | null {
+  const m = /(?:^|[\s(<])(?:https?:\/\/)?cfx\.re\/join\/([a-z0-9]{4,12})(?=$|[\s)>.,!?])/i.exec(text)
+  return m ? m[1].toLowerCase() : null
+}
+
+/**
+ * What Glofly shows for a cfx.re/join link. Looking the server up (name, players, FiveM or
+ * RedM) uses Cfx.re's server list and is off unless the Glofly server turns it on (`lookup`);
+ * without it the card just opens the link.
+ */
+export type CfxServerCard = {
+  code: string
+  lookup: boolean
+  found?: boolean
+  name?: string
+  players?: number
+  maxPlayers?: number
+  game?: 'fivem' | 'redm'
+}
+
+/** Opens FiveM / RedM straight into the server (their own link handlers). */
+export const cfxConnectUrl = (code: string, game: 'fivem' | 'redm'): string => `${game}://connect/cfx.re/join/${code}`
+/** Cfx.re's own page for the link (works without the game's link handler). */
+export const cfxJoinPage = (code: string): string => `https://cfx.re/join/${code}`
+
+/** A server name without FiveM's color codes (^1, ~r~) and odd spacing. */
+export function cleanCfxName(raw: string): string {
+  return raw
+    .replace(/\^[0-9]/g, '')
+    .replace(/~[a-zA-Z]~/g, '')
+    .replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁩﻿]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80)
+}

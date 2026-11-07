@@ -639,3 +639,13 @@ test('group mention suggestions follow the permission', () => {
   assert.ok(s.mentionsMe({ mentions: [], mentionRoles: ['r1'] }, 'me', ['r1']))
   assert.ok(!s.mentionsMe({ mentions: [], mentionRoles: ['r1'] }, 'me'))
 })
+
+// Communities round: cfx.re/join links
+test('cfx.re join links and server names', () => {
+  assert.equal(s.cfxJoinCodeIn('come play https://cfx.re/join/Ab12cd tonight'), 'ab12cd')
+  assert.equal(s.cfxJoinCodeIn('cfx.re/join/xyz789.'), 'xyz789')
+  assert.equal(s.cfxJoinCodeIn('evilcfx.re/join/abc123'), null)
+  assert.equal(s.cfxJoinCodeIn('https://cfx.re/join/abc123/extra'), null)
+  assert.equal(s.cleanCfxName('^1Cozy ^7RP ~r~| Serious​ RP'), 'Cozy RP | Serious RP')
+  assert.equal(s.cfxConnectUrl('abc123', 'redm'), 'redm://connect/cfx.re/join/abc123')
+})

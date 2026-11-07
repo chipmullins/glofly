@@ -133,3 +133,23 @@
   color: var(--glo-faint);
   margin-top: 6px;
 }
+
+/* Communities round: cfx.re/join cards (CfxCard) */
+.cx-cfx-card .cx-ic-body {
+  align-items: center;
+}
+.cx-cfx-mark {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #f40552;
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+}
+.cx-cfx-mark--redm {
+  background: #c8102e;
+}
