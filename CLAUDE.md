@@ -194,3 +194,9 @@
   **Threads + forum nebulas** (`threads/`): replies are messages in the nebula's own conversation with `thread_id`; anything
   that shows a nebula's timeline must filter with `inNebulaTimeline()` (threads/timeline.ts). Apps that know forums send
   `X-Glofly-Features: threads`; for others `threads/legacy.ts` turns forum nebulas into read-only text in every JSON answer.
+  **Notifications 4.2**: per-constellation window (`PUT /constellations/:id/notify` takes mute/ignoreEveryone/
+  ignoreRoles/followAlerts; `laterMute` = nebula or constellation mute). @everyone/@here/@Role only count with the
+  `mentionEveryone` permission or a `mentionable` role (`constellations/groupMentions.ts`); who it reached is kept in
+  `messages.group_mentions` (server only): anything counting "mentions me" must use `mentionsUserSql`.
+  **Onboarding 4.3** (`constellations/onboarding.ts`): with it on, `nebulas.optional` nebulas are only seen by
+  people who picked them (`constellation_members.shown_nebulas`), enforced in `access.ts` like role-only nebulas.
