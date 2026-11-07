@@ -306,7 +306,13 @@ function TextRow({ c, n, onOpen, selected, dense }: { c: ConstellationDetail; n:
         backgroundColor: selected ? N.raised : pressed ? N.card2 : bright && !dense ? N.card2 : 'transparent',
       })}
     >
-      <StarGlyph size={dense ? 14 : 16} color={bright || selected ? N.amber : N.faint} />
+      {n.kind === 'forum' ? (
+        <Text size={dense ? 13 : 15} style={{ color: bright || selected ? N.amber : N.faint }}>
+          💬
+        </Text>
+      ) : (
+        <StarGlyph size={dense ? 14 : 16} color={bright || selected ? N.amber : N.faint} />
+      )}
       <Text size={dense ? 14 : 15} weight={bright || selected ? 'bold' : 'regular'} numberOfLines={1} style={{ flex: 1, color: bright || selected ? N.ink : quiet ? N.faint : N.ink2 }}>
         {n.name}
       </Text>

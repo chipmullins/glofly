@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { threadsApi } from '@/api/threads'
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, View, type View as RNView } from 'react-native'
 import { router, useIsFocused } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -277,6 +278,11 @@ export function NebulaChat({
   }
 
   /** Press and hold a message: reactions, Reply, Copy, Report; moderators get Time out and Delete. */
+  /** Communities round: a message's thread (board 20) */
+  function openThread(m: Message) {
+    if (m.thread) router.push({ pathname: '/constellations/[cid]/thread/[tid]', params: { cid: c.id, tid: m.thread.id, nid: n.id } })
+  }
+
   async function messageMenu(m: Message, anchorRef: RNView | null) {
     if (isLocal(m)) return
     haptic.medium()
@@ -290,6 +296,10 @@ export function NebulaChat({
     const items: MenuItem[] = [
       ...(canAct ? [{ key: 'reply', label: 'Reply', icon: <Icon name="reply" size={18} color={N.ink} /> }] : []),
       ...(m.body && !special(m) ? [{ key: 'copy', label: 'Copy text', icon: <Icon name="copy" size={18} color={N.ink} /> }] : []),
+      // Communities round: a thread off this message (or open the one it has)
+      ...(!m.deleted && !m.event && !m.lantern && (m.thread || (canAct && (!n.threadsStaffOnly || can(c, 'manageNebulas') || can(c, 'deleteMessages'))))
+        ? [{ key: 'thread', label: m.thread ? 'Open thread' : 'Start a thread', icon: <Icon name="reply" size={18} color={N.ink} /> }]
+        : []),
       ...(mine && m.body && canAct && !special(m) ? [{ key: 'edit', label: 'Edit', icon: <Icon name="pencil" size={18} color={N.ink} /> }] : []),
       ...(mine && m.linkPreview && canAct ? [{ key: 'unpreview', label: 'Remove link preview', icon: <Icon name="link" size={18} color={N.ink} /> }] : []),
       ...(mine ? [{ key: 'delete', label: 'Delete', icon: <Icon name="trash" size={18} color={N.redText} />, danger: true }] : []),
@@ -316,6 +326,13 @@ export function NebulaChat({
     }
     if (pick.startsWith('react:')) return void react(m, pick.slice(6))
     switch (pick) {
+      case 'thread':
+        if (m.thread) return openThread(m)
+        void threadsApi.start(c.id, n.id, { parentMessageId: m.id }).then((r) => {
+          if (r.ok) router.push({ pathname: '/constellations/[cid]/thread/[tid]', params: { cid: c.id, tid: r.data.thread.id, nid: n.id } })
+          else cxSay(r.message)
+        })
+        return
       case 'reply':
         setEditing(null)
         setReply(m)
@@ -410,9 +427,9 @@ export function NebulaChat({
       const row = item.message.id === firstNew && newSince ? (
       <View>
         <NewSinceLine since={newSince.since} />
-        <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} />
+        <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} onThread={openThread} />
       </View>
-    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} />
+    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} onThread={openThread} />
       if (!ev || raw.message.deleted) return row
       return (
         <View>
@@ -740,6 +757,7 @@ function HeldRow({
   onFace,
   onPhoto,
   onButton,
+  onThread,
 }: {
   item: NebulaRowInfo
   c: ConstellationDetail
@@ -755,6 +773,7 @@ function HeldRow({
   onPhoto: (m: Message, i: number) => void
   memberIds: string[]
   onButton: (m: Message, buttonId: string) => void
+  onThread?: (m: Message) => void
 }) {
   const ref = useRef<RNView>(null)
   const m = item.message
@@ -776,6 +795,7 @@ function HeldRow({
         onFacePress={onFace}
         onOpenPhoto={onPhoto}
         onButton={onButton}
+        onThread={onThread}
       />
     </View>
   )

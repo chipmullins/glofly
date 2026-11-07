@@ -5,6 +5,7 @@ import { loadDetail, onRemovedFrom, useCx } from '@/state/constellations'
 import { useWide } from '@/lib/layout'
 import { Spinner, Text } from '@/ui/kit'
 import { NebulaChat } from '@/constellations/NebulaChat'
+import { ForumList } from '@/constellations/Threads'
 import { VoiceLobby } from '@/constellations/Voice'
 import { N, NightButton, NightCenter } from '@/constellations/ui'
 import { rememberCxPlace } from '@/constellations/nav'
@@ -66,5 +67,5 @@ export default function NebulaScreen() {
       </View>
     )
   }
-  return n.kind === 'voice' ? <VoiceLobby c={c} n={n} /> : <NebulaChat c={c} n={n} />
+  return n.kind === 'voice' ? <VoiceLobby c={c} n={n} /> : n.kind === 'forum' ? <ForumList c={c} n={n} /> : <NebulaChat c={c} n={n} />
 }

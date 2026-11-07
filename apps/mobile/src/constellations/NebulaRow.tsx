@@ -75,6 +75,8 @@ export const NebulaRow = memo(function NebulaRow({
   onFacePress,
   onOpenPhoto,
   onButton,
+  onThread,
+  answer,
 }: {
   row: NebulaRowInfo
   meId: string
@@ -95,6 +97,10 @@ export const NebulaRow = memo(function NebulaRow({
   onOpenPhoto?: (m: Message, index: number) => void
   /** Communities round: a click on one of a bot's buttons */
   onButton?: (m: Message, buttonId: string) => void
+  /** Communities round: the thread chip under a message (opens the thread) */
+  onThread?: (m: Message) => void
+  /** Forum posts: this reply is the marked answer */
+  answer?: boolean
 }) {
   const m = row.message
   const face = compact ? 32 : 36
@@ -134,6 +140,11 @@ export const NebulaRow = memo(function NebulaRow({
   return (
     <View style={{ marginTop: row.joined ? 2 : compact ? 10 : 12 }}>
       {day}
+      {answer ? (
+        <Text size={11} weight="bold" style={{ color: '#86efac', letterSpacing: 0.6, marginBottom: 4 }}>
+          ✓ THE ANSWER
+        </Text>
+      ) : null}
       <Pressable
         onLongPress={!m.deleted && onLongPress ? () => onLongPress(m) : undefined}
         delayLongPress={300}
@@ -144,6 +155,7 @@ export const NebulaRow = memo(function NebulaRow({
           { flexDirection: 'row', gap: 10, opacity: row.outgoing === 'sending' && row.slow ? 0.6 : 1, borderRadius: 14 },
           row.mentionsMe ? { backgroundColor: 'rgba(255,179,71,0.10)', padding: 8, marginHorizontal: -8 } : null,
           highlight ? { backgroundColor: N.raised, padding: 8, marginHorizontal: -8 } : null,
+          answer ? { backgroundColor: '#0f2a1b', borderWidth: 1, borderColor: '#1f5135', padding: 8, marginHorizontal: -8 } : null,
         ]}
       >
         {row.joined ? (
@@ -253,6 +265,37 @@ export const NebulaRow = memo(function NebulaRow({
                     </Pressable>
                   ))}
                 </View>
+              ) : null}
+              {/* Communities round: the thread started from this message */}
+              {m.thread && onThread && !m.deleted ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Thread ${m.thread.title}, ${m.thread.replyCount} replies`}
+                  onPress={() => onThread(m)}
+                  style={({ pressed }) => ({
+                    marginTop: 7,
+                    alignSelf: 'flex-start',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingHorizontal: 11,
+                    paddingVertical: 7,
+                    borderRadius: 12,
+                    backgroundColor: N.card,
+                    borderWidth: 1,
+                    borderColor: N.edge2,
+                    opacity: pressed ? 0.7 : 1,
+                    maxWidth: 300,
+                  })}
+                >
+                  <Text size={14} style={{ color: N.amber }}>↳</Text>
+                  <Text size={13} weight="bold" numberOfLines={1} style={{ color: N.ink, flexShrink: 1 }}>
+                    {m.thread.title}
+                  </Text>
+                  <Text size={13} weight="bold" style={{ color: N.amber }}>
+                    {m.thread.replyCount}
+                  </Text>
+                </Pressable>
               ) : null}
               {/* 0.7.5: a constellation invite link becomes a card */}
               {!m.deleted && inviteCodeIn(m.body) ? <InviteCard code={inviteCodeIn(m.body)!} /> : null}

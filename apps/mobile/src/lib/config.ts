@@ -13,7 +13,8 @@ export const APP_VERSION: string =
 export const PLATFORM: 'android' | 'ios' = Platform.OS === 'ios' ? 'ios' : 'android'
 
 /** Sent with every request: the server checks it against the minimum version for this platform. */
-export const VERSION_HEADERS = { 'X-Glofly-Version': APP_VERSION, 'X-Glofly-Platform': PLATFORM }
+// Communities round: this app knows threads and forum nebulas (X-Glofly-Features).
+export const VERSION_HEADERS = { 'X-Glofly-Version': APP_VERSION, 'X-Glofly-Platform': PLATFORM, 'X-Glofly-Features': 'threads' }
 
 export const SITE_URL = 'https://glofly.app'
 export const SUPPORT_EMAIL = 'support@glofly.app'
