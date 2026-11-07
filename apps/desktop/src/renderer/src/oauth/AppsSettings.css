@@ -38,3 +38,106 @@
 .settings-section .ix-card + .ix-card {
   margin-top: 10px;
 }
+
+/* Linked game servers (boards 7 and 8) */
+.gl-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: #fff;
+  font: 700 11.5px Outfit, sans-serif;
+  letter-spacing: 0.01em;
+}
+.gl-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.gl-title h2 {
+  margin: 0;
+}
+.gl-sheet {
+  max-width: 440px;
+}
+.gl-code {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: text;
+}
+.gl-code-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  font-size: 16px;
+}
+.gl-digit-wrap {
+  display: contents;
+}
+.gl-digit {
+  width: 46px;
+  height: 56px;
+  border-radius: 12px;
+  border: 2px solid var(--glo-line-strong, #dcc8b8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 24px Outfit, sans-serif;
+  color: var(--glo-ink);
+}
+.gl-code:focus-within .gl-digit--at {
+  border-color: #f47a1f;
+}
+.gl-dash {
+  font: 700 22px Outfit, sans-serif;
+  color: var(--glo-muted);
+}
+.gl-center {
+  text-align: center;
+}
+.gl-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.gl-head .ix-sheet-title {
+  font-size: 21px;
+  line-height: 1.25;
+}
+.gl-facts {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--glo-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.gl-notice {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(21, 128, 61, 0.12);
+  color: var(--glo-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.gl-visually-hidden {
+  position: absolute;
+  left: -9999px;
+}
+.settings-section .gl-sheet h2.ix-sheet-title {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--glo-ink);
+  font-size: 22px;
+}
+.settings-section .gl-sheet .gl-head h2.ix-sheet-title {
+  font-size: 21px;
+}

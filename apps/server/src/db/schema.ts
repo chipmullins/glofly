@@ -1878,3 +1878,63 @@ export const giveawayEntries = pgTable(
   },
   (t) => [primaryKey({ columns: [t.giveawayId, t.userId] })],
 );
+
+// Communities round (Nov 2026): Linked game servers. A game server's script (FiveM/RedM license,
+// Minecraft UUID) asks Glofly about a player with its constellation API key ("link" permission).
+// Not linked yet → a one-time code (6 digits, 10 minutes, one use) the player types into Glofly
+// (Settings → Linked game servers → Enter a code). One player per Glofly account per constellation
+// and game; the server only ever learns the Glofly name and roles in its own constellation.
+export const gameLinkCodes = pgTable(
+  "game_link_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    keyId: uuid("key_id").references(() => constellationApiKeys.id, { onDelete: "cascade" }),
+    // "fivem" | "redm" | "minecraft"
+    game: text("game").notNull(),
+    // "license:<40 hex>" (FiveM/RedM) or a Minecraft UUID (lowercase, with dashes)
+    identity: text("identity").notNull(),
+    // Other ids the game gave (fivem:, discord:), saved with the link so servers can map old data.
+    extraIds: text("extra_ids").array().notNull().default(sql`'{}'::text[]`),
+    // The in-game name the server sent (shown in the confirm step, text only).
+    playerName: text("player_name").notNull(),
+    // SHA-256 of the 6 digits.
+    codeHash: text("code_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("game_link_codes_hash_idx").on(t.codeHash),
+    uniqueIndex("game_link_codes_player_idx").on(t.constellationId, t.game, t.identity),
+    index("game_link_codes_expires_idx").on(t.expiresAt),
+  ],
+);
+
+export const gameLinks = pgTable(
+  "game_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    // The key whose server made the code (for the list's name); links outlive a deleted key.
+    keyId: uuid("key_id").references(() => constellationApiKeys.id, { onDelete: "set null" }),
+    serverName: text("server_name").notNull(),
+    game: text("game").notNull(),
+    identity: text("identity").notNull(),
+    extraIds: text("extra_ids").array().notNull().default(sql`'{}'::text[]`),
+    playerName: text("player_name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Written at most once a minute per link.
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("game_links_player_idx").on(t.constellationId, t.game, t.identity),
+    uniqueIndex("game_links_user_idx").on(t.userId, t.constellationId, t.game),
+  ],
+);

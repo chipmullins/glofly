@@ -166,7 +166,7 @@ export default function Settings() {
       <SectionLabel>Account</SectionLabel>
       <SettingsRow icon="user" label="Account" detail="Email, password, devices, delete account" onPress={() => router.push('/settings/account')} />
       {/* Communities round (Nov 2026): Sign in with Glofly */}
-      <SettingsRow icon="link" label="Apps & game servers" detail="Sites you signed in to with Glofly" onPress={() => router.push('/settings/connected-apps')} />
+      <SettingsRow icon="link" label="Apps & game servers" detail="Sign in with Glofly, linked game servers" onPress={() => router.push('/settings/connected-apps')} />
       {/* 0.8.0: iPad / tablet keyboard shortcuts (also ⌘/ on the keyboard) */}
       {showShortcutsInSettings() ? <SettingsRow icon="key" label="Keyboard shortcuts" detail={`${MOD}K to find a chat, ${MOD}/ for the full list`} onPress={openShortcutSheet} /> : null}
       <SettingsRow icon="info" label="About Glofly" onPress={() => router.push('/settings/about')} />

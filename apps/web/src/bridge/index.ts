@@ -106,7 +106,7 @@ function isConstellationPath(method: unknown, path: unknown, body: unknown): boo
 function isAppsPath(method: unknown, path: unknown, body: unknown): boolean {
   if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(method as string)) return false
   if (typeof path !== 'string' || path.length > 200) return false
-  if (!/^\/(account\/connected-apps|developer\/apps)(\/[A-Za-z0-9_-]+)*$/.test(path)) return false
+  if (!/^\/(account\/connected-apps|account\/game-links|developer\/apps)(\/[A-Za-z0-9_-]+)*$/.test(path)) return false
   if (body === undefined || body === null) return true
   try {
     return typeof body === 'object' && JSON.stringify(body).length <= 10_000

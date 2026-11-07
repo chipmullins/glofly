@@ -57,6 +57,7 @@ import { toolsRouter } from "./tools/routes";
 import { sweepGiveaways } from "./tools/tools";
 import { startToolHooks } from "./tools/hooks";
 import { sweepIntegrationActivity } from "./integrations/keys";
+import { gameLinksRouter, sweepGameLinkCodes } from "./integrations/gameLinks";
 import { connectedAppsRouter, developerRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
@@ -125,6 +126,7 @@ app.use("/account/two-step", twoStepRouter);
 app.use("/account/qr", qrAccountRouter);
 // Communities round: Settings → Connected apps (Sign in with Glofly), before the account router.
 app.use("/account/connected-apps", connectedAppsRouter);
+app.use("/account/game-links", gameLinksRouter);
 app.use("/account", accountRouter);
 // 0.7.3: what a phone's camera opens from a sign-in QR code.
 app.use("/qr", qrPageRouter);
@@ -297,6 +299,7 @@ connectRedis()
     setInterval(sweepLinks, 60 * 60 * 1000);
     // Communities round: Integrations → Activity is kept 30 days (hourly).
     every(60 * 60 * 1000, "Integration activity cleanup", sweepIntegrationActivity);
+    every(15 * 60 * 1000, "Game link code cleanup", sweepGameLinkCodes);
     every(60 * 60 * 1000, "Sign in with Glofly cleanup", sweepOAuth);
     every(60_000, "Giveaways", sweepGiveaways);
     // Resolved reports are removed a year after they were resolved (hourly).

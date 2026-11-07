@@ -607,3 +607,11 @@ test('dashboard star pattern (Nov 6)', () => {
   assert.equal(s.starChartFor('x', sky.slice(0, 1)).stars.length, 3)
   for (const [i, j] of b.links) assert.equal(i < b.stars.length && j < b.stars.length, true)
 })
+
+test('link codes: typed any way, shown as 482-913', () => {
+  assert.equal(s.normalizeLinkCode('482-913'), '482913')
+  assert.equal(s.normalizeLinkCode(' 482 913 '), '482913')
+  assert.equal(s.normalizeLinkCode('48291'), null)
+  assert.equal(s.normalizeLinkCode('48291a'), null)
+  assert.equal(s.formatLinkCode('482913'), '482-913')
+})

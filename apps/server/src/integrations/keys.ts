@@ -145,6 +145,8 @@ export async function activityFor(constellationId: string, before: Date | null):
   }));
 }
 
+const gameName = (g: unknown) => (g === "minecraft" ? "Minecraft" : g === "redm" ? "RedM" : "FiveM");
+
 function activityText(action: string, key: string, actor: string, target: string | null, d: Record<string, unknown>): string {
   const who = target ? `@${target}` : "someone";
   switch (action) {
@@ -187,6 +189,14 @@ function activityText(action: string, key: string, actor: string, target: string
       return `${key} gave ${who} the role ${String(d.role)}`;
     case "role.taken":
       return `${key} took the role ${String(d.role)} from ${who}`;
+    case "link.lookup":
+      return d.allowed ? `${key} checked ${who} joining ${gameName(d.game)}` : `${key} turned away a linked player who can't join right now`;
+    case "link.code":
+      return `${key} gave a new player a link code`;
+    case "link.made":
+      return `${actor} linked their ${gameName(d.game)} player ${String(d.player ?? "")}`.trim();
+    case "link.removed":
+      return `${actor} unlinked their ${gameName(d.game)} player ${String(d.player ?? "")}`.trim();
     case "refused.address":
       return `${key} was refused: it came from an address that isn't allowed`;
     case "refused.scope":

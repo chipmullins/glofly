@@ -25,6 +25,7 @@ import { takeSlot, noteRedisError } from "../rateLimit";
 import { postScheduledText } from "../messages/routes";
 import { hashKey, logIntegration, looksLikeKey } from "./keys";
 import { clientIp } from "./ip";
+import { lookupBody, lookupPlayer } from "./gameLinks";
 
 // Communities round (Nov 2026): the bot API, for game servers and bots with a constellation API key
 // (Integrations). Versioned under /api/v1 so Glofly's own app changes never break a server's script.
@@ -41,6 +42,7 @@ import { clientIp } from "./ip";
 //   PUT  /api/v1/interactions                { url } → { secret }: where commands and button clicks go
 //   GET  /api/v1/commands · PUT { commands: [{ name, description }] }   commands (replaces this bot's)
 //   PUT/DELETE /api/v1/members/:userId/roles/:roleId                    roles:write (roles below the bot's)
+//   POST /api/v1/links/lookup                link: a game server asks about a player (gameLinks.ts)
 //
 // Every request is rate limited per key (and per constellation), checked against the key's address
 // list, and logged in Integrations → Activity. Errors are JSON { error, message }.
@@ -154,6 +156,17 @@ async function needs(res: Response, scope: IntegrationScope): Promise<boolean> {
 }
 
 const idParam = z.uuid();
+
+botApiRouter.post("/api/v1/links/lookup", async (req, res) => {
+  if (!(await needs(res, "link"))) return;
+  const body = lookupBody.safeParse(req.body);
+  if (!body.success) {
+    fail(res, 400, "bad_request", "Send { game: \"fivem\" | \"redm\" | \"minecraft\", identity, playerName }.");
+    return;
+  }
+  const r = await lookupPlayer(keyOf(res), body.data);
+  res.status(r.status).json(r.json);
+});
 
 botApiRouter.get("/api/v1/me", (_req, res) => {
   const k = keyOf(res);

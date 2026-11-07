@@ -201,3 +201,45 @@ export type InteractionPayload = {
   button?: { id: string }
   createdAt: string
 }
+
+// ───────────── Linked game servers (communities round, Nov 2026) ─────────────
+
+export type GameLinkGame = 'fivem' | 'redm' | 'minecraft'
+export const GAME_LINK_GAMES: Record<GameLinkGame, string> = { fivem: 'FiveM', redm: 'RedM', minecraft: 'Minecraft' }
+/** One-time codes: 6 digits, shown as "482-913", good for 10 minutes and one use. */
+export const LINK_CODE_MINUTES = 10
+
+/** "482 913", "482-913" or "482913" → "482913"; null if it isn't 6 digits. */
+export function normalizeLinkCode(input: string): string | null {
+  const digits = input.replace(/[\s-]/g, '')
+  return /^\d{6}$/.test(digits) ? digits : null
+}
+
+/** "482913" → "482-913". */
+export const formatLinkCode = (digits: string): string => `${digits.slice(0, 3)}-${digits.slice(3)}`
+
+/** Settings → Linked game servers. */
+export type LinkedGameServer = {
+  id: string
+  game: GameLinkGame
+  serverName: string
+  constellationId: string
+  constellationName: string
+  playerName: string
+  /** Your roles there now (what the server sees). */
+  roles: string[]
+  createdAt: string
+  lastUsedAt: string | null
+}
+
+/** What a code is for, before you confirm (Enter a code → "Link to Cozy RP's FiveM server?"). */
+export type GameLinkPreview = {
+  game: GameLinkGame
+  serverName: string
+  constellationId: string
+  constellationName: string
+  playerName: string
+  member: boolean
+  /** Linking replaces this player (one player per account per constellation and game). */
+  replaces: string | null
+}

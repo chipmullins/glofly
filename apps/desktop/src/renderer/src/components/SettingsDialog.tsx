@@ -33,6 +33,7 @@ import { isMac, isWeb } from '../lib/platform'
 import { BrowserNotificationsRow } from './WebNotifications'
 import './dialogs.css'
 import { AppsIcon, ConnectedAppsSettings, DeveloperIcon, DeveloperSettings } from '../oauth/AppsSettings'
+import { GameServersIcon, GameServersSettings } from '../oauth/GameLinks'
 import './SettingsDialog.css'
 
 // Settings → App says it the Mac way on a Mac. (A Mac keeps Glofly running in the Dock after
@@ -61,7 +62,7 @@ type SettingsDialogProps = {
   scrollTo?: string
 }
 
-export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'apps' | 'developer' | 'about'
+export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'apps' | 'games' | 'developer' | 'about'
 type Page = SettingsPage
 
 type ToggleKey = 'readReceipts' | 'showLastSeen' | 'showTyping'
@@ -854,6 +855,15 @@ export default function SettingsDialog({
             </button>
             <button
               type="button"
+              className={page === 'games' ? 'settings-nav-item settings-nav-item--active' : 'settings-nav-item'}
+              aria-current={page === 'games' ? 'page' : undefined}
+              onClick={() => openPage('games')}
+            >
+              <GameServersIcon active={page === 'games'} />
+              Linked game servers
+            </button>
+            <button
+              type="button"
               className={page === 'developer' ? 'settings-nav-item settings-nav-item--active' : 'settings-nav-item'}
               aria-current={page === 'developer' ? 'page' : undefined}
               onClick={() => openPage('developer')}
@@ -893,6 +903,8 @@ export default function SettingsDialog({
               <AboutSettings version={appSettings?.version ?? null} />
             ) : page === 'apps' ? (
               <ConnectedAppsSettings />
+            ) : page === 'games' ? (
+              <GameServersSettings />
             ) : page === 'developer' ? (
               <DeveloperSettings />
             ) : page === 'account' ? (
