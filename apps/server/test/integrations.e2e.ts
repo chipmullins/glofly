@@ -191,6 +191,18 @@ test("rank rules: a moderator with settings rights can't give a bot a role at or
     assert.equal(same.status, 400);
     const change = await call(`/constellations/${cid}/integrations/keys/${keyId}`, { method: "PATCH", token: helper.token, body: { name: "Mine now", password: PASSWORD } });
     assert.equal(change.status, 403, "the Whitelist bot holds Moderator, the helper's own rank");
+    // Resetting or deleting it would hand the helper a bot at their own rank: refused too.
+    const reset = await call(`/constellations/${cid}/integrations/keys/${keyId}/reset`, { method: "POST", token: helper.token, body: { password: PASSWORD } });
+    assert.equal(reset.status, 403);
+    assert.equal(reset.json.secret, undefined);
+    const del = await call(`/constellations/${cid}/integrations/keys/${keyId}`, { method: "DELETE", token: helper.token });
+    assert.equal(del.status, 403);
+    // A nebula the helper can't see (Admins only) can't be given to a key.
+    const hidden = await pool.query("update nebulas set visibility = 'roles', role_ids = array[$2::uuid] where id = $1 returning id", [other.id, adminRole]);
+    assert.equal(hidden.rowCount, 1);
+    const sneaky = await newKey({ name: "Sneaky", scopes: ["messages:read"], readNebulaIds: [other.id] }, helper.token);
+    assert.equal(sneaky.status, 400, JSON.stringify(sneaky.json));
+    await pool.query("update nebulas set visibility = 'everyone', role_ids = '{}' where id = $1", [other.id]);
   } finally {
     await pool.query("update constellation_roles set permissions = array_remove(permissions, 'manageConstellation') where id = $1", [modRole]);
   }

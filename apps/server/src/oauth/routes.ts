@@ -626,5 +626,7 @@ developerRouter.delete("/apps/:id", devLimiter, async (req, res) => {
 export async function sweepOAuth(): Promise<void> {
   const now = new Date();
   await db.delete(oauthCodes).where(sql`${oauthCodes.expiresAt} < ${now}`);
-  await db.delete(oauthTokens).where(sql`coalesce(${oauthTokens.refreshExpiresAt}, ${oauthTokens.accessExpiresAt}) < ${now} or (${oauthTokens.replacedAt} is not null and ${oauthTokens.accessExpiresAt} < ${now})`);
+  // Replaced rows stay until their refresh token would have expired, so a stolen old refresh token
+  // is still recognised as reuse (and signs the whole family out) for as long as it could work.
+  await db.delete(oauthTokens).where(sql`coalesce(${oauthTokens.refreshExpiresAt}, ${oauthTokens.accessExpiresAt}) < ${now}`);
 }

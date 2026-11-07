@@ -5,6 +5,7 @@ import { db } from "../db";
 import { attachments, constellationApiKeys, messages, nebulas, users } from "../db/schema";
 import { safePost } from "../messages/links";
 import { registerToolHooks } from "../toolHooks";
+import { seesNebulaChat, viewersOf } from "../constellations/access";
 import { signature } from "./events";
 import { logIntegration } from "./keys";
 import type { BotKey } from "./api";
@@ -103,6 +104,10 @@ export async function listMessages(k: BotKey, nebulaId: string, after: string | 
     .from(nebulas)
     .where(and(eq(nebulas.id, nebulaId), eq(nebulas.constellationId, k.constellationId)));
   if (!n) return { status: 404, json: { error: "not_found", message: "That nebula is gone." } };
+  // The bot itself must be able to see it (its role), like any member reading a nebula.
+  if (!(await seesNebulaChat(k.botUserId, n.conversationId))) {
+    return { status: 403, json: { error: "nebula_not_allowed", message: "This bot's role can't see that nebula. Give it a role that can, in Integrations." } };
+  }
   const limit = Math.max(1, Math.min(PAGE_MAX, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 50));
   const base: SQL[] = [eq(messages.conversationId, n.conversationId), isNull(messages.deletedAt), isNull(messages.event), eq(messages.lantern, false)];
   let rows: Row[];
@@ -132,12 +137,16 @@ async function pushToReaders(conversationId: string, messageId: string, change: 
   if (!n) return;
   const keys = (await readersOf(n.constellationId, n.id)).filter((k) => k.url && k.secret);
   if (!keys.length) return;
+  // Only bots that can see the nebula right now (their role) are told.
+  const seeing = new Set(await viewersOf(conversationId));
+  const allowed = keys.filter((k) => seeing.has(k.botUserId));
+  if (!allowed.length) return;
   const [row] = await db.select().from(messages).where(eq(messages.id, messageId));
   if (!row) return;
   if (change !== "deleted" && !readable(row)) return;
   if (change === "deleted" && (row.event || row.lantern)) return;
   const [message] = change === "deleted" ? [null] : await forBots([row], n.id);
-  for (const k of keys) {
+  for (const k of allowed) {
     if (row.senderId === k.botUserId) continue; // its own post: no echo
     const push: BridgePush = {
       id: randomUUID(),

@@ -215,7 +215,10 @@ async function codeSlot(req: Request, res: Response): Promise<boolean> {
       return false;
     }
   } catch (err) {
+    // Codes are short, so without the limit nobody may try one (fail closed, unlike sign-in limits).
     noteRedisError(err);
+    bad(res, "Linking is busy right now. Try again in a minute.", 503);
+    return false;
   }
   return true;
 }

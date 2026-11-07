@@ -26,7 +26,8 @@ import { lockedDown, LOCKDOWN_MESSAGE } from "../admin/lockdown";
 import { rateLimit } from "../rateLimit";
 import { can, frozen, FROZEN_MESSAGE, standingOf, type Standing } from "../constellations/perms";
 import { addMember, ConstellationFull, removeMember } from "../constellations/members";
-import { syncNebulaAccess } from "../constellations/access";
+import { syncNebulaAccess, visibleNebulaIds } from "../constellations/access";
+import { setNebulaShown } from "../constellations/onboarding";
 import { constellationChanged } from "../constellations/activity";
 import { activityFor, createBotUser, keyInfo, logIntegration, newKey } from "./keys";
 import { normalizeIp } from "./ip";
@@ -155,6 +156,9 @@ async function check(
       .from(nebulas)
       .where(and(eq(nebulas.constellationId, s.constellationId), inArray(nebulas.id, wanted)));
     if (found.length !== wanted.length) return "Pick nebulas from this constellation.";
+    // A key can never reach a nebula its maker can't see (role-only or not picked yet).
+    const mine = await visibleNebulaIds(s.constellationId, s.userId);
+    if (!wanted.every((id) => mine.has(id))) return "Pick nebulas you can see.";
   }
   const postNebulaIds = scopes.includes("messages:write") ? [...new Set(input.postNebulaIds)] : [];
   const readNebulaIds = scopes.includes("messages:read") ? [...new Set(input.readNebulaIds)] : [];
@@ -205,6 +209,30 @@ const expiryFor = (lifetime: string): Date | null => {
 };
 
 /** Gives the bot exactly this role (or none) and refreshes which nebulas it's in. */
+/**
+ * A key's or webhook's bot ranks at or above me (by its role): only someone higher, or the Owner,
+ * may change, reset or delete it. Otherwise resetting it would hand me a bot above my rank.
+ */
+async function botOutranksMe(s: Standing, botUserId: string | null): Promise<boolean> {
+  if (s.owner || !botUserId) return false;
+  const roleId = await botRole(s.constellationId, botUserId);
+  if (!roleId) return false;
+  const [r] = await db.select({ position: constellationRoles.position }).from(constellationRoles).where(eq(constellationRoles.id, roleId));
+  return !!r && r.position >= s.rank;
+}
+const TOO_HIGH = "This bot's role is at or above yours, so ask someone higher to change it.";
+
+/** Optional nebulas (onboarding) a key works in are shown to its bot, so it really can see them. */
+async function showOptionalTo(constellationId: string, botId: string, nebulaIds: string[]): Promise<void> {
+  if (!nebulaIds.length) return;
+  const optional = await db
+    .select({ id: nebulas.id })
+    .from(nebulas)
+    .where(and(eq(nebulas.constellationId, constellationId), inArray(nebulas.id, nebulaIds), eq(nebulas.optional, true)));
+  for (const n of optional) await setNebulaShown(constellationId, botId, n.id, true);
+  if (optional.length) await syncNebulaAccess(constellationId, { userIds: [botId] });
+}
+
 async function setBotRole(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], constellationId: string, botId: string, roleId: string | null) {
   await tx
     .delete(constellationMemberRoles)
@@ -289,6 +317,8 @@ integrationsRouter.post("/:id/integrations/keys", changeLimiter, async (req, res
     }
     throw err;
   }
+  const [made] = await db.select({ botUserId: constellationApiKeys.botUserId }).from(constellationApiKeys).where(eq(constellationApiKeys.id, keyId));
+  if (made) await showOptionalTo(s.constellationId, made.botUserId, [...checked.postNebulaIds, ...checked.readNebulaIds]);
   await logIntegration({ constellationId: s.constellationId, keyId, keyName: parsed.data.name, actorId: s.userId, action: "key.created", details: { scopes: checked.scopes } });
   await constellationChanged(s.constellationId);
   const info = (await listKeys(s.constellationId)).find((k) => k.id === keyId)!;
@@ -326,12 +356,9 @@ integrationsRouter.patch("/:id/integrations/keys/:keyId", changeLimiter, async (
   }
   const currentRole = await botRole(s.constellationId, row.botUserId);
   // Someone can't change a key whose bot ranks at or above them (the Owner can change any).
-  if (currentRole && !s.owner) {
-    const [r] = await db.select({ position: constellationRoles.position }).from(constellationRoles).where(eq(constellationRoles.id, currentRole));
-    if (r && r.position >= s.rank) {
-      bad(res, "This bot's role is at or above yours, so ask someone higher to change it.", 403);
-      return;
-    }
+  if (await botOutranksMe(s, row.botUserId)) {
+    bad(res, TOO_HIGH, 403);
+    return;
   }
   const d = parsed.data;
   const checked = await check(s, {
@@ -360,6 +387,7 @@ integrationsRouter.patch("/:id/integrations/keys/:keyId", changeLimiter, async (
     if (d.name) await tx.update(users).set({ displayName: d.name }).where(eq(users.id, row.botUserId));
     if (checked.roleId !== currentRole) await setBotRole(tx, s.constellationId, row.botUserId, checked.roleId);
   });
+  await showOptionalTo(s.constellationId, row.botUserId, [...checked.postNebulaIds, ...checked.readNebulaIds]);
   await logIntegration({ constellationId: s.constellationId, keyId: row.id, keyName: d.name ?? row.name, actorId: s.userId, action: "key.changed", details: { scopes: checked.scopes } });
   await constellationChanged(s.constellationId);
   res.json({ key: (await listKeys(s.constellationId)).find((k) => k.id === row.id) });
@@ -368,9 +396,13 @@ integrationsRouter.patch("/:id/integrations/keys/:keyId", changeLimiter, async (
 // POST /constellations/:id/integrations/keys/:keyId/reset — a new secret; the old one stops working.
 integrationsRouter.post("/:id/integrations/keys/:keyId/reset", changeLimiter, async (req, res) => {
   const s = await manager(req, res);
-  if (!s) return;
+  if (!s || !(await writable(s, res))) return;
   const row = await keyFor(req, res, s);
   if (!row) return;
+  if (await botOutranksMe(s, row.botUserId)) {
+    bad(res, TOO_HIGH, 403);
+    return;
+  }
   if (!(await passwordOk(s.userId, req.body?.password))) {
     bad(res, "That password isn't right.", 403);
     return;
@@ -392,6 +424,10 @@ integrationsRouter.delete("/:id/integrations/keys/:keyId", changeLimiter, async 
   if (!s) return;
   const row = await keyFor(req, res, s);
   if (!row) return;
+  if (await botOutranksMe(s, row.botUserId)) {
+    bad(res, TOO_HIGH, 403);
+    return;
+  }
   await db.delete(constellationApiKeys).where(eq(constellationApiKeys.id, row.id));
   await removeMember(s.constellationId, row.botUserId);
   await logIntegration({ constellationId: s.constellationId, keyName: row.name, actorId: s.userId, action: "key.deleted" });
@@ -480,6 +516,8 @@ integrationsRouter.post("/:id/integrations/hooks", changeLimiter, async (req, re
       }
       throw err;
     }
+    const [madeHook] = await db.select({ botUserId: constellationWebhooks.botUserId }).from(constellationWebhooks).where(eq(constellationWebhooks.id, hookId));
+    if (madeHook?.botUserId) await showOptionalTo(s.constellationId, madeHook.botUserId, [d.nebulaId]);
     await logIntegration({ constellationId: s.constellationId, keyName: d.name, actorId: s.userId, action: "hook.created", details: { kind: "incoming" } });
     await constellationChanged(s.constellationId);
     const hook = (await listHooks(s.constellationId)).find((h) => h.id === hookId);
@@ -523,6 +561,10 @@ integrationsRouter.patch("/:id/integrations/hooks/:hookId", changeLimiter, async
   if (!s || !(await writable(s, res))) return;
   const row = await hookFor(req, res, s);
   if (!row) return;
+  if (await botOutranksMe(s, row.botUserId)) {
+    bad(res, TOO_HIGH, 403);
+    return;
+  }
   const parsed = z
     .object({ name: keyName.optional(), url: z.string().trim().max(500).optional(), events: z.array(z.string()).min(1).max(WEBHOOK_EVENTS.length).optional(), enabled: z.boolean().optional() })
     .safeParse(req.body);
@@ -566,9 +608,13 @@ integrationsRouter.patch("/:id/integrations/hooks/:hookId", changeLimiter, async
 
 integrationsRouter.post("/:id/integrations/hooks/:hookId/reset", changeLimiter, async (req, res) => {
   const s = await manager(req, res);
-  if (!s) return;
+  if (!s || !(await writable(s, res))) return;
   const row = await hookFor(req, res, s);
   if (!row) return;
+  if (await botOutranksMe(s, row.botUserId)) {
+    bad(res, TOO_HIGH, 403);
+    return;
+  }
   if (!(await passwordOk(s.userId, req.body?.password))) {
     bad(res, "That password isn't right.", 403);
     return;
@@ -606,6 +652,10 @@ integrationsRouter.delete("/:id/integrations/hooks/:hookId", changeLimiter, asyn
   if (!s) return;
   const row = await hookFor(req, res, s);
   if (!row) return;
+  if (await botOutranksMe(s, row.botUserId)) {
+    bad(res, TOO_HIGH, 403);
+    return;
+  }
   await db.delete(constellationWebhooks).where(eq(constellationWebhooks.id, row.id));
   if (row.botUserId) await removeMember(s.constellationId, row.botUserId);
   await logIntegration({ constellationId: s.constellationId, keyName: row.name, actorId: s.userId, action: "hook.deleted" });

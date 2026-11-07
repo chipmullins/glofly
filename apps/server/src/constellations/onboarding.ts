@@ -252,10 +252,13 @@ export async function setNebulaShown(constellationId: string, userId: string, ne
 export async function browseFor(constellationId: string, seen: Set<string>, onboarding: OnboardingSettings | null): Promise<BrowseNebula[]> {
   if (!onboarding?.enabled) return [];
   const rows = await db
-    .select({ id: nebulas.id, name: nebulas.name, kind: nebulas.kind, topic: nebulas.topic, position: nebulas.position })
+    .select({ id: nebulas.id, name: nebulas.name, kind: nebulas.kind, topic: nebulas.topic, position: nebulas.position, visibility: nebulas.visibility, categoryVisibility: constellationCategories.visibility })
     .from(nebulas)
+    .leftJoin(constellationCategories, eq(constellationCategories.id, nebulas.categoryId))
     .where(and(eq(nebulas.constellationId, constellationId), eq(nebulas.optional, true)));
   return rows
+    // A nebula limited to roles (itself or by its category) is never listed, even if it was optional before.
+    .filter((r) => r.visibility !== "roles" && r.categoryVisibility !== "roles")
     .filter((r) => !seen.has(r.id))
     .sort((a, b) => a.position - b.position)
     .map((r) => ({ id: r.id, name: r.name, kind: r.kind === "voice" ? "voice" : r.kind === "forum" ? "forum" : "text", topic: r.topic }));

@@ -1713,6 +1713,8 @@ constellationsRouter.patch("/:id/nebulas/:nid", changeLimiter, async (req, res) 
   if (parsed.data.readOnly !== undefined) changes.readOnly = parsed.data.readOnly;
   // 0.8.0: who can see it. Left out = unchanged, so older apps editing a nebula keep it.
   if (parsed.data.visibility !== undefined) changes.visibility = parsed.data.visibility;
+  // 4.3: a nebula limited to roles can't stay optional (onboarding only offers nebulas for everyone).
+  if (parsed.data.visibility === "roles") changes.optional = false;
   const roleIds = await cleanRoleIds(s.constellationId, parsed.data.roleIds);
   if (roleIds !== undefined) changes.roleIds = roleIds;
   if (parsed.data.categoryId !== undefined) {
