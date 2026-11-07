@@ -3,45 +3,58 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { serverSettings } from "../db/schema";
 
-// Communities round (Nov 2026): Sign in with Glofly's ID tokens are JWTs signed with ES256 (P-256).
-// The key is made once and kept in server_settings ("oauth_signing_key", a private JWK); its public
-// half is published at /oauth/jwks so apps can check tokens came from Glofly.
+// Communities round (Nov 2026): Sign in with Glofly's ID tokens are JWTs signed with RS256 (RSA 2048),
+// like Apple's and Google's: OpenID Connect requires providers to support RS256, and many apps
+// (Gloslate's verifier among them) only accept it. Each key is made once and kept in
+// server_settings as a private JWK; the public halves are published at /oauth/jwks so apps can check
+// tokens came from Glofly. The first key (ES256, "oauth_signing_key") stays published so tokens it
+// signed can still be checked, but new tokens are RS256.
 
-const SETTING = "oauth_signing_key";
+type Alg = "RS256" | "ES256";
+const SETTINGS: Record<Alg, string> = { RS256: "oauth_signing_key_rs256", ES256: "oauth_signing_key" };
 type Stored = { kid: string; jwk: Record<string, string> };
-let cached: { kid: string; privateKey: KeyObject; publicJwk: Record<string, string> } | null = null;
+type Key = { kid: string; privateKey: KeyObject; publicJwk: Record<string, string> };
+const cached = new Map<Alg, Key>();
 
-async function signingKey() {
-  if (cached) return cached;
-  const [row] = await db.select({ value: serverSettings.value }).from(serverSettings).where(eq(serverSettings.key, SETTING));
+function generate(alg: Alg): KeyObject {
+  return alg === "RS256"
+    ? generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey
+    : generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey;
+}
+
+async function signingKey(alg: Alg): Promise<Key> {
+  const hit = cached.get(alg);
+  if (hit) return hit;
+  const setting = SETTINGS[alg];
+  const [row] = await db.select({ value: serverSettings.value }).from(serverSettings).where(eq(serverSettings.key, setting));
   let stored = row?.value as Stored | undefined;
   if (!stored?.jwk?.d) {
-    const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
-    stored = { kid: randomUUID().slice(0, 8), jwk: privateKey.export({ format: "jwk" }) as Record<string, string> };
+    stored = { kid: randomUUID().slice(0, 8), jwk: generate(alg).export({ format: "jwk" }) as Record<string, string> };
     // Two servers starting at once: the first one written wins, everyone reads it back.
-    await db.insert(serverSettings).values({ key: SETTING, value: stored }).onConflictDoNothing();
-    const [again] = await db.select({ value: serverSettings.value }).from(serverSettings).where(eq(serverSettings.key, SETTING));
+    await db.insert(serverSettings).values({ key: setting, value: stored }).onConflictDoNothing();
+    const [again] = await db.select({ value: serverSettings.value }).from(serverSettings).where(eq(serverSettings.key, setting));
     stored = again.value as Stored;
   }
   const privateKey = createPrivateKey({ key: stored.jwk, format: "jwk" });
-  const { d: _private, ...pub } = createPublicKey(privateKey).export({ format: "jwk" }) as Record<string, string>;
-  void _private;
-  cached = { kid: stored.kid, privateKey, publicJwk: { ...pub, kid: stored.kid, use: "sig", alg: "ES256" } };
-  return cached;
+  const pub = createPublicKey(privateKey).export({ format: "jwk" }) as Record<string, string>;
+  delete pub.d;
+  const key = { kid: stored.kid, privateKey, publicJwk: { ...pub, kid: stored.kid, use: "sig", alg } };
+  cached.set(alg, key);
+  return key;
 }
 
 const b64 = (v: Buffer | string) => Buffer.from(v).toString("base64url");
 
-/** A signed JWT (ES256). */
+/** A signed JWT (RS256). */
 export async function signJwt(claims: Record<string, unknown>): Promise<string> {
-  const key = await signingKey();
-  const head = b64(JSON.stringify({ alg: "ES256", typ: "JWT", kid: key.kid }));
+  const key = await signingKey("RS256");
+  const head = b64(JSON.stringify({ alg: "RS256", typ: "JWT", kid: key.kid }));
   const body = b64(JSON.stringify(claims));
-  const sig = sign("sha256", Buffer.from(`${head}.${body}`), { key: key.privateKey, dsaEncoding: "ieee-p1363" });
+  const sig = sign("sha256", Buffer.from(`${head}.${body}`), key.privateKey);
   return `${head}.${body}.${b64(sig)}`;
 }
 
-/** The public keys apps check ID tokens with. */
+/** The public keys apps check ID tokens with (the signing key first). */
 export async function jwks(): Promise<{ keys: Record<string, string>[] }> {
-  return { keys: [(await signingKey()).publicJwk] };
+  return { keys: [(await signingKey("RS256")).publicJwk, (await signingKey("ES256")).publicJwk] };
 }

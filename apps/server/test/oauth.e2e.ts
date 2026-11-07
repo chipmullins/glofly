@@ -84,7 +84,10 @@ test("discovery and keys", { skip }, async () => {
   assert.deepEqual(d.json.response_types_supported, ["code"]);
   assert.deepEqual(d.json.code_challenge_methods_supported, ["S256"]);
   const k = await call("/oauth/jwks");
-  assert.equal(k.json.keys[0].kty, "EC");
+  // RS256 first (what Apple and Google use; OpenID Connect requires it), the old ES256 key after it.
+  assert.equal(k.json.keys[0].kty, "RSA");
+  assert.equal(k.json.keys[0].alg, "RS256");
+  assert.deepEqual(d.json.id_token_signing_alg_values_supported, ["RS256"]);
   assert.equal(k.json.keys[0].d, undefined, "never the private part");
 });
 
@@ -149,8 +152,11 @@ test("code + PKCE → tokens; a signed ID token; email only when agreed; roles f
   refresh = t.json.refresh_token;
   // The ID token, checked with the published key.
   const [h, p, s] = t.json.id_token.split(".");
-  const key = createPublicKey({ key: (await call("/oauth/jwks")).json.keys[0], format: "jwk" });
-  assert.ok(verify("sha256", Buffer.from(`${h}.${p}`), { key, dsaEncoding: "ieee-p1363" }, Buffer.from(s, "base64url")));
+  const head = JSON.parse(Buffer.from(h, "base64url").toString());
+  assert.equal(head.alg, "RS256");
+  const jwk = (await call("/oauth/jwks")).json.keys.find((x: any) => x.kid === head.kid);
+  const key = createPublicKey({ key: jwk, format: "jwk" });
+  assert.ok(verify("sha256", Buffer.from(`${h}.${p}`), key, Buffer.from(s, "base64url")));
   const claims = JSON.parse(Buffer.from(p, "base64url").toString());
   assert.equal(claims.sub, riley.id);
   assert.equal(claims.aud, app.clientId);

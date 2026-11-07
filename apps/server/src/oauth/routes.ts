@@ -90,7 +90,7 @@ oauthRouter.get("/.well-known/openid-configuration", (req, res) => {
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     subject_types_supported: ["public"],
-    id_token_signing_alg_values_supported: ["ES256"],
+    id_token_signing_alg_values_supported: ["RS256"],
     scopes_supported: ["openid", "profile", "email", "roles"],
     token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"],
     code_challenge_methods_supported: ["S256"],
