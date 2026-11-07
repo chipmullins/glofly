@@ -188,3 +188,9 @@
   Also 0.8.7: Go live `notify` (POST /broadcasts, default true), viewer names + "started watching" toast; "Free to hang"
   (was "Want to hang?"); Mac welcome notification once (`glofly.macNotifyAsked`) so macOS asks for permission (no
   permission = no pop-ups and no Dock badge); screen sound problems report to Control → Errors (where "screen sound").
+- **Communities round (Nov 2026, in progress on `dev`)** (project doc `glofly-communities-round-progress.md`, migrations 0041–0047):
+  API keys/bot API (`/api/v1`, `integrations/`), webhooks, Glofly tools (`tools/`), Sign in with Glofly (`oauth/`),
+  Linked game servers (`integrations/gameLinks.ts`), bridges (`messages:read`, `integrations/readers.ts`), docs `/docs/api`.
+  **Threads + forum nebulas** (`threads/`): replies are messages in the nebula's own conversation with `thread_id`; anything
+  that shows a nebula's timeline must filter with `inNebulaTimeline()` (threads/timeline.ts). Apps that know forums send
+  `X-Glofly-Features: threads`; for others `threads/legacy.ts` turns forum nebulas into read-only text in every JSON answer.
