@@ -506,7 +506,7 @@ constellationsRouter.get("/directory", directoryLimiter, async (req, res) => {
   const offset = z.coerce.number().int().min(0).max(2000).catch(0).parse(req.query.offset);
   const PAGE = 24;
   const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-  const memberCount = sql<number>`(select count(*)::int from ${constellationMembers} cm where cm.constellation_id = ${constellations.id})`;
+  const memberCount = sql<number>`(select count(*)::int from ${constellationMembers} cm join ${users} u on u.id = cm.user_id where cm.constellation_id = ${constellations.id} and not u.bot)`;
   const rows = await db
     .select({ id: constellations.id })
     .from(constellations)
@@ -571,7 +571,7 @@ constellationsRouter.get("/discover", directoryLimiter, async (_req, res) => {
         where ${constellations.visibility} <> 'invite' and ${constellations.takenDownAt} is null
         group by t.tag order by uses desc, t.tag asc limit 10`,
   );
-  const memberCount = sql<number>`(select count(*)::int from ${constellationMembers} cm where cm.constellation_id = ${constellations.id})`;
+  const memberCount = sql<number>`(select count(*)::int from ${constellationMembers} cm join ${users} u on u.id = cm.user_id where cm.constellation_id = ${constellations.id} and not u.bot)`;
   const candidates = await db
     .select({ id: constellations.id })
     .from(constellations)

@@ -101,6 +101,9 @@ async function standing(constellationId: string, userId: string): Promise<Standi
     .from(constellationMembers)
     .where(and(eq(constellationMembers.constellationId, constellationId), eq(constellationMembers.userId, userId)));
   if (!m) return { allowed: false, reason: "not_member", timedOutUntil: null };
+  // A suspended account, or one waiting to be deleted, can't get into game servers either.
+  const [u] = await db.select({ suspendedAt: users.suspendedAt, deleteAfter: users.deleteAfter }).from(users).where(eq(users.id, userId));
+  if (!u || u.suspendedAt || u.deleteAfter) return { allowed: false, reason: "account_locked", timedOutUntil: null };
   if (await lockedDown(userId)) return { allowed: false, reason: "account_locked", timedOutUntil: null };
   const t = m.timedOutUntil && m.timedOutUntil.getTime() > Date.now() ? m.timedOutUntil.toISOString() : null;
   return { allowed: true, timedOutUntil: t };

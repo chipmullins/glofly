@@ -143,10 +143,12 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
     .where(and(eq(constellationMembers.userId, userId), isNull(constellations.takenDownAt)));
   if (!mine.length) return [];
   const ids = mine.map((m) => m.c.id);
+  // People only: bots, webhooks and the Glofly tool member aren't counted as members.
   const members = await db
     .select({ constellationId: constellationMembers.constellationId, userId: constellationMembers.userId })
     .from(constellationMembers)
-    .where(inArray(constellationMembers.constellationId, ids));
+    .innerJoin(users, eq(users.id, constellationMembers.userId))
+    .where(and(inArray(constellationMembers.constellationId, ids), eq(users.bot, false)));
   const allNebulas = await db
     .select({ id: nebulas.id, constellationId: nebulas.constellationId, conversationId: nebulas.conversationId, name: nebulas.name, kind: nebulas.kind, position: nebulas.position, categoryId: nebulas.categoryId })
     .from(nebulas)
@@ -288,10 +290,12 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
 export async function entriesFor(viewerId: string, ids: string[]): Promise<DirectoryEntry[]> {
   if (!ids.length) return [];
   const rows = await db.select().from(constellations).where(and(inArray(constellations.id, ids), isNull(constellations.takenDownAt)));
+  // People only: bots, webhooks and the Glofly tool member aren't counted as members.
   const members = await db
     .select({ constellationId: constellationMembers.constellationId, userId: constellationMembers.userId })
     .from(constellationMembers)
-    .where(inArray(constellationMembers.constellationId, ids));
+    .innerJoin(users, eq(users.id, constellationMembers.userId))
+    .where(and(inArray(constellationMembers.constellationId, ids), eq(users.bot, false)));
   const requests = await db
     .select({ constellationId: constellationJoinRequests.constellationId })
     .from(constellationJoinRequests)

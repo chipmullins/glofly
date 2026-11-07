@@ -47,7 +47,7 @@ constellationsAdminRouter.get("/constellations", async (req, res) => {
   const q = z.string().trim().max(60).catch("").parse(req.query.q);
   const status = z.enum(["all", "live", "taken_down", "frozen", "reports", "growing"]).catch("all").parse(req.query.status);
   const offset = z.coerce.number().int().min(0).catch(0).parse(req.query.offset);
-  const memberCount = sql<number>`(select count(*)::int from ${constellationMembers} cm where cm.constellation_id = ${constellations.id})`;
+  const memberCount = sql<number>`(select count(*)::int from ${constellationMembers} cm join ${users} u on u.id = cm.user_id where cm.constellation_id = ${constellations.id} and not u.bot)`;
   const openReports = sql<number>`(select count(*)::int from ${reports} r join ${nebulas} n on n.conversation_id = r.conversation_id where n.constellation_id = ${constellations.id} and r.status = 'open')`;
   const joinsToday = sql<number>`(select count(*)::int from ${constellationMembers} cm where cm.constellation_id = ${constellations.id} and cm.joined_at > now() - interval '24 hours')`;
   const nebulaCount = sql<number>`(select count(*)::int from ${nebulas} n where n.constellation_id = ${constellations.id})`;

@@ -162,6 +162,11 @@ test("banned or gone: the server is told no, without the name", { skip }, async 
   assert.equal((await lookup({ game: "fivem", identity: id })).json.reason, "banned");
   await pool.query("delete from constellation_bans where constellation_id = $1 and user_id = $2", [cid, player.id]);
   await pool.query("insert into constellation_members (constellation_id, user_id, joined_at, welcomed_at) values ($1, $2, now(), now())", [cid, player.id]);
+  // An account waiting to be deleted (or suspended) is kept out too, without its name.
+  await pool.query("update users set delete_after = now() + interval '30 days' where id = $1", [player.id]);
+  assert.deepEqual((await lookup({ game: "fivem", identity: id })).json, { linked: true, allowed: false, reason: "account_locked" });
+  await pool.query("update users set delete_after = null where id = $1", [player.id]);
+  assert.equal((await lookup({ game: "fivem", identity: id })).json.allowed, true);
 });
 
 test("unlink: the server can't look you up any more", { skip }, async () => {
