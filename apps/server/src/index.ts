@@ -58,6 +58,7 @@ import { sweepGiveaways } from "./tools/tools";
 import { startToolHooks } from "./tools/hooks";
 import { sweepIntegrationActivity } from "./integrations/keys";
 import { gameLinksRouter, sweepGameLinkCodes } from "./integrations/gameLinks";
+import { startReaderPushes } from "./integrations/readers";
 import { connectedAppsRouter, developerRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
@@ -240,6 +241,7 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 
 // Communities round: Glofly tools hear about joins, moderation and message changes.
 startToolHooks();
+startReaderPushes();
 
 connectRedis()
   .then(() => {

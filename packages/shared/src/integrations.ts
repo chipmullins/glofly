@@ -243,3 +243,31 @@ export type GameLinkPreview = {
   /** Linking replaces this player (one player per account per constellation and game). */
   replaces: string | null
 }
+
+// ───────────── Reading messages (bridges, communities round) ─────────────
+
+/** A message as a key with "messages:read" sees it (GET /api/v1/nebulas/:id/messages and pushes). */
+export type BridgeMessage = {
+  id: string
+  nebulaId: string
+  author: { id: string; username: string; displayName: string; bot: boolean }
+  text: string
+  replyToId: string | null
+  /** Photos and files (names only for now) */
+  attachments: { kind: 'image' | 'file'; name: string }[]
+  gif: boolean
+  createdAt: string
+  editedAt: string | null
+}
+
+/** Sent to the key's interactions address, signed like everything else (Glofly-Signature). */
+export type BridgePush = {
+  id: string
+  type: 'message.created' | 'message.edited' | 'message.deleted'
+  constellationId: string
+  nebulaId: string
+  /** created / edited: the message; deleted: only its id */
+  message: BridgeMessage | null
+  messageId: string
+  createdAt: string
+}

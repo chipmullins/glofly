@@ -189,6 +189,8 @@ function activityText(action: string, key: string, actor: string, target: string
       return `${key} gave ${who} the role ${String(d.role)}`;
     case "role.taken":
       return `${key} took the role ${String(d.role)} from ${who}`;
+    case "messages.read":
+      return `${key} read messages in a shared nebula`;
     case "link.lookup":
       return d.allowed ? `${key} checked ${who} joining ${gameName(d.game)}` : `${key} turned away a linked player who can't join right now`;
     case "link.code":

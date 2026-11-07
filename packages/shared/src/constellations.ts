@@ -566,6 +566,8 @@ export type Nebula = {
   /** 0.8.0 role-only: sent only to people who can manage nebulas (missing = everyone) */
   visibility?: NebulaVisibility
   roleIds?: string[]
+  /** Communities round: integrations (bridges) that read its messages, by name. Members see a notice. */
+  sharedWith?: string[]
 }
 
 /** 0.7.5 living sky: one star per nebula, in sidebar order (dashboard cards). */

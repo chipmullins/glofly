@@ -149,6 +149,8 @@ export type NebulaMode = {
   commands?: ConstellationCommand[]
   /** Runs "/name text": posts my message and tells the bot. Resolves with a problem, or null. */
   runCommand?: (input: string) => Promise<string | null>
+  /** Communities round: integrations (bridges) reading this nebula; members always see a notice */
+  sharedWith?: string[]
 }
 
 const TYPING_SEND_EVERY_MS = 3000 // how often we tell the other person we're typing
@@ -2355,6 +2357,14 @@ export default function ChatView({
       </div>
 
       <div className="composer-area">
+        {nebula?.sharedWith?.length ? (
+          <p className="cx-shared-note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+            </svg>
+            Messages here are also shared with {nebula.sharedWith.join(' and ')}, set up by this constellation&rsquo;s staff.
+          </p>
+        ) : null}
         <div className="typing-line" aria-live="polite">
           {someoneTyping && (
             <>

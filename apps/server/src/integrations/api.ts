@@ -26,6 +26,7 @@ import { postScheduledText } from "../messages/routes";
 import { hashKey, logIntegration, looksLikeKey } from "./keys";
 import { clientIp } from "./ip";
 import { lookupBody, lookupPlayer } from "./gameLinks";
+import { listMessages } from "./readers";
 
 // Communities round (Nov 2026): the bot API, for game servers and bots with a constellation API key
 // (Integrations). Versioned under /api/v1 so Glofly's own app changes never break a server's script.
@@ -43,6 +44,7 @@ import { lookupBody, lookupPlayer } from "./gameLinks";
 //   GET  /api/v1/commands · PUT { commands: [{ name, description }] }   commands (replaces this bot's)
 //   PUT/DELETE /api/v1/members/:userId/roles/:roleId                    roles:write (roles below the bot's)
 //   POST /api/v1/links/lookup                link: a game server asks about a player (gameLinks.ts)
+//   GET  /api/v1/nebulas/:nebulaId/messages  messages:read (only nebulas picked for the key; readers.ts)
 //
 // Every request is rate limited per key (and per constellation), checked against the key's address
 // list, and logged in Integrations → Activity. Errors are JSON { error, message }.
@@ -165,6 +167,18 @@ botApiRouter.post("/api/v1/links/lookup", async (req, res) => {
     return;
   }
   const r = await lookupPlayer(keyOf(res), body.data);
+  res.status(r.status).json(r.json);
+});
+
+botApiRouter.get("/api/v1/nebulas/:nebulaId/messages", async (req, res) => {
+  if (!(await needs(res, "messages:read"))) return;
+  const nebulaId = idParam.safeParse(req.params.nebulaId);
+  const after = typeof req.query.after === "string" ? idParam.safeParse(req.query.after) : null;
+  if (!nebulaId.success || (after && !after.success)) {
+    fail(res, 400, "bad_request", "Use a nebula id, and a message id for `after`.");
+    return;
+  }
+  const r = await listMessages(keyOf(res), nebulaId.data, after?.data ?? null, Number(req.query.limit ?? 50));
   res.status(r.status).json(r.json);
 });
 
@@ -300,7 +314,7 @@ botApiRouter.post("/api/v1/nebulas/:nebulaId/messages", async (req, res) => {
 // signing secret every time (the old one stops being used at once).
 botApiRouter.put("/api/v1/interactions", async (req, res) => {
   const k = keyOf(res);
-  if (!k.scopes.has("commands") && !k.scopes.has("messages:write")) {
+  if (!k.scopes.has("commands") && !k.scopes.has("messages:write") && !k.scopes.has("messages:read")) {
     await needs(res, "commands");
     return;
   }

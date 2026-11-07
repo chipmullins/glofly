@@ -1692,6 +1692,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           jumpRequest={jump}
           nebula={{
             name: chatNebula.name,
+            sharedWith: chatNebula.sharedWith,
             // 0.7.5: on its milestone cards
             constellationIcon: (
               <ConstellationIcon

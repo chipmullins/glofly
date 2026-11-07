@@ -7,16 +7,19 @@ type Hooks = {
   onLeave: (constellationId: string, userId: string) => Promise<void>;
   onModeration: (constellationId: string, actorId: string | null, action: string, targetUserId: string | null, details: Record<string, unknown> | null) => Promise<void>;
   onMessageChanged: (conversationId: string, userId: string, change: "edited" | "deleted") => Promise<void>;
+  /** Any nebula message posted, edited or deleted (integrations/readers.ts: bridges with messages:read). */
+  onNebulaMessage: (conversationId: string, messageId: string, change: "created" | "edited" | "deleted") => Promise<void>;
 };
 
-let hooks: Hooks | null = null;
+let hooks: Partial<Hooks> = {};
 
-export function registerToolHooks(h: Hooks): void {
-  hooks = h;
+/** Each module registers the hooks it handles (tools/hooks.ts, integrations/readers.ts). */
+export function registerToolHooks(h: Partial<Hooks>): void {
+  hooks = { ...hooks, ...h };
 }
 
 /** Runs a tool hook in the background (nothing happens before registration; never throws). */
 export function toolHook<K extends keyof Hooks>(name: K, ...args: Parameters<Hooks[K]>): void {
-  const fn = hooks?.[name] as ((...a: Parameters<Hooks[K]>) => Promise<void>) | undefined;
+  const fn = hooks[name] as ((...a: Parameters<Hooks[K]>) => Promise<void>) | undefined;
   if (fn) void fn(...args).catch((err) => console.error(`Glofly tools (${name}) failed`, err));
 }

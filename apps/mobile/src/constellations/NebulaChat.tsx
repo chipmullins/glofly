@@ -593,6 +593,15 @@ export function NebulaChat({
         </View>
       ) : null}
 
+      {n.sharedWith?.length ? (
+        <View accessibilityRole="text" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 6, borderTopWidth: 1, borderTopColor: N.line }}>
+          <Glyph name="external" size={13} color={N.muted} />
+          <Text size={12} style={{ color: N.muted, flex: 1 }}>
+            Messages here are also shared with {n.sharedWith.join(' and ')}, set up by this constellation's staff.
+          </Text>
+        </View>
+      ) : null}
+
       {blocked?.kind === 'readonly' ? (
         <View style={{ paddingTop: 14, paddingHorizontal: 16, paddingBottom: (wide ? 14 : insets.bottom) + 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: N.side, borderTopWidth: 1, borderTopColor: N.line }}>
           <Glyph name="lock" size={16} color={N.muted} />

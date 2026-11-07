@@ -1,4 +1,5 @@
 import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
+import { sharedWithByNebula } from "../integrations/readers";
 import {
   ALL_PERMISSIONS,
   CHATTING_PEOPLE,
@@ -405,6 +406,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       .sort((a, b) => b.position - a.position),
   ];
   const myRow = memberRows.find((m) => m.userId === userId);
+  const sharedWith = await sharedWithByNebula(constellationId);
   const pendingRequests = can(me, "approveRequests")
     ? await db.$count(constellationJoinRequests, eq(constellationJoinRequests.constellationId, constellationId))
     : 0;
@@ -449,6 +451,8 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       lastReadAt: mySettings.find((s) => s.conversationId === n.conversationId)?.lastReadAt?.toISOString() ?? null,
       chatting: chatting.get(n.conversationId) ?? 0,
       ...(manager ? { visibility: n.visibility === "roles" ? ("roles" as const) : ("everyone" as const), roleIds: n.roleIds } : {}),
+      // Members always see when a bridge reads a nebula (communities round, messages:read).
+      ...(sharedWith.get(n.id)?.length ? { sharedWith: sharedWith.get(n.id) } : {}),
     })),
     roles,
     members: memberRows

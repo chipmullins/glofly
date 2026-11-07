@@ -913,7 +913,10 @@ export async function announce(row: MessageRow, userIds: string[]) {
     emitToUser(userId, "message:new", modern ? { message, people, nebula: true } : { message, people }, modern);
     if (!modern) emitToUser(userId, "conversations:changed", {});
   }
-  if (modern) await nebulaActivity(row.conversationId, row.senderId, row.createdAt, []);
+  if (modern) {
+    await nebulaActivity(row.conversationId, row.senderId, row.createdAt, []);
+    toolHook("onNebulaMessage", row.conversationId, row.id, "created");
+  }
 }
 
 /** Checks I can add each of these people: they're my friends (not blocked, not leaving). */
@@ -1543,7 +1546,10 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     const m = userId === myId ? mineCopy : message;
     emitToUser(userId, "message:new", modernOnly(chat) ? { message: m, nebula: true } : { message: m }, modernOnly(chat));
   }
-  if (chat.kind === "nebula") inBackground(nebulaActivity(id.data, myId, inserted.createdAt, mentions, nebulaPreview(message)));
+  if (chat.kind === "nebula") {
+    inBackground(nebulaActivity(id.data, myId, inserted.createdAt, mentions, nebulaPreview(message)));
+    toolHook("onNebulaMessage", id.data, inserted.id, "created");
+  }
   // Replying means you've read everything before it ("Seen" is for DMs).
   if (chat.partner) await shareReadPosition(id.data, myId, chat.partner, inserted.createdAt);
   res.status(201).json({ message: mineCopy });
@@ -1628,7 +1634,10 @@ export async function postScheduledText(
   const [message] = await hydrate([inserted]);
   for (const userId of chat.memberIds)
     emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
-  if (chat.kind === "nebula") inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, mentions, nebulaPreview(message)));
+  if (chat.kind === "nebula") {
+    inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, mentions, nebulaPreview(message)));
+    toolHook("onNebulaMessage", conversationId, inserted.id, "created");
+  }
   if (chat.partner) await shareReadPosition(conversationId, myId, chat.partner, inserted.createdAt);
   inBackground(notifyMessage(message, chat));
   inBackground(addLinkPreview(inserted.id, conversationId, text, myId));
@@ -1695,7 +1704,10 @@ export async function postSpecial(
   });
   const [message] = await hydrate([inserted]);
   for (const userId of chat.memberIds) emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
-  if (chat.kind === "nebula") inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, [], nebulaPreview(message)));
+  if (chat.kind === "nebula") {
+    inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, [], nebulaPreview(message)));
+    toolHook("onNebulaMessage", conversationId, inserted.id, "created");
+  }
   if (chat.partner) await shareReadPosition(conversationId, myId, chat.partner, inserted.createdAt);
   inBackground(notifyMessage(message, chat));
   if (sessionId) inBackground(notifyRead(myId, conversationId, sessionId));
@@ -1782,7 +1794,10 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
       if (!message.lantern) inBackground(addLinkPreview(message.id, conversationId, body.data, message.senderId));
     }
   }
-  if (chat.kind === "nebula" && body.data !== message.body) toolHook("onMessageChanged", conversationId, myId, "edited");
+  if (chat.kind === "nebula" && body.data !== message.body) {
+    toolHook("onMessageChanged", conversationId, myId, "edited");
+    toolHook("onNebulaMessage", conversationId, message.id, "edited");
+  }
   res.json({ message: await sendUpdated(message.id, conversationId) });
 });
 
@@ -1809,13 +1824,17 @@ conversationsRouter.delete("/:id/messages/:messageId", async (req, res) => {
         excerpt: message.body.slice(0, 120),
         conversationId,
       });
+      toolHook("onNebulaMessage", conversationId, message.id, "deleted");
     }
     res.json({ message: await sendUpdated(message.id, conversationId) });
     return;
   }
   if (!message.deletedAt) {
     await wipeMessage(message.id);
-    if (chat.kind === "nebula") toolHook("onMessageChanged", conversationId, myId, "deleted");
+    if (chat.kind === "nebula") {
+      toolHook("onMessageChanged", conversationId, myId, "deleted");
+      toolHook("onNebulaMessage", conversationId, message.id, "deleted");
+    }
   }
   res.json({ message: await sendUpdated(message.id, conversationId) });
 });
