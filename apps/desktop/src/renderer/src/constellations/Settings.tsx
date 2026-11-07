@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { OnboardingSetup } from './Onboarding'
 import {
   CloseDaysField,
   ForumSettingsFields,
@@ -92,6 +93,7 @@ const ACTION_WORDS: Record<string, string> = {
   roles_changed: 'changed the roles of',
   role_created: 'created a role',
   role_changed: 'changed a role',
+  onboarding_changed: 'changed onboarding',
   role_deleted: 'deleted a role',
   nebula_deleted: 'deleted a nebula',
   category_deleted: 'deleted a category',
@@ -215,6 +217,8 @@ export default function ConstellationSettings({
       show: can(c, 'manageConstellation') || can(c, 'deleteMessages')
     },
     { id: 'moderation', name: 'Moderation', show: modViewer },
+    // Communities round 4.3: questions new members answer (board 25).
+    { id: 'onboarding', name: 'Onboarding', show: can(c, 'manageConstellation') && can(c, 'manageNebulas') },
     // Communities round (Nov 2026): API keys, webhooks, bots (Owner / Edit constellation settings).
     { id: 'integrations', name: 'Integrations', show: can(c, 'manageConstellation') }
   ]
@@ -323,6 +327,7 @@ export default function ConstellationSettings({
           {page === 'automod' && <AutoModPage c={c} meId={me.id} onProblem={onProblem} />}
           {page === 'moderation' && <ModerationPage c={c} me={me} />}
           {page === 'integrations' && <IntegrationsPage c={c} onProblem={onProblem} />}
+          {page === 'onboarding' && <OnboardingSetup c={c} onChanged={onChanged} onProblem={onProblem} />}
           {page === 'delete' && <DeletePage c={c} onDeleted={onDeleted} />}
         </div>
       </div>

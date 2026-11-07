@@ -73,6 +73,7 @@ const ACTION_WORDS: Record<string, string> = {
   roles_changed: 'changed the roles of',
   role_created: 'created a role',
   role_changed: 'changed a role',
+  onboarding_changed: 'changed onboarding',
   role_deleted: 'deleted a role',
   nebula_deleted: 'deleted a nebula',
   category_deleted: 'deleted a category',

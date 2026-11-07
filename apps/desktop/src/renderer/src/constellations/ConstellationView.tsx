@@ -23,6 +23,7 @@ import type {
 } from '../../../preload/api-types'
 import ChatView, { type NebulaMentions } from '../components/ChatView'
 import NotifySettings, { LEVEL_NAMES } from './NotifySettings'
+import { OnboardingFlow, YourAnswersDialog, needsOnboarding } from './Onboarding'
 import SearchPanel from '../components/SearchPanel'
 import ConfirmDialog from '../components/ConfirmDialog'
 import StatusMenu from '../components/StatusMenu'
@@ -222,6 +223,7 @@ export type SettingsPageName =
   | 'moderation'
   | 'automod'
   | 'integrations'
+  | 'onboarding'
   | 'delete'
 
 export default function ConstellationView(props: ConstellationViewProps): React.JSX.Element {
@@ -237,6 +239,10 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const [headMenu, setHeadMenu] = useState(false)
   // 4.2 (board 23): the constellation's notification window
   const [notifyOpen, setNotifyOpen] = useState(false)
+  // 4.3: the questions were answered here (don't ask again before the reload) / "Your answers & nebulas"
+  const [onboardedFor, setOnboardedFor] = useState<string | null>(null)
+  const [summaryFor, setSummaryFor] = useState<string | null>(null)
+  const [answersOpen, setAnswersOpen] = useState(false)
   /** Right-click on a nebula in the sidebar: its notification and mute menu */
   const [nebMenu, setNebMenu] = useState<{ nebula: Nebula; x: number; y: number } | null>(null)
   const [statusOpen, setStatusOpen] = useState(false)
@@ -1079,18 +1085,32 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             >
               Mark everything read
             </button>
-            {c.roles.some((r) => r.selfAssign) && (
+            {c.onboarding?.enabled ? (
               <button
                 type="button"
                 role="menuitem"
                 className="cx-menu-item"
                 onClick={() => {
                   setHeadMenu(false)
-                  setRolesOpen(true)
+                  setAnswersOpen(true)
                 }}
               >
-                Your roles
+                Your answers &amp; nebulas
               </button>
+            ) : (
+              c.roles.some((r) => r.selfAssign) && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="cx-menu-item"
+                  onClick={() => {
+                    setHeadMenu(false)
+                    setRolesOpen(true)
+                  }}
+                >
+                  Your roles
+                </button>
+              )
             )}
             {!c.me.owner && (
               <button
@@ -1988,6 +2008,29 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             setWelcomeShownFor(c.id)
             if (next) props.onChanged(next)
           }}
+          onProblem={props.onProblem}
+        />
+      )}
+      {/* 4.3: the questions, right after the welcome screen (board 26) */}
+      {!(needsWelcome(c) && welcomeShownFor !== c.id) && (needsOnboarding(c) || summaryFor === c.id) && onboardedFor !== c.id && (
+        <OnboardingFlow
+          c={c}
+          // The answers are saved before "Your …" shows: keep it up through the reload that follows.
+          onSaved={() => setSummaryFor(c.id)}
+          onDone={(next) => {
+            setOnboardedFor(c.id)
+            setSummaryFor(null)
+            if (next) props.onChanged(next)
+          }}
+          onProblem={props.onProblem}
+        />
+      )}
+      {answersOpen && (
+        <YourAnswersDialog
+          c={c}
+          meId={me.id}
+          onClose={() => setAnswersOpen(false)}
+          onChanged={props.onChanged}
           onProblem={props.onProblem}
         />
       )}

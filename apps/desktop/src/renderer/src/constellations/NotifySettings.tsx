@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import type { ConstellationDetail, MuteDuration, Nebula, NotifyLevel } from '../../../preload/api-types'
+import type {
+  ConstellationDetail,
+  MuteDuration,
+  Nebula,
+  NotifyLevel
+} from '../../../preload/api-types'
 import { MUTE_CHOICES, mutedLabel } from '../lib/mentions'
 import { api } from '../lib/constellations'
 import { ConstellationIcon } from './bits'
@@ -51,7 +56,10 @@ function Switch({
 function NebulaName({ n }: { n: Nebula }): React.JSX.Element {
   return (
     <span className="nf-nebula-name">
-      <span className={n.kind === 'forum' ? 'nf-mark nf-mark--chart' : 'nf-mark'} aria-hidden="true">
+      <span
+        className={n.kind === 'forum' ? 'nf-mark nf-mark--chart' : 'nf-mark'}
+        aria-hidden="true"
+      >
         {n.kind === 'forum' ? '💬' : n.kind === 'voice' ? '🔊' : '✦'}
       </span>
       {n.name}
@@ -172,7 +180,9 @@ export default function NotifySettings({
                   setMutedUntil(
                     v === 'forever'
                       ? '2100-01-01T00:00:00.000Z'
-                      : new Date(Date.now() + { '1h': 1, '8h': 8, '24h': 24 }[v] * 3_600_000).toISOString()
+                      : new Date(
+                          Date.now() + { '1h': 1, '8h': 8, '24h': 24 }[v] * 3_600_000
+                        ).toISOString()
                   )
                   void save({ mute: v }, () => setMutedUntil(before))
                 }
@@ -240,7 +250,9 @@ export default function NotifySettings({
                   .filter((r) => r.kind !== 'member' && r.mentionable)
                   .slice(0, 2)
                   .map((r) => `@${r.name}`)
-                return names.length ? `${names.join(', ')}… don’t notify you` : 'Mentions of your roles don’t notify you'
+                return names.length
+                  ? `${names.join(', ')}… don’t notify you`
+                  : 'Mentions of your roles don’t notify you'
               })()}
             </span>
           </span>

@@ -1,0 +1,549 @@
+/* Communities round 4.3 (approved boards 25–27): onboarding. */
+
+/* ───── Settings → Onboarding (board 25) ───── */
+.ob-setup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 22px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .ob-setup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.ob-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 24px;
+  border-radius: 20px;
+  background: var(--glo-surface);
+  border: 1px solid var(--glo-line);
+}
+.ob-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ob-card-head h2,
+.ob-title-field input {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 21px;
+}
+.ob-lead {
+  margin: 0;
+  color: var(--glo-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.ob-sub {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.ob-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ob-chips--small {
+  margin-top: 6px;
+}
+.ob-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.ob-chip--nebula {
+  background: rgba(var(--glo-accent-rgb), 0.16);
+  color: var(--glo-link);
+}
+.ob-chip--role {
+  background: rgba(124, 77, 255, 0.15);
+  color: #6a3fd1;
+}
+:root[data-theme='dark'] .ob-chip--role {
+  color: #c4b0ff;
+}
+.ob-chip--off {
+  background: transparent;
+  color: var(--glo-muted);
+  border: 1px dashed var(--glo-border);
+  cursor: pointer;
+}
+.ob-chip--on {
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+.ob-chip-x {
+  border: 0;
+  background: none;
+  padding: 0 0 0 2px;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.ob-chip-x:hover {
+  opacity: 1;
+}
+.ob-add-select {
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 13px;
+}
+.ob-note-line {
+  margin: 0;
+}
+.ob-link {
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--glo-link);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ob-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ob-link--danger {
+  color: var(--glo-danger, #c0392b);
+}
+.ob-muted {
+  margin: 0;
+  color: var(--glo-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.ob-questions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ob-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--glo-border);
+  border-radius: 12px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ob-question--on {
+  border-color: rgba(var(--glo-accent-rgb), 0.55);
+  background: rgba(var(--glo-accent-rgb), 0.08);
+}
+.ob-question > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ob-question > span:last-child span {
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+.ob-grip {
+  color: var(--glo-muted);
+  cursor: grab;
+}
+.ob-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.ob-saved {
+  margin-left: auto;
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+.ob-save {
+  min-width: 76px;
+}
+
+/* The question being edited */
+.ob-title-field input {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px dashed var(--glo-border);
+  background: transparent;
+  color: var(--glo-ink);
+  padding: 2px 0 6px;
+}
+.ob-title-field input:focus {
+  outline: none;
+  border-bottom-color: var(--glo-accent);
+}
+.ob-selects {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ob-selects select {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--glo-border);
+  border-radius: 9px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.ob-remove-q {
+  margin-left: auto;
+  align-self: center;
+  font-size: 13px;
+}
+.ob-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--glo-line);
+  border-radius: 12px;
+}
+.ob-answer-emoji {
+  width: 26px;
+  font-size: 22px;
+  line-height: 1.1;
+  text-align: center;
+}
+.ob-answer-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ob-answer-text > span:not(.ob-chips) {
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+.ob-edit {
+  border: 0;
+  background: none;
+  color: var(--glo-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+.ob-edit:hover {
+  color: var(--glo-ink);
+}
+.ob-answer--editing {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  border-color: rgba(var(--glo-accent-rgb), 0.55);
+}
+.ob-answer--editing input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--glo-border);
+  border-radius: 9px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+}
+.ob-answer-fields {
+  display: flex;
+  gap: 8px;
+}
+.ob-emoji-field input {
+  width: 52px;
+  text-align: center;
+  font-size: 18px;
+}
+.ob-grow {
+  flex: 1;
+}
+.ob-pick-head {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--glo-muted);
+}
+.ob-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ob-answer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ob-note {
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(var(--glo-accent-rgb), 0.06);
+  color: var(--glo-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ───── The member's questions (board 26) ───── */
+.ob-flow {
+  width: min(620px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 26px 26px 24px;
+  border-radius: 22px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+  outline: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: cx-welcome-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+  margin-bottom: 36px;
+}
+.ob-bars {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.ob-bar {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--glo-line);
+}
+.ob-bar--on {
+  background: var(--glo-orange, #f47a1f);
+}
+.ob-kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.ob-q-title {
+  margin: 2px 0 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 23px;
+}
+.ob-q-sub {
+  margin: 0 0 4px;
+  color: var(--glo-muted);
+  font-size: 14px;
+}
+.ob-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.ob-pickcard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 12px 16px;
+  border: 1.5px solid var(--glo-border);
+  border-radius: 14px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ob-pickcard:hover {
+  background: var(--glo-hover);
+}
+.ob-pickcard--on {
+  border-color: var(--glo-orange, #f47a1f);
+  background: rgba(var(--glo-accent-rgb), 0.07);
+}
+.ob-pickcard-emoji {
+  font-size: 26px;
+  line-height: 1;
+}
+.ob-pickcard-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ob-pickcard-text span {
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+.ob-check {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  color: var(--glo-orange, #f47a1f);
+  font-weight: 700;
+}
+.ob-flow-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.ob-back {
+  border: 0;
+  background: none;
+  color: var(--glo-muted);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ob-next,
+.ob-open {
+  height: 40px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--glo-orange, #f47a1f);
+  color: #2a1406;
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ob-next:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ob-open {
+  width: 100%;
+  margin-top: 4px;
+}
+.ob-summary {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(var(--glo-accent-rgb), 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+.ob-summary span {
+  color: #9b7cf0;
+  margin-right: 8px;
+  font-size: 11px;
+}
+
+/* ───── Your answers & nebulas (board 27) ───── */
+.ob-yours {
+  max-width: 600px;
+  position: relative;
+}
+.ob-yours-title {
+  flex: 1;
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 22px;
+}
+.ob-tabs {
+  display: flex;
+  gap: 8px;
+}
+.ob-tab {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--glo-border);
+  border-radius: 16px;
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ob-tab--on {
+  background: var(--glo-ink);
+  border-color: var(--glo-ink);
+  color: var(--glo-surface);
+}
+.ob-yours-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--glo-line);
+  border-radius: 12px;
+}
+.ob-yours-row > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ob-yours-row > span span {
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+.ob-yours-row .ob-link {
+  align-self: center;
+}
+.ob-browse {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ob-browse li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--glo-line);
+}
+.ob-browse-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ob-browse-text span {
+  color: var(--glo-muted);
+  font-size: 13px;
+}
+.ob-change {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

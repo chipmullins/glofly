@@ -22,6 +22,7 @@ import type {
   MyGamesVisibility,
   NebulaKind,
   NotifyLevel,
+  OnboardingQuestion,
   RoleColor,
   TimeoutLength,
   VoicePreviewPass
@@ -122,6 +123,13 @@ export const api = {
     call<Detail>('POST', `${base(id)}/welcome`, { agreed, roleIds }),
   myRoles: (id: string, roleIds: string[]) =>
     call<Detail>('PUT', `${base(id)}/me/roles`, { roleIds }),
+  /** 4.3 onboarding (boards 25–27) */
+  saveOnboarding: (id: string, body: { enabled: boolean; questions: OnboardingQuestion[]; optionalNebulaIds: string[] }) =>
+    call<Detail>('PUT', `${base(id)}/onboarding`, body),
+  answerOnboarding: (id: string, answers: Record<string, string[]>, done: boolean) =>
+    call<Detail>('POST', `${base(id)}/onboarding/answers`, { answers, done }),
+  showNebula: (id: string, nebulaId: string, shown: boolean) =>
+    call<Detail>('PUT', `${base(id)}/me/nebulas/${nebulaId}`, { shown }),
   memberCard: (id: string, userId: string) =>
     call<MemberCardInfo>('GET', `${base(id)}/members/${userId}/card`),
   setIcon: (

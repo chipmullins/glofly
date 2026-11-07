@@ -70,7 +70,8 @@ export default function WelcomeDialog({
   onProblem: (message: string) => void
 }): React.JSX.Element {
   const rules = c.rules ?? []
-  const pickable = c.roles.filter((r) => r.selfAssign)
+  // 4.3: with onboarding on, its questions pick roles instead (right after this).
+  const pickable = c.onboarding?.enabled ? [] : c.roles.filter((r) => r.selfAssign)
   const steps: Step[] = [
     'about',
     ...(rules.length ? (['rules'] as const) : []),
