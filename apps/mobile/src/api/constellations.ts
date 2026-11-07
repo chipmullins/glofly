@@ -80,6 +80,9 @@ export const cx = {
   // 0.7.5 community and identity
   welcomeDone: (id: string, agreed: boolean, roleIds: string[]) => request<Detail>('POST', `${base(id)}/welcome`, { agreed, roleIds }),
   myRoles: (id: string, roleIds: string[]) => request<Detail>('PUT', `${base(id)}/me/roles`, { roleIds }),
+  /** 4.3 onboarding (board 28; setup is on a computer) */
+  answerOnboarding: (id: string, answers: Record<string, string[]>, done: boolean) => request<Detail>('POST', `${base(id)}/onboarding/answers`, { answers, done }),
+  showNebula: (id: string, nebulaId: string, shown: boolean) => request<Detail>('PUT', `${base(id)}/me/nebulas/${nebulaId}`, { shown }),
   memberCard: (id: string, userId: string) => request<MemberCardInfo>('GET', `${base(id)}/members/${userId}/card`),
   remove: (id: string, name: string) => request<null>('DELETE', base(id), { name }),
   transfer: (id: string, userId: string) => request<Detail>('POST', `${base(id)}/transfer`, { userId }),

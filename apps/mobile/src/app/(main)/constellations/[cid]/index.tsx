@@ -20,6 +20,7 @@ import { CreateJoinSheet } from '@/constellations/CreateJoin'
 import { ConstellationBanner, IconStrip, NebulaList, SideBanner, SideStrip, useStripList } from '@/constellations/Inside'
 import { NebulaChat } from '@/constellations/NebulaChat'
 import { WelcomeSheet } from '@/constellations/community'
+import { OnboardingSheet } from '@/constellations/Onboarding'
 import { MemberList, openMemberSheet } from '@/constellations/Members'
 import { VoiceLobby, VoiceStage } from '@/constellations/Voice'
 import { openDmDock } from '@/constellations/dock'
@@ -95,6 +96,8 @@ export default function ConstellationHome() {
       )}
       {/* 0.7.5: the welcome, once, right after you join (about, rules, pick your roles) */}
       <WelcomeSheet c={c} />
+      {/* 4.3: the questions, right after the welcome (board 28) */}
+      <OnboardingSheet c={c} />
     </>
   )
 }

@@ -346,7 +346,8 @@ export function WelcomeSheet({ c }: { c: ConstellationDetail }) {
   const me = c.members.find((m) => m.user.id === meId)?.user
   const [, redraw] = useState(0)
   const rules = c.rules ?? []
-  const pickable = c.roles.filter((r) => r.selfAssign)
+  // 4.3: with onboarding on, its questions pick roles instead (right after this).
+  const pickable = c.onboarding?.enabled ? [] : c.roles.filter((r) => r.selfAssign)
   const steps = ['about', ...(rules.length ? ['rules'] : []), ...(pickable.length ? ['roles'] : [])] as const
   const [at, setAt] = useState(0)
   const [agreed, setAgreed] = useState(false)

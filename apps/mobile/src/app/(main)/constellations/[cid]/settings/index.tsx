@@ -84,6 +84,7 @@ export default function SettingsMenu() {
       ) : null}
       <Card>
         <Row icon={<IconBox><Icon name="bell" size={17} color={N.ink} /></IconBox>} label="Notifications" detail={c.me.notifications?.mutedUntil ? 'Muted' : NOTIFY_WORDS[c.me.notify]} chevron onPress={() => go('notifications')} />
+        {c.onboarding?.enabled ? <Row icon={<IconBox><StarGlyph size={16} color={N.ink} /></IconBox>} label="Your answers & nebulas" chevron onPress={() => go('answers')} /> : null}
         <Row icon={<IconBox><Glyph name="markRead" size={17} /></IconBox>} label="Mark everything read" disabled={!card?.unreadCount && !card?.mentionCount} onPress={() => void readAll()} />
         {!c.me.owner ? <Row icon={<IconBox danger><Glyph name="leave" size={17} color={N.redText} /></IconBox>} label={`Leave ${c.name}`} danger last onPress={() => void leave()} /> : <Row icon={<IconBox><Icon name="link" size={17} color={N.ink} /></IconBox>} label="Invite people" chevron last onPress={() => go('invites')} />}
       </Card>
