@@ -12,6 +12,7 @@ import {
   type WebhookEvent,
   type WebhookInfo
 } from '@glofly/shared'
+import { DEVELOPER_TERMS_URL } from '@glofly/shared'
 import { integrations, type KeyFields } from '../lib/integrations'
 import './Integrations.css'
 import ToolsSection from './ToolsSection'
@@ -298,6 +299,15 @@ function KeyDialog({
         )}
       </div>
       <PasswordField value={password} onChange={setPassword} />
+      {!editing && (
+        <p className="ix-terms">
+          By making a key you agree to the{' '}
+          <a href={DEVELOPER_TERMS_URL} target="_blank" rel="noreferrer">
+            Glofly Developer Terms
+          </a>
+          .
+        </p>
+      )}
       {problem && <p className="cx-error">{problem}</p>}
       <div className="ix-actions">
         <button type="button" className="ix-btn" onClick={onClose}>
@@ -446,6 +456,13 @@ function HookDialog({
         </>
       )}
       <PasswordField value={password} onChange={setPassword} />
+      <p className="ix-terms">
+        By making a webhook you agree to the{' '}
+        <a href={DEVELOPER_TERMS_URL} target="_blank" rel="noreferrer">
+          Glofly Developer Terms
+        </a>
+        .
+      </p>
       {problem && <p className="cx-error">{problem}</p>}
       <div className="ix-actions">
         <button type="button" className="ix-btn" onClick={onClose}>

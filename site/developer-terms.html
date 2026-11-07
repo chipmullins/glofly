@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Developer Terms · Glofly</title>
+<meta name="description" content="The rules for building apps, bots, webhooks and game-server links on Glofly.">
+<link rel="icon" href="/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,600&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fffcf9; --sand: #f7f0e9; --line: #eaddd1; --ink: #24170f; --muted: #6b5547;
+    --red: #e0193a; --red-deep: #c0122f; --red-rgb: 224, 25, 58;
+    --font-display: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--page); }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 400 17px/1.65 var(--font-body); -webkit-font-smoothing: antialiased; }
+  a { color: var(--red-deep); }
+  a:focus-visible { outline: 3px solid rgba(var(--red-rgb), 0.45); outline-offset: 3px; border-radius: 6px; }
+  .wrap { width: 100%; max-width: 760px; margin: 0 auto; padding-inline: 24px; }
+  @media (max-width: 480px) { .wrap { padding-inline: 16px; } }
+  .top { padding-block: 22px; border-bottom: 1px solid var(--line); }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; max-width: 1120px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font: 700 22px/1 var(--font-display); }
+  .brand img { width: 36px; height: 36px; border-radius: 10px; }
+  .top nav { display: flex; gap: 18px; font-size: 15px; }
+  main { padding-block: 48px 64px; }
+  h1 { font: 700 clamp(34px, 5vw, 46px)/1.1 var(--font-display); margin: 0 0 10px; letter-spacing: -0.01em; }
+  .updated { color: var(--muted); margin: 0 0 28px; font-size: 15px; }
+  .summary { background: var(--sand); border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px; margin: 0 0 36px; }
+  .summary p { margin: 0 0 8px; font-weight: 600; }
+  .summary ul { margin: 0; padding-left: 20px; }
+  h2 { font: 600 24px/1.25 var(--font-display); margin: 40px 0 12px; }
+  h3 { font: 600 18px/1.3 var(--font-body); margin: 22px 0 6px; }
+  p, li { max-width: 68ch; }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 8px; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; background: var(--sand); }
+  .table-box { overflow-x: auto; }
+  footer { border-top: 1px solid var(--line); padding-block: 28px 40px; font-size: 14px; color: var(--muted); }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: space-between; max-width: 1120px; }
+  footer p { margin: 0; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/icon.png" alt="">Glofly</a>
+    <nav aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/developer-terms" aria-current="page">Developers</a></nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <h1>Developer Terms</h1>
+    <p class="updated">Last updated November 7, 2026</p>
+
+    <div class="summary">
+      <p>The short version</p>
+      <ul>
+        <li>These terms are for anyone who builds on Glofly: Sign in with Glofly apps, API keys and bots, webhooks, bridges, and linked game servers.</li>
+        <li>Ask only for what you need, use it only for what people expect, and say so in your own privacy policy.</li>
+        <li>Never sell Glofly people's information, use it for ads or tracking, or use their messages to train AI.</li>
+        <li>Keep your keys and secrets secret. What happens with them is on you.</li>
+        <li>It's free, there's no guarantee it stays the same, and we can switch off anything that breaks these terms.</li>
+      </ul>
+    </div>
+
+    <p>These terms are an agreement between you and Glofly, run by Chip Mullins in Lexington, Kentucky, USA ("Glofly", "we", "us"). They add to the <a href="/terms">Terms of Service</a> and the <a href="/privacy">Privacy Policy</a>, which still apply to you and to everything you build. You agree to them when you make a Sign in with Glofly app, an API key, a webhook or a game-server link, or otherwise use Glofly's developer features ("the API"). If you build for a company or group, you agree for them too and confirm you're allowed to.</p>
+
+    <h2>What these terms cover</h2>
+    <ul>
+      <li><strong>Sign in with Glofly</strong>: apps and websites that let people sign in with their Glofly account (OAuth 2.0 and OpenID Connect).</li>
+      <li><strong>Constellation integrations</strong>: API keys and the bots they act as, slash commands and buttons, incoming and outgoing webhooks, and bridges that read or post messages in nebulas a constellation's owner picked.</li>
+      <li><strong>Linked game servers</strong>: game servers (for example FiveM, RedM or Minecraft) that check a player's Glofly link, including the Glofly Whitelist resource.</li>
+    </ul>
+
+    <h2>Your keys and secrets</h2>
+    <ul>
+      <li>Client secrets, API keys, webhook addresses and signing secrets are passwords. Keep them on your server, never in a public repo, a phone app's code or a web page.</li>
+      <li>You're responsible for everything done with your app, keys and bots, including by anyone you let use them.</li>
+      <li>If one leaks, reset it straight away (Settings → Developer, or the constellation's Integrations page) and tell us at <a href="mailto:support@glofly.app">support@glofly.app</a> if people's information may have been exposed.</li>
+    </ul>
+
+    <h2>People's information</h2>
+    <p>Everything you get from Glofly about a person (their name, username, photo, Glofly ID, email address, roles, game links, presence and messages) is "Glofly data". With Glofly data you must:</p>
+    <ul>
+      <li><strong>Have a privacy policy.</strong> A Sign in with Glofly app must link a public privacy policy that says what it gets from Glofly, why, how long it keeps it and how people can have it deleted. We show that link when people sign in.</li>
+      <li><strong>Ask for the least you need</strong> and use it only to provide the feature people chose your app, bot or server for. Ask for email or roles only if your app really uses them.</li>
+      <li><strong>Respect "no"</strong>. People can turn down email or roles, disconnect your app, unlink a game server, and constellation owners can remove your key at any time. When that happens, stop using what you no longer have permission for and delete it within 30 days unless the law requires you to keep it. Do the same when someone asks you to, or when your app shuts down.</li>
+      <li><strong>Keep it safe</strong> with reasonable security, and tell affected people (and us) without undue delay if it's exposed.</li>
+    </ul>
+    <p>You must not:</p>
+    <ul>
+      <li>sell, rent or trade Glofly data, or give it to data brokers, ad networks or anyone else, except service providers who handle it only for you and under the same rules;</li>
+      <li>use Glofly data for advertising, to build profiles of people, or to track them across other apps and sites;</li>
+      <li>use messages or other content from Glofly to train, fine-tune or evaluate AI or machine-learning models;</li>
+      <li>combine Glofly data with other information to work out who someone is when they haven't told you, or to find, follow or harass anyone;</li>
+      <li>send people email they didn't ask for: use their email address only for your service's own account messages unless they separately agree to more;</li>
+      <li>build anything aimed at children under 13, or try to sign in or link family accounts (Glofly refuses them).</li>
+    </ul>
+
+    <h2>Messages and bridges</h2>
+    <ul>
+      <li>A key with permission to read messages can only read the nebulas the constellation's owner picked, and Glofly tells everyone in those nebulas that their messages are shared with your bot. Use those messages only to provide that bridge or feature.</li>
+      <li>Don't keep copies of messages longer than the bridge needs, and remove or update them when Glofly tells you a message was edited or deleted, where your service makes that possible.</li>
+      <li>Never read, store or forward direct messages or group chats. The API doesn't offer them; don't try to get them another way.</li>
+    </ul>
+
+    <h2>Bots, webhooks and game servers</h2>
+    <ul>
+      <li>A bot must say what it is and what it does, and do only what the constellation's owner set it up for. No spam, mass mentions or unasked-for messages.</li>
+      <li>Game servers: use a player's link only to let them in, give them their roles and show their Glofly name in game. Tell players on your server what the link does.</li>
+      <li>Constellation owners are responsible for the integrations they add, and for following these terms and the Terms of Service in their constellation.</li>
+    </ul>
+
+    <h2>Using the API fairly</h2>
+    <ul>
+      <li>Stay within the rate limits, and don't try to get around them, Lockdown, bans, timeouts, family-account rules or any other limit or security measure.</li>
+      <li>Don't scrape Glofly, collect information about people who haven't used your app, or use the API to copy Glofly or build a competing messenger from its data.</li>
+      <li>Don't make anything that pretends to be Glofly or the Glofly team, asks for people's Glofly passwords, or hides what it is from the people using it.</li>
+      <li>Found a security problem? Email <a href="mailto:support@glofly.app">support@glofly.app</a> and give us a fair chance to fix it before you tell anyone. Never test against accounts or constellations that aren't yours.</li>
+    </ul>
+
+    <h2>The Glofly name</h2>
+    <p>You can say your app works with Glofly and use the "Sign in with Glofly" wording and button. Don't use the Glofly name, firefly logo or anything like them in your app's name or logo, or in a way that suggests we made, checked or endorse your app. Apps marked "Made by Glofly" are only ours.</p>
+
+    <h2>Our part</h2>
+    <ul>
+      <li>The API is free. We may set or change limits, and add, change or remove parts of it. We'll try to give notice of changes that break working apps, but can't always.</li>
+      <li>We may ask what your app does with Glofly data, and you'll answer honestly.</li>
+      <li>We can suspend or switch off any app, key, bot, webhook or game-server link, or your access to the API, at any time, for example if it breaks these terms, puts people at risk or harms Glofly. Where it's safe and sensible we'll tell you why.</li>
+      <li>We don't review apps or integrations before people use them and aren't responsible for them. Your app's relationship with its users is yours.</li>
+    </ul>
+
+    <h2>Disclaimers and liability</h2>
+    <p>The API is provided "as is" and "as available", with no promise that it will be uninterrupted, error-free or stay the same, and the disclaimers and limits on liability in the <a href="/terms">Terms of Service</a> apply. To the extent the law allows, you'll defend and cover Glofly against claims, losses and costs that come from your app, bot, server or integration, how you handle Glofly data, or your breaking these terms.</p>
+
+    <h2>Ending things</h2>
+    <p>You can stop using the API and delete your apps and keys at any time. If you stop, or we switch you off, delete the Glofly data you hold as described above. The sections on people's information, messages, disclaimers and liability continue after that.</p>
+
+    <h2>Changes to these terms</h2>
+    <p>We may update these terms. We'll change the date above, and for important changes we'll tell you by email or in Glofly before they take effect, and may ask you to agree again before you change an app. If you keep using the API after that, the new terms apply. The law and courts in the <a href="/terms">Terms of Service</a> apply to these terms too.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about these terms or the API: <a href="mailto:support@glofly.app">support@glofly.app</a>.</p>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 Glofly · Created by Chip Mullins</p>
+    <p><a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · <a href="/developer-terms">Developer Terms</a> · <a href="mailto:support@glofly.app">support@glofly.app</a></p>
+  </div>
+</footer>
+</body>
+</html>

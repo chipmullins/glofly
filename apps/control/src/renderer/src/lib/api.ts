@@ -662,6 +662,11 @@ export type OAuthAppRow = {
   clientId: string
   name: string
   website: string | null
+  privacyUrl?: string | null
+  termsUrl?: string | null
+  /** Which Developer Terms its maker agreed to (null: none yet) */
+  devTermsVersion?: string | null
+  devTermsAcceptedAt?: string | null
   owner: string
   redirectUris: string[]
   scopes: string[]

@@ -43,12 +43,24 @@ export function redirectUriProblem(uri: string): string | null {
   return /^[a-z][a-z0-9+.-]{2,}$/.test(scheme) ? null : 'That kind of address can’t be used.'
 }
 
+/**
+ * The Glofly Developer Terms (glofly.app/developer-terms) people agree to when they make a
+ * Sign in with Glofly app. Bump when the terms change in a way developers must agree to again.
+ */
+export const DEVELOPER_TERMS_VERSION = '2026-11-07'
+export const DEVELOPER_TERMS_URL = 'https://glofly.app/developer-terms'
+
 /** An app in Settings → Developer. */
 export type DeveloperApp = {
   id: string
   clientId: string
   name: string
   website: string | null
+  /** The app's own privacy policy (https; required for new apps) and terms, linked on the consent page */
+  privacyUrl: string | null
+  termsUrl: string | null
+  /** The Developer Terms version its maker agreed to (null: not yet) */
+  devTermsVersion: string | null
   redirectUris: string[]
   scopes: ('email' | 'roles')[]
   /** A server app (has a client secret) or a phone/browser app (none; PKCE only) */
@@ -76,7 +88,7 @@ export type ConnectedApp = {
 
 /** What the consent page shows (GET /oauth/request). */
 export type OAuthRequestInfo = {
-  app: { name: string; website: string | null; firstParty: boolean; madeBy: string | null }
+  app: { name: string; website: string | null; firstParty: boolean; madeBy: string | null; privacyUrl?: string | null; termsUrl?: string | null }
   scopes: OAuthScope[]
   /** "roles": constellations you're in, to pick from (ones allowed before are ticked) */
   constellations: { id: string; name: string; picked: boolean }[]

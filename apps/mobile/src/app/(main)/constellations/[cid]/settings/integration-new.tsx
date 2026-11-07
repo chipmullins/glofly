@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Pressable, View } from 'react-native'
+import { Linking, Pressable, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
-import { API_KEY_LIFETIMES, INTEGRATION_SCOPES, type ApiKeyLifetime, type IntegrationScope } from '@glofly/shared'
+import { API_KEY_LIFETIMES, DEVELOPER_TERMS_URL, INTEGRATION_SCOPES, type ApiKeyLifetime, type IntegrationScope } from '@glofly/shared'
 import { integrations } from '@/api/integrations'
 import { cxSay } from '@/state/constellations'
 import { chooseFrom } from '@/ui/dialogs'
@@ -106,6 +106,13 @@ export default function NewKeyScreen() {
       ) : null}
       <NightField label="Only from these addresses (optional)" value={ips} onChangeText={setIps} autoCapitalize="none" autoCorrect={false} keyboardType="numbers-and-punctuation" placeholder="203.0.113.24" />
       <NightField label="Your Glofly password, to confirm" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="password" />
+      <Text size={12.5} style={{ color: N.muted, marginTop: 4 }}>
+        By making a key you agree to the{' '}
+        <Text size={12.5} weight="bold" style={{ color: N.ink }} accessibilityRole="link" onPress={() => void Linking.openURL(DEVELOPER_TERMS_URL)}>
+          Glofly Developer Terms
+        </Text>
+        .
+      </Text>
       <NightButton label="Make key" busy={busy} disabled={!name.trim() || !password} onPress={() => void make()} />
       {secret ? (
         <SecretSheet

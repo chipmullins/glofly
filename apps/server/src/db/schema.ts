@@ -1769,6 +1769,12 @@ export const oauthApps = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     website: text("website"),
+    // The app's own privacy policy and terms (https), linked on the consent page (communities release)
+    privacyUrl: text("privacy_url"),
+    termsUrl: text("terms_url"),
+    // Which Glofly Developer Terms its maker agreed to, and when (null: made before they existed)
+    devTermsVersion: text("dev_terms_version"),
+    devTermsAcceptedAt: timestamp("dev_terms_accepted_at", { withTimezone: true }),
     // Exact return addresses (https, or a custom scheme like gloslate:// for phone apps)
     redirectUris: text("redirect_uris").array().notNull().default(sql`'{}'::text[]`),
     // What it may ask for: "email", "roles" (name and photo always)

@@ -28,6 +28,9 @@ services:
       # WEB_ORIGIN= (nothing after the =) in .env and run docker compose up -d; the desktop and
       # phone apps don't use any of it.
       WEB_ORIGIN: ${WEB_ORIGIN-https://chat.glofly.app}
+      # Communities release: Glofly's own address as other apps see it (Sign in with Glofly's issuer,
+      # webhook addresses, the API docs page). Must be exact: apps compare the issuer letter for letter.
+      PUBLIC_API_URL: https://${API_DOMAIN}
     volumes:
       # Files the server reads but that must never be in the repo (the Firebase key for push
       # notifications). Put them in deploy/secrets/ on the server (chmod 600).

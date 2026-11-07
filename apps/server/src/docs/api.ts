@@ -52,7 +52,7 @@ a{color:#b4530e}
 <body>
 <header><div class="in">
 <h1>Glofly API</h1>
-<p>For game servers, bots, bridges and sites that sign people in with Glofly. Version 1.</p>
+<p>For game servers, bots, bridges and sites that sign people in with Glofly. Version 1. Using it means agreeing to the <a href="https://glofly.app/developer-terms">Glofly Developer Terms</a>: ask only for what you need, have a privacy policy, never sell people's information or train AI on their messages.</p>
 <nav>
 <a href="#keys">API keys</a><a href="#bot">Bot API</a><a href="#interactions">Commands &amp; buttons</a>
 <a href="#reading">Reading messages</a><a href="#links">Linked game servers</a><a href="#webhooks">Webhooks</a>
@@ -176,13 +176,13 @@ function fromGlofly(header, rawBody, secret) {
 <p>Other headers: <code>Glofly-Event</code> (the type) and <code>Glofly-Delivery</code> (a unique id, so you can ignore repeats).</p>
 
 <h2 id="signin">Sign in with Glofly</h2>
-<p>Glofly is an OpenID Connect provider. Register your app in Glofly on a computer: <b>Settings → Developer</b>. You get a client id (<code>gfa_…</code>) and, for apps with a server, a secret (<code>gfs_…</code>, shown once).</p>
+<p>Glofly is an OpenID Connect provider. Register your app in Glofly on a computer: <b>Settings → Developer</b>. You add a link to your app's privacy policy (shown to people when they sign in) and agree to the <a href="https://glofly.app/developer-terms">Developer Terms</a>. You get a client id (<code>gfa_…</code>) and, for apps with a server, a secret (<code>gfs_…</code>, shown once).</p>
 <table>
 <tr><th>Discovery</th><td><code>${api}/.well-known/openid-configuration</code></td></tr>
 <tr><th>Authorize</th><td><code>${chat}/oauth/authorize</code></td></tr>
 <tr><th>Token</th><td><code>${api}/oauth/token</code></td></tr>
 <tr><th>User info</th><td><code>${api}/oauth/userinfo</code></td></tr>
-<tr><th>Keys (ES256)</th><td><code>${api}/oauth/jwks</code></td></tr>
+<tr><th>Keys (RS256)</th><td><code>${api}/oauth/jwks</code></td></tr>
 <tr><th>Revoke</th><td><code>${api}/oauth/revoke</code></td></tr>
 </table>
 <ul>

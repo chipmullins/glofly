@@ -65,6 +65,10 @@ export function SignInApps({ toast }: { toast: (message: string, bad?: boolean) 
                     <div className="muted" style={{ fontSize: 12 }}>
                       <code>{a.clientId}</code> · {a.confidential ? 'server app' : 'phone/browser app'} · {a.scopes.join(', ') || 'name and photo only'}
                     </div>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {a.privacyUrl ? <>Privacy: {a.privacyUrl}</> : 'No privacy policy link'} ·{' '}
+                      {a.devTermsVersion ? `Developer Terms ${a.devTermsVersion} agreed ${shortDate(a.devTermsAcceptedAt ?? a.createdAt)}` : 'Developer Terms not agreed yet'}
+                    </div>
                   </td>
                   <td>@{a.owner}</td>
                   <td>{a.people}</td>

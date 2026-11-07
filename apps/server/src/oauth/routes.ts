@@ -3,6 +3,7 @@ import express, { Router, type Request, type Response } from "express";
 import { and, count, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
+  DEVELOPER_TERMS_VERSION,
   OAUTH_APP_NAME_MAX,
   OAUTH_APPS_PER_DEVELOPER_MAX,
   OAUTH_REDIRECTS_MAX,
@@ -164,7 +165,7 @@ oauthRouter.get("/oauth/request", requireAuth, async (req, res) => {
   const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, c.app.ownerId));
   const mine = c.scopes.includes("roles") ? await myConstellations(me(res).id) : [];
   const info: OAuthRequestInfo = {
-    app: { name: c.app.name, website: c.app.website, firstParty: c.app.firstParty, madeBy: c.app.firstParty ? null : (c.app.website ?? (owner ? `@${owner.username}` : null)) },
+    app: { name: c.app.name, website: c.app.website, privacyUrl: c.app.privacyUrl, termsUrl: c.app.termsUrl, firstParty: c.app.firstParty, madeBy: c.app.firstParty ? null : (c.app.website ?? (owner ? `@${owner.username}` : null)) },
     scopes: c.scopes,
     constellations: mine.map((x) => ({ id: x.id, name: x.name, picked: !!grant?.constellationIds.includes(x.id) })),
     allowedBefore: !!grant && c.scopes.every((s) => grant.scopes.includes(s)),
@@ -482,6 +483,23 @@ const appFields = z.object({
     .refine((w) => !w || /^https:\/\/[^\s/@]+\.[^\s/@]+/.test(w), "Websites start with https://")
     .nullable()
     .default(null),
+  privacyUrl: z
+    .string()
+    .trim()
+    .max(300)
+    .refine((w) => !w || /^https:\/\/[^\s/@]+\.[^\s/@]+/.test(w), "Privacy policy links start with https://")
+    .transform((w) => w || null)
+    .nullable()
+    .default(null),
+  termsUrl: z
+    .string()
+    .trim()
+    .max(300)
+    .refine((w) => !w || /^https:\/\/[^\s/@]+\.[^\s/@]+/.test(w), "Terms links start with https://")
+    .transform((w) => w || null)
+    .nullable()
+    .default(null),
+  agreeTerms: z.literal(true).optional(),
   redirectUris: z.array(z.string().trim()).min(1, "Add at least one return address.").max(OAUTH_REDIRECTS_MAX, `Up to ${OAUTH_REDIRECTS_MAX} return addresses.`),
   scopes: z.array(z.enum(["email", "roles"])).max(2).default([]),
   confidential: z.boolean().default(true),
@@ -497,6 +515,9 @@ async function devApps(userId: string): Promise<DeveloperApp[]> {
       clientId: a.clientId,
       name: a.name,
       website: a.website,
+      privacyUrl: a.privacyUrl,
+      termsUrl: a.termsUrl,
+      devTermsVersion: a.devTermsVersion,
       redirectUris: a.redirectUris,
       scopes: a.scopes.filter((s): s is "email" | "roles" => s === "email" || s === "roles"),
       confidential: !!a.clientSecretHash,
@@ -517,6 +538,10 @@ developerRouter.get("/apps", async (_req, res) => res.json({ apps: await devApps
 developerRouter.post("/apps", devLimiter, async (req, res) => {
   const p = appFields.safeParse(req.body);
   if (!p.success) return void res.status(400).json({ error: "invalid", message: p.error.issues[0]?.message ?? "Check the app's details." });
+  // Apps get Glofly people's names and photos (and maybe email), so their maker agrees to the
+  // Developer Terms and says where the app's own privacy policy is.
+  if (p.data.agreeTerms !== true) return void res.status(400).json({ error: "terms", message: "Agree to the Glofly Developer Terms to make an app." });
+  if (!p.data.privacyUrl) return void res.status(400).json({ error: "invalid", message: "Add a link to your app's privacy policy." });
   const problem = uriProblem(p.data.redirectUris);
   if (problem) return void res.status(400).json({ error: "invalid", message: problem });
   const [n] = await db.select({ n: count() }).from(oauthApps).where(eq(oauthApps.ownerId, me(res).id));
@@ -529,6 +554,10 @@ developerRouter.post("/apps", devLimiter, async (req, res) => {
       ownerId: me(res).id,
       name: p.data.name,
       website: p.data.website,
+      privacyUrl: p.data.privacyUrl,
+      termsUrl: p.data.termsUrl,
+      devTermsVersion: DEVELOPER_TERMS_VERSION,
+      devTermsAcceptedAt: new Date(),
       redirectUris: [...new Set(p.data.redirectUris)],
       scopes: p.data.scopes,
       clientSecretHash: secret ? sha(secret) : null,
@@ -550,6 +579,10 @@ developerRouter.patch("/apps/:id", devLimiter, async (req, res) => {
   if (!a) return;
   const p = appFields.partial().safeParse(req.body);
   if (!p.success) return void res.status(400).json({ error: "invalid", message: p.error.issues[0]?.message ?? "Check the app's details." });
+  // .partial() still fills in defaults (null, []), so only fields the app actually sent change.
+  const sent = (k: string) => typeof req.body === "object" && req.body !== null && Object.hasOwn(req.body, k);
+  for (const k of ["website", "privacyUrl", "termsUrl", "scopes", "redirectUris", "name"] as const) if (!sent(k)) delete p.data[k];
+  if (p.data.privacyUrl === null && !a.firstParty) return void res.status(400).json({ error: "invalid", message: "Your app needs a link to its privacy policy." });
   if (p.data.redirectUris) {
     const problem = uriProblem(p.data.redirectUris);
     if (problem) return void res.status(400).json({ error: "invalid", message: problem });
@@ -559,6 +592,10 @@ developerRouter.patch("/apps/:id", devLimiter, async (req, res) => {
     .set({
       ...(p.data.name ? { name: p.data.name } : {}),
       ...(p.data.website !== undefined ? { website: p.data.website } : {}),
+      ...(p.data.privacyUrl !== undefined ? { privacyUrl: p.data.privacyUrl } : {}),
+      ...(p.data.termsUrl !== undefined ? { termsUrl: p.data.termsUrl } : {}),
+      // Saving with the box ticked records agreement to the current Developer Terms.
+      ...(p.data.agreeTerms ? { devTermsVersion: DEVELOPER_TERMS_VERSION, devTermsAcceptedAt: new Date() } : {}),
       ...(p.data.redirectUris ? { redirectUris: [...new Set(p.data.redirectUris)] } : {}),
       ...(p.data.scopes ? { scopes: p.data.scopes } : {}),
     })

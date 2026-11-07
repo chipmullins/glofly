@@ -351,6 +351,13 @@
       "when": 1794036327016,
       "tag": "0049_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1794040536456,
+      "tag": "0050_oauth_app_policies",
+      "breakpoints": true
     }
   ]
 }

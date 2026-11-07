@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  DEVELOPER_TERMS_URL,
+  DEVELOPER_TERMS_VERSION,
   OAUTH_OPTIONAL_SCOPES,
   redirectUriProblem,
   type ApiResult,
@@ -117,6 +119,10 @@ function AppForm({
 }): React.JSX.Element {
   const [name, setName] = useState(app?.name ?? '')
   const [website, setWebsite] = useState(app?.website ?? '')
+  const [privacyUrl, setPrivacyUrl] = useState(app?.privacyUrl ?? '')
+  const [termsUrl, setTermsUrl] = useState(app?.termsUrl ?? '')
+  const termsDue = !app || app.devTermsVersion !== DEVELOPER_TERMS_VERSION
+  const [agree, setAgree] = useState(false)
   const [uris, setUris] = useState((app?.redirectUris ?? []).join('\n'))
   const [scopes, setScopes] = useState<('email' | 'roles')[]>(app?.scopes ?? [])
   const [confidential, setConfidential] = useState(app?.confidential ?? true)
@@ -127,7 +133,16 @@ function AppForm({
     const bad = list.map(redirectUriProblem).find((p) => p)
     if (bad) return setProblem(bad)
     setBusy(true)
-    const body = { name, website: website.trim() || null, redirectUris: list, scopes, ...(app ? {} : { confidential }) }
+    const body = {
+      name,
+      website: website.trim() || null,
+      privacyUrl: privacyUrl.trim() || null,
+      termsUrl: termsUrl.trim() || null,
+      redirectUris: list,
+      scopes,
+      ...(app ? {} : { confidential }),
+      ...(agree ? { agreeTerms: true } : {})
+    }
     const r = await call<{ app: DeveloperApp; secret?: string | null }>(app ? 'PATCH' : 'POST', app ? `/developer/apps/${app.id}` : '/developer/apps', body)
     setBusy(false)
     if (!r.ok) return setProblem(r.message)
@@ -144,6 +159,16 @@ function AppForm({
           <label className="ix-field">
             Website (optional)
             <input value={website} maxLength={200} onChange={(e) => setWebsite(e.target.value)} placeholder="https://example.com" />
+          </label>
+        </div>
+        <div className="ix-grid2">
+          <label className="ix-field">
+            Privacy policy link
+            <input value={privacyUrl} maxLength={300} onChange={(e) => setPrivacyUrl(e.target.value)} placeholder="https://example.com/privacy" />
+          </label>
+          <label className="ix-field">
+            Terms link (optional)
+            <input value={termsUrl} maxLength={300} onChange={(e) => setTermsUrl(e.target.value)} placeholder="https://example.com/terms" />
           </label>
         </div>
         <label className="ix-field">
@@ -172,12 +197,29 @@ function AppForm({
             </button>
           </fieldset>
         )}
+        {termsDue && (
+          <label className="as-agree">
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+            <span>
+              I agree to the{' '}
+              <a href={DEVELOPER_TERMS_URL} target="_blank" rel="noreferrer">
+                Glofly Developer Terms
+              </a>
+              {app ? ' (updated since you made this app)' : ''}. People see the privacy policy link when they sign in.
+            </span>
+          </label>
+        )}
         {problem && <p className="cx-error">{problem}</p>}
         <div className="ix-actions">
           <button type="button" className="ix-btn" onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" className="ix-btn ix-btn--gold" disabled={busy || !name.trim() || !uris.trim()} onClick={() => void save()}>
+          <button
+            type="button"
+            className="ix-btn ix-btn--gold"
+            disabled={busy || !name.trim() || !uris.trim() || !privacyUrl.trim() || (!app && !agree)}
+            onClick={() => void save()}
+          >
             {app ? 'Save' : 'Make app'}
           </button>
         </div>

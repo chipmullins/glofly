@@ -165,3 +165,8 @@
   text-align: center;
   line-height: 1.45;
 }
+.oc-foot a {
+  color: #f3e6da;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

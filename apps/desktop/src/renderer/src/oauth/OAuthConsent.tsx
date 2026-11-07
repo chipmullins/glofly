@@ -151,6 +151,23 @@ export default function OAuthConsent({ me, query, onClose }: { me: Pick<PublicUs
         </div>
         <span className="oc-foot">
           {info.app.firstParty ? '' : `Made by ${(info.app.madeBy ?? 'someone else').replace(/^https:\/\//, '')}, not by Glofly. `}
+          {info.app.privacyUrl && (
+            <>
+              {info.app.name}&apos;s{' '}
+              <a href={info.app.privacyUrl} target="_blank" rel="noreferrer noopener">
+                privacy policy
+              </a>
+              {info.app.termsUrl && (
+                <>
+                  {' '}and{' '}
+                  <a href={info.app.termsUrl} target="_blank" rel="noreferrer noopener">
+                    terms
+                  </a>
+                </>
+              )}{' '}
+              say how it uses your info.{' '}
+            </>
+          )}
           Disconnect it any time in Settings → Connected apps.
         </span>
       </main>

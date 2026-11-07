@@ -732,6 +732,18 @@ export async function exportAccount(userId: string) {
       .select()
       .from(s.userGames)
       .where(eq(s.userGames.userId, userId)),
+    // Communities round: apps they signed in to, game servers they linked, trails, apps they made.
+    connectedApps: await db
+      .select({ app: s.oauthApps.name, scopes: s.oauthGrants.scopes, constellationIds: s.oauthGrants.constellationIds, createdAt: s.oauthGrants.createdAt, lastUsedAt: s.oauthGrants.lastUsedAt })
+      .from(s.oauthGrants)
+      .innerJoin(s.oauthApps, eq(s.oauthApps.id, s.oauthGrants.appId))
+      .where(eq(s.oauthGrants.userId, userId)),
+    gameLinks: await db.select().from(s.gameLinks).where(eq(s.gameLinks.userId, userId)),
+    trailsFollowed: await db.select().from(s.threadFollows).where(eq(s.threadFollows.userId, userId)),
+    appsMade: await db
+      .select({ name: s.oauthApps.name, clientId: s.oauthApps.clientId, website: s.oauthApps.website, privacyUrl: s.oauthApps.privacyUrl, redirectUris: s.oauthApps.redirectUris, scopes: s.oauthApps.scopes, devTermsVersion: s.oauthApps.devTermsVersion, devTermsAcceptedAt: s.oauthApps.devTermsAcceptedAt, createdAt: s.oauthApps.createdAt })
+      .from(s.oauthApps)
+      .where(eq(s.oauthApps.ownerId, userId)),
     reportsFiled: await db
       .select({
         id: s.reports.id,

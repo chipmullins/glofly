@@ -96,9 +96,26 @@ test("developers register apps; return addresses are checked", { skip }, async (
   assert.equal(bad.status, 400);
   const js = await call("/developer/apps", { method: "POST", token: dev.token, body: { name: "Bad", redirectUris: ["javascript://x"], scopes: [] } });
   assert.equal(js.status, 400);
-  const r = await call("/developer/apps", { method: "POST", token: dev.token, body: { name: "Cozy RP Website", website: "https://app.example.net", redirectUris: [REDIRECT], scopes: ["email", "roles"], confidential: true } });
+  const base = { name: "Cozy RP Website", website: "https://app.example.net", redirectUris: [REDIRECT], scopes: ["email", "roles"], confidential: true };
+  // The Developer Terms and a privacy policy link are required for a new app.
+  const noTerms = await call("/developer/apps", { method: "POST", token: dev.token, body: { ...base, privacyUrl: "https://app.example.net/privacy" } });
+  assert.equal(noTerms.status, 400);
+  assert.equal(noTerms.json.error, "terms");
+  const noPolicy = await call("/developer/apps", { method: "POST", token: dev.token, body: { ...base, agreeTerms: true } });
+  assert.equal(noPolicy.status, 400);
+  const r = await call("/developer/apps", { method: "POST", token: dev.token, body: { ...base, privacyUrl: "https://app.example.net/privacy", agreeTerms: true } });
   assert.equal(r.status, 201, JSON.stringify(r.json));
   app = r.json.app;
+  assert.equal(app.privacyUrl, "https://app.example.net/privacy");
+  assert.ok(app.devTermsVersion);
+  // Changing one thing leaves the rest alone (the website and scopes stay).
+  const renamed = await call(`/developer/apps/${app.id}`, { method: "PATCH", token: dev.token, body: { name: "Cozy RP Website" } });
+  assert.equal(renamed.status, 200, JSON.stringify(renamed.json));
+  assert.equal(renamed.json.app.website, "https://app.example.net");
+  assert.deepEqual(renamed.json.app.scopes, ["email", "roles"]);
+  assert.equal(renamed.json.app.privacyUrl, "https://app.example.net/privacy");
+  const cleared = await call(`/developer/apps/${app.id}`, { method: "PATCH", token: dev.token, body: { privacyUrl: "" } });
+  assert.equal(cleared.status, 400, "a privacy policy link can't be removed");
   secret = r.json.secret;
   assert.match(app.clientId, /^gfa_/);
   assert.match(secret, /^gfs_/);
@@ -118,6 +135,7 @@ test("the consent request refuses unregistered addresses, missing PKCE and extra
   const ok = await call(`/oauth/request?${q(params({ code_challenge: challenge, code_challenge_method: "S256" }))}`, { token: riley.token });
   assert.equal(ok.status, 200);
   assert.equal(ok.json.app.name, "Cozy RP Website");
+  assert.equal(ok.json.app.privacyUrl, "https://app.example.net/privacy", "the consent page links the app's privacy policy");
   assert.ok(ok.json.constellations.some((c: any) => c.id === cid));
 });
 
@@ -184,7 +202,7 @@ test("refresh tokens rotate; using an old one again signs the app out", { skip }
 });
 
 test("phone apps (no secret) use PKCE alone; server apps must send their secret", { skip }, async () => {
-  const r = await call("/developer/apps", { method: "POST", token: dev.token, body: { name: "Gloslate", redirectUris: ["gloslate://auth"], scopes: [], confidential: false } });
+  const r = await call("/developer/apps", { method: "POST", token: dev.token, body: { name: "Gloslate", redirectUris: ["gloslate://auth"], scopes: [], confidential: false, privacyUrl: "https://gloslate.app/privacy", agreeTerms: true } });
   assert.equal(r.status, 201);
   assert.equal(r.json.secret, null);
   const phone = r.json.app;
