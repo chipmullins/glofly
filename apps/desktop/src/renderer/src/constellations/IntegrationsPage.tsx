@@ -518,7 +518,10 @@ export default function IntegrationsPage({
     <div className="cx-settings-body ix-page">
       <p className="cx-settings-text">
         Connect your game server, a bot or another app to {c.name}. Keys only work for this constellation, Glofly shows each one
-        once, and every use is in Activity below.
+        once, and every use is in Activity below.{' '}
+        <a href={(window.glofly.web?.apiUrl ?? 'https://api.glofly.app') + '/docs/api'} target="_blank" rel="noreferrer">
+          Read the API docs
+        </a>
       </p>
 
       <ToolsSection c={c} onProblem={onProblem} onNotice={setNotice} />

@@ -59,6 +59,7 @@ import { startToolHooks } from "./tools/hooks";
 import { sweepIntegrationActivity } from "./integrations/keys";
 import { gameLinksRouter, sweepGameLinkCodes } from "./integrations/gameLinks";
 import { startReaderPushes } from "./integrations/readers";
+import { docsRouter } from "./docs/api";
 import { connectedAppsRouter, developerRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
@@ -131,6 +132,7 @@ app.use("/account/game-links", gameLinksRouter);
 app.use("/account", accountRouter);
 // 0.7.3: what a phone's camera opens from a sign-in QR code.
 app.use("/qr", qrPageRouter);
+app.use(docsRouter);
 // 0.7.3: the apps' error reports (Control → Errors).
 app.use("/errors", errorReportsRouter);
 app.use("/users", usersRouter);

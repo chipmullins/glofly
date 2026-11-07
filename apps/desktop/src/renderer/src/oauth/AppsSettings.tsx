@@ -211,7 +211,10 @@ export function DeveloperSettings(): React.JSX.Element {
       <p className="ix-text">
         Let people sign in to your site or app with Glofly (OAuth 2.0 + OpenID Connect, with PKCE). Discovery:{' '}
         <code className="ix-code">{(window.glofly.web?.apiUrl ?? 'https://api.glofly.app') + '/.well-known/openid-configuration'}</code>. Bots and game servers
-        use a constellation&apos;s Integrations page instead.
+        use a constellation&apos;s Integrations page instead.{' '}
+        <a href={(window.glofly.web?.apiUrl ?? 'https://api.glofly.app') + '/docs/api#signin'} target="_blank" rel="noreferrer">
+          Read the API docs
+        </a>
       </p>
       {problem && <p className="cx-error">{problem}</p>}
       {secret && (
