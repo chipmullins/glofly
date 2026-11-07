@@ -1475,18 +1475,18 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   }
   let thread: Awaited<ReturnType<typeof threadIn>> = null;
   if (!threadParam.success) {
-    res.status(400).json({ error: "invalid", message: "That thread isn't there any more." });
+    res.status(400).json({ error: "invalid", message: "That trail isn't there any more." });
     return;
   }
   if (threadParam.data) {
     thread = chat.kind === "nebula" ? await threadIn(id.data, threadParam.data) : null;
     if (!thread) {
-      res.status(404).json({ error: "not_found", message: "That thread isn't there any more." });
+      res.status(404).json({ error: "not_found", message: "That trail isn't there any more." });
       return;
     }
     // A forum post's opening message comes from who started it.
     if (thread.nebulaKind === "forum" && !thread.firstMessageId && thread.authorId !== myId) {
-      res.status(404).json({ error: "not_found", message: "That post isn't there yet." });
+      res.status(404).json({ error: "not_found", message: "That signal isn't there yet." });
       return;
     }
   }

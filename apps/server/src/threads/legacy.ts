@@ -5,7 +5,7 @@ import type { NextFunction, Request, Response } from "express";
 // `X-Glofly-Features: threads`; for everyone else, every forum nebula in an answer becomes a
 // read-only text nebula that says to update (its timeline is empty: all posts are threads).
 
-const NOTE = "This is a forum. Update Glofly to read and write posts here.";
+const NOTE = "This is a star chart. Update Glofly to read and send signals here.";
 
 export const knowsThreads = (req: Request) => /(^|[\s,])threads($|[\s,])/.test(String(req.headers["x-glofly-features"] ?? ""));
 

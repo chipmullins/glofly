@@ -72,7 +72,7 @@ async function threadHere(req: Request, res: Response, s: Standing) {
         .where(and(eq(nebulaThreads.id, tid.data), eq(nebulaThreads.constellationId, s.constellationId)))
     : [];
   if (!row || !(await seesNebulaChat(s.userId, row.n.conversationId))) {
-    bad(res, "That thread isn't there any more.", 404);
+    bad(res, "That trail isn't there any more.", 404);
     return null;
   }
   return row;
@@ -164,7 +164,7 @@ threadsRouter.post("/:id/nebulas/:nid/threads", async (req, res) => {
   const n = await nebulaHere(req, res, s);
   if (!n) return;
   const body = startBody.safeParse(req.body);
-  if (!body.success) return bad(res, "Send a title (and a message for a thread).");
+  if (!body.success) return bad(res, "Send a title (and a message for a trail).");
   const chat = await access(n.conversationId, s.userId);
   if (!chat || !(await canPost(chat, s.userId))) return bad(res, chat ? await cantPostMessage(chat, s.userId) : "You can't post here.", 403);
   const staff = isStaff(s);
@@ -172,19 +172,19 @@ threadsRouter.post("/:id/nebulas/:nid/threads", async (req, res) => {
   let parent: { id: string; body: string } | null = null;
   let tagIds: string[] = [];
   if (n.kind === "text") {
-    if (n.threadsStaffOnly && !staff) return bad(res, "Only staff can start threads here.", 403);
-    if (!body.data.parentMessageId) return bad(res, "Pick a message to start the thread from.");
+    if (n.threadsStaffOnly && !staff) return bad(res, "Only staff can start trails here.", 403);
+    if (!body.data.parentMessageId) return bad(res, "Pick a message to start the trail from.");
     const [m] = await db
       .select({ id: messages.id, body: messages.body, deletedAt: messages.deletedAt, event: messages.event, threadId: messages.threadId, lantern: messages.lantern })
       .from(messages)
       .where(and(eq(messages.id, body.data.parentMessageId), eq(messages.conversationId, n.conversationId)));
-    if (!m || m.deletedAt || m.event || m.threadId || m.lantern) return bad(res, "You can't start a thread from that message.");
+    if (!m || m.deletedAt || m.event || m.threadId || m.lantern) return bad(res, "You can't start a trail from that message.");
     const [already] = await db.select().from(nebulaThreads).where(eq(nebulaThreads.parentMessageId, m.id));
     if (already) return void res.json({ thread: await oneSummary(already, s.userId, n.threadCloseDays), existed: true });
     parent = m;
     if (!title) title = threadTitleFrom(m.body);
   } else {
-    if (!title) return bad(res, "Give your post a title.");
+    if (!title) return bad(res, "Give your signal a title.");
     const checked = checkTags(n, body.data.tagIds, staff);
     if (typeof checked === "string") return bad(res, checked);
     tagIds = checked;
@@ -193,7 +193,7 @@ threadsRouter.post("/:id/nebulas/:nid/threads", async (req, res) => {
   if (blocked) return bad(res, blocked, 403);
   // A forum post waiting for its opening message counts too (no flooding with empty posts).
   const waiting = await db.$count(nebulaThreads, and(eq(nebulaThreads.authorId, s.userId), isNull(nebulaThreads.firstMessageId), isNull(nebulaThreads.parentMessageId)));
-  if (waiting >= 5) return bad(res, "Finish the posts you started first.", 429);
+  if (waiting >= 5) return bad(res, "Finish the signals you started first.", 429);
   const [t] = await db
     .insert(nebulaThreads)
     .values({ id: randomUUID(), constellationId: s.constellationId, nebulaId: n.id, conversationId: n.conversationId, parentMessageId: parent?.id ?? null, title, tagIds, authorId: s.userId })
@@ -250,7 +250,7 @@ threadsRouter.patch("/:id/threads/:tid", async (req, res) => {
     set.title = title;
   }
   if (d.tagIds !== undefined) {
-    if (n.kind !== "forum") return bad(res, "Only forum posts have tags.");
+    if (n.kind !== "forum") return bad(res, "Only signals in a star chart have tags.");
     const checked = checkTags(n, d.tagIds, staff, t.tagIds, mine);
     if (typeof checked === "string") return bad(res, checked, 403);
     set.tagIds = checked;
@@ -258,18 +258,18 @@ threadsRouter.patch("/:id/threads/:tid", async (req, res) => {
   if (d.closed !== undefined) set.closedAt = d.closed ? new Date() : null;
   if (d.closed === false) set.lastMessageAt = new Date();
   if (d.pinned !== undefined) {
-    if (!staff) return bad(res, "Only staff can pin posts.", 403);
+    if (!staff) return bad(res, "Only staff can pin signals.", 403);
     set.pinnedAt = d.pinned ? new Date() : null;
   }
   if (d.answerMessageId !== undefined) {
-    if (n.kind !== "forum") return bad(res, "Only forum posts have answers.");
-    if (!staff && !mine) return bad(res, "Only who posted it or staff can mark the answer.", 403);
+    if (n.kind !== "forum") return bad(res, "Only signals in a star chart have answers.");
+    if (!staff && !mine) return bad(res, "Only who sent it or staff can mark the answer.", 403);
     if (d.answerMessageId) {
       const [m] = await db
         .select({ id: messages.id, deletedAt: messages.deletedAt })
         .from(messages)
         .where(and(eq(messages.id, d.answerMessageId), eq(messages.threadId, t.id)));
-      if (!m || m.deletedAt || m.id === t.firstMessageId) return bad(res, "Pick a reply in this post.");
+      if (!m || m.deletedAt || m.id === t.firstMessageId) return bad(res, "Pick a reply in this signal.");
     }
     set.answerMessageId = d.answerMessageId;
     // "Solved": the forum's tag named Solved goes on with an answer and off without one.
@@ -299,7 +299,7 @@ threadsRouter.delete("/:id/threads/:tid", async (req, res) => {
   const staff = isStaff(s);
   // Who started it may delete it while nobody else has replied; staff any time.
   const others = await db.$count(messages, and(eq(messages.threadId, t.id), sql`${messages.senderId} <> ${s.userId}::uuid`, isNull(messages.deletedAt)));
-  if (!staff && !(t.authorId === s.userId && others === 0)) return bad(res, "Only staff can delete a thread others have replied in.", 403);
+  if (!staff && !(t.authorId === s.userId && others === 0)) return bad(res, "Only staff can delete a trail others have replied in.", 403);
   if (await frozen(s.constellationId)) return bad(res, "This constellation is paused by the Glofly team.", 403);
   await db.delete(nebulaThreads).where(eq(nebulaThreads.id, t.id));
   if (t.authorId !== s.userId) await logModeration(s.constellationId, s.userId, "thread_deleted", t.authorId, { thread: t.title, nebulaId: n.id });

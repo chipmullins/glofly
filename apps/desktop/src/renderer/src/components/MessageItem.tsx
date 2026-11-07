@@ -579,12 +579,12 @@ export default function MessageItem({
             </button>
           )}
           {onStartThread && !m.deleted && !item.pending && (
-            <button type="button" className="message-thread-button" aria-label="Start a thread" title="Start a thread" onClick={onStartThread}>
+            <button type="button" className="message-thread-button" aria-label="Start a trail" title="Start a trail" onClick={onStartThread}>
               <Icon>
                 <path d="M4 4v9a4 4 0 0 0 4 4h10" />
                 <path d="m14 13 4 4-4 4" />
               </Icon>
-              <span>Start a thread</span>
+              <span>Start a trail</span>
             </button>
           )}
           <button

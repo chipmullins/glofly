@@ -82,7 +82,7 @@ export default function ThreadPanel({
   }, [])
 
   return (
-    <aside className="thread-panel" aria-label={`Thread: ${thread.title}`}>
+    <aside className="thread-panel" aria-label={`Trail: ${thread.title}`}>
       <header className="thread-panel-head">
         <div className="thread-panel-row">
           <span className="thread-panel-icon">
@@ -100,7 +100,7 @@ export default function ThreadPanel({
             >
               <input
                 autoFocus
-                aria-label="Thread name"
+                aria-label="Trail name"
                 value={renaming}
                 maxLength={100}
                 onChange={(e) => setRenaming(e.target.value)}
@@ -124,7 +124,7 @@ export default function ThreadPanel({
             <button
               type="button"
               className="thread-icon-button"
-              aria-label="Thread options"
+              aria-label="Trail options"
               aria-expanded={menu}
               onClick={() => setMenu((v) => !v)}
             >
@@ -149,7 +149,7 @@ export default function ThreadPanel({
                     className="menu-item"
                     onClick={() => (setMenu(false), setRenaming(thread.title))}
                   >
-                    Rename thread
+                    Rename trail
                   </button>
                 )}
                 {(mine || staff) && (
@@ -162,7 +162,7 @@ export default function ThreadPanel({
                       void change(threads.change(c.id, thread.id, { closed: !thread.closed }))
                     )}
                   >
-                    {thread.closed ? 'Reopen thread' : 'Close thread'}
+                    {thread.closed ? 'Reopen trail' : 'Close trail'}
                   </button>
                 )}
                 {(mine || staff) && (
@@ -177,7 +177,7 @@ export default function ThreadPanel({
                         .then((r) => (r.ok ? onClose() : onProblem(r.message)))
                     }}
                   >
-                    Delete thread
+                    Delete trail
                   </button>
                 )}
                 {!mine && !staff && (
@@ -189,7 +189,7 @@ export default function ThreadPanel({
           <button
             type="button"
             className="thread-icon-button"
-            aria-label="Close thread"
+            aria-label="Close trail"
             onClick={onClose}
           >
             <svg
@@ -221,7 +221,7 @@ export default function ThreadPanel({
             constellationId: c.id,
             parent,
             alsoInName: nebula.name,
-            placeholder: 'Reply in thread',
+            placeholder: 'Reply in trail',
             onSummary: (t) => onSummary({ ...t, following: true })
           }}
         />
@@ -267,10 +267,10 @@ export function ThreadsButton({
         className="threads-button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        title="Threads in this nebula"
+        title="Trails in this nebula"
       >
         <ThreadIcon size={16} />
-        Threads{list && list.length > 0 ? ` · ${list.length}${list.length >= 30 ? '+' : ''}` : ''}
+        Trails{list && list.length > 0 ? ` · ${list.length}${list.length >= 30 ? '+' : ''}` : ''}
       </button>
       {open && (
         <div role="menu" className="menu threads-list" onMouseLeave={() => setOpen(false)}>
@@ -299,7 +299,7 @@ export function ThreadsButton({
             ))
           ) : (
             <span className="menu-note">
-              No open threads. Hover a message and press Start a thread.
+              No open trails. Hover a message and press Start a trail.
             </span>
           )}
         </div>

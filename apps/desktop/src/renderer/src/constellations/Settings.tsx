@@ -654,10 +654,10 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                   type="button"
                   role="radio"
                   aria-checked={newKind === 'forum'}
-                  title="Posts with titles and tags, each its own conversation"
+                  title="Signals with titles and tags, each its own conversation"
                   onClick={() => setNewKind('forum')}
                 >
-                  Forum
+                  Star chart
                 </button>
                 <button
                   type="button"
@@ -896,7 +896,7 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                     {n.kind === 'text' && (
                       <>
                         <label className="cx-field">
-                          <span>Who can start threads</span>
+                          <span>Who can start trails</span>
                           <select
                             value={draft.threadsStaffOnly ? 'staff' : 'all'}
                             onChange={(e) =>
@@ -908,7 +908,7 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                           </select>
                         </label>
                         <CloseDaysField
-                          what="threads"
+                          what="trails"
                           value={draft.threadCloseDays}
                           onChange={(d) => setDraft({ ...draft, threadCloseDays: d })}
                         />
@@ -921,7 +921,7 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                           onChange={(f) => setDraft({ ...draft, forum: f })}
                         />
                         <CloseDaysField
-                          what="posts"
+                          what="signals"
                           value={draft.threadCloseDays}
                           onChange={(d) => setDraft({ ...draft, threadCloseDays: d })}
                         />
@@ -960,7 +960,7 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                         {n.kind === 'voice'
                           ? 'Voice nebula'
                           : n.kind === 'forum'
-                            ? 'Forum'
+                            ? 'Star chart'
                             : n.readOnly
                               ? 'Announcements'
                               : 'Text nebula'}

@@ -105,7 +105,7 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
         } else if (e.type === 'thread:updated' && e.thread.id === threadId) {
           setThread((t) => (t ? { ...e.thread, following: t.following, unread: 0 } : t))
         } else if (e.type === 'thread:deleted' && e.threadId === threadId) {
-          cxSay(forum ? 'That post was deleted.' : 'That thread was deleted.')
+          cxSay(forum ? 'That signal was deleted.' : 'That trail was deleted.')
           router.back()
         }
       }),
@@ -243,8 +243,8 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
   ) : (
     <NightHeader
       overlay
-      title={thread?.title ?? 'Thread'}
-      subtitle={`Thread in #${n.name}${thread ? ` · ${thread.replyCount} ${thread.replyCount === 1 ? 'reply' : 'replies'}` : ''}`}
+      title={thread?.title ?? 'Trail'}
+      subtitle={`Trail in #${n.name}${thread ? ` · ${thread.replyCount} ${thread.replyCount === 1 ? 'reply' : 'replies'}` : ''}`}
       right={
         thread ? (
           <Pressable
@@ -288,7 +288,7 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
             {countLine}
           </>
         }
-        ListEmptyComponent={loaded && forum ? <Text size={14} style={{ color: N.ink2, textAlign: 'center', marginTop: 20 }}>This post is empty.</Text> : null}
+        ListEmptyComponent={loaded && forum ? <Text size={14} style={{ color: N.ink2, textAlign: 'center', marginTop: 20 }}>This signal is empty.</Text> : null}
         renderItem={({ item }) => (
           <NebulaRow
             row={item}
@@ -316,7 +316,7 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
       ) : null}
       <Composer
         ref={composer}
-        placeholder={forum ? 'Reply to this post' : 'Reply in thread'}
+        placeholder={forum ? 'Reply to this signal' : 'Reply in trail'}
         people={members.filter((m) => m.id !== meId)}
         mentionable
         reply={reply}
@@ -325,7 +325,7 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
         onCancel={() => setReply(null)}
         onSend={(t) => void send(t)}
         onTyping={() => undefined}
-        onAttach={() => cxSay('Photos and files in threads are coming soon on phones.')}
+        onAttach={() => cxSay('Photos and files in trails are coming soon on phones.')}
       />
     </KeyboardAvoidingView>
   )
@@ -372,12 +372,12 @@ export function ForumList({ c, n }: { c: ConstellationDetail; n: Nebula }) {
           </Text>
           <Text size={12} style={{ color: N.ink2 }}>
             {c.name}
-            {list ? ` · ${list.length}${list.length >= 30 ? '+' : ''} posts` : ''}
+            {list ? ` · ${list.length}${list.length >= 30 ? '+' : ''} signals` : ''}
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="New post"
+          accessibilityLabel="New signal"
           disabled={!!c.me.timedOutUntil}
           onPress={() => router.push({ pathname: '/constellations/[cid]/new-post', params: { cid: c.id, nid: n.id } })}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: N.orange, alignItems: 'center', justifyContent: 'center', opacity: c.me.timedOutUntil ? 0.4 : 1 }}
@@ -391,7 +391,7 @@ export function ForumList({ c, n }: { c: ConstellationDetail; n: Nebula }) {
         <TextInput
           value={q}
           onChangeText={setQ}
-          placeholder="Search posts"
+          placeholder="Search signals"
           placeholderTextColor={N.faint}
           style={{ height: 38, borderRadius: 19, paddingHorizontal: 14, backgroundColor: N.card, color: N.ink, fontSize: 15 }}
         />
@@ -415,7 +415,7 @@ export function ForumList({ c, n }: { c: ConstellationDetail; n: Nebula }) {
         ListEmptyComponent={
           list ? (
             <Text size={14} style={{ color: N.ink2, textAlign: 'center', marginTop: 30 }}>
-              {q || tag ? 'No posts match.' : 'No posts yet. Ask a question or share a guide.'}
+              {q || tag ? 'No signals match.' : 'No signals yet. Ask a question or share a guide.'}
             </Text>
           ) : null
         }
@@ -481,7 +481,7 @@ export function NewPostScreen({ c, n }: { c: ConstellationDetail; n: Nebula }) {
   const field = { minHeight: 44, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: N.card, color: N.ink, fontSize: 15, borderWidth: 1, borderColor: N.edge } as const
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: N.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <NightHeader title={`New post in #${n.name}`} close />
+      <NightHeader title={`New signal in #${n.name}`} close />
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
         {n.forum?.guidelines ? (
           <View style={{ padding: 12, borderRadius: 12, backgroundColor: N.card2 }}>
@@ -515,7 +515,7 @@ export function NewPostScreen({ c, n }: { c: ConstellationDetail; n: Nebula }) {
           </Text>
           <TextInput value={body} onChangeText={setBody} multiline maxLength={4000} style={[field, { minHeight: 140, textAlignVertical: 'top' }]} />
         </View>
-        <NightButton label="Post" busy={busy} disabled={!title.trim() || !body.trim() || (needTag && !picked.length)} onPress={() => void post()} />
+        <NightButton label="Send signal" busy={busy} disabled={!title.trim() || !body.trim() || (needTag && !picked.length)} onPress={() => void post()} />
       </ScrollView>
     </KeyboardAvoidingView>
   )

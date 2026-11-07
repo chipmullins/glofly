@@ -158,12 +158,12 @@ export function ForumView({
           onClick={onNewPost}
           disabled={!!c.me.timedOutUntil}
         >
-          + New post
+          + New signal
         </button>
       </header>
       <div className="forum-tools">
         <label className="forum-search">
-          <span className="sr-only">Search posts</span>
+          <span className="sr-only">Search signals</span>
           <svg
             width="16"
             height="16"
@@ -179,7 +179,7 @@ export function ForumView({
           </svg>
           <input
             value={q}
-            placeholder="Search posts"
+            placeholder="Search signals"
             maxLength={100}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -210,20 +210,20 @@ export function ForumView({
             onChange={(e) => setSort(e.target.value === 'newest' ? 'newest' : 'activity')}
           >
             <option value="activity">Latest activity</option>
-            <option value="newest">Newest posts</option>
+            <option value="newest">Newest signals</option>
           </select>
         </label>
       </div>
       <div className="forum-list">
-        {list === null && <p className="forum-empty">Loading posts…</p>}
+        {list === null && <p className="forum-empty">Loading signals…</p>}
         {list?.length === 0 && (
           <div className="forum-empty">
             <ForumIcon size={34} color="#e8a25e" />
-            <b>{q || tag ? 'No posts match.' : 'No posts yet.'}</b>
+            <b>{q || tag ? 'No signals match.' : 'No signals yet.'}</b>
             <span>
               {q || tag
                 ? 'Try other words or another tag.'
-                : 'Ask a question or share a guide: each post gets its own conversation.'}
+                : 'Ask a question or share a guide: each signal gets its own conversation.'}
             </span>
           </div>
         )}
@@ -273,7 +273,7 @@ export function ForumView({
         })}
         {hasMore && (
           <button type="button" className="forum-more" onClick={() => load(list?.length ?? 0)}>
-            Show more posts
+            Show more signals
           </button>
         )}
       </div>
@@ -369,7 +369,7 @@ export function PostView({
               <button
                 type="button"
                 className="thread-icon-button"
-                aria-label="Post options"
+                aria-label="Signal options"
                 aria-expanded={menu}
                 onClick={() => setMenu((v) => !v)}
               >
@@ -397,7 +397,7 @@ export function PostView({
                         change(threads.change(c.id, post.id, { pinned: !post.pinned }))
                       )}
                     >
-                      {post.pinned ? 'Unpin post' : 'Pin to the top'}
+                      {post.pinned ? 'Unpin signal' : 'Pin to the top'}
                     </button>
                   )}
                   {(mine || staff) && (
@@ -410,7 +410,7 @@ export function PostView({
                         change(threads.change(c.id, post.id, { closed: !post.closed }))
                       )}
                     >
-                      {post.closed ? 'Reopen post' : 'Close post'}
+                      {post.closed ? 'Reopen signal' : 'Close signal'}
                     </button>
                   )}
                   {(mine || staff) && (
@@ -425,11 +425,11 @@ export function PostView({
                           .then((r) => (r.ok ? onBack() : onProblem(r.message)))
                       }}
                     >
-                      Delete post
+                      Delete signal
                     </button>
                   )}
                   {!mine && !staff && (
-                    <span className="menu-note">Only who posted it or staff can change it.</span>
+                    <span className="menu-note">Only who sent it or staff can change it.</span>
                   )}
                 </div>
               )}
@@ -445,7 +445,7 @@ export function PostView({
           constellationId: c.id,
           parent: null,
           alsoInName: null,
-          placeholder: 'Reply to this post',
+          placeholder: 'Reply to this signal',
           answerMessageId: post.answerMessageId,
           onMarkAnswer:
             mine || staff
@@ -530,10 +530,10 @@ export function NewPostDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`New post in #${nebula.name}`}
+        aria-label={`New signal in #${nebula.name}`}
         className="ix-sheet forum-dialog"
       >
-        <h2 className="ix-sheet-title">New post in #{nebula.name}</h2>
+        <h2 className="ix-sheet-title">New signal in #{nebula.name}</h2>
         {nebula.forum?.guidelines && (
           <p className="forum-guidelines">
             <EmojiText text={nebula.forum.guidelines} />
@@ -589,7 +589,7 @@ export function NewPostDialog({
             onChange={(e) => setBody(e.target.value)}
           />
         </label>
-        <span className="ix-muted">Add photos or files in a reply once it's posted.</span>
+        <span className="ix-muted">Add photos or files in a reply once it's sent.</span>
         {problem && <p className="cx-error">{problem}</p>}
         <div className="ix-actions">
           <button type="button" className="ix-btn" onClick={onClose}>
@@ -601,7 +601,7 @@ export function NewPostDialog({
             disabled={busy || !title.trim() || !body.trim() || (needTag && !picked.length)}
             onClick={() => void post()}
           >
-            Post
+            Send signal
           </button>
         </div>
       </div>
@@ -648,7 +648,7 @@ export function ForumSettingsFields({
   return (
     <div className="forum-settings">
       <label className="cx-field">
-        <span>Post guidelines (shown when someone writes a post)</span>
+        <span>Signal guidelines (shown when someone writes a signal)</span>
         <textarea
           rows={3}
           value={draft.guidelines}
@@ -742,7 +742,7 @@ export function ForumSettingsFields({
           checked={draft.requireTag}
           onChange={(e) => onChange({ ...draft, requireTag: e.target.checked })}
         />
-        Posts need at least one tag
+        Signals need at least one tag
       </label>
       <label className="cx-field">
         <span>Default sort</span>
@@ -753,7 +753,7 @@ export function ForumSettingsFields({
           }
         >
           <option value="activity">Latest activity</option>
-          <option value="newest">Newest posts</option>
+          <option value="newest">Newest signals</option>
         </select>
       </label>
     </div>
@@ -767,7 +767,7 @@ export function CloseDaysField({
 }: {
   value: number
   onChange: (d: number) => void
-  what: 'threads' | 'posts'
+  what: 'trails' | 'signals'
 }): React.JSX.Element {
   return (
     <label className="cx-field">

@@ -3048,7 +3048,7 @@ function ThreadChip({
       type="button"
       className="thread-chip"
       onClick={onOpen}
-      aria-label={`Open thread ${thread.title}, ${thread.replyCount} replies`}
+      aria-label={`Open trail ${thread.title}, ${thread.replyCount} replies`}
     >
       <svg
         width="16"

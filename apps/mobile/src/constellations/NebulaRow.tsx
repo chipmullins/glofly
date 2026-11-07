@@ -270,7 +270,7 @@ export const NebulaRow = memo(function NebulaRow({
               {m.thread && onThread && !m.deleted ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Thread ${m.thread.title}, ${m.thread.replyCount} replies`}
+                  accessibilityLabel={`Trail ${m.thread.title}, ${m.thread.replyCount} replies`}
                   onPress={() => onThread(m)}
                   style={({ pressed }) => ({
                     marginTop: 7,

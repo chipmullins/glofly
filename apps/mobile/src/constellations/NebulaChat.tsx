@@ -298,7 +298,7 @@ export function NebulaChat({
       ...(m.body && !special(m) ? [{ key: 'copy', label: 'Copy text', icon: <Icon name="copy" size={18} color={N.ink} /> }] : []),
       // Communities round: a thread off this message (or open the one it has)
       ...(!m.deleted && !m.event && !m.lantern && (m.thread || (canAct && (!n.threadsStaffOnly || can(c, 'manageNebulas') || can(c, 'deleteMessages'))))
-        ? [{ key: 'thread', label: m.thread ? 'Open thread' : 'Start a thread', icon: <Icon name="reply" size={18} color={N.ink} /> }]
+        ? [{ key: 'thread', label: m.thread ? 'Open trail' : 'Start a trail', icon: <Icon name="reply" size={18} color={N.ink} /> }]
         : []),
       ...(mine && m.body && canAct && !special(m) ? [{ key: 'edit', label: 'Edit', icon: <Icon name="pencil" size={18} color={N.ink} /> }] : []),
       ...(mine && m.linkPreview && canAct ? [{ key: 'unpreview', label: 'Remove link preview', icon: <Icon name="link" size={18} color={N.ink} /> }] : []),
