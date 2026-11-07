@@ -41,10 +41,12 @@ type Props = {
   onSendLater?: (text: string) => void
   /** 0.8.0 keyboard shortcuts: the box gained or lost focus, or became empty / not empty */
   onKeyState?: (s: { focused: boolean; empty: boolean }) => void
+  /** Communities round (nebulas): the constellation's slash commands, offered while typing "/" */
+  commands?: { name: string; description: string; bot: { displayName: string } }[]
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot, canSendEmpty, onSendLater, onKeyState },
+  { placeholder, people, mentionable, reply, replyName, editing, onCancel, onSend, onTyping, onAttach, voice, recordButton, topSlot, canSendEmpty, onSendLater, onKeyState, commands },
   ref,
 ) {
   const { c } = useTheme()
@@ -82,6 +84,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   const query = mentionable ? mentionQuery(text, selection.start) : null
   const suggestions = query ? mentionSuggestions(query.query, people) : []
+  const commandMatches = commands?.length && !editing && /^\/[a-z0-9-]*$/i.test(text) ? commands.filter((x) => x.name.startsWith(text.slice(1).toLowerCase())).slice(0, 6) : []
+  function pickCommand(name: string) {
+    const next = `/${name} `
+    setText(next)
+    setSelection({ start: next.length, end: next.length })
+    input.current?.focus()
+  }
 
   function insertMention(p: PublicUser) {
     if (!query) return
@@ -116,6 +125,20 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   return (
     <View style={{ backgroundColor: c.barBg, borderTopWidth: 0.5, borderTopColor: c.line, paddingHorizontal: 10, paddingTop: 6, paddingBottom: Math.max(insets.bottom, 8) + 4, gap: 8 }}>
       {topSlot}
+      {commandMatches.length ? (
+        <View accessibilityLabel="Commands" style={{ borderRadius: 16, backgroundColor: c.sheet, borderWidth: 1, borderColor: c.line, overflow: 'hidden' }}>
+          {commandMatches.map((x) => (
+            <Pressable key={x.name} accessibilityRole="button" accessibilityLabel={`/${x.name}: ${x.description}`} onPress={() => pickCommand(x.name)} android_ripple={{ color: c.line }} style={{ paddingHorizontal: 14, paddingVertical: 9, gap: 1 }}>
+              <Text size={15} weight="bold">
+                /{x.name}
+              </Text>
+              <Text size={13} tone="muted" numberOfLines={1}>
+                {x.description} · {x.bot.displayName}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       {suggestions.length ? (
         <View accessibilityLabel="People to mention" style={{ borderRadius: 16, backgroundColor: c.sheet, borderWidth: 1, borderColor: c.line, overflow: 'hidden', maxHeight: 240 }}>
           <ScrollView keyboardShouldPersistTaps="always">

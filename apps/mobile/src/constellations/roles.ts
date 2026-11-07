@@ -28,7 +28,10 @@ export function outranks(c: ConstellationDetail, meId: string, userId: string): 
 
 /** A name's color and badge in a nebula (plain members have neither). */
 export function roleLook(c: ConstellationDetail, userId: string): RoleLook {
-  if (!c.members.some((m) => m.user.id === userId)) return null
+  const member = c.members.find((m) => m.user.id === userId)
+  if (!member) return null
+  // Communities round: a constellation's bot always shows BOT.
+  if (member.user.bot) return { name: 'BOT', color: '#7fd4e8', badgeBg: hexA('#7fd4e8', 0.16) }
   const role = topRole(c, userId)
   if (role.kind === 'member') return { name: null, color: '#f5ede6', badgeBg: 'transparent' }
   const colors = role.kind === 'owner' ? ROLE_COLORS.ember : (ROLE_COLORS[role.color] ?? ROLE_COLORS.gray)

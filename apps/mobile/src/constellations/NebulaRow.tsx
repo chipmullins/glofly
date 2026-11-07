@@ -74,6 +74,7 @@ export const NebulaRow = memo(function NebulaRow({
   onRetry,
   onFacePress,
   onOpenPhoto,
+  onButton,
 }: {
   row: NebulaRowInfo
   meId: string
@@ -92,6 +93,8 @@ export const NebulaRow = memo(function NebulaRow({
   onRetry?: (m: Message) => void
   onFacePress?: (userId: string) => void
   onOpenPhoto?: (m: Message, index: number) => void
+  /** Communities round: a click on one of a bot's buttons */
+  onButton?: (m: Message, buttonId: string) => void
 }) {
   const m = row.message
   const face = compact ? 32 : 36
@@ -222,6 +225,32 @@ export const NebulaRow = memo(function NebulaRow({
               {m.linkPreview ? (
                 <View style={{ marginTop: 6, alignSelf: 'flex-start', maxWidth: 320 }}>
                   <LinkCard message={m} preview={m.linkPreview} mine={false} />
+                </View>
+              ) : null}
+              {m.buttons?.length && sender?.bot && onButton ? (
+                <View accessibilityLabel="Bot buttons" style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {m.buttons.map((b) => (
+                    <Pressable
+                      key={b.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={b.label}
+                      onPress={() => onButton(m, b.id)}
+                      style={({ pressed }) => ({
+                        minHeight: 40,
+                        paddingHorizontal: 16,
+                        borderRadius: 20,
+                        justifyContent: 'center',
+                        opacity: pressed ? 0.7 : 1,
+                        backgroundColor: b.style === 'primary' ? N.green : 'transparent',
+                        borderWidth: b.style === 'primary' ? 0 : 1,
+                        borderColor: N.edge2,
+                      })}
+                    >
+                      <Text size={14} weight="bold" style={{ color: b.style === 'primary' ? '#ffffff' : b.style === 'danger' ? N.redText : N.ink }}>
+                        {b.label}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
               ) : null}
               {/* 0.7.5: a constellation invite link becomes a card */}

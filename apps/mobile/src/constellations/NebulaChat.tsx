@@ -45,6 +45,8 @@ import { openNebulaSheet } from './nebulaActions'
 import { CountBadge, FireflyMark, Glyph, N, SpeakerGlyph, StarGlyph } from './ui'
 // 0.8.0 community tools: event cards, search across the constellation
 import { EventCard, takeJump, useEventMessages } from './communityTools'
+import { parseSlashCommand, type ConstellationCommand } from '@glofly/shared'
+import { integrations } from '@/api/integrations'
 import { useCallStripHeight } from '@/calls/CallOverlay'
 
 // A text nebula (canvas boards 4 and 4b): the chat with role colors and badges, @you rows,
@@ -108,6 +110,29 @@ export function NebulaChat({
   const [scheduledOpen, setScheduledOpen] = useState(false)
   const [laterText, setLaterText] = useState<string | null>(null)
   const voice = useVoice(n.conversationId)
+  // Communities round: the constellation's slash commands and bot buttons.
+  const [commands, setCommands] = useState<ConstellationCommand[]>([])
+  const hasBots = c.members.some((m) => m.user.bot)
+  useEffect(() => {
+    if (!hasBots) return setCommands([])
+    let stale = false
+    void integrations.commands(c.id).then((r) => {
+      if (!stale && r.ok) setCommands(r.data.commands)
+    })
+    return () => {
+      stale = true
+    }
+  }, [c.id, hasBots, c])
+  const onButton = useCallback(
+    (m: Message, buttonId: string) => {
+      void integrations.clickButton(c.id, m.id, buttonId).then((r) => {
+        if (!r.ok) cxSay(r.message)
+        else if (!r.data.delivered) cxSay("The bot didn't answer. Try again in a moment.")
+        else haptic.success()
+      })
+    },
+    [c.id],
+  )
   const blocked = cantPost(c, n)
   const timedOut = blocked?.kind === 'timeout'
   const now = useNow(timedOut ? 1000 : 60_000)
@@ -160,6 +185,18 @@ export function NebulaChat({
   useKeyCommand('escape', () => setSearching(false), focused && searching)
 
   function onSend(text: string) {
+    // Communities round: a bot's slash command posts my message through the server and tells the bot.
+    const command = !editing && !uploads.items.length ? parseSlashCommand(text) : null
+    if (command && commands.some((x) => x.name === command.name)) {
+      setReply(null)
+      void integrations.runCommand(c.id, n.id, text).then((r) => {
+        if (!r.ok) {
+          cxSay(r.message)
+          composer.current?.setText(text)
+        } else if (!r.data.delivered) cxSay("The bot didn't answer. It may be offline.")
+      })
+      return
+    }
     if (editing) {
       const m = editing
       setEditing(null)
@@ -370,9 +407,9 @@ export function NebulaChat({
       const row = item.message.id === firstNew && newSince ? (
       <View>
         <NewSinceLine since={newSince.since} />
-        <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />
+        <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} />
       </View>
-    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} />
+    ) : <HeldRow item={item} c={c} meId={meId} people={people} members={members} highlight={highlight === item.message.id} canAct={canAct} onMenu={(m, ref) => void latest.current.messageMenu(m, ref)} onReact={onReact} onQuote={onQuote} onFace={onFace} onPhoto={onPhoto} memberIds={memberIds} onButton={onButton} />
       if (!ev || raw.message.deleted) return row
       return (
         <View>
@@ -388,7 +425,7 @@ export function NebulaChat({
         </View>
       )
     },
-    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds, firstNew, newSince, eventCards],
+    [c, meId, people, members, highlight, canAct, onReact, onQuote, onFace, onPhoto, memberIds, firstNew, newSince, eventCards, onButton],
   )
 
   // Phones: swipe left on the chat for the members (the canvas's other way in, besides the button).
@@ -583,6 +620,7 @@ export function NebulaChat({
             setEditing(null)
           }}
           onSend={onSend}
+          commands={commands}
           onTyping={() => sendTyping(n.conversationId)}
           onAttach={() => void plusMenu()}
           topSlot={
@@ -689,6 +727,7 @@ function HeldRow({
   onQuote,
   onFace,
   onPhoto,
+  onButton,
 }: {
   item: NebulaRowInfo
   c: ConstellationDetail
@@ -703,6 +742,7 @@ function HeldRow({
   onFace: (uid: string) => void
   onPhoto: (m: Message, i: number) => void
   memberIds: string[]
+  onButton: (m: Message, buttonId: string) => void
 }) {
   const ref = useRef<RNView>(null)
   const m = item.message
@@ -723,6 +763,7 @@ function HeldRow({
         onRetry={retryOrDiscard}
         onFacePress={onFace}
         onOpenPhoto={onPhoto}
+        onButton={onButton}
       />
     </View>
   )

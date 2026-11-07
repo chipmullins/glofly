@@ -34,6 +34,8 @@ export default function SettingsMenu() {
     { key: 'members', label: 'Members', icon: <Icon name="friends" size={17} color={N.ink} />, detail: c.pendingRequests ? `${c.pendingRequests} ${c.pendingRequests === 1 ? 'request' : 'requests'}` : String(c.members.length), show: manageMembers },
     { key: 'invites', label: 'Invites', icon: <Glyph name="invite" size={17} />, show: can(c, 'invite') },
     { key: 'moderation', label: 'Moderation log', icon: <Icon name="clock" size={17} color={N.ink} />, show: modViewer },
+    // Communities round (Nov 2026): API keys for bots and game servers.
+    { key: 'integrations', label: 'Integrations', icon: <Glyph name="external" size={17} />, show: can(c, 'manageConstellation') },
   ].filter((p) => p.show)
 
   async function pickNotify() {
