@@ -141,23 +141,3 @@
 .settings-section .gl-sheet .gl-head h2.ix-sheet-title {
   font-size: 21px;
 }
-
-/* "I agree to the Glofly Developer Terms" on the app form */
-.as-agree {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--glo-muted);
-}
-.as-agree input {
-  margin-top: 2px;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--glo-accent);
-  flex: none;
-}
-.as-agree a {
-  color: var(--glo-link);
-}

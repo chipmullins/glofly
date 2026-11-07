@@ -173,7 +173,11 @@ test("giveaways: enter once, the sweep picks a winner and announces it", { skip,
   await pool.query("update constellation_giveaways set ends_at = now() - interval '1 second' where id = $1", [g.json.id]);
   const done = await waitFor(async () => (await pool.query("select winner_ids from constellation_giveaways where id = $1 and ended_at is not null", [g.json.id])).rows[0], 75_000);
   assert.deepEqual(done.winner_ids, [player.id]);
-  const announce = await lastBody(general.conversationId);
+  // The sweep marks it ended first, then posts the announcement: wait for that too.
+  const announce = await waitFor(async () => {
+    const m = await lastBody(general.conversationId);
+    return /Giveaway ended: Fennec/.test(m?.body ?? "") ? m : null;
+  }, 10_000);
   assert.match(announce.body, /Giveaway ended: Fennec/);
   assert.match((await enter()).json.message, /ended/);
 });

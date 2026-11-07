@@ -74,7 +74,7 @@ before(async () => {
 after(async () => {
   if (skip) return;
   await pool.query("delete from constellations where id = $1", [cid]);
-  await pool.query("delete from oauth_apps where owner_id = $1", [dev.id]);
+  await pool.query("delete from oauth_apps where id = any($1)", [madeApps]);
   await pool.end();
 });
 
@@ -91,36 +91,27 @@ test("discovery and keys", { skip }, async () => {
   assert.equal(k.json.keys[0].d, undefined, "never the private part");
 });
 
-test("developers register apps; return addresses are checked", { skip }, async () => {
-  const bad = await call("/developer/apps", { method: "POST", token: dev.token, body: { name: "Bad", redirectUris: ["http://evil.example/cb"], scopes: [] } });
-  assert.equal(bad.status, 400);
-  const js = await call("/developer/apps", { method: "POST", token: dev.token, body: { name: "Bad", redirectUris: ["javascript://x"], scopes: [] } });
-  assert.equal(js.status, 400);
-  const base = { name: "Cozy RP Website", website: "https://app.example.net", redirectUris: [REDIRECT], scopes: ["email", "roles"], confidential: true };
-  // The Developer Terms and a privacy policy link are required for a new app.
-  const noTerms = await call("/developer/apps", { method: "POST", token: dev.token, body: { ...base, privacyUrl: "https://app.example.net/privacy" } });
-  assert.equal(noTerms.status, 400);
-  assert.equal(noTerms.json.error, "terms");
-  const noPolicy = await call("/developer/apps", { method: "POST", token: dev.token, body: { ...base, agreeTerms: true } });
-  assert.equal(noPolicy.status, 400);
-  const r = await call("/developer/apps", { method: "POST", token: dev.token, body: { ...base, privacyUrl: "https://app.example.net/privacy", agreeTerms: true } });
-  assert.equal(r.status, 201, JSON.stringify(r.json));
-  app = r.json.app;
-  assert.equal(app.privacyUrl, "https://app.example.net/privacy");
-  assert.ok(app.devTermsVersion);
-  // Changing one thing leaves the rest alone (the website and scopes stay).
-  const renamed = await call(`/developer/apps/${app.id}`, { method: "PATCH", token: dev.token, body: { name: "Cozy RP Website" } });
-  assert.equal(renamed.status, 200, JSON.stringify(renamed.json));
-  assert.equal(renamed.json.app.website, "https://app.example.net");
-  assert.deepEqual(renamed.json.app.scopes, ["email", "roles"]);
-  assert.equal(renamed.json.app.privacyUrl, "https://app.example.net/privacy");
-  const cleared = await call(`/developer/apps/${app.id}`, { method: "PATCH", token: dev.token, body: { privacyUrl: "" } });
-  assert.equal(cleared.status, 400, "a privacy policy link can't be removed");
-  secret = r.json.secret;
-  assert.match(app.clientId, /^gfa_/);
-  assert.match(secret, /^gfs_/);
-  const stored = await pool.query("select client_secret_hash from oauth_apps where id = $1", [app.id]);
-  assert.notEqual(stored.rows[0].client_secret_hash, secret);
+// 0.9.0: apps are only made in Glofly Control (admin/oauthApps.ts). Here they're put in the table the
+// same way Control does: Glofly's own, a privacy link, only the secret's SHA-256 stored.
+const madeApps: string[] = [];
+async function makeApp(o: { name: string; redirectUris: string[]; scopes: string[]; confidential: boolean; firstParty?: boolean }) {
+  const clientId = "gfa_" + randomBytes(9).toString("base64url");
+  const secretValue = o.confidential ? "gfs_" + randomBytes(32).toString("base64url") : null;
+  const row = await pool.query(
+    "insert into oauth_apps (client_id, name, website, privacy_url, redirect_uris, scopes, client_secret_hash, first_party) values ($1, $2, 'https://app.example.net', 'https://app.example.net/privacy', $3, $4, $5, $6) returning id",
+    [clientId, o.name, o.redirectUris, o.scopes, secretValue ? createHash("sha256").update(secretValue).digest("hex") : null, o.firstParty ?? true],
+  );
+  madeApps.push(row.rows[0].id);
+  return { app: { id: row.rows[0].id as string, clientId }, secret: secretValue };
+}
+
+test("the Glofly apps can't make Sign in with Glofly apps any more (Control only)", { skip }, async () => {
+  assert.equal((await call("/developer/apps", { token: dev.token })).status, 404);
+  const made = await call("/developer/apps", { method: "POST", token: dev.token, body: { name: "Outsider", redirectUris: ["https://outsider.example/cb"], scopes: [], privacyUrl: "https://outsider.example/privacy" } });
+  assert.equal(made.status, 404);
+  const m = await makeApp({ name: "Cozy RP Website", redirectUris: [REDIRECT], scopes: ["email", "roles"], confidential: true });
+  app = m.app;
+  secret = m.secret!;
 });
 
 const params = (extra: Record<string, string> = {}) => ({ client_id: app.clientId, redirect_uri: REDIRECT, response_type: "code", scope: "openid profile email roles", state: "xyz", ...extra });
@@ -136,6 +127,11 @@ test("the consent request refuses unregistered addresses, missing PKCE and extra
   assert.equal(ok.status, 200);
   assert.equal(ok.json.app.name, "Cozy RP Website");
   assert.equal(ok.json.app.privacyUrl, "https://app.example.net/privacy", "the consent page links the app's privacy policy");
+  // An app that isn't Glofly's own (Control turned "Made by Glofly" off) can't sign anyone in.
+  await pool.query("update oauth_apps set first_party = false where id = $1", [app.id]);
+  const outsider = await call(`/oauth/request?${q(params({ code_challenge: challenge, code_challenge_method: "S256" }))}`, { token: riley.token });
+  assert.notEqual(outsider.status, 200);
+  await pool.query("update oauth_apps set first_party = true where id = $1", [app.id]);
   assert.ok(ok.json.constellations.some((c: any) => c.id === cid));
 });
 
@@ -202,10 +198,7 @@ test("refresh tokens rotate; using an old one again signs the app out", { skip }
 });
 
 test("phone apps (no secret) use PKCE alone; server apps must send their secret", { skip }, async () => {
-  const r = await call("/developer/apps", { method: "POST", token: dev.token, body: { name: "Gloslate", redirectUris: ["gloslate://auth"], scopes: [], confidential: false, privacyUrl: "https://gloslate.app/privacy", agreeTerms: true } });
-  assert.equal(r.status, 201);
-  assert.equal(r.json.secret, null);
-  const phone = r.json.app;
+  const phone = (await makeApp({ name: "Gloslate", redirectUris: ["gloslate://auth"], scopes: [], confidential: false })).app;
   const { verifier, challenge } = pkce();
   const ap = await call("/oauth/approve", { method: "POST", token: riley.token, body: { client_id: phone.clientId, redirect_uri: "gloslate://auth", response_type: "code", scope: "openid profile", code_challenge: challenge, code_challenge_method: "S256" } });
   assert.equal(ap.status, 200, JSON.stringify(ap.json));
@@ -249,9 +242,3 @@ test("an app switched off in Control stops working; family accounts can't use ap
   assert.equal((await call(`/oauth/request?${q(params({ code_challenge: challenge, code_challenge_method: "S256" }))}`, { token: kid.token })).status, 403);
 });
 
-test("only the owner sees or changes an app", { skip }, async () => {
-  assert.equal((await call(`/developer/apps/${app.id}`, { method: "PATCH", token: riley.token, body: { name: "Mine" } })).status, 404);
-  assert.equal((await call(`/developer/apps/${app.id}/secret`, { method: "POST", token: riley.token })).status, 404);
-  const mine = await call("/developer/apps", { token: riley.token });
-  assert.ok(!mine.json.apps.some((a: any) => a.id === app.id));
-});

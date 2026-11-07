@@ -32,7 +32,7 @@ import { setNotificationSettings } from '../lib/notify'
 import { isMac, isWeb } from '../lib/platform'
 import { BrowserNotificationsRow } from './WebNotifications'
 import './dialogs.css'
-import { AppsIcon, ConnectedAppsSettings, DeveloperIcon, DeveloperSettings } from '../oauth/AppsSettings'
+import { AppsIcon, ConnectedAppsSettings } from '../oauth/AppsSettings'
 import { GameServersIcon, GameServersSettings } from '../oauth/GameLinks'
 import './SettingsDialog.css'
 
@@ -62,7 +62,7 @@ type SettingsDialogProps = {
   scrollTo?: string
 }
 
-export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'apps' | 'games' | 'developer' | 'about'
+export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'apps' | 'games' | 'about'
 type Page = SettingsPage
 
 type ToggleKey = 'readReceipts' | 'showLastSeen' | 'showTyping'
@@ -864,15 +864,6 @@ export default function SettingsDialog({
             </button>
             <button
               type="button"
-              className={page === 'developer' ? 'settings-nav-item settings-nav-item--active' : 'settings-nav-item'}
-              aria-current={page === 'developer' ? 'page' : undefined}
-              onClick={() => openPage('developer')}
-            >
-              <DeveloperIcon active={page === 'developer'} />
-              Developer
-            </button>
-            <button
-              type="button"
               className={
                 page === 'about'
                   ? 'settings-nav-item settings-nav-item--active'
@@ -905,8 +896,7 @@ export default function SettingsDialog({
               <ConnectedAppsSettings />
             ) : page === 'games' ? (
               <GameServersSettings />
-            ) : page === 'developer' ? (
-              <DeveloperSettings />
+
             ) : page === 'account' ? (
               <AccountSettings
                 user={user}

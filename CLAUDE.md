@@ -202,7 +202,9 @@
   people who picked them (`constellation_members.shown_nebulas`), enforced in `access.ts` like role-only nebulas.
   **FiveM/RedM** (project doc `glofly-fivem-redm.md`): `KNOWN_GAME_PATTERNS` (desktop), cfx.re/join cards (`games/cfx.ts`,
   lookup OFF until `CFX_SERVER_LOOKUP=on`), the Glofly Whitelist resource in `game-integrations/fivem/` (test: `test/run.py`).
-  **Legal (0.9.0):** `site/developer-terms.html` (Developer Terms); new Sign in with Glofly apps need `privacyUrl` + `agreeTerms`
-  (`oauth_apps.dev_terms_version`, shared `DEVELOPER_TERMS_VERSION`: bump it when the terms change). A new kind of data
-  shared with apps, bots or game servers must be added to `site/privacy.html` (and the consent page if it's per person).
+  **Sign in with Glofly is only for Glofly's own apps** (Gloslate, Tablespin; Chip, Nov 7): apps are made only in Glofly
+  Control → Sign-in apps (`admin/oauthApps.ts`, `owner_id` null, migration 0051); the Glofly apps have no Developer page;
+  the server refuses any app not `first_party`. Don't reopen it to outside developers without Chip.
+  **Legal (0.9.0):** `site/developer-terms.html` covers bots, webhooks, bridges and game servers (API keys show the notice).
+  A new kind of data shared with apps, bots or game servers must be added to `site/privacy.html`.
   Member counts leave out bots (`users.bot`). Next: roadmap 4.4 moderation, 4.5 stage/announcement nebulas, 4.6 scale (mockups first).

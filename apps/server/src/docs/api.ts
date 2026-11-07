@@ -52,7 +52,7 @@ a{color:#b4530e}
 <body>
 <header><div class="in">
 <h1>Glofly API</h1>
-<p>For game servers, bots, bridges and sites that sign people in with Glofly. Version 1. Using it means agreeing to the <a href="https://glofly.app/developer-terms">Glofly Developer Terms</a>: ask only for what you need, have a privacy policy, never sell people's information or train AI on their messages.</p>
+<p>For game servers, bots and bridges (and Glofly's own apps that sign people in with Glofly). Version 1. Using it means agreeing to the <a href="https://glofly.app/developer-terms">Glofly Developer Terms</a>: ask only for what you need, tell people what you keep, never sell their information or train AI on their messages.</p>
 <nav>
 <a href="#keys">API keys</a><a href="#bot">Bot API</a><a href="#interactions">Commands &amp; buttons</a>
 <a href="#reading">Reading messages</a><a href="#links">Linked game servers</a><a href="#webhooks">Webhooks</a>
@@ -176,7 +176,7 @@ function fromGlofly(header, rawBody, secret) {
 <p>Other headers: <code>Glofly-Event</code> (the type) and <code>Glofly-Delivery</code> (a unique id, so you can ignore repeats).</p>
 
 <h2 id="signin">Sign in with Glofly</h2>
-<p>Glofly is an OpenID Connect provider. Register your app in Glofly on a computer: <b>Settings → Developer</b>. You add a link to your app's privacy policy (shown to people when they sign in) and agree to the <a href="https://glofly.app/developer-terms">Developer Terms</a>. You get a client id (<code>gfa_…</code>) and, for apps with a server, a secret (<code>gfs_…</code>, shown once).</p>
+<p><b>Only for Glofly's own apps</b> (like Gloslate and Tablespin); it isn't open to other developers. The Glofly team registers them in Glofly Control (with a privacy policy link that people see when they sign in). Each gets a client id (<code>gfa_…</code>) and, for apps with a server, a secret (<code>gfs_…</code>, shown once).</p>
 <table>
 <tr><th>Discovery</th><td><code>${api}/.well-known/openid-configuration</code></td></tr>
 <tr><th>Authorize</th><td><code>${chat}/oauth/authorize</code></td></tr>

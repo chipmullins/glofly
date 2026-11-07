@@ -1764,9 +1764,8 @@ export const oauthApps = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     // "gfa_" + 12 characters: what the app sends as client_id
     clientId: text("client_id").notNull(),
-    ownerId: uuid("owner_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    // Who made it in Settings → Developer (before 0.9.0); null for apps made in Glofly Control.
+    ownerId: uuid("owner_id").references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     website: text("website"),
     // The app's own privacy policy and terms (https), linked on the consent page (communities release)

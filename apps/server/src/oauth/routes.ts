@@ -24,6 +24,7 @@ import {
   oauthCodes,
   oauthGrants,
   oauthTokens,
+  serverSettings,
   users,
 } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
@@ -51,12 +52,11 @@ import { jwks, signJwt } from "./jwt";
 // Codes: 60 s, one use, SHA-256 stored, bound to the app, return address and PKCE challenge.
 // Access tokens 1 h; refresh tokens 60 days and replaced each use (an old one used again revokes
 // the whole family). Tokens never work as a Glofly sign-in and sessions never work here.
-// People: Settings → Connected apps (/account/connected-apps). Developers: Settings → Developer
-// (/developer/apps). Glofly Control can switch any app off and mark Glofly's own apps.
+// People: Settings → Connected apps (/account/connected-apps). Apps are made in Glofly Control
+// → Sign-in apps (admin/oauthApps.ts), which can also switch any app off.
 
 export const oauthRouter = Router();
 export const connectedAppsRouter = Router();
-export const developerRouter = Router();
 
 const CODE_MS = 60_000;
 const ACCESS_MS = 60 * 60_000;
@@ -127,6 +127,8 @@ async function checkRequest(raw: unknown): Promise<Checked | { problem: string }
   const [app] = await db.select().from(oauthApps).where(eq(oauthApps.clientId, p.data.client_id));
   if (!app) return { problem: "Glofly doesn't know this app." };
   if (app.disabledAt) return { problem: "The Glofly team switched this app off." };
+  // 0.9.0 (Chip, Nov 7): Sign in with Glofly is only for Glofly's own apps (like Gloslate).
+  if (!app.firstParty) return { problem: "Sign in with Glofly is only for Glofly's own apps." };
   // Exact match only: no prefixes, no added paths.
   if (!app.redirectUris.includes(p.data.redirect_uri)) return { problem: "This app sent you here from an address it didn't register. For your safety, nothing was shared." };
   if (p.data.response_type !== "code") return { problem: "This app asked in a way Glofly doesn't allow (response_type must be code)." };
@@ -162,10 +164,9 @@ oauthRouter.get("/oauth/request", requireAuth, async (req, res) => {
   const c = await checkRequest(req.query);
   if ("problem" in c) return void res.status(400).json({ error: "invalid", message: c.problem });
   const [grant] = await db.select().from(oauthGrants).where(and(eq(oauthGrants.userId, me(res).id), eq(oauthGrants.appId, c.app.id)));
-  const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, c.app.ownerId));
   const mine = c.scopes.includes("roles") ? await myConstellations(me(res).id) : [];
   const info: OAuthRequestInfo = {
-    app: { name: c.app.name, website: c.app.website, privacyUrl: c.app.privacyUrl, termsUrl: c.app.termsUrl, firstParty: c.app.firstParty, madeBy: c.app.firstParty ? null : (c.app.website ?? (owner ? `@${owner.username}` : null)) },
+    app: { name: c.app.name, website: c.app.website, privacyUrl: c.app.privacyUrl, termsUrl: c.app.termsUrl, firstParty: c.app.firstParty, madeBy: c.app.firstParty ? null : c.app.website },
     scopes: c.scopes,
     constellations: mine.map((x) => ({ id: x.id, name: x.name, picked: !!grant?.constellationIds.includes(x.id) })),
     allowedBefore: !!grant && c.scopes.every((s) => grant.scopes.includes(s)),
@@ -254,7 +255,7 @@ async function clientFor(req: Request): Promise<typeof oauthApps.$inferSelect | 
   }
   if (!id || id.length > 40) return null;
   const [app] = await db.select().from(oauthApps).where(eq(oauthApps.clientId, id));
-  if (!app || app.disabledAt) return null;
+  if (!app || app.disabledAt || !app.firstParty) return null;
   if (app.clientSecretHash) {
     if (!secret || !same(sha(secret), app.clientSecretHash)) return null;
   }
@@ -391,11 +392,11 @@ oauthRouter.get("/oauth/userinfo", async (req, res) => {
   const bearer = /^Bearer\s+(gfo_[A-Za-z0-9_-]{43})$/.exec(req.get("authorization") ?? "");
   if (!bearer) return void res.status(401).set("WWW-Authenticate", 'Bearer error="invalid_token"').json({ error: "invalid_token" });
   const [row] = await db
-    .select({ t: oauthTokens, disabledAt: oauthApps.disabledAt })
+    .select({ t: oauthTokens, disabledAt: oauthApps.disabledAt, firstParty: oauthApps.firstParty })
     .from(oauthTokens)
     .innerJoin(oauthApps, eq(oauthApps.id, oauthTokens.appId))
     .where(and(eq(oauthTokens.accessHash, sha(bearer[1])), gt(oauthTokens.accessExpiresAt, new Date())));
-  if (!row || row.disabledAt) return void res.status(401).set("WWW-Authenticate", 'Bearer error="invalid_token"').json({ error: "invalid_token" });
+  if (!row || row.disabledAt || !row.firstParty) return void res.status(401).set("WWW-Authenticate", 'Bearer error="invalid_token"').json({ error: "invalid_token" });
   const [grant] = await db.select({ u: oauthGrants.userId }).from(oauthGrants).where(and(eq(oauthGrants.userId, row.t.userId), eq(oauthGrants.appId, row.t.appId)));
   const claims = grant ? await claimsFor(req, row.t.userId, row.t.scopes, row.t.appId) : null;
   if (!claims) return void res.status(401).set("WWW-Authenticate", 'Bearer error="invalid_token"').json({ error: "invalid_token" });
@@ -454,171 +455,38 @@ connectedAppsRouter.delete("/:appId", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ───────────── Settings → Developer ─────────────
+// ───────────── Making apps (Glofly Control only) ─────────────
+// 0.9.0 (Chip, Nov 7): Sign in with Glofly is only for Glofly's own apps (Gloslate, Tablespin). They are
+// made in Glofly Control → Sign-in apps (admin/oauthApps.ts); the Glofly apps have no Developer page.
 
-developerRouter.use(requireAuth);
-developerRouter.use(async (_req, res, next) => {
-  if (await isRestricted(me(res).id)) return void res.status(403).json(MANAGED_BY_FAMILY);
-  next();
-});
-
-const devLimiter = rateLimit("developer:change", {
-  windowMs: 60 * 60_000,
-  limit: 30,
-  keyGenerator: (_req, res) => me(res).id,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { error: "too_many_requests", message: "That's a lot of changes. Try again later." },
-});
-
-const appFields = z.object({
+export const appFields = z.object({
   name: z
     .string()
     .transform((s) => s.normalize("NFKC").trim().replace(/\s+/g, " "))
     .pipe(z.string().min(1, "Give the app a name.").max(OAUTH_APP_NAME_MAX, `Names can be up to ${OAUTH_APP_NAME_MAX} characters.`)),
-  website: z
-    .string()
-    .trim()
-    .max(200)
-    .refine((w) => !w || /^https:\/\/[^\s/@]+\.[^\s/@]+/.test(w), "Websites start with https://")
-    .nullable()
-    .default(null),
-  privacyUrl: z
-    .string()
-    .trim()
-    .max(300)
-    .refine((w) => !w || /^https:\/\/[^\s/@]+\.[^\s/@]+/.test(w), "Privacy policy links start with https://")
-    .transform((w) => w || null)
-    .nullable()
-    .default(null),
-  termsUrl: z
-    .string()
-    .trim()
-    .max(300)
-    .refine((w) => !w || /^https:\/\/[^\s/@]+\.[^\s/@]+/.test(w), "Terms links start with https://")
-    .transform((w) => w || null)
-    .nullable()
-    .default(null),
-  agreeTerms: z.literal(true).optional(),
+  website: link("Websites start with https://"),
+  privacyUrl: link("Privacy policy links start with https://"),
+  termsUrl: link("Terms links start with https://"),
   redirectUris: z.array(z.string().trim()).min(1, "Add at least one return address.").max(OAUTH_REDIRECTS_MAX, `Up to ${OAUTH_REDIRECTS_MAX} return addresses.`),
   scopes: z.array(z.enum(["email", "roles"])).max(2).default([]),
   confidential: z.boolean().default(true),
 });
 
-async function devApps(userId: string): Promise<DeveloperApp[]> {
-  const rows = await db.select().from(oauthApps).where(eq(oauthApps.ownerId, userId)).orderBy(oauthApps.createdAt);
-  const out: DeveloperApp[] = [];
-  for (const a of rows) {
-    const [n] = await db.select({ n: count() }).from(oauthGrants).where(eq(oauthGrants.appId, a.id));
-    out.push({
-      id: a.id,
-      clientId: a.clientId,
-      name: a.name,
-      website: a.website,
-      privacyUrl: a.privacyUrl,
-      termsUrl: a.termsUrl,
-      devTermsVersion: a.devTermsVersion,
-      redirectUris: a.redirectUris,
-      scopes: a.scopes.filter((s): s is "email" | "roles" => s === "email" || s === "roles"),
-      confidential: !!a.clientSecretHash,
-      firstParty: a.firstParty,
-      disabled: !!a.disabledAt,
-      disabledReason: a.disabledReason,
-      people: Number(n?.n ?? 0),
-      createdAt: a.createdAt.toISOString(),
-    });
-  }
-  return out;
+function link(message: string) {
+  return z
+    .string()
+    .trim()
+    .max(300)
+    .refine((w) => !w || /^https:\/\/[^\s/@]+\.[^\s/@]+/.test(w), message)
+    .transform((w) => w || null)
+    .nullable()
+    .default(null);
 }
 
-const uriProblem = (uris: string[]) => uris.map(redirectUriProblem).find((p) => p) ?? null;
-
-developerRouter.get("/apps", async (_req, res) => res.json({ apps: await devApps(me(res).id) }));
-
-developerRouter.post("/apps", devLimiter, async (req, res) => {
-  const p = appFields.safeParse(req.body);
-  if (!p.success) return void res.status(400).json({ error: "invalid", message: p.error.issues[0]?.message ?? "Check the app's details." });
-  // Apps get Glofly people's names and photos (and maybe email), so their maker agrees to the
-  // Developer Terms and says where the app's own privacy policy is.
-  if (p.data.agreeTerms !== true) return void res.status(400).json({ error: "terms", message: "Agree to the Glofly Developer Terms to make an app." });
-  if (!p.data.privacyUrl) return void res.status(400).json({ error: "invalid", message: "Add a link to your app's privacy policy." });
-  const problem = uriProblem(p.data.redirectUris);
-  if (problem) return void res.status(400).json({ error: "invalid", message: problem });
-  const [n] = await db.select({ n: count() }).from(oauthApps).where(eq(oauthApps.ownerId, me(res).id));
-  if (Number(n?.n ?? 0) >= OAUTH_APPS_PER_DEVELOPER_MAX) return void res.status(400).json({ error: "invalid", message: `Up to ${OAUTH_APPS_PER_DEVELOPER_MAX} apps.` });
-  const secret = p.data.confidential ? token("gfs_") : null;
-  const [row] = await db
-    .insert(oauthApps)
-    .values({
-      clientId: "gfa_" + randomBytes(9).toString("base64url"),
-      ownerId: me(res).id,
-      name: p.data.name,
-      website: p.data.website,
-      privacyUrl: p.data.privacyUrl,
-      termsUrl: p.data.termsUrl,
-      devTermsVersion: DEVELOPER_TERMS_VERSION,
-      devTermsAcceptedAt: new Date(),
-      redirectUris: [...new Set(p.data.redirectUris)],
-      scopes: p.data.scopes,
-      clientSecretHash: secret ? sha(secret) : null,
-    })
-    .returning({ id: oauthApps.id });
-  res.set("Cache-Control", "no-store");
-  res.status(201).json({ app: (await devApps(me(res).id)).find((a) => a.id === row.id), secret });
-});
-
-async function myApp(req: Request, res: Response) {
-  const id = z.uuid().safeParse(req.params.id);
-  const [a] = id.success ? await db.select().from(oauthApps).where(and(eq(oauthApps.id, id.data), eq(oauthApps.ownerId, me(res).id))) : [];
-  if (!a) res.status(404).json({ error: "not_found", message: "That app isn't there any more." });
-  return a ?? null;
-}
-
-developerRouter.patch("/apps/:id", devLimiter, async (req, res) => {
-  const a = await myApp(req, res);
-  if (!a) return;
-  const p = appFields.partial().safeParse(req.body);
-  if (!p.success) return void res.status(400).json({ error: "invalid", message: p.error.issues[0]?.message ?? "Check the app's details." });
-  // .partial() still fills in defaults (null, []), so only fields the app actually sent change.
-  const sent = (k: string) => typeof req.body === "object" && req.body !== null && Object.hasOwn(req.body, k);
-  for (const k of ["website", "privacyUrl", "termsUrl", "scopes", "redirectUris", "name"] as const) if (!sent(k)) delete p.data[k];
-  if (p.data.privacyUrl === null && !a.firstParty) return void res.status(400).json({ error: "invalid", message: "Your app needs a link to its privacy policy." });
-  if (p.data.redirectUris) {
-    const problem = uriProblem(p.data.redirectUris);
-    if (problem) return void res.status(400).json({ error: "invalid", message: problem });
-  }
-  await db
-    .update(oauthApps)
-    .set({
-      ...(p.data.name ? { name: p.data.name } : {}),
-      ...(p.data.website !== undefined ? { website: p.data.website } : {}),
-      ...(p.data.privacyUrl !== undefined ? { privacyUrl: p.data.privacyUrl } : {}),
-      ...(p.data.termsUrl !== undefined ? { termsUrl: p.data.termsUrl } : {}),
-      // Saving with the box ticked records agreement to the current Developer Terms.
-      ...(p.data.agreeTerms ? { devTermsVersion: DEVELOPER_TERMS_VERSION, devTermsAcceptedAt: new Date() } : {}),
-      ...(p.data.redirectUris ? { redirectUris: [...new Set(p.data.redirectUris)] } : {}),
-      ...(p.data.scopes ? { scopes: p.data.scopes } : {}),
-    })
-    .where(eq(oauthApps.id, a.id));
-  res.json({ app: (await devApps(me(res).id)).find((x) => x.id === a.id) });
-});
-
-// A new client secret (the old one stops working); also turns a phone app into a server app.
-developerRouter.post("/apps/:id/secret", devLimiter, async (req, res) => {
-  const a = await myApp(req, res);
-  if (!a) return;
-  const secret = token("gfs_");
-  await db.update(oauthApps).set({ clientSecretHash: sha(secret) }).where(eq(oauthApps.id, a.id));
-  res.set("Cache-Control", "no-store");
-  res.json({ secret });
-});
-
-developerRouter.delete("/apps/:id", devLimiter, async (req, res) => {
-  const a = await myApp(req, res);
-  if (!a) return;
-  await db.delete(oauthApps).where(eq(oauthApps.id, a.id));
-  res.json({ ok: true });
-});
+export const redirectProblem = (uris: string[]) => uris.map(redirectUriProblem).find((p) => p) ?? null;
+export const newClientSecret = () => token("gfs_");
+export const newClientId = () => "gfa_" + randomBytes(9).toString("base64url");
+export { sha as hashSecret };
 
 // ───────────── Housekeeping ─────────────
 

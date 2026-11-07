@@ -657,6 +657,17 @@ export type AccountSupport = {
 // ───────────── Calls ─────────────
 
 /** Communities round (Nov 2026): a Sign in with Glofly app (Control → Sign-in apps). */
+export type NewOAuthApp = {
+  name: string
+  website: string | null
+  privacyUrl: string
+  termsUrl: string | null
+  redirectUris: string[]
+  scopes: ('email' | 'roles')[]
+  confidential: boolean
+  note: string
+}
+
 export type OAuthAppRow = {
   id: string
   clientId: string
@@ -667,7 +678,8 @@ export type OAuthAppRow = {
   /** Which Developer Terms its maker agreed to (null: none yet) */
   devTermsVersion?: string | null
   devTermsAcceptedAt?: string | null
-  owner: string
+  /** Who made it in the Glofly app before 0.9.0; null for apps made here */
+  owner: string | null
   redirectUris: string[]
   scopes: string[]
   confidential: boolean
@@ -680,8 +692,25 @@ export type OAuthAppRow = {
 
 export const api = {
   oauthApps: () => call<{ apps: OAuthAppRow[] }>('GET', '/admin/oauth-apps'),
-  setOAuthApp: (id: string, changes: { disabled?: boolean; reason?: string; firstParty?: boolean; note: string }) =>
-    call<Done>('POST', `/admin/oauth-apps/${id}`, changes),
+  setOAuthApp: (
+    id: string,
+    changes: {
+      disabled?: boolean
+      reason?: string
+      firstParty?: boolean
+      name?: string
+      website?: string | null
+      privacyUrl?: string | null
+      termsUrl?: string | null
+      redirectUris?: string[]
+      scopes?: ('email' | 'roles')[]
+      note: string
+    }
+  ) => call<Done>('POST', `/admin/oauth-apps/${id}`, changes),
+  newOAuthApp: (app: NewOAuthApp) =>
+    call<{ app: { id: string; clientId: string; name: string }; secret: string | null }>('POST', '/admin/oauth-apps/new', app),
+  newOAuthSecret: (id: string, note: string) => call<{ secret: string }>('POST', `/admin/oauth-apps/${id}/secret`, { note }),
+  deleteOAuthApp: (id: string, note: string) => call<Done>('POST', `/admin/oauth-apps/${id}/delete`, { note }),
   usage: () => call<UsageReport>('GET', '/admin/usage'),
   setBudget: (monthly: number | null) =>
     call<UsageReport>('PUT', '/admin/usage/budget', { monthly }),

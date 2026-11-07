@@ -240,7 +240,10 @@ const ALLOWED: [string, RegExp][] = [
   ['POST', new RegExp(`^/admin/accounts/${ID}/export$`)],
   // Communities round (Nov 2026): Sign in with Glofly apps (switch off, mark Glofly's own)
   ['GET', new RegExp(`^/admin/oauth-apps$`)],
-  ['POST', new RegExp(`^/admin/oauth-apps/${ID}$`)]
+  ['POST', new RegExp(`^/admin/oauth-apps/new$`)],
+  ['POST', new RegExp(`^/admin/oauth-apps/${ID}$`)],
+  ['POST', new RegExp(`^/admin/oauth-apps/${ID}/secret$`)],
+  ['POST', new RegExp(`^/admin/oauth-apps/${ID}/delete$`)]
 ]
 
 export function isAllowedCall(method: unknown, path: unknown): boolean {

@@ -62,7 +62,7 @@ import { startReaderPushes } from "./integrations/readers";
 import { docsRouter } from "./docs/api";
 import { sweepUnfinishedPosts, threadsRouter } from "./threads/routes";
 import { legacyForums } from "./threads/legacy";
-import { connectedAppsRouter, developerRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
+import { connectedAppsRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 
 /** Runs a background job every so often, never two runs of it at once. */
@@ -176,7 +176,6 @@ app.use(botApiRouter);
 app.use(incomingHooksRouter);
 // Communities round: Sign in with Glofly (OAuth 2.0 + OpenID Connect) and Settings → Developer.
 app.use(oauthRouter);
-app.use("/developer", developerRouter);
 // 0.7.5: a constellation invite link's page (glofly.app/c/<code>; Caddy sends /c/* here).
 app.use("/c", invitePageRouter);
 // 0.8.0: a friend invite link's page (glofly.app/i/<code>; Caddy sends /i/* here).
