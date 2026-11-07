@@ -890,7 +890,36 @@ export const CONSTELLATION_EVENT_NAMES = [
   // 0.8.0 community tools: an event changed / is about to start / started, and the Inbox changed
   'constellation:event',
   'inbox:changed',
+  // Communities round: threads + forum posts
+  'thread:message',
+  'thread:updated',
+  'thread:deleted',
 ] as const
+
+/** A thread summary from the server, checked (null if it doesn't look right). */
+function cleanThread(x: unknown): import('./threads').ThreadSummary | null {
+  const t = (x ?? {}) as Record<string, unknown>
+  if (!str(t.id) || !str(t.nebulaId) || typeof t.title !== 'string') return null
+  const n = (v: unknown) => (typeof v === 'number' && v >= 0 ? Math.floor(v) : 0)
+  return {
+    id: t.id,
+    nebulaId: t.nebulaId,
+    parentMessageId: str(t.parentMessageId) ? t.parentMessageId : null,
+    title: text(t.title, 120),
+    tagIds: strList(t.tagIds).slice(0, 10),
+    authorId: str(t.authorId) ? t.authorId : null,
+    replyCount: n(t.replyCount),
+    createdAt: text(t.createdAt, 40),
+    lastMessageAt: text(t.lastMessageAt, 40),
+    closed: t.closed === true,
+    pinned: t.pinned === true,
+    answerMessageId: str(t.answerMessageId) ? t.answerMessageId : null,
+    preview: typeof t.preview === 'string' ? t.preview.slice(0, 200) : null,
+    recentIds: strList(t.recentIds).slice(0, 3),
+    following: false,
+    unread: 0,
+  }
+}
 
 /** One of those events, checked field by field (null if it doesn't look right). */
 export function cleanConstellationEvent(name: string, payload: unknown): ServerEvent | null {
@@ -992,6 +1021,20 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
     }
     case 'inbox:changed':
       return { type: 'inbox:changed' }
+    case 'thread:updated': {
+      const thread = cleanThread(p.thread)
+      return thread && str(p.constellationId) ? { type: 'thread:updated', constellationId: p.constellationId, thread } : null
+    }
+    case 'thread:message': {
+      const thread = cleanThread(p.thread)
+      const m = (p.message ?? {}) as Record<string, unknown>
+      if (!thread || !str(p.constellationId) || !str(m.id) || !str(m.conversationId) || !str(m.senderId)) return null
+      return { type: 'thread:message', constellationId: p.constellationId, thread, message: p.message as import('./types').Message }
+    }
+    case 'thread:deleted':
+      return str(p.constellationId) && str(p.nebulaId) && str(p.threadId)
+        ? { type: 'thread:deleted', constellationId: p.constellationId, nebulaId: p.nebulaId, threadId: p.threadId, parentMessageId: str(p.parentMessageId) ? p.parentMessageId : null }
+        : null
     default:
       return null
   }

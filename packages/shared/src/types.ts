@@ -519,6 +519,10 @@ export type ServerEvent =
       nebula?: boolean
     }
   | { type: 'message:updated'; message: Message }
+  /** Communities round: a reply in a thread / forum post, with the thread's new counts */
+  | { type: 'thread:message'; constellationId: string; thread: import('./threads').ThreadSummary; message: Message }
+  | { type: 'thread:updated'; constellationId: string; thread: import('./threads').ThreadSummary }
+  | { type: 'thread:deleted'; constellationId: string; nebulaId: string; threadId: string; parentMessageId: string | null }
   | { type: 'typing'; conversationId: string; userId: string }
   | { type: 'friends:changed' }
   | ({ type: 'presence'; userId: string } & Presence)
