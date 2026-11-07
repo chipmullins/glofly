@@ -575,6 +575,8 @@ export type Nebula = {
   roleIds?: string[]
   /** Communities round: integrations (bridges) that read its messages, by name. Members see a notice. */
   sharedWith?: string[]
+  /** Communities round 4.3: only people who picked it see it (managers see the flag) */
+  optional?: boolean
   /** Communities round: threads (text nebulas) and forum settings */
   threadsStaffOnly?: boolean
   threadCloseDays?: number
@@ -660,7 +662,13 @@ export type ConstellationDetail = {
     notify: NotifyLevel
     /** Communities round 4.2: the rest of the notification window (missing from older servers) */
     notifications?: ConstellationNotifySettings
+    /** Communities round 4.3: my answers (when the constellation has onboarding) */
+    onboarding?: MyOnboarding
   }
+  /** Communities round 4.3: the questions (null/missing = none) */
+  onboarding?: OnboardingSettings | null
+  /** Communities round 4.3: optional nebulas I don't see yet (Browse nebulas) */
+  browse?: BrowseNebula[]
   /** Open join requests (only for people who can approve them) */
   pendingRequests: number
   /** 0.7.5 identity: accent color and banner photo (missing from older servers) */
@@ -1163,4 +1171,57 @@ export function starChartFor(id: string, sky?: NebulaStar[] | null): StarChart {
   // One unbroken line left to right: a branch back to the end crossed over the others.
   for (let i = 0; i < count - 1; i++) links.push([i, i + 1])
   return { stars, links }
+}
+
+// ───────────── Onboarding (Communities round 4.3, approved boards 25–28) ─────────────
+
+/**
+ * Questions new members answer right after the welcome screen. Each answer can give roles
+ * members may pick themselves (labels, never permissions) and show optional nebulas (ones for
+ * everyone that people only see once they pick them). Role-only nebulas a given role unlocks come
+ * along by themselves.
+ */
+export type OnboardingAnswer = {
+  id: string
+  emoji: string
+  label: string
+  description: string
+  roleIds: string[]
+  nebulaIds: string[]
+}
+export type OnboardingQuestion = {
+  id: string
+  title: string
+  /** "Pick any" (true) or "Pick one" */
+  multi: boolean
+  required: boolean
+  answers: OnboardingAnswer[]
+}
+export type OnboardingSettings = {
+  enabled: boolean
+  questions: OnboardingQuestion[]
+}
+/** Your side of it (in ConstellationDetail.me) */
+export type MyOnboarding = {
+  /** questionId → the answer ids you picked */
+  answers: Record<string, string[]>
+  /** When you finished it (null = show the questions after the welcome screen) */
+  onboardedAt: string | null
+}
+/** An optional nebula you don't see yet ("Browse nebulas") */
+export type BrowseNebula = { id: string; name: string; kind: NebulaKind; topic: string | null }
+
+export const ONBOARDING_QUESTIONS_MAX = 6
+export const ONBOARDING_ANSWERS_MAX = 10
+export const ONBOARDING_TITLE_MAX = 100
+export const ONBOARDING_LABEL_MAX = 40
+export const ONBOARDING_DESCRIPTION_MAX = 80
+/** Roles one answer gives, and optional nebulas it shows */
+export const ONBOARDING_ANSWER_ROLES_MAX = 5
+export const ONBOARDING_ANSWER_NEBULAS_MAX = 10
+
+/** "Pick any · 4 answers · required" */
+export function onboardingQuestionLine(q: Pick<OnboardingQuestion, 'multi' | 'required' | 'answers'>): string {
+  const n = q.answers.length
+  return [q.multi ? 'Pick any' : 'Pick one', `${n} ${n === 1 ? 'answer' : 'answers'}`, ...(q.required ? ['required'] : [])].join(' · ')
 }

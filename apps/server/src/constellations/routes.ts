@@ -5,6 +5,8 @@ import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from 
 import { z } from "zod";
 import { FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
   ALL_PERMISSIONS,
+  ONBOARDING_ANSWERS_MAX,
+  ONBOARDING_QUESTIONS_MAX,
   CATEGORIES_MAX,
   CATEGORY_NAME_MAX,
   CONSTELLATION_DESCRIPTION_MAX,
@@ -83,6 +85,7 @@ import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, un
 import { fireConstellationEvent } from "../integrations/events";
 import { seesNebulaChat, syncNebulaAccess } from "./access";
 import { knowsThreads } from "../threads/legacy";
+import { answerOnboarding, onboardingInput, saveOnboarding, setNebulaShown } from "./onboarding";
 
 // Constellations (Glofly 2.0): communities with nebulas, categories, members and roles.
 // Every action is permission-checked here. Restricted (family) accounts can't use any of it.
@@ -1045,6 +1048,83 @@ constellationsRouter.put("/:id/me/roles", changeLimiter, async (req, res) => {
   fireConstellationEvent(s.constellationId, "member.roles", s.userId, await heldRoleIds(s.constellationId, s.userId));
   await resync(s.constellationId, [s.userId]);
   await constellationChanged(s.constellationId);
+  res.json({ constellation: await detailFor(s.constellationId, s.userId) });
+});
+
+// ───────────── Onboarding (Communities round 4.3, approved boards 25–28) ─────────────
+
+// PUT /constellations/:id/onboarding  { enabled, questions, optionalNebulaIds } — the questions new
+// members answer, and which nebulas for everyone are optional (Owner / Edit constellation settings
+// + Manage nebulas: it decides who sees what).
+constellationsRouter.put("/:id/onboarding", changeLimiter, async (req, res) => {
+  const s = await standingFor(req, res, "manageConstellation");
+  if (!s) return;
+  if (!can(s, "manageNebulas")) {
+    bad(res, "Your role doesn't allow that here.", 403);
+    return;
+  }
+  if (await frozen(s.constellationId)) {
+    bad(res, FROZEN_MESSAGE, 403);
+    return;
+  }
+  const parsed = onboardingInput.safeParse(req.body);
+  if (!parsed.success) {
+    bad(res, firstIssue(parsed.error));
+    return;
+  }
+  const problem = await saveOnboarding(s.constellationId, parsed.data);
+  if (problem) {
+    bad(res, problem);
+    return;
+  }
+  await logModeration(s.constellationId, s.userId, "onboarding_changed", null, { enabled: parsed.data.enabled });
+  await resync(s.constellationId);
+  await constellationChanged(s.constellationId);
+  res.json({ constellation: await detailFor(s.constellationId, s.userId) });
+});
+
+// POST /constellations/:id/onboarding/answers  { answers: { questionId: answerIds }, done? } — my
+// answers (all of them after the welcome screen, or one question from "Your answers").
+constellationsRouter.post("/:id/onboarding/answers", changeLimiter, async (req, res) => {
+  const s = await standingFor(req, res);
+  if (!s) return;
+  const parsed = z
+    .object({
+      answers: z.record(z.string().max(40), z.array(z.string().max(40)).max(ONBOARDING_ANSWERS_MAX)).refine((o) => Object.keys(o).length <= ONBOARDING_QUESTIONS_MAX),
+      done: z.boolean().optional(),
+    })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    bad(res, "Pick answers from the list.");
+    return;
+  }
+  const r = await answerOnboarding(s.constellationId, s.userId, parsed.data.answers, parsed.data.done === true);
+  if ("problem" in r) {
+    bad(res, r.problem);
+    return;
+  }
+  if (r.rolesChanged) fireConstellationEvent(s.constellationId, "member.roles", s.userId, await heldRoleIds(s.constellationId, s.userId));
+  await resync(s.constellationId, [s.userId]);
+  if (r.rolesChanged) await constellationChanged(s.constellationId);
+  res.json({ constellation: await detailFor(s.constellationId, s.userId) });
+});
+
+// PUT /constellations/:id/me/nebulas/:nid  { shown } — Browse nebulas: an optional nebula, for me.
+constellationsRouter.put("/:id/me/nebulas/:nid", changeLimiter, async (req, res) => {
+  const s = await standingFor(req, res);
+  if (!s) return;
+  const nid = idParam.safeParse(req.params.nid);
+  const shown = z.boolean().safeParse(req.body?.shown);
+  if (!nid.success || !shown.success) {
+    bad(res, "Pick a nebula to show or hide.");
+    return;
+  }
+  const problem = await setNebulaShown(s.constellationId, s.userId, nid.data, shown.data);
+  if (problem) {
+    bad(res, problem);
+    return;
+  }
+  await resync(s.constellationId, [s.userId]);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
 

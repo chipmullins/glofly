@@ -36,9 +36,12 @@ export const seesAllNebulas = (s: Pick<Standing, "owner" | "permissions">): bool
 
 /** Everything the rule needs about one constellation. */
 async function rulesOf(constellationId: string, x: Exec = db) {
-  const [c] = await x.select({ ownerId: constellations.ownerId, toolBotId: constellations.toolBotId }).from(constellations).where(eq(constellations.id, constellationId));
+  const [c] = await x
+    .select({ ownerId: constellations.ownerId, toolBotId: constellations.toolBotId, onboarding: constellations.onboarding })
+    .from(constellations)
+    .where(eq(constellations.id, constellationId));
   const nebulaRows = await x
-    .select({ id: nebulas.id, conversationId: nebulas.conversationId, categoryId: nebulas.categoryId, visibility: nebulas.visibility, roleIds: nebulas.roleIds, userIds: nebulas.userIds })
+    .select({ id: nebulas.id, conversationId: nebulas.conversationId, categoryId: nebulas.categoryId, visibility: nebulas.visibility, roleIds: nebulas.roleIds, userIds: nebulas.userIds, optional: nebulas.optional })
     .from(nebulas)
     .where(eq(nebulas.constellationId, constellationId));
   const categoryRows = await x
@@ -49,7 +52,10 @@ async function rulesOf(constellationId: string, x: Exec = db) {
     .select({ id: constellationRoles.id, kind: constellationRoles.kind, permissions: constellationRoles.permissions, selfAssign: constellationRoles.selfAssign })
     .from(constellationRoles)
     .where(eq(constellationRoles.constellationId, constellationId));
-  const members = await x.select({ userId: constellationMembers.userId }).from(constellationMembers).where(eq(constellationMembers.constellationId, constellationId));
+  const members = await x
+    .select({ userId: constellationMembers.userId, shownNebulas: constellationMembers.shownNebulas })
+    .from(constellationMembers)
+    .where(eq(constellationMembers.constellationId, constellationId));
   const held = await x
     .select({ userId: constellationMemberRoles.userId, roleId: constellationMemberRoles.roleId })
     .from(constellationMemberRoles)
@@ -71,6 +77,9 @@ async function rulesOf(constellationId: string, x: Exec = db) {
     categories,
     memberIds: members.map((m) => m.userId),
     heldBy,
+    // Communities round 4.3: with onboarding on, optional nebulas only for people who picked them.
+    onboardingOn: !!c?.onboarding?.enabled,
+    shownBy: new Map(members.map((m) => [m.userId, new Set(m.shownNebulas)])),
     // Communities round: the Glofly tools' member posts wherever a tool is set up.
     seesAll: (userId: string) =>
       userId === c?.ownerId || (!!c?.toolBotId && userId === c.toolBotId) || everyoneManages || [...(heldBy.get(userId) ?? [])].some((id) => managerRoles.has(id)),
@@ -90,6 +99,8 @@ function visibleBy(rules: Rules, userId: string): Set<string> {
   const out = new Set<string>();
   for (const n of rules.nebulas) {
     const category = n.categoryId ? rules.categories.get(n.categoryId) : null;
+    // Communities round 4.3: an optional nebula (for everyone) waits until they pick it.
+    if (rules.onboardingOn && n.optional && !all && n.visibility !== "roles" && category?.visibility !== "roles" && !rules.shownBy.get(userId)?.has(n.id)) continue;
     // Communities round: a ticket's opener sees it whatever their roles.
     if (canSeeNebula(all, held, gateOf(n), category) || n.userIds.includes(userId)) out.add(n.conversationId);
   }

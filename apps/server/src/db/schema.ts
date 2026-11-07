@@ -14,6 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { OnboardingSettings } from "@glofly/shared";
 
 export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invisible"]);
 // Who can send someone friend requests (Settings → General → Privacy).
@@ -1075,6 +1076,9 @@ export const constellations = pgTable(
     frozenAt: timestamp("frozen_at", { withTimezone: true }),
     // Communities round: the "Glofly" member the built-in tools post as (made on first use).
     toolBotId: uuid("tool_bot_id"),
+    // Communities round 4.3 (approved boards 25–28): questions new members answer after the
+    // welcome screen (@glofly/shared OnboardingSettings; null = never set up).
+    onboarding: jsonb("onboarding").$type<OnboardingSettings>(),
     invitesOffAt: timestamp("invites_off_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     // The newest message in any of its nebulas (the dashboard's "Quiet since yesterday").
@@ -1154,6 +1158,11 @@ export const constellationMembers = pgTable(
     ignoreEveryone: boolean("ignore_everyone").notNull().default(false),
     ignoreRoles: boolean("ignore_roles").notNull().default(false),
     followAlerts: boolean("follow_alerts").notNull().default(true),
+    // Communities round 4.3: their onboarding answers ({ questionId: answerIds }), when they
+    // finished it (null = ask after the welcome screen), and the optional nebulas they picked.
+    onboardingAnswers: jsonb("onboarding_answers").$type<Record<string, string[]>>().notNull().default({}),
+    onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
+    shownNebulas: uuid("shown_nebulas").array().notNull().default(sql`'{}'::uuid[]`),
   },
   (t) => [
     primaryKey({ columns: [t.constellationId, t.userId] }),
@@ -1220,6 +1229,9 @@ export const nebulas = pgTable(
     roleIds: uuid("role_ids").array().notNull().default(sql`'{}'::uuid[]`),
     // Communities round (Glofly tools): people who see it whatever their roles (a ticket's opener).
     userIds: uuid("user_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    // Communities round 4.3: with onboarding on, an "optional" nebula for everyone is only seen
+    // by people who picked it (an answer or Browse nebulas; constellation_members.shown_nebulas).
+    optional: boolean("optional").notNull().default(false),
     // Communities round: threads + forums. Who may start threads (text nebulas), how long a quiet
     // thread or post stays open, and a forum's tags, guidelines, required tag and default sort.
     threadsStaffOnly: boolean("threads_staff_only").notNull().default(false),

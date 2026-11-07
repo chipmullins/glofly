@@ -2,6 +2,7 @@ import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { forumSettingsOf, myOpenThreads } from "../threads/core";
 import { inNebulaTimeline } from "../threads/timeline";
 import { sharedWithByNebula } from "../integrations/readers";
+import { browseFor } from "./onboarding";
 import {
   ALL_PERMISSIONS,
   CHATTING_PEOPLE,
@@ -382,6 +383,8 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       ignoreEveryone: constellationMembers.ignoreEveryone,
       ignoreRoles: constellationMembers.ignoreRoles,
       followAlerts: constellationMembers.followAlerts,
+      onboardingAnswers: constellationMembers.onboardingAnswers,
+      onboardedAt: constellationMembers.onboardedAt,
     })
     .from(constellationMembers)
     .where(eq(constellationMembers.constellationId, constellationId));
@@ -465,6 +468,8 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       lastReadAt: mySettings.find((s) => s.conversationId === n.conversationId)?.lastReadAt?.toISOString() ?? null,
       chatting: chatting.get(n.conversationId) ?? 0,
       ...(manager ? { visibility: n.visibility === "roles" ? ("roles" as const) : ("everyone" as const), roleIds: n.roleIds } : {}),
+      // 4.3: only people who picked it see it (the flag is for whoever sets onboarding up)
+      ...(n.optional ? { optional: true } : {}),
       // Members always see when a bridge reads a nebula (communities round, messages:read).
       ...(sharedWith.get(n.id)?.length ? { sharedWith: sharedWith.get(n.id) } : {}),
       // Threads + forums
@@ -502,7 +507,12 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
         ignoreRoles: myRow?.ignoreRoles ?? false,
         followAlerts: myRow?.followAlerts ?? true,
       },
+      // 4.3: my answers (boards 26–27)
+      onboarding: { answers: myRow?.onboardingAnswers ?? {}, onboardedAt: myRow?.onboardedAt?.toISOString() ?? null },
     },
+    // 4.3: the questions, and the optional nebulas I could still pick (Browse nebulas)
+    onboarding: c.onboarding ?? null,
+    browse: await browseFor(constellationId, new Set(nebulaRows.map((n) => n.id)), c.onboarding ?? null),
     pendingRequests,
     ...identityOf(c),
     rules: c.rules,
