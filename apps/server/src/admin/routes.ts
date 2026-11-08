@@ -123,8 +123,9 @@ adminRouter.get("/dashboard", async (req, res) => {
 
   const [[accounts], [newThisWeek], [messagesToday], [messagesYesterday], [callsToday], [groupCallsToday], [files]] =
     await Promise.all([
-      db.select({ n: count() }).from(users),
-      db.select({ n: count() }).from(users).where(gt(users.createdAt, weekAgo)),
+      // People only: bots (API keys, webhooks, the Glofly tool member) aren't accounts.
+      db.select({ n: count() }).from(users).where(eq(users.bot, false)),
+      db.select({ n: count() }).from(users).where(and(gt(users.createdAt, weekAgo), eq(users.bot, false))),
       db
         .select({ n: count() })
         .from(messages)
@@ -162,7 +163,7 @@ adminRouter.get("/dashboard", async (req, res) => {
     select to_char(b.day, 'YYYY-MM-DD') as day,
       (select count(*)::int from messages m where m.event is null and m.created_at >= b.starts and m.created_at < b.ends) as messages,
       (select count(*)::int from calls c where c.created_at >= b.starts and c.created_at < b.ends) as calls,
-      (select count(*)::int from users u where u.created_at >= b.starts and u.created_at < b.ends) as signups
+      (select count(*)::int from users u where u.created_at >= b.starts and u.created_at < b.ends and not u.bot) as signups
     from bounds b
     order by b.day
   `);
@@ -201,6 +202,7 @@ adminRouter.get("/dashboard", async (req, res) => {
       deleteAfter: users.deleteAfter,
     })
     .from(users)
+    .where(eq(users.bot, false))
     .orderBy(desc(users.createdAt))
     .limit(5);
   const invites = (await openInvites()).slice(0, 5);
@@ -303,7 +305,7 @@ function accountStatus(u: StatusRow): "deleting" | "suspended" | "unconfirmed" |
   return u.emailVerifiedAt ? "confirmed" : "unconfirmed";
 }
 
-const FILTERS = ["all", "invited", "unconfirmed", "suspended", "deleting"] as const;
+const FILTERS = ["all", "invited", "unconfirmed", "suspended", "deleting", "bots"] as const;
 type Filter = (typeof FILTERS)[number];
 
 adminRouter.get("/accounts", async (req, res) => {
@@ -320,7 +322,10 @@ adminRouter.get("/accounts", async (req, res) => {
     unconfirmed: and(isNull(users.emailVerifiedAt), isNull(users.deleteAfter), isNull(users.suspendedAt)),
     suspended: isNotNull(users.suspendedAt),
     deleting: isNotNull(users.deleteAfter),
+    bots: undefined,
   }[filter];
+  // Bots (API keys, webhooks, Glofly tool members) are users rows but not people: only under "Bots".
+  const botWhere = eq(users.bot, filter === "bots");
 
   const LIMIT = 200;
   const rows = await db
@@ -339,26 +344,28 @@ adminRouter.get("/accounts", async (req, res) => {
     })
     .from(users)
     .leftJoin(admins, eq(admins.userId, users.id))
-    .where(and(search, filterWhere))
+    .where(and(search, filterWhere, botWhere))
     .orderBy(desc(users.createdAt))
     .limit(LIMIT + 1);
 
   const invites = filter === "all" || filter === "invited" ? await openInvites(q.replace(/^@/, "") || undefined) : [];
   const live = await connectedSummary();
 
-  const [[all], [unconfirmed], [suspended], [deleting]] = await Promise.all([
-    db.select({ n: count() }).from(users),
+  const people = eq(users.bot, false);
+  const [[all], [unconfirmed], [suspended], [deleting], [bots]] = await Promise.all([
+    db.select({ n: count() }).from(users).where(people),
     db
       .select({ n: count() })
       .from(users)
-      .where(and(isNull(users.emailVerifiedAt), isNull(users.deleteAfter), isNull(users.suspendedAt))),
-    db.select({ n: count() }).from(users).where(isNotNull(users.suspendedAt)),
-    db.select({ n: count() }).from(users).where(isNotNull(users.deleteAfter)),
+      .where(and(people, isNull(users.emailVerifiedAt), isNull(users.deleteAfter), isNull(users.suspendedAt))),
+    db.select({ n: count() }).from(users).where(and(people, isNotNull(users.suspendedAt))),
+    db.select({ n: count() }).from(users).where(and(people, isNotNull(users.deleteAfter))),
+    db.select({ n: count() }).from(users).where(eq(users.bot, true)),
   ]);
   const invitedCount = (await openInvites()).length;
 
   res.json({
-    counts: { all: all.n + invitedCount, invited: invitedCount, unconfirmed: unconfirmed.n, suspended: suspended.n, deleting: deleting.n },
+    counts: { all: all.n + invitedCount, invited: invitedCount, unconfirmed: unconfirmed.n, suspended: suspended.n, deleting: deleting.n, bots: bots.n },
     more: rows.length > LIMIT,
     invites: invites.map((i) => ({
       id: i.id,
@@ -381,6 +388,7 @@ adminRouter.get("/accounts", async (req, res) => {
       online: live.userIds.has(u.id),
       isAdmin: u.isAdmin,
       restricted: u.restricted,
+      bot: filter === "bots",
       status: accountStatus(u),
     })),
   });

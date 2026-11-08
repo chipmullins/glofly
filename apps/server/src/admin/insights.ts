@@ -151,7 +151,7 @@ export async function peopleInsights() {
     select count(distinct user_id) filter (where day = ${today}::date)::int as today,
       count(distinct user_id) filter (where day >= ${weekStart}::date)::int as week,
       count(distinct user_id) filter (where day >= ${monthStart}::date)::int as month,
-      (select count(*)::int from users where delete_after is null and suspended_at is null) as total
+      (select count(*)::int from users where delete_after is null and suspended_at is null and not bot) as total
     from active_days where day >= ${monthStart}::date`);
   const perDay = await rows<{
     day: string;
@@ -195,7 +195,7 @@ export async function peopleInsights() {
   }>(sql`
     with joined as (
       select id, (created_at at time zone ${TIME_ZONE})::date as d0 from users
-      where created_at >= now() - interval '56 days'
+      where created_at >= now() - interval '56 days' and not bot
     ), today as (select (now() at time zone ${TIME_ZONE})::date as t)
     select to_char(date_trunc('week', j.d0)::date, 'YYYY-MM-DD') as week,
       count(*)::int as joined,
@@ -293,7 +293,7 @@ export async function funnelInsights(days: number) {
     joined_constellation: number;
     median_first_message_min: number | null;
   }>(sql`
-    with u as (select id, created_at, email_verified_at from users where created_at >= ${since}),
+    with u as (select id, created_at, email_verified_at from users where created_at >= ${since} and not bot),
     first_msg as (
       select u.id, min(m.created_at) as at from u join messages m on m.sender_id = u.id and m.event is null group by u.id
     )

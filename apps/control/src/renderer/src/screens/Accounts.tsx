@@ -20,7 +20,8 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'invited', label: 'Invited' },
   { id: 'unconfirmed', label: 'Email not confirmed' },
   { id: 'suspended', label: 'Suspended' },
-  { id: 'deleting', label: 'Being deleted' }
+  { id: 'deleting', label: 'Being deleted' },
+  { id: 'bots', label: 'Bots' }
 ]
 
 type Selected = { kind: 'account'; id: string } | { kind: 'invite'; id: string } | null
@@ -189,6 +190,14 @@ export function Accounts({
                         {' '}
                         <Chip tone="purple" small>
                           Family
+                        </Chip>
+                      </>
+                    )}
+                    {item.row.bot && (
+                      <>
+                        {' '}
+                        <Chip tone="purple" small>
+                          Bot
                         </Chip>
                       </>
                     )}

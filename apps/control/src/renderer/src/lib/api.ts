@@ -286,6 +286,8 @@ export type AccountRow = {
   isAdmin: boolean
   /** 0.4.0: a restricted (family-managed) account (missing from older servers) */
   restricted?: boolean
+  /** 0.9.1: a bot (API key, webhook or Glofly tool member); only listed under the Bots filter */
+  bot?: boolean
   status: AccountStatus
 }
 
@@ -302,10 +304,11 @@ export type InviteRow = {
   status: InviteStatus
 }
 
-export type Filter = 'all' | 'invited' | 'unconfirmed' | 'suspended' | 'deleting'
+export type Filter = 'all' | 'invited' | 'unconfirmed' | 'suspended' | 'deleting' | 'bots'
 
 export type AccountList = {
-  counts: Record<Filter, number>
+  /** bots: 0.9.1 (missing from older servers) */
+  counts: Record<Exclude<Filter, 'bots'>, number> & { bots?: number }
   more: boolean
   invites: InviteRow[]
   accounts: AccountRow[]
