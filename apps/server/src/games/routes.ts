@@ -193,6 +193,13 @@ myGamesRouter.delete("/me/:key", async (req, res) => {
   res.json({ games: await gamesOf(me(res).id, true) });
 });
 
+/** 0.9.1 profile preview: whether My games would show to a friend / to anyone else. */
+export async function gamesSharedAs(ownerId: string, friend: boolean): Promise<boolean> {
+  const own = await visibilityOf(ownerId);
+  const visibility = (await isRestricted(ownerId)) ? (own === "only_me" ? "only_me" : "friends") : own;
+  return visibility === "everyone" || (visibility === "friends" && friend);
+}
+
 /** Whether someone's My games shows to this viewer (0.9.1: also used by profiles). */
 export async function gamesSharedWith(viewerId: string, ownerId: string): Promise<boolean> {
   if (viewerId === ownerId) return true;

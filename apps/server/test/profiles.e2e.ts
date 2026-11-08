@@ -223,3 +223,29 @@ test("restricted (family) accounts only show these to friends", { skip }, async 
   const f = await call(`/users/${sam.id}/profile`, { token: riley.token });
   assert.equal(f.json.pronouns, "he/him");
 });
+
+test("Preview my profile: as a friend and as anyone else", { skip }, async () => {
+  await call("/users/me/profile", { method: "PATCH", token: maya.token, body: { bio: "Hi there", privacy: { board: "friends", activity: "friends" } } });
+  const asFriend = await call("/users/me/profile?as=friend", { token: maya.token });
+  assert.equal(asFriend.status, 200);
+  assert.equal(asFriend.json.bio, "Hi there");
+  assert.ok(asFriend.json.board, "friends see a friends-only board");
+  assert.equal(asFriend.json.privacy, undefined, "a preview carries no settings");
+  assert.equal(asFriend.json.boardSource, undefined);
+  const c = asFriend.json.board.find((t: any) => t.kind === "constellation");
+  if (c) assert.equal(c.constellation.joined, false, "the tile shows Join, as it would to them");
+  assert.equal(asFriend.json.activityShown, true);
+  const anyone = await call("/users/me/profile?as=everyone", { token: maya.token });
+  assert.equal(anyone.json.bio, null, "About me is for friends and chat partners");
+  assert.equal(anyone.json.board, null);
+  assert.equal(anyone.json.activityShown, false);
+  assert.equal(anyone.json.presence, null);
+  const act = await call(`/users/${maya.id}/activity?as=everyone`, { token: maya.token });
+  assert.equal(act.json.shown, false);
+  const actF = await call(`/users/${maya.id}/activity?as=friend`, { token: maya.token });
+  assert.equal(actF.json.shown, true);
+  // ?as= only ever applies to your own profile.
+  const other = await call(`/users/${maya.id}/activity?as=friend`, { token: stranger.token });
+  assert.equal(other.status, 404, "blocked earlier in this file");
+  await call("/users/me/profile", { method: "PATCH", token: maya.token, body: { privacy: { board: "everyone" } } });
+});

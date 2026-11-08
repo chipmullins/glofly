@@ -15,7 +15,8 @@ import {
   shows,
   storedBoard,
 } from "./board";
-import { gamesSharedWith } from "../games/routes";
+import { gamesSharedAs, gamesSharedWith } from "../games/routes";
+import { isRestricted } from "../friends/rules";
 import { coversFor } from "../games/igdb";
 import type { BoardTile } from "@glofly/shared";
 
@@ -110,7 +111,13 @@ async function visibilityOf(viewerId: string, targetId: string): Promise<Visibil
   return (await chatPartnersOf(viewerId)).includes(targetId) ? "full" : "basic";
 }
 
-async function profileOf(targetId: string, visibility: Visibility, viewerId: string) {
+/** 0.9.1 "Preview my profile": as a friend, or as anyone else on Glofly. */
+type PreviewAs = "friend" | "everyone";
+const previewAs = (x: unknown): PreviewAs | null => (x === "friend" || x === "everyone" ? x : null);
+/** Someone who's in nothing of yours (so a constellation tile shows Join, as it would to them). */
+const NOBODY = "00000000-0000-0000-0000-000000000000";
+
+async function profileOf(targetId: string, visibility: Visibility, viewerId: string, as: PreviewAs | null = null) {
   const [row] = await db
     .select({
       id: users.id,
@@ -136,7 +143,7 @@ async function profileOf(targetId: string, visibility: Visibility, viewerId: str
   };
   const presence =
     visibility === "friend" ? ((await presenceOf([row.id])).get(row.id) ?? null) : null;
-  const extras = await extrasOf(row, viewerId, presence?.activity?.name ?? null);
+  const extras = await extrasOf(row, viewerId, presence?.activity?.name ?? null, as);
   if (visibility === "basic") return { ...base, bio: null, joinedAt: null, presence: null, ...extras };
   return { ...base, bio: row.bio, joinedAt: row.createdAt.toISOString(), presence, ...extras };
 }
@@ -156,14 +163,19 @@ async function extrasOf(
   },
   viewerId: string,
   playing: string | null,
+  as: PreviewAs | null = null,
 ): Promise<ProfileExtras> {
-  const rel = await relationOf(viewerId, row.id);
+  const rel = as ? { self: false, friend: as === "friend", restricted: await isRestricted(row.id) } : await relationOf(viewerId, row.id);
   const privacy = privacyOf(row.profilePrivacy);
   const tiles = storedBoard(row.profileBoard);
   const open = !rel.restricted || rel.friend;
-  const gamesShared = await gamesSharedWith(viewerId, row.id);
-  const board = shows(privacy.board, rel) && tiles.length ? await boardView(viewerId, row.id, tiles, { gamesShared, playing }) : null;
-  const mutualsShown = !rel.self && shows(privacy.mutuals, rel);
+  const gamesShared = as ? await gamesSharedAs(row.id, as === "friend") : await gamesSharedWith(viewerId, row.id);
+  const board =
+    shows(privacy.board, rel) && tiles.length
+      ? await boardView(as ? NOBODY : viewerId, row.id, tiles, { gamesShared, playing: as === "everyone" ? null : playing })
+      : null;
+  // (A preview has no mutuals: they depend on who's looking.)
+  const mutualsShown = !rel.self && !as && shows(privacy.mutuals, rel);
   return {
     pronouns: open ? row.pronouns : null,
     header: open && row.headerVersion ? { version: row.headerVersion, focus: row.headerFocus } : null,
@@ -175,8 +187,10 @@ async function extrasOf(
 }
 
 // GET /users/me/profile — your own profile, for Edit profile.
-profileRouter.get("/me/profile", async (_req, res) => {
-  res.json(await profileOf(me(res).id, "friend", me(res).id));
+// 0.9.1: ?as=friend or ?as=everyone = what a friend / anyone else sees ("Preview my profile").
+profileRouter.get("/me/profile", async (req, res) => {
+  const as = previewAs(req.query.as);
+  res.json(await profileOf(me(res).id, as === "everyone" ? "basic" : "friend", me(res).id, as));
 });
 
 const profileSchema = z
@@ -354,8 +368,12 @@ profileRouter.get("/:id/activity", async (req, res) => {
     return;
   }
   const [row] = await db.select({ p: users.profilePrivacy }).from(users).where(eq(users.id, id));
-  const shown = shows(privacyOf(row?.p).activity, await relationOf(me(res).id, id));
-  res.json(shown ? { shown: true, items: await activityOf(id, await gamesSharedWith(me(res).id, id)) } : { shown: false, items: [] });
+  // 0.9.1: your own, previewed as a friend / anyone else (?as=).
+  const as = id === me(res).id ? previewAs(req.query.as) : null;
+  const rel = as ? { self: false, friend: as === "friend", restricted: await isRestricted(id) } : await relationOf(me(res).id, id);
+  const shared = as ? await gamesSharedAs(id, as === "friend") : await gamesSharedWith(me(res).id, id);
+  const shown = shows(privacyOf(row?.p).activity, rel);
+  res.json(shown ? { shown: true, items: await activityOf(id, shared) } : { shown: false, items: [] });
 });
 
 // GET /users/:id/profile — someone's profile card.
