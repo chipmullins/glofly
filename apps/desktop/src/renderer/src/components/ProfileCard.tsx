@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Presence, Profile, PublicUser } from '../../../preload/api-types'
 import fireflyImg from '../assets/firefly.png'
 import { shortDate } from '../lib/names'
@@ -458,6 +458,7 @@ export default function ProfileCard({
                       </button>
                     ))}
                   </div>
+                  <SteadyPanel resetKey={`${person.id}:${preview ? viewAs : ''}`}>
                   <div role="tabpanel" id="pt-panel" aria-labelledby={`pt-${tab}`} className="pb-panel" key={tab}>
                     {tab === 'board' && shown.board ? (
                       <BoardGrid
@@ -478,6 +479,7 @@ export default function ProfileCard({
                       <ActivityList userId={person.id} as={preview ? viewAs : undefined} />
                     ) : null}
                   </div>
+                  </SteadyPanel>
                 </div>
               )}
             </div>
@@ -597,5 +599,30 @@ function NicknameRow({
         </button>
       </div>
     </form>
+  )
+}
+
+/**
+ * 0.9.1: the tabs' area never shrinks while the card is open (it keeps the tallest tab's height so
+ * far), so switching between Board, Mutual friends and Activity doesn't make the card jump. It can
+ * still grow, gently, when a longer tab is opened.
+ */
+function SteadyPanel({ children, resetKey }: { children: React.ReactNode; resetKey: string }): React.JSX.Element {
+  const inner = useRef<HTMLDivElement>(null)
+  const [min, setMin] = useState(0)
+  useEffect(() => setMin(0), [resetKey])
+  useLayoutEffect(() => {
+    const el = inner.current
+    if (!el) return
+    const note = (): void => setMin((m) => Math.max(m, Math.ceil(el.getBoundingClientRect().height)))
+    note()
+    const ro = new ResizeObserver(note)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return (
+    <div className="pb-steady" style={{ minHeight: min || undefined }}>
+      <div ref={inner}>{children}</div>
+    </div>
   )
 }

@@ -441,3 +441,8 @@
   gap: 6px;
   cursor: pointer;
 }
+
+/* The tab area keeps its height (SteadyPanel in ProfileCard.tsx) and grows smoothly. */
+.pb-steady {
+  transition: min-height 200ms var(--glo-ease-open, ease);
+}

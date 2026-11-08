@@ -92,6 +92,7 @@ export default function ProfileCard() {
     ...(profile?.activityShown ? [{ id: 'activity' as const, label: 'Activity' }] : []),
   ]
   const [tabChoice, setTab] = useState<'board' | 'mutuals' | 'activity' | null>(null)
+  const [tabsMin, setTabsMin] = useState(0)
   const tab = tabs.find((t) => t.id === tabChoice)?.id ?? tabs[0]?.id ?? null
 
   // The bell: "Notify me when they come online" (0.3.0 servers send onlineAlert).
@@ -297,6 +298,11 @@ export default function ProfileCard() {
                     </Pressable>
                   ))}
                 </View>
+                {/* 0.9.1: keeps the tallest tab's height so far, so the sheet doesn't jump between tabs */}
+                <View style={{ minHeight: tabsMin || undefined }} onLayout={(e) => {
+                  const h = Math.ceil(e.nativeEvent.layout.height)
+                  if (h > tabsMin) setTabsMin(h)
+                }}>
                 {tab === 'board' && profile.board ? (
                   <BoardTiles tiles={profile.board} userId={profile.id} />
                 ) : tab === 'mutuals' ? (
@@ -304,6 +310,7 @@ export default function ProfileCard() {
                 ) : tab === 'activity' ? (
                   <ActivityFeed userId={profile.id} name={profile.displayName} as={isMe ? viewAs : undefined} />
                 ) : null}
+                </View>
               </View>
             ) : null}
             {profile.joinedAt ? (
