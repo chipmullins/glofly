@@ -37,7 +37,7 @@ async function accessToken(): Promise<string | null> {
       const q = new URLSearchParams({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, grant_type: "client_credentials" });
       const res = await fetch(`${TOKEN_URL}?${q}`, { method: "POST", signal: AbortSignal.timeout(8000), redirect: "error" });
       if (!res.ok) {
-        console.error(`IGDB: Twitch refused the app's sign-in (${res.status}). Check IGDB_CLIENT_ID / IGDB_CLIENT_SECRET.`);
+        warn(`IGDB: Twitch refused the app's sign-in (${res.status}). Check IGDB_CLIENT_ID / IGDB_CLIENT_SECRET.`);
         return null;
       }
       const body = (await res.json()) as { access_token?: unknown; expires_in?: unknown };
@@ -45,7 +45,8 @@ async function accessToken(): Promise<string | null> {
       const seconds = typeof body.expires_in === "number" ? body.expires_in : 3600;
       token = { value: body.access_token, until: Date.now() + seconds * 1000 };
       return token.value;
-    } catch {
+    } catch (err) {
+      warn(`IGDB: couldn't reach Twitch to sign in: ${(err as Error).message}`);
       return null;
     } finally {
       tokenWait = null;
@@ -84,13 +85,32 @@ async function query(body: string, retried = false): Promise<IgdbGame[] | null> 
         token = null;
         return query(body, true);
       }
-      if (!res.ok) return null;
+      if (!res.ok) {
+        warn(`IGDB answered ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+        return null;
+      }
       const json = await res.json();
       return Array.isArray(json) ? (json as IgdbGame[]) : null;
-    } catch {
+    } catch (err) {
+      warn(`IGDB couldn't be reached: ${(err as Error).message}`);
       return null;
     }
   });
+}
+
+// Problems go to the server log (at most once a minute), so "no pictures" can be explained.
+let lastWarn = 0;
+function warn(text: string): void {
+  if (Date.now() - lastWarn < 60_000) return;
+  lastWarn = Date.now();
+  console.error(text);
+}
+
+/** A games query with the "main games only" filter, or without it if IGDB refuses the filter. */
+async function gamesQuery(search: string, limit: number): Promise<IgdbGame[] | null> {
+  const strict = await query(`search "${search}"; ${FIELDS} ${MAIN} limit ${limit};`);
+  if (strict) return strict;
+  return query(`search "${search}"; ${FIELDS} where version_parent = null; limit ${limit};`);
 }
 
 /** Text for inside an Apicalypse search "…" (no quotes or backslashes, short). */
@@ -122,7 +142,7 @@ export async function searchGames(q: string): Promise<GameSearchResult[] | null>
   if (!igdbConfigured) return null;
   const text = searchText(q);
   if (text.length < 2) return [];
-  const rows = await query(`search "${text}"; ${FIELDS} ${MAIN} limit 8;`);
+  const rows = await gamesQuery(text, 8);
   if (!rows) return null;
   const seen = new Set<string>();
   const results = rows.map(clean).filter((r): r is GameSearchResult => !!r && !seen.has(r.key) && !!seen.add(r.key));
@@ -145,7 +165,7 @@ function lookUpLater(games: { key: string; name: string }[]): void {
       while (pending.size) {
         const [key, name] = pending.entries().next().value as [string, string];
         pending.delete(key);
-        const rows = await query(`search "${searchText(name)}"; ${FIELDS} ${MAIN} limit 5;`);
+        const rows = await gamesQuery(searchText(name), 5);
         if (!rows) break; // IGDB down: try again the next time someone needs it
         const match = rows.map(clean).find((r) => r && r.key === key) ?? null;
         await db
@@ -195,8 +215,11 @@ export async function coverImage(id: string): Promise<{ stream: Readable; size: 
   if (!wait) {
     wait = (async () => {
       try {
-        const res = await fetch(`${IMAGE_URL}/t_cover_big/${id}.jpg`, { signal: AbortSignal.timeout(8000), redirect: "error" });
-        if (!res.ok) return null;
+        const res = await fetch(`${IMAGE_URL}/t_cover_big/${id}.jpg`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) {
+          warn(`IGDB picture ${id}: ${res.status}`);
+          return null;
+        }
         const input = Buffer.from(await res.arrayBuffer());
         if (input.length > 4 * 1024 * 1024) return null;
         const out = await sharp(input, { limitInputPixels: 20_000_000 }).resize(264, 352, { fit: "cover" }).webp({ quality: 82 }).toBuffer();
