@@ -222,7 +222,8 @@ export default function ThreadPanel({
             parent,
             alsoInName: nebula.name,
             placeholder: 'Reply in trail',
-            onSummary: (t) => onSummary({ ...t, following: true })
+            // 0.9.1: only your own reply makes you follow; others' replies keep your choice.
+            onSummary: (t, fromMe) => onSummary({ ...t, following: fromMe || thread.following, unread: 0 })
           }}
         />
       </div>

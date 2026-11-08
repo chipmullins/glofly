@@ -52,25 +52,28 @@ export function Sheet({
   title,
   children,
   onClose,
-  wide
+  wide,
+  sticky
 }: {
   title: string
   children: React.ReactNode
   onClose: () => void
   wide?: boolean
+  /** 0.9.1: only its own button closes it (a secret shown once mustn't vanish on a stray click or Escape) */
+  sticky?: boolean
 }): React.JSX.Element {
   useEffect(() => {
     const key = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose()
+        if (!sticky) onClose()
       }
     }
     window.addEventListener('keydown', key, true)
     return () => window.removeEventListener('keydown', key, true)
-  }, [onClose])
+  }, [onClose, sticky])
   return (
-    <div className="ix-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="ix-backdrop" onMouseDown={(e) => !sticky && e.target === e.currentTarget && onClose()}>
       <div role="dialog" aria-modal="true" aria-label={title} className={wide ? 'ix-sheet ix-sheet--wide' : 'ix-sheet'}>
         <h2 className="ix-sheet-title">{title}</h2>
         {children}
@@ -102,7 +105,7 @@ function ShownOnce({
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   return (
-    <Sheet title={title} onClose={onDone}>
+    <Sheet title={title} onClose={onDone} sticky>
       <p className="ix-text">{what}</p>
       <div className="ix-secret">
         <code>{secret}</code>

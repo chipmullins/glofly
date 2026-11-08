@@ -130,7 +130,11 @@ function connect() {
     emit('message:new', { message, counts })
   })
   s.on('message:updated', (p: { message?: Message }) => {
-    if (p?.message?.id) updateMessage(upgradeEvents(p.message))
+    if (!p?.message?.id) return
+    const m = upgradeEvents(p.message)
+    updateMessage(m)
+    // 0.9.1: trails keep their own list (they aren't in the store's chats).
+    emit('message:updated', { message: m })
   })
   s.on('typing', (p: { conversationId?: string; userId?: string }) => {
     if (typeof p?.conversationId === 'string' && typeof p?.userId === 'string') setTyping(p.conversationId, p.userId, Date.now() + 6000)

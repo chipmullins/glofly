@@ -64,6 +64,9 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
   const [parent, setParent] = useState<Message | null>(null)
   const [list, setList] = useState<Message[]>([])
   const [loaded, setLoaded] = useState(false)
+  // 0.9.1: older pages load as you scroll up (a long signal used to lose its opening post).
+  const [hasMore, setHasMore] = useState(false)
+  const loadingOlder = useRef(false)
   const [reply, setReply] = useState<Message | null>(null)
   const [also, setAlso] = useState(false)
   const composer = useRef<ComposerHandle>(null)
@@ -81,21 +84,40 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
       return router.back()
     }
     setThread(t.data.thread)
-    if (page.ok) setList(page.data.messages)
+    if (page.ok) {
+      setList(page.data.messages)
+      setHasMore(page.data.hasMore)
+    }
     setLoaded(true)
     void threadsApi.read(c.id, threadId)
-    if (t.data.thread.parentMessageId) {
-      const around = await import('@/api/glofly').then((api) => api.loadMessages(n.conversationId))
-      const found = around.ok ? around.data.messages.find((m) => m.id === t.data.thread.parentMessageId) : undefined
-      if (found) setParent(found)
-    }
+    // The server sends the message it started from, however old.
+    if (t.data.parent) setParent(t.data.parent)
   }, [c.id, threadId, n.conversationId])
+  const loadOlder = useCallback(async () => {
+    const oldest = list.find((m) => !m.id.startsWith('local-'))
+    if (!hasMore || loadingOlder.current || !oldest) return
+    loadingOlder.current = true
+    const page = await threadsApi.messages(n.conversationId, threadId, oldest.id)
+    loadingOlder.current = false
+    if (!page.ok) return
+    setHasMore(page.data.hasMore)
+    setList((l) => [...page.data.messages.filter((m) => !l.some((x) => x.id === m.id)), ...l])
+  }, [list, hasMore, n.conversationId, threadId])
   useEffect(() => {
     void load()
   }, [load])
   useEffect(
     () =>
       onLive((event, payload) => {
+        // 0.9.1: edits, deletes and reactions show at once.
+        if (event === 'message:updated') {
+          const m = (payload as { message: Message }).message
+          if (m.conversationId === n.conversationId) {
+            setList((l) => (l.some((x) => x.id === m.id) ? l.map((x) => (x.id === m.id ? m : x)) : l))
+            setParent((p) => (p && p.id === m.id ? m : p))
+          }
+          return
+        }
         if (event !== 'cx') return
         const e = payload as ServerEvent
         if (e.type === 'thread:message' && e.thread.id === threadId) {
@@ -109,7 +131,7 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
           router.back()
         }
       }),
-    [c.id, threadId, meId, forum],
+    [c.id, threadId, meId, forum, n.conversationId],
   )
 
   // 4.2 (board 30): @everyone / @here / @Role
@@ -173,7 +195,8 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
   async function longPress(m: Message) {
     if (!thread || m.id.startsWith('local-') || m.deleted) return
     const { openContextMenu } = await import('./ContextMenu')
-    const canAnswer = forum && (mine || staff) && m.id !== list[0]?.id
+    const opening = thread.firstMessageId ?? (hasMore ? null : list[0]?.id)
+    const canAnswer = forum && (mine || staff) && m.id !== opening
     const pick = await openContextMenu(
       { x: 14, y: 260, w: 360, h: 60 },
       null,
@@ -282,6 +305,8 @@ export function ThreadScreen({ c, n, threadId }: { c: ConstellationDetail; n: Ne
       <FlatList
         inverted
         data={rows}
+        onEndReached={() => void loadOlder()}
+        onEndReachedThreshold={0.4}
         keyExtractor={(r) => r.message.id}
         contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
         ListFooterComponent={

@@ -11,7 +11,7 @@ import { seesNebulaChat, viewersOf } from "../constellations/access";
 import { logModeration } from "../constellations/activity";
 import { automodWordInEdit } from "../constellations/automod";
 import { emitToUser } from "../realtime";
-import { access, canPost, cantPostMessage } from "../messages/routes";
+import { access, canPost, cantPostMessage, hydrate, messageFields } from "../messages/routes";
 import { follow, forumSettingsOf, summaries, type ThreadRow } from "./core";
 
 // Communities round (Nov 2026): threads + forum posts (approved canvas boards 16–22).
@@ -215,7 +215,14 @@ threadsRouter.get("/:id/threads/:tid", async (req, res) => {
   if (!s) return;
   const row = await threadHere(req, res, s);
   if (!row) return;
-  res.json({ thread: await oneSummary(row.t, s.userId, row.n.threadCloseDays), nebula: { id: row.n.id, kind: row.n.kind, name: row.n.name, conversationId: row.n.conversationId } });
+  // 0.9.1: the message a trail was started from, however old (apps used to look for it only in the
+  // nebula's newest page, so older parents went missing).
+  let parent = null;
+  if (row.t.parentMessageId) {
+    const [m] = await db.select(messageFields).from(messages).where(and(eq(messages.id, row.t.parentMessageId), eq(messages.conversationId, row.n.conversationId)));
+    if (m) [parent] = await hydrate([m]);
+  }
+  res.json({ thread: await oneSummary(row.t, s.userId, row.n.threadCloseDays), parent, nebula: { id: row.n.id, kind: row.n.kind, name: row.n.name, conversationId: row.n.conversationId } });
 });
 
 const changeBody = z.object({

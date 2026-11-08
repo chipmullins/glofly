@@ -1,4 +1,4 @@
-import type { ApiResult } from '@glofly/shared'
+import type { ApiResult, Message } from '@glofly/shared'
 import type { ThreadSummary } from '@glofly/shared/threads'
 
 // Communities round (Nov 2026): threads + forum posts (server threads/routes.ts), through the
@@ -22,7 +22,7 @@ export const threads = {
   },
   start: (cid: string, nebulaId: string, values: { parentMessageId?: string; title?: string; tagIds?: string[] }) =>
     call<{ thread: ThreadSummary; existed?: boolean }>('POST', `/constellations/${cid}/nebulas/${nebulaId}/threads`, values),
-  get: (cid: string, threadId: string) => call<{ thread: ThreadSummary }>('GET', `/constellations/${cid}/threads/${threadId}`),
+  get: (cid: string, threadId: string) => call<{ thread: ThreadSummary; parent?: Message | null }>('GET', `/constellations/${cid}/threads/${threadId}`),
   change: (cid: string, threadId: string, changes: ThreadChange) =>
     call<{ thread: ThreadSummary }>('PATCH', `/constellations/${cid}/threads/${threadId}`, changes),
   remove: (cid: string, threadId: string) => call<{ ok: true }>('DELETE', `/constellations/${cid}/threads/${threadId}`),

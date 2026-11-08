@@ -107,7 +107,7 @@ export default function ConnectedApps() {
       ))}
       <View style={{ height: 12 }} />
       <Text size={12} tone="muted" style={{ paddingHorizontal: 20, lineHeight: 18 }}>
-        Tap an app to disconnect it, or a game server to unlink it. Developers register apps in Glofly on a computer (Settings → Developer).
+        Tap an app to disconnect it, or a game server to unlink it.
       </Text>
     </Screen>
   )

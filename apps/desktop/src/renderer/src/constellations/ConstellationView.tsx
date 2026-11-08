@@ -607,21 +607,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const openThreadById = useCallback(
     async (t: ThreadSummary, parent?: Message | null) => {
       setOpenThread({ thread: t, parent: parent ?? null })
+      // 0.9.1: the server sends the message it started from, however old (it used to be looked
+      // for only in the nebula's newest page).
       const fresh = await threadApi.get(c.id, t.id)
       if (fresh.ok)
-        setOpenThread((o) => (o?.thread.id === t.id ? { ...o, thread: fresh.data.thread } : o))
-      if (parent === undefined && t.parentMessageId) {
-        const nb = c.nebulas.find((x) => x.id === t.nebulaId)
-        if (nb) {
-          const page = await window.glofly.conversations.messages(nb.conversationId)
-          const found = page.ok
-            ? page.data.messages.find((m) => m.id === t.parentMessageId)
-            : undefined
-          if (found) setOpenThread((o) => (o?.thread.id === t.id ? { ...o, parent: found } : o))
-        }
-      }
+        setOpenThread((o) =>
+          o?.thread.id === t.id
+            ? { ...o, thread: fresh.data.thread, parent: o.parent ?? fresh.data.parent ?? null }
+            : o
+        )
     },
-    [c.id, c.nebulas]
+    [c.id]
   )
   const openThreadByIdRef = useRef(openThreadById)
   openThreadByIdRef.current = openThreadById

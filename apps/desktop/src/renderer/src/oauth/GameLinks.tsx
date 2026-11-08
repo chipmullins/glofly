@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { GAME_LINK_GAMES, normalizeLinkCode, type ApiResult, type GameLinkGame, type GameLinkPreview, type LinkedGameServer } from '@glofly/shared'
 import '../constellations/Integrations.css'
 import './AppsSettings.css'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 // Communities round (Nov 2026): Settings → Linked game servers + Enter a code (approved canvas
 // boards 7 and 8). Through window.glofly.apps.request (it lets /account/game-links… through).
@@ -172,6 +173,8 @@ export function GameServersSettings(): React.JSX.Element {
   const [problem, setProblem] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [entering, setEntering] = useState(false)
+  const [asking, setAsking] = useState<LinkedGameServer | null>(null)
+  const [busy, setBusy] = useState(false)
   const load = useCallback(() => {
     void call<{ servers: LinkedGameServer[] }>('GET', '/account/game-links').then((r) => {
       if (r.ok) setServers(r.data.servers)
@@ -212,17 +215,31 @@ export function GameServersSettings(): React.JSX.Element {
           <button
             type="button"
             className="ix-btn ix-btn--small ix-btn--danger"
-            onClick={() =>
-              void call('DELETE', `/account/game-links/${s.id}`).then((r) => {
-                if (r.ok) load()
-                else setProblem(r.message)
-              })
-            }
+            onClick={() => setAsking(s)}
           >
             Unlink
           </button>
         </div>
       ))}
+      {asking && (
+        <ConfirmDialog
+          title={`Unlink ${asking.serverName}?`}
+          message="The server won't let you in with Glofly any more. To link it again you'll need a new code from the game."
+          confirmLabel="Unlink"
+          danger
+          busy={busy}
+          onCancel={() => setAsking(null)}
+          onConfirm={() => {
+            setBusy(true)
+            void call('DELETE', `/account/game-links/${asking.id}`).then((r) => {
+              setBusy(false)
+              setAsking(null)
+              if (r.ok) load()
+              else setProblem(r.message)
+            })
+          }}
+        />
+      )}
       <p className="ix-text">Unlinking means the server can't look you up any more; you'll be asked for a new code next time you join. Your characters and progress stay on the game server.</p>
       {entering && (
         <EnterCode

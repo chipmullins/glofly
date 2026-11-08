@@ -137,7 +137,8 @@ export type ThreadMode = {
   answerMessageId?: string | null
   onMarkAnswer?: (m: Message) => void
   /** The thread's new counts (each reply) */
-  onSummary?: (t: ThreadSummary) => void
+  /** fromMe: a reply you sent (you follow the trail now); false for others' replies and changes */
+  onSummary?: (t: ThreadSummary, fromMe: boolean) => void
 }
 
 /** How a nebula's chat differs from a group chat (2.0, Constellation.dc.html). */
@@ -620,8 +621,13 @@ export default function ChatView({
       if (event.type === 'thread:message' && threadId && event.thread.id === threadId) {
         const m = event.message
         setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))
-        threadCallbacks.current?.onSummary?.(event.thread)
+        threadCallbacks.current?.onSummary?.(event.thread, m.senderId === me.id)
         if (m.senderId !== me.id && stickToBottom.current) void markRead()
+        return
+      }
+      // 0.9.1: the open trail renamed, closed or reopened by someone else.
+      if (event.type === 'thread:updated' && threadId && event.thread.id === threadId) {
+        threadCallbacks.current?.onSummary?.(event.thread, false)
         return
       }
       if (

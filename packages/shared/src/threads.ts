@@ -44,6 +44,8 @@ export type ThreadSummary = {
   closed: boolean
   pinned: boolean
   answerMessageId: string | null
+  /** 0.9.1 forum posts: the opening message (it can't be marked as the answer) */
+  firstMessageId?: string | null
   /** Forum posts: the opening message's text (the list's second line) */
   preview?: string | null
   /** The last few people who replied (newest first, up to 3) */

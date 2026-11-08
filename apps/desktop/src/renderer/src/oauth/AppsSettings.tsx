@@ -6,6 +6,7 @@ import '../constellations/Integrations.css'
 const initialsOf = (name: string): string =>
   (name.trim().split(/\s+/).length > 1 ? name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('') : name.slice(0, 2)).toUpperCase()
 import './AppsSettings.css'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 // Communities round (Nov 2026): Settings → Connected apps and Developer (Sign in with Glofly;
 // approved canvas boards 6 and 10). Through window.glofly.apps.request, which only lets
@@ -44,6 +45,8 @@ const what = (a: ConnectedApp): string => {
 export function ConnectedAppsSettings(): React.JSX.Element {
   const [apps, setApps] = useState<ConnectedApp[] | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
+  const [asking, setAsking] = useState<ConnectedApp | null>(null)
+  const [busy, setBusy] = useState(false)
   const load = useCallback(() => {
     void call<{ apps: ConnectedApp[] }>('GET', '/account/connected-apps').then((r) => {
       if (r.ok) setApps(r.data.apps)
@@ -76,17 +79,31 @@ export function ConnectedAppsSettings(): React.JSX.Element {
           <button
             type="button"
             className="ix-btn ix-btn--small ix-btn--danger"
-            onClick={() =>
-              void call('DELETE', `/account/connected-apps/${a.appId}`).then((r) => {
-                if (r.ok) load()
-                else setProblem(r.message)
-              })
-            }
+            onClick={() => setAsking(a)}
           >
             Disconnect
           </button>
         </div>
       ))}
+      {asking && (
+        <ConfirmDialog
+          title={`Disconnect ${asking.name}?`}
+          message={`${asking.name} is signed out of your Glofly account straight away. To use it with Glofly again you'll sign in again.`}
+          confirmLabel="Disconnect"
+          danger
+          busy={busy}
+          onCancel={() => setAsking(null)}
+          onConfirm={() => {
+            setBusy(true)
+            void call('DELETE', `/account/connected-apps/${asking.appId}`).then((r) => {
+              setBusy(false)
+              setAsking(null)
+              if (r.ok) load()
+              else setProblem(r.message)
+            })
+          }}
+        />
+      )}
       <p className="ix-text">Disconnecting signs the app out of your Glofly account straight away. Its own account on its site stays, so ask the site if you want that deleted too.</p>
     </section>
   )

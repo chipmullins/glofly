@@ -66,6 +66,7 @@ export async function summaries(rows: ThreadRow[], userId: string | null, closeD
       closed: isClosed(t, closeDays.get(t.nebulaId) ?? 7),
       pinned: !!t.pinnedAt,
       answerMessageId: t.answerMessageId,
+      firstMessageId: t.firstMessageId,
       preview: first ? (first.deletedAt ? null : first.body.slice(0, 200)) : null,
       recentIds: recent.rows.filter((r) => r.thread_id === t.id).map((r) => r.sender_id),
       following: !!f?.following,

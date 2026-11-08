@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { accentOf, type ConstellationDetail, type OnboardingQuestion } from '@glofly/shared'
 import { cx } from '@/api/constellations'
-import { cxSay, putDetail } from '@/state/constellations'
+import { cxSay, loadDetail, putDetail } from '@/state/constellations'
 import { Text } from '@/ui/kit'
 import { needsWelcome } from './community'
 import { haptic } from './motion'
@@ -66,7 +66,9 @@ export function OnboardingSheet({ c }: { c: ConstellationDetail }) {
   // Sized from the window (a Modal's own box isn't always the screen's width on the web).
   const { width, height } = useWindowDimensions()
   const questions = c.onboarding?.questions ?? []
-  const [at, setAt] = useState(0)
+  const [atRaw, setAt] = useState(0)
+  // 0.9.1: an admin may remove a question while you're on it: never past the last one.
+  const at = Math.min(atRaw, Math.max(0, questions.length - 1))
   const [answers, setAnswers] = useState<Record<string, string[]>>(() => ({ ...(c.me.onboarding?.answers ?? {}) }))
   const [done, setDone] = useState<ConstellationDetail | null>(null)
   const [busy, setBusy] = useState(false)
@@ -75,6 +77,8 @@ export function OnboardingSheet({ c }: { c: ConstellationDetail }) {
   if (!showing) return null
   const a = accentOf(c)
   const q = questions[at]
+  // No questions left (onboarding changed meanwhile): nothing to ask.
+  if (!done && !q) return null
   const picked = q ? (answers[q.id] ?? []) : []
   const blocked = !!q?.required && !picked.length
 
@@ -87,10 +91,20 @@ export function OnboardingSheet({ c }: { c: ConstellationDetail }) {
     setBusy(true)
     const r = await cx.answerOnboarding(c.id, answers, true)
     setBusy(false)
-    if (!r.ok) return cxSay(r.message)
+    if (!r.ok) {
+      cxSay(r.message)
+      // Back to the start of the questions as they are now (they may have changed).
+      void loadDetail(c.id)
+      return
+    }
     haptic.success()
     answeredFor.add(c.id)
     setDone(r.data.constellation)
+  }
+  // Back on the first question: "not now" (asked again next time you open it).
+  function notNow() {
+    answeredFor.add(c.id)
+    redraw((x) => x + 1)
   }
   function open() {
     const d = done
@@ -106,7 +120,7 @@ export function OnboardingSheet({ c }: { c: ConstellationDetail }) {
   const more = (done?.browse?.length ?? 0) + Object.values(done?.unlocks ?? {}).flat().length
 
   return (
-    <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => (done ? open() : at > 0 ? setAt(at - 1) : undefined)}>
+    <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => (done ? open() : at > 0 ? setAt(at - 1) : notNow())}>
       <View accessibilityViewIsModal style={{ width, height, backgroundColor: N.bg, paddingTop: insets.top + 14, paddingBottom: insets.bottom + 12, alignItems: 'center' }}>
         <View style={{ flex: 1, width: Math.min(width - 40, 560) }}>
         {done ? (

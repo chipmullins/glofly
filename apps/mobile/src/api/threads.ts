@@ -18,7 +18,7 @@ export const threadsApi = {
   },
   start: (cid: string, nebulaId: string, values: { parentMessageId?: string; title?: string; tagIds?: string[] }) =>
     request<{ thread: ThreadSummary; existed?: boolean }>('POST', `/constellations/${cid}/nebulas/${nebulaId}/threads`, values),
-  get: (cid: string, threadId: string) => request<{ thread: ThreadSummary }>('GET', `/constellations/${cid}/threads/${threadId}`),
+  get: (cid: string, threadId: string) => request<{ thread: ThreadSummary; parent?: Message | null }>('GET', `/constellations/${cid}/threads/${threadId}`),
   change: (cid: string, threadId: string, changes: { title?: string; tagIds?: string[]; closed?: boolean; pinned?: boolean; answerMessageId?: string | null }) =>
     request<{ thread: ThreadSummary }>('PATCH', `/constellations/${cid}/threads/${threadId}`, changes),
   remove: (cid: string, threadId: string) => request<{ ok: true }>('DELETE', `/constellations/${cid}/threads/${threadId}`),

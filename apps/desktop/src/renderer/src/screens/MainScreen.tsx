@@ -2266,7 +2266,7 @@ export default function MainScreen({
           </div>
         )}
         {/* Communities round: a Sign in with Glofly request waiting in this tab (browser only). */}
-        {oauthQuery && !restricted && (
+        {oauthQuery && (
           <OAuthConsent me={user} query={oauthQuery} onClose={() => setOauthQuery(null)} />
         )}
         {welcoming && !restricted && (
