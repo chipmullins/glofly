@@ -404,6 +404,8 @@ export type OverlaySettings = {
 export type OverlayInfo = {
   /** Windows only */
   supported: boolean
+  /** "Try it" is showing (0.9.2) */
+  previewing?: boolean
   settings: OverlaySettings
   /** Games Glofly has seen you play (for the per-game switches) */
   games: string[]

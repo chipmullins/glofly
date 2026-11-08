@@ -28,7 +28,8 @@ const POPUPS: { key: keyof Settings['popups']; label: string }[] = [
 const keyLabel = (k: string): string => k.split('+').join(' + ')
 
 export default function OverlaySettings(): React.JSX.Element {
-  const api = window.glofly.overlay
+  // Held once: the effects below must not re-run (a re-run used to end "Try it" right after it began).
+  const [api] = useState(() => window.glofly.overlay)
   const [info, setInfo] = useState<OverlayInfo | null>(null)
   const [opacity, setOpacity] = useState<number | null>(null)
   const [trying, setTrying] = useState(false)
@@ -36,9 +37,12 @@ export default function OverlaySettings(): React.JSX.Element {
   useEffect(() => {
     if (!api) return
     void api.info().then(setInfo)
-    return api.onSettings(setInfo)
+    return api.onSettings((next) => {
+      setInfo(next)
+      // The main process says when "Try it" ends (closed, or after 45 seconds).
+      if (typeof next.previewing === 'boolean') setTrying(next.previewing)
+    })
   }, [api])
-  // "Try it" lasts 45 seconds (main process); the button follows.
   useEffect(() => {
     if (!trying) return
     const t = setTimeout(() => setTrying(false), 45_000)
@@ -90,7 +94,7 @@ export default function OverlaySettings(): React.JSX.Element {
             <div className="settings-row-text">
               <span className="settings-row-label">Try it</span>
               <span className="settings-row-desc">
-                Shows the overlay over Glofly for 45 seconds, so you can see it without a game.
+                Opens the overlay over Glofly, so you can see it without a game. Esc closes it.
               </span>
             </div>
             <button

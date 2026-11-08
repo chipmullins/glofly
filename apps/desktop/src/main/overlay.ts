@@ -163,10 +163,17 @@ function settings(): OverlaySettings {
   }
 }
 
+/** Settings pages follow along (the Try it button). */
+function tellSettings(): void {
+  const now = info()
+  for (const w of BrowserWindow.getAllWindows()) if (w !== win && !w.isDestroyed()) w.webContents.send('overlay:settings', now)
+}
+
 function info(): OverlayInfo {
   const playing = runningGame()
   const games = [...new Set([...(playing ? [playing] : []), ...saved.seenGames, ...saved.offGames])]
   return {
+    previewing: preview,
     supported,
     settings: settings(),
     games,
@@ -273,6 +280,10 @@ let poller: ReturnType<typeof setInterval> | null = null
 let gameHwnd = 0
 let voice: OverlayVoice | null = null
 let keys: string[] = []
+/** The overlay's page has loaded (a transparent window shown before that can flash and vanish). */
+let ready = false
+/** "Try it" asked to open it before the page had loaded */
+let pendingOpen = false
 
 const alive = (w: BrowserWindow | null): w is BrowserWindow => !!w && !w.isDestroyed()
 
@@ -318,18 +329,30 @@ function ensureWindow(): BrowserWindow | null {
   w.webContents.on('will-navigate', (event) => event.preventDefault())
   w.webContents.on('did-finish-load', () => {
     w.webContents.setZoomFactor(1)
+    ready = true
+    if (visible) {
+      w.showInactive()
+      w.setAlwaysOnTop(true, 'screen-saver')
+    }
     sendState()
     send('overlay:voice', voice)
+    if (pendingOpen) {
+      pendingOpen = false
+      openOverlay()
+    }
   })
   w.on('closed', () => {
     if (win === w) {
       win = null
+      ready = false
+      pendingOpen = false
       visible = false
       open = false
       setKeys()
     }
   })
   win = w
+  ready = false
   deps.load(w)
   return w
 }
@@ -368,8 +391,11 @@ function showOver(rect: Rectangle | null): void {
   }
   if (!visible) {
     visible = true
-    w.showInactive()
-    w.setAlwaysOnTop(true, 'screen-saver')
+    // Only once its page is there (did-finish-load shows it otherwise).
+    if (ready) {
+      w.showInactive()
+      w.setAlwaysOnTop(true, 'screen-saver')
+    }
     setKeys()
     sendState()
   }
@@ -386,6 +412,10 @@ function hide(): void {
 
 function openOverlay(): void {
   if (!visible || open || !alive(win)) return
+  if (!ready) {
+    pendingOpen = true
+    return
+  }
   open = true
   win.setIgnoreMouseEvents(false)
   win.setFocusable(true)
@@ -405,6 +435,8 @@ function closeOverlay(giveBack = true): void {
     else if (gameHwnd) loadNative()?.focus(gameHwnd)
   }
   sendState()
+  // "Try it" ends when you close the overlay (Esc, the key or ×).
+  if (preview && giveBack) endPreview()
 }
 
 const toggle = (): void => (open ? closeOverlay() : openOverlay())
@@ -501,9 +533,11 @@ function gameChanged(name: string | null): void {
 function endPreview(): void {
   if (!preview) return
   preview = false
+  pendingOpen = false
   if (previewTimer) clearTimeout(previewTimer)
   previewTimer = null
   hide()
+  tellSettings()
   if (runningGame()) startPolling()
   else if (alive(win)) {
     win.destroy()
@@ -528,6 +562,9 @@ function startPreview(): void {
   }
   if (visible) sendState()
   showOver(rect)
+  // Open it straight away, so "Try it" shows the real thing (Esc closes it and ends the try).
+  openOverlay()
+  tellSettings()
 }
 
 // ---- Pop-ups (the main window's notifications go here while you're in game) -------------
