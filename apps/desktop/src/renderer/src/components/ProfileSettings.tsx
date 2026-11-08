@@ -76,8 +76,11 @@ export default function ProfileSettings({
   status,
   onSaved,
   onStatusChange,
-  onSessionExpired
+  onSessionExpired,
+  onDirtyChange
 }: {
+  /** 0.9.1: Settings asks before leaving with unsaved changes */
+  onDirtyChange?: (dirty: boolean) => void
   user: SignedInUser
   /** 0.9.1: Edit profile lives here now (photo and status too) */
   status?: MyStatus
@@ -149,6 +152,10 @@ export default function ProfileSettings({
       JSON.stringify(board) !== JSON.stringify(profile.boardSource ?? []) ||
       JSON.stringify(privacy) !== JSON.stringify(profile.privacy ?? DEFAULT_PROFILE_PRIVACY) ||
       (!!headerSrc && focus !== (profile.header?.focus ?? 50)))
+
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
 
   async function pick(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = e.target.files?.[0]

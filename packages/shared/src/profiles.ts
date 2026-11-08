@@ -74,6 +74,8 @@ export type ProfileExtras = {
   counts?: { mutualFriends: number; mutualConstellations: number }
   /** Whether the Activity tab has anything you may see */
   activityShown?: boolean
+  /** Whether their My games is shared with you (0.9.2) */
+  gamesShown?: boolean
   /** Your own profile only */
   privacy?: ProfilePrivacy
   boardSource?: BoardTile[]

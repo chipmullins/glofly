@@ -1,4 +1,5 @@
 import ProfileSettings from './ProfileSettings'
+import ConfirmDialog from './ConfirmDialog'
 import { patchSocial, refreshSocial, useSocial } from '../lib/social'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type {
@@ -693,9 +694,19 @@ export default function SettingsDialog({
   /** Which sound row's preview is playing */
   const [playing, setPlaying] = useState<SoundKey | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const closeRef = useRef(onClose)
+  // 0.9.1: leaving Settings → Profile with unsaved changes asks first.
+  const profileDirty = useRef(false)
+  const [leaving, setLeaving] = useState<null | (() => void)>(null)
+  const leavingRef = useRef(false)
+  leavingRef.current = leaving !== null
+  const guard = (action: () => void): void => {
+    if (profileDirty.current) setLeaving(() => action)
+    else action()
+  }
+  const requestClose = (): void => guard(onClose)
+  const closeRef = useRef(requestClose)
   useEffect(() => {
-    closeRef.current = onClose
+    closeRef.current = requestClose
   })
 
   useEffect(() => {
@@ -709,7 +720,7 @@ export default function SettingsDialog({
     window.glofly.app.getSettings().then((s) => s && setAppSettings(s))
     const onKey = (e: KeyboardEvent): void => {
       // A dialog on top (like "Delete account?") handles its own Escape.
-      if (e.key === 'Escape' && !e.defaultPrevented) closeRef.current()
+      if (e.key === 'Escape' && !e.defaultPrevented && !leavingRef.current) closeRef.current()
     }
     document.addEventListener('keydown', onKey)
     return () => {
@@ -791,13 +802,17 @@ export default function SettingsDialog({
   }
 
   function openPage(next: Page): void {
+    if (next !== page) guard(() => showPage(next))
+  }
+  function showPage(next: Page): void {
+    profileDirty.current = false
     setPage(next)
     setNotice(null)
     if (contentRef.current) contentRef.current.scrollTop = 0
   }
 
   return (
-    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
       <div
         role="dialog"
         aria-modal="true"
@@ -810,7 +825,7 @@ export default function SettingsDialog({
             type="button"
             className="dialog-close"
             aria-label="Close settings"
-            onClick={onClose}
+            onClick={requestClose}
           >
             <CloseIcon />
           </button>
@@ -932,6 +947,7 @@ export default function SettingsDialog({
                 onSaved={onUserChange}
                 onStatusChange={onStatusChange}
                 onSessionExpired={onSessionExpired}
+                onDirtyChange={(d) => (profileDirty.current = d)}
               />
             ) : page === 'voice' ? (
               <VoiceVideoSettings />
@@ -1348,6 +1364,21 @@ export default function SettingsDialog({
           </div>
         </div>
       </div>
+      {leaving && (
+        <ConfirmDialog
+          title="Discard your profile changes?"
+          message="You changed your profile but didn't press Save."
+          confirmLabel="Discard"
+          danger
+          onConfirm={() => {
+            const go = leaving
+            setLeaving(null)
+            profileDirty.current = false
+            go()
+          }}
+          onCancel={() => setLeaving(null)}
+        />
+      )}
     </div>
   )
 }

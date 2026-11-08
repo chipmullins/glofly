@@ -319,7 +319,7 @@ export default function ProfileCard({
                 </button>
               )}
 
-              <button
+              {shown.gamesShown !== false && <button
                 type="button"
                 className="profile-games"
                 aria-expanded={gamesOpen}
@@ -327,7 +327,7 @@ export default function ProfileCard({
               >
                 <GameIcon size={16} />
                 My games
-              </button>
+              </button>}
 
               {shown.joinedAt && (
                 <div className="profile-joined">
@@ -442,7 +442,20 @@ export default function ProfileCard({
 
               {tab && (
                 <div className="profile-tabs-area">
-                  <div role="tablist" aria-label="Profile" className="pb-tabs">
+                  <div
+                    role="tablist"
+                    aria-label="Profile"
+                    className="pb-tabs"
+                    onKeyDown={(e) => {
+                      // Arrow keys move between tabs (the usual tab list keys).
+                      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+                      const i = tabs.findIndex((t) => t.id === tab)
+                      const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]
+                      setTab(next.id)
+                      document.getElementById(`pt-${next.id}`)?.focus()
+                      e.preventDefault()
+                    }}
+                  >
                     {tabs.map((t) => (
                       <button
                         key={t.id}
@@ -450,6 +463,7 @@ export default function ProfileCard({
                         role="tab"
                         id={`pt-${t.id}`}
                         aria-selected={tab === t.id}
+                        tabIndex={tab === t.id ? 0 : -1}
                         aria-controls="pt-panel"
                         className="pb-tab"
                         onClick={() => setTab(t.id)}

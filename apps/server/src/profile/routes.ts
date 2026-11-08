@@ -182,6 +182,7 @@ async function extrasOf(
     board: board?.length ? board : null,
     counts: mutualsShown ? await mutualCounts(viewerId, row.id) : { mutualFriends: 0, mutualConstellations: 0 },
     activityShown: shows(privacy.activity, rel),
+    gamesShown: gamesShared,
     ...(rel.self ? { privacy, boardSource: await withCovers(tiles) } : {}),
   };
 }
