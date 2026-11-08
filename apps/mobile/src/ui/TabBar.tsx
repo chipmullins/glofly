@@ -10,6 +10,7 @@ import { unreadTotal } from '@/lib/chats'
 import { usePaneTab, type PaneTab } from '@/lib/layout'
 import { useCxAvailable } from '@/state/constellations'
 import { ConstellationsTab } from '@/constellations/ConstellationsTab'
+import { DockTip } from '@/constellations/DockTip'
 
 type BottomTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0]
 
@@ -71,6 +72,8 @@ function TabButtons({ names, active, onSelect }: { names: string[]; active: stri
       accessibilityRole="tablist"
       style={{ flexDirection: 'row', backgroundColor: c.navBg, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12) + 4 }}
     >
+      {/* 0.9.1: once, a tip pointing at the Constellations tab's hold / swipe up (the nebula dock) */}
+      {constellations ? <DockTip /> : null}
       {names.map((name) => {
         const tab = TABS[name]
         if (!tab) return null
