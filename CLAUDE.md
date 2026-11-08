@@ -213,4 +213,8 @@
   `profile/routes.ts` (`/users/me/header`, `/headers/:userId/:version`, `/users/:id/mutuals`, `/users/:id/activity`); shared
   `profiles.ts`. A new kind of profile data must follow `shows()` (board/activity/mutuals privacy; restricted = friends
   only) and be added to `site/privacy.html`. Desktop: `ProfileBoard.tsx` (card tabs), `ProfileSettings.tsx` (Settings →
-  Profile); phones: `src/profiles/`, `app/(main)/edit-board.tsx`. Game art is letter tiles until IGDB (next).
+  Profile); phones: `src/profiles/`, `app/(main)/edit-board.tsx`. **Game pictures** (`games/igdb.ts`, migration 0053
+  `game_art`): only the server talks to IGDB (IGDB_CLIENT_ID/SECRET), only game names; covers served by Glofly at
+  `/games/cover/:id` (desktop `glofly-media://game-covers/<id>`); show "Game info by IGDB" wherever covers or search
+  results appear. IGDB is free for non-commercial use: a paid Glofly needs a Twitch partnership first. The sandbox can't
+  reach Twitch/IGDB: test with `test/igdb.e2e.ts` (stand-in, see its header).
