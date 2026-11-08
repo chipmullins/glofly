@@ -24,6 +24,7 @@ import { WelcomeFlowHost } from '@/ui/WelcomeFlow'
 import { startQuietHours } from '@/state/quiet'
 import { startKeyCommands } from '@/lib/keys'
 import { KeyShortcuts } from '@/ui/KeyShortcuts'
+import { refreshFriendsLive, startFriendsLive } from '@/state/friendsLive'
 
 // Everything after signing in: the live connection, push notifications and calls start here.
 
@@ -47,6 +48,8 @@ export default function MainLayout() {
     startUpdates()
     startQuietHours()
     startKeyCommands()
+    startFriendsLive()
+    void refreshFriendsLive()
   }, [])
   return (
     <>

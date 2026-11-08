@@ -8,6 +8,7 @@ import { Attachments } from '@/chat/Attachments'
 import { Formatted } from '@/chat/Formatted'
 import { ForwardedLabel } from '@/chat/MessageRow'
 import { GameCard, GifView, LinkCard, PollCard } from '@/chat/Extras'
+import { LiveAlertCard, liveAlertBody } from './LiveAlertCard'
 import { isJumbo } from '@/lib/emoji'
 import { firstName } from '@/lib/format'
 import { Icon } from '@/ui/icons'
@@ -278,11 +279,16 @@ export const NebulaRow = memo(function NebulaRow({
                       {m.body}
                     </Text>
                   ) : (
-                    <Body text={m.body} members={members} meId={meId} size={size} groups={groups} message={m} />
+                    <Body text={m.liveCard ? liveAlertBody(m.body, m.liveCard) : m.body} members={members} meId={meId} size={size} groups={groups} message={m} />
                   )}
                 </View>
               ) : null}
-              {m.linkPreview ? (
+              {/* 0.9.3: a Live alert (Twitch, Kick, YouTube) */}
+              {m.liveCard ? (
+                <View style={{ marginTop: 6, alignSelf: 'flex-start', maxWidth: '100%' }}>
+                  <LiveAlertCard message={m} card={m.liveCard} preview={m.linkPreview} />
+                </View>
+              ) : m.linkPreview ? (
                 <View style={{ marginTop: 6, alignSelf: 'flex-start', maxWidth: 320 }}>
                   <LinkCard message={m} preview={m.linkPreview} mine={false} />
                 </View>

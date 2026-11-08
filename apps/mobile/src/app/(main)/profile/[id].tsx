@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, View } from 'react-native'
+import { Linking, Pressable, ScrollView, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { NICKNAME_MAX, STATUS_LABEL, activityLine, mobileLabel, onMobile, playing, type Profile } from '@glofly/shared'
+import { NICKNAME_MAX, STATUS_LABEL, activityLine, mobileLabel, onMobile, playing, siteName, type Profile } from '@glofly/shared'
+import { useFriendsLive } from '@/state/friendsLive'
+import { LivePill } from '@/ui/LivePill'
 import * as api from '@/api/glofly'
 import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
@@ -41,6 +43,7 @@ export default function ProfileCard() {
   const insets = useSafeAreaInsets()
   const meId = useSession((s) => s.user?.id)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const stream = useFriendsLive((st) => st.live[id as string]) ?? null
   const [gone, setGone] = useState(false)
   const live = useStore((s) => s.presence[id])
   const friends = useStore((s) => s.friends)
@@ -186,6 +189,7 @@ export default function ProfileCard() {
                     </Text>
                   </View>
                 ) : null}
+                {stream ? <LivePill /> : null}
               </View>
               <Text size={15} tone="muted">
                 @{profile.username}
@@ -242,6 +246,24 @@ export default function ProfileCard() {
                 {action('phone', 'Voice', () => void startCallWith(id, false))}
                 {action('video', 'Video', () => void startCallWith(id, true))}
               </View>
+            ) : null}
+            {/* 0.9.3 (board 9): live on Twitch or Kick */}
+            {stream && !isMe ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, backgroundColor: c.surface }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text size={15} weight="bold">
+                    Live on {siteName(stream.source)}
+                  </Text>
+                  <Text size={13} tone="muted" numberOfLines={2}>
+                    {[stream.title, stream.game].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+                {/^https:\/\/(www\.twitch\.tv|kick\.com)\//.test(stream.url) ? <Button compact label="Watch" onPress={() => void Linking.openURL(stream.url)} /> : null}
+              </View>
+            ) : null}
+            {/* 0.9.3: their Steam page (they chose to show it) */}
+            {profile.steamUrl && /^https:\/\/steamcommunity\.com\//.test(profile.steamUrl) ? (
+              <Button compact kind="secondary" label="Steam profile" onPress={() => void Linking.openURL(profile.steamUrl!)} />
             ) : null}
             {/* Glofly 2.0: My games (hidden when they keep it private or haven't played anything). */}
             {(isMe || isFriend) && !blocked && profile.gamesShown !== false ? <GamesCard userId={id} isMe={isMe} onOpen={close} /> : null}

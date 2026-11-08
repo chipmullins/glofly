@@ -177,6 +177,8 @@ export default function Settings() {
 
       <SectionLabel>Account</SectionLabel>
       <SettingsRow icon="user" label="Account" detail="Email, password, devices, delete account" onPress={() => router.push('/settings/account')} />
+      {/* 0.9.3: Steam, Twitch and Kick */}
+      <SettingsRow icon="live" label="Connections" detail="Twitch, Kick and Steam: live alerts and My games" onPress={() => router.push('/settings/connections')} />
       {/* Communities round (Nov 2026): Sign in with Glofly */}
       <SettingsRow icon="link" label="Apps & game servers" detail="Sign in with Glofly, linked game servers" onPress={() => router.push('/settings/connected-apps')} />
       {/* 0.8.0: iPad / tablet keyboard shortcuts (also ⌘/ on the keyboard) */}

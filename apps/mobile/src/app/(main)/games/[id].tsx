@@ -100,6 +100,7 @@ function FriendGames({ userId }: { userId: string }) {
                 </Text>
                 <Text size={13} tone="ink2">
                   {hoursShort(g.seconds)} · {lastPlayed(g, playing)}
+                  {g.steam ? ' · Steam' : ''}
                 </Text>
                 <View style={{ marginTop: 6, height: 5, borderRadius: 3, backgroundColor: 'rgba(244,122,31,0.25)' }}>
                   <View style={{ width: `${Math.max(4, Math.round((g.seconds / max) * 100))}%`, height: 5, borderRadius: 3, backgroundColor: c.accent }} />
@@ -121,6 +122,7 @@ function FriendGames({ userId }: { userId: string }) {
                 </Text>
                 <Text size={13} tone="muted">
                   {hoursShort(g.seconds)} · {lastPlayed(g, playing)}
+                  {g.steam ? ' · Steam' : ''}
                 </Text>
               </View>
             </View>
@@ -306,6 +308,7 @@ function GameRow({ g, playing, onStar, onHide, onRemove }: { g: MyGame; playing:
           </Text>
           <Text size={12} tone="muted">
             {hoursShort(g.seconds)} · {lastPlayed(g, playing)}
+                  {g.steam ? ' · Steam' : ''}
           </Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel={g.favorite ? `Unstar ${g.name}` : `Star ${g.name}`} onPress={onStar} hitSlop={4} style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>

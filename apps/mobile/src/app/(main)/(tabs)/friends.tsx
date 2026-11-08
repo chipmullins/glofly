@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { Pressable, SectionList, TextInput, useWindowDimensions, View } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { onMobile, presenceLine, type FriendEntry } from '@glofly/shared'
+import { onMobile, presenceLine, siteName, type FriendEntry } from '@glofly/shared'
+import { useFriendsLive } from '@/state/friendsLive'
+import { LivePill } from '@/ui/LivePill'
 import * as api from '@/api/glofly'
 import { useStore } from '@/state/store'
 import { useSession } from '@/state/session'
@@ -34,6 +36,7 @@ export default function Friends() {
   const insets = useSafeAreaInsets()
   const lists = useStore((s) => s.friends)
   const presence = useStore((s) => s.presence)
+  const live = useFriendsLive((s) => s.live)
   const synced = useStore((s) => s.synced.friends)
   const [filter, setFilter] = useState<Filter>('online')
   const [query, setQuery] = useState('')
@@ -180,8 +183,11 @@ export default function Friends() {
           const f = item.entry
           const p = presence[f.id] ?? f.presence
           const first = f.displayName.split(/\s+/)[0]
+          const stream = item.kind === 'friend' ? live[f.id] : undefined
           const sub =
-            item.kind === 'incoming'
+            stream
+              ? stream.title || `Live on ${siteName(stream.source)}`
+              : item.kind === 'incoming'
               ? `@${f.username} · wants to be friends`
               : item.kind === 'outgoing'
                 ? `@${f.username} · request sent`
@@ -199,9 +205,13 @@ export default function Friends() {
             >
               <Avatar user={f} size={48} status={item.kind === 'friend' ? (p?.status ?? 'offline') : null} mobile={onMobile(p ?? undefined)} />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text size={16} weight="bold" numberOfLines={1}>
-                  {f.displayName}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text size={16} weight="bold" numberOfLines={1} style={{ flexShrink: 1 }}>
+                    {f.displayName}
+                  </Text>
+                  {/* 0.9.3: live on Twitch or Kick */}
+                  {stream ? <LivePill /> : null}
+                </View>
                 <Text size={13} tone="muted" numberOfLines={1}>
                   {sub}
                 </Text>

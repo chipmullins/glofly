@@ -36,6 +36,8 @@ export default function SettingsMenu() {
     { key: 'moderation', label: 'Moderation log', icon: <Icon name="clock" size={17} color={N.ink} />, show: modViewer },
     // Communities round (Nov 2026): API keys for bots and game servers.
     { key: 'integrations', label: 'Integrations', icon: <Glyph name="external" size={17} />, show: can(c, 'manageConstellation') },
+    // 0.9.3: Twitch, Kick and YouTube alerts.
+    { key: 'live-alerts', label: 'Live alerts', icon: <Icon name="live" size={17} color={N.ink} />, show: can(c, 'manageConstellation') },
   ].filter((p) => p.show)
 
   async function readAll() {
