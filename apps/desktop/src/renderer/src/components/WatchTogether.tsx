@@ -18,7 +18,6 @@ import type { ApiResult, PublicUser, WatchUpdate } from '../../../preload/api-ty
 import type { WatchValue } from '../calls/useWatch'
 import WatchPlayer, { type PlayerInfo } from './WatchPlayer'
 import Avatar from './Avatar'
-import { isWeb } from '../lib/platform'
 import {
   BackTenIcon,
   CloseIcon,
@@ -154,7 +153,7 @@ export function StartWatchDialog({
             <h1 id="watch-start-title">{changing ? 'Change the video' : 'Watch together'}</h1>
             <p>
               Everyone in this call sees the same video at the same moment. Works with YouTube,
-              Twitch, Vimeo and Dailymotion.
+              Twitch, Kick, Vimeo and Dailymotion.
             </p>
           </div>
           <button type="button" className="dialog-close" aria-label="Close" onClick={onClose}>
@@ -171,7 +170,7 @@ export function StartWatchDialog({
               setLink(e.target.value)
               setStartFailed(null)
             }}
-            placeholder="https://youtu.be/… or a Twitch, Vimeo or Dailymotion link"
+            placeholder="https://youtu.be/… or a Twitch, Kick, Vimeo or Dailymotion link"
             maxLength={500}
             spellCheck={false}
             autoComplete="off"
@@ -180,15 +179,7 @@ export function StartWatchDialog({
         </label>
         {link.trim() && !id && (
           <p className="watch-start-hint">
-            Paste a link from YouTube, Twitch, Vimeo or Dailymotion.
-          </p>
-        )}
-        {/* 0.7.2: Twitch checks every page above its player, and the desktop app's window has no
-            web address, so Twitch refuses to play here. Others (browser, phones) still can. */}
-        {site === 'twitch' && id && !isWeb && (
-          <p className="watch-start-hint">
-            Twitch doesn&apos;t play in the desktop app. People on chat.glofly.app or a phone can
-            still watch it; you&apos;ll see a note instead of the video.
+            Paste a link from YouTube, Twitch, Kick, Vimeo or Dailymotion.
           </p>
         )}
 
@@ -378,7 +369,9 @@ function SiteMark({ site }: { site: WatchSite }): React.JSX.Element {
         ? '#17d5ff'
         : site === 'dailymotion'
           ? '#0d0d0d'
-          : '#ff3b30'
+          : site === 'kick'
+            ? '#53fc18'
+            : '#ff3b30'
   return (
     <svg width="18" height="13" viewBox="0 0 18 13" aria-label={WATCH_SITE_NAMES[site]} role="img">
       <rect
@@ -389,7 +382,7 @@ function SiteMark({ site }: { site: WatchSite }): React.JSX.Element {
         stroke={site === 'dailymotion' ? '#fff' : 'none'}
         strokeOpacity={0.5}
       />
-      <path d="M7 3.6v5.8L12 6.5z" fill="#fff" />
+      <path d="M7 3.6v5.8L12 6.5z" fill={site === 'kick' ? '#0b0e0f' : '#fff'} />
     </svg>
   )
 }
@@ -867,7 +860,9 @@ export function WatchStage({
             <p className="watch-note watch-note--limited">
               {watch.site === 'dailymotion'
                 ? "Dailymotion's player can't be kept exactly in step: skips reload the video, and you may need to press play on it."
-                : "Glofly can't talk to the video player right now, so skips and pauses reload the video. Alt-click the pill above and tell Claude what it says."}
+                : watch.site === 'kick'
+                  ? "Kick's player can't be talked to: pausing reloads the stream, and you may need to press play on it."
+                  : "Glofly can't talk to the video player right now, so skips and pauses reload the video. Alt-click the pill above and tell Claude what it says."}
             </p>
           )}
           {showDiag && (

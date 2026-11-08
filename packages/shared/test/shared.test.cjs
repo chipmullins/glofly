@@ -732,3 +732,14 @@ test('0.9.3 live alerts: channel links and alert text', () => {
   assert.equal(s.liveAlertText('{streamer} is live: {title} ({game})', card, '@Stream fans'), '@Stream fans kroof_ is live: Heist night (GTA V)\nhttps://www.twitch.tv/kroof_')
   assert.equal(s.liveAlertText('', { ...card, title: '' }, null), 'kroof_ is live: untitled\nhttps://www.twitch.tv/kroof_')
 })
+
+test('0.9.3 Watch Together: Kick channels', () => {
+  const w = s
+  assert.deepEqual(w.watchLinkFrom('https://kick.com/Maya-Plays'), { site: 'kick', videoId: 'c:maya-plays', live: true, start: 0 })
+  assert.deepEqual(w.watchLinkFrom('player.kick.com/xqc'), { site: 'kick', videoId: 'c:xqc', live: true, start: 0 })
+  assert.equal(w.watchLinkFrom('kick.com/categories'), null)
+  assert.equal(w.watchLinkFrom('kick.com/maya/videos/abc'), null)
+  assert.equal(w.isWatchVideoId('kick', 'c:maya'), true)
+  assert.equal(w.isWatchVideoId('kick', 'maya'), false)
+  assert.equal(w.isLiveSite('kick'), true)
+})

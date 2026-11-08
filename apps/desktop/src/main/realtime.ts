@@ -64,7 +64,7 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
     auth: {
       token,
       version: app.getVersion(),
-      features: ['constellations', 'callMove', 'watchSites']
+      features: ['constellations', 'callMove', 'watchSites', 'watchKick']
     },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000 // keeps retrying if the connection drops

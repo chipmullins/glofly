@@ -1,6 +1,6 @@
 import { Router, type Response } from "express";
 
-// Watch Together's video player page: /watch/player?v=<video id>[&site=twitch|vimeo|dailymotion]
+// Watch Together's video player page: /watch/player?v=<video id>[&site=twitch|vimeo|dailymotion|kick]
 //
 // Every app shows the shared video through this little page (an iframe in the desktop app and
 // the browser version, a web view in the phone apps). It holds YouTube's own embed player and
@@ -26,7 +26,7 @@ function playerHeaders(res: Response, kind: "html" | "js"): void {
       "style-src 'unsafe-inline'",
       // 0.7.1: Twitch, Vimeo and Dailymotion's own embed players too (each driven by its
       // documented postMessage messages; still no script of theirs on this address).
-      "frame-src https://www.youtube-nocookie.com https://player.twitch.tv https://player.vimeo.com https://www.dailymotion.com https://geo.dailymotion.com",
+      "frame-src https://www.youtube-nocookie.com https://player.twitch.tv https://player.vimeo.com https://www.dailymotion.com https://geo.dailymotion.com https://player.kick.com",
       "img-src 'self' data:",
       "base-uri 'none'",
       "form-action 'none'",
@@ -88,7 +88,9 @@ const PLAYER_JS = String.raw`(function () {
     // 0.7.2: Dailymotion's old embed (www.dailymotion.com/embed/…?api=postMessage) now redirects to
     // its new player, which has no message API without Dailymotion's own script: "limited" below.
     dailymotion: { origins: ['https://geo.dailymotion.com', 'https://www.dailymotion.com'], id: /^x[a-z0-9]{4,12}$/i, name: 'Dailymotion' },
-    twitch: { origins: ['https://player.twitch.tv'], id: /^(v\d{5,14}|c:[A-Za-z0-9_]{3,25})$/, name: 'Twitch' }
+    twitch: { origins: ['https://player.twitch.tv'], id: /^(v\d{5,14}|c:[A-Za-z0-9_]{3,25})$/, name: 'Twitch' },
+    // 0.9.3: Kick's official embed (live channels). No message API: "limited", like Dailymotion.
+    kick: { origins: ['https://player.kick.com'], id: /^c:[a-z0-9_-]{2,40}$/, name: 'Kick' }
   };
   var box = document.getElementById('player');
   var frame = null;
@@ -117,6 +119,8 @@ const PLAYER_JS = String.raw`(function () {
   function tell(msg) {
     msg.glofly = 'watch';
     if (native) window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+    // 0.9.3: the desktop app's <webview> (Twitch, Kick): its preload passes reports to the window.
+    else if (window.gloflyHost && typeof window.gloflyHost.post === 'function') window.gloflyHost.post(msg);
     else if (window.parent !== window) window.parent.postMessage(msg, '*');
   }
 
@@ -189,6 +193,9 @@ const PLAYER_JS = String.raw`(function () {
     if (site === 'dailymotion') {
       // The new player takes only mute / startTime / loop (its own settings decide autoplay).
       return 'https://geo.dailymotion.com/player.html?' + ['video=' + id, 'mute=false', 'startTime=' + s0].join('&');
+    }
+    if (site === 'kick') {
+      return 'https://player.kick.com/' + encodeURIComponent(id.slice(2)) + '?' + ['autoplay=' + (play ? 'true' : 'false'), 'muted=false'].join('&');
     }
     if (site === 'twitch') {
       // Twitch only plays when every page above it is on an address listed as "parent".
@@ -315,7 +322,7 @@ const PLAYER_JS = String.raw`(function () {
       return tell({ ev: 'error', code: 'twitch-app' });
     }
     place(start, play);
-    if (s === 'dailymotion') {
+    if (s === 'dailymotion' || s === 'kick') {
       // No message API: Glofly works it by reloading it (skips, play, pause).
       limited = true;
       info.state = play ? 1 : 2;

@@ -46,7 +46,15 @@ export default defineConfig(({ mode }) => ({
       }
     }
   },
-  preload: { resolve: { alias: shared } },
+  preload: {
+    resolve: { alias: shared },
+    build: {
+      rollupOptions: {
+        // 0.9.3: the Watch Together player page in its own <webview> (Twitch, Kick) gets only this.
+        input: { index: resolve('src/preload/index.ts'), watchHost: resolve('src/preload/watchHost.ts') }
+      }
+    }
+  },
   renderer: {
     resolve: {
       alias: [...shared, { find: '@renderer', replacement: resolve('src/renderer/src') }]

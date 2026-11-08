@@ -33,7 +33,26 @@ export type PlayerInfo = {
   diag?: string
 }
 
-export default function WatchPlayer({
+type Props = Parameters<typeof Player>[0]
+
+/**
+ * 0.9.3: Twitch and Kick only play when every page above their player has a real web address.
+ * The desktop app's window is a file, so for those two the player page is shown in a <webview>
+ * (a page of its own at the server's address; locked down in main/watchView.ts) instead of an
+ * iframe. It looks and behaves the same. The browser version always uses the iframe.
+ */
+export default function WatchPlayer(props: Props): React.JSX.Element {
+  const view = !isWeb && (props.watch.site === 'twitch' || props.watch.site === 'kick')
+  return <Player key={view ? 'view' : 'frame'} {...props} asView={view} />
+}
+
+/** The <webview> element (Electron), as far as this file uses it. */
+type WebViewElement = HTMLElement & {
+  executeJavaScript: (code: string) => Promise<unknown>
+}
+
+function Player({
+  asView = false,
   playerUrl,
   watch,
   clock,
@@ -61,8 +80,12 @@ export default function WatchPlayer({
   onToggle: () => void
   /** A click on the video by someone who may not play or pause it */
   onRefused: () => void
+  /** Shown in a <webview> (desktop, Twitch and Kick) */
+  asView?: boolean
 }): React.JSX.Element {
   const frame = useRef<HTMLIFrameElement>(null)
+  const view = useRef<WebViewElement>(null)
+  const viewReady = useRef(false)
   const origin = new URL(playerUrl).origin
   const watchRef = useRef(watch)
   const volumeRef = useRef(volume)
@@ -89,6 +112,14 @@ export default function WatchPlayer({
   })
 
   const send = (c: PlayerCommand): void => {
+    if (asView) {
+      // The command is our own plain data, written out as JSON (never text from anyone else).
+      if (viewReady.current)
+        void view.current
+          ?.executeJavaScript(`window.gloflyWatch && window.gloflyWatch(${JSON.stringify({ glofly: 'watch', ...c })})`)
+          .catch(() => undefined)
+      return
+    }
     frame.current?.contentWindow?.postMessage({ glofly: 'watch', ...c }, origin)
   }
 
@@ -162,9 +193,7 @@ export default function WatchPlayer({
 
   // Messages from the player page (only from our frame, only from the server's address).
   useEffect(() => {
-    const onMessage = (e: MessageEvent): void => {
-      if (e.origin !== origin || e.source !== frame.current?.contentWindow) return
-      const d = e.data as Record<string, unknown> | null
+    const handle = (d: Record<string, unknown> | null): void => {
       if (!d || d.glofly !== 'watch') return
       const p = page.current
       if (d.ev === 'loaded') {
@@ -209,10 +238,37 @@ export default function WatchPlayer({
         tick()
       }
     }
+    if (asView) {
+      const el = view.current
+      if (!el) return
+      // From the <webview>'s preload (watchHost.ts): only its 'watch' channel.
+      const onIpc = (e: Event): void => {
+        const ev = e as Event & { channel?: string; args?: unknown[] }
+        if (ev.channel !== 'watch') return
+        const d = ev.args?.[0]
+        if (d && typeof d === 'object') handle(d as Record<string, unknown>)
+      }
+      const onReady = (): void => {
+        viewReady.current = true
+      }
+      const onFail = (): void => handle({ glofly: 'watch', ev: 'error', code: 'noload' })
+      el.addEventListener('ipc-message', onIpc)
+      el.addEventListener('dom-ready', onReady)
+      el.addEventListener('did-fail-load', onFail)
+      return () => {
+        el.removeEventListener('ipc-message', onIpc)
+        el.removeEventListener('dom-ready', onReady)
+        el.removeEventListener('did-fail-load', onFail)
+      }
+    }
+    const onMessage = (e: MessageEvent): void => {
+      if (e.origin !== origin || e.source !== frame.current?.contentWindow) return
+      handle(e.data as Record<string, unknown> | null)
+    }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [origin])
+  }, [origin, asView])
 
   useEffect(() => {
     const timer = setInterval(tick, 500)
@@ -244,17 +300,28 @@ export default function WatchPlayer({
 
   return (
     <div className="watch-player">
-      <iframe
-        ref={frame}
-        src={playerUrl}
-        title={`Shared video: ${watch.title}`}
-        allow="autoplay; encrypted-media; picture-in-picture"
-        referrerPolicy="strict-origin"
-        tabIndex={-1}
-      />
+      {asView ? (
+        <webview
+          ref={view as React.Ref<HTMLElement>}
+          className="watch-player-view"
+          src={playerUrl}
+          partition="watch-together"
+          title={`Shared video: ${watch.title}`}
+          tabIndex={-1}
+        />
+      ) : (
+        <iframe
+          ref={frame}
+          src={playerUrl}
+          title={`Shared video: ${watch.title}`}
+          allow="autoplay; encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin"
+          tabIndex={-1}
+        />
+      )}
       {/* Clicks on the video are Glofly's play / pause, except when a tap is needed to start. */}
       {/* Dailymotion's new player can't be talked to: its own buttons stay usable (0.7.2). */}
-      {!tapToStart && watch.site !== 'dailymotion' && (
+      {!tapToStart && watch.site !== 'dailymotion' && watch.site !== 'kick' && (
         <div
           className={
             canControl ? 'watch-player-shield watch-player-shield--can' : 'watch-player-shield'

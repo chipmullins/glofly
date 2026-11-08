@@ -66,7 +66,7 @@ export function WatchView({ watch, style, unmute, onState }: { watch: WatchState
           }
         }}
       />
-      {state.status !== 'blocked' && watch.site !== 'dailymotion' ? <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} /> : null}
+      {state.status !== 'blocked' && watch.site !== 'dailymotion' && watch.site !== 'kick' ? <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} /> : null}
     </View>
   )
 }

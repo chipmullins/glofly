@@ -70,7 +70,7 @@ function connect() {
     path,
     // features: what this app knows beyond its version (0.5.2: a call can move to a new group;
     // 0.7.0: Constellations, whose live events only go to apps that say so).
-    auth: { token, version: APP_VERSION, platform: PLATFORM, features: ['callMove', 'constellations', 'watchSites'] },
+    auth: { token, version: APP_VERSION, platform: PLATFORM, features: ['callMove', 'constellations', 'watchSites', 'watchKick'] },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000,
     // A fresh connection every time instead of socket.io's cached one, which could still be

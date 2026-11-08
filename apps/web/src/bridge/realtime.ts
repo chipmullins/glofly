@@ -53,7 +53,7 @@ export function connectRealtime(onUnauthorized: () => void): void {
     auth: {
       version: VERSION,
       platform: 'web',
-      features: ['constellations', 'callMove', 'watchSites']
+      features: ['constellations', 'callMove', 'watchSites', 'watchKick']
     },
     transports: ['websocket'],
     withCredentials: true,

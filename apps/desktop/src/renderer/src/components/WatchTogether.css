@@ -58,12 +58,18 @@
 }
 .watch-player,
 .watch-player iframe,
+.watch-player webview,
 .watch-player-shield {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   border: 0;
+}
+/* 0.9.3: Twitch and Kick in the desktop app (a <webview>; it sizes its page with flex). */
+.watch-player webview {
+  display: flex;
+  background: #000;
 }
 .watch-player-shield {
   z-index: 1;

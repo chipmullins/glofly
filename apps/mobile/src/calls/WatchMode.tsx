@@ -77,7 +77,7 @@ export function StartWatchSheet({ changing, onClose }: { changing: boolean; onCl
             {changing ? 'Change the video' : 'Watch together'}
           </Text>
           <Text tone="muted" size={15}>
-            Everyone in this call sees the same video at the same moment. Works with YouTube, Twitch, Vimeo and Dailymotion.
+            Everyone in this call sees the same video at the same moment. Works with YouTube, Twitch, Kick, Vimeo and Dailymotion.
           </Text>
         </View>
         <Field
@@ -92,7 +92,7 @@ export function StartWatchSheet({ changing, onClose }: { changing: boolean; onCl
           autoCorrect={false}
           keyboardType="url"
           maxLength={500}
-          error={startProblem ?? answer?.problem ?? (link.trim() && !id ? 'Paste a link from YouTube, Twitch, Vimeo or Dailymotion.' : null)}
+          error={startProblem ?? answer?.problem ?? (link.trim() && !id ? 'Paste a link from YouTube, Twitch, Kick, Vimeo or Dailymotion.' : null)}
         />
         {id ? (
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: 14, backgroundColor: 'rgba(244,122,31,0.08)' }}>
@@ -323,7 +323,7 @@ function Controls({ watch, meId, state, compact, onRefused }: { watch: WatchStat
       </View>
       {state.limited && !compact ? (
         <Text size={12} style={{ color: '#FFD7A6', textAlign: 'center' }}>
-          {watch.site === 'dailymotion' ? "Dailymotion's player can't be kept exactly in step: skips reload the video, and you may need to tap play on it." : "Glofly can't talk to the video player right now, so skips and pauses reload the video. Long-press the pill and tell Claude what it says."}
+          {watch.site === 'dailymotion' ? "Dailymotion's player can't be kept exactly in step: skips reload the video, and you may need to tap play on it." : watch.site === 'kick' ? "Kick's player can't be talked to: pausing reloads the stream, and you may need to tap play on it." : "Glofly can't talk to the video player right now, so skips and pauses reload the video. Long-press the pill and tell Claude what it says."}
         </Text>
       ) : null}
       {details ? (

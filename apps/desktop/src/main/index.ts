@@ -9,6 +9,7 @@ import {
   type IpcMainInvokeEvent
 } from 'electron'
 import { join } from 'path'
+import { guardWatchView } from './watchView'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -296,6 +297,8 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
+      // 0.9.3: only for Watch Together's player page with Twitch and Kick (main/watchView.ts).
+      webviewTag: true,
       // The accent is known before the page draws, so it never flashes the wrong color.
       additionalArguments: appearanceArgs()
     }
@@ -333,6 +336,8 @@ function createWindow(): void {
     }
   })
   watchShutdown(window)
+
+  guardWatchView(window)
 
   // Links that try to open a new window go to the real browser instead (https only).
   window.webContents.setWindowOpenHandler((details) => {

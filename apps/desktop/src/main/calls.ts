@@ -91,13 +91,13 @@ export function leaveCall(callId: string): Promise<ApiResult<null>> {
 export const watchPlayerUrl = (): string => `${API_URL}/watch/player`
 
 export function watchGet(callId: string): Promise<ApiResult<WatchUpdate>> {
-  return request<WatchUpdate>('GET', `/calls/${callId}/watch?sites=1`)
+  return request<WatchUpdate>('GET', `/calls/${callId}/watch?sites=2`)
 }
 
 export function watchPreview(link: string): Promise<ApiResult<WatchPreview>> {
   return request<WatchPreview>(
     'GET',
-    `/calls/watch/preview?sites=1&link=${encodeURIComponent(link)}`
+    `/calls/watch/preview?sites=2&link=${encodeURIComponent(link)}`
   )
 }
 
@@ -106,7 +106,7 @@ export function watchStart(
   link: string,
   control?: WatchControl
 ): Promise<ApiResult<WatchUpdate>> {
-  return request<WatchUpdate>('POST', `/calls/${callId}/watch?sites=1`, { link, control })
+  return request<WatchUpdate>('POST', `/calls/${callId}/watch?sites=2`, { link, control })
 }
 
 export function watchControl(
@@ -114,14 +114,14 @@ export function watchControl(
   action: Extract<WatchAction, 'play' | 'pause' | 'seek' | 'back' | 'forward'>,
   to?: number
 ): Promise<ApiResult<WatchUpdate>> {
-  return request<WatchUpdate>('POST', `/calls/${callId}/watch/control?sites=1`, { action, to })
+  return request<WatchUpdate>('POST', `/calls/${callId}/watch/control?sites=2`, { action, to })
 }
 
 export function watchSettings(
   callId: string,
   control: WatchControl
 ): Promise<ApiResult<WatchUpdate>> {
-  return request<WatchUpdate>('POST', `/calls/${callId}/watch/settings?sites=1`, { control })
+  return request<WatchUpdate>('POST', `/calls/${callId}/watch/settings?sites=2`, { control })
 }
 
 export function watchReport(
@@ -138,7 +138,7 @@ export function watchReact(callId: string, reaction: WatchReaction): Promise<Api
 }
 
 export function watchStop(callId: string): Promise<ApiResult<WatchUpdate>> {
-  return request<WatchUpdate>('DELETE', `/calls/${callId}/watch?sites=1`)
+  return request<WatchUpdate>('DELETE', `/calls/${callId}/watch?sites=2`)
 }
 
 // ---------------------------------------------------------------------------------------

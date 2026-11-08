@@ -24,16 +24,21 @@ export type WatchAction =
  * Where the video comes from (0.7.1). YouTube was the only one before, so a state without `site`
  * is YouTube, and apps older than 0.7.1 are only ever told about YouTube videos.
  */
-export type WatchSite = 'youtube' | 'twitch' | 'vimeo' | 'dailymotion'
-export const WATCH_SITES: readonly WatchSite[] = ['youtube', 'twitch', 'vimeo', 'dailymotion']
+export type WatchSite = 'youtube' | 'twitch' | 'vimeo' | 'dailymotion' | 'kick'
+export const WATCH_SITES: readonly WatchSite[] = ['youtube', 'twitch', 'vimeo', 'dailymotion', 'kick']
 export const WATCH_SITE_NAMES: Record<WatchSite, string> = {
   youtube: 'YouTube',
   twitch: 'Twitch',
   vimeo: 'Vimeo',
-  dailymotion: 'Dailymotion'
+  dailymotion: 'Dailymotion',
+  kick: 'Kick'
 }
-/** The live-connection feature an app sends when it can play every site above (0.7.1). */
+/** The live-connection feature an app sends when it can play Twitch, Vimeo and Dailymotion (0.7.1). */
 export const WATCH_SITES_FEATURE = 'watchSites'
+/** 0.9.3: and Kick (apps without it are told "nothing's on" for a Kick stream). */
+export const WATCH_KICK_FEATURE = 'watchKick'
+/** Live-only sites (a channel, no time line). */
+export const isLiveSite = (site: WatchSite | undefined): boolean => site === 'twitch' || site === 'kick'
 
 /** The video a call is watching together. */
 export type WatchState = {
@@ -161,6 +166,7 @@ const TWITCH_VOD = /^v\d{5,14}$/
 const TWITCH_CHANNEL = /^c:[A-Za-z0-9_]{3,25}$/
 const VIMEO_ID = /^\d{5,12}(?::[0-9a-f]{6,20})?$/
 const DM_ID = /^x[a-z0-9]{4,12}$/i
+const KICK_CHANNEL = /^c:[a-z0-9_-]{2,40}$/
 
 /** A valid video id for this site? */
 export function isWatchVideoId(site: WatchSite, id: unknown): id is string {
@@ -174,6 +180,8 @@ export function isWatchVideoId(site: WatchSite, id: unknown): id is string {
       return VIMEO_ID.test(id)
     case 'dailymotion':
       return DM_ID.test(id)
+    case 'kick':
+      return KICK_CHANNEL.test(id)
   }
   return false
 }
@@ -184,6 +192,7 @@ export const isWatchSite = (v: unknown): v is WatchSite =>
 /** The name a video goes by until its site says ("YouTube video", "Twitch stream"…). */
 export function defaultWatchTitle(site: WatchSite = 'youtube', live = false): string {
   if (site === 'twitch') return live ? 'Twitch stream' : 'Twitch video'
+  if (site === 'kick') return 'Kick stream'
   return `${WATCH_SITE_NAMES[site]} video`
 }
 
@@ -217,6 +226,13 @@ export function watchLinkFrom(input: string): { site: WatchSite; videoId: string
     if (video && /^\d{5,14}$/.test(video)) return { site: 'twitch', videoId: `v${video}`, live: false, start }
     const channel = link.query.get('channel')
     if (channel && /^[A-Za-z0-9_]{3,25}$/.test(channel)) return { site: 'twitch', videoId: `c:${channel.toLowerCase()}`, live: true, start: 0 }
+    return null
+  }
+  // 0.9.3: Kick live channels (kick.com/<channel>, player.kick.com/<channel>).
+  if (host === 'kick.com' || host === 'player.kick.com') {
+    const name = (parts[0] ?? '').toLowerCase()
+    const reserved = ['categories', 'browse', 'following', 'search', 'video', 'videos', 'clips', 'dashboard', 'settings', 'terms-of-service', 'privacy-policy', 'community-guidelines']
+    if (parts.length === 1 && /^[a-z0-9_-]{2,40}$/.test(name) && !reserved.includes(name)) return { site: 'kick', videoId: `c:${name}`, live: true, start: 0 }
     return null
   }
   if (host === 'vimeo.com' || host === 'player.vimeo.com') {
@@ -375,7 +391,7 @@ export function cleanWatchState(raw: unknown): WatchState | null {
     callId: x.callId,
     site,
     videoId: x.videoId,
-    live: site === 'twitch' && x.live === true,
+    live: (site === 'twitch' && x.live === true) || site === 'kick',
     title: typeof x.title === 'string' ? x.title.slice(0, 120) : defaultWatchTitle(site, x.live === true),
     channel: typeof x.channel === 'string' ? x.channel.slice(0, 120) : null,
     durationSec: num(x.durationSec, 48 * 3600),
@@ -640,7 +656,8 @@ const SITE_NAMES: Record<string, string> = {
   youtube: 'YouTube',
   twitch: 'Twitch',
   vimeo: 'Vimeo',
-  dailymotion: 'Dailymotion'
+  dailymotion: 'Dailymotion',
+  kick: 'Kick'
 }
 
 /** 0.7.2: what to say when the player page reports a problem (codes are YouTube's, or our own words) */

@@ -680,22 +680,22 @@ export function createBridge(): GloflyApi {
     },
     watch: {
       playerUrl: async () => `${API_URL}/watch/player`,
-      get: (id) => badId(id) ?? request<WatchUpdate>('GET', `/calls/${id}/watch?sites=1`),
+      get: (id) => badId(id) ?? request<WatchUpdate>('GET', `/calls/${id}/watch?sites=2`),
       preview: (link) =>
         typeof link === 'string' && link.length > 0 && link.length <= 500
           ? request<WatchPreview>(
               'GET',
-              `/calls/watch/preview?sites=1&link=${encodeURIComponent(link)}`
+              `/calls/watch/preview?sites=2&link=${encodeURIComponent(link)}`
             )
           : Promise.resolve(invalid),
       start: (id, link, control) =>
-        badId(id) ?? request<WatchUpdate>('POST', `/calls/${id}/watch?sites=1`, { link, control }),
+        badId(id) ?? request<WatchUpdate>('POST', `/calls/${id}/watch?sites=2`, { link, control }),
       control: (id, action, to) =>
         badId(id) ??
-        request<WatchUpdate>('POST', `/calls/${id}/watch/control?sites=1`, { action, to }),
+        request<WatchUpdate>('POST', `/calls/${id}/watch/control?sites=2`, { action, to }),
       settings: (id, control) =>
         badId(id) ??
-        request<WatchUpdate>('POST', `/calls/${id}/watch/settings?sites=1`, { control }),
+        request<WatchUpdate>('POST', `/calls/${id}/watch/settings?sites=2`, { control }),
       report: (id, videoId, durationSec, title) =>
         badId(id) ??
         (typeof videoId === 'string' && /^[A-Za-z0-9_:-]{4,40}$/.test(videoId)
@@ -703,7 +703,7 @@ export function createBridge(): GloflyApi {
           : Promise.resolve(invalid)),
       react: (id, reaction) =>
         badId(id) ?? request<null>('POST', `/calls/${id}/watch/react`, { reaction }),
-      stop: (id) => badId(id) ?? request<WatchUpdate>('DELETE', `/calls/${id}/watch?sites=1`)
+      stop: (id) => badId(id) ?? request<WatchUpdate>('DELETE', `/calls/${id}/watch?sites=2`)
     },
     ptt: {
       start: async (choice) => startPtt(choice),

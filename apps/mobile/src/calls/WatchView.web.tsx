@@ -24,7 +24,7 @@ export function WatchView({ watch, style, unmute, onState }: { watch: WatchState
   return (
     <View style={[{ backgroundColor: '#000', overflow: 'hidden' }, style]}>
       <iframe ref={frame} src={PLAYER} title={`Shared video: ${watch.title}`} allow="autoplay; encrypted-media" referrerPolicy="strict-origin" style={{ border: 0, width: '100%', height: '100%' }} />
-      {state.status !== 'blocked' && watch.site !== 'dailymotion' ? <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} /> : null}
+      {state.status !== 'blocked' && watch.site !== 'dailymotion' && watch.site !== 'kick' ? <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} /> : null}
     </View>
   )
 }

@@ -3,6 +3,7 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import {
   canControlWatch,
   defaultWatchTitle,
+  WATCH_KICK_FEATURE,
   WATCH_SITES_FEATURE,
   type WatchSite,
   watchEnded,
@@ -34,8 +35,12 @@ import { emitToUser, emitToUserByFeature, someAppLacks } from "../realtime";
 type Entry = { state: WatchState; conversationId: string; endTimer?: ReturnType<typeof setTimeout> };
 const watching = new Map<string, Entry>();
 
-/** Only YouTube existed before 0.7.1: older apps are told about other sites' videos as "nothing". */
-const oldAppsCanSee = (s: WatchState | null) => !s || !s.site || s.site === "youtube";
+/**
+ * Which apps can show a site: YouTube every app (0), Twitch/Vimeo/Dailymotion 0.7.1+ (1, the
+ * watchSites feature, ?sites=1), Kick 0.9.3+ (2, watchKick, ?sites=2). Others hear "nothing's on".
+ */
+export const siteLevel = (site: WatchSite | undefined): number => (!site || site === "youtube" ? 0 : site === "kick" ? 2 : 1);
+const oldAppsCanSee = (s: WatchState | null) => !s || siteLevel(s.site) === 0;
 
 export type WatchProblem = { status: number; error: string; message: string };
 const forbidden = (message: string): WatchProblem => ({ status: 403, error: "forbidden", message });
@@ -80,10 +85,11 @@ export function watchOf(callId: string): WatchState | null {
   return entry.state;
 }
 
-/** `sites`: the app asking knows every site (0.7.1); older apps only ever hear about YouTube. */
-export function watchUpdate(callId: string, sites = true): WatchUpdate {
+/** `level`: which sites the app asking knows (siteLevel); older apps only ever hear about YouTube. */
+export function watchUpdate(callId: string, level: number | boolean = 2): WatchUpdate {
   const watch = watchOf(callId);
-  return { callId, watch: sites || oldAppsCanSee(watch) ? watch : null, serverNow: Date.now() };
+  const knows = level === true ? 2 : level === false ? 0 : level;
+  return { callId, watch: !watch || knows >= siteLevel(watch.site) ? watch : null, serverNow: Date.now() };
 }
 
 /**
@@ -117,16 +123,18 @@ async function announce(callId: string, conversationId: string): Promise<void> {
   }
   // Another site: apps that know it get the video, older ones hear "nothing's on".
   const older: WatchUpdate = { ...payload, watch: null };
-  for (const userId of audience.ids) void emitToUserByFeature(userId, "watch:updated", WATCH_SITES_FEATURE, payload, older, audience.modern);
+  const feature = siteLevel(payload.watch?.site) === 2 ? WATCH_KICK_FEATURE : WATCH_SITES_FEATURE;
+  for (const userId of audience.ids) void emitToUserByFeature(userId, "watch:updated", feature, payload, older, audience.modern);
 }
 
 /** Does everyone else in the call have an app that can show this site? (0.7.1) */
 export async function othersNeedUpdate(callId: string, conversationId: string, userId: string, site: WatchSite): Promise<boolean> {
   if (site === "youtube") return false;
+  const feature = siteLevel(site) === 2 ? WATCH_KICK_FEATURE : WATCH_SITES_FEATURE;
   const audience = await audienceOf(conversationId, callId);
   for (const id of audience.ids) {
     if (id === userId) continue;
-    if (await someAppLacks(id, WATCH_SITES_FEATURE)) return true;
+    if (await someAppLacks(id, feature)) return true;
   }
   return false;
 }
@@ -155,7 +163,7 @@ export async function startWatch(
   const old = watching.get(callId);
   if (old && !canControlWatch(old.state, userId)) return forbidden(ONLY_STARTER(await starterName(old.state.startedBy)));
   const site = video.site ?? "youtube";
-  const live = site === "twitch" && !!video.live;
+  const live = (site === "twitch" && !!video.live) || site === "kick";
   const state: WatchState = {
     callId,
     site,
@@ -338,8 +346,8 @@ export async function previewVideo(videoId: string, site: WatchSite = "youtube",
     site,
     live,
     videoId,
-    title: site === "twitch" && live ? `${videoId.slice(2)} on Twitch` : name,
-    channel: site === "twitch" && live ? videoId.slice(2) : null,
+    title: (site === "twitch" && live) || site === "kick" ? `${videoId.slice(2)} on ${site === "kick" ? "Kick" : "Twitch"}` : name,
+    channel: (site === "twitch" && live) || site === "kick" ? videoId.slice(2) : null,
     thumbnailUrl: site === "youtube" ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : null,
   };
   const url = oembedUrl(site, videoId);

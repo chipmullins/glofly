@@ -34,6 +34,7 @@ import {
   setWatchControl,
   startWatch,
   stopWatch,
+  siteLevel,
   watchUpdate,
   type WatchProblem,
 } from "./watch";
@@ -488,14 +489,15 @@ async function callImIn(req: { params: Record<string, unknown> }, res: Response)
 }
 
 /** 0.7.1 apps add ?sites=1: they can show Twitch, Vimeo and Dailymotion, not only YouTube. */
-const knowsSites = (req: { query: Record<string, unknown> }) => req.query.sites === "1";
+// 0.9.3 apps add ?sites=2: Kick too.
+const knowsSites = (req: { query: Record<string, unknown> }) => (req.query.sites === "2" ? 2 : req.query.sites === "1" ? 1 : 0);
 const NOT_A_LINK = "That doesn't look like a YouTube, Twitch, Vimeo or Dailymotion link.";
 
 // GET /calls/watch/preview?link= — what a link is, for the Start dialog.
 callsRouter.get("/watch/preview", previewLimiter, async (req, res) => {
   const link = typeof req.query.link === "string" ? req.query.link : "";
   const found = watchLinkFrom(link);
-  if (!found || (found.site !== "youtube" && !knowsSites(req))) {
+  if (!found || knowsSites(req) < siteLevel(found.site)) {
     res.status(400).json({ error: "invalid", message: found ? "That doesn't look like a YouTube link." : NOT_A_LINK });
     return;
   }
@@ -528,7 +530,7 @@ callsRouter.post("/:id/watch", watchLimiter, async (req, res) => {
     return;
   }
   const link = watchLinkFrom(parsed.data.link);
-  if (!link || (link.site !== "youtube" && !knowsSites(req))) {
+  if (!link || knowsSites(req) < siteLevel(link.site)) {
     res.status(400).json({ error: "invalid", message: link ? "That doesn't look like a YouTube link." : NOT_A_LINK });
     return;
   }
