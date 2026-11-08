@@ -23,7 +23,24 @@ public class GloflyAppDelegate: ExpoAppDelegateSubscriber, MessagingDelegate {
     GloflyNotifications.shared.install()
     // Lock-screen calls: register for VoIP pushes (one may be what just launched the app).
     GloflyCallKit.shared.start()
+    // 0.9.1: keep your camera going when you leave Glofly mid-call (the call shrinks to iOS's
+    // floating window). Before, iOS paused the camera and the others saw your video freeze.
+    Self.allowCameraWhileMultitasking()
     return true
+  }
+
+  /// iOS lets calling apps (voip background mode, built with the iOS 18 SDK or later) keep the
+  /// camera while another app is on screen. LiveKit's WebRTC switches it on for each camera it
+  /// opens when this option is set, so it's set at launch, before any call. Looked up by name so
+  /// this module needn't link LiveKit's pod; if the class or option isn't there, nothing changes.
+  static func allowCameraWhileMultitasking() {
+    guard let options = NSClassFromString("WebRTCModuleOptions") as? NSObject.Type else { return }
+    let sharedInstance = NSSelectorFromString("sharedInstance")
+    guard options.responds(to: sharedInstance),
+          let shared = (options as AnyObject).perform(sharedInstance)?.takeUnretainedValue() as? NSObject,
+          shared.responds(to: NSSelectorFromString("setEnableMultitaskingCameraAccess:"))
+    else { return }
+    shared.setValue(true, forKey: "enableMultitaskingCameraAccess")
   }
 
   public func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
