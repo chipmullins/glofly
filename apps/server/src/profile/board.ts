@@ -8,7 +8,8 @@
 // A family-managed (restricted) account never shows any of them to people who aren't its friends.
 // Blocks look like "not found" before any of this runs (routes.ts).
 
-import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { steamInMyGames } from "../connections/steam";
+import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   BOARD_GAMES_MAX,
@@ -231,7 +232,11 @@ export async function boardView(
       ? new Map(
           (
             await db
-              .select({ key: userGames.gameKey, seconds: userGames.seconds })
+              .select({
+                key: userGames.gameKey,
+                // 0.9.3: Steam's playtime counts when they show it in My games (the larger of the two).
+                seconds: (await steamInMyGames(ownerId)) ? sql<number>`greatest(${userGames.seconds}, ${userGames.steamSeconds})` : userGames.seconds,
+              })
               .from(userGames)
               .where(and(eq(userGames.userId, ownerId), eq(userGames.hidden, false), inArray(userGames.gameKey, gameNames)))
           ).map((r) => [r.key, r.seconds]),
@@ -373,7 +378,8 @@ export async function activityOf(ownerId: string, gamesShared: boolean): Promise
     const games = await db
       .select()
       .from(userGames)
-      .where(and(eq(userGames.userId, ownerId), eq(userGames.hidden, false)))
+      // Only time Glofly saw (a Steam library imported today isn't "started 12 games").
+      .where(and(eq(userGames.userId, ownerId), eq(userGames.hidden, false), gt(userGames.seconds, 0)))
       .orderBy(desc(userGames.lastPlayedAt))
       .limit(ACTIVITY_MAX);
     for (const g of games) {

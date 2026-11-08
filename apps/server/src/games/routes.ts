@@ -12,6 +12,7 @@ import { areFriends, blockedEitherWay } from "../friends/rules";
 import { currentActivity } from "../presence";
 import { connectedSummary, emitToUser } from "../realtime";
 import { sendStream } from "../storage";
+import { steamInMyGames } from "../connections/steam";
 import { coverImage, coversFor, igdbConfigured, isCoverId, searchGames } from "./igdb";
 
 // My games (Glofly 2.0): the games someone has played, with their playtime, from the desktop's
@@ -119,23 +120,37 @@ export async function sweepPlaytime(): Promise<void> {
 }
 
 async function gamesOf(userId: string, includeHidden: boolean): Promise<MyGame[]> {
+  // 0.9.3: with Steam linked and "Show in My games" on, Steam's playtime counts (the larger of
+  // Steam's and Glofly's, so nothing is counted twice); off, only Glofly's own minutes show.
+  const useSteam = await steamInMyGames(userId);
+  const total = useSteam ? sql<number>`greatest(${userGames.seconds}, ${userGames.steamSeconds})` : sql<number>`${userGames.seconds}`;
   const rows = await db
     .select()
     .from(userGames)
-    .where(and(eq(userGames.userId, userId), includeHidden ? undefined : eq(userGames.hidden, false)))
-    .orderBy(desc(userGames.favorite), desc(userGames.seconds))
+    .where(
+      and(
+        eq(userGames.userId, userId),
+        includeHidden ? undefined : eq(userGames.hidden, false),
+        useSteam ? undefined : sql`${userGames.seconds} > 0`,
+      ),
+    )
+    .orderBy(desc(userGames.favorite), desc(total))
     .limit(200);
   const covers = await coversFor(rows.map((r) => ({ key: r.gameKey, name: r.name })));
-  return rows.map((r) => ({
-    ...(covers.has(r.gameKey) ? { cover: covers.get(r.gameKey)! } : {}),
-    key: r.gameKey,
-    name: r.name,
-    seconds: r.seconds,
-    firstPlayedAt: r.firstPlayedAt.toISOString(),
-    lastPlayedAt: r.lastPlayedAt.toISOString(),
-    favorite: r.favorite,
-    hidden: r.hidden,
-  }));
+  return rows.map((r) => {
+    const fromSteam = useSteam && r.steamSeconds > 0;
+    return {
+      ...(covers.has(r.gameKey) ? { cover: covers.get(r.gameKey)! } : {}),
+      key: r.gameKey,
+      name: r.name,
+      seconds: fromSteam ? Math.max(r.seconds, r.steamSeconds) : r.seconds,
+      firstPlayedAt: r.firstPlayedAt.toISOString(),
+      lastPlayedAt: r.lastPlayedAt.toISOString(),
+      favorite: r.favorite,
+      hidden: r.hidden,
+      ...(fromSteam ? { steam: true } : {}),
+    };
+  });
 }
 
 async function visibilityOf(userId: string): Promise<MyGamesVisibility> {

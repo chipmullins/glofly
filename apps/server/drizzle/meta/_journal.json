@@ -393,6 +393,13 @@
       "when": 1794129339267,
       "tag": "0055_sidebar_pins",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1794130088421,
+      "tag": "0056_connections",
+      "breakpoints": true
     }
   ]
 }

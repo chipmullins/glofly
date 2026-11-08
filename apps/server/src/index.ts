@@ -65,6 +65,10 @@ import { sweepUnfinishedPosts, threadsRouter } from "./threads/routes";
 import { legacyForums } from "./threads/legacy";
 import { connectedAppsRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
+import { connectionsReturnRouter, connectionsRouter } from "./connections/routes";
+import { liveHooksRouter } from "./connections/hooks";
+import { publicBase, sweepStreamWatches } from "./connections/live";
+import { sweepSteamPlaying, sweepSteamSync } from "./connections/steam";
 
 /** Runs a background job every so often, never two runs of it at once. */
 function every(ms: number, name: string, job: () => Promise<void>): void {
@@ -99,7 +103,9 @@ app.use(
     limit: "10kb", // rejects oversized request bodies
     // 0.8.2: Control for iPhone signs its requests, body included (admin/devices.ts).
     verify: (req, _res, buf) => {
-      if ((req as { url?: string }).url?.startsWith("/admin/")) (req as { rawBody?: Buffer }).rawBody = buf;
+      const url = (req as { url?: string }).url ?? "";
+      // 0.9.3: Twitch and Kick sign their live notices (connections/hooks.ts).
+      if (url.startsWith("/admin/") || url === "/hooks/twitch" || url === "/hooks/kick") (req as { rawBody?: Buffer }).rawBody = buf;
     },
   }),
 );
@@ -174,6 +180,11 @@ app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
 // Communities round: the bot API (/api/v1, "Authorization: Bot gfk_…"), for game servers and bots.
 app.use(botApiRouter);
+// 0.9.3: Settings → Connections (Steam, Twitch, Kick), the pages a sign-in comes back to, and
+// Twitch's and Kick's live notices (before incomingHooksRouter's /hooks/<id>/<token>).
+app.use("/connections", connectionsReturnRouter);
+app.use("/connections", connectionsRouter);
+app.use(liveHooksRouter);
 // Communities round: incoming webhooks (POST /hooks/<id>/<token> posts into one nebula).
 app.use(incomingHooksRouter);
 // Communities round: Sign in with Glofly (OAuth 2.0 + OpenID Connect) and Settings → Developer.
@@ -314,6 +325,11 @@ connectRedis()
     every(60 * 60 * 1000, "Sign in with Glofly cleanup", sweepOAuth);
     every(60_000, "Giveaways", sweepGiveaways);
     every(10 * 60_000, "Unfinished forum posts", sweepUnfinishedPosts);
+    // 0.9.3 Connections: Steam games (each account every 6 hours), what's playing on Steam, and
+    // live notices Twitch or Kick stopped sending.
+    every(5 * 60_000, "Steam games", sweepSteamSync);
+    every(60_000, "Steam playing", sweepSteamPlaying);
+    every(10 * 60_000, "Live channels", () => sweepStreamWatches(publicBase(`http://localhost:${PORT}`)));
     // Resolved reports are removed a year after they were resolved (hourly).
     const sweepReports = () =>
       purgeOldReports().catch((err) => console.error("Report cleanup failed", err));

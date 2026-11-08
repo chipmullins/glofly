@@ -892,6 +892,8 @@ export type MyGame = {
   hidden: boolean
   /** 0.9.1: box art's image id (IGDB), from GET /games/cover/:id; missing = letter tile */
   cover?: string
+  /** 0.9.3: Steam counted (some or all) of this game's time (Steam linked, "Show in My games" on) */
+  steam?: boolean
 }
 
 /** How games with slightly different names count as one: lower case, ™/® and extra spaces gone. */

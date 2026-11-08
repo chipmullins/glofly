@@ -143,6 +143,8 @@ export const users = pgTable(
     // ---- 2.0 ----
     // My games: who can see the games they've played ("everyone" / "friends" / "only_me").
     myGamesVisibility: text("my_games_visibility").notNull().default("friends"),
+    // 0.9.3: friends whose "went live" alerts they muted (Twitch / Kick linking).
+    mutedLiveAlerts: uuid("muted_live_alerts").array().notNull().default(sql`'{}'::uuid[]`),
     // ---- 0.7.3 ----
     // Two-step sign-in: after the password, a 6-digit code by email (and by text once a phone is
     // confirmed). Off unless turned on in Settings → Account.
@@ -1381,8 +1383,62 @@ export const userGames = pgTable(
     favorite: boolean("favorite").notNull().default(false),
     // Hidden by them: never shown to anyone else (still counted).
     hidden: boolean("hidden").notNull().default(false),
+    // 0.9.3 Steam linking: the game's Steam app id and Steam's own playtime (all computers).
+    // My games shows the larger of the two, so nothing is counted twice. Cleared on unlink.
+    steamAppId: integer("steam_app_id"),
+    steamSeconds: integer("steam_seconds").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.userId, t.gameKey] })],
+);
+
+// 0.9.3: accounts linked in Settings → Connections (Steam, Twitch, Kick). Only the other site's
+// id and name are kept (never a password or a sign-in token). One Glofly account per outside
+// account, one outside account per site per Glofly account.
+export const linkedAccounts = pgTable(
+  "linked_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    externalId: text("external_id").notNull(),
+    // Their name there (Steam persona, Twitch / Kick login) and display name.
+    login: text("login").notNull(),
+    displayName: text("display_name").notNull(),
+    profileUrl: text("profile_url"),
+    // @glofly/shared ConnectionSettings
+    settings: jsonb("settings").notNull().default({}),
+    // Twitch / Kick: live right now (title, game, started) or null.
+    live: jsonb("live"),
+    // Steam: games last synced, and how many.
+    syncedAt: timestamp("synced_at", { withTimezone: true }),
+    gameCount: integer("game_count"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("linked_accounts_user_provider_idx").on(t.userId, t.provider),
+    uniqueIndex("linked_accounts_external_idx").on(t.provider, t.externalId),
+  ],
+);
+
+// 0.9.3: channels Glofly listens to for "went live" (Twitch EventSub, Kick webhooks) or new videos
+// (YouTube WebSub), for linked accounts and constellation Live alerts. One row per channel.
+export const streamWatches = pgTable(
+  "stream_watches",
+  {
+    provider: text("provider").notNull(),
+    channelId: text("channel_id").notNull(),
+    // The other site's subscription ids (to cancel them), and when they need renewing (YouTube).
+    subscriptionIds: text("subscription_ids").array().notNull().default(sql`'{}'::text[]`),
+    renewAt: timestamp("renew_at", { withTimezone: true }),
+    // Live right now (title, game, started, thumbnail) or null.
+    live: jsonb("live"),
+    // YouTube: the newest video ids already announced (so a repeat notice isn't posted twice).
+    seen: text("seen").array().notNull().default(sql`'{}'::text[]`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.provider, t.channelId] })],
 );
 
 // 0.9.1: box art from IGDB, one row per game (by Glofly's game key, the name in lower case). Looked
