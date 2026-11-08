@@ -351,7 +351,8 @@ export function createBridge(): GloflyApi {
       set: (changes) => request<MyStatus>('PATCH', '/users/me/status', changes)
     },
     profile: {
-      getMine: () => request<Profile>('GET', '/users/me/profile'),
+      getMine: (as) =>
+        request<Profile>('GET', as === 'friend' || as === 'everyone' ? `/users/me/profile?as=${as}` : '/users/me/profile'),
       get: (id) => badId(id) ?? request<Profile>('GET', `/users/${id}/profile`),
       update: (changes) => request<Profile>('PATCH', '/users/me/profile', changes),
       setPhoto: (data, type) => request('PUT', '/users/me/avatar', undefined, { data, type }),
@@ -359,7 +360,9 @@ export function createBridge(): GloflyApi {
       setHeader: (data, type) => request('PUT', '/users/me/header', undefined, { data, type }),
       removeHeader: () => request('DELETE', '/users/me/header'),
       mutuals: (id) => badId(id) ?? request('GET', `/users/${id}/mutuals`),
-      activity: (id) => badId(id) ?? request('GET', `/users/${id}/activity`),
+      activity: (id, as) =>
+        badId(id) ??
+        request('GET', `/users/${id}/activity${as === 'friend' || as === 'everyone' ? `?as=${as}` : ''}`),
       setNickname: (id, nickname) =>
         badId(id) ?? request('PUT', `/users/${id}/nickname`, { nickname })
     },

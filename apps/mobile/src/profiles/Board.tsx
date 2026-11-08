@@ -367,15 +367,15 @@ function day(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-export function ActivityFeed({ userId, name }: { userId: string; name: string }) {
+export function ActivityFeed({ userId, name, as }: { userId: string; name: string; as?: 'friend' | 'everyone' }) {
   const [items, setItems] = useState<ActivityItem[] | null | undefined>(undefined)
   useEffect(() => {
     let live = true
-    void api.getActivity(userId).then((r) => live && setItems(r.ok && r.data.shown ? r.data.items : null))
+    void api.getActivity(userId, as).then((r) => live && setItems(r.ok && r.data.shown ? r.data.items : null))
     return () => {
       live = false
     }
-  }, [userId])
+  }, [userId, as])
   if (items === undefined) return <Spinner />
   if (items === null) return <Text tone="muted">{name.split(' ')[0]} keeps this to themselves.</Text>
   if (!items.length) return <Text tone="muted">Nothing in the last 30 days.</Text>

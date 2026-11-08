@@ -57,15 +57,17 @@ export default function ProfileCard() {
 
   const [nickEdit, setNickEdit] = useState<string | null>(null) // the nickname being typed, or null
   const [nickBusy, setNickBusy] = useState(false)
+  // 0.9.1: your own card is a preview of what others see (a friend, or anyone else).
+  const [viewAs, setViewAs] = useState<'friend' | 'everyone'>('friend')
   const load = () =>
-    api.getProfile(id).then((r) => {
+    (id === meId ? api.getMyProfile(viewAs) : api.getProfile(id)).then((r) => {
       if (r.ok) setProfile(r.data)
       else setGone(true)
     })
   useEffect(() => {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, isFriend])
+  }, [id, isFriend, viewAs])
 
   // Nicknames: only you see them; the server puts them everywhere for you (lists refresh by themselves).
   async function saveNickname(next: string | null) {
@@ -132,11 +134,44 @@ export default function ProfileCard() {
           </View>
         ) : (
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 24, gap: 14 }}>
+            {isMe ? (
+              <View style={{ marginHorizontal: -20, paddingLeft: 16, paddingRight: 64, paddingVertical: 12, backgroundColor: c.accentSoft, gap: 8 }}>
+                <Text size={13.5} weight="bold">
+                  Preview: how {viewAs === 'friend' ? 'a friend sees' : 'anyone else on Glofly sees'} your profile
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {(
+                    [
+                      ['friend', 'A friend'],
+                      ['everyone', 'Anyone else'],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <Pressable
+                      key={v}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: viewAs === v }}
+                      onPress={() => setViewAs(v)}
+                      style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center', backgroundColor: viewAs === v ? c.accent : c.bg }}
+                    >
+                      <Text size={13} weight="bold" style={{ color: viewAs === v ? c.accentInk : c.ink2 }}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                  <View style={{ flex: 1 }} />
+                  <Pressable accessibilityRole="button" onPress={() => router.replace('/edit-profile')} style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center', backgroundColor: c.ink }}>
+                    <Text size={13} weight="bold" style={{ color: c.bg }}>
+                      Edit
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
             <View style={{ marginHorizontal: -20, marginBottom: -14 }}>
               <ProfileHeaderImage userId={profile.id} header={profile.header} height={profile.header ? 150 : 96} />
             </View>
             <View style={{ marginTop: -52, borderRadius: 60, borderWidth: 5, borderColor: c.sheet, alignSelf: 'flex-start' }}>
-              <Avatar user={profile} size={96} status={isFriend || isMe ? (presence?.status ?? 'offline') : null} mobile={onMobile(presence ?? undefined)} ring={c.sheet} />
+              <Avatar user={profile} size={96} status={isFriend || (isMe && viewAs === 'friend') ? (presence?.status ?? 'offline') : null} mobile={onMobile(presence ?? undefined)} ring={c.sheet} />
             </View>
             <View style={{ gap: 2 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -179,7 +214,7 @@ export default function ProfileCard() {
                 </View>
               </View>
             ) : null}
-            {presence && (isFriend || isMe) ? (
+            {presence && (isFriend || (isMe && viewAs === 'friend')) ? (
               <View style={{ gap: 6 }}>
                 <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, height: 32, borderRadius: 16, backgroundColor: presence.status === 'online' ? c.onlineSoft : c.surface }}>
                   <Text size={14} weight="medium" style={{ color: presence.status === 'online' ? c.onlineText : c.ink2 }}>
@@ -267,7 +302,7 @@ export default function ProfileCard() {
                 ) : tab === 'mutuals' ? (
                   <MutualsList userId={profile.id} name={profile.displayName} />
                 ) : tab === 'activity' ? (
-                  <ActivityFeed userId={profile.id} name={profile.displayName} />
+                  <ActivityFeed userId={profile.id} name={profile.displayName} as={isMe ? viewAs : undefined} />
                 ) : null}
               </View>
             ) : null}

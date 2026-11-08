@@ -2,6 +2,7 @@ import ProfileSettings from './ProfileSettings'
 import { patchSocial, refreshSocial, useSocial } from '../lib/social'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type {
+  MyStatus,
   AlertSound,
   AppSettings,
   AppSettingsChanges,
@@ -61,8 +62,11 @@ type SettingsDialogProps = {
    * "quiet-hours") or a section's heading as shown ("Privacy"; the Ctrl+K quick switcher).
    */
   scrollTo?: string
-  /** 0.9.1: Settings → Profile changed your display name */
-  onUserChange?: (changes: { displayName: string }) => void
+  /** 0.9.1: Settings → Profile changed your name or photo */
+  onUserChange?: (changes: { displayName: string; avatarVersion: string | null }) => void
+  /** 0.9.1: Settings → Profile edits your status too (it was Edit profile's) */
+  status?: MyStatus
+  onStatusChange?: (status: MyStatus) => void
 }
 
 export type SettingsPage = 'profile' | 'general' | 'voice' | 'overlay' | 'account' | 'apps' | 'games' | 'about'
@@ -662,6 +666,8 @@ export default function SettingsDialog({
   onSessionExpired,
   onAccountDeleted,
   onUserChange,
+  status,
+  onStatusChange,
   initialPage = 'general',
   scrollTo
 }: SettingsDialogProps): React.JSX.Element {
@@ -920,7 +926,13 @@ export default function SettingsDialog({
             )}
 
             {page === 'profile' ? (
-              <ProfileSettings user={user} onSaved={onUserChange} onSessionExpired={onSessionExpired} />
+              <ProfileSettings
+                user={user}
+                status={status}
+                onSaved={onUserChange}
+                onStatusChange={onStatusChange}
+                onSessionExpired={onSessionExpired}
+              />
             ) : page === 'voice' ? (
               <VoiceVideoSettings />
             ) : page === 'overlay' ? (

@@ -15,6 +15,7 @@ import {
   GameIcon,
   PencilIcon,
   PhoneIcon,
+  ProfileIcon,
   RemoveFriendIcon,
   VideoIcon
 } from './icons'
@@ -117,6 +118,11 @@ type ProfileCardProps = {
   onOpenConstellation?: (id: string) => void
   /** 0.9.1: your own card: Settings → Profile */
   onEditProfile?: () => void
+  /**
+   * 0.9.1 "View my profile": your own card as a friend or anyone else sees it (the server works
+   * it out), with a switch between the two and Edit profile. No actions on it.
+   */
+  preview?: boolean
 }
 
 type Tab = 'board' | 'friends' | 'constellations' | 'activity'
@@ -138,9 +144,11 @@ export default function ProfileCard({
   isMe,
   onViewPerson,
   onOpenConstellation,
-  onEditProfile
+  onEditProfile,
+  preview
 }: ProfileCardProps): React.JSX.Element {
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [viewAs, setViewAs] = useState<'friend' | 'everyone'>('friend')
   const [error, setError] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
@@ -154,7 +162,7 @@ export default function ProfileCard({
   useEffect(() => {
     let cancelled = false
     const load = (): void => {
-      window.glofly.profile.get(person.id).then((result) => {
+      ;(preview ? window.glofly.profile.getMine(viewAs) : window.glofly.profile.get(person.id)).then((result) => {
         if (cancelled) return
         if (result.ok) {
           setProfile(result.data)
@@ -172,20 +180,30 @@ export default function ProfileCard({
       cancelled = true
       stop()
     }
-  }, [person.id])
+  }, [person.id, preview, viewAs])
 
   // Escape closes; focus starts on the card.
   useEffect(() => {
     dialogRef.current?.focus()
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') closeRef.current()
+      if (e.key !== 'Escape') return
+      // A preview opened from Settings closes alone (Settings skips handled Escapes).
+      if (preview) e.preventDefault()
+      closeRef.current()
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey, preview)
+    return () => document.removeEventListener('keydown', onKey, preview)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const shown = profile ?? { ...person, bio: null, joinedAt: null, presence: null }
-  const presence = isFriend ? (livePresence ?? shown.presence ?? undefined) : undefined
+  const presence = preview
+    ? viewAs === 'friend'
+      ? (livePresence ?? shown.presence ?? undefined)
+      : undefined
+    : isFriend
+      ? (livePresence ?? shown.presence ?? undefined)
+      : undefined
   const statusText = presence && presence.status !== 'offline' ? presence.statusText : null
   const game = playing(presence)
   // 2.0 My games: the pop-out beside the card.
@@ -220,6 +238,32 @@ export default function ProfileCard({
           className={tabs.length ? 'dialog profile-dialog profile-dialog--wide' : 'dialog profile-dialog'}
           tabIndex={-1}
         >
+          {preview && (
+            <div className="profile-preview-bar">
+              <span className="profile-preview-label">
+                <ProfileIcon size={16} />
+                Preview: how {viewAs === 'friend' ? 'a friend sees' : 'anyone else on Glofly sees'} your profile
+              </span>
+              <span className="profile-preview-switch" role="radiogroup" aria-label="See it as">
+                {(
+                  [
+                    ['friend', 'A friend'],
+                    ['everyone', 'Anyone else']
+                  ] as const
+                ).map(([v, label]) => (
+                  <button key={v} type="button" role="radio" aria-checked={viewAs === v} onClick={() => setViewAs(v)}>
+                    {label}
+                  </button>
+                ))}
+              </span>
+              {onEditProfile && (
+                <button type="button" className="profile-preview-edit" onClick={onEditProfile}>
+                  <PencilIcon size={14} strokeWidth={2} />
+                  Edit profile
+                </button>
+              )}
+            </div>
+          )}
           <ProfileHero
             photo={header}
             sparks={['a', 'b']}
@@ -250,6 +294,7 @@ export default function ProfileCard({
                 </div>
               )}
 
+              {!preview && (
               <div className="profile-actions">
                 {isFriend && onRemove && (
                   <button type="button" className="profile-action" onClick={onRemove}>
@@ -266,7 +311,8 @@ export default function ProfileCard({
                   Block
                 </button>
               </div>
-              {onReport && (
+              )}
+              {onReport && !preview && (
                 <button type="button" className="profile-report" onClick={onReport}>
                   <FlagIcon size={14} />
                   Report @{person.username}
@@ -302,11 +348,11 @@ export default function ProfileCard({
                   {shown.realName && <> · their name is {shown.realName}</>}
                 </span>
               </div>
-              <NicknameRow
+              {!preview && <NicknameRow
                 userId={person.id}
                 nickname={shown.realName ? shown.displayName : null}
                 placeholder={shown.realName ?? shown.displayName}
-              />
+              />}
 
               {game && (
                 <div className="profile-playing">
@@ -340,7 +386,7 @@ export default function ProfileCard({
                 </p>
               )}
 
-              {isFriend && (
+              {isFriend && !preview && (
                 <div className="profile-buttons">
                   <button type="button" className="profile-message" onClick={onMessage}>
                     <ChatIcon size={18} strokeWidth={2} />
@@ -387,7 +433,7 @@ export default function ProfileCard({
                 </div>
               )}
 
-              {isMe && onEditProfile && (
+              {isMe && !preview && onEditProfile && (
                 <button type="button" className="profile-nickname-button" onClick={onEditProfile}>
                   <PencilIcon size={14} strokeWidth={2} />
                   Header, pronouns and board
@@ -429,7 +475,7 @@ export default function ProfileCard({
                         onOpenConstellation={onOpenConstellation}
                       />
                     ) : tab === 'activity' ? (
-                      <ActivityList userId={person.id} />
+                      <ActivityList userId={person.id} as={preview ? viewAs : undefined} />
                     ) : null}
                   </div>
                 </div>

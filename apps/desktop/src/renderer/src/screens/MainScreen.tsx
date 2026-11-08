@@ -25,7 +25,6 @@ import Avatar, { AvatarFace } from '../components/Avatar'
 import ChatView from '../components/ChatView'
 import { ListSkeleton } from '../components/Skeleton'
 import ConfirmDialog from '../components/ConfirmDialog'
-import EditProfileDialog from '../components/EditProfileDialog'
 import EmptyScene from '../components/EmptyScene'
 import WelcomeFlow from '../components/WelcomeFlow'
 import OAuthConsent, { pendingOAuth } from '../oauth/OAuthConsent'
@@ -40,6 +39,7 @@ import {
   LogOutIcon,
   MoreIcon,
   ProfileIcon,
+  PencilIcon,
   RemoveFriendIcon,
   SearchIcon,
   SettingsIcon
@@ -155,12 +155,15 @@ function SettingsMenu({
   onLogout,
   onOpenSettings,
   onEditProfile,
+  onViewProfile,
   onYearInGlow,
   onMyGames
 }: {
   onLogout: () => void
   onOpenSettings: () => void
   onEditProfile: () => void
+  /** 0.9.1: your card as others see it */
+  onViewProfile: () => void
   onYearInGlow: () => void
   /** 2.0: your games and who sees them */
   onMyGames: () => void
@@ -189,10 +192,22 @@ function SettingsMenu({
             className="menu-item"
             onClick={() => {
               close()
-              onEditProfile()
+              onViewProfile()
             }}
           >
             <ProfileIcon size={18} />
+            View my profile
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close()
+              onEditProfile()
+            }}
+          >
+            <PencilIcon size={18} />
             Edit profile
           </button>
           <button
@@ -552,7 +567,8 @@ export default function MainScreen({
     (chatId: string) => setMessageSearch((s) => ({ chatId, query: s?.query ?? '' })),
     []
   )
-  const [editingProfile, setEditingProfile] = useState(false)
+  // 0.9.1: "View my profile" (your card as others see it); editing is Settings → Profile.
+  const [viewingMe, setViewingMe] = useState(false)
   const [viewing, setViewing] = useState<PublicUser | null>(null)
   const [groupPicker, setGroupPicker] = useState<GroupPicker>(null)
   const [settingsFor, setSettingsFor] = useState<string | null>(null)
@@ -1295,7 +1311,7 @@ export default function MainScreen({
 
   /** Someone's profile card (your own opens Edit profile). */
   function viewPerson(person: PublicUser): void {
-    if (person.id === user.id) setEditingProfile(true)
+    if (person.id === user.id) setViewingMe(true)
     else setViewing(person)
   }
 
@@ -1843,7 +1859,8 @@ export default function MainScreen({
             <SettingsMenu
               onLogout={onLogout}
               onOpenSettings={() => setSettingsOpen('general')}
-              onEditProfile={() => setEditingProfile(true)}
+              onEditProfile={() => setSettingsOpen('profile')}
+              onViewProfile={() => setViewingMe(true)}
               onYearInGlow={() => setYearOpen(true)}
               onMyGames={() => setMyGamesOpen(true)}
             />
@@ -2389,21 +2406,24 @@ export default function MainScreen({
             onLogout={onLogout}
             onAccountDeleted={onAccountDeleted}
             onSessionExpired={onSessionExpired}
-            onUserChange={(c) => onUserChange({ displayName: c.displayName, avatarVersion: user.avatarVersion })}
+            onUserChange={(c) => onUserChange({ displayName: c.displayName, avatarVersion: c.avatarVersion })}
+            status={myStatus}
+            onStatusChange={setMyStatus}
           />
         )}
-        {editingProfile && (
-          <EditProfileDialog
-            user={user}
-            status={myStatus}
-            onSaved={(saved, status) => {
-              onUserChange({ displayName: saved.displayName, avatarVersion: saved.avatarVersion })
-              setMyStatus(status)
-            }}
-            onClose={() => setEditingProfile(false)}
+        {viewingMe && (
+          <ProfileCard
+            preview
+            isMe
+            person={{ id: user.id, username: user.username, displayName: user.displayName, avatarVersion: user.avatarVersion }}
+            isFriend={false}
+            presence={presence[user.id]}
+            onMessage={() => undefined}
+            onBlock={() => undefined}
+            onClose={() => setViewingMe(false)}
             onSessionExpired={onSessionExpired}
-            onMore={() => {
-              setEditingProfile(false)
+            onEditProfile={() => {
+              setViewingMe(false)
               setSettingsOpen('profile')
             }}
           />

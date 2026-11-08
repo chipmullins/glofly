@@ -691,7 +691,11 @@ function registerIpcHandlers(): void {
         (typeof c.bio === 'string' && c.bio.length <= BIO_MAX * 2))
     )
   }
-  ipcMain.handle('profile:get-mine', (event) => (fromApp(event) ? getMyProfile() : invalid))
+  const isPreviewAs = (v: unknown): v is 'friend' | 'everyone' | undefined =>
+    v === undefined || v === null || v === 'friend' || v === 'everyone'
+  ipcMain.handle('profile:get-mine', (event, as: unknown) =>
+    fromApp(event) && isPreviewAs(as) ? getMyProfile(as ?? undefined) : invalid
+  )
   ipcMain.handle('profile:get', (event, userId: unknown) =>
     fromApp(event) && isUserId(userId) ? getProfile(userId) : invalid
   )
@@ -733,8 +737,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('profile:mutuals', (event, userId: unknown) =>
     fromApp(event) && isUserId(userId) ? getMutuals(userId) : invalid
   )
-  ipcMain.handle('profile:activity', (event, userId: unknown) =>
-    fromApp(event) && isUserId(userId) ? getActivity(userId) : invalid
+  ipcMain.handle('profile:activity', (event, userId: unknown, as: unknown) =>
+    fromApp(event) && isUserId(userId) && isPreviewAs(as) ? getActivity(userId, as ?? undefined) : invalid
   )
 
   // Conversations and messages.

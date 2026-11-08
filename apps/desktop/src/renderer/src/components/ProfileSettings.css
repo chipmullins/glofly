@@ -446,3 +446,66 @@
   max-width: 220px;
   flex: none;
 }
+
+/* 0.9.1: photo and status moved here from Edit profile */
+.ps-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ps-photo {
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+  flex: none;
+}
+.ps-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ps-photo:focus-visible {
+  outline: 2px solid var(--glo-orange);
+  outline-offset: 2px;
+}
+.ps-status {
+  width: 180px;
+}
+.ps-status select {
+  width: 100%;
+  height: 42px;
+}
+.ps-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ps-see {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  font: 700 13px var(--glo-font-body);
+  color: var(--glo-link);
+  cursor: pointer;
+}
+.ps-see:hover {
+  text-decoration: underline;
+}
+.ps-card-photo--img {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid var(--glo-surface);
+  margin-top: -34px;
+  position: relative;
+}
+.ps-status {
+  width: 150px;
+}

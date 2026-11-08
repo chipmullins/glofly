@@ -53,7 +53,8 @@ const enc = encodeURIComponent
 
 // ---- Profiles and status ----
 
-export const getMyProfile = () => request<Profile>('GET', '/users/me/profile')
+/** 0.9.1: `as` previews what a friend / anyone else sees. */
+export const getMyProfile = (as?: 'friend' | 'everyone') => request<Profile>('GET', as ? `/users/me/profile?as=${as}` : '/users/me/profile')
 export const getProfile = (userId: string) => request<Profile>('GET', `/users/${userId}/profile`)
 export const updateProfile = (changes: ProfileChanges) => request<Profile>('PATCH', '/users/me/profile', changes)
 /** Your own name for someone, only you see it (null removes it). */
@@ -63,7 +64,8 @@ export const setAvatar = (file: Upload) => upload<{ avatarVersion: string }>('PU
 export const setHeader = (file: Upload) => upload<{ header: ProfileHeader }>('PUT', '/users/me/header', file)
 export const removeHeader = () => request<{ header: null }>('DELETE', '/users/me/header')
 export const getMutuals = (userId: string) => request<Mutuals & { shown: boolean }>('GET', `/users/${userId}/mutuals`)
-export const getActivity = (userId: string) => request<{ shown: boolean; items: ActivityItem[] }>('GET', `/users/${userId}/activity`)
+export const getActivity = (userId: string, as?: 'friend' | 'everyone') =>
+  request<{ shown: boolean; items: ActivityItem[] }>('GET', `/users/${userId}/activity${as ? `?as=${as}` : ''}`)
 export const removeAvatar = () => request<{ avatarVersion: null }>('DELETE', '/users/me/avatar')
 export const getMyStatus = () => request<MyStatus>('GET', '/users/me/status')
 export const setMyStatus = (changes: MyStatusChanges) => request<MyStatus>('PATCH', '/users/me/status', changes)

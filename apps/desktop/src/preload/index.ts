@@ -142,7 +142,7 @@ const glofly: GloflyApi = {
     set: (changes: MyStatusChanges) => ipcRenderer.invoke('status:set', changes)
   },
   profile: {
-    getMine: () => ipcRenderer.invoke('profile:get-mine'),
+    getMine: (as?: 'friend' | 'everyone') => ipcRenderer.invoke('profile:get-mine', as),
     get: (userId: string) => ipcRenderer.invoke('profile:get', userId),
     update: (changes: ProfileChanges) => ipcRenderer.invoke('profile:update', changes),
     setPhoto: (data: ArrayBuffer, type: PhotoType) =>
@@ -152,7 +152,8 @@ const glofly: GloflyApi = {
       ipcRenderer.invoke('profile:set-header', data, type),
     removeHeader: () => ipcRenderer.invoke('profile:remove-header'),
     mutuals: (userId: string) => ipcRenderer.invoke('profile:mutuals', userId),
-    activity: (userId: string) => ipcRenderer.invoke('profile:activity', userId),
+    activity: (userId: string, as?: 'friend' | 'everyone') =>
+      ipcRenderer.invoke('profile:activity', userId, as),
     setNickname: (userId: string, nickname: string | null) =>
       ipcRenderer.invoke('profile:set-nickname', userId, nickname)
   },

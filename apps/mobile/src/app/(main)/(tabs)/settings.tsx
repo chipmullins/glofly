@@ -1,3 +1,4 @@
+import { Icon } from '@/ui/icons'
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { router } from 'expo-router'
@@ -100,6 +101,17 @@ export default function Settings() {
         </View>
         <Text size={14} weight="bold" tone="accent">
           Edit
+        </Text>
+      </Pressable>
+      {/* 0.9.1: your profile as others see it */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push({ pathname: '/profile/[id]', params: { id: user.id } })}
+        style={{ marginHorizontal: 16, marginTop: 8, minHeight: 44, borderRadius: 14, borderWidth: 1, borderColor: c.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+      >
+        <Icon name="eye" size={18} color={c.accentText} />
+        <Text size={15} weight="bold" style={{ color: c.accentText }}>
+          View my profile
         </Text>
       </Pressable>
 

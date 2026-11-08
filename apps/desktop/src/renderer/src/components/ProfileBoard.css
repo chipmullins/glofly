@@ -387,3 +387,57 @@
 .pb-credit:hover {
   text-decoration: underline;
 }
+
+/* 0.9.1 "View my profile": the preview bar on your own card */
+.profile-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--glo-accent-soft);
+  color: var(--glo-ink);
+  font-size: 13.5px;
+}
+.profile-preview-label {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.profile-preview-switch {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--glo-surface);
+  border: 1px solid var(--glo-line);
+}
+.profile-preview-switch button {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: 600 13px var(--glo-font-body);
+  color: var(--glo-muted);
+  cursor: pointer;
+}
+.profile-preview-switch button[aria-checked='true'] {
+  background: var(--glo-orange);
+  color: var(--glo-on-accent);
+}
+.profile-preview-edit {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 17px;
+  border: 0;
+  background: var(--glo-ink);
+  color: var(--glo-surface);
+  font: 700 13px var(--glo-font-body);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}

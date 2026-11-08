@@ -311,17 +311,17 @@ function activityText(i: ActivityItem): { title: string; sub: string } {
 }
 
 /** Activity tab. */
-export function ActivityList({ userId }: { userId: string }): React.JSX.Element {
+export function ActivityList({ userId, as }: { userId: string; as?: 'friend' | 'everyone' }): React.JSX.Element {
   const [items, setItems] = useState<ActivityItem[] | null | undefined>(undefined)
   useEffect(() => {
     let cancelled = false
-    void window.glofly.profile.activity(userId).then((r) => {
+    void window.glofly.profile.activity(userId, as).then((r) => {
       if (!cancelled) setItems(r.ok && r.data.shown ? r.data.items : null)
     })
     return () => {
       cancelled = true
     }
-  }, [userId])
+  }, [userId, as])
   if (items === undefined) return <p className="pb-empty">Loading…</p>
   if (items === null) return <p className="pb-empty">They keep this to themselves.</p>
   if (!items.length) return <p className="pb-empty">Nothing in the last 30 days.</p>

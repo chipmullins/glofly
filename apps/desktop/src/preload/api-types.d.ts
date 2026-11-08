@@ -594,8 +594,8 @@ export type GloflyApi = {
     set: (changes: MyStatusChanges) => Promise<ApiResult<MyStatus>>
   }
   profile: {
-    /** Your own profile, for Edit profile. */
-    getMine: () => Promise<ApiResult<Profile>>
+    /** Your own profile, for Edit profile. 0.9.1: `as` previews what a friend / anyone else sees. */
+    getMine: (as?: 'friend' | 'everyone') => Promise<ApiResult<Profile>>
     /** Someone's profile card. */
     get: (userId: string) => Promise<ApiResult<Profile>>
     update: (changes: ProfileChanges) => Promise<ApiResult<Profile>>
@@ -608,7 +608,10 @@ export type GloflyApi = {
     /** 0.9.1: friends and constellations you share with someone (if they show them). */
     mutuals: (userId: string) => Promise<ApiResult<Mutuals & { shown: boolean }>>
     /** 0.9.1: their recent games and public constellations joined (if they show them). */
-    activity: (userId: string) => Promise<ApiResult<{ shown: boolean; items: ActivityItem[] }>>
+    activity: (
+      userId: string,
+      as?: 'friend' | 'everyone'
+    ) => Promise<ApiResult<{ shown: boolean; items: ActivityItem[] }>>
     /** Your own name for someone, only you see it (null removes it). */
     setNickname: (
       userId: string,

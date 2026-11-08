@@ -1,7 +1,9 @@
 import type { ActivityItem, ApiResult, Mutuals, PhotoType, Profile, ProfileChanges, ProfileHeader } from '../preload/api-types'
 import { request } from './api'
 
-export const getMyProfile = (): Promise<ApiResult<Profile>> => request('GET', '/users/me/profile')
+/** 0.9.1: `as` = preview what a friend / anyone else sees. */
+export const getMyProfile = (as?: 'friend' | 'everyone'): Promise<ApiResult<Profile>> =>
+  request('GET', as ? `/users/me/profile?as=${as}` : '/users/me/profile')
 
 export const getProfile = (userId: string): Promise<ApiResult<Profile>> =>
   request('GET', `/users/${userId}/profile`)
@@ -29,9 +31,10 @@ export const getMutuals = (userId: string): Promise<ApiResult<Mutuals & { shown:
   request('GET', `/users/${userId}/mutuals`)
 
 export const getActivity = (
-  userId: string
+  userId: string,
+  as?: 'friend' | 'everyone'
 ): Promise<ApiResult<{ shown: boolean; items: ActivityItem[] }>> =>
-  request('GET', `/users/${userId}/activity`)
+  request('GET', `/users/${userId}/activity${as ? `?as=${as}` : ''}`)
 
 export const removePhoto = (): Promise<ApiResult<{ avatarVersion: null }>> =>
   request('DELETE', '/users/me/avatar')

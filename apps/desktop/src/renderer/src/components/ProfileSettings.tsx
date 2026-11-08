@@ -4,6 +4,8 @@ import type {
   BoardTileView,
   ConstellationCard,
   MyGame,
+  MyStatus,
+  MyStatusChoice,
   PhotoType,
   Profile,
   ProfileAudience,
@@ -28,7 +30,9 @@ import {
 import type { ConstellationColor } from '@glofly/shared/constellations'
 import { api } from '../lib/constellations'
 import { headerUrl } from '../lib/media'
-import { PHOTO_TYPES, readPhoto } from '../lib/photoPick'
+import { PHOTO_TYPES, readPhoto, type PickedPhoto } from '../lib/photoPick'
+import PhotoCropper from './PhotoCropper'
+import ProfileCard from './ProfileCard'
 import { ConstellationIcon } from '../constellations/bits'
 import Avatar from './Avatar'
 import { BoardGrid, GameArt } from './ProfileBoard'
@@ -57,15 +61,36 @@ const TILE_NAMES: Record<BoardTile['kind'], string> = {
   playing: 'Currently playing'
 }
 
+type PhotoChange = { kind: 'new'; data: ArrayBuffer; type: PhotoType; preview: string; original: PickedPhoto } | { kind: 'remove' } | null
+
+const STATUS_CHOICES: { id: MyStatusChoice; label: string }[] = [
+  { id: 'online', label: 'Online' },
+  { id: 'away', label: 'Away' },
+  { id: 'dnd', label: 'Do Not Disturb' },
+  { id: 'invisible', label: 'Invisible' }
+]
+const STATUS_TEXT_MAX = 80
+
 export default function ProfileSettings({
   user,
+  status,
   onSaved,
+  onStatusChange,
   onSessionExpired
 }: {
   user: SignedInUser
-  onSaved?: (changes: { displayName: string }) => void
+  /** 0.9.1: Edit profile lives here now (photo and status too) */
+  status?: MyStatus
+  onSaved?: (changes: { displayName: string; avatarVersion: string | null }) => void
+  onStatusChange?: (status: MyStatus) => void
   onSessionExpired: () => void
 }): React.JSX.Element {
+  const [photo, setPhoto] = useState<PhotoChange>(null)
+  const [cropping, setCropping] = useState<PickedPhoto | null>(null)
+  const [statusChoice, setStatusChoice] = useState<MyStatusChoice>(status?.status ?? 'online')
+  const [statusText, setStatusText] = useState(status?.statusText ?? '')
+  const [previewing, setPreviewing] = useState(false)
+  const photoRef = useRef<HTMLInputElement>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [displayName, setDisplayName] = useState(user.displayName)
   const [pronouns, setPronouns] = useState('')
@@ -112,9 +137,12 @@ export default function ProfileSettings({
           ? headerUrl(user.id, profile.header.version)
           : null
 
+  const statusChanged = !!status && (statusChoice !== status.status || statusText.trim() !== (status.statusText ?? ''))
   const dirty =
     !!profile &&
     (header !== null ||
+      photo !== null ||
+      statusChanged ||
       displayName.trim() !== profile.displayName ||
       (pronouns.trim() || null) !== (profile.pronouns ?? null) ||
       (bio.trim() || null) !== (profile.bio ?? null) ||
@@ -150,6 +178,26 @@ export default function ProfileSettings({
       if (r.error === 'unauthorized') onSessionExpired()
       else setError(r.message)
     }
+    let avatarVersion = user.avatarVersion
+    if (photo?.kind === 'new') {
+      const r = await window.glofly.profile.setPhoto(photo.data, photo.type)
+      if (!r.ok) return fail(r)
+      avatarVersion = r.data.avatarVersion
+    } else if (photo?.kind === 'remove') {
+      const r = await window.glofly.profile.removePhoto()
+      if (!r.ok) return fail(r)
+      avatarVersion = null
+    }
+    setPhoto(null)
+    if (status && statusChanged) {
+      const text = statusText.trim()
+      const r = await window.glofly.status.set({
+        ...(statusChoice !== status.status ? { status: statusChoice } : {}),
+        ...(text !== (status.statusText ?? '') ? { statusText: text } : {})
+      })
+      if (!r.ok) return fail(r)
+      onStatusChange?.(r.data)
+    }
     if (header?.kind === 'new') {
       const r = await window.glofly.profile.setHeader(header.data, header.type)
       if (!r.ok) return fail(r)
@@ -173,7 +221,8 @@ export default function ProfileSettings({
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
-    if (r.data.displayName !== user.displayName) onSaved?.({ displayName: r.data.displayName })
+    if (r.data.displayName !== user.displayName || avatarVersion !== user.avatarVersion)
+      onSaved?.({ displayName: r.data.displayName, avatarVersion })
   }
 
   // Dragging the header picture up and down.
@@ -285,6 +334,78 @@ export default function ProfileSettings({
           <input ref={fileRef} type="file" hidden accept={PHOTO_TYPES.join(',')} onChange={(e) => void pick(e)} />
           <span className="ps-hint">PNG, JPG, WebP or GIF (still frame), up to 8 MB. Wide pictures work best (3:1).</span>
         </section>
+
+        <section className="ps-field">
+          <h2 className="ps-h">Profile photo</h2>
+          <div className="ps-photo-row">
+            <button type="button" className="ps-photo" aria-label="Change profile photo" onClick={() => photoRef.current?.click()}>
+              {photo?.kind === 'new' ? (
+                <img src={photo.preview} alt="" draggable={false} />
+              ) : (
+                <Avatar
+                  id={user.id}
+                  name={displayName || user.displayName}
+                  avatarVersion={photo?.kind === 'remove' ? null : user.avatarVersion}
+                  size={72}
+                />
+              )}
+            </button>
+            <div className="ps-buttons">
+              <button type="button" className="ps-quiet" onClick={() => photoRef.current?.click()}>
+                {user.avatarVersion || photo?.kind === 'new' ? 'Change photo' : 'Choose a photo'}
+              </button>
+              {photo?.kind === 'new' && (
+                <button type="button" className="ps-quiet" onClick={() => setCropping(photo.original)}>
+                  Adjust
+                </button>
+              )}
+              {(photo?.kind === 'new' || (user.avatarVersion && photo?.kind !== 'remove')) && (
+                <button type="button" className="ps-quiet" onClick={() => setPhoto(user.avatarVersion ? { kind: 'remove' } : null)}>
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+          <input
+            ref={photoRef}
+            type="file"
+            hidden
+            accept={PHOTO_TYPES.join(',')}
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (!file) return
+              const picked = await readPhoto(file)
+              if ('error' in picked) setError(picked.error)
+              else setCropping(picked)
+            }}
+          />
+        </section>
+
+        {status && (
+          <div className="ps-row">
+            <label className="ps-label ps-status">
+              Status
+              <select className="settings-select" value={statusChoice} onChange={(e) => setStatusChoice(e.target.value as MyStatusChoice)}>
+                {STATUS_CHOICES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="ps-label ps-grow">
+              Status message
+              <input
+                className="ep-input"
+                value={statusText}
+                maxLength={STATUS_TEXT_MAX}
+                placeholder="What are you up to?"
+                onChange={(e) => setStatusText(e.target.value)}
+              />
+            </label>
+          </div>
+        )}
 
         <div className="ps-row">
           <label className="ps-label ps-grow">
@@ -440,13 +561,29 @@ export default function ProfileSettings({
       </div>
 
       <aside className="ps-preview">
-        <h2 className="ps-h">Preview</h2>
+        <div className="ps-preview-head">
+          <h2 className="ps-h">Preview</h2>
+          <button type="button" className="ps-see" onClick={() => setPreviewing(true)}>
+            See how others see it
+          </button>
+        </div>
         <div className="ps-card">
           <div className="ps-card-head">
             {headerSrc && <img src={headerSrc} alt="" draggable={false} style={{ objectPosition: `50% ${focus}%` }} />}
           </div>
           <div className="ps-card-body">
-            <Avatar id={user.id} name={displayName || user.displayName} avatarVersion={user.avatarVersion} size={68} mine ring="var(--glo-surface)" className="ps-card-photo" />
+            {photo?.kind === 'new' ? (
+              <img className="ps-card-photo ps-card-photo--img" src={photo.preview} alt="" draggable={false} />
+            ) : (
+              <Avatar
+                id={user.id}
+                name={displayName || user.displayName}
+                avatarVersion={photo?.kind === 'remove' ? null : user.avatarVersion}
+                size={68}
+                ring="var(--glo-surface)"
+                className="ps-card-photo"
+              />
+            )}
             <div className="ps-card-name">
               <b>{displayName.trim() || user.displayName}</b>
               {pronouns.trim() && <span>{pronouns.trim()}</span>}
@@ -455,7 +592,9 @@ export default function ProfileSettings({
             {previewTiles.length > 0 && <BoardGrid tiles={previewTiles} name={displayName} preview />}
           </div>
         </div>
-        <span className="ps-hint">This is roughly what friends see. Changes save when you press Save.</span>
+        <span className="ps-hint">
+          Roughly what friends see. Changes save when you press Save; “See how others see it” shows what’s saved.
+        </span>
         {error && (
           <p className="dialog-message" role="alert">
             {error}
@@ -466,6 +605,33 @@ export default function ProfileSettings({
         </button>
       </aside>
 
+      {cropping && (
+        <PhotoCropper
+          src={cropping.src}
+          animated={cropping.type === 'image/gif'}
+          onApply={({ data, preview }) => {
+            setPhoto({ kind: 'new', data, type: 'image/webp', preview, original: cropping })
+            setCropping(null)
+          }}
+          onUseWhole={() => {
+            setPhoto({ kind: 'new', data: cropping.data, type: cropping.type, preview: cropping.src, original: cropping })
+            setCropping(null)
+          }}
+          onCancel={() => setCropping(null)}
+        />
+      )}
+      {previewing && (
+        <ProfileCard
+          preview
+          isMe
+          person={{ id: user.id, username: user.username, displayName: user.displayName, avatarVersion: user.avatarVersion }}
+          isFriend={false}
+          onMessage={() => undefined}
+          onBlock={() => undefined}
+          onClose={() => setPreviewing(false)}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
       {adding && (
         <AddTileDialog
           kind={adding.kind}
