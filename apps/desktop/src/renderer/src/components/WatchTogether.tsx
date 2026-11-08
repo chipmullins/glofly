@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { enterFullscreen, exitFullscreen, fullscreenElement, onFullscreenChange } from '../lib/fullscreen'
+import {
+  enterFullscreen,
+  exitFullscreen,
+  fullscreenElement,
+  onFullscreenChange
+} from '../lib/fullscreen'
 import {
   canControlWatch,
   isWatchVideoId,
@@ -204,6 +209,30 @@ export function StartWatchDialog({
           </div>
         )}
 
+        {/* 0.9.3 (board 8): what each site can do */}
+        {!id && (
+          <div className="watch-sites">
+            <span className="watch-sites-label">Works with</span>
+            <ul>
+              {WORKS_WITH.map((w) => (
+                <li key={w.site}>
+                  <span
+                    className="watch-sites-mark"
+                    style={{ background: w.color }}
+                    aria-hidden="true"
+                  >
+                    {w.short}
+                  </span>
+                  <span>
+                    <b>{WATCH_SITE_NAMES[w.site]}</b>
+                    <span>{w.what}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {!changing && (
           <fieldset className="watch-start-control">
             <legend>Who can pause and skip</legend>
@@ -359,6 +388,13 @@ function WatchFireflies({
     </div>
   )
 }
+
+const WORKS_WITH: { site: WatchSite; short: string; color: string; what: string }[] = [
+  { site: 'youtube', short: 'YT', color: '#c4302b', what: 'Videos, fully in sync' },
+  { site: 'twitch', short: 'TW', color: '#6f3fd1', what: 'Live and past broadcasts' },
+  { site: 'kick', short: 'KICK', color: '#1f7a3a', what: 'Live streams (new)' },
+  { site: 'vimeo', short: 'VIM', color: '#1a9bd7', what: 'Videos the owner lets play anywhere' }
+]
 
 /** The little mark beside the title: each site's colours (0.7.1), never its logo. */
 function SiteMark({ site }: { site: WatchSite }): React.JSX.Element {

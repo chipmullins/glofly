@@ -893,3 +893,53 @@
 .watch-note--limited {
   color: #ffd7a6;
 }
+
+/* 0.9.3 (board 8): "Works with" in the Start dialog */
+.watch-sites {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.watch-sites-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.watch-sites ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.watch-sites li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.watch-sites li > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.watch-sites b {
+  font-size: 14px;
+}
+.watch-sites li > span:last-child > span {
+  font-size: 12.5px;
+  color: var(--glo-muted);
+}
+.watch-sites-mark {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font: 800 9px var(--glo-font-display);
+}
