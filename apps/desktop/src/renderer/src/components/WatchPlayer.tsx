@@ -86,6 +86,9 @@ function Player({
   const frame = useRef<HTMLIFrameElement>(null)
   const view = useRef<WebViewElement>(null)
   const viewReady = useRef(false)
+  // Commands for the <webview> made before it can run them (Electron refuses executeJavaScript
+  // until its dom-ready, and the page says "loaded" before that): kept, then sent in order.
+  const viewQueue = useRef<PlayerCommand[]>([])
   const origin = new URL(playerUrl).origin
   const watchRef = useRef(watch)
   const volumeRef = useRef(volume)
@@ -111,15 +114,18 @@ function Player({
     diag: null as PlayerDiag | null
   })
 
+  const runInView = (c: PlayerCommand): void => {
+    // The command is our own plain data, written out as JSON (never text from anyone else).
+    void view.current
+      ?.executeJavaScript(
+        `window.gloflyWatch && window.gloflyWatch(${JSON.stringify({ glofly: 'watch', ...c })})`
+      )
+      .catch(() => undefined)
+  }
   const send = (c: PlayerCommand): void => {
     if (asView) {
-      // The command is our own plain data, written out as JSON (never text from anyone else).
-      if (viewReady.current)
-        void view.current
-          ?.executeJavaScript(
-            `window.gloflyWatch && window.gloflyWatch(${JSON.stringify({ glofly: 'watch', ...c })})`
-          )
-          .catch(() => undefined)
+      if (viewReady.current) runInView(c)
+      else viewQueue.current = [...viewQueue.current.slice(-19), c]
       return
     }
     frame.current?.contentWindow?.postMessage({ glofly: 'watch', ...c }, origin)
@@ -252,12 +258,21 @@ function Player({
       }
       const onReady = (): void => {
         viewReady.current = true
+        const queued = viewQueue.current
+        viewQueue.current = []
+        for (const c of queued) runInView(c)
+      }
+      // A reload of the page itself: hold commands again until it's ready (it says "loaded" again).
+      const onLoading = (): void => {
+        viewReady.current = false
       }
       const onFail = (): void => handle({ glofly: 'watch', ev: 'error', code: 'noload' })
+      el.addEventListener('did-start-loading', onLoading)
       el.addEventListener('ipc-message', onIpc)
       el.addEventListener('dom-ready', onReady)
       el.addEventListener('did-fail-load', onFail)
       return () => {
+        el.removeEventListener('did-start-loading', onLoading)
         el.removeEventListener('ipc-message', onIpc)
         el.removeEventListener('dom-ready', onReady)
         el.removeEventListener('did-fail-load', onFail)

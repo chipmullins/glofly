@@ -46,8 +46,13 @@ export function guardWatchView(window: BrowserWindow): void {
     guest.on('will-redirect', (e, url) => {
       if (!isPlayerPage(url)) e.preventDefault()
     })
+    // Covers navigations the two above miss (in-page and frame-level starts of the main frame).
+    guest.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !isPlayerPage(details.url)) guest.stop()
+    })
     guest.session.setPermissionRequestHandler((_wc, permission, callback) =>
       callback(permission === 'fullscreen')
     )
+    guest.session.setPermissionCheckHandler((_wc, permission) => permission === 'fullscreen')
   })
 }
