@@ -76,6 +76,8 @@ export type ProfileExtras = {
   activityShown?: boolean
   /** Whether their My games is shared with you (0.9.2) */
   gamesShown?: boolean
+  /** 0.9.3: their Steam profile page (they chose to show it; follows who sees My games) */
+  steamUrl?: string
   /** Your own profile only */
   privacy?: ProfilePrivacy
   boardSource?: BoardTile[]

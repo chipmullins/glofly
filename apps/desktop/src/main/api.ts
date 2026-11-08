@@ -139,7 +139,12 @@ const TOOL_PATHS = [
   /^\/conversations\/scheduled$/,
   new RegExp(`^/conversations/${UUID}/(pins|unread|scheduled)$`, 'i'),
   new RegExp(`^/conversations/${UUID}/scheduled/${UUID}(/send)?$`, 'i'),
-  new RegExp(`^/conversations/${UUID}/messages/${UUID}/pin$`, 'i')
+  new RegExp(`^/conversations/${UUID}/messages/${UUID}/pin$`, 'i'),
+  // 0.9.3 Settings → Connections (Steam, Twitch, Kick) and friends' streams.
+  /^\/connections(\/friends-live)?$/,
+  /^\/connections\/(steam|twitch|kick)(\/start)?$/,
+  /^\/connections\/steam\/sync$/,
+  new RegExp(`^/connections/muted-live/${UUID}$`, 'i')
 ]
 export function isToolsRequest(
   method: unknown,

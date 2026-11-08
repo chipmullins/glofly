@@ -10,6 +10,8 @@ import EmojiText, { Emoji } from './EmojiText'
 import FormattedText from './FormattedText'
 import './Forward.css'
 import { GameCard, GifView, LanternTag, LinkPreviewCard, PollCard } from './ChatExtras'
+import LiveAlertCard from '../connections/LiveAlertCard'
+import { liveAlertBody } from '../connections/liveAlertBits'
 import { lanternStyle } from '../lib/lantern'
 import type { FireflyEmoji } from '../../../preload/api-types'
 
@@ -138,7 +140,9 @@ function MentionText({
               key={gi}
               className={mine ? 'mention mention--role mention--me' : 'mention mention--role'}
               style={role ? { color: role.color, background: role.bg } : undefined}
-              title={role ? `Role · ${role.count} ${role.count === 1 ? 'person' : 'people'}` : undefined}
+              title={
+                role ? `Role · ${role.count} ${role.count === 1 ? 'person' : 'people'}` : undefined
+              }
             >
               {g.text}
             </span>
@@ -180,7 +184,17 @@ function ForwardWrap({
   return (
     <div className="message-forward">
       <span className="message-forward-label">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
           <path d="M14 5l7 7-7 7" />
           <path d="M21 12H9a6 6 0 0 0-6 6v1" />
         </svg>
@@ -505,80 +519,89 @@ export default function MessageItem({
         )}
 
         <ForwardWrap forwarded={!m.deleted && !editing ? m.forwarded : undefined}>
-        {editing ? (
-          <EditBox initial={m.body} onSave={onSaveEdit} onCancel={onCancelEdit} />
-        ) : m.deleted ? (
-          <p className="message-body message-body--deleted">
-            {m.lantern ? 'A lantern message faded away.' : 'This message was deleted.'}
-          </p>
-        ) : special || (!m.body && m.attachments.length > 0) ? null : (
-          <p
-            className={jumbo ? `${bodyClass} message-body--jumbo` : bodyClass}
-            title={grouped ? time : undefined}
-          >
-            <FormattedText
-              text={m.body}
-              renderText={(text, key) =>
-                people?.length ? (
-                  <MentionText
-                    key={key}
-                    text={text}
-                    people={people}
-                    meId={meId}
-                    onClick={onMentionClick}
-                    group={groupMentions}
-                    message={m}
-                  />
-                ) : (
-                  <EmojiText key={key} text={text} />
-                )
-              }
+          {editing ? (
+            <EditBox initial={m.body} onSave={onSaveEdit} onCancel={onCancelEdit} />
+          ) : m.deleted ? (
+            <p className="message-body message-body--deleted">
+              {m.lantern ? 'A lantern message faded away.' : 'This message was deleted.'}
+            </p>
+          ) : special || (!m.body && m.attachments.length > 0) ? null : (
+            <p
+              className={jumbo ? `${bodyClass} message-body--jumbo` : bodyClass}
+              title={grouped ? time : undefined}
+            >
+              <FormattedText
+                text={m.liveCard ? liveAlertBody(m.body, m.liveCard) : m.body}
+                renderText={(text, key) =>
+                  people?.length ? (
+                    <MentionText
+                      key={key}
+                      text={text}
+                      people={people}
+                      meId={meId}
+                      onClick={onMentionClick}
+                      group={groupMentions}
+                      message={m}
+                    />
+                  ) : (
+                    <EmojiText key={key} text={text} />
+                  )
+                }
+              />
+              {m.editedAt && (
+                <span
+                  className="message-edited"
+                  title={`Edited ${new Date(m.editedAt).toLocaleString()}`}
+                >
+                  {' '}
+                  (edited)
+                </span>
+              )}
+            </p>
+          )}
+
+          {!m.deleted && !editing && m.gif && <GifView gif={m.gif} />}
+          {!m.deleted && m.poll && (
+            <PollCard
+              message={m}
+              meId={meId}
+              nameOf={nameOf}
+              canAct={canAct}
+              onUpdated={onUpdated}
+              onFailure={onFailure}
             />
-            {m.editedAt && (
-              <span
-                className="message-edited"
-                title={`Edited ${new Date(m.editedAt).toLocaleString()}`}
-              >
-                {' '}
-                (edited)
-              </span>
-            )}
-          </p>
-        )}
+          )}
+          {!m.deleted && m.game && (
+            <GameCard
+              message={m}
+              meId={meId}
+              nameOf={nameOf}
+              canAct={canAct}
+              memberIds={memberIds}
+              onUpdated={onUpdated}
+              onFailure={onFailure}
+            />
+          )}
+          {/* 0.9.3: a constellation's Live alert (its card shows the link preview's picture) */}
+          {!m.deleted && !editing && m.liveCard && (
+            <LiveAlertCard
+              card={m.liveCard}
+              preview={m.linkPreview}
+              conversationId={m.conversationId}
+              messageId={m.id}
+            />
+          )}
+          {!m.deleted && !editing && !m.liveCard && m.linkPreview && (
+            <LinkPreviewCard
+              conversationId={m.conversationId}
+              messageId={m.id}
+              preview={m.linkPreview}
+              canRemove={mine && canAct && !!onRemovePreview}
+              onRemove={() => onRemovePreview?.()}
+            />
+          )}
 
-        {!m.deleted && !editing && m.gif && <GifView gif={m.gif} />}
-        {!m.deleted && m.poll && (
-          <PollCard
-            message={m}
-            meId={meId}
-            nameOf={nameOf}
-            canAct={canAct}
-            onUpdated={onUpdated}
-            onFailure={onFailure}
-          />
-        )}
-        {!m.deleted && m.game && (
-          <GameCard
-            message={m}
-            meId={meId}
-            nameOf={nameOf}
-            canAct={canAct}
-            memberIds={memberIds}
-            onUpdated={onUpdated}
-            onFailure={onFailure}
-          />
-        )}
-        {!m.deleted && !editing && m.linkPreview && (
-          <LinkPreviewCard
-            conversationId={m.conversationId}
-            messageId={m.id}
-            preview={m.linkPreview}
-            canRemove={mine && canAct && !!onRemovePreview}
-            onRemove={() => onRemovePreview?.()}
-          />
-        )}
-
-        {!m.deleted && attachments}
+          {!m.deleted && attachments}
         </ForwardWrap>
         {extra}
 
@@ -675,7 +698,13 @@ export default function MessageItem({
             </button>
           )}
           {onStartThread && !m.deleted && !item.pending && (
-            <button type="button" className="message-thread-button" aria-label="Start a trail" title="Start a trail" onClick={onStartThread}>
+            <button
+              type="button"
+              className="message-thread-button"
+              aria-label="Start a trail"
+              title="Start a trail"
+              onClick={onStartThread}
+            >
               <Icon>
                 <path d="M4 4v9a4 4 0 0 0 4 4h10" />
                 <path d="m14 13 4 4-4 4" />

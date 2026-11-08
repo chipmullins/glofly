@@ -37,6 +37,7 @@ import { BrowserNotificationsRow } from './WebNotifications'
 import './dialogs.css'
 import { AppsIcon, ConnectedAppsSettings } from '../oauth/AppsSettings'
 import { GameServersIcon, GameServersSettings } from '../oauth/GameLinks'
+import { ConnectionsIcon, ConnectionsSettings } from '../connections/ConnectionsSettings'
 import './SettingsDialog.css'
 
 // Settings → App says it the Mac way on a Mac. (A Mac keeps Glofly running in the Dock after
@@ -70,7 +71,7 @@ type SettingsDialogProps = {
   onStatusChange?: (status: MyStatus) => void
 }
 
-export type SettingsPage = 'profile' | 'general' | 'voice' | 'overlay' | 'account' | 'apps' | 'games' | 'about'
+export type SettingsPage = 'profile' | 'general' | 'voice' | 'overlay' | 'account' | 'connections' | 'apps' | 'games' | 'about'
 type Page = SettingsPage
 
 type ToggleKey = 'readReceipts' | 'showLastSeen' | 'showTyping'
@@ -897,6 +898,16 @@ export default function SettingsDialog({
               <AccountIcon active={page === 'account'} />
               Account
             </button>
+            {/* 0.9.3: Steam, Twitch and Kick */}
+            <button
+              type="button"
+              className={page === 'connections' ? 'settings-nav-item settings-nav-item--active' : 'settings-nav-item'}
+              aria-current={page === 'connections' ? 'page' : undefined}
+              onClick={() => openPage('connections')}
+            >
+              <ConnectionsIcon active={page === 'connections'} />
+              Connections
+            </button>
             {/* Communities round (Nov 2026): Sign in with Glofly */}
             <button
               type="button"
@@ -955,6 +966,8 @@ export default function SettingsDialog({
               <OverlaySettings />
             ) : page === 'about' ? (
               <AboutSettings version={appSettings?.version ?? null} />
+            ) : page === 'connections' ? (
+              <ConnectionsSettings />
             ) : page === 'apps' ? (
               <ConnectedAppsSettings />
             ) : page === 'games' ? (

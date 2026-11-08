@@ -116,7 +116,9 @@ function Player({
       // The command is our own plain data, written out as JSON (never text from anyone else).
       if (viewReady.current)
         void view.current
-          ?.executeJavaScript(`window.gloflyWatch && window.gloflyWatch(${JSON.stringify({ glofly: 'watch', ...c })})`)
+          ?.executeJavaScript(
+            `window.gloflyWatch && window.gloflyWatch(${JSON.stringify({ glofly: 'watch', ...c })})`
+          )
           .catch(() => undefined)
       return
     }
@@ -305,6 +307,7 @@ function Player({
           ref={view as React.Ref<HTMLElement>}
           className="watch-player-view"
           src={playerUrl}
+          // eslint-disable-next-line react/no-unknown-property -- Electron's <webview> attribute
           partition="watch-together"
           title={`Shared video: ${watch.title}`}
           tabIndex={-1}

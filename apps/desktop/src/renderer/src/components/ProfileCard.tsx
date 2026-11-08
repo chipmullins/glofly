@@ -27,6 +27,9 @@ import { usePresence } from '../lib/usePresence'
 import { headerUrl } from '../lib/media'
 import { ActivityList, BoardGrid, MutualConstellations, MutualFriends } from './ProfileBoard'
 import { NICKNAME_MAX } from '@glofly/shared/rules'
+import { siteName } from '@glofly/shared/connections'
+import { isStreamPage, useFriendsLive } from '../lib/connections'
+import '../connections/Connections.css'
 
 type Fly = { left: string; top: number; size: 'big' | 'small'; rotate: number }
 type Spark = 'a' | 'b'
@@ -162,7 +165,10 @@ export default function ProfileCard({
   useEffect(() => {
     let cancelled = false
     const load = (): void => {
-      ;(preview ? window.glofly.profile.getMine(viewAs) : window.glofly.profile.get(person.id)).then((result) => {
+      ;(preview
+        ? window.glofly.profile.getMine(viewAs)
+        : window.glofly.profile.get(person.id)
+      ).then((result) => {
         if (cancelled) return
         if (result.ok) {
           setProfile(result.data)
@@ -197,6 +203,7 @@ export default function ProfileCard({
   }, [])
 
   const shown = profile ?? { ...person, bio: null, joinedAt: null, presence: null }
+  const stream = useFriendsLive().get(person.id) ?? null
   const presence = preview
     ? viewAs === 'friend'
       ? (livePresence ?? shown.presence ?? undefined)
@@ -215,15 +222,24 @@ export default function ProfileCard({
   const counts = shown.counts
   const tabs: { id: Tab; label: string }[] = [
     ...(shown.board?.length ? [{ id: 'board' as const, label: 'Board' }] : []),
-    ...(!isMe && counts?.mutualFriends ? [{ id: 'friends' as const, label: `Mutual friends · ${counts.mutualFriends}` }] : []),
+    ...(!isMe && counts?.mutualFriends
+      ? [{ id: 'friends' as const, label: `Mutual friends · ${counts.mutualFriends}` }]
+      : []),
     ...(!isMe && counts?.mutualConstellations
-      ? [{ id: 'constellations' as const, label: `Mutual constellations · ${counts.mutualConstellations}` }]
+      ? [
+          {
+            id: 'constellations' as const,
+            label: `Mutual constellations · ${counts.mutualConstellations}`
+          }
+        ]
       : []),
     ...(shown.activityShown ? [{ id: 'activity' as const, label: 'Activity' }] : [])
   ]
   const [tabChoice, setTab] = useState<Tab | null>(null)
   const tab = tabs.find((t) => t.id === tabChoice)?.id ?? tabs[0]?.id ?? null
-  const header = shown.header ? { url: headerUrl(shown.id, shown.header.version), focus: shown.header.focus } : null
+  const header = shown.header
+    ? { url: headerUrl(shown.id, shown.header.version), focus: shown.header.focus }
+    : null
 
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -235,14 +251,19 @@ export default function ProfileCard({
           role="dialog"
           aria-modal="true"
           aria-label={`${shown.displayName} profile`}
-          className={tabs.length ? 'dialog profile-dialog profile-dialog--wide' : 'dialog profile-dialog'}
+          className={
+            tabs.length ? 'dialog profile-dialog profile-dialog--wide' : 'dialog profile-dialog'
+          }
           tabIndex={-1}
         >
           {preview && (
             <div className="profile-preview-bar">
               <span className="profile-preview-label">
                 <ProfileIcon size={16} />
-                Preview: how {viewAs === 'friend' ? 'a friend sees' : 'anyone else on Glofly sees'} your profile
+                Preview: how {viewAs === 'friend'
+                  ? 'a friend sees'
+                  : 'anyone else on Glofly sees'}{' '}
+                your profile
               </span>
               <span className="profile-preview-switch" role="radiogroup" aria-label="See it as">
                 {(
@@ -251,7 +272,13 @@ export default function ProfileCard({
                     ['everyone', 'Anyone else']
                   ] as const
                 ).map(([v, label]) => (
-                  <button key={v} type="button" role="radio" aria-checked={viewAs === v} onClick={() => setViewAs(v)}>
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={viewAs === v}
+                    onClick={() => setViewAs(v)}
+                  >
                     {label}
                   </button>
                 ))}
@@ -295,22 +322,22 @@ export default function ProfileCard({
               )}
 
               {!preview && (
-              <div className="profile-actions">
-                {isFriend && onRemove && (
-                  <button type="button" className="profile-action" onClick={onRemove}>
-                    <RemoveFriendIcon size={15} strokeWidth={2} />
-                    Remove
+                <div className="profile-actions">
+                  {isFriend && onRemove && (
+                    <button type="button" className="profile-action" onClick={onRemove}>
+                      <RemoveFriendIcon size={15} strokeWidth={2} />
+                      Remove
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="profile-action profile-action--danger"
+                    onClick={onBlock}
+                  >
+                    <BlockIcon size={15} strokeWidth={2} />
+                    Block
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="profile-action profile-action--danger"
-                  onClick={onBlock}
-                >
-                  <BlockIcon size={15} strokeWidth={2} />
-                  Block
-                </button>
-              </div>
+                </div>
               )}
               {onReport && !preview && (
                 <button type="button" className="profile-report" onClick={onReport}>
@@ -319,15 +346,34 @@ export default function ProfileCard({
                 </button>
               )}
 
-              {shown.gamesShown !== false && <button
-                type="button"
-                className="profile-games"
-                aria-expanded={gamesOpen}
-                onClick={() => setGamesOpen((v) => !v)}
-              >
-                <GameIcon size={16} />
-                My games
-              </button>}
+              {shown.gamesShown !== false && (
+                <button
+                  type="button"
+                  className="profile-games"
+                  aria-expanded={gamesOpen}
+                  onClick={() => setGamesOpen((v) => !v)}
+                >
+                  <GameIcon size={16} />
+                  My games
+                </button>
+              )}
+
+              {/* 0.9.3: their Steam page (they chose to show it) */}
+              {!preview &&
+                shown.steamUrl &&
+                /^https:\/\/steamcommunity\.com\//.test(shown.steamUrl) && (
+                  <a
+                    className="profile-games profile-steam"
+                    href={shown.steamUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span className="profile-steam-mark" aria-hidden="true">
+                      S
+                    </span>
+                    Steam profile
+                  </a>
+                )}
 
               {shown.joinedAt && (
                 <div className="profile-joined">
@@ -342,17 +388,39 @@ export default function ProfileCard({
                 <div className="profile-name-row">
                   <h2>{shown.displayName}</h2>
                   {shown.pronouns && <span className="profile-pronouns">{shown.pronouns}</span>}
+                  {stream && !preview && <span className="live-pill">LIVE</span>}
                 </div>
+                {/* 0.9.3 (board 9): live on Twitch or Kick */}
+                {stream && !preview && (
+                  <div className="profile-live">
+                    <span className="profile-live-text">
+                      <b>Live on {siteName(stream.source)}</b>
+                      <span>{[stream.title, stream.game].filter(Boolean).join(' · ')}</span>
+                    </span>
+                    {isStreamPage(stream.url) && (
+                      <a
+                        className="profile-live-open"
+                        href={stream.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Watch on {siteName(stream.source)}
+                      </a>
+                    )}
+                  </div>
+                )}
                 <span>
                   @{shown.username}
                   {shown.realName && <> · their name is {shown.realName}</>}
                 </span>
               </div>
-              {!preview && <NicknameRow
-                userId={person.id}
-                nickname={shown.realName ? shown.displayName : null}
-                placeholder={shown.realName ?? shown.displayName}
-              />}
+              {!preview && (
+                <NicknameRow
+                  userId={person.id}
+                  nickname={shown.realName ? shown.displayName : null}
+                  placeholder={shown.realName ?? shown.displayName}
+                />
+              )}
 
               {game && (
                 <div className="profile-playing">
@@ -450,7 +518,8 @@ export default function ProfileCard({
                       // Arrow keys move between tabs (the usual tab list keys).
                       if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
                       const i = tabs.findIndex((t) => t.id === tab)
-                      const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]
+                      const next =
+                        tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]
                       setTab(next.id)
                       document.getElementById(`pt-${next.id}`)?.focus()
                       e.preventDefault()
@@ -473,26 +542,32 @@ export default function ProfileCard({
                     ))}
                   </div>
                   <SteadyPanel resetKey={`${person.id}:${preview ? viewAs : ''}`}>
-                  <div role="tabpanel" id="pt-panel" aria-labelledby={`pt-${tab}`} className="pb-panel" key={tab}>
-                    {tab === 'board' && shown.board ? (
-                      <BoardGrid
-                        tiles={shown.board}
-                        name={shown.displayName}
-                        onOpenConstellation={onOpenConstellation}
-                        onAllGames={() => setGamesOpen(true)}
-                      />
-                    ) : tab === 'friends' ? (
-                      <MutualFriends userId={person.id} onViewPerson={(p) => onViewPerson?.(p)} />
-                    ) : tab === 'constellations' ? (
-                      <MutualConstellations
-                        userId={person.id}
-                        name={shown.displayName}
-                        onOpenConstellation={onOpenConstellation}
-                      />
-                    ) : tab === 'activity' ? (
-                      <ActivityList userId={person.id} as={preview ? viewAs : undefined} />
-                    ) : null}
-                  </div>
+                    <div
+                      role="tabpanel"
+                      id="pt-panel"
+                      aria-labelledby={`pt-${tab}`}
+                      className="pb-panel"
+                      key={tab}
+                    >
+                      {tab === 'board' && shown.board ? (
+                        <BoardGrid
+                          tiles={shown.board}
+                          name={shown.displayName}
+                          onOpenConstellation={onOpenConstellation}
+                          onAllGames={() => setGamesOpen(true)}
+                        />
+                      ) : tab === 'friends' ? (
+                        <MutualFriends userId={person.id} onViewPerson={(p) => onViewPerson?.(p)} />
+                      ) : tab === 'constellations' ? (
+                        <MutualConstellations
+                          userId={person.id}
+                          name={shown.displayName}
+                          onOpenConstellation={onOpenConstellation}
+                        />
+                      ) : tab === 'activity' ? (
+                        <ActivityList userId={person.id} as={preview ? viewAs : undefined} />
+                      ) : null}
+                    </div>
                   </SteadyPanel>
                 </div>
               )}
@@ -621,14 +696,21 @@ function NicknameRow({
  * far), so switching between Board, Mutual friends and Activity doesn't make the card jump. It can
  * still grow, gently, when a longer tab is opened.
  */
-function SteadyPanel({ children, resetKey }: { children: React.ReactNode; resetKey: string }): React.JSX.Element {
+function SteadyPanel({
+  children,
+  resetKey
+}: {
+  children: React.ReactNode
+  resetKey: string
+}): React.JSX.Element {
   const inner = useRef<HTMLDivElement>(null)
   const [min, setMin] = useState(0)
   useEffect(() => setMin(0), [resetKey])
   useLayoutEffect(() => {
     const el = inner.current
     if (!el) return
-    const note = (): void => setMin((m) => Math.max(m, Math.ceil(el.getBoundingClientRect().height)))
+    const note = (): void =>
+      setMin((m) => Math.max(m, Math.ceil(el.getBoundingClientRect().height)))
     note()
     const ro = new ResizeObserver(note)
     ro.observe(el)

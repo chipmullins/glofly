@@ -105,11 +105,20 @@ export default function MyGamesPanel({
 
   const row = (g: MyGame): React.JSX.Element => (
     <li key={g.key} className={g.hidden ? 'mg-game mg-game--hidden' : 'mg-game'}>
-      <GameTile name={g.name} cover={g.cover} />
+      <span className="mg-tile-wrap">
+        <GameTile name={g.name} cover={g.cover} />
+        {/* 0.9.3: Steam counted this game's time (board 7) */}
+        {g.steam && (
+          <span className="mg-steam" title="Playtime from Steam">
+            STEAM
+          </span>
+        )}
+      </span>
       <span className="mg-game-text">
         <strong>{g.name}</strong>
         <span>
           {playtimeLabel(g.seconds)} · last played {relativeDay(g.lastPlayedAt)}
+          {g.steam ? ' · Steam' : ''}
           {g.hidden ? ' · hidden' : ''}
         </span>
       </span>

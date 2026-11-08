@@ -1,0 +1,87 @@
+/* 0.9.3 Constellation settings → Live alerts (board 4) */
+.la {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.la-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.la-top .ix-text {
+  flex: 1;
+  font-size: 15px;
+}
+.la-card {
+  align-items: center;
+}
+.la-badge {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font: 800 13px var(--glo-font-display);
+}
+.la-badge--members {
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+  font-size: 18px;
+}
+.la-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.la-card-main b {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.la-card-where {
+  flex: none;
+  max-width: 34%;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.la-card-where b {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.la-sites {
+  display: flex;
+  gap: 8px;
+}
+.la-site {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.la-site--on {
+  border-color: var(--glo-accent);
+  background: var(--glo-accent-tint);
+}
+.la-site:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.la-site:focus-visible {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 2px;
+}

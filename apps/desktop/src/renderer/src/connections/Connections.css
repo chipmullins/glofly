@@ -1,0 +1,348 @@
+/* 0.9.3 Settings → Connections (boards 6 and 8) and the LIVE bits around the app. */
+.cn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cn h2 {
+  margin: 0 0 4px;
+}
+.cn-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-family: var(--glo-font-display);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.cn-card {
+  padding: 4px 0;
+}
+.cn-account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+}
+.cn-account + .cn-account {
+  border-top: 1px solid var(--glo-line-soft);
+}
+.cn-account--pad {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--glo-line-soft);
+}
+.cn-account-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cn-account-text > b {
+  font-size: 15.5px;
+  overflow-wrap: anywhere;
+}
+.cn-live-now {
+  color: var(--glo-good-text);
+}
+.cn-subhead {
+  margin: 14px 18px 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-weight: 700;
+}
+.cn-segment {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cn-seg {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cn-seg--on {
+  border-color: var(--glo-accent);
+  background: var(--glo-accent-tint);
+}
+.cn-seg:focus-visible {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 2px;
+}
+.cn-choose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cn-search {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+}
+.cn-friends {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+}
+.cn-friend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.cn-friend:hover {
+  background: var(--glo-subtle);
+}
+.cn-friend input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--glo-accent);
+}
+.cn-friend-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.cn-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--glo-subtle);
+  border: 1px solid var(--glo-line);
+  color: var(--glo-ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.cn-note svg {
+  flex: none;
+  color: var(--glo-link);
+  margin-top: 1px;
+}
+.cn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cn-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--glo-muted);
+}
+.cn-unlinked {
+  align-items: center;
+}
+
+/* LIVE: the red pill in friends lists and on profiles */
+.live-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: #c42b1c;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+/* "Chip went live on Kick" (board 9): the dark card at the bottom, like the call toasts */
+.live-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 71;
+  width: min(640px, calc(100vw - 48px));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 12px 14px 16px;
+  border-radius: 16px;
+  background: #1c1210;
+  color: #f5ede6;
+  box-shadow: 0 16px 40px rgba(var(--glo-shadow-rgb), 0.35);
+  animation: call-toast-in 0.2s ease-out;
+}
+.live-toast-face {
+  position: relative;
+  flex: none;
+  /* room for the site tag, so nothing is cut off */
+  padding: 0 6px 4px 0;
+}
+.live-toast-site {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  box-shadow: 0 0 0 2px #1c1210;
+}
+.live-toast-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.live-toast-text b {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-toast-text span {
+  font-size: 13px;
+  color: #d9c2b1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-toast-btn {
+  flex: none;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid #3a2a22;
+  background: #2a1c17;
+  color: #f5ede6;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.live-toast-btn:hover {
+  background: #36251e;
+}
+.live-toast-btn--main {
+  border-color: var(--glo-accent);
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+}
+.live-toast-btn--main:hover {
+  background: var(--glo-accent-deep);
+}
+.live-toast-btn:focus-visible,
+.live-toast-close:focus-visible {
+  outline: 2px solid #f5ede6;
+  outline-offset: 2px;
+}
+.live-toast-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: #d9c2b1;
+  font-size: 20px;
+  cursor: pointer;
+}
+@media (max-width: 720px) {
+  .live-toast {
+    flex-wrap: wrap;
+  }
+  .live-toast-text {
+    flex-basis: calc(100% - 120px);
+  }
+}
+.dm-live {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+/* Profile card (board 9): live on Twitch or Kick, and the Steam profile link */
+.profile-live {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--glo-subtle);
+  border: 1px solid var(--glo-line);
+  min-width: 0;
+}
+.profile-live-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.profile-live-text b {
+  font-size: 14px;
+}
+.profile-live-text span {
+  font-size: 13px;
+  color: var(--glo-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-live-open {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.profile-live-open:hover {
+  background: var(--glo-accent-deep);
+}
+.profile-steam {
+  text-decoration: none;
+  margin-top: 8px;
+}
+.profile-steam-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: #1b2838;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 800;
+}

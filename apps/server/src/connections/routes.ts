@@ -121,7 +121,9 @@ connectionsRouter.get("/", requireAuth, async (_req, res) => {
 
 // Friends live on Twitch or Kick right now (the LIVE badges when an app starts or reconnects).
 connectionsRouter.get("/friends-live", requireAuth, async (_req, res) => {
-  res.json({ streams: await friendStreamsFor(me(res).id) });
+  const myId = me(res).id;
+  const [row] = await db.select({ muted: users.mutedLiveAlerts }).from(users).where(eq(users.id, myId));
+  res.json({ streams: await friendStreamsFor(myId), mutedLive: row?.muted ?? [] });
 });
 
 connectionsRouter.post("/:provider/start", requireAuth, startLimiter, async (req, res) => {

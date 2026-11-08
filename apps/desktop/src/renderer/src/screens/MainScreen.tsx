@@ -1,4 +1,5 @@
 import { shortBody } from '@glofly/shared/gifs'
+import { siteName } from '@glofly/shared/connections'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ApiResult,
@@ -58,6 +59,8 @@ import {
 import StatusDot from '../components/StatusDot'
 import StatusMenu from '../components/StatusMenu'
 import SettingsDialog, { type SettingsPage } from '../components/SettingsDialog'
+import FriendLiveAlerts from '../connections/FriendLiveAlerts'
+import { liveAlertsMuted, setLiveAlertsMuted, useFriendsLive } from '../lib/connections'
 import GameNotice from '../components/GameNotice'
 import SearchPanel from '../components/SearchPanel'
 import '../components/dialogs.css'
@@ -88,7 +91,7 @@ import ConfirmEmailBar from '../components/ConfirmEmailBar'
 import { WebNotifyBar } from '../components/WebNotifications'
 import type { CallsValue } from '../calls/callState'
 import { CallFloat, CallStrip } from '../components/CallPanel'
-import { ChevronIcon, GameIcon, PhoneIcon, VideoIcon } from '../components/icons'
+import { BellOffIcon, ChevronIcon, GameIcon, PhoneIcon, VideoIcon } from '../components/icons'
 import { isMac, isShortcutKey, isWeb, shortcutLabel } from '../lib/platform'
 import { useSocial, useSocialSync } from '../lib/social'
 import { HangToast, SocialActions, SocialStrip, YearInGlowDialog } from '../components/Social'
@@ -294,6 +297,9 @@ function FriendRow({
   const close = useCallback(() => setOpen(false), [])
   const wrapRef = useClickOutside(open, close)
   const game = playing(person.presence)
+  // 0.9.3: live on Twitch or Kick (board 9: the red LIVE pill and the stream's title)
+  const stream = useFriendsLive().get(person.id) ?? null
+  const mutedLive = liveAlertsMuted(person.id)
 
   return (
     // Clicking anywhere on the row opens the chat (the Message button does the same from the
@@ -321,8 +327,17 @@ function FriendRow({
         <div className="friend-names">
           <span className="friend-name">{person.displayName}</span>
           <span className="friend-user">@{person.username}</span>
+          {stream && (
+            <span className="live-pill" title={`Live on ${siteName(stream.source)}`}>
+              LIVE
+            </span>
+          )}
         </div>
-        {game ? (
+        {stream ? (
+          <span className="friend-sub" title={`Live on ${siteName(stream.source)}${stream.title ? `: ${stream.title}` : ''}`}>
+            <EmojiText text={stream.title || `Live on ${siteName(stream.source)}`} />
+          </span>
+        ) : game ? (
           <span className="friend-sub friend-sub--playing" title={activityLine(game, now)}>
             <GameIcon size={14} />
             <span>{activityLine(game, now)}</span>
@@ -391,6 +406,21 @@ function FriendRow({
               <VideoIcon size={18} />
               Video call
             </button>
+            {/* 0.9.3: only for friends who linked a stream (or were muted before) */}
+            {(stream || mutedLive) && (
+              <button
+                type="button"
+                role="menuitem"
+                className="menu-item"
+                onClick={() => {
+                  close()
+                  void setLiveAlertsMuted(person.id, !mutedLive)
+                }}
+              >
+                <BellOffIcon />
+                {mutedLive ? `Unmute ${person.displayName}'s live alerts` : `Mute ${person.displayName}'s live alerts`}
+              </button>
+            )}
             <div className="menu-divider" role="separator" />
             <button
               type="button"
@@ -2634,6 +2664,8 @@ export default function MainScreen({
             }}
           />
         )}
+        {/* 0.9.3: a friend went live on Twitch or Kick (board 9) */}
+        <FriendLiveAlerts friends={lists?.friends ?? []} />
         {toast && (
           <div className="call-toast" role="status">
             {toast}

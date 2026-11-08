@@ -1,0 +1,116 @@
+/* 0.9.3 a Live alert in a nebula (board 5) */
+.lac {
+  margin-top: 6px;
+  max-width: 560px;
+  border-radius: 16px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+  overflow: hidden;
+}
+.lac-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 0;
+}
+.lac-site {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font: 800 9px var(--glo-font-display);
+}
+.lac-channel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lac-picture {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-height: 260px;
+  width: 100%;
+  background: #1c1210;
+  overflow: hidden;
+}
+.lac-picture img,
+.lac-glow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.lac-tag {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #c42b1c;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.lac-body {
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.lac-title {
+  font-size: 16px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.lac-facts {
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.lac-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.lac-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.lac-btn:hover {
+  background: var(--glo-subtle);
+}
+.lac-btn--main {
+  border-color: var(--glo-accent);
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+}
+.lac-btn--main:hover {
+  background: var(--glo-accent-deep);
+}
+.lac-btn:focus-visible {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 2px;
+}

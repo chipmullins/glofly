@@ -46,6 +46,8 @@ export function guardWatchView(window: BrowserWindow): void {
     guest.on('will-redirect', (e, url) => {
       if (!isPlayerPage(url)) e.preventDefault()
     })
-    guest.session.setPermissionRequestHandler((_wc, permission, callback) => callback(permission === 'fullscreen'))
+    guest.session.setPermissionRequestHandler((_wc, permission, callback) =>
+      callback(permission === 'fullscreen')
+    )
   })
 }

@@ -135,14 +135,23 @@ export async function channelWentOffline(site: StreamSite, channelId: string): P
 async function tellFriends(userId: string, site: StreamSite, live: StreamLive, settings: ReturnType<typeof connectionSettingsOf>): Promise<void> {
   emitToUser(userId, "connections:changed", {}, true);
   const friends = await friendIdsOf(userId);
-  const [who] = await db.select({ id: users.id, displayName: users.displayName, avatarVersion: users.avatarVersion }).from(users).where(eq(users.id, userId));
+  const [who] = await db
+    .select({ id: users.id, displayName: users.displayName, avatarVersion: users.avatarVersion, headerVersion: users.headerVersion })
+    .from(users)
+    .where(eq(users.id, userId));
   if (!who) return;
   const stream: FriendStream = { userId, source: site, title: live.title, game: live.game, url: live.url, startedAt: live.startedAt };
   const told =
     settings.tellFriends === "off" ? [] : settings.tellFriends === "chosen" ? friends.filter((f) => settings.chosen.includes(f)) : friends;
   for (const id of friends) {
     // Everyone who may see the LIVE badge gets the state; only those told get the alert.
-    if (settings.showLive || told.includes(id)) emitToUser(id, "friend:live", { userId, source: site, live: settings.showLive ? stream : null, alert: told.includes(id) }, true);
+    if (settings.showLive || told.includes(id)) emitToUser(
+        id,
+        "friend:live",
+        // The header picture goes across the top of the Windows notification (no game art).
+        { userId, source: site, live: settings.showLive || told.includes(id) ? stream : null, alert: told.includes(id), showLive: settings.showLive, headerVersion: who.headerVersion ?? null },
+        true,
+      );
   }
   for (const id of told) {
     const muted = await alertsMuted(id, userId);

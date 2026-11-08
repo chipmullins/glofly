@@ -12,6 +12,8 @@ import { useSocial } from '../lib/social'
 import { BirthdayMark, GlowMark } from './Social'
 import { joinedCount, useCalls } from '../calls/callState'
 import { onMobile, playing, presenceLine } from '../lib/presence'
+import { useFriendsLive } from '../lib/connections'
+import '../connections/Connections.css'
 import Avatar from './Avatar'
 import EmojiText from './EmojiText'
 import GroupAvatar from './GroupAvatar'
@@ -151,6 +153,7 @@ function DmRow({
   const title = chatTitle(c)
   const ring = active ? 'var(--glo-accent-soft)' : 'var(--glo-sidebar)'
   const muted = isMuted(c, now)
+  const streams = useFriendsLive()
   return (
     <div
       className={[
@@ -206,6 +209,15 @@ function DmRow({
             )}
             {c.kind === 'dm' && social.birthdays.includes(c.partner.id) && (
               <BirthdayMark name={c.partner.displayName} />
+            )}
+            {/* 0.9.3: live on Twitch or Kick */}
+            {c.kind === 'dm' && streams.has(c.partner.id) && (
+              <span
+                className="live-pill dm-live"
+                title={`Live: ${streams.get(c.partner.id)!.title}`}
+              >
+                LIVE
+              </span>
             )}
           </span>
           <span

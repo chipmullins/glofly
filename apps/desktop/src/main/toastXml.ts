@@ -23,7 +23,8 @@ export const TOAST_BUTTONS: readonly ToastButtonId[] = [
   'watch',
   'open',
   'not-now',
-  'join-voice'
+  'join-voice',
+  'mute-live'
 ]
 
 /** What Windows hands back for a press: which notification, which button (none = the toast). */

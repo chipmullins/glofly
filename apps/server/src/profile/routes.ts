@@ -16,6 +16,7 @@ import {
   storedBoard,
 } from "./board";
 import { gamesSharedAs, gamesSharedWith } from "../games/routes";
+import { steamLinkOf } from "../connections/steam";
 import { isRestricted } from "../friends/rules";
 import { coversFor } from "../games/igdb";
 import type { BoardTile } from "@glofly/shared";
@@ -183,6 +184,8 @@ async function extrasOf(
     counts: mutualsShown ? await mutualCounts(viewerId, row.id) : { mutualFriends: 0, mutualConstellations: 0 },
     activityShown: shows(privacy.activity, rel),
     gamesShown: gamesShared,
+    // 0.9.3: "Show my Steam profile link on my profile" (who sees it follows My games)
+    ...(gamesShared ? await steamLinkOf(row.id) : {}),
     ...(rel.self ? { privacy, boardSource: await withCovers(tiles) } : {}),
   };
 }

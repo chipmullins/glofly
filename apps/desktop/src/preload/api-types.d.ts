@@ -182,6 +182,8 @@ export type ToastButtonId =
   | 'open'
   | 'not-now'
   | 'join-voice'
+  /** 0.9.3: "Mute Chip's live alerts" */
+  | 'mute-live'
 
 export type ToastButton = { id: ToastButtonId; label: string; style?: 'success' | 'critical' }
 

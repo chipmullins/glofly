@@ -107,3 +107,14 @@ export async function steamInMyGames(userId: string): Promise<boolean> {
     .where(and(eq(linkedAccounts.userId, userId), eq(linkedAccounts.provider, "steam")));
   return !!row && connectionSettingsOf(row.settings).myGames;
 }
+
+/** Their Steam profile page for their Glofly profile, when they chose to show it. */
+export async function steamLinkOf(userId: string): Promise<{ steamUrl?: string }> {
+  const [row] = await db
+    .select({ settings: linkedAccounts.settings, profileUrl: linkedAccounts.profileUrl })
+    .from(linkedAccounts)
+    .where(and(eq(linkedAccounts.userId, userId), eq(linkedAccounts.provider, "steam")));
+  if (!row || !connectionSettingsOf(row.settings).showLink) return {};
+  const url = row.profileUrl ?? "";
+  return /^https:\/\/steamcommunity\.com\/(id|profiles)\/[A-Za-z0-9_-]{2,64}\/?$/.test(url) ? { steamUrl: url } : {};
+}

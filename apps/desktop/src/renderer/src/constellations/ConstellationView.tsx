@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  setVoiceNebulaNames,
+  WATCH_TOGETHER_EVENT,
+  type WatchTogetherDetail
+} from '../connections/liveAlertBits'
 import EmptyScene from '../components/EmptyScene'
 import {
   CONSTELLATION_THEME,
@@ -224,6 +229,7 @@ export type SettingsPageName =
   | 'moderation'
   | 'automod'
   | 'integrations'
+  | 'liveAlerts'
   | 'onboarding'
   | 'delete'
 
@@ -575,6 +581,59 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     })
     if (show) props.onSelectNebula(n.id)
   }
+
+  // 0.9.3 Live alerts: the cards say "Watch together in <voice nebula>" with this constellation's
+  // voice nebulas' names, and pressing it joins that nebula and starts the stream there.
+  useEffect(() => {
+    setVoiceNebulaNames(
+      new Map(c.nebulas.filter((n) => n.kind === 'voice').map((n) => [n.id, n.name]))
+    )
+  }, [c.nebulas])
+  const pendingWatch = useRef<{ url: string; nebulaId: string; at: number } | null>(null)
+  const startWatchIn = useCallback(
+    async (callId: string, url: string): Promise<void> => {
+      const r = await window.glofly.watch.start(callId, url, 'everyone')
+      if (!r.ok) props.onProblem(r.message)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+  useEffect(() => {
+    const onWatch = (e: Event): void => {
+      const d = (e as CustomEvent<WatchTogetherDetail>).detail
+      if (!d || typeof d.url !== 'string') return
+      const cur = calls.current
+      const connectedId = cur && cur.phase === 'connected' && cur.call ? cur.call.id : null
+      const target = d.watchNebulaId
+        ? c.nebulas.find((n) => n.id === d.watchNebulaId && n.kind === 'voice')
+        : undefined
+      // Already in that voice nebula (or no nebula asked for and in a call): play it now.
+      if (
+        connectedId &&
+        (!target || (cur?.chat.kind === 'nebula' && cur.chat.nebula?.nebulaId === target.id))
+      ) {
+        void startWatchIn(connectedId, d.url)
+        return
+      }
+      if (!target) {
+        props.onProblem('Join a voice nebula first, then press Watch together.')
+        return
+      }
+      pendingWatch.current = { url: d.url, nebulaId: target.id, at: Date.now() }
+      joinVoice(target)
+    }
+    window.addEventListener(WATCH_TOGETHER_EVENT, onWatch)
+    return () => window.removeEventListener(WATCH_TOGETHER_EVENT, onWatch)
+  })
+  // Joined the voice nebula: start the stream there (within a minute of asking).
+  useEffect(() => {
+    const p = pendingWatch.current
+    const cur = calls.current
+    if (!p || !cur || cur.phase !== 'connected' || !cur.call) return
+    if (cur.chat.kind !== 'nebula' || cur.chat.nebula?.nebulaId !== p.nebulaId) return
+    pendingWatch.current = null
+    if (Date.now() - p.at < 60_000) void startWatchIn(cur.call.id, p.url)
+  }, [calls.current?.phase, calls.current?.call?.id, startWatchIn])
 
   // The chat of the open nebula, as the chat screen expects it.
   const chatNebula = nebula && (nebula.kind !== 'voice' || voiceChatOpen) ? nebula : null
@@ -2029,19 +2088,21 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         />
       )}
       {/* 4.3: the questions, right after the welcome screen (board 26) */}
-      {!(needsWelcome(c) && welcomeShownFor !== c.id) && (needsOnboarding(c) || summaryFor === c.id) && onboardedFor !== c.id && (
-        <OnboardingFlow
-          c={c}
-          // The answers are saved before "Your …" shows: keep it up through the reload that follows.
-          onSaved={() => setSummaryFor(c.id)}
-          onDone={(next) => {
-            setOnboardedFor(c.id)
-            setSummaryFor(null)
-            if (next) props.onChanged(next)
-          }}
-          onProblem={props.onProblem}
-        />
-      )}
+      {!(needsWelcome(c) && welcomeShownFor !== c.id) &&
+        (needsOnboarding(c) || summaryFor === c.id) &&
+        onboardedFor !== c.id && (
+          <OnboardingFlow
+            c={c}
+            // The answers are saved before "Your …" shows: keep it up through the reload that follows.
+            onSaved={() => setSummaryFor(c.id)}
+            onDone={(next) => {
+              setOnboardedFor(c.id)
+              setSummaryFor(null)
+              if (next) props.onChanged(next)
+            }}
+            onProblem={props.onProblem}
+          />
+        )}
       {answersOpen && (
         <YourAnswersDialog
           c={c}
@@ -2319,7 +2380,14 @@ function NotifyButton({
                     onMute(m.duration)
                   }}
                 >
-                  {{ '1h': '1 hour', '8h': '8 hours', '24h': '24 hours', forever: 'until I turn it on' }[m.duration]}
+                  {
+                    {
+                      '1h': '1 hour',
+                      '8h': '8 hours',
+                      '24h': '24 hours',
+                      forever: 'until I turn it on'
+                    }[m.duration]
+                  }
                 </button>
               </span>
             ))}

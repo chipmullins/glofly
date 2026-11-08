@@ -42,6 +42,7 @@ import type {
 import { AvatarFace } from '../components/Avatar'
 import { colorsFor } from '../lib/avatarColors'
 import { api, can, outranks, topRole } from '../lib/constellations'
+import LiveAlertsPage from './LiveAlertsPage'
 import { CloseIcon, ConstellationIcon } from './bits'
 import IdentitySettings from './SettingsIdentity'
 import { TagInput, VisibilityChoices } from './CreateJoin'
@@ -220,7 +221,9 @@ export default function ConstellationSettings({
     // Communities round 4.3: questions new members answer (board 25).
     { id: 'onboarding', name: 'Onboarding', show: can(c, 'manageConstellation') && can(c, 'manageNebulas') },
     // Communities round (Nov 2026): API keys, webhooks, bots (Owner / Edit constellation settings).
-    { id: 'integrations', name: 'Integrations', show: can(c, 'manageConstellation') }
+    { id: 'integrations', name: 'Integrations', show: can(c, 'manageConstellation') },
+    // 0.9.3: Twitch, Kick and YouTube alerts (board 4).
+    { id: 'liveAlerts', name: 'Live alerts', show: can(c, 'manageConstellation') }
   ]
   const title =
     page === 'delete' ? 'Delete constellation' : (pages.find((p) => p.id === page)?.name ?? '')
@@ -264,7 +267,7 @@ export default function ConstellationSettings({
                 onClick={() => setPage(p.id)}
               >
                 {p.name}
-                {p.id === 'integrations' && <span className="cx-settings-new">NEW</span>}
+                {p.id === 'liveAlerts' && <span className="cx-settings-new">NEW</span>}
                 {p.id === 'members' && c.pendingRequests > 0 && (
                   <span className="cx-settings-count">{c.pendingRequests}</span>
                 )}
@@ -327,6 +330,7 @@ export default function ConstellationSettings({
           {page === 'automod' && <AutoModPage c={c} meId={me.id} onProblem={onProblem} />}
           {page === 'moderation' && <ModerationPage c={c} me={me} />}
           {page === 'integrations' && <IntegrationsPage c={c} onProblem={onProblem} />}
+          {page === 'liveAlerts' && <LiveAlertsPage c={c} onProblem={onProblem} />}
           {page === 'onboarding' && <OnboardingSetup c={c} onChanged={onChanged} onProblem={onProblem} />}
           {page === 'delete' && <DeletePage c={c} onDeleted={onDeleted} />}
         </div>

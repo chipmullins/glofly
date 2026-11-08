@@ -940,6 +940,9 @@ export const CONSTELLATION_EVENT_NAMES = [
   'thread:message',
   'thread:updated',
   'thread:deleted',
+  // 0.9.3 Connections: Steam/Twitch/Kick linked or changed; a friend live on Twitch or Kick
+  'connections:changed',
+  'friend:live',
 ] as const
 
 /** A thread summary from the server, checked (null if it doesn't look right). */
@@ -975,6 +978,36 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
       return { type: 'constellations:changed' }
     case 'games:changed':
       return { type: 'games:changed' }
+    case 'connections:changed':
+      return { type: 'connections:changed' }
+    case 'friend:live': {
+      const source: 'twitch' | 'kick' | null = p.source === 'twitch' || p.source === 'kick' ? p.source : null
+      if (!str(p.userId) || !source) return null
+      const l = (p.live ?? null) as Record<string, unknown> | null
+      const url = l && typeof l.url === 'string' ? l.url : ''
+      // Only the stream's own page on that site (never any other link).
+      const okUrl = source === 'twitch' ? /^https:\/\/www\.twitch\.tv\/[a-z0-9_]{2,25}$/.test(url) : /^https:\/\/kick\.com\/[a-z0-9_-]{2,40}$/.test(url)
+      const live =
+        l && okUrl
+          ? {
+              userId: p.userId,
+              source,
+              title: text(l.title, 140),
+              game: typeof l.game === 'string' ? text(l.game, 80) : null,
+              url,
+              startedAt: text(l.startedAt, 40),
+            }
+          : null
+      return {
+        type: 'friend:live',
+        userId: p.userId,
+        source,
+        live,
+        alert: p.alert === true && !!live,
+        showLive: p.showLive !== false,
+        headerVersion: typeof p.headerVersion === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(p.headerVersion) ? p.headerVersion : null,
+      }
+    }
     case 'constellation:updated':
       return str(p.constellationId) ? { type: 'constellation:updated', constellationId: p.constellationId } : null
     case 'constellation:removed': {

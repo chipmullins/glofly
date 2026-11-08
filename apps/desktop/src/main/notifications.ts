@@ -163,12 +163,13 @@ async function runAction(key: string, conversationId: string | null, action: Toa
     }
     return
   }
-  if (action === 'open') {
+  // A friend's stream (key "live:…"): the window opens the stream's page, so it goes there.
+  if (action === 'open' && !key.startsWith('live:')) {
     showWindow()
     return
   }
   // Answering, joining, watching and opening need Glofly in front; declining doesn't.
-  if (action !== 'decline' && action !== 'not-now' && action !== 'accept') showWindow()
+  if (action !== 'decline' && action !== 'not-now' && action !== 'accept' && action !== 'mute-live' && !(action === 'open' && key.startsWith('live:'))) showWindow()
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send('glofly:event', { type: 'notification:action', key, action, conversationId })
   }

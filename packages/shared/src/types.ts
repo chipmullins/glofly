@@ -607,6 +607,20 @@ export type ServerEvent =
   | { type: 'constellation:invited'; invite: import('./constellations').InvitePopup }
   /** My games changed (on another device) */
   | { type: 'games:changed' }
+  /** 0.9.3: my Settings → Connections changed (linked on the website, synced, live) */
+  | { type: 'connections:changed' }
+  /** 0.9.3: a friend went live on Twitch or Kick (`live` null: stopped). `alert`: tell me (toast, notification) */
+  | {
+      type: 'friend:live'
+      userId: string
+      source: import('./connections').StreamSite
+      live: import('./connections').FriendStream | null
+      alert: boolean
+      /** false: tell me, but no LIVE badge (they turned "Show LIVE" off) */
+      showLive?: boolean
+      /** Their profile header's version (the picture for the notification), if they have one */
+      headerVersion?: string | null
+    }
   /** 0.8.0: an event in a constellation changed, starts in 15 minutes, or just started */
   | {
       type: 'constellation:event'
