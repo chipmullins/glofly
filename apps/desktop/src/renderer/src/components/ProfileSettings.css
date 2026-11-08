@@ -1,0 +1,448 @@
+/* Settings → Profile (0.9.1) */
+.ps {
+  display: flex;
+  gap: 26px;
+  align-items: flex-start;
+}
+.ps-form {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ps-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ps-h {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.ps-hint {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--glo-muted);
+  font-weight: 500;
+}
+.ps-header {
+  position: relative;
+  height: 120px;
+  border-radius: 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(2px 2px at 20% 30%, #ffd59a, transparent),
+    radial-gradient(2px 2px at 70% 60%, #ffd59a, transparent),
+    radial-gradient(1.5px 1.5px at 45% 20%, #fff, transparent),
+    linear-gradient(160deg, #2a1a33 0%, #1c1210 100%);
+  user-select: none;
+}
+.ps-header--photo {
+  cursor: grab;
+  touch-action: none;
+}
+.ps-header--photo:active {
+  cursor: grabbing;
+}
+.ps-header--photo:focus-visible {
+  outline: 2px solid var(--glo-orange);
+  outline-offset: 2px;
+}
+.ps-header img,
+.ps-card-head img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.ps-header-tip {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(28, 18, 16, 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ps-buttons,
+.ps-add-buttons {
+  display: flex;
+  gap: 8px;
+}
+.ps-add-buttons {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.ps-primary,
+.ps-quiet,
+.ps-dark,
+.ps-save {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+  font: 700 14px var(--glo-font-body);
+  cursor: pointer;
+}
+.ps-primary,
+.ps-save {
+  border: 0;
+  background: var(--glo-orange);
+  color: var(--glo-on-accent);
+}
+.ps-primary:disabled,
+.ps-save:disabled,
+.ps-dark:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ps-quiet {
+  border: 1px solid var(--glo-line-strong);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font-weight: 600;
+}
+.ps-quiet:hover {
+  background: var(--glo-hover);
+}
+.ps-dark {
+  height: 36px;
+  border: 0;
+  background: var(--glo-ink);
+  color: var(--glo-surface);
+  font-size: 13px;
+}
+.ps-save {
+  height: 44px;
+  border-radius: 22px;
+  font-size: 15px;
+}
+.ps-row {
+  display: flex;
+  gap: 14px;
+}
+.ps-grow {
+  flex: 1;
+  min-width: 0;
+}
+.ps-pronouns {
+  width: 200px;
+}
+.ps-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ps-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.ps-picks,
+.ps-picked {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ps-picks {
+  margin-top: -8px;
+}
+.ps-pick {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  border: 1px solid var(--glo-line-strong);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: 600 13px var(--glo-font-body);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ps-pick--on {
+  border-color: var(--glo-orange);
+  background: var(--glo-accent-soft);
+}
+.ps-board-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ps-board-head .ps-h {
+  flex: 1;
+}
+.ps-tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ps-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+  transition: box-shadow 140ms ease, opacity 140ms ease;
+}
+.ps-tile--drag {
+  opacity: 0.6;
+  box-shadow: 0 8px 22px rgba(var(--glo-shadow-rgb), 0.18);
+}
+.ps-tile b {
+  font-size: 14px;
+  white-space: nowrap;
+}
+.ps-tile-sum {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--glo-muted);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ps-handle {
+  width: 28px;
+  height: 32px;
+  border: 0;
+  background: none;
+  color: var(--glo-faint);
+  cursor: grab;
+  letter-spacing: -2px;
+  border-radius: 8px;
+}
+.ps-handle:focus-visible,
+.ps-edit:focus-visible,
+.ps-x:focus-visible {
+  outline: 2px solid var(--glo-orange);
+}
+.ps-edit {
+  border: 0;
+  background: none;
+  font: 700 13px var(--glo-font-body);
+  color: var(--glo-link);
+  cursor: pointer;
+  padding: 8px 4px;
+}
+.ps-x {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  color: var(--glo-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ps-x:hover {
+  background: var(--glo-hover);
+}
+.ps-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ps-who span {
+  flex: 1;
+}
+
+/* Live preview */
+.ps-preview {
+  width: 270px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+}
+.ps-card {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+}
+.ps-card-head {
+  position: relative;
+  height: 80px;
+  background: linear-gradient(160deg, #2a1a33 0%, #1c1210 100%);
+}
+.ps-card-body {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ps-card-photo.avatar {
+  margin-top: -34px;
+  font-size: 24px;
+  position: relative;
+}
+.ps-card-name {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.ps-card-name b {
+  font: 700 18px var(--glo-font-display);
+  overflow-wrap: anywhere;
+}
+.ps-card-name span,
+.ps-card-user {
+  font-size: 12.5px;
+  color: var(--glo-muted);
+}
+
+/* Add to your board */
+.ps-add-backdrop {
+  z-index: 70;
+}
+.ps-add {
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: glo-rise 180ms var(--glo-ease-open, ease-out);
+}
+.ps-add-title {
+  margin: 0 0 4px;
+  font: 600 18px var(--glo-font-display);
+}
+.ps-kind {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  padding: 10px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--glo-ink);
+  font-family: var(--glo-font-body);
+  cursor: pointer;
+}
+.ps-kind:hover,
+.ps-kind:focus-visible {
+  background: var(--glo-accent-tint, var(--glo-subtle));
+  outline: none;
+}
+.ps-kind > span:last-child {
+  display: flex;
+  flex-direction: column;
+}
+.ps-kind b {
+  font-size: 14px;
+}
+.ps-kind > span:last-child > span {
+  font-size: 12.5px;
+  color: var(--glo-muted);
+}
+.ps-kind-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  flex: none;
+}
+.ps-kind-icon--games {
+  background: linear-gradient(160deg, #3f7f3a, #8fc06a);
+}
+.ps-kind-icon--constellation {
+  background: #7c3aed;
+}
+.ps-kind-icon--note {
+  background: var(--glo-subtle);
+  border: 1px solid var(--glo-line);
+}
+.ps-kind-icon--into {
+  background: var(--glo-panel);
+}
+.ps-kind-icon--playing {
+  background: var(--glo-night);
+}
+.ps-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.ps-result {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--glo-ink);
+  font-family: var(--glo-font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.ps-result:hover {
+  background: var(--glo-hover);
+}
+.ps-result--on {
+  background: var(--glo-accent-soft);
+}
+.ps-result b {
+  flex: 1;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ps-result-art.pb-art {
+  width: 30px;
+  font-size: 11px;
+  border-radius: 5px;
+  flex: none;
+}
+.ps-result-on {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--glo-good-text);
+}
+
+@media (max-width: 900px) {
+  .ps {
+    flex-direction: column;
+  }
+  .ps-preview {
+    position: static;
+    width: 100%;
+  }
+}
+.ps-who select {
+  width: auto;
+  min-width: 0;
+  max-width: 220px;
+  flex: none;
+}

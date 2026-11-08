@@ -356,6 +356,10 @@ export function createBridge(): GloflyApi {
       update: (changes) => request<Profile>('PATCH', '/users/me/profile', changes),
       setPhoto: (data, type) => request('PUT', '/users/me/avatar', undefined, { data, type }),
       removePhoto: () => request('DELETE', '/users/me/avatar'),
+      setHeader: (data, type) => request('PUT', '/users/me/header', undefined, { data, type }),
+      removeHeader: () => request('DELETE', '/users/me/header'),
+      mutuals: (id) => badId(id) ?? request('GET', `/users/${id}/mutuals`),
+      activity: (id) => badId(id) ?? request('GET', `/users/${id}/activity`),
       setNickname: (id, nickname) =>
         badId(id) ?? request('PUT', `/users/${id}/nickname`, { nickname })
     },

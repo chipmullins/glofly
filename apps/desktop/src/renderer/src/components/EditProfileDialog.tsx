@@ -22,6 +22,8 @@ type EditProfileDialogProps = {
   onSaved: (user: SignedInUser, status: MyStatus) => void
   onClose: () => void
   onSessionExpired: () => void
+  /** 0.9.1: Settings → Profile (header, pronouns, board, who sees what) */
+  onMore?: () => void
 }
 
 const DISPLAY_NAME_MAX = 32
@@ -54,7 +56,8 @@ export default function EditProfileDialog({
   status,
   onSaved,
   onClose,
-  onSessionExpired
+  onSessionExpired,
+  onMore
 }: EditProfileDialogProps): React.JSX.Element {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [displayName, setDisplayName] = useState(user.displayName)
@@ -356,6 +359,13 @@ export default function EditProfileDialog({
                 onChange={(e) => setBio(e.target.value)}
               />
             </div>
+
+            {onMore && (
+              <button type="button" className="profile-nickname-button" onClick={onMore}>
+                <PencilIcon size={14} strokeWidth={2} />
+                Header image, pronouns and your board
+              </button>
+            )}
 
             {error && (
               <p className="dialog-message" role="alert">

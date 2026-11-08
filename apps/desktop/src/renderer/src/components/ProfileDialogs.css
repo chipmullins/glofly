@@ -3,6 +3,7 @@
 .profile-dialog {
   position: relative;
   max-width: 800px;
+  transition: max-width 220ms var(--glo-ease-open, ease);
   max-height: 100%;
   overflow: hidden auto;
 }
@@ -740,4 +741,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 0.9.1: a card with tabs (board, mutuals, activity) gets a little more room. */
+.profile-dialog--wide {
+  max-width: 900px;
+}
+.profile-wrap > .profile-dialog--wide {
+  flex-basis: 900px;
+}
+.profile-tabs-area {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }

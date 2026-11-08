@@ -47,6 +47,10 @@ function serverPathFor(
   if (url.host === 'avatars' && parts.length === 2 && parts.every(isUserId)) {
     return { path: `/avatars/${parts[0]}/${parts[1]}`, maxBytes: 2 * MB }
   }
+  // 0.9.1: a profile header (glofly-media://headers/<userId>/<version>)
+  if (url.host === 'headers' && parts.length === 2 && parts.every(isUserId)) {
+    return { path: `/headers/${parts[0]}/${parts[1]}`, maxBytes: 4 * MB }
+  }
   if (url.host === 'groups' && parts.length === 2 && parts.every(isUserId)) {
     return { path: `/conversations/${parts[0]}/photo/${parts[1]}`, maxBytes: 2 * MB }
   }

@@ -2389,6 +2389,7 @@ export default function MainScreen({
             onLogout={onLogout}
             onAccountDeleted={onAccountDeleted}
             onSessionExpired={onSessionExpired}
+            onUserChange={(c) => onUserChange({ displayName: c.displayName, avatarVersion: user.avatarVersion })}
           />
         )}
         {editingProfile && (
@@ -2401,6 +2402,10 @@ export default function MainScreen({
             }}
             onClose={() => setEditingProfile(false)}
             onSessionExpired={onSessionExpired}
+            onMore={() => {
+              setEditingProfile(false)
+              setSettingsOpen('profile')
+            }}
           />
         )}
         {viewing && (
@@ -2446,6 +2451,12 @@ export default function MainScreen({
             onOnlineAlert={(on) => void toggleOnlineAlert(viewing.id, on)}
             onClose={() => setViewing(null)}
             onSessionExpired={onSessionExpired}
+            onViewPerson={(p) => viewPerson(p)}
+            onOpenConstellation={(id) => {
+              setViewing(null)
+              noteRecent(user.id, { kind: 'constellation', id })
+              cx.enter(cxNavRef.current, { constellationId: id, nebulaId: null })
+            }}
           />
         )}
         {confirm && (

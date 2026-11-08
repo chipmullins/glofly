@@ -10,6 +10,10 @@ const server = isWeb && web ? web.apiUrl : null
 export const avatarUrl = (userId: string, version: string): string =>
   server ? `${server}/avatars/${userId}/${version}` : `glofly-media://avatars/${userId}/${version}`
 
+/** 0.9.1: a profile's header image. */
+export const headerUrl = (userId: string, version: string): string =>
+  server ? `${server}/headers/${userId}/${version}` : `glofly-media://headers/${userId}/${version}`
+
 /** Where a group photo loads from. */
 export const groupPhotoUrl = (conversationId: string, version: string): string =>
   server

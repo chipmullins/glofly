@@ -1,3 +1,4 @@
+import ProfileSettings from './ProfileSettings'
 import { patchSocial, refreshSocial, useSocial } from '../lib/social'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type {
@@ -60,9 +61,11 @@ type SettingsDialogProps = {
    * "quiet-hours") or a section's heading as shown ("Privacy"; the Ctrl+K quick switcher).
    */
   scrollTo?: string
+  /** 0.9.1: Settings → Profile changed your display name */
+  onUserChange?: (changes: { displayName: string }) => void
 }
 
-export type SettingsPage = 'general' | 'voice' | 'overlay' | 'account' | 'apps' | 'games' | 'about'
+export type SettingsPage = 'profile' | 'general' | 'voice' | 'overlay' | 'account' | 'apps' | 'games' | 'about'
 type Page = SettingsPage
 
 type ToggleKey = 'readReceipts' | 'showLastSeen' | 'showTyping'
@@ -553,6 +556,26 @@ function GeneralIcon({ active }: { active: boolean }): React.JSX.Element {
   )
 }
 
+function ProfileNavIcon({ active }: { active: boolean }): React.JSX.Element {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{ stroke: active ? 'var(--glo-link)' : 'currentColor' }}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <circle cx="9" cy="11" r="2.5" />
+      <path d="M5.5 17c.8-2 2-3 3.5-3s2.7 1 3.5 3M14 9h4M14 13h4" />
+    </svg>
+  )
+}
+
 function AccountIcon({ active }: { active: boolean }): React.JSX.Element {
   return (
     <svg
@@ -638,6 +661,7 @@ export default function SettingsDialog({
   onLogout,
   onSessionExpired,
   onAccountDeleted,
+  onUserChange,
   initialPage = 'general',
   scrollTo
 }: SettingsDialogProps): React.JSX.Element {
@@ -790,6 +814,15 @@ export default function SettingsDialog({
           <nav aria-label="Settings sections" className="settings-nav">
             <button
               type="button"
+              className={page === 'profile' ? 'settings-nav-item settings-nav-item--active' : 'settings-nav-item'}
+              aria-current={page === 'profile' ? 'page' : undefined}
+              onClick={() => openPage('profile')}
+            >
+              <ProfileNavIcon active={page === 'profile'} />
+              Profile
+            </button>
+            <button
+              type="button"
               className={
                 page === 'general'
                   ? 'settings-nav-item settings-nav-item--active'
@@ -886,7 +919,9 @@ export default function SettingsDialog({
               </p>
             )}
 
-            {page === 'voice' ? (
+            {page === 'profile' ? (
+              <ProfileSettings user={user} onSaved={onUserChange} onSessionExpired={onSessionExpired} />
+            ) : page === 'voice' ? (
               <VoiceVideoSettings />
             ) : page === 'overlay' ? (
               <OverlaySettings />

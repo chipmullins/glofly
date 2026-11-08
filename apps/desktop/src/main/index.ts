@@ -168,6 +168,10 @@ import {
   getProfile,
   removePhoto,
   setNickname,
+  setHeader,
+  removeHeader,
+  getMutuals,
+  getActivity,
   setPhoto,
   updateProfile
 } from './profile'
@@ -667,13 +671,19 @@ function registerIpcHandlers(): void {
   const PHOTO_MAX_BYTES = 8 * 1024 * 1024
   const PHOTO_TYPES: PhotoType[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
   const BIO_MAX = 190
+  const PROFILE_KEYS = ['displayName', 'bio', 'pronouns', 'board', 'privacy', 'headerFocus']
   const isProfileChanges = (value: unknown): value is ProfileChanges => {
     const c = value as Record<string, unknown> | null
     if (typeof c !== 'object' || c === null || Array.isArray(c)) return false
     const keys = Object.keys(c)
     return (
       keys.length > 0 &&
-      keys.every((k) => k === 'displayName' || k === 'bio') &&
+      keys.every((k) => PROFILE_KEYS.includes(k)) &&
+      // 0.9.1: pronouns, board, privacy, header position (the server checks the details).
+      (c.pronouns === undefined || c.pronouns === null || (typeof c.pronouns === 'string' && c.pronouns.length <= 80)) &&
+      (c.board === undefined || (Array.isArray(c.board) && c.board.length <= 6 && JSON.stringify(c.board).length <= 8000)) &&
+      (c.privacy === undefined || (typeof c.privacy === 'object' && c.privacy !== null && !Array.isArray(c.privacy) && Object.keys(c.privacy).length <= 3)) &&
+      (c.headerFocus === undefined || (typeof c.headerFocus === 'number' && c.headerFocus >= 0 && c.headerFocus <= 100)) &&
       (c.displayName === undefined ||
         (typeof c.displayName === 'string' && c.displayName.length <= 64)) &&
       (c.bio === undefined ||
@@ -709,6 +719,23 @@ function registerIpcHandlers(): void {
     return setPhoto(new Uint8Array(data), type as PhotoType)
   })
   ipcMain.handle('profile:remove-photo', (event) => (fromApp(event) ? removePhoto() : invalid))
+  // 0.9.1 profiles
+  ipcMain.handle('profile:set-header', (event, data: unknown, type: unknown) => {
+    if (!fromApp(event) || !(data instanceof ArrayBuffer) || !PHOTO_TYPES.includes(type as PhotoType)) {
+      return invalid
+    }
+    if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
+      return { ok: false, error: 'invalid', message: 'Pictures can be up to 8 MB.' }
+    }
+    return setHeader(new Uint8Array(data), type as PhotoType)
+  })
+  ipcMain.handle('profile:remove-header', (event) => (fromApp(event) ? removeHeader() : invalid))
+  ipcMain.handle('profile:mutuals', (event, userId: unknown) =>
+    fromApp(event) && isUserId(userId) ? getMutuals(userId) : invalid
+  )
+  ipcMain.handle('profile:activity', (event, userId: unknown) =>
+    fromApp(event) && isUserId(userId) ? getActivity(userId) : invalid
+  )
 
   // Conversations and messages.
   const isMessage = (v: unknown): v is string => typeof v === 'string' && v.length <= 8000

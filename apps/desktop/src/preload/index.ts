@@ -148,6 +148,11 @@ const glofly: GloflyApi = {
     setPhoto: (data: ArrayBuffer, type: PhotoType) =>
       ipcRenderer.invoke('profile:set-photo', data, type),
     removePhoto: () => ipcRenderer.invoke('profile:remove-photo'),
+    setHeader: (data: ArrayBuffer, type: PhotoType) =>
+      ipcRenderer.invoke('profile:set-header', data, type),
+    removeHeader: () => ipcRenderer.invoke('profile:remove-header'),
+    mutuals: (userId: string) => ipcRenderer.invoke('profile:mutuals', userId),
+    activity: (userId: string) => ipcRenderer.invoke('profile:activity', userId),
     setNickname: (userId: string, nickname: string | null) =>
       ipcRenderer.invoke('profile:set-nickname', userId, nickname)
   },

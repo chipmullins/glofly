@@ -10,6 +10,8 @@ export type * from '@glofly/shared/constellations'
 export type * from '@glofly/shared/security'
 export type * from '@glofly/shared/chatTools'
 export type * from '@glofly/shared/friendLinks'
+export type * from '@glofly/shared/profiles'
+import type { ActivityItem, Mutuals, ProfileHeader } from '@glofly/shared/profiles'
 import type {
   FriendLinkAccepted,
   FriendLinkInfo,
@@ -600,6 +602,13 @@ export type GloflyApi = {
     /** Uploads a new profile photo (up to 8 MB). The server crops it and removes hidden photo data. */
     setPhoto: (data: ArrayBuffer, type: PhotoType) => Promise<ApiResult<{ avatarVersion: string }>>
     removePhoto: () => Promise<ApiResult<{ avatarVersion: null }>>
+    /** 0.9.1: a header image for your card (up to 8 MB, kept whole so it can be moved). */
+    setHeader: (data: ArrayBuffer, type: PhotoType) => Promise<ApiResult<{ header: ProfileHeader }>>
+    removeHeader: () => Promise<ApiResult<{ header: null }>>
+    /** 0.9.1: friends and constellations you share with someone (if they show them). */
+    mutuals: (userId: string) => Promise<ApiResult<Mutuals & { shown: boolean }>>
+    /** 0.9.1: their recent games and public constellations joined (if they show them). */
+    activity: (userId: string) => Promise<ApiResult<{ shown: boolean; items: ActivityItem[] }>>
     /** Your own name for someone, only you see it (null removes it). */
     setNickname: (
       userId: string,

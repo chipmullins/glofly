@@ -23,6 +23,8 @@ import './ProfileDialogs.css'
 import EmojiText from './EmojiText'
 import MyGamesPanel from './MyGames'
 import { usePresence } from '../lib/usePresence'
+import { headerUrl } from '../lib/media'
+import { ActivityList, BoardGrid, MutualConstellations, MutualFriends } from './ProfileBoard'
 import { NICKNAME_MAX } from '@glofly/shared/rules'
 
 type Fly = { left: string; top: number; size: 'big' | 'small'; rotate: number }
@@ -34,14 +36,36 @@ export function ProfileHero({
   sparks,
   label,
   closeLabel,
-  onClose
+  onClose,
+  photo
 }: {
   flies: Fly[]
   sparks: Spark[]
   label?: string
+  /** 0.9.1: their header image (and how far down it shows, 0–100) instead of the night sky */
+  photo?: { url: string; focus: number } | null
   closeLabel: string
   onClose: () => void
 }): React.JSX.Element {
+  const [failed, setFailed] = useState<string | null>(null)
+  if (photo && photo.url !== failed) {
+    return (
+      <div className="profile-hero profile-hero--photo">
+        <img
+          className="profile-hero-photo"
+          src={photo.url}
+          alt=""
+          draggable={false}
+          style={{ objectPosition: `50% ${photo.focus}%` }}
+          onError={() => setFailed(photo.url)}
+        />
+        {label && <span className="profile-hero-label">{label}</span>}
+        <button type="button" className="profile-close" aria-label={closeLabel} onClick={onClose}>
+          <CloseIcon size={18} strokeWidth={2.2} />
+        </button>
+      </div>
+    )
+  }
   return (
     <div className="profile-hero">
       {sparks.map((s) => (
@@ -87,7 +111,15 @@ type ProfileCardProps = {
   onSessionExpired: () => void
   /** 2.0: it's your own card (My games can be edited) */
   isMe?: boolean
+  /** 0.9.1: open someone from Mutual friends */
+  onViewPerson?: (person: PublicUser) => void
+  /** 0.9.1: open a constellation from the board or Mutual constellations */
+  onOpenConstellation?: (id: string) => void
+  /** 0.9.1: your own card: Settings → Profile */
+  onEditProfile?: () => void
 }
+
+type Tab = 'board' | 'friends' | 'constellations' | 'activity'
 
 /** Someone's profile card (Profile.dc.html). */
 export default function ProfileCard({
@@ -103,7 +135,10 @@ export default function ProfileCard({
   onOnlineAlert,
   onClose,
   onSessionExpired,
-  isMe
+  isMe,
+  onViewPerson,
+  onOpenConstellation,
+  onEditProfile
 }: ProfileCardProps): React.JSX.Element {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -158,6 +193,20 @@ export default function ProfileCard({
   // 0.9.1: it slides out from behind the card (and back) instead of popping in and shoving it over.
   const games = usePresence(gamesOpen)
 
+  // 0.9.1 tabs: only the ones with something you may see.
+  const counts = shown.counts
+  const tabs: { id: Tab; label: string }[] = [
+    ...(shown.board?.length ? [{ id: 'board' as const, label: 'Board' }] : []),
+    ...(!isMe && counts?.mutualFriends ? [{ id: 'friends' as const, label: `Mutual friends · ${counts.mutualFriends}` }] : []),
+    ...(!isMe && counts?.mutualConstellations
+      ? [{ id: 'constellations' as const, label: `Mutual constellations · ${counts.mutualConstellations}` }]
+      : []),
+    ...(shown.activityShown ? [{ id: 'activity' as const, label: 'Activity' }] : [])
+  ]
+  const [tabChoice, setTab] = useState<Tab | null>(null)
+  const tab = tabs.find((t) => t.id === tabChoice)?.id ?? tabs[0]?.id ?? null
+  const header = shown.header ? { url: headerUrl(shown.id, shown.header.version), focus: shown.header.focus } : null
+
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       {/* The card and (2.0) My games side by side. My games used to sit inside the card, whose
@@ -168,10 +217,11 @@ export default function ProfileCard({
           role="dialog"
           aria-modal="true"
           aria-label={`${shown.displayName} profile`}
-          className="dialog profile-dialog"
+          className={tabs.length ? 'dialog profile-dialog profile-dialog--wide' : 'dialog profile-dialog'}
           tabIndex={-1}
         >
           <ProfileHero
+            photo={header}
             sparks={['a', 'b']}
             flies={[
               { left: '50%', top: 44, size: 'big', rotate: -12 },
@@ -243,7 +293,10 @@ export default function ProfileCard({
 
             <div className="profile-main">
               <div className="profile-names">
-                <h2>{shown.displayName}</h2>
+                <div className="profile-name-row">
+                  <h2>{shown.displayName}</h2>
+                  {shown.pronouns && <span className="profile-pronouns">{shown.pronouns}</span>}
+                </div>
                 <span>
                   @{shown.username}
                   {shown.realName && <> · their name is {shown.realName}</>}
@@ -331,6 +384,54 @@ export default function ProfileCard({
                       {onlineAlert ? <BellIcon size={19} /> : <BellOffIcon size={19} />}
                     </button>
                   )}
+                </div>
+              )}
+
+              {isMe && onEditProfile && (
+                <button type="button" className="profile-nickname-button" onClick={onEditProfile}>
+                  <PencilIcon size={14} strokeWidth={2} />
+                  Header, pronouns and board
+                </button>
+              )}
+
+              {tab && (
+                <div className="profile-tabs-area">
+                  <div role="tablist" aria-label="Profile" className="pb-tabs">
+                    {tabs.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="tab"
+                        id={`pt-${t.id}`}
+                        aria-selected={tab === t.id}
+                        aria-controls="pt-panel"
+                        className="pb-tab"
+                        onClick={() => setTab(t.id)}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div role="tabpanel" id="pt-panel" aria-labelledby={`pt-${tab}`} className="pb-panel" key={tab}>
+                    {tab === 'board' && shown.board ? (
+                      <BoardGrid
+                        tiles={shown.board}
+                        name={shown.displayName}
+                        onOpenConstellation={onOpenConstellation}
+                        onAllGames={() => setGamesOpen(true)}
+                      />
+                    ) : tab === 'friends' ? (
+                      <MutualFriends userId={person.id} onViewPerson={(p) => onViewPerson?.(p)} />
+                    ) : tab === 'constellations' ? (
+                      <MutualConstellations
+                        userId={person.id}
+                        name={shown.displayName}
+                        onOpenConstellation={onOpenConstellation}
+                      />
+                    ) : tab === 'activity' ? (
+                      <ActivityList userId={person.id} />
+                    ) : null}
+                  </div>
                 </div>
               )}
             </div>
