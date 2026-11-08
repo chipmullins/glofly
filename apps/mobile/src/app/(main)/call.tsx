@@ -50,6 +50,8 @@ export default function CallScreen() {
   /** Watch Together: the Start / Change video sheet, and full screen when sideways */
   const [watchSheet, setWatchSheet] = useState<'start' | 'change' | null>(null)
   const [watchFull, setWatchFull] = useState(true)
+  // 0.9.1: upright, the video can shrink to a corner so the call (everyone's faces) shows.
+  const [watchSmall, setWatchSmall] = useState(false)
   const watchState = useWatchStore((x) => (s.call && x.callId === s.call.id ? x.watch : null))
   const landscape = width > height
   // Which video goes into iOS's floating window when you leave the app: the pinned person, else
@@ -120,6 +122,12 @@ export default function CallScreen() {
   const watch = meJoined ? watchState : null
   const canWatchControl = !!watch && canControlWatch(watch, meId)
   const watchingFull = !!watch && landscape && watchFull
+  const watchMini = !!watch && !landscape && watchSmall
+  // A new video starts big again.
+  const watching = !!watch
+  useEffect(() => {
+    if (!watching) setWatchSmall(false)
+  }, [watching])
   // Add people (0.5.2): groups any time; 1-on-1 once they've picked up (it becomes a group call).
   const canAdd = !!call && meJoined && (isGroup || (call.status === 'ongoing' && !!chat))
   // On your own in a group call (0.5.2): the last minute's countdown, with Stay.
@@ -150,7 +158,7 @@ export default function CallScreen() {
     <View style={{ flex: 1, backgroundColor: callColors.bg }}>
       {/* Main area */}
       <View style={{ flex: 1 }}>
-        {watch && !landscape && call ? (
+        {watch && !landscape && call && !watchMini ? (
           // The video itself is drawn by WatchScreen below (one player, whichever way the phone faces).
           <View style={{ flex: 1 }} />
         ) : screenTile ? (
@@ -279,10 +287,11 @@ export default function CallScreen() {
           {meJoined && answered ? (
             <CtrlButton
               icon="watch"
-              label={watch ? (landscape ? 'Watching together: full screen' : canWatchControl ? 'Watching together: change the video' : 'Watching together') : 'Watch a video together'}
+              label={watch ? (landscape ? 'Watching together: full screen' : watchMini ? 'Watching together: make the video big' : canWatchControl ? 'Watching together: change the video' : 'Watching together') : 'Watch a video together'}
               lit={!!watch}
               onPress={() => {
                 if (watch && landscape) setWatchFull(true)
+                else if (watchMini) setWatchSmall(false)
                 else if (watch) {
                   if (canWatchControl) setWatchSheet('change')
                 } else setWatchSheet('start')
@@ -311,8 +320,10 @@ export default function CallScreen() {
           conversationId={call.conversationId}
           top={insets.top + 64}
           bottom={bottomSpace + 6}
-          mode={!landscape ? 'portrait' : watchingFull ? 'full' : 'parked'}
+          mode={!landscape ? (watchMini ? 'mini' : 'portrait') : watchingFull ? 'full' : 'parked'}
           onExitFull={() => setWatchFull(false)}
+          onMinimize={() => setWatchSmall(true)}
+          onExpand={() => setWatchSmall(false)}
         />
       ) : null}
 

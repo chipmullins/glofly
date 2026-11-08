@@ -12,6 +12,7 @@ import { useNow } from '@/lib/hooks'
 import { Avatar } from '@/ui/Avatar'
 import { BottomSheet, confirm } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
+import { CallVideo } from './media'
 import { Button, Field, Text } from '@/ui/kit'
 import { controlWatch, reactWatch, setWatchControl, startWatching, stopWatching, useWatchStore, watchClock } from './watch'
 import { WatchView } from './WatchView'
@@ -507,6 +508,8 @@ export function WatchScreen({
   bottom,
   mode,
   onExitFull,
+  onMinimize,
+  onExpand,
   embedded = false,
 }: {
   watch: WatchState
@@ -517,8 +520,12 @@ export function WatchScreen({
   /** Upright: room above and below (the call's own bar and buttons) */
   top: number
   bottom: number
-  mode: 'portrait' | 'full' | 'parked'
+  /** 0.9.1 'mini': a small player in a corner over the normal call, so you can see everyone's faces */
+  mode: 'portrait' | 'full' | 'parked' | 'mini'
   onExitFull?: () => void
+  /** Upright: shrink to the small player / back to big */
+  onMinimize?: () => void
+  onExpand?: () => void
   /** 0.7.2: inside a voice nebula's stage, which has its own tiles: the video and its controls only, as wide as the stage */
   embedded?: boolean
 }) {
@@ -599,7 +606,10 @@ export function WatchScreen({
     const vh = (vw * 9) / 16
     box = { left: (width - vw) / 2, top: (height - vh) / 2, w: vw, h: vh }
   } else if (mode === 'parked') box = { left: -4, top: -4, w: 2, h: 2 }
-  else box = { left: 0, top: 0, w: width, h: (width * 9) / 16 }
+  else if (mode === 'mini') {
+    const mw = Math.min(200, Math.round(width * 0.46))
+    box = { left: width - mw - 12, top: top + 8, w: mw, h: (mw * 9) / 16 }
+  } else box = { left: 0, top: 0, w: width, h: (width * 9) / 16 }
   const talking = tiles.filter((t) => t.speaking && !t.micMuted)
 
   const container =
@@ -607,37 +617,85 @@ export function WatchScreen({
       ? { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000' }
       : mode === 'parked'
         ? { position: 'absolute' as const, top: 0, left: 0, width: 1, height: 1, opacity: 0, overflow: 'hidden' as const }
-        : { position: 'absolute' as const, top, left: 0, right: 0, bottom }
+        : mode === 'mini'
+          ? { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 }
+          : { position: 'absolute' as const, top, left: 0, right: 0, bottom }
 
   return (
     <View style={container} pointerEvents={mode === 'parked' ? 'none' : 'box-none'}>
       {/* Sideways: tapping anywhere shows (or hides) the controls. Under the video. */}
       {mode === 'full' ? <Pressable key="backdrop" accessibilityLabel={shown ? 'Hide video controls' : 'Show video controls'} onPress={() => setShown((v) => !v)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} /> : null}
-      <View key="video" style={{ position: 'absolute', left: box.left, top: box.top, width: box.w, height: box.h }}>
-        <Video watch={watch} w={box.w} h={box.h} nameOf={nameOf} onState={setState} state={state} said={said} canControl={can} onTap={mode === 'full' ? () => setShown((v) => !v) : playPause} onPlayPause={playPause} />
+      <View
+        key="video"
+        style={[
+          { position: 'absolute', left: box.left, top: box.top, width: box.w, height: box.h },
+          mode === 'mini' ? { borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 6px 18px rgba(0,0,0,0.5)' } : null,
+        ]}
+      >
+        <Video
+          watch={watch}
+          w={box.w}
+          h={box.h}
+          nameOf={nameOf}
+          onState={setState}
+          state={state}
+          said={mode === 'mini' ? null : said}
+          canControl={can}
+          onTap={mode === 'full' ? () => setShown((v) => !v) : mode === 'mini' ? () => onExpand?.() : playPause}
+          onPlayPause={playPause}
+        />
       </View>
+      {mode === 'mini' ? (
+        <Pressable
+          key="expand"
+          accessibilityRole="button"
+          accessibilityLabel={`Make the video big again: ${watch.title}`}
+          onPress={() => onExpand?.()}
+          hitSlop={8}
+          style={{ position: 'absolute', left: box.left + box.w - 40, top: box.top + 4, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Icon name="fullscreen" size={16} color="#FFF" />
+        </Pressable>
+      ) : null}
       {mode === 'portrait' ? (
         <View key="portrait" style={{ position: 'absolute', top: box.h + 10, left: 0, right: 0, bottom: 0, gap: 10 }}>
           <View style={{ paddingHorizontal: 16 }}>
             <Controls watch={watch} meId={meId} state={state} onRefused={refuse} />
             {note}
-            {can ? (
-              <Pressable accessibilityRole="button" accessibilityLabel="Stop watching, for everyone" onPress={() => void askStop()} style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#2A1C17', opacity: pressed ? 0.8 : 1 })}>
-                <Icon name="close" size={14} color="#F5EDE6" />
-                <Text size={13} weight="bold" style={{ color: '#F5EDE6' }}>
-                  Stop watching
-                </Text>
-              </Pressable>
-            ) : null}
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 8 }}>
+              {onMinimize ? (
+                <Pressable accessibilityRole="button" accessibilityLabel="Make the video small and see everyone" onPress={onMinimize} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 44, borderRadius: 22, backgroundColor: '#2A1C17', opacity: pressed ? 0.8 : 1 })}>
+                  <Icon name="minimize" size={14} color="#F5EDE6" />
+                  <Text size={13} weight="bold" style={{ color: '#F5EDE6' }}>
+                    See everyone
+                  </Text>
+                </Pressable>
+              ) : null}
+              {can ? (
+                <Pressable accessibilityRole="button" accessibilityLabel="Stop watching, for everyone" onPress={() => void askStop()} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 44, borderRadius: 22, backgroundColor: '#2A1C17', opacity: pressed ? 0.8 : 1 })}>
+                  <Icon name="close" size={14} color="#F5EDE6" />
+                  <Text size={13} weight="bold" style={{ color: '#F5EDE6' }}>
+                    Stop watching
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
           <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 14, paddingHorizontal: 16, justifyContent: 'center', flexGrow: 1 }}>
             {tiles.map((t) => {
               const p = people(t.userId)
               return (
                 <View key={t.userId} style={{ alignItems: 'center', gap: 4 }} accessibilityLabel={`${t.local ? 'You' : p.displayName}${t.speaking ? ', talking' : ''}${t.micMuted ? ', muted' : ''}`}>
-                  <View style={{ borderRadius: 30, boxShadow: t.speaking ? '0 0 0 3px #FF9F43' : undefined }}>
-                    <Avatar user={p} size={52} />
-                  </View>
+                  {t.camera ? (
+                    // 0.9.1: live faces, so you can see each other react to the video.
+                    <View style={{ width: 72, height: 96, borderRadius: 14, overflow: 'hidden', backgroundColor: '#000', boxShadow: t.speaking ? '0 0 0 3px #FF9F43' : undefined }}>
+                      <CallVideo track={t.camera} mirror={t.local} style={{ width: 72, height: 96 }} />
+                    </View>
+                  ) : (
+                    <View style={{ borderRadius: 30, boxShadow: t.speaking ? '0 0 0 3px #FF9F43' : undefined }}>
+                      <Avatar user={p} size={52} />
+                    </View>
+                  )}
                   <Text size={12} style={{ color: '#F5EDE6' }}>
                     {t.local ? 'You' : firstOf(p)}
                   </Text>
