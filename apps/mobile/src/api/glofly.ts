@@ -1,5 +1,8 @@
 import type {
   AccountDetails,
+  ActivityItem,
+  Mutuals,
+  ProfileHeader,
   FriendLinkAccepted,
   FriendLinkInfo,
   FriendLinkPreview,
@@ -56,6 +59,11 @@ export const updateProfile = (changes: ProfileChanges) => request<Profile>('PATC
 /** Your own name for someone, only you see it (null removes it). */
 export const setNickname = (userId: string, nickname: string | null) => request<{ userId: string; nickname: string | null }>('PUT', `/users/${userId}/nickname`, { nickname })
 export const setAvatar = (file: Upload) => upload<{ avatarVersion: string }>('PUT', '/users/me/avatar', file)
+// 0.9.1 profiles
+export const setHeader = (file: Upload) => upload<{ header: ProfileHeader }>('PUT', '/users/me/header', file)
+export const removeHeader = () => request<{ header: null }>('DELETE', '/users/me/header')
+export const getMutuals = (userId: string) => request<Mutuals & { shown: boolean }>('GET', `/users/${userId}/mutuals`)
+export const getActivity = (userId: string) => request<{ shown: boolean; items: ActivityItem[] }>('GET', `/users/${userId}/activity`)
 export const removeAvatar = () => request<{ avatarVersion: null }>('DELETE', '/users/me/avatar')
 export const getMyStatus = () => request<MyStatus>('GET', '/users/me/status')
 export const setMyStatus = (changes: MyStatusChanges) => request<MyStatus>('PATCH', '/users/me/status', changes)

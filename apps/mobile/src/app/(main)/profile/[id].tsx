@@ -20,6 +20,7 @@ import { Icon, type IconName } from '@/ui/icons'
 import { Button, Field, IconButton, Spinner, Switch, Text } from '@/ui/kit'
 import { SheetHost, openReport } from '@/ui/sheets'
 import { useTheme } from '@/ui/theme'
+import { ActivityFeed, BoardTiles, MutualsList, ProfileHeaderImage } from '@/profiles/Board'
 
 // A person's profile card (from the design): photo, name, status, what they're playing,
 // Message / Voice / Video, About me, when they joined, and Remove friend / Block / Report.
@@ -81,6 +82,15 @@ export default function ProfileCard() {
   const game = presence ? playing(presence) : null
   const first = profile?.displayName.split(/\s+/)[0] ?? ''
   const isMe = id === meId
+  // 0.9.1 tabs: only the ones with something you may see.
+  const mutualCount = (profile?.counts?.mutualFriends ?? 0) + (profile?.counts?.mutualConstellations ?? 0)
+  const tabs: { id: 'board' | 'mutuals' | 'activity'; label: string }[] = [
+    ...(profile?.board?.length ? [{ id: 'board' as const, label: 'Board' }] : []),
+    ...(!isMe && mutualCount ? [{ id: 'mutuals' as const, label: 'Mutuals' }] : []),
+    ...(profile?.activityShown ? [{ id: 'activity' as const, label: 'Activity' }] : []),
+  ]
+  const [tabChoice, setTab] = useState<'board' | 'mutuals' | 'activity' | null>(null)
+  const tab = tabs.find((t) => t.id === tabChoice)?.id ?? tabs[0]?.id ?? null
 
   // The bell: "Notify me when they come online" (0.3.0 servers send onlineAlert).
   async function toggleOnlineAlert(on: boolean) {
@@ -122,17 +132,31 @@ export default function ProfileCard() {
           </View>
         ) : (
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 24, gap: 14 }}>
-            <View style={{ height: 96, backgroundColor: c.accentSoft, marginHorizontal: -20, marginBottom: -14 }} />
+            <View style={{ marginHorizontal: -20, marginBottom: -14 }}>
+              <ProfileHeaderImage userId={profile.id} header={profile.header} height={profile.header ? 150 : 96} />
+            </View>
             <View style={{ marginTop: -52, borderRadius: 60, borderWidth: 5, borderColor: c.sheet, alignSelf: 'flex-start' }}>
               <Avatar user={profile} size={96} status={isFriend || isMe ? (presence?.status ?? 'offline') : null} mobile={onMobile(presence ?? undefined)} ring={c.sheet} />
             </View>
             <View style={{ gap: 2 }}>
-              <Text display size={26} accessibilityRole="header">
-                {profile.displayName}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <Text display size={26} accessibilityRole="header">
+                  {profile.displayName}
+                </Text>
+                {profile.pronouns ? (
+                  <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 9, backgroundColor: c.surface }}>
+                    <Text size={12.5} weight="medium" tone="muted">
+                      {profile.pronouns}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               <Text size={15} tone="muted">
                 @{profile.username}
                 {profile.realName ? ` · their name is ${profile.realName}` : ''}
+                {!isMe && profile.counts?.mutualFriends
+                  ? ` · ${profile.counts.mutualFriends} mutual ${profile.counts.mutualFriends === 1 ? 'friend' : 'friends'}`
+                  : ''}
               </Text>
             </View>
             {!isMe && nickEdit !== null ? (
@@ -221,6 +245,32 @@ export default function ProfileCard() {
                 </Text>
               </View>
             ) : null}
+            {tabs.length ? (
+              <View style={{ gap: 12 }}>
+                <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 2, borderBottomWidth: 1, borderColor: c.line }}>
+                  {tabs.map((t) => (
+                    <Pressable
+                      key={t.id}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: tab === t.id }}
+                      onPress={() => setTab(t.id)}
+                      style={{ height: 44, paddingHorizontal: 10, justifyContent: 'center', borderBottomWidth: 3, borderColor: tab === t.id ? c.accent : 'transparent' }}
+                    >
+                      <Text size={14} weight={tab === t.id ? 'bold' : 'medium'} tone={tab === t.id ? 'ink' : 'muted'}>
+                        {t.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {tab === 'board' && profile.board ? (
+                  <BoardTiles tiles={profile.board} userId={profile.id} />
+                ) : tab === 'mutuals' ? (
+                  <MutualsList userId={profile.id} name={profile.displayName} />
+                ) : tab === 'activity' ? (
+                  <ActivityFeed userId={profile.id} name={profile.displayName} />
+                ) : null}
+              </View>
+            ) : null}
             {profile.joinedAt ? (
               <Text size={14} tone="muted">
                 Joined Glofly {longDate(profile.joinedAt)}
@@ -244,7 +294,7 @@ export default function ProfileCard() {
             )}
           </ScrollView>
         )}
-        <IconButton name="close" label="Close" onPress={close} color={c.ink} style={{ position: 'absolute', top: 8, right: 8 }} />
+        <IconButton name="close" label="Close" onPress={close} color="#FFFFFF" style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(28,18,16,0.5)', borderRadius: 22 }} />
       </View>
       {/* This card lies over the app (transparentModal): its dialogs must be drawn from here on iPhone. */}
       <SheetHost />

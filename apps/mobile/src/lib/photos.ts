@@ -131,3 +131,23 @@ function videoName(fileName: string | null | undefined, mimeType: string | undef
   const base = (fileName ?? `Video ${i + 1}`).replace(/\.[^.]+$/, '')
   return `${base}.${ext}`
 }
+
+/**
+ * 0.9.1: a profile header (wide; kept whole so the server can store it and you can move it).
+ * Resized to at most 1500 px wide as a JPEG; GIFs as they are (the server keeps a still frame).
+ */
+export async function pickHeaderPhoto(): Promise<Upload | null> {
+  await afterOverlaysClose()
+  try {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: QUALITY, ...iosCompatible })
+    if (result.canceled || !result.assets[0]) return null
+    const asset = result.assets[0]
+    if (asset.mimeType === 'image/gif' || Platform.OS === 'web') return { uri: asset.uri, type: asset.mimeType ?? 'image/jpeg' }
+    const width = asset.width && asset.width > 1500 ? 1500 : asset.width || 1500
+    const ref = await ImageManipulator.manipulate(asset.uri).resize({ width }).renderAsync()
+    const saved = await ref.saveAsync({ format: SaveFormat.JPEG, compress: 0.88 })
+    return { uri: saved.uri, type: 'image/jpeg' }
+  } catch (e) {
+    return pickFailed(e)
+  }
+}
