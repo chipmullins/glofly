@@ -71,6 +71,7 @@ const MAX_REPLY = 4000
 /** A typed reply, tidied: null when there's nothing to send. */
 export function cleanReply(text: unknown): string | null {
   if (typeof text !== 'string') return null
-  const trimmed = text.replace(/\r\n?/g, '\n').trim()
+  // Stray Enters (Windows' reply box adds a line on Enter) never send blank lines.
+  const trimmed = text.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
   return trimmed ? trimmed.slice(0, MAX_REPLY) : null
 }

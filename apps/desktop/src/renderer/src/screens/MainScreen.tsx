@@ -836,7 +836,8 @@ export default function MainScreen({
           kind: 'message',
           attribution: where ? `Glofly · ${where}` : 'Glofly · Direct message',
           header: { id: `chat:${m.conversationId}`, title: where ?? name },
-          reply: `Reply to ${where ?? (sender ? firstNameOf(sender) : name)}`.slice(0, 60),
+          // Windows' reply box: Enter adds a line, Ctrl+Enter sends (Windows decides, not Glofly).
+          reply: `${`Reply to ${where ?? (sender ? firstNameOf(sender) : name)}`.slice(0, 38)} · Ctrl+Enter sends`,
           buttons: [...MESSAGE_BUTTONS]
         }
       },
@@ -1084,7 +1085,7 @@ export default function MainScreen({
                   kind: mention ? 'mention' : 'message',
                   attribution: `Glofly · ${place}`.slice(0, 120),
                   header: { id: `chat:${event.conversationId}`, title: place.slice(0, 100) },
-                  reply: `Reply in ${where}`.slice(0, 60),
+                  reply: `${`Reply in ${where}`.slice(0, 38)} · Ctrl+Enter sends`,
                   buttons: [
                     { id: 'read', label: 'Mark as read' },
                     { id: 'mute-1h', label: `Mute ${where} 1 h`.slice(0, 40) },

@@ -235,7 +235,7 @@ function showPlainNotification(n: ShowNotification, appIcon: string): void {
     // Messages (chats, groups, nebulas) get a Reply box, on Windows and the Mac alike. Electron
     // builds the Windows toast itself, so names and text never end up as raw toast XML. It's
     // there even when previews are off: the text stays hidden, answering is still fine.
-    ...(replyTo ? { hasReply: true, replyPlaceholder: 'Reply…' } : {})
+    ...(replyTo ? { hasReply: true, replyPlaceholder: process.platform === 'win32' ? 'Reply… (Ctrl+Enter sends)' : 'Reply…' } : {})
   })
   if (replyTo) {
     toast.on('reply', (details) => {
