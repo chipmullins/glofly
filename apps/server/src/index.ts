@@ -32,7 +32,7 @@ import { watchPageRouter } from "./calls/player";
 import { sweepCalls } from "./calls/service";
 import { saveSentBytes } from "./admin/usage";
 import { livekitConfigured } from "./calls/livekit";
-import { avatarsRouter, profileRouter } from "./profile/routes";
+import { avatarsRouter, headersRouter, profileRouter } from "./profile/routes";
 import { sweepUnsentUploads } from "./messages/attachments";
 import { startRealtime, stopRealtime } from "./realtime";
 import { connectRedis, redis } from "./redis";
@@ -142,6 +142,7 @@ app.use("/errors", errorReportsRouter);
 app.use("/users", usersRouter);
 app.use("/users", profileRouter);
 app.use("/avatars", avatarsRouter);
+app.use("/headers", headersRouter);
 // 0.8.0 (before friendsRouter: /friends/link isn't a friend's id).
 app.use("/friends/link", friendLinkRouter);
 app.use("/friends", friendsRouter);

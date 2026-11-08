@@ -135,6 +135,16 @@ myGamesRouter.delete("/me/:key", async (req, res) => {
   res.json({ games: await gamesOf(me(res).id, true) });
 });
 
+/** Whether someone's My games shows to this viewer (0.9.1: also used by profiles). */
+export async function gamesSharedWith(viewerId: string, ownerId: string): Promise<boolean> {
+  if (viewerId === ownerId) return true;
+  const visibility = (await isRestricted(ownerId)) ? (await visibilityOf(ownerId)) === "only_me" ? "only_me" : "friends" : await visibilityOf(ownerId);
+  return (
+    !(await blockedEitherWay(viewerId, ownerId)) &&
+    (visibility === "everyone" || (visibility === "friends" && (await areFriends(viewerId, ownerId))))
+  );
+}
+
 myGamesRouter.get("/user/:userId", async (req, res) => {
   const id = z.uuid().safeParse(req.params.userId);
   const myId = me(res).id;

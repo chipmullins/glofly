@@ -115,6 +115,7 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
     .select({
       id: users.id,
       avatarVersion: users.avatarVersion,
+      headerVersion: users.headerVersion,
       email: users.email,
       displayName: users.displayName,
       username: users.username,
@@ -249,6 +250,11 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
       await storage
         .remove(`avatars/${user.id}/${user.avatarVersion}.webp`)
         .catch((err) => console.error("Couldn't remove a profile photo", err));
+    }
+    if (user.headerVersion) {
+      await storage
+        .remove(`headers/${user.id}/${user.headerVersion}.webp`)
+        .catch((err) => console.error("Couldn't remove a profile header", err));
     }
     await tellFriendsAndChats(user.id, friends, partners);
     // Sent after the removal went through (the address is only kept in memory until now).

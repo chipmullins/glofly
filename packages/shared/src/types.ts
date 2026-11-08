@@ -1,3 +1,4 @@
+import type { BoardTile, ProfileExtras, ProfilePrivacy } from './profiles'
 // The shapes Glofly's server sends and accepts, shared by every Glofly app (desktop, mobile)
 // and the server. Moved here from apps/desktop/src/preload/api-types.d.ts (Oct 11, 2026).
 
@@ -104,9 +105,18 @@ export type Profile = PublicUser & {
   /** ISO date */
   joinedAt: string | null
   presence: Presence | null
-}
+} & ProfileExtras
 
-export type ProfileChanges = { displayName?: string; bio?: string | null }
+export type ProfileChanges = {
+  displayName?: string
+  bio?: string | null
+  /** 0.9.1 profiles */
+  pronouns?: string | null
+  board?: BoardTile[]
+  privacy?: Partial<ProfilePrivacy>
+  /** Header image's vertical position, 0 (top) to 100 (bottom) */
+  headerFocus?: number
+}
 
 /** Photo types Glofly accepts for profile photos. */
 export type PhotoType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'

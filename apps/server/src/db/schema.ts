@@ -83,6 +83,17 @@ export const users = pgTable(
     avatarVersion: text("avatar_version"),
     // "About me" on their profile, up to 190 characters.
     bio: text("bio"),
+    // ---- 0.9.1 profiles (migration 0052) ----
+    // Pronouns shown next to their name (up to 40 characters).
+    pronouns: text("pronouns"),
+    // Header image on their profile card (a new random version each upload), and how far down
+    // the picture is shown (0 = top, 100 = bottom).
+    headerVersion: text("header_version"),
+    headerFocus: integer("header_focus").notNull().default(50),
+    // The board: up to 6 tiles (shared BoardTile[]); null = never set.
+    profileBoard: jsonb("profile_board").$type<unknown[]>(),
+    // Who sees the board / activity / mutuals (shared ProfilePrivacy); null = the defaults.
+    profilePrivacy: jsonb("profile_privacy").$type<Record<string, string>>(),
 
     // When their last device disconnected. Shown to friends as "Last seen …".
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),

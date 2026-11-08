@@ -40,3 +40,22 @@ export async function bannerPhoto(input: Buffer): Promise<Buffer | null> {
     return null;
   }
 }
+
+/**
+ * 0.9.1: a profile header. Kept taller than it shows (up to 1500×1000) so its owner can drag it
+ * up and down (header_focus); turned the right way up and re-saved as WebP like every photo.
+ */
+export async function headerPhoto(input: Buffer): Promise<Buffer | null> {
+  try {
+    const image = sharp(input, { limitInputPixels: 50_000_000 });
+    const meta = await image.metadata();
+    if (!["jpeg", "png", "webp", "gif", "heif", "avif"].includes(meta.format ?? "")) return null;
+    return await image
+      .rotate()
+      .resize(1500, 1000, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+  } catch {
+    return null;
+  }
+}
