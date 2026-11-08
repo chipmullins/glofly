@@ -171,7 +171,7 @@
   made a cycle that crashed the server at start; the time zone is in `src/timeZone.ts`). Desktop Control's main
   process only allows listed routes (`main/api.ts ALLOWED`): add new Control routes there too. Control for iPhone:
   Face ID sign-in for 14 days (`POST /admin/auth/resume`, `admin_devices.remember_*`, test `test/faceid.e2e.ts`).
-- **Next (Oct 31, 2026):** start with the project doc `glofly-status-oct31.md` (Watch Together silences voice on iPhone; what's in flight), then `glofly-status-oct28.md`.
+- **Next (Nov 8, 2026):** start with the project doc `glofly-status-nov8.md` (0.9.2 waiting to ship, custom Windows notifications next, what's untested), then `glofly-release-0.9.2.md`.
 - **0.8.6 (Oct 28, 2026): update on every launch, Windows + Mac** (project doc `glofly-release-0.8.6.md`).
   `src/main/launchUpdate.ts` runs before Glofly's window opens (`openGlofly` in index.ts starts everything
   else, once); the window is its own page `src/renderer/updater.html` + `src/renderer/src/updater/` (no
