@@ -1,0 +1,196 @@
+/* 0.9.3 Forward a message (approved boards 1–2). */
+.forward-dialog {
+  max-width: 560px;
+}
+.forward-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.forward-head h1 {
+  margin: 0;
+  font-family: var(--glo-font-display);
+  font-weight: 600;
+  font-size: 22px;
+}
+.forward-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--glo-panel);
+}
+.forward-quote-from,
+.forward-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
+.forward-quote-text {
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.forward-search {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 15px;
+  box-sizing: border-box;
+  width: 100%;
+}
+.forward-search:focus-visible {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 1px;
+}
+.forward-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 140px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0 -6px;
+  padding: 0 6px;
+}
+.forward-label {
+  padding: 2px 8px 4px;
+}
+.forward-empty {
+  padding: 16px 8px;
+  color: var(--glo-muted);
+  font-size: 14px;
+}
+.forward-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.forward-row:hover {
+  background: var(--glo-subtle);
+}
+.forward-row--on {
+  background: var(--glo-accent-tint);
+}
+.forward-row[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* The real checkbox sits under the drawn one, so it stays keyboard and screen-reader friendly. */
+.forward-row input {
+  position: absolute;
+  opacity: 0;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  left: 8px;
+}
+.forward-check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 2px solid var(--glo-line-strong);
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+}
+.forward-row input:checked + .forward-check {
+  background: var(--glo-accent-deep);
+  border-color: var(--glo-accent-deep);
+}
+.forward-row input:checked + .forward-check::after {
+  content: '';
+  width: 10px;
+  height: 5px;
+  border: solid #fff;
+  border-width: 0 0 2.5px 2.5px;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.forward-row input:focus-visible + .forward-check {
+  outline: 2px solid var(--glo-accent);
+  outline-offset: 2px;
+}
+.forward-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.forward-row-text b {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.forward-row-text span {
+  font-size: 13px;
+  color: var(--glo-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.forward-cx-icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 11px !important;
+  flex: none;
+  font-size: 13px;
+}
+.forward-group-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--glo-panel);
+  color: var(--glo-icon);
+}
+.forward-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.forward-count {
+  flex: 1;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+
+/* A forwarded message in a chat (board 2). */
+.message-forward {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 8px 12px 10px;
+  max-width: 560px;
+  border-radius: 14px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+}
+.message-forward-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--glo-muted);
+}
+.chat-notice--good {
+  background: var(--glo-good-bg);
+  color: var(--glo-good-text);
+}

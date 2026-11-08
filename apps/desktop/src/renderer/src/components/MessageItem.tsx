@@ -8,6 +8,7 @@ import { addRecent, isJumbo } from '../lib/emoji'
 import EmojiPicker from './EmojiPicker'
 import EmojiText, { Emoji } from './EmojiText'
 import FormattedText from './FormattedText'
+import './Forward.css'
 import { GameCard, GifView, LanternTag, LinkPreviewCard, PollCard } from './ChatExtras'
 import { lanternStyle } from '../lib/lantern'
 import type { FireflyEmoji } from '../../../preload/api-types'
@@ -72,6 +73,8 @@ type MessageItemProps = {
   onPin?: (pin: boolean) => void
   /** "Mark unread from here" (others' messages) */
   onMarkUnread?: () => void
+  /** 0.9.3: forward this message (not lanterns, polls, games or events) */
+  onForward?: () => void
   // ---- Communities round: threads + forums ----
   /** "Start a thread" from this message (text nebulas) */
   onStartThread?: () => void
@@ -158,6 +161,37 @@ function MentionText({
         )
       })}
     </>
+  )
+}
+
+/** 0.9.3: a forwarded message sits in a card that says whose words they are and where from. */
+function ForwardWrap({
+  forwarded,
+  children
+}: {
+  forwarded?: Message['forwarded']
+  children: React.ReactNode
+}): React.JSX.Element {
+  if (!forwarded) return <>{children}</>
+  const when = new Date(forwarded.at)
+  const at = Number.isNaN(when.getTime())
+    ? ''
+    : when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return (
+    <div className="message-forward">
+      <span className="message-forward-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M14 5l7 7-7 7" />
+          <path d="M21 12H9a6 6 0 0 0-6 6v1" />
+        </svg>
+        <span>
+          Forwarded from {forwarded.where ?? forwarded.name}
+          {forwarded.where ? ` · ${forwarded.name}` : ''}
+          {at ? ` · ${at}` : ''}
+        </span>
+      </span>
+      {children}
+    </div>
   )
 }
 
@@ -295,6 +329,7 @@ export default function MessageItem({
   pinned = null,
   onPin,
   onMarkUnread,
+  onForward,
   onStartThread,
   onMarkAnswer,
   isAnswer = false,
@@ -469,6 +504,7 @@ export default function MessageItem({
           </div>
         )}
 
+        <ForwardWrap forwarded={!m.deleted && !editing ? m.forwarded : undefined}>
         {editing ? (
           <EditBox initial={m.body} onSave={onSaveEdit} onCancel={onCancelEdit} />
         ) : m.deleted ? (
@@ -543,6 +579,7 @@ export default function MessageItem({
         )}
 
         {!m.deleted && attachments}
+        </ForwardWrap>
         {extra}
 
         {m.lantern && !m.deleted && !item.pending && <LanternTag fadeAt={m.lanternFadeAt} />}
@@ -770,6 +807,30 @@ export default function MessageItem({
                   Copy text
                 </button>
               )}
+              {onForward &&
+                !m.deleted &&
+                !item.pending &&
+                !m.lantern &&
+                !m.poll &&
+                !m.game &&
+                !m.event &&
+                !m.buttons?.length && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="menu-item"
+                    onClick={() => {
+                      setPopup(null)
+                      onForward()
+                    }}
+                  >
+                    <Icon>
+                      <path d="M14 5l7 7-7 7" />
+                      <path d="M21 12H9a6 6 0 0 0-6 6v1" />
+                    </Icon>
+                    Forward
+                  </button>
+                )}
               {onPin && pinned !== null && !m.deleted && !item.pending && (
                 <button
                   type="button"

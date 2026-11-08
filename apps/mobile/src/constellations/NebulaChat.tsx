@@ -5,7 +5,7 @@ import { router, useIsFocused } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import * as Clipboard from 'expo-clipboard'
-import { type ConstellationDetail, type Message, type Nebula, type PublicUser } from '@glofly/shared'
+import { attachmentSummary, shortBody, type ConstellationDetail, type Message, type Nebula, type PublicUser } from '@glofly/shared'
 import * as api from '@/api/glofly'
 import { sendTyping } from '@/api/realtime'
 import { putMessage, useStore } from '@/state/store'
@@ -296,6 +296,7 @@ export function NebulaChat({
     const items: MenuItem[] = [
       ...(canAct ? [{ key: 'reply', label: 'Reply', icon: <Icon name="reply" size={18} color={N.ink} /> }] : []),
       ...(m.body && !special(m) ? [{ key: 'copy', label: 'Copy text', icon: <Icon name="copy" size={18} color={N.ink} /> }] : []),
+      ...(c.forwarding !== false && !m.deleted && !m.event && !m.lantern && !m.poll && !m.game && !m.buttons?.length ? [{ key: 'forward', label: 'Forward', icon: <Icon name="send" size={18} color={N.ink} /> }] : []),
       // Communities round: a thread off this message (or open the one it has)
       ...(!m.deleted && !m.event && !m.lantern && (m.thread || (canAct && (!n.threadsStaffOnly || can(c, 'manageNebulas') || can(c, 'deleteMessages'))))
         ? [{ key: 'thread', label: m.thread ? 'Open trail' : 'Start a trail', icon: <Icon name="reply" size={18} color={N.ink} /> }]
@@ -341,6 +342,9 @@ export function NebulaChat({
       case 'copy':
         await Clipboard.setStringAsync(m.body)
         cxSay('Copied.')
+        return
+      case 'forward':
+        router.push({ pathname: '/forward', params: { mid: m.id, from: m.forwarded?.name ?? sender?.displayName ?? 'someone', text: (shortBody(m.body) || attachmentSummary(m.attachments)).slice(0, 300) } })
         return
       case 'edit':
         setReply(null)

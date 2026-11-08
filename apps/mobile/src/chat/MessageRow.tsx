@@ -116,6 +116,20 @@ function Body({ text, members, mine }: { text: string; members: PublicUser[]; mi
   )
 }
 
+/** 0.9.3: "Forwarded from Maya Reyes · 9:03 PM" on a forwarded message. */
+export function ForwardedLabel({ forwarded, color }: { forwarded: NonNullable<Message['forwarded']>; color: string }) {
+  const at = new Date(forwarded.at)
+  const time = Number.isNaN(at.getTime()) ? '' : ` · ${clockTime(forwarded.at)}`
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+      <Icon name="send" size={13} color={color} />
+      <Text size={12} weight="bold" style={{ color, flexShrink: 1 }} numberOfLines={1}>
+        {`Forwarded from ${forwarded.where ?? forwarded.name}${forwarded.where ? ` · ${forwarded.name}` : ''}${time}`}
+      </Text>
+    </View>
+  )
+}
+
 export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people, members, highlight, onLongPress, onReact, onQuotePress, onRetry, onAvatarPress, onOpenPhoto, canAct, memberIds }: Props) {
   const { c } = useTheme()
   const m = row.message
@@ -335,6 +349,7 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
                             paddingBottom: m.replyTo || m.attachments.length || m.linkPreview ? 2 : 9,
                           }}
                         >
+                          {m.forwarded ? <ForwardedLabel forwarded={m.forwarded} color={mine ? c.meInk : c.muted} /> : null}
                           <Body text={m.body} members={members} mine={mine} />
                         </View>
                       ) : special && m.gif ? (

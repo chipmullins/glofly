@@ -2,6 +2,8 @@ import type {
   ApiResult,
   Attachment,
   ConversationSummary,
+  ForwardResult,
+  ForwardTarget,
   Message,
   MessagePage,
   MessageSearchPage,
@@ -224,6 +226,22 @@ export async function muteConversation(
         `/conversations/${conversationId}/mute`
       )
   return result.ok ? { ok: true, data: { mutedUntil: result.data.mutedUntil ?? null } } : result
+}
+
+/** 0.9.3: forwards a message (the server checks every place). */
+export const forwardMessage = (
+  messageId: string,
+  to: string[],
+  note: string
+): Promise<ApiResult<ForwardResult>> =>
+  request<ForwardResult>('POST', `/conversations/messages/${messageId}/forward`, {
+    to,
+    ...(note.trim() ? { note } : {})
+  })
+
+export async function forwardTargets(): Promise<ApiResult<ForwardTarget[]>> {
+  const result = await request<{ targets: ForwardTarget[] }>('GET', '/conversations/forward-targets')
+  return result.ok ? { ok: true, data: result.data.targets } : result
 }
 
 /** 0.9.3: mutes until a set moment ("Mute until tomorrow" on a Windows notification). */

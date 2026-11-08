@@ -1,5 +1,6 @@
 import type {
   AccountDetails,
+  ForwardTarget,
   FriendLinkAccepted,
   FriendLinkPreview,
   MyFriendLink,
@@ -494,6 +495,13 @@ export function createBridge(): GloflyApi {
           'message'
         ),
       markRead: (id) => badId(id) ?? nothing(request('POST', `/conversations/${id}/read`)),
+      forward: (id, to, note) =>
+        badId(id) ??
+        request('POST', `/conversations/messages/${id}/forward`, { to, ...(note.trim() ? { note } : {}) }),
+      forwardTargets: () =>
+        request<{ targets: ForwardTarget[] }>('GET', '/conversations/forward-targets').then((r) =>
+          r.ok ? { ok: true as const, data: r.data.targets } : r
+        ),
       pin: (id, pinned) =>
         badId(id) ?? nothing(request(pinned ? 'PUT' : 'DELETE', `/conversations/${id}/pin`)),
       orderGroups: (ids) => nothing(request('PUT', '/conversations/groups/order', { ids })),

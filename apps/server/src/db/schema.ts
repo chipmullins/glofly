@@ -14,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { OnboardingSettings } from "@glofly/shared";
+import type { ForwardedFrom, OnboardingSettings } from "@glofly/shared";
 
 export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invisible"]);
 // Who can send someone friend requests (Settings → General → Privacy).
@@ -409,6 +409,8 @@ export const messages = pgTable(
     // Lantern messages fade away once everyone else has read them: lanternFadeAt is when.
     lantern: boolean("lantern").notNull().default(false),
     lanternFadeAt: timestamp("lantern_fade_at", { withTimezone: true }),
+    // 0.9.3: a forwarded message: whose words and where they came from (the body is their text).
+    forwarded: jsonb("forwarded").$type<ForwardedFrom>(),
     // Communities round (Nov 2026): a reply in a thread or forum post (nebulas only). Thread
     // replies stay out of the nebula's own timeline unless alsoInNebula ("Also send to #general").
     threadId: uuid("thread_id").references((): AnyPgColumn => nebulaThreads.id, { onDelete: "cascade" }),
@@ -1104,6 +1106,8 @@ export const constellations = pgTable(
     // 0.7.5 celebrations already posted: the highest member milestone and birthday year.
     celebratedMembers: integer("celebrated_members").notNull().default(0),
     celebratedYears: integer("celebrated_years").notNull().default(0),
+    // 0.9.3: owners can stop members forwarding its messages to other chats.
+    forwardingOff: boolean("forwarding_off").notNull().default(false),
   },
   (t) => [
     index("constellations_owner_idx").on(t.ownerId),

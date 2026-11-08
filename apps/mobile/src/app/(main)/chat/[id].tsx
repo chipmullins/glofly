@@ -7,7 +7,9 @@ import { flyIn } from '@/constellations/transition'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Clipboard from 'expo-clipboard'
 import {
+  attachmentSummary,
   chatTitle,
+  shortBody,
   clockTime,
   continuesGroup,
   dayLabel,
@@ -379,6 +381,9 @@ export default function ChatScreen() {
       case 'unpin':
         void pinsApi.setPinned(m, action === 'pin')
         return
+      case 'forward':
+        router.push({ pathname: '/forward', params: { mid: m.id, from: m.forwarded?.name ?? nameOf(m.senderId), text: (shortBody(m.body) || attachmentSummary(m.attachments)).slice(0, 300) } })
+        return
       case 'unread':
         // Leaves the chat, so it isn't read again straight away.
         if (await markUnread(id, m)) {
@@ -685,6 +690,7 @@ export default function ChatScreen() {
               {[
                 { key: 'reply', label: 'Reply', icon: 'reply' as const, show: canMessage },
                 { key: 'copy', label: 'Copy text', icon: 'copy' as const, show: !!actionsFor.body && !special(actionsFor) },
+                { key: 'forward', label: 'Forward', icon: 'send' as const, show: !actionsFor.deleted && !actionsFor.event && !actionsFor.lantern && !actionsFor.poll && !actionsFor.game && !actionsFor.buttons?.length },
                 { key: 'edit', label: 'Edit', icon: 'pencil' as const, show: actionsFor.senderId === meId && !!actionsFor.body && canMessage && !special(actionsFor) },
                 { key: 'unpreview', label: 'Remove link preview', icon: 'link' as const, show: actionsFor.senderId === meId && !!actionsFor.linkPreview && canMessage },
                 { key: 'delete', label: 'Delete', icon: 'trash' as const, show: actionsFor.senderId === meId, danger: true },

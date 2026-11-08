@@ -522,6 +522,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
     rules: c.rules,
     welcome: welcomeOf(c.welcome),
     welcomedAt: myRow?.welcomedAt?.toISOString() ?? null,
+    forwarding: !c.forwardingOff,
     rulesAgreedAt: myRow?.rulesAgreedAt?.toISOString() ?? null,
     unlocks: roleRows.some((r) => r.selfAssign && r.kind === "custom") ? Object.fromEntries(await unlocksFor(constellationId, userId)) : {},
   };

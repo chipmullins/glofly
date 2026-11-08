@@ -111,6 +111,8 @@ export const api = {
       accent: ConstellationAccent | null
       rules: string[]
       welcome: Partial<WelcomeSettings>
+      // 0.9.3
+      forwarding: boolean
     }>
   ) => call<Detail>('PATCH', base(id), changes),
   // 0.7.5 community and identity

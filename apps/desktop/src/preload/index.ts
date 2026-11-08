@@ -202,6 +202,9 @@ const glofly: GloflyApi = {
     react: (conversationId: string, messageId: string, emoji: string, on: boolean) =>
       ipcRenderer.invoke('conversations:react', conversationId, messageId, emoji, on),
     markRead: (conversationId: string) => ipcRenderer.invoke('conversations:read', conversationId),
+    forward: (messageId: string, to: string[], note: string) =>
+      ipcRenderer.invoke('conversations:forward', messageId, to, note),
+    forwardTargets: () => ipcRenderer.invoke('conversations:forwardTargets'),
     pin: (conversationId: string, pinned: boolean) =>
       ipcRenderer.invoke('conversations:pin', conversationId, pinned),
     orderGroups: (ids: string[]) => ipcRenderer.invoke('conversations:orderGroups', ids),

@@ -775,6 +775,8 @@ constellationsRouter.patch("/:id", changeLimiter, async (req, res) => {
         .partial()
         .strict()
         .optional(),
+      // 0.9.3: may members forward its messages to other chats?
+      forwarding: z.boolean().optional(),
     })
     .safeParse(req.body);
   if (!parsed.success) {
@@ -835,10 +837,11 @@ constellationsRouter.patch("/:id", changeLimiter, async (req, res) => {
       ...(d.accent !== undefined ? { accent: d.accent, ...(d.accent ? { color: ACCENT_THEME[d.accent as keyof typeof ACCENT_THEME].legacy } : {}) } : {}),
       ...(rules !== undefined ? { rules } : {}),
       ...(d.welcome !== undefined ? { welcome: { ...welcomeOf(current.welcome), ...d.welcome } } : {}),
+      ...(d.forwarding !== undefined ? { forwardingOff: !d.forwarding } : {}),
     })
     .where(eq(constellations.id, s.constellationId));
   // 0.7.5: what changed goes in the moderation log (visibility has its own line below).
-  const changed = (["name", "description", "color", "type", "tags", "accent", "rules", "welcome"] as const).filter((k) => d[k] !== undefined);
+  const changed = (["name", "description", "color", "type", "tags", "accent", "rules", "welcome", "forwarding"] as const).filter((k) => d[k] !== undefined);
   if (changed.length) await logModeration(s.constellationId, s.userId, "settings_changed", null, { fields: changed });
   // No longer asking first: people waiting are let in? No: their requests stay for a moderator
   // to approve (opening the doors shouldn't add people nobody checked).

@@ -119,6 +119,26 @@ export const orderGroups = async (ids: string[]) => none(await request('PUT', '/
 export const orderPins = async (ids: string[]) => none(await request('PUT', '/conversations/pins/order', { ids }))
 export const markRead = async (id: string) => none(await request('POST', `/conversations/${id}/read`))
 
+// 0.9.3 forwarding
+export type ForwardTarget = {
+  conversationId: string
+  kind: 'dm' | 'group' | 'nebula'
+  title: string
+  subtitle: string | null
+  userId: string | null
+  avatarVersion: string | null
+  constellationId: string | null
+  iconVersion: string | null
+  color: string | null
+}
+export type ForwardResult = { sent: { conversationId: string; message: Message }[]; failed: { conversationId: string; reason: string }[] }
+export async function forwardTargets(): Promise<ApiResult<ForwardTarget[]>> {
+  const r = await request<{ targets: ForwardTarget[] }>('GET', '/conversations/forward-targets')
+  return r.ok ? { ok: true, data: r.data.targets } : r
+}
+export const forwardMessage = (messageId: string, to: string[], note: string) =>
+  request<ForwardResult>('POST', `/conversations/messages/${messageId}/forward`, { to, ...(note.trim() ? { note } : {}) })
+
 // ---- Messages ----
 
 export const loadMessages = (id: string, before?: string) => request<MessagePage>('GET', `/conversations/${id}/messages${before ? `?before=${before}` : ''}`)

@@ -680,6 +680,8 @@ export type ConstellationDetail = {
   welcome?: WelcomeSettings
   /** 0.7.5: you saw the welcome (null = show it now) and agreed to the rules */
   welcomedAt?: string | null
+  /** 0.9.3: members may forward its messages to other chats (owners can turn it off) */
+  forwarding?: boolean
   rulesAgreedAt?: string | null
   /**
    * 0.8.0: for each role you can pick yourself, the role-only nebulas picking it would show you

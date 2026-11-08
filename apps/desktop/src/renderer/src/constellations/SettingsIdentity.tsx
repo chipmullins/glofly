@@ -217,6 +217,28 @@ export default function IdentitySettings({
           ))}
         </div>
       </fieldset>
+      <fieldset className="cx-fieldset">
+        <legend>Sharing</legend>
+        <div className="cx-perms">
+          <label className="cx-perm cx-perm--last">
+            <span style={{ flex: 1 }}>
+              <span className="cx-perm-name">Members can forward messages</span>
+              <span className="cx-perm-what">
+                Lets members forward messages from its nebulas to their own chats. Off keeps
+                what&apos;s said here, here.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={c.forwarding !== false}
+              disabled={!editable || busy}
+              onChange={() =>
+                void run(() => api.update(c.id, { forwarding: c.forwarding === false }))
+              }
+            />
+          </label>
+        </div>
+      </fieldset>
     </>
   )
 }

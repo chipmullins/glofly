@@ -6,6 +6,7 @@ import { clockTime, quoteSummary, shortBody, splitGroupMentions, splitMentions, 
 import type { MentionGroups } from './roles'
 import { Attachments } from '@/chat/Attachments'
 import { Formatted } from '@/chat/Formatted'
+import { ForwardedLabel } from '@/chat/MessageRow'
 import { GameCard, GifView, LinkCard, PollCard } from '@/chat/Extras'
 import { isJumbo } from '@/lib/emoji'
 import { firstName } from '@/lib/format'
@@ -271,6 +272,7 @@ export const NebulaRow = memo(function NebulaRow({
               ) : null}
               {m.body ? (
                 <View style={{ marginTop: 3 }}>
+                  {m.forwarded ? <ForwardedLabel forwarded={m.forwarded} color={N.muted} /> : null}
                   {jumbo ? (
                     <Text size={40} style={{ lineHeight: 48 }}>
                       {m.body}

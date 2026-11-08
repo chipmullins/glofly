@@ -282,6 +282,8 @@ export type Message = {
   lantern?: boolean
   /** A lantern that has been read by everyone: when it fades (ISO date) */
   lanternFadeAt?: string | null
+  /** 0.9.3: a forwarded message (older apps just show its text) */
+  forwarded?: ForwardedFrom
   /** Communities round (Nov 2026): buttons under a bot's message (constellations only) */
   buttons?: import('./integrations').MessageButton[] | null
   /** Communities round: a reply in a thread / forum post (missing = the nebula's own timeline) */
@@ -687,3 +689,13 @@ export type ReportRequest = {
 
 // 0.5.0 social types live in social.ts (with their rules); re-exported for the apps' API types.
 export type { Broadcast, BroadcastJoin, Glow, Hanging, SocialToday, YearInGlow } from './social'
+
+/** 0.9.3: where a forwarded message came from (shown as "Forwarded from Maya Reyes · Night Raiders › #raid-notes"). */
+export type ForwardedFrom = {
+  /** Who wrote it (their name when it was forwarded) */
+  name: string
+  /** A group's name or "Constellation › #nebula"; null for a direct message */
+  where: string | null
+  /** When it was first sent */
+  at: string
+}

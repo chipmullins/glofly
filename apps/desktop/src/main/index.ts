@@ -39,6 +39,8 @@ import {
   loadMessages,
   searchMessages,
   markRead,
+  forwardMessage,
+  forwardTargets,
   pinConversation,
   orderGroups,
   orderPins,
@@ -1025,6 +1027,22 @@ function registerIpcHandlers(): void {
   )
   ipcMain.handle('conversations:read', (event, id: unknown) =>
     fromApp(event) && isUserId(id) ? markRead(id) : invalid
+  )
+  // 0.9.3: forwarding (the server checks every place; this only checks the shape).
+  ipcMain.handle('conversations:forward', (event, id: unknown, to: unknown, note: unknown) =>
+    fromApp(event) &&
+    isUserId(id) &&
+    Array.isArray(to) &&
+    to.length >= 1 &&
+    to.length <= 5 &&
+    to.every(isUserId) &&
+    typeof note === 'string' &&
+    note.length <= 4200
+      ? forwardMessage(id, to as string[], note)
+      : invalid
+  )
+  ipcMain.handle('conversations:forwardTargets', (event) =>
+    fromApp(event) ? forwardTargets() : invalid
   )
   ipcMain.handle('conversations:pin', (event, id: unknown, pinned: unknown) =>
     fromApp(event) && isUserId(id) && typeof pinned === 'boolean'

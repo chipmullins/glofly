@@ -82,6 +82,7 @@ import { MessagesSkeleton } from './Skeleton'
 import EmptyScene from './EmptyScene'
 import CfxCard from './CfxCard'
 import FormatBar from './FormatBar'
+import ForwardDialog from './ForwardDialog'
 import { applyFormat, type FormatAction } from '@glofly/shared/format'
 import { cfxJoinCodeIn } from '@glofly/shared/games'
 import * as outbox from '../lib/outbox'
@@ -447,6 +448,14 @@ export default function ChatView({
     inputRef.current?.focus()
   }
   const [notice, setNotice] = useState<string | null>(null)
+  // 0.9.3: the message being forwarded (the Forward dialog is open).
+  const [forwarding, setForwarding] = useState<Message | null>(null)
+  const [forwardNote, setForwardNote] = useState<string | null>(null)
+  useEffect(() => {
+    if (!forwardNote) return
+    const t = setTimeout(() => setForwardNote(null), 4500)
+    return () => clearTimeout(t)
+  }, [forwardNote])
   /** Who's typing right now (several people at once in a group) */
   const [typingIds, setTypingIds] = useState<string[]>([])
   /** Everyone messages here mention, including people who've left a group */
@@ -1917,6 +1926,7 @@ export default function ChatView({
               pinned={canPin && !item.pending ? pinnedIds.has(m.id) : null}
               onPin={canPin ? (pin) => void setPinned(m, pin) : undefined}
               onMarkUnread={!item.pending ? () => void markUnreadFrom(m) : undefined}
+              onForward={!item.pending ? () => setForwarding(m) : undefined}
               attachments={
                 m.attachments.length > 0 ? (
                   <MessageAttachments
@@ -2625,6 +2635,14 @@ export default function ChatView({
           )}
         </div>
 
+        {forwardNote && (
+          <p className="chat-notice chat-notice--good" role="status">
+            {forwardNote}
+            <button type="button" aria-label="Dismiss" onClick={() => setForwardNote(null)}>
+              ×
+            </button>
+          </p>
+        )}
         {notice && (
           <p className="chat-notice" role="alert">
             {notice}
@@ -3137,6 +3155,17 @@ export default function ChatView({
         />
       )}
 
+      {forwarding && (
+        <ForwardDialog
+          message={forwarding}
+          sender={personOf(forwarding.senderId) ?? null}
+          onClose={() => setForwarding(null)}
+          onSent={(summary) => {
+            setForwarding(null)
+            setForwardNote(summary)
+          }}
+        />
+      )}
       {deleting && (
         <ConfirmDialog
           title="Delete message?"

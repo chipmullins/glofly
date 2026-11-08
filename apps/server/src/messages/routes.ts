@@ -10,6 +10,7 @@ import { redis } from "../redis";
 import { alias } from "drizzle-orm/pg-core";
 import {
   attachments,
+  constellations,
   conversationMembers,
   conversations,
   messageReactions,
@@ -48,7 +49,7 @@ import {
 import { requireAuth } from "../auth/sessions";
 import { blockedEitherWay, canMessage, deletionPending, groupBreaksRestriction, isRestricted, messageableAmong, pair } from "../friends/rules";
 import { emitToUser } from "../realtime";
-import { isNebulaChat } from "../constellations/chats";
+import { isNebulaChat, nebulaOfChat } from "../constellations/chats";
 import { canModerateNebula, canPostInNebula, nebulaChatOpen, whyCantPostInNebula } from "../constellations/perms";
 import { logModeration, nebulaActivity } from "../constellations/activity";
 import { automodGate, automodWordInEdit } from "../constellations/automod";
@@ -75,7 +76,7 @@ import {
   publicGame,
   shortBody,
   attachmentSummary,
-  type GameState, type MessageButton } from "@glofly/shared";
+  type GameState, type MessageButton, type ForwardedFrom } from "@glofly/shared";
 import { toolHook } from "../toolHooks";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
@@ -128,6 +129,7 @@ export const messageFields = {
   buttons: messages.buttons,
   threadId: messages.threadId,
   alsoInNebula: messages.alsoInNebula,
+  forwarded: messages.forwarded,
 };
 export type MessageRow = {
   id: string;
@@ -147,6 +149,7 @@ export type MessageRow = {
   poll: PollInfo | null;
   game: GameInfo | null;
   threadId?: string | null;
+  forwarded?: ForwardedFrom | null;
   alsoInNebula?: boolean;
   lantern: boolean;
   lanternFadeAt: Date | null;
@@ -271,6 +274,8 @@ export async function hydrate(rows: MessageRow[]) {
       // Communities round: threads (left out for ordinary messages).
       ...(r.threadId ? { threadId: r.threadId, ...(r.alsoInNebula ? { alsoInNebula: true } : {}) } : {}),
       ...(chips.has(r.id) ? { thread: chips.get(r.id) } : {}),
+      // 0.9.3: forwarded (older apps just show the text).
+      ...(r.forwarded && !deleted ? { forwarded: r.forwarded } : {}),
     };
   });
 }
@@ -1736,6 +1741,231 @@ export async function postScheduledText(
   return { ok: true, messageId: inserted.id };
 }
 
+// ---------------------------------------------------------------------------------------
+// 0.9.3: forwarding (approved canvas "Glofly: forwarding, formatting, live alerts, Steam",
+// boards 1–2). One message to up to 5 chats, groups or nebulas, with an optional note.
+
+export const FORWARD_MAX_TARGETS = 5;
+/** Files copied by one forward, at most (each target gets its own copy). */
+const FORWARD_MAX_BYTES = 120 * 1024 * 1024;
+
+const forwardLimiter = rateLimit("messages:forward", {
+  windowMs: 10 * 60 * 1000,
+  limit: 30,
+  keyGenerator: (_req, res) => me(res).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "That's a lot of forwarding. Wait a few minutes." },
+});
+
+/** Where a message is, in words: a group's name, "Night Raiders › #raid-notes", or null for a DM. */
+async function placeOf(chat: Access): Promise<string | null> {
+  if (chat.kind === "dm") return null;
+  if (chat.kind === "group") return chat.name?.trim() || "a group";
+  const nebula = await nebulaOfChat(chat.conversationId);
+  if (!nebula) return null;
+  const [c] = await db.select({ name: constellations.name }).from(constellations).where(eq(constellations.id, nebula.constellationId));
+  return `${c?.name ?? "A constellation"} › #${nebula.name}`.slice(0, 120);
+}
+
+async function copyStored(from: string, to: string, contentType: string): Promise<boolean> {
+  const got = await storage.get(from);
+  if (!got) return false;
+  const chunks: Buffer[] = [];
+  for await (const chunk of got.stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  await storage.put(to, Buffer.concat(chunks), contentType);
+  return true;
+}
+
+/**
+ * Posts a forwarded copy of `source` in a chat, the way sending does (every check: friends only,
+ * blocks, nebula permissions, AutoMod, slow mode). The copy's files are copied too, so deleting
+ * the original never breaks it. Forwards don't @mention anyone again.
+ */
+async function postForward(
+  targetId: string,
+  myId: string,
+  source: MessageRow,
+  forwarded: ForwardedFrom,
+): Promise<{ ok: true; message: Awaited<ReturnType<typeof hydrate>>[number] } | { ok: false; reason: string }> {
+  const chat = await access(targetId, myId);
+  if (!chat) return { ok: false, reason: "You're not in that chat any more." };
+  if (!(await canPost(chat, myId))) return { ok: false, reason: await cantPostMessage(chat, myId) };
+  if (chat.kind === "nebula" && (await isForumConversation(targetId))) return { ok: false, reason: FORUM_NEEDS_SIGNAL };
+  if (chat.kind === "nebula") {
+    const refused = await automodGate(targetId, myId, source.body, null);
+    if (refused) return { ok: false, reason: refused.message };
+  }
+  const files = await db.select().from(attachments).where(eq(attachments.messageId, source.id)).orderBy(attachments.position);
+  const copies = files.map((a) => ({ ...a, newId: randomUUID() }));
+  for (const c of copies) {
+    const base = { id: c.id, conversationId: source.conversationId, kind: c.kind };
+    const next = { id: c.newId, conversationId: targetId, kind: c.kind };
+    const variants: ("preview" | "full" | "file" | "poster")[] = c.kind === "image" ? ["preview", "full"] : c.video ? ["file", "poster"] : ["file"];
+    for (const v of variants) {
+      const fromKey = keyFor(base, v);
+      const toKey = keyFor(next, v);
+      if (!fromKey || !toKey) continue;
+      const ok = await copyStored(fromKey, toKey, v === "file" ? "application/octet-stream" : "image/webp");
+      if (!ok && v !== "poster") return { ok: false, reason: "One of its files isn't available any more." };
+    }
+  }
+  const inserted = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(messages)
+      .values({ conversationId: targetId, senderId: myId, body: source.body, mentions: [], gif: source.gif, forwarded })
+      .returning(messageFields);
+    for (const [position, c] of copies.entries()) {
+      await tx.insert(attachments).values({
+        id: c.newId,
+        conversationId: targetId,
+        uploaderId: myId,
+        messageId: row.id,
+        position,
+        kind: c.kind,
+        name: c.name,
+        size: c.size,
+        width: c.width ?? null,
+        height: c.height ?? null,
+        voice: c.voice ?? null,
+        video: c.video ?? null,
+        sticker: !!c.sticker,
+      });
+    }
+    await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, targetId));
+    await tx
+      .update(conversationMembers)
+      .set({ lastReadAt: row.createdAt })
+      .where(and(eq(conversationMembers.conversationId, targetId), eq(conversationMembers.userId, myId)));
+    return row;
+  });
+  const [message] = await hydrate([inserted]);
+  for (const userId of chat.memberIds)
+    emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  if (chat.kind === "nebula") {
+    inBackground(nebulaActivity(targetId, myId, inserted.createdAt, [], nebulaPreview(message), []));
+    toolHook("onNebulaMessage", targetId, inserted.id, "created");
+  }
+  if (chat.partner) await shareReadPosition(targetId, myId, chat.partner, inserted.createdAt);
+  inBackground(notifyMessage({ ...message, groupMentions: [] }, chat));
+  if (chat.partner) inBackground(noteGlow(myId, chat.partner));
+  return { ok: true, message };
+}
+
+// POST /conversations/messages/:messageId/forward  { to: [conversationId…] (1–5), note? }
+// Answers { sent: [{ conversationId, message }], failed: [{ conversationId, reason }] }.
+conversationsRouter.post("/messages/:messageId/forward", forwardLimiter, async (req, res) => {
+  const myId = me(res).id;
+  const messageId = idParam.safeParse(req.params.messageId);
+  const body = z
+    .object({
+      to: z.array(z.uuid()).min(1).max(FORWARD_MAX_TARGETS),
+      note: z.string().max(MESSAGE_MAX).optional(),
+    })
+    .safeParse(req.body);
+  if (!messageId.success) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (!body.success || new Set(body.data.to).size !== body.data.to.length) {
+    res.status(400).json({ error: "invalid", message: `Pick 1 to ${FORWARD_MAX_TARGETS} places to forward it to.` });
+    return;
+  }
+  const [row] = await db.select(messageFields).from(messages).where(eq(messages.id, messageId.data));
+  // You can only forward what you can see: a message in a chat you're in (and, in a nebula, its
+  // timeline or a trail of it).
+  const from = row ? await access(row.conversationId, myId) : null;
+  if (!row || !from || row.deletedAt || row.event) {
+    res.status(404).json({ error: "not_found", message: "That message isn't there any more." });
+    return;
+  }
+  if (row.lantern) {
+    res.status(400).json({ error: "invalid", message: "Lantern messages can't be forwarded." });
+    return;
+  }
+  if (row.poll || row.game || row.buttons?.length) {
+    res.status(400).json({ error: "invalid", message: "This kind of message can't be forwarded." });
+    return;
+  }
+  if (from.kind === "nebula") {
+    const nebula = await nebulaOfChat(row.conversationId);
+    const [c] = nebula
+      ? await db.select({ off: constellations.forwardingOff }).from(constellations).where(eq(constellations.id, nebula.constellationId))
+      : [];
+    if (c?.off) {
+      res.status(403).json({ error: "forbidden", message: "This constellation doesn't allow forwarding its messages." });
+      return;
+    }
+  }
+  const files = (await attachmentsOf([row.id])).get(row.id) ?? [];
+  if (files.reduce((n, f) => n + (f.size ?? 0), 0) * body.data.to.length > FORWARD_MAX_BYTES) {
+    res.status(400).json({ error: "invalid", message: "Those files are too big to forward to that many places. Pick fewer." });
+    return;
+  }
+  const [sender] = await db.select({ name: users.displayName }).from(users).where(eq(users.id, row.senderId));
+  // A forward of a forward keeps the first writer and place.
+  const forwarded: ForwardedFrom = row.forwarded ?? {
+    name: (sender?.name ?? "Someone").slice(0, 64),
+    where: await placeOf(from),
+    at: row.createdAt.toISOString(),
+  };
+  const note = body.data.note?.replace(/\r\n?/g, "\n").trim() ?? "";
+  const sent: { conversationId: string; message: unknown }[] = [];
+  const failed: { conversationId: string; reason: string }[] = [];
+  for (const to of body.data.to) {
+    if (note) {
+      const posted = await postScheduledText(to, myId, note, null);
+      if (!posted.ok) {
+        failed.push({ conversationId: to, reason: posted.reason });
+        continue;
+      }
+    }
+    const result = await postForward(to, myId, row, forwarded);
+    if (result.ok) sent.push({ conversationId: to, message: result.message });
+    else failed.push({ conversationId: to, reason: result.reason });
+  }
+  res.status(sent.length ? 201 : 400).json({ sent, failed, ...(sent.length ? {} : { error: "invalid", message: failed[0]?.reason ?? "Couldn't forward it." }) });
+});
+
+// GET /conversations/forward-targets — where you can forward to: your recent chats, groups and
+// nebulas you can post in (newest first, at most 40).
+conversationsRouter.get("/forward-targets", async (_req, res) => {
+  const myId = me(res).id;
+  const recent = await db
+    .select({ id: conversations.id, kind: conversations.kind })
+    .from(conversationMembers)
+    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
+    .where(and(eq(conversationMembers.userId, myId), isNull(conversationMembers.closedAt)))
+    .orderBy(desc(conversations.lastMessageAt))
+    .limit(60);
+  const out: { conversationId: string; kind: "dm" | "group" | "nebula"; title: string; subtitle: string | null; userId: string | null; avatarVersion: string | null; constellationId: string | null; iconVersion: string | null; color: string | null }[] = [];
+  for (const r of recent) {
+    if (out.length >= 40) break;
+    const chat = await access(r.id, myId);
+    if (!chat || !(await canPost(chat, myId))) continue;
+    if (chat.kind === "nebula" && (await isForumConversation(r.id))) continue;
+    if (chat.kind === "dm") {
+      const [p] = chat.partner
+        ? await db.select({ id: users.id, name: users.displayName, username: users.username, avatarVersion: users.avatarVersion }).from(users).where(eq(users.id, chat.partner))
+        : [];
+      if (!p) continue;
+      out.push({ conversationId: r.id, kind: "dm", title: p.name, subtitle: `@${p.username}`, userId: p.id, avatarVersion: p.avatarVersion, constellationId: null, iconVersion: null, color: null });
+    } else if (chat.kind === "group") {
+      out.push({ conversationId: r.id, kind: "group", title: chat.name?.trim() || "Group", subtitle: `Group · ${chat.memberIds.length} people`, userId: null, avatarVersion: null, constellationId: null, iconVersion: null, color: null });
+    } else {
+      const nebula = await nebulaOfChat(r.id);
+      if (!nebula || nebula.kind !== "text") continue;
+      const [c] = await db
+        .select({ id: constellations.id, name: constellations.name, iconVersion: constellations.iconVersion, color: constellations.color })
+        .from(constellations)
+        .where(eq(constellations.id, nebula.constellationId));
+      if (!c) continue;
+      out.push({ conversationId: r.id, kind: "nebula", title: `#${nebula.name}`, subtitle: c.name, userId: null, avatarVersion: null, constellationId: c.id, iconVersion: c.iconVersion, color: c.color });
+    }
+  }
+  res.json({ targets: out });
+});
+
 /** 0.7.3 Mark as unread: everything from this message on counts as unread again (for me only). */
 export async function markUnreadFrom(conversationId: string, myId: string, messageId: string): Promise<Date | null> {
   const found = await findMessage(conversationId, messageId);
@@ -1848,6 +2078,11 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
   }
   if (message.gif || message.poll || message.game) {
     res.status(400).json({ error: "invalid", message: "This kind of message can't be edited." });
+    return;
+  }
+  // 0.9.3: a forward is someone else's words.
+  if (message.forwarded) {
+    res.status(400).json({ error: "invalid", message: "Forwarded messages can't be edited." });
     return;
   }
   if (!(await canPost(chat, myId))) {

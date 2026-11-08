@@ -148,6 +148,25 @@ export type ShowNotification = {
   rich?: RichNotification
 }
 
+/** 0.9.3: a place a message can be forwarded to. */
+export type ForwardTarget = {
+  conversationId: string
+  kind: 'dm' | 'group' | 'nebula'
+  /** A person's name, a group's name, or "#nebula" */
+  title: string
+  /** "@maya", "Group · 5 people", or the constellation's name */
+  subtitle: string | null
+  userId: string | null
+  avatarVersion: string | null
+  constellationId: string | null
+  iconVersion: string | null
+  color: string | null
+}
+export type ForwardResult = {
+  sent: { conversationId: string; message: Message }[]
+  failed: { conversationId: string; reason: string }[]
+}
+
 /** 0.9.3: the buttons a Glofly Windows notification can have. */
 export type ToastButtonId =
   | 'read'
@@ -729,6 +748,10 @@ export type GloflyApi = {
       on: boolean
     ) => Promise<ApiResult<Message>>
     markRead: (conversationId: string) => Promise<ApiResult<null>>
+    /** 0.9.3: forwards a message to up to 5 chats, groups or nebulas (with an optional note first) */
+    forward: (messageId: string, to: string[], note: string) => Promise<ApiResult<ForwardResult>>
+    /** 0.9.3: where you can forward to (recent chats, groups and nebulas you can post in) */
+    forwardTargets: () => Promise<ApiResult<ForwardTarget[]>>
     /** Pins a chat to the top of the sidebar (up to 10, saved on your account), or unpins it. */
     pin: (conversationId: string, pinned: boolean) => Promise<ApiResult<null>>
     /** Your order for the Groups page (saved on your account). */
