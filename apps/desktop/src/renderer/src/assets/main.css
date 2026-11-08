@@ -472,7 +472,56 @@ img.emoji {
     transform: translateY(24px) scale(0.96);
   }
 }
+/* 0.9.1 polish: a settings page (or similar content) easing in when you switch to it. */
+@keyframes glo-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+/* 0.9.1 polish: panels beside the main view (My games, a trail, members). In: they slide out from
+   behind their edge while the rest of the layout moves over smoothly (their negative margin shrinks
+   to 0, so the space they take grows instead of appearing at once). Out: the same, backwards
+   (.glo-side-out, kept on screen for the length of it by usePresence). --glo-side-w = the panel's
+   width plus any gap before it. */
+@keyframes glo-side-in {
+  from {
+    margin-right: calc(-1 * var(--glo-side-w, 340px));
+    opacity: 0;
+  }
+}
+@keyframes glo-side-out {
+  to {
+    margin-right: calc(-1 * var(--glo-side-w, 340px));
+    opacity: 0;
+  }
+}
+.glo-side-in {
+  animation: glo-side-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.glo-side-out {
+  animation: glo-side-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+}
+/* Content that swaps in place (one side panel replacing another) just eases in. */
+.glo-swap-in {
+  animation: glo-swap-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes glo-swap-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  .settings-content,
+  .glo-side-in,
+  .glo-swap-in {
+    animation: glo-fade-in 120ms ease-out;
+  }
+  .glo-side-out {
+    animation: glo-fade-out 120ms ease forwards;
+  }
   .menu,
   .msg-rise {
     animation: glo-fade-in 120ms ease-out;

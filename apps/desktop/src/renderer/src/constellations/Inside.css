@@ -822,6 +822,7 @@
 /* ───────────── Members ───────────── */
 
 .cx-members {
+  --glo-side-w: 240px;
   width: 240px;
   flex: none;
   background: var(--glo-subtle);

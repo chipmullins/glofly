@@ -22,6 +22,7 @@ import './dialogs.css'
 import './ProfileDialogs.css'
 import EmojiText from './EmojiText'
 import MyGamesPanel from './MyGames'
+import { usePresence } from '../lib/usePresence'
 import { NICKNAME_MAX } from '@glofly/shared/rules'
 
 type Fly = { left: string; top: number; size: 'big' | 'small'; rotate: number }
@@ -154,6 +155,8 @@ export default function ProfileCard({
   const game = playing(presence)
   // 2.0 My games: the pop-out beside the card.
   const [gamesOpen, setGamesOpen] = useState(false)
+  // 0.9.1: it slides out from behind the card (and back) instead of popping in and shoving it over.
+  const games = usePresence(gamesOpen)
 
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -333,8 +336,9 @@ export default function ProfileCard({
             </div>
           </div>
         </div>
-        {gamesOpen && (
+        {games.shown && (
           <MyGamesPanel
+            leaving={games.leaving}
             userId={person.id}
             name={shown.displayName}
             isMe={isMe === true}

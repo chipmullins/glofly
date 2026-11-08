@@ -40,7 +40,8 @@ export default function ThreadPanel({
   people,
   onSummary,
   onClose,
-  onProblem
+  onProblem,
+  growBy = 380
 }: {
   c: ConstellationDetail
   nebula: Nebula
@@ -53,6 +54,8 @@ export default function ThreadPanel({
   onSummary: (t: ThreadSummary) => void
   onClose: () => void
   onProblem: (message: string) => void
+  /** 0.9.1: how much wider than what it replaces (the members list) it is, for its slide-in */
+  growBy?: number
 }): React.JSX.Element {
   const [menu, setMenu] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -82,7 +85,11 @@ export default function ThreadPanel({
   }, [])
 
   return (
-    <aside className="thread-panel" aria-label={`Trail: ${thread.title}`}>
+    <aside
+      className="thread-panel glo-side-in"
+      style={{ '--glo-side-w': `${growBy}px` } as React.CSSProperties}
+      aria-label={`Trail: ${thread.title}`}
+    >
       <header className="thread-panel-head">
         <div className="thread-panel-row">
           <span className="thread-panel-icon">

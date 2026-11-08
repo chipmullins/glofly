@@ -879,7 +879,7 @@ export default function SettingsDialog({
             {appSettings && <span className="settings-version">Glofly v{appSettings.version}</span>}
           </nav>
 
-          <div className="settings-content" ref={contentRef}>
+          <div className="settings-content" ref={contentRef} key={page}>
             {notice && (
               <p className="dialog-message" role="alert">
                 {notice}

@@ -67,6 +67,7 @@ import BotButtons from './BotButtons'
 import ThreadPanel, { ThreadIcon, ThreadsButton } from './ThreadPanel'
 import { ForumIcon, ForumView, NewPostDialog, PostView } from './Forum'
 import { threads as threadApi } from '../lib/threads'
+import { usePresence } from '../lib/usePresence'
 import type { ThreadSummary } from '@glofly/shared/threads'
 import { integrations } from '../lib/integrations'
 import type { ConstellationCommand } from '@glofly/shared/integrations'
@@ -233,6 +234,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   const theme = CONSTELLATION_THEME[c.color]
   const [collapsed, setCollapsed] = useState<string[]>(() => readCollapsed(c.id))
   const [membersOpen, setMembersOpen] = useState(true)
+  // 0.9.1: the members list slides in and out instead of popping.
+  const membersShow = usePresence(membersOpen)
   const [menu, setMenu] = useState<MenuState>(null)
   /** 0.7.5: the member card whose ⋯ (more actions) is open */
   const [memberMore, setMemberMore] = useState<string | null>(null)
@@ -1358,11 +1361,15 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   )
 
   // ---- The members panel ----
-  const membersPanel = membersOpen && (
-    <aside aria-label="Members" className="cx-members">
+  const membersPanel = membersShow.shown && (
+    <aside
+      aria-label="Members"
+      className={membersShow.leaving ? 'cx-members glo-side-out' : 'cx-members glo-side-in'}
+      inert={membersShow.leaving || undefined}
+    >
       {/* Oct 17: invite right from here, for anyone who can invite (no trip into Settings). */}
       <div className="cx-members-head">
-        <span>Members · {c.members.length}</span>
+        <span>Members · {c.members.filter((m) => !m.user.bot).length}</span>
         {can(c, 'invite') && (
           <button
             type="button"
@@ -2084,6 +2091,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             }
             onClose={() => setOpenThread(null)}
             onProblem={props.onProblem}
+            growBy={membersOpen ? 380 - 240 : 380}
           />
         ) : (
           membersPanel

@@ -36,12 +36,15 @@ export default function MyGamesPanel({
   userId,
   name,
   isMe,
-  onClose
+  onClose,
+  leaving = false
 }: {
   userId: string
   name: string
   isMe: boolean
   onClose: () => void
+  /** 0.9.1: on its way out (closing animation) */
+  leaving?: boolean
 }): React.JSX.Element {
   const [games, setGames] = useState<MyGame[] | null>(null)
   const [visibility, setVisibility] = useState<MyGamesVisibility>('friends')
@@ -141,7 +144,7 @@ export default function MyGamesPanel({
   )
 
   return (
-    <aside className="mg-panel" role="dialog" aria-label={isMe ? 'My games' : `${first}'s games`}>
+    <aside className={leaving ? 'mg-panel glo-side-out' : 'mg-panel glo-side-in'} inert={leaving || undefined} role="dialog" aria-label={isMe ? 'My games' : `${first}'s games`}>
       <header className="mg-head">
         <h3>{isMe ? 'My games' : `${first}'s games`}</h3>
         <button type="button" className="mg-close" aria-label="Close" onClick={onClose}>

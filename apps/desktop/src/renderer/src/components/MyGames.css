@@ -20,6 +20,25 @@
   .profile-wrap > .mg-panel {
     position: static;
     flex: none;
+    /* 0.9.1: slides out from behind the card (its width + the gap), the card easing over */
+    --glo-side-w: 354px;
+  }
+  .profile-wrap > .profile-dialog {
+    position: relative;
+    z-index: 1;
+  }
+}
+/* While it slides, the window never gets a sideways scrollbar. */
+.dialog-backdrop:has(> .profile-wrap) {
+  overflow-x: clip;
+}
+@media (max-width: 1100px) {
+  /* Narrow windows: My games floats over the card; it just fades and grows a little. */
+  .mg-panel.glo-side-in {
+    animation: glo-fade-in 180ms ease-out;
+  }
+  .mg-panel.glo-side-out {
+    animation: glo-fade-out 160ms ease forwards;
   }
 }
 .mg-panel {
