@@ -1120,18 +1120,36 @@ export function CallProvider({
   }, [active, bump])
 
   // Changing devices in Settings → Voice & video during a call switches them right away.
+  // 0.9.1: only what actually changed. Before, any change (a new microphone, push to talk, the
+  // mirror) also re-opened the camera that was already running; on Windows a camera can't be
+  // opened twice, so the restart failed and the camera stayed off until you rejoined. The
+  // microphone was also restarted twice (switch + restart) for one change.
+  const appliedPrefs = useRef(getCallPrefs())
   useEffect(() => {
     return onCallPrefsChange((p) => {
+      const before = appliedPrefs.current
+      appliedPrefs.current = p
       const r = roomRef.current
       if (!r) return
-      if (p.micId) void r.switchActiveDevice('audioinput', p.micId).catch(() => {})
-      if (p.cameraId) void r.switchActiveDevice('videoinput', p.cameraId).catch(() => {})
-      void r.switchActiveDevice('audiooutput', p.speakerId || 'default').catch(() => {})
+      const micChanged = p.micId !== before.micId
+      const processingChanged =
+        p.echoCancellation !== before.echoCancellation ||
+        p.noiseSuppression !== before.noiseSuppression ||
+        p.autoGainControl !== before.autoGainControl
       const mic = r.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack
-      if (mic && 'restartTrack' in mic) {
+      if (processingChanged && mic && 'restartTrack' in mic) {
+        // One restart with the new device and settings together.
         void (mic as { restartTrack: (o: unknown) => Promise<void> })
           .restartTrack(audioCapture(p))
           .catch(() => {})
+      } else if (micChanged) {
+        void r.switchActiveDevice('audioinput', p.micId || 'default').catch(() => {})
+      }
+      if (p.cameraId !== before.cameraId) {
+        void r.switchActiveDevice('videoinput', p.cameraId || 'default').catch(() => {})
+      }
+      if (p.speakerId !== before.speakerId) {
+        void r.switchActiveDevice('audiooutput', p.speakerId || 'default').catch(() => {})
       }
       bump()
     })
