@@ -13,6 +13,8 @@ export type Live = {
   viewers: string[];
   /** When the broadcaster was last seen in the room */
   seenAt: number;
+  /** 0.9.3: friends were told (Go live → "Tell my friends") */
+  notify?: boolean;
 };
 
 export const live = new Map<string, Live>();
@@ -22,6 +24,7 @@ export const shown = (b: Live): Broadcast => ({
   startedAt: b.startedAt.toISOString(),
   title: b.title,
   viewers: b.viewers.length,
+  notified: b.notify !== false,
 });
 
 /** Broadcasts someone can watch: their friends' (and their own first). */

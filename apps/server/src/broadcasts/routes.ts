@@ -70,7 +70,7 @@ broadcastsRouter.post("/", startLimiter, async (req, res) => {
   let b = live.get(user.id);
   const fresh = !b;
   if (!b) {
-    b = { userId: user.id, room: `bc_${user.id}_${randomBytes(6).toString("hex")}`, startedAt: new Date(), title: title.data || null, viewers: [], seenAt: Date.now() };
+    b = { userId: user.id, room: `bc_${user.id}_${randomBytes(6).toString("hex")}`, startedAt: new Date(), title: title.data || null, viewers: [], seenAt: Date.now(), notify };
     live.set(user.id, b);
   } else if (title.data !== undefined) b.title = title.data || null;
   const token = await broadcastToken(b.room, user, "host");

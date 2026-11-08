@@ -390,30 +390,31 @@ export default function ProfileCard({
                   {shown.pronouns && <span className="profile-pronouns">{shown.pronouns}</span>}
                   {stream && !preview && <span className="live-pill">LIVE</span>}
                 </div>
-                {/* 0.9.3 (board 9): live on Twitch or Kick */}
-                {stream && !preview && (
-                  <div className="profile-live">
-                    <span className="profile-live-text">
-                      <b>Live on {siteName(stream.source)}</b>
-                      <span>{[stream.title, stream.game].filter(Boolean).join(' · ')}</span>
-                    </span>
-                    {isStreamPage(stream.url) && (
-                      <a
-                        className="profile-live-open"
-                        href={stream.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Watch on {siteName(stream.source)}
-                      </a>
-                    )}
-                  </div>
-                )}
                 <span>
                   @{shown.username}
                   {shown.realName && <> · their name is {shown.realName}</>}
                 </span>
               </div>
+              {/* 0.9.3 (board 9): live on Twitch or Kick */}
+              {stream && !preview && (
+                <div className="profile-live">
+                  <span className="profile-live-text">
+                    <b>Live on {siteName(stream.source)}</b>
+                    <span>{[stream.title, stream.game].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  {isStreamPage(stream.url) && (
+                    <a
+                      className="profile-live-open"
+                      href={stream.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Watch on {siteName(stream.source)}
+                    </a>
+                  )}
+                </div>
+              )}
+
               {!preview && (
                 <NicknameRow
                   userId={person.id}

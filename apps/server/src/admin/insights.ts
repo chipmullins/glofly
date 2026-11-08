@@ -739,6 +739,12 @@ export async function exportAccount(userId: string) {
       .innerJoin(s.oauthApps, eq(s.oauthApps.id, s.oauthGrants.appId))
       .where(eq(s.oauthGrants.userId, userId)),
     gameLinks: await db.select().from(s.gameLinks).where(eq(s.gameLinks.userId, userId)),
+    // 0.9.3: Steam, Twitch and Kick accounts they linked, and live alerts they set up.
+    linkedAccounts: await db.select().from(s.linkedAccounts).where(eq(s.linkedAccounts.userId, userId)),
+    liveAlertsMade: await db
+      .select({ constellationId: s.constellationLiveAlerts.constellationId, site: s.constellationLiveAlerts.site, channel: s.constellationLiveAlerts.channelName, createdAt: s.constellationLiveAlerts.createdAt })
+      .from(s.constellationLiveAlerts)
+      .where(eq(s.constellationLiveAlerts.createdBy, userId)),
     trailsFollowed: await db.select().from(s.threadFollows).where(eq(s.threadFollows.userId, userId)),
     appsMade: await db
       .select({ name: s.oauthApps.name, clientId: s.oauthApps.clientId, website: s.oauthApps.website, privacyUrl: s.oauthApps.privacyUrl, redirectUris: s.oauthApps.redirectUris, scopes: s.oauthApps.scopes, devTermsVersion: s.oauthApps.devTermsVersion, devTermsAcceptedAt: s.oauthApps.devTermsAcceptedAt, createdAt: s.oauthApps.createdAt })

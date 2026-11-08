@@ -88,6 +88,8 @@ export type Broadcast = {
   title: string | null
   /** People watching right now */
   viewers: number
+  /** 0.9.3: friends were told it started (missing on older servers: treat as yes) */
+  notified?: boolean
 }
 
 /** A pass to watch (or, for the broadcaster, to send) a broadcast. */

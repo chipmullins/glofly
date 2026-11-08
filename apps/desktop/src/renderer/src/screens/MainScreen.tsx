@@ -1104,6 +1104,10 @@ export default function MainScreen({
         }
         case 'notification:action': {
           // 0.9.3: a button on a Glofly Windows notification (calls are handled by the call code).
+          if (event.key.startsWith('golive:') && event.action === 'watch') {
+            setWatchingId(event.key.slice(7))
+            break
+          }
           if (event.key.startsWith('request:')) {
             const person = listsRef.current?.incoming.find((p) => `request:${p.id}` === event.key)
             if (!person) break
@@ -1127,6 +1131,7 @@ export default function MainScreen({
           }
           // Glofly is already in front: open the chat (or Friends → Pending for a request).
           if (event.conversationId) setOpenChatId(event.conversationId)
+          else if (event.key?.startsWith('golive:')) setWatchingId(event.key.slice(7))
           else if (event.key && !event.key.startsWith('request:')) {
             // 0.9.3: invites, events, "is online", went live: bringing Glofly up is enough.
           } else {
@@ -1159,6 +1164,40 @@ export default function MainScreen({
     }, 2500)
     return () => clearTimeout(t)
   }, [])
+
+  // 0.9.3: a friend went live with Go live (and told friends): the same Windows notification as a
+  // Twitch or Kick stream (approved canvas), with Watch. The first list after starting only counts
+  // as "already live", never as news.
+  const seenBroadcasts = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    const now = new Set(social.broadcasts.filter((b) => b.userId !== user.id).map((b) => `${b.userId}:${b.startedAt}`))
+    const before = seenBroadcasts.current
+    seenBroadcasts.current = now
+    if (!before) return
+    for (const b of social.broadcasts) {
+      if (b.userId === user.id || b.notified === false || before.has(`${b.userId}:${b.startedAt}`)) continue
+      const who = friendsById.get(b.userId)
+      if (!who || !shouldNotify()) continue
+      void notify(
+        {
+          key: `golive:${who.id}`,
+          conversationId: null,
+          title: `${who.displayName} went live on Glofly`,
+          body: b.title || 'Tap to watch',
+          rich: {
+            kind: 'live',
+            attribution: 'Glofly · Go live',
+            hero: true,
+            buttons: [
+              { id: 'watch', label: 'Watch', style: 'success' },
+              { id: 'not-now', label: 'Not now' }
+            ]
+          }
+        },
+        who
+      )
+    }
+  }, [social.broadcasts, user.id, friendsById])
 
   // Oct 30, 2026: while you're live, "Mom started watching" when someone drops in.
   const liveViewerCount =

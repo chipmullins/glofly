@@ -136,10 +136,11 @@ async function tellFriends(userId: string, site: StreamSite, live: StreamLive, s
   emitToUser(userId, "connections:changed", {}, true);
   const friends = await friendIdsOf(userId);
   const [who] = await db
-    .select({ id: users.id, displayName: users.displayName, avatarVersion: users.avatarVersion, headerVersion: users.headerVersion })
+    .select({ id: users.id, displayName: users.displayName, avatarVersion: users.avatarVersion, headerVersion: users.headerVersion, deleteAfter: users.deleteAfter })
     .from(users)
     .where(eq(users.id, userId));
-  if (!who) return;
+  // An account waiting to be deleted (its 30 days) tells nobody.
+  if (!who || who.deleteAfter) return;
   const stream: FriendStream = { userId, source: site, title: live.title, game: live.game, url: live.url, startedAt: live.startedAt };
   const told =
     settings.tellFriends === "off" ? [] : settings.tellFriends === "chosen" ? friends.filter((f) => settings.chosen.includes(f)) : friends;

@@ -118,7 +118,6 @@ export default function MyGamesPanel({
         <strong>{g.name}</strong>
         <span>
           {playtimeLabel(g.seconds)} · last played {relativeDay(g.lastPlayedAt)}
-          {g.steam ? ' · Steam' : ''}
           {g.hidden ? ' · hidden' : ''}
         </span>
       </span>

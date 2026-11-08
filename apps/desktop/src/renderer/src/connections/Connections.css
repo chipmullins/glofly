@@ -287,11 +287,16 @@
 }
 
 /* Profile card (board 9): live on Twitch or Kick, and the Steam profile link */
+.profile-names .live-pill,
+.profile-name-row .live-pill {
+  color: #ffffff;
+  font-size: 10px;
+}
 .profile-live {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 10px 12px;
   border-radius: 14px;
   background: var(--glo-subtle);

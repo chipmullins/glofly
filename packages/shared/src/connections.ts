@@ -114,7 +114,7 @@ export type AlertSite = 'twitch' | 'kick' | 'youtube'
 export const ALERT_SITES: readonly AlertSite[] = ['twitch', 'kick', 'youtube']
 export const alertSiteName = (site: AlertSite): string => (site === 'youtube' ? 'YouTube' : siteName(site))
 /** At most this many channels per constellation. */
-export const LIVE_ALERTS_MAX = 25
+export const LIVE_ALERTS_MAX = 10
 export const LIVE_ALERT_MESSAGE_MAX = 300
 export const DEFAULT_LIVE_MESSAGE = '{streamer} is live: {title}'
 export const DEFAULT_VIDEO_MESSAGE = '{streamer} posted: {title}'

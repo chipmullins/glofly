@@ -171,7 +171,7 @@
   made a cycle that crashed the server at start; the time zone is in `src/timeZone.ts`). Desktop Control's main
   process only allows listed routes (`main/api.ts ALLOWED`): add new Control routes there too. Control for iPhone:
   Face ID sign-in for 14 days (`POST /admin/auth/resume`, `admin_devices.remember_*`, test `test/faceid.e2e.ts`).
-- **Next (Nov 8, 2026):** start with the project doc `glofly-status-nov8.md` (0.9.2 waiting to ship, custom Windows notifications next, what's untested), then `glofly-release-0.9.2.md`.
+- **Next (Nov 8, 2026):** start with the project doc `glofly-status-nov8.md` (0.9.3 = 0.9.2 + the bulk round, waiting to ship; setup steps and what's untested), then `glofly-release-0.9.3.md`.
 - **0.8.6 (Oct 28, 2026): update on every launch, Windows + Mac** (project doc `glofly-release-0.8.6.md`).
   `src/main/launchUpdate.ts` runs before Glofly's window opens (`openGlofly` in index.ts starts everything
   else, once); the window is its own page `src/renderer/updater.html` + `src/renderer/src/updater/` (no
@@ -218,3 +218,17 @@
   `/games/cover/:id` (desktop `glofly-media://game-covers/<id>`); show "Game info by IGDB" wherever covers or search
   results appear. IGDB is free for non-commercial use: a paid Glofly needs a Twitch partnership first. The sandbox can't
   reach Twitch/IGDB: test with `test/igdb.e2e.ts` (stand-in, see its header).
+- **0.9.3 (Nov 8, 2026): the bulk round** (project doc `glofly-release-0.9.3.md`, migrations 0054–0057; ships 0.9.2 too).
+  Windows: Glofly's own toasts (`main/toastXml.ts`; presses come back through `Notification.handleActivation`;
+  buttons in `TOAST_BUTTONS`, keys like `live:<userId>` / `golive:<userId>`). Formatting: shared `format.ts`
+  (parser + code highlighter; previews use `plainFormatted`). Forwarding: `messages.forwarded`, POST
+  `/conversations/messages/:id/forward`, `constellations.forwarding_off`. Sidebar pins: `constellation_members.sidebar_pin`.
+  **Connections** (`src/connections/`: providers, live, steam, youtube, routes, hooks): Steam OpenID + Web API, Twitch
+  and Kick OAuth (tokens used once, then revoked), `linked_accounts`, `stream_watches` (shared listening per channel),
+  `users.muted_live_alerts`; webhooks `/hooks/twitch` (HMAC), `/hooks/kick` (RSA), `/hooks/youtube` (WebSub, HMAC-SHA1);
+  index.ts keeps `rawBody` for the first two. Stand-ins via `*_URL` env (see `test/connections.e2e.ts`). Live events
+  `connections:changed`, `friend:live` (modern-only). **Live alerts** (`constellations/liveAlerts.ts`): `messages.live_card`
+  + a link preview for older apps; pings checked when chosen (`groupMentionsFor(..., trusted)`); members' streams
+  respect Lockdown. **Kick in Watch Together** (`WatchSite` 'kick', feature `watchKick`, `?sites=2`, `siteLevel` in
+  calls/watch.ts). Desktop Twitch/Kick play in a `<webview>` of the player page (`main/watchView.ts` locks it down;
+  preload `watchHost.ts`). A new kind of linked data must be added to `site/privacy.html`.

@@ -35,6 +35,7 @@ import {
 } from "@glofly/shared";
 import { db } from "../db";
 import { redis } from "../redis";
+import { lockedDown } from "../admin/lockdown";
 import { constellationLiveAlerts, constellationMembers, constellationRoles, linkedAccounts, messages, nebulas, streamWatches } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
 import { isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
@@ -430,7 +431,8 @@ async function channelLive(site: StreamSite, channelId: string, login: string | 
     .from(linkedAccounts)
     .where(and(eq(linkedAccounts.provider, site), eq(linkedAccounts.externalId, channelId)));
   for (const l of linked) {
-    if (!connectionSettingsOf(l.settings).postInConstellations) continue;
+    // Lockdown (Control) holds a member's posts in constellations back, alerts included.
+    if (!connectionSettingsOf(l.settings).postInConstellations || (await lockedDown(l.userId))) continue;
     const rows = await db
       .select({ alert: constellationLiveAlerts })
       .from(constellationLiveAlerts)
