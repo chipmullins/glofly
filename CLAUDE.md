@@ -208,3 +208,9 @@
   **Legal (0.9.0):** `site/developer-terms.html` covers bots, webhooks, bridges and game servers (API keys show the notice).
   A new kind of data shared with apps, bots or game servers must be added to `site/privacy.html`.
   Member counts leave out bots (`users.bot`). Next: roadmap 4.4 moderation, 4.5 stage/announcement nebulas, 4.6 scale (mockups first).
+- **0.9.1 (Nov 8, 2026): polish + profiles 2.0** (project doc `glofly-release-0.9.1.md`, migration 0052). Approved canvas
+  "Glofly profiles"; keep screens matching it. Server `profile/board.ts` (privacy, board checks, mutuals, activity) +
+  `profile/routes.ts` (`/users/me/header`, `/headers/:userId/:version`, `/users/:id/mutuals`, `/users/:id/activity`); shared
+  `profiles.ts`. A new kind of profile data must follow `shows()` (board/activity/mutuals privacy; restricted = friends
+  only) and be added to `site/privacy.html`. Desktop: `ProfileBoard.tsx` (card tabs), `ProfileSettings.tsx` (Settings →
+  Profile); phones: `src/profiles/`, `app/(main)/edit-board.tsx`. Game art is letter tiles until IGDB (next).
