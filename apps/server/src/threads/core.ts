@@ -158,3 +158,14 @@ export async function myOpenThreads(userId: string, nebulaIds: string[]): Promis
   const days = await closeDaysOf(nebulaIds);
   return (await summaries(rows.map((r) => r.t), userId, days)).filter((s) => !s.closed);
 }
+
+/**
+ * 0.9.1: a star chart (forum nebula) has no timeline of its own: everything in it is a signal
+ * (thread). Older apps show it as a text nebula with a box to type in, so plain messages are refused
+ * instead of becoming invisible ones that still counted as unread.
+ */
+export async function isForumConversation(conversationId: string): Promise<boolean> {
+  const [n] = await db.select({ kind: nebulas.kind }).from(nebulas).where(eq(nebulas.conversationId, conversationId)).limit(1);
+  return n?.kind === "forum";
+}
+export const FORUM_NEEDS_SIGNAL = "This is a star chart: start a signal or reply in one. Update Glofly to post here.";

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chipsFor, followersOf, noteReply, summaries as threadSummaries, threadIn, threadRowOf } from "../threads/core";
+import { FORUM_NEEDS_SIGNAL, chipsFor, followersOf, isForumConversation, noteReply, summaries as threadSummaries, threadIn, threadRowOf } from "../threads/core";
 import { inNebulaTimeline } from "../threads/timeline";
 import express, { Router, type Response } from "express";
 import { rateLimit } from "../rateLimit";
@@ -1499,6 +1499,10 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
       return;
     }
   }
+  if (!thread && chat.kind === "nebula" && (await isForumConversation(id.data))) {
+    res.status(400).json({ error: "star_chart", message: FORUM_NEEDS_SIGNAL });
+    return;
+  }
   const alsoInNebula = !!thread && wantsAlsoInNebula && thread.nebulaKind === "text";
   // A reply must point at a message in this same chat (and the same thread) that still exists.
   const replyToId = replyTo.success ? (replyTo.data ?? null) : null;
@@ -1687,6 +1691,7 @@ export async function postScheduledText(
   const chat = await access(conversationId, myId);
   if (!chat) return { ok: false, reason: "You're no longer in this chat." };
   if (!(await canPost(chat, myId))) return { ok: false, reason: await cantPostMessage(chat, myId) };
+  if (chat.kind === "nebula" && (await isForumConversation(conversationId))) return { ok: false, reason: FORUM_NEEDS_SIGNAL };
   // 0.8.0 AutoMod lite runs on scheduled nebula messages too.
   if (chat.kind === "nebula") {
     const refused = await automodGate(conversationId, myId, text, replyToId);

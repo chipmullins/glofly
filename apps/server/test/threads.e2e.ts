@@ -162,6 +162,10 @@ test("forum nebulas: tags (required, staff-only), older apps see read-only text"
   assert.equal(asOld.kind, "text");
   assert.equal(asOld.readOnly, true);
   assert.equal(asOld.forum, undefined);
+  // A plain message (an older app's box) is refused instead of becoming an invisible, unread one.
+  const plain = await call(`/conversations/${forum.conversationId}/messages`, { method: "POST", token: owner.token, body: { body: "typed in an old app" } });
+  assert.equal(plain.status, 400);
+  assert.equal(plain.json.error, "star_chart");
 
   const noTag = await call(`/constellations/${cid}/nebulas/${forum.id}/threads`, { method: "POST", token: riley.token, body: { title: "Can't join FiveM" } });
   assert.equal(noTag.status, 400);
