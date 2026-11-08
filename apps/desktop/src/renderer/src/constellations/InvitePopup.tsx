@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { InvitePopup as Invite } from '@glofly/shared/constellations'
 import { api } from '../lib/constellations'
 import { playSound } from '../lib/sounds'
+import { notify, shouldNotify } from '../lib/notify'
 import { ConstellationIcon } from './bits'
 import { GalaxyIcon } from './sky'
 
@@ -24,6 +25,28 @@ export default function InvitePopup({
       window.glofly.onEvent((event) => {
         if (event.type !== 'constellation:invited') return
         playSound('friendRequest')
+        // 0.9.3: a Windows notification too while Glofly isn't in front (Open brings it up).
+        if (shouldNotify()) {
+          const inv = event.invite
+          const first = inv.by.displayName.trim().split(/\s+/)[0] || inv.by.username
+          void notify(
+            {
+              key: `cxinvite:${inv.id}`.slice(0, 60),
+              conversationId: null,
+              title: `${first} invited you to ${inv.name}`,
+              body: `${inv.memberCount} ${inv.memberCount === 1 ? 'member' : 'members'}`,
+              rich: {
+                kind: 'invite',
+                attribution: 'Glofly · Constellation invite',
+                buttons: [
+                  { id: 'open', label: 'Open' },
+                  { id: 'not-now', label: 'Not now' }
+                ]
+              }
+            },
+            inv.by
+          )
+        }
         setQueue((q) =>
           [
             ...q.filter((i) => i.constellationId !== event.invite.constellationId),

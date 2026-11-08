@@ -226,6 +226,19 @@ export async function muteConversation(
   return result.ok ? { ok: true, data: { mutedUntil: result.data.mutedUntil ?? null } } : result
 }
 
+/** 0.9.3: mutes until a set moment ("Mute until tomorrow" on a Windows notification). */
+export async function muteConversationUntil(
+  conversationId: string,
+  until: string
+): Promise<ApiResult<{ mutedUntil: string | null }>> {
+  const result = await request<{ mutedUntil: string | null }>(
+    'PUT',
+    `/conversations/${conversationId}/mute`,
+    { duration: 'until', until }
+  )
+  return result.ok ? { ok: true, data: { mutedUntil: result.data.mutedUntil ?? null } } : result
+}
+
 export async function markRead(conversationId: string): Promise<ApiResult<null>> {
   const result = await request('POST', `/conversations/${conversationId}/read`)
   return result.ok ? { ok: true, data: null } : result

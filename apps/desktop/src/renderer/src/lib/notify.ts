@@ -77,14 +77,52 @@ async function faceImage(person: PublicUser): Promise<string | null> {
   }
 }
 
-/** Shows a notification with this person's face as its picture. */
+/** A photo (a message's photo, a game picture, a header image) made small enough for a toast. */
+async function pictureData(src: string, maxWidth: number): Promise<string | null> {
+  const img = await loadImage(src)
+  if (!img || !img.naturalWidth) return null
+  const scale = Math.min(1, maxWidth / img.naturalWidth)
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+  try {
+    const data = canvas.toDataURL('image/jpeg', 0.82)
+    return data.length <= 1_400_000 ? data : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Shows a notification with this person's face as its picture. 0.9.3: on Windows it's Glofly's own
+ * notification (`rich`: round photo, where it came from, buttons, a picture). `pictureUrl` is a
+ * photo to show in it (only when previews are on).
+ */
 export async function notify(
   n: Omit<ShowNotification, 'icon'>,
-  person: PublicUser | null
+  person: PublicUser | null,
+  pictureUrl?: string | null
 ): Promise<void> {
   const icon = person ? await faceImage(person) : null
-  window.glofly.notifications.show({ ...n, icon })
+  const rich = n.rich ?? { kind: 'other' as const, attribution: 'Glofly' }
+  const picture =
+    pictureUrl && previewsOn() ? await pictureData(pictureUrl, rich.hero ? 728 : 560) : null
+  window.glofly.notifications.show({ ...n, icon, rich: { ...rich, ...(picture ? { picture } : {}) } })
 }
+
+/** "Maya" from "Maya Reyes" (notification buttons and reply boxes). */
+export const firstNameOf = (p: Pick<PublicUser, 'displayName' | 'username'>): string =>
+  p.displayName.trim().split(/\s+/)[0] || p.username
+
+/** The three buttons every message notification gets (Chip, Nov 8: both mute choices). */
+export const MESSAGE_BUTTONS = [
+  { id: 'read', label: 'Mark as read' },
+  { id: 'mute-1h', label: 'Mute 1 h' },
+  { id: 'mute-tomorrow', label: 'Mute until tomorrow' }
+] as const
 
 export function clearNotification(key: string): void {
   window.glofly.notifications.clear(key)

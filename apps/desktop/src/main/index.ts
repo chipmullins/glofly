@@ -66,6 +66,7 @@ import {
   clearAllNotifications,
   clearNotification,
   isShowNotification,
+  listenToNotificationPresses,
   setBadge,
   showTestNotification,
   openNotificationSettings,
@@ -1378,6 +1379,8 @@ app.whenReady().then(() => {
   loadAppSettings()
   configurePauseChecks(API_URL)
   registerIpcHandlers()
+  // 0.9.3: presses on Glofly's Windows notifications (also from Action Center after a restart).
+  listenToNotificationPresses()
   startIdleWatch()
   // 0.8.6: the updater window checks for a new version first (and installs it) before Glofly
   // opens. When nothing's new, or it can't check, it hands over to openGlofly.

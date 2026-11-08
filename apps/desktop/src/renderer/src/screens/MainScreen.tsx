@@ -71,8 +71,16 @@ import { isClosed, isMuted, mentionsMe, muteUntil } from '../lib/mentions'
 import { findChats, type ChatResult } from '../lib/chatSearch'
 import { GroupPeopleDialog, GroupSettingsDialog } from '../components/GroupDialogs'
 import { chatTitle } from '../lib/groups'
-import { attachmentSummary } from '../lib/attachments'
-import { badgeImage, clearNotification, notify, previewsOn, shouldNotify } from '../lib/notify'
+import { attachmentSummary, photoUrl } from '../lib/attachments'
+import {
+  badgeImage,
+  clearNotification,
+  firstNameOf,
+  MESSAGE_BUTTONS,
+  notify,
+  previewsOn,
+  shouldNotify
+} from '../lib/notify'
 import { CallProvider } from '../calls/CallContext'
 import UpdateBar from '../components/UpdateBar'
 import ConfirmEmailBar from '../components/ConfirmEmailBar'
@@ -127,7 +135,7 @@ const FILTERS: { id: FriendFilter; label: string }[] = [
 // is just a safety net in case an update is ever missed.
 const REFRESH_MS = 60_000
 
-type Confirm = { kind: 'remove' | 'block'; person: PublicUser } | null
+type Confirm = { kind: 'remove' | 'block' | 'declineRequest'; person: PublicUser } | null
 /** "New group chat", or "Add people" to a group */
 type GroupPicker = { groupId: string | null } | null
 
@@ -495,6 +503,8 @@ export default function MainScreen({
   const [teamNotices, setTeamNotices] = useState<TeamNotice[]>([])
   const [announcement, setAnnouncement] = useState<Announcement | null>(null)
   const [lists, setLists] = useState<FriendLists | null>(null)
+  const listsRef = useRef<FriendLists | null>(null)
+  listsRef.current = lists
   /** Friends by id (0.5.0: who's live, free to hang, birthdays) */
   const friendsById = useMemo(() => new Map((lists?.friends ?? []).map((f) => [f.id, f])), [lists])
   const friendsRef = useRef<PublicUser[]>([])
@@ -703,7 +713,15 @@ export default function MainScreen({
               key: `request:${p.id}`,
               conversationId: null,
               title: p.displayName,
-              body: `@${p.username} sent you a friend request`
+              body: `@${p.username} sent you a friend request`,
+              rich: {
+                kind: 'request',
+                attribution: 'Glofly · Friend request',
+                buttons: [
+                  { id: 'accept', label: 'Accept' },
+                  { id: 'decline-request', label: 'Decline' }
+                ]
+              }
             },
             p
           )
@@ -775,14 +793,24 @@ export default function MainScreen({
     unseen.current.set(m.conversationId, count)
     const text = (shortBody(m.body) || attachmentSummary(m.attachments)).replace(/\s+/g, ' ').trim()
     const more = count > 1 ? ` · +${count - 1} more` : ''
+    const photo = m.attachments.find((a) => a.kind === 'image')
+    const where = chat?.kind === 'group' ? chatTitle(chat) : null
     void notify(
       {
         key: m.conversationId,
         conversationId: m.conversationId,
-        title: chat?.kind === 'group' ? `${name} · ${chatTitle(chat)}` : name,
-        body: previewsOn() ? `${text}${more}` : count > 1 ? `${count} new messages` : 'New message'
+        title: where ? `${name} · ${where}` : name,
+        body: previewsOn() ? `${text}${more}` : count > 1 ? `${count} new messages` : 'New message',
+        rich: {
+          kind: 'message',
+          attribution: where ? `Glofly · ${where}` : 'Glofly · Direct message',
+          header: { id: `chat:${m.conversationId}`, title: where ?? name },
+          reply: `Reply to ${where ?? (sender ? firstNameOf(sender) : name)}`.slice(0, 60),
+          buttons: [...MESSAGE_BUTTONS]
+        }
       },
-      sender
+      sender,
+      photo ? photoUrl(m.conversationId, photo.id, 'preview') : null
     )
   }, [])
 
@@ -1008,19 +1036,55 @@ export default function MainScreen({
           playSound('constellationMessage')
           if (shouldNotify()) {
             const where = `#${event.nebulaName ?? ''}`
+            const place = `${event.constellationName ?? 'Constellation'} › ${where}`
+            const senderName = event.senderName ?? 'Someone'
+            const mention = event.alert === 'mention'
             void notify(
               {
                 key: `nebula:${event.conversationId}`,
                 conversationId: event.conversationId,
-                title: `${event.senderName ?? 'Someone'} · ${where}`,
+                title: mention ? `${senderName} mentioned you` : `${senderName} · ${where}`,
                 body: previewsOn()
-                  ? `${event.constellationName ? `${event.constellationName}: ` : ''}${event.preview ?? ''}`
-                  : event.alert === 'mention'
+                  ? `${!mention && event.constellationName ? `${event.constellationName}: ` : ''}${event.preview ?? ''}`
+                  : mention
                     ? `Mentioned you in ${event.constellationName ?? 'a constellation'}`
-                    : `New message in ${event.constellationName ?? 'a constellation'}`
+                    : `New message in ${event.constellationName ?? 'a constellation'}`,
+                rich: {
+                  kind: mention ? 'mention' : 'message',
+                  attribution: `Glofly · ${place}`.slice(0, 120),
+                  header: { id: `chat:${event.conversationId}`, title: place.slice(0, 100) },
+                  reply: `Reply in ${where}`.slice(0, 60),
+                  buttons: [
+                    { id: 'read', label: 'Mark as read' },
+                    { id: 'mute-1h', label: `Mute ${where} 1 h`.slice(0, 40) },
+                    { id: 'mute-tomorrow', label: 'Mute until tomorrow' }
+                  ]
+                }
               },
-              null
+              {
+                id: event.senderId,
+                username: senderName,
+                displayName: senderName,
+                avatarVersion: event.senderAvatarVersion ?? null
+              } as PublicUser
             )
+          }
+          break
+        }
+        case 'notification:action': {
+          // 0.9.3: a button on a Glofly Windows notification (calls are handled by the call code).
+          if (event.key.startsWith('request:')) {
+            const person = listsRef.current?.incoming.find((p) => `request:${p.id}` === event.key)
+            if (!person) break
+            if (event.action === 'accept') {
+              void window.glofly.friends.accept(person.id).then(() => refresh())
+            } else if (event.action === 'decline-request') {
+              // Chip, Nov 8: declining asks first.
+              setOpenChatId(null)
+              setPage('friends')
+              setFilter('pending')
+              setConfirm({ kind: 'declineRequest', person })
+            }
           }
           break
         }
@@ -1032,7 +1096,9 @@ export default function MainScreen({
           }
           // Glofly is already in front: open the chat (or Friends → Pending for a request).
           if (event.conversationId) setOpenChatId(event.conversationId)
-          else {
+          else if (event.key && !event.key.startsWith('request:')) {
+            // 0.9.3: invites, events, "is online", went live: bringing Glofly up is enough.
+          } else {
             setOpenChatId(null)
             setPage('friends')
             setFilter('pending')
@@ -1499,7 +1565,9 @@ export default function MainScreen({
     const ok = await run(person.id, () =>
       kind === 'remove'
         ? window.glofly.friends.remove(person.id)
-        : window.glofly.friends.block(person.id)
+        : kind === 'declineRequest'
+          ? window.glofly.friends.removeRequest(person.id)
+          : window.glofly.friends.block(person.id)
     )
     if (ok) setConfirm(null)
   }
@@ -2484,14 +2552,24 @@ export default function MainScreen({
             title={
               confirm.kind === 'remove'
                 ? `Remove ${confirm.person.displayName}?`
-                : `Block ${confirm.person.displayName}?`
+                : confirm.kind === 'declineRequest'
+                  ? `Decline ${confirm.person.displayName}'s friend request?`
+                  : `Block ${confirm.person.displayName}?`
             }
             message={
               confirm.kind === 'remove'
                 ? `You'll no longer be friends with @${confirm.person.username}. You can send a new request later.`
-                : `@${confirm.person.username} will be removed from your friends, won't find you in search, and can't send you requests. You can unblock them anytime.`
+                : confirm.kind === 'declineRequest'
+                  ? `@${confirm.person.username} won't be told. They can send you a new request later.`
+                  : `@${confirm.person.username} will be removed from your friends, won't find you in search, and can't send you requests. You can unblock them anytime.`
             }
-            confirmLabel={confirm.kind === 'remove' ? 'Remove friend' : 'Block'}
+            confirmLabel={
+              confirm.kind === 'remove'
+                ? 'Remove friend'
+                : confirm.kind === 'declineRequest'
+                  ? 'Decline'
+                  : 'Block'
+            }
             danger
             busy={busy === confirm.person.id}
             onConfirm={confirmAction}

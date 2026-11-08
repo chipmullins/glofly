@@ -128,6 +128,8 @@ export type NotificationSettings = {
   enabled: boolean
   /** "Show message preview": off shows "New message" instead of the text */
   preview: boolean
+  /** 0.9.3, Windows: Glofly's own notifications (photos, buttons, calls that stay up). Default on. */
+  rich?: boolean
 }
 
 /** A Windows notification, built by the window and shown by the main process. */
@@ -142,6 +144,44 @@ export type ShowNotification = {
   icon: string | null
   /** Calls stay until answered or dismissed */
   call?: boolean
+  /** 0.9.3: Glofly's own Windows notification (ignored elsewhere: the Mac keeps the plain one) */
+  rich?: RichNotification
+}
+
+/** 0.9.3: the buttons a Glofly Windows notification can have. */
+export type ToastButtonId =
+  | 'read'
+  | 'mute-1h'
+  | 'mute-tomorrow'
+  | 'answer'
+  | 'answer-voice'
+  | 'decline'
+  | 'join'
+  | 'accept'
+  | 'decline-request'
+  | 'watch'
+  | 'open'
+  | 'not-now'
+  | 'join-voice'
+
+export type ToastButton = { id: ToastButtonId; label: string; style?: 'success' | 'critical' }
+
+/** 0.9.3 (approved canvas "Glofly Windows notifications: today vs new"). */
+export type RichNotification = {
+  kind: 'message' | 'mention' | 'call' | 'request' | 'live' | 'invite' | 'voice' | 'other'
+  /** "Glofly · Night Raiders › #general" (Windows' small attribution line) */
+  attribution?: string
+  /** One group per chat in the notification center */
+  header?: { id: string; title: string }
+  /** A photo or picture shown in the notification (JPEG/PNG data: URL, small) */
+  picture?: string | null
+  /** The picture goes across the top (went live) instead of under the text (photos) */
+  hero?: boolean
+  /** A reply box with this placeholder ("Reply to Maya") */
+  reply?: string
+  /** Windows' incoming-call style: stays on screen while it rings */
+  callScenario?: boolean
+  buttons?: ToastButton[]
 }
 
 /** Short sounds for alerts and call moments, and longer ones that loop while a call rings. */
@@ -346,7 +386,9 @@ export type GloflyEvent =
   | { type: 'session:expired' }
   | { type: 'appearance'; accent: AccentChoice; dark: boolean }
   /** A Windows notification was clicked (Glofly is already brought to the front). */
-  | { type: 'notification:click'; conversationId: string | null }
+  | { type: 'notification:click'; conversationId: string | null; key?: string }
+  /** 0.9.3: a button on a Glofly Windows notification that the window carries out */
+  | { type: 'notification:action'; key: string; action: ToastButtonId; conversationId: string | null }
   /** Web only: the browser's notification permission changed (asked from a click). */
   | { type: 'notifications:permission'; permission: 'granted' | 'denied' | 'default' }
 

@@ -1002,16 +1002,29 @@ export function CallProvider({
           // the only thing the device can ring with, so it's shown even with the tab in front.
           if (shouldNotify() || (isWeb && !soundCanPlay() && notificationsAllowed())) {
             const kind = call.video ? 'Video call' : 'Voice call'
+            const group = chat.kind === 'group'
             void notify(
               {
                 key: `call:${call.id}`,
                 conversationId: call.conversationId,
                 call: true,
-                title:
-                  chat.kind === 'group'
-                    ? `${firstName(who)} is calling ${chat.title}`
-                    : `${who.displayName} is calling you`,
-                body: `${kind} · Click to answer`
+                title: group
+                  ? `${firstName(who)} is calling ${chat.title}`
+                  : `${who.displayName} is calling you`,
+                body: `${kind} · Click to answer`,
+                // 0.9.3: Windows' call style: it stays up with Answer / Decline while it rings.
+                rich: {
+                  kind: 'call',
+                  callScenario: true,
+                  attribution: group ? `Glofly · ${chat.title}`.slice(0, 120) : 'Glofly · Direct call',
+                  buttons: [
+                    { id: 'answer', label: group ? 'Join' : 'Answer', style: 'success' },
+                    ...(call.video
+                      ? [{ id: 'answer-voice' as const, label: 'Voice only' }]
+                      : []),
+                    { id: 'decline', label: group ? 'Not now' : 'Decline', style: 'critical' }
+                  ]
+                }
               },
               who
             )
@@ -1099,6 +1112,18 @@ export function CallProvider({
       if (event.type === 'connection' && event.connected) void syncActive()
     })
   }, [onCallUpdate, syncActive])
+
+  // 0.9.3: Answer / Voice only / Decline on the Windows call notification.
+  useEffect(() => {
+    return window.glofly.onEvent((event) => {
+      if (event.type !== 'notification:action' || !event.key.startsWith('call:')) return
+      const inc = incomingRef.current
+      if (!inc || `call:${inc.call.id}` !== event.key) return
+      if (event.action === 'answer') void answer(inc.call.video)
+      else if (event.action === 'answer-voice') void answer(false)
+      else if (event.action === 'decline') void decline()
+    })
+  }, [answer, decline])
 
   // On sign-in, once the chat list is here (calls need it to know who's who).
   const synced = useRef(false)

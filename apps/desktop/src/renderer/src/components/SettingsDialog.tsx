@@ -1084,6 +1084,27 @@ export default function SettingsDialog({
                         <span className="toggle toggle--loading" aria-hidden="true" />
                       )}
                     </div>
+                    {!isWeb && !isMac && (
+                      <div className="settings-row">
+                        <div className="settings-row-text">
+                          <span className="settings-row-label">Glofly-style notifications</span>
+                          <span className="settings-row-desc">
+                            Round photos, Reply and Mark as read, pictures, and calls that stay up
+                            with Answer and Decline. Off uses Windows&apos; plain notifications.
+                          </span>
+                        </div>
+                        {appSettings ? (
+                          <Toggle
+                            on={appSettings.notifications.rich !== false}
+                            label="Glofly-style notifications"
+                            disabled={!appSettings.notifications.enabled}
+                            onChange={(on) => void changeApp({ notifications: { rich: on } })}
+                          />
+                        ) : (
+                          <span className="toggle toggle--loading" aria-hidden="true" />
+                        )}
+                      </div>
+                    )}
                     {settings?.onlineAlertsMode !== undefined ? (
                       <div className="settings-row">
                         <div className="settings-row-text">

@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, nativeImage, nativeTheme, Tray } from 'electr
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { goodbyeFirst, skipGoodbye } from './goodbye'
+import { setRichNotifications } from './notifications'
 import type {
   AccentChoice,
   AlertSound,
@@ -61,7 +62,7 @@ const isNotificationChanges = (value: unknown): value is Partial<NotificationSet
   value !== null &&
   !Array.isArray(value) &&
   Object.entries(value).every(
-    ([k, v]) => (k === 'enabled' || k === 'preview') && typeof v === 'boolean'
+    ([k, v]) => (k === 'enabled' || k === 'preview' || k === 'rich') && typeof v === 'boolean'
   )
 
 const ALERT_SOUNDS: AlertSound[] = [
@@ -241,6 +242,7 @@ export function loadAppSettings(): void {
   } catch {
     // First run (or an unreadable file): keep the defaults.
   }
+  setRichNotifications(saved.notifications.rich !== false)
   // Light, dark, or follow Windows. The window's colors follow this (prefers-color-scheme).
   nativeTheme.themeSource = saved.theme
 }
@@ -339,6 +341,7 @@ export function setAppSettings(changes: AppSettingsChanges): AppSettings {
   if (changes.sounds) saved.sounds = { ...saved.sounds, ...changes.sounds }
   if (changes.notifications) {
     saved.notifications = { ...saved.notifications, ...changes.notifications }
+    setRichNotifications(saved.notifications.rich !== false)
   }
   if (
     changes.notifications ||

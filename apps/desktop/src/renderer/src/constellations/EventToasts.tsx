@@ -55,6 +55,20 @@ export default function EventToasts({
   onOpen: (place: { constellationId: string; nebulaId: string | null }) => void
 }): React.JSX.Element | null {
   const [queue, setQueue] = useState<Toast[]>([])
+  // 0.9.3: "Join" on the Windows notification goes straight into the voice nebula.
+  useEffect(
+    () =>
+      window.glofly.onEvent((event) => {
+        if (event.type !== 'notification:action' || event.action !== 'join-voice') return
+        if (!event.key.startsWith('event:')) return
+        setQueue((q) => {
+          const t = q.find((x) => `event:${x.eventId}` === event.key)
+          if (t?.voiceNebulaId) onOpen({ constellationId: t.constellationId, nebulaId: t.voiceNebulaId })
+          return t ? q.filter((x) => x.key !== t.key) : q
+        })
+      }),
+    [onOpen]
+  )
   useEffect(
     () =>
       window.glofly.onEvent((event) => {
@@ -97,7 +111,18 @@ export default function EventToasts({
                     ? toast.voiceName
                       ? `${toast.voiceName} is open · ${toast.constellationName}`
                       : toast.constellationName
-                    : `${toast.constellationName}${toast.voiceName ? ` · ${toast.voiceName}` : ''}`
+                    : `${toast.constellationName}${toast.voiceName ? ` · ${toast.voiceName}` : ''}`,
+                rich: {
+                  kind: 'voice',
+                  attribution: `Glofly · ${toast.constellationName}`.slice(0, 120),
+                  buttons:
+                    phase === 'started' && toast.voiceNebulaId
+                      ? [
+                          { id: 'join-voice', label: `Join ${toast.voiceName || 'voice'}`.slice(0, 40), style: 'success' },
+                          { id: 'not-now', label: 'Later' }
+                        ]
+                      : []
+                }
               },
               null
             )

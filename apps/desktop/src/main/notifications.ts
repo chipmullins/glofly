@@ -1,8 +1,13 @@
+import { createHash } from 'node:crypto'
+import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, nativeImage, Notification, shell } from 'electron'
-import type { ShowNotification } from '../preload/api-types'
+import type { ShowNotification, ToastButtonId } from '../preload/api-types'
 import { showWindow } from './app-settings'
-import { markRead, sendMessage } from './messages'
+import { markRead, muteConversation, muteConversationUntil, sendMessage } from './messages'
 import { badgeNumber, badgeText, cleanReply, replyTarget } from './taskbar-core'
+import { buildToastXml, isRichNotification, payloadFrom, tomorrowMorning } from './toastXml'
 
 // Windows notifications (toasts) and the unread badge on the taskbar icon.
 //
@@ -41,13 +46,182 @@ export function isShowNotification(value: unknown): value is ShowNotification {
     typeof v.title === 'string' &&
     typeof v.body === 'string' &&
     (v.icon === null || typeof v.icon === 'string') &&
-    (v.call === undefined || typeof v.call === 'boolean')
+    (v.call === undefined || typeof v.call === 'boolean') &&
+    (v.rich === undefined || isRichNotification(v.rich))
   )
 }
+
+// ---------------------------------------------------------------------------------------
+// 0.9.3: Glofly's own Windows notifications (round photo, buttons, call style, pictures).
+
+/** Settings → Notifications & sounds → "Glofly-style notifications" (Windows; on by default). */
+let richOn = true
+export function setRichNotifications(on: boolean): void {
+  richOn = on
+}
+
+const MAX_RICH_PICTURE = 1_500_000
+let pictureDir: string | null = null
+
+/** Where toast pictures go: Windows reads them from disk. Old ones are cleared at start. */
+function toastFolder(): string {
+  if (pictureDir) return pictureDir
+  pictureDir = join(app.getPath('temp'), 'glofly-toasts')
+  mkdirSync(pictureDir, { recursive: true })
+  try {
+    const dayAgo = Date.now() - 24 * 3600_000
+    for (const name of readdirSync(pictureDir)) {
+      const file = join(pictureDir, name)
+      if (statSync(file).mtimeMs < dayAgo) rmSync(file, { force: true })
+    }
+  } catch {
+    // a file in use: next time
+  }
+  return pictureDir
+}
+
+/** Saves a picture from the window (PNG or JPEG data: URL only) and returns its file:/// address. */
+function savePicture(dataUrl: unknown, max: number): string | null {
+  if (typeof dataUrl !== 'string' || dataUrl.length > max) return null
+  const m = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl)
+  if (!m) return null
+  const bytes = Buffer.from(m[2], 'base64')
+  // Check it really is that kind of picture (PNG / JPEG signature).
+  const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  if ((m[1] === 'png' && !png) || (m[1] === 'jpeg' && !jpeg)) return null
+  try {
+    const name = `${createHash('sha1').update(bytes).digest('hex')}.${m[1] === 'png' ? 'png' : 'jpg'}`
+    const file = join(toastFolder(), name)
+    writeFileSync(file, bytes)
+    return pathToFileURL(file).href
+  } catch {
+    return null
+  }
+}
+
+/** The notifications shown with buttons, by key: what each button index was. */
+const richButtons = new Map<string, ToastButtonId[]>()
+
+/**
+ * Presses on Glofly's Windows notifications (the toast, a button, or Send in its reply box).
+ * Electron hands every one of them here, also after Glofly restarted or the notification object
+ * is gone (Action Center). Registered once at start (Windows only).
+ */
+export function listenToNotificationPresses(): void {
+  if (process.platform !== 'win32' || typeof Notification.handleActivation !== 'function') return
+  Notification.handleActivation((details) => {
+    const p = payloadFrom(details.arguments ?? '')
+    if (!p) return
+    if (recentlyHandled(details.arguments)) return
+    if (details.type === 'reply') {
+      const typed = details.reply ?? details.userInputs?.reply ?? ''
+      clearNotification(p.k)
+      const to = replyTarget({ key: p.k, conversationId: p.c })
+      if (to) void sendReply(to, typed)
+      return
+    }
+    const action = p.a ?? (details.type === 'action' ? richButtons.get(p.k)?.[details.actionIndex ?? -1] : undefined)
+    if (!action) {
+      clickThrough(p.c, p.k)
+      clearNotification(p.k)
+      return
+    }
+    clearNotification(p.k)
+    void runAction(p.k, p.c, action)
+  })
+}
+
+const handled = new Map<string, number>()
+function recentlyHandled(args: string): boolean {
+  const now = Date.now()
+  for (const [k, at] of handled) if (now - at > 3000) handled.delete(k)
+  if (handled.has(args)) return true
+  handled.set(args, now)
+  return false
+}
+
+function clickThrough(conversationId: string | null, key: string): void {
+  showWindow()
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send('glofly:event', { type: 'notification:click', conversationId, key })
+  }
+}
+
+/** Buttons that only need the server run here; the rest go to the window (calls, friends, Watch). */
+async function runAction(key: string, conversationId: string | null, action: ToastButtonId): Promise<void> {
+  if (conversationId && (action === 'read' || action === 'mute-1h' || action === 'mute-tomorrow')) {
+    if (action === 'read') await markRead(conversationId)
+    else if (action === 'mute-1h') await muteConversation(conversationId, '1h')
+    else await muteConversationUntil(conversationId, tomorrowMorning().toISOString())
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('glofly:event', {
+        type: 'conversation:unread',
+        conversationId,
+        lastReadAt: new Date().toISOString()
+      })
+    }
+    return
+  }
+  if (action === 'open') {
+    showWindow()
+    return
+  }
+  // Answering, joining, watching and opening need Glofly in front; declining doesn't.
+  if (action !== 'decline' && action !== 'not-now' && action !== 'accept') showWindow()
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send('glofly:event', { type: 'notification:action', key, action, conversationId })
+  }
+}
+
+function showRichNotification(n: ShowNotification & { rich: NonNullable<ShowNotification['rich']> }): void {
+  const faceUri = savePicture(n.icon, MAX_PICTURE)
+  const pictureUri = savePicture(n.rich.picture, MAX_RICH_PICTURE)
+  const toastXml = buildToastXml({
+    key: n.key,
+    conversationId: n.conversationId,
+    title: n.title,
+    body: n.body,
+    rich: n.rich,
+    faceUri,
+    pictureUri
+  })
+  const toast = new Notification({
+    toastXml,
+    id: n.key.slice(0, 60),
+    ...(n.rich.header ? { groupId: n.rich.header.id.slice(0, 60) } : {})
+  })
+  richButtons.set(n.key, (n.rich.buttons ?? []).map((b) => b.id))
+  const forget = (): void => {
+    if (shown.get(n.key) === toast) {
+      shown.delete(n.key)
+      richButtons.delete(n.key)
+    }
+  }
+  toast.on('close', forget)
+  // A toast Windows refuses (odd XML, too big a picture): show the plain one instead.
+  toast.on('failed', () => {
+    forget()
+    showPlainNotification({ ...n, rich: undefined }, fallbackIcon)
+  })
+  shown.set(n.key, toast)
+  toast.show()
+}
+
+let fallbackIcon = ''
 
 export function showNotification(n: ShowNotification, appIcon: string): void {
   if (!Notification.isSupported()) return
   clearNotification(n.key)
+  fallbackIcon = appIcon
+  if (process.platform === 'win32' && richOn && n.rich) {
+    showRichNotification({ ...n, rich: n.rich })
+    return
+  }
+  showPlainNotification(n, appIcon)
+}
+
+function showPlainNotification(n: ShowNotification, appIcon: string): void {
   const replyTo = replyTarget(n)
   const toast = new Notification({
     title: n.title.slice(0, 100),
@@ -120,6 +294,7 @@ export function clearNotification(key: string): void {
   const old = shown.get(key)
   if (!old) return
   shown.delete(key)
+  richButtons.delete(key)
   old.close()
 }
 

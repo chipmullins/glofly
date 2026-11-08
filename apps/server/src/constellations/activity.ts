@@ -87,7 +87,7 @@ export async function nebulaActivity(
       and(eq(conversationMembers.userId, constellationMembers.userId), eq(conversationMembers.conversationId, conversationId)),
     )
     .where(eq(constellationMembers.constellationId, nebula.constellationId));
-  const [sender] = await db.select({ name: users.displayName }).from(users).where(eq(users.id, senderId));
+  const [sender] = await db.select({ name: users.displayName, avatarVersion: users.avatarVersion }).from(users).where(eq(users.id, senderId));
   const now = Date.now();
   for (const s of settings) {
     const mentioned = mentions.includes(s.userId) || groupMentions.includes(s.userId);
@@ -96,7 +96,7 @@ export async function nebulaActivity(
       s.userId,
       "constellation:activity",
       alert
-        ? { ...base, alert, nebulaName: nebula.name, constellationName: c?.name ?? "", senderName: sender?.name ?? "Someone", preview }
+        ? { ...base, alert, nebulaName: nebula.name, constellationName: c?.name ?? "", senderName: sender?.name ?? "Someone", senderAvatarVersion: sender?.avatarVersion ?? null, preview }
         : { ...base, alert: null },
       true,
     );

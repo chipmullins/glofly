@@ -684,7 +684,12 @@ const MUTE_HOURS = { "1h": 1, "8h": 8, "24h": 24 } as const;
 // notifications from this chat for a while (mentions of me still get through).
 conversationsRouter.put("/:id/mute", async (req, res) => {
   const id = idParam.safeParse(req.params.id);
-  const duration = z.object({ duration: z.enum(["1h", "8h", "24h", "forever"]) }).safeParse(req.body);
+  // 0.9.3: { duration: "until", until } mutes to a moment the app picked ("Mute until tomorrow" on a
+  // Windows notification: 8 AM the next day where you are), from a minute to 8 days ahead.
+  const duration = z
+    .object({ duration: z.enum(["1h", "8h", "24h", "forever", "until"]), until: z.string().datetime({ offset: true }).optional() })
+    .refine((b) => b.duration !== "until" || (!!b.until && Date.parse(b.until) > Date.now() + 60_000 && Date.parse(b.until) < Date.now() + 8 * 86_400_000))
+    .safeParse(req.body);
   if (!id.success) {
     res.status(404).json({ error: "not_found" });
     return;
@@ -694,7 +699,8 @@ conversationsRouter.put("/:id/mute", async (req, res) => {
     return;
   }
   const d = duration.data.duration;
-  const until = d === "forever" ? MUTED_FOREVER : new Date(Date.now() + MUTE_HOURS[d] * 60 * 60 * 1000);
+  const until =
+    d === "forever" ? MUTED_FOREVER : d === "until" ? new Date(duration.data.until!) : new Date(Date.now() + MUTE_HOURS[d] * 60 * 60 * 1000);
   const myId = me(res).id;
   const updated = await db
     .update(conversationMembers)
