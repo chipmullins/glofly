@@ -8,6 +8,8 @@ import {
 } from '@glofly/shared/constellations'
 import { api } from '../lib/constellations'
 import { colorsFor } from '../lib/avatarColors'
+import { gameCoverUrl } from '../lib/media'
+import { IGDB_CREDIT, IGDB_URL } from '@glofly/shared'
 import { relativeDay } from '../lib/myGamesTime'
 import './MyGames.css'
 
@@ -16,8 +18,16 @@ import './MyGames.css'
 // notices the game), counted a minute at a time by the server. On your own card you can star or
 // hide games, remove one, and pick who sees the list (Everyone / Friends / Only me).
 
-function GameTile({ name }: { name: string }): React.JSX.Element {
+function GameTile({ name, cover }: { name: string; cover?: string }): React.JSX.Element {
+  const [failed, setFailed] = useState<string | null>(null)
   const [bg, fg] = colorsFor(name)
+  if (cover && cover !== failed) {
+    return (
+      <span className="mg-tile mg-tile--cover" aria-hidden="true" style={{ background: bg }}>
+        <img src={gameCoverUrl(cover)} alt="" draggable={false} loading="lazy" onError={() => setFailed(cover)} />
+      </span>
+    )
+  }
   const letters = name
     .replace(/[^\p{L}\p{N} ]/gu, '')
     .split(/\s+/)
@@ -95,7 +105,7 @@ export default function MyGamesPanel({
 
   const row = (g: MyGame): React.JSX.Element => (
     <li key={g.key} className={g.hidden ? 'mg-game mg-game--hidden' : 'mg-game'}>
-      <GameTile name={g.name} />
+      <GameTile name={g.name} cover={g.cover} />
       <span className="mg-game-text">
         <strong>{g.name}</strong>
         <span>
@@ -204,6 +214,11 @@ export default function MyGamesPanel({
           {favorites.length > 0 && <h4 className="mg-sub">Most played</h4>}
           <ul className="mg-list">{rest.map(row)}</ul>
         </>
+      )}
+      {games?.some((g) => g.cover) && (
+        <a className="mg-credit" href={IGDB_URL} target="_blank" rel="noreferrer">
+          {IGDB_CREDIT}
+        </a>
       )}
     </aside>
   )

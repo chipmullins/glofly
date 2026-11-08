@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { router } from 'expo-router'
 import { colorsFor, gameKey, timeAgo, type MyGame } from '@glofly/shared'
+import { Image } from 'expo-image'
+import { gameCoverSource } from '@/profiles/Board'
 import { cx } from '@/api/constellations'
 import { useStore } from '@/state/store'
 import { Icon } from '@/ui/icons'
@@ -19,8 +21,15 @@ export function gameInitials(name: string): string {
   return (words[0][0] + words[1][0]).toUpperCase()
 }
 
-export function GameTile({ name, size, radius, ring }: { name: string; size: number; radius: number; ring?: string }) {
+export function GameTile({ name, size, radius, ring, cover }: { name: string; size: number; radius: number; ring?: string; cover?: string }) {
   const [bg] = colorsFor(gameKey(name))
+  // 0.9.1: box art (IGDB, served by Glofly) when known.
+  if (cover)
+    return (
+      <View style={{ width: size, height: size, borderRadius: radius, backgroundColor: bg, overflow: 'hidden', borderWidth: ring ? 2 : 0, borderColor: ring }}>
+        <Image source={gameCoverSource(cover)} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={120} accessibilityIgnoresInvertColors />
+      </View>
+    )
   return (
     <View style={{ width: size, height: size, borderRadius: radius, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', borderWidth: ring ? 2 : 0, borderColor: ring }}>
       <Text style={{ color: '#ffffff', fontFamily: font.displayBold, fontSize: Math.round(size * 0.3) }}>{gameInitials(name)}</Text>
@@ -81,7 +90,7 @@ export function GamesCard({ userId, isMe, onOpen }: { userId: string; isMe: bool
         <View style={{ flexDirection: 'row' }}>
           {top.map((g, i) => (
             <View key={g.key} style={{ marginLeft: i ? -12 : 0 }}>
-              <GameTile name={g.name} size={36} radius={10} ring={c.bg} />
+              <GameTile name={g.name} cover={g.cover} size={36} radius={10} ring={c.bg} />
             </View>
           ))}
         </View>

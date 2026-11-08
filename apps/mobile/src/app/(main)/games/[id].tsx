@@ -14,6 +14,7 @@ import { confirm, inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { IconButton, Spinner, Text } from '@/ui/kit'
 import { useTheme } from '@/ui/theme'
+import { IgdbCredit } from '@/profiles/Board'
 import { GameTile, hoursShort, lastPlayed, sortGames, usePlayingNow } from '@/constellations/games'
 import { haptic } from '@/constellations/motion'
 
@@ -92,7 +93,7 @@ function FriendGames({ userId }: { userId: string }) {
           ) : null}
           {favorites.map((g) => (
             <View key={g.key} accessible accessibilityLabel={`${g.name}, ${hoursShort(g.seconds)}, ${lastPlayed(g, playing)}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18, backgroundColor: c.accentSoft }}>
-              <GameTile name={g.name} size={56} radius={14} />
+              <GameTile name={g.name} cover={g.cover} size={56} radius={14} />
               <View style={{ flex: 1 }}>
                 <Text size={16} weight="bold" numberOfLines={1}>
                   {g.name}
@@ -113,7 +114,7 @@ function FriendGames({ userId }: { userId: string }) {
           ) : null}
           {rest.map((g) => (
             <View key={g.key} accessible accessibilityLabel={`${g.name}, ${hoursShort(g.seconds)}, ${lastPlayed(g, playing)}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 }}>
-              <GameTile name={g.name} size={48} radius={12} />
+              <GameTile name={g.name} cover={g.cover} size={48} radius={12} />
               <View style={{ flex: 1 }}>
                 <Text size={15} weight="bold" numberOfLines={1}>
                   {g.name}
@@ -124,6 +125,7 @@ function FriendGames({ userId }: { userId: string }) {
               </View>
             </View>
           ))}
+          {games.some((g) => g.cover) ? <View style={{ alignItems: 'flex-end' }}><IgdbCredit /></View> : null}
         </ScrollView>
       )}
     </View>
@@ -238,7 +240,7 @@ function MyOwnGames() {
         {showHidden
           ? hidden.map((g) => (
               <View key={g.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, height: 66, paddingHorizontal: 12, opacity: 0.75 }}>
-                <GameTile name={g.name} size={46} radius={12} />
+                <GameTile name={g.name} cover={g.cover} size={46} radius={12} />
                 <View style={{ flex: 1 }}>
                   <Text size={15} weight="bold" numberOfLines={1}>
                     {g.name}
@@ -255,6 +257,7 @@ function MyOwnGames() {
               </View>
             ))
           : null}
+        {games?.some((g) => g.cover) ? <View style={{ alignItems: 'flex-end' }}><IgdbCredit /></View> : null}
       </ScrollView>
     </View>
   )
@@ -296,7 +299,7 @@ function GameRow({ g, playing, onStar, onHide, onRemove }: { g: MyGame; playing:
         onAccessibilityAction={(e) => (e.nativeEvent.actionName === 'star' ? onStar() : e.nativeEvent.actionName === 'hide' ? onHide() : onRemove())}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 12, height: 66, paddingHorizontal: 12, borderRadius: 16, backgroundColor: g.favorite ? c.surface : c.bg }}
       >
-        <GameTile name={g.name} size={46} radius={12} />
+        <GameTile name={g.name} cover={g.cover} size={46} radius={12} />
         <View style={{ flex: 1 }}>
           <Text size={15} weight="bold" numberOfLines={1}>
             {g.name}

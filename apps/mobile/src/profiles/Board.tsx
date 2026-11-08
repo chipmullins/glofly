@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Pressable, View } from 'react-native'
+import { Linking, Pressable, View } from 'react-native'
 import { Image } from 'expo-image'
 import { router } from 'expo-router'
 import {
+  IGDB_CREDIT,
+  IGDB_URL,
   colorsFor,
   playtimeLabel,
   type ActivityItem,
@@ -33,6 +35,13 @@ export const headerSource = (userId: string, version: string) => ({
   uri: url(`/headers/${userId}/${version}`),
   headers: authHeaders(),
   cacheKey: `header-${userId}-${version}`,
+})
+
+/** 0.9.1: a game's box art (IGDB, fetched and served by Glofly). */
+export const gameCoverSource = (id: string) => ({
+  uri: url(`/games/cover/${id}`),
+  headers: authHeaders(),
+  cacheKey: `game-cover-${id}`,
 })
 
 /** The header: their picture (placed where they put it), or the night sky. */
@@ -80,8 +89,14 @@ export function ProfileHeaderImage({
 }
 
 /** A game's picture (its colors and letters until box art arrives). */
-export function GameArt({ name, width, radius = 9 }: { name: string; width?: number; radius?: number }) {
+export function GameArt({ name, width, radius = 9, cover }: { name: string; width?: number; radius?: number; cover?: string }) {
   const [bg, fg] = colorsFor(name)
+  if (cover)
+    return (
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ width: width ?? '100%', aspectRatio: 3 / 4, borderRadius: radius, backgroundColor: bg, overflow: 'hidden' }}>
+        <Image source={gameCoverSource(cover)} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={120} accessibilityIgnoresInvertColors />
+      </View>
+    )
   const letters = name
     .replace(/[^\p{L}\p{N} ]/gu, '')
     .split(/\s+/)
@@ -187,7 +202,7 @@ export function BoardTiles({ tiles, userId, preview }: { tiles: BoardTileView[];
           {label('Playing now', true)}
           {t.game ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <GameArt name={t.game} width={28} radius={5} />
+              <GameArt name={t.game} cover={t.cover} width={28} radius={5} />
               <Text size={13.5} weight="bold" numberOfLines={2} style={{ color: NIGHT_TEXT, flex: 1 }}>
                 {t.game}
               </Text>
@@ -225,7 +240,7 @@ export function BoardTiles({ tiles, userId, preview }: { tiles: BoardTileView[];
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {row.games.map((g) => (
                 <View key={g.key} style={{ flex: 1, maxWidth: '33%', gap: 3 }}>
-                  <GameArt name={g.name} />
+                  <GameArt name={g.name} cover={g.cover} />
                   <Text size={12.5} weight="bold" numberOfLines={1}>
                     {g.name}
                   </Text>
@@ -238,11 +253,14 @@ export function BoardTiles({ tiles, userId, preview }: { tiles: BoardTileView[];
               ))}
             </View>
             {!preview ? (
-              <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/games/[id]', params: { id: userId } })} style={{ minHeight: 32, justifyContent: 'center' }}>
-                <Text size={13} weight="bold" style={{ color: c.accentText }}>
-                  All their games (My games)
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/games/[id]', params: { id: userId } })} style={{ minHeight: 32, justifyContent: 'center', flex: 1 }}>
+                  <Text size={13} weight="bold" style={{ color: c.accentText }}>
+                    All their games (My games)
+                  </Text>
+                </Pressable>
+                {row.games.some((g) => g.cover) ? <IgdbCredit /> : null}
+              </View>
             ) : null}
           </View>
         ) : row.kind === 'into' ? (
@@ -261,6 +279,17 @@ export function BoardTiles({ tiles, userId, preview }: { tiles: BoardTileView[];
         ) : null,
       )}
     </View>
+  )
+}
+
+/** IGDB's credit (their terms ask for it wherever their game info or pictures show). */
+export function IgdbCredit() {
+  return (
+    <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(IGDB_URL)} style={{ minHeight: 32, justifyContent: 'center' }}>
+      <Text size={11} tone="muted">
+        {IGDB_CREDIT}
+      </Text>
+    </Pressable>
   )
 }
 
@@ -366,7 +395,7 @@ export function ActivityFeed({ userId, name }: { userId: string; name: string })
             {i.kind === 'joined' ? (
               <ConstellationIcon c={{ ...i.constellation, color: i.constellation.color as ConstellationColor }} size={44} />
             ) : (
-              <GameArt name={i.game} width={44} radius={8} />
+              <GameArt name={i.game} cover={i.cover} width={44} radius={8} />
             )}
             <View style={{ flex: 1 }}>
               <Text size={14.5} weight="bold">

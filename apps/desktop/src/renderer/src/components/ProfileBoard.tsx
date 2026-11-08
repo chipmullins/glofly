@@ -10,6 +10,8 @@ import { playtimeLabel, type ConstellationColor } from '@glofly/shared/constella
 import { colorsFor } from '../lib/avatarColors'
 import { relativeDay } from '../lib/myGamesTime'
 import { api } from '../lib/constellations'
+import { gameCoverUrl } from '../lib/media'
+import { IGDB_CREDIT, IGDB_URL } from '@glofly/shared'
 import { ConstellationIcon } from '../constellations/bits'
 import Avatar from './Avatar'
 import EmojiText from './EmojiText'
@@ -23,12 +25,23 @@ import './ProfileBoard.css'
 /** A game's picture. Until box art arrives it's the game's colors and letters. */
 export function GameArt({
   name,
+  cover,
   className = 'pb-art'
 }: {
   name: string
+  /** Box art's image id (IGDB) */
+  cover?: string | null
   className?: string
 }): React.JSX.Element {
+  const [failed, setFailed] = useState<string | null>(null)
   const [bg, fg] = colorsFor(name)
+  if (cover && cover !== failed) {
+    return (
+      <span className={`${className} pb-art--cover`} aria-hidden="true" style={{ background: bg }}>
+        <img src={gameCoverUrl(cover)} alt="" draggable={false} loading="lazy" onError={() => setFailed(cover)} />
+      </span>
+    )
+  }
   const letters = name
     .replace(/[^\p{L}\p{N} ]/gu, '')
     .split(/\s+/)
@@ -134,12 +147,17 @@ export function BoardGrid({
                 <div className="pb-games">
                   {t.games.map((g) => (
                     <div key={g.key} className="pb-game">
-                      <GameArt name={g.name} />
+                      <GameArt name={g.name} cover={g.cover} />
                       <b>{g.name}</b>
                       {g.seconds !== undefined && <span>{hours(g.seconds)}</span>}
                     </div>
                   ))}
                 </div>
+                {!preview && t.games.some((g) => g.cover) && (
+                  <a className="pb-credit" href={IGDB_URL} target="_blank" rel="noreferrer">
+                    {IGDB_CREDIT}
+                  </a>
+                )}
                 {onAllGames && !preview && (
                   <button type="button" className="pb-link" onClick={onAllGames}>
                     All {name}’s games (My games)
@@ -177,7 +195,7 @@ export function BoardGrid({
                 <span className="pb-label">Playing now</span>
                 {t.game ? (
                   <div className="pb-cx">
-                    <GameArt name={t.game} className="pb-art pb-art--small" />
+                    <GameArt name={t.game} cover={t.cover} className="pb-art pb-art--small" />
                     <b>{t.game}</b>
                   </div>
                 ) : (
@@ -322,7 +340,7 @@ export function ActivityList({ userId }: { userId: string }): React.JSX.Element 
                 className="pb-cx-icon pb-cx-icon--big"
               />
             ) : (
-              <GameArt name={i.game} className="pb-art pb-art--row" />
+              <GameArt name={i.game} cover={i.cover} className="pb-art pb-art--row" />
             )}
             <div className="pb-person-text">
               <b>{t.title}</b>

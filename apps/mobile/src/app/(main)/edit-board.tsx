@@ -10,11 +10,12 @@ import {
   type BoardTile,
   type ConstellationCard,
   type ConstellationColor,
+  type GameSearchResult,
   type MyGame,
 } from '@glofly/shared'
 import { cx } from '@/api/constellations'
 import { ConstellationIcon } from '@/constellations/ui'
-import { GameArt } from '@/profiles/Board'
+import { GameArt, IgdbCredit } from '@/profiles/Board'
 import { TILE_NAMES, putTile, useBoardDraft } from '@/profiles/draft'
 import { Icon } from '@/ui/icons'
 import { Field, Spinner, Text } from '@/ui/kit'
@@ -116,11 +117,36 @@ function GamesEditor({ tile, onDone }: { tile: Extract<BoardTile, { kind: 'games
   const toggle = (n: string) =>
     setPicked((p) => (isPicked(n) ? p.filter((x) => x.toLowerCase() !== n.toLowerCase()) : p.length >= BOARD_GAMES_MAX ? p : [...p, n]))
   const matches = (played ?? []).filter((g) => !q || g.name.toLowerCase().includes(q)).slice(0, 8)
-  const showTyped = !!typed && !(played ?? []).some((g) => g.name.toLowerCase() === typed.toLowerCase())
+  // 0.9.1: IGDB results through Glofly, a moment after typing stops.
+  const [found, setFound] = useState<GameSearchResult[]>([])
+  const [credit, setCredit] = useState(false)
+  useEffect(() => {
+    if (q.length < 2) return setFound([])
+    let live = true
+    const timer = setTimeout(() => {
+      void cx.searchGames(q).then((r) => {
+        if (!live || !r.ok) return
+        setFound(r.data.games)
+        setCredit(r.data.available)
+      })
+    }, 300)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [q])
+  const playedNames = new Set(matches.map((g) => g.name.toLowerCase()))
+  const more = found.filter((g) => !playedNames.has(g.name.toLowerCase())).slice(0, 6)
+  const showTyped = !!typed && !(played ?? []).some((g) => g.name.toLowerCase() === typed.toLowerCase()) && !found.some((g) => g.name.toLowerCase() === typed.toLowerCase())
+  const coverOf = (n: string) =>
+    (played ?? []).find((g) => g.name.toLowerCase() === n.toLowerCase())?.cover ??
+    found.find((g) => g.name.toLowerCase() === n.toLowerCase())?.cover ??
+    tile?.games.find((g) => g.name.toLowerCase() === n.toLowerCase())?.cover ??
+    undefined
   return (
     <Screen
       title="Favorite games"
-      right={<DoneButton ok={picked.length > 0} onPress={() => onDone({ kind: 'games', games: picked.map((name) => ({ key: name.toLowerCase(), name })) })} />}
+      right={<DoneButton ok={picked.length > 0} onPress={() => onDone({ kind: 'games', games: picked.map((name) => { const cover = coverOf(name); return { key: name.toLowerCase(), name, ...(cover ? { cover } : {}) } }) })} />}
       contentStyle={{ padding: 16, gap: 12 }}
     >
       <Field label="Find a game" value={query} onChangeText={setQuery} placeholder="Type a game’s name" autoFocus returnKeyType="search" accessibilityLabel="Find a game" />
@@ -140,12 +166,16 @@ function GamesEditor({ tile, onDone }: { tile: Extract<BoardTile, { kind: 'games
       <View>
         {showTyped ? <Row onPress={() => toggle(typed)} selected={isPicked(typed)} left={<GameArt name={typed} width={30} radius={5} />} title={`Add “${typed}”`} /> : null}
         {matches.map((g) => (
-          <Row key={g.key} onPress={() => toggle(g.name)} selected={isPicked(g.name)} left={<GameArt name={g.name} width={30} radius={5} />} title={g.name} sub="Played on Glofly" />
+          <Row key={g.key} onPress={() => toggle(g.name)} selected={isPicked(g.name)} left={<GameArt name={g.name} cover={g.cover} width={30} radius={5} />} title={g.name} sub="Played on Glofly" />
+        ))}
+        {more.map((g) => (
+          <Row key={`igdb-${g.key}`} onPress={() => toggle(g.name)} selected={isPicked(g.name)} left={<GameArt name={g.name} cover={g.cover ?? undefined} width={30} radius={5} />} title={g.name} sub={g.year ? String(g.year) : undefined} />
         ))}
       </View>
       <Text size={12.5} tone="muted">
         Up to {BOARD_GAMES_MAX}. Games you’ve played on Glofly come first, or type any game.
       </Text>
+      {credit ? <IgdbCredit /> : null}
     </Screen>
   )
 }

@@ -273,6 +273,12 @@ export const api = {
     ),
   // My games
   myGames: () => call<{ visibility: MyGamesVisibility; games: MyGame[] }>('GET', '/games/me'),
+  /** 0.9.1: "Find a game" (IGDB through Glofly; available false = not set up on this server) */
+  searchGames: (q: string) =>
+    call<{ games: import('@glofly/shared').GameSearchResult[]; available: boolean }>(
+      'GET',
+      `/games/search?q=${encodeURIComponent(q)}`
+    ),
   /** Communities round: the card under a cfx.re/join link */
   cfxCard: (code: string) => call<CfxServerCard>('GET', `/games/cfx/${encodeURIComponent(code)}`),
   setGamesVisibility: (visibility: MyGamesVisibility) =>

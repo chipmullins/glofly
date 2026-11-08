@@ -139,6 +139,8 @@ export const cx = {
 
   // ---- My games ----
   myGames: () => request<{ visibility: MyGamesVisibility; games: MyGame[] }>('GET', '/games/me'),
+  /** 0.9.1: "Find a game" (IGDB through Glofly; available false = not set up on this server) */
+  searchGames: (q: string) => request<{ games: import('@glofly/shared').GameSearchResult[]; available: boolean }>('GET', `/games/search?q=${encodeURIComponent(q)}`),
   /** Communities round: the card under a cfx.re/join link */
   cfxCard: (code: string) => request<CfxServerCard>('GET', `/games/cfx/${encodeURIComponent(code)}`),
   setGamesVisibility: (visibility: MyGamesVisibility) => request<{ visibility: MyGamesVisibility }>('PUT', '/games/me/settings', { visibility }),

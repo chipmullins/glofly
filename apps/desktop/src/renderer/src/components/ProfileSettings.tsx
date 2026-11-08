@@ -20,7 +20,10 @@ import {
   DEFAULT_PROFILE_PRIVACY,
   PRONOUNS_MAX,
   PRONOUN_PICKS,
-  cleanInterestTag
+  IGDB_CREDIT,
+  IGDB_URL,
+  cleanInterestTag,
+  type GameSearchResult
 } from '@glofly/shared'
 import type { ConstellationColor } from '@glofly/shared/constellations'
 import { api } from '../lib/constellations'
@@ -594,8 +597,44 @@ function GamesEditor({
   }, [])
   const q = query.trim().toLowerCase()
   const matches = played.filter((g) => !q || g.name.toLowerCase().includes(q)).slice(0, 6)
+  // 0.9.1: IGDB results through Glofly, a moment after typing stops.
+  const [found, setFound] = useState<GameSearchResult[]>([])
+  const [credit, setCredit] = useState(false)
+  const [searching, setSearching] = useState(false)
+  useEffect(() => {
+    if (q.length < 2) {
+      setFound([])
+      return
+    }
+    let live = true
+    setSearching(true)
+    const timer = setTimeout(() => {
+      void api.searchGames(q).then((r) => {
+        if (!live) return
+        setSearching(false)
+        if (r.ok) {
+          setFound(r.data.games)
+          setCredit(r.data.available)
+        }
+      })
+    }, 300)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [q])
+  const playedKeys = new Set(matches.map((g) => g.name.toLowerCase()))
+  const more = found.filter((g) => !playedKeys.has(g.name.toLowerCase())).slice(0, 6)
   const typed = query.trim().replace(/\s+/g, ' ').slice(0, 80)
-  const showTyped = typed && !played.some((g) => g.name.toLowerCase() === typed.toLowerCase())
+  const showTyped =
+    typed &&
+    !played.some((g) => g.name.toLowerCase() === typed.toLowerCase()) &&
+    !found.some((g) => g.name.toLowerCase() === typed.toLowerCase())
+  const coverOf = (name: string): string | undefined =>
+    played.find((g) => g.name.toLowerCase() === name.toLowerCase())?.cover ??
+    found.find((g) => g.name.toLowerCase() === name.toLowerCase())?.cover ??
+    tile?.games.find((g) => g.name.toLowerCase() === name.toLowerCase())?.cover ??
+    undefined
   const isPicked = (name: string): boolean => picked.some((p) => p.toLowerCase() === name.toLowerCase())
   const toggle = (name: string): void =>
     setPicked((p) =>
@@ -634,20 +673,52 @@ function GamesEditor({
             className={isPicked(g.name) ? 'ps-result ps-result--on' : 'ps-result'}
             onClick={() => toggle(g.name)}
           >
-            <GameArt name={g.name} className="pb-art ps-result-art" />
+            <GameArt name={g.name} cover={g.cover} className="pb-art ps-result-art" />
             <b>{g.name}</b>
             <span className={isPicked(g.name) ? 'ps-result-on' : 'ps-hint'}>{isPicked(g.name) ? '✓ Picked' : 'Played on Glofly'}</span>
           </button>
         ))}
+        {more.map((g) => (
+          <button
+            key={`igdb-${g.key}`}
+            type="button"
+            role="option"
+            aria-selected={isPicked(g.name)}
+            className={isPicked(g.name) ? 'ps-result ps-result--on' : 'ps-result'}
+            onClick={() => toggle(g.name)}
+          >
+            <GameArt name={g.name} cover={g.cover} className="pb-art ps-result-art" />
+            <b>{g.name}</b>
+            <span className={isPicked(g.name) ? 'ps-result-on' : 'ps-hint'}>{isPicked(g.name) ? '✓ Picked' : (g.year ?? '')}</span>
+          </button>
+        ))}
+        {searching && !more.length && <p className="ps-hint">Looking…</p>}
         {!matches.length && !showTyped && <p className="ps-hint">Games you’ve played on Glofly show here. Or type any game.</p>}
       </div>
       <span className="ps-hint">
         Up to {BOARD_GAMES_MAX}. Games you’ve played on Glofly come first.
+        {credit && (
+          <>
+            {' '}Pictures:{' '}
+            <a href={IGDB_URL} target="_blank" rel="noreferrer">
+              {IGDB_CREDIT.replace('Game info', 'game info')}
+            </a>
+            .
+          </>
+        )}
       </span>
       <EditorButtons
         ok={picked.length > 0}
         onCancel={onCancel}
-        onDone={() => onDone({ kind: 'games', games: picked.map((name) => ({ key: name.toLowerCase(), name })) })}
+        onDone={() =>
+          onDone({
+            kind: 'games',
+            games: picked.map((name) => {
+              const cover = coverOf(name)
+              return { key: name.toLowerCase(), name, ...(cover ? { cover } : {}) }
+            })
+          })
+        }
       />
     </>
   )

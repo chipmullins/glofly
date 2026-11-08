@@ -14,6 +14,10 @@ export const avatarUrl = (userId: string, version: string): string =>
 export const headerUrl = (userId: string, version: string): string =>
   server ? `${server}/headers/${userId}/${version}` : `glofly-media://headers/${userId}/${version}`
 
+/** 0.9.1: a game's box art (IGDB, served by Glofly). */
+export const gameCoverUrl = (id: string): string =>
+  server ? `${server}/games/cover/${id}` : `glofly-media://game-covers/${id}`
+
 /** Where a group photo loads from. */
 export const groupPhotoUrl = (conversationId: string, version: string): string =>
   server
