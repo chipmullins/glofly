@@ -8,6 +8,7 @@
 import { and, eq, inArray, isNotNull, lt, or, isNull, sql } from "drizzle-orm";
 import { connectionSettingsOf, gameKey } from "@glofly/shared";
 import { db } from "../db";
+import { redis } from "../redis";
 import { linkedAccounts, userGames } from "../db/schema";
 import { connectedSummary, emitToUser } from "../realtime";
 import { announcePresence, setDeviceActivity } from "../presence";
@@ -18,9 +19,20 @@ const SYNC_EVERY_MS = 6 * 3600_000;
 const STEAM_DEVICE = "steam";
 
 /** Copies their Steam games into My games. False: Steam couldn't be reached. */
-export async function syncSteamGames(userId: string): Promise<{ ok: boolean; count: number; publicGames: boolean }> {
-  const [acct] = await db.select().from(linkedAccounts).where(and(eq(linkedAccounts.userId, userId), eq(linkedAccounts.provider, "steam")));
-  if (!acct || !steamConfigured()) return { ok: false, count: 0, publicGames: false };
+export async function syncSteamGames(
+  userId: string,
+): Promise<{ ok: boolean; count: number; publicGames: boolean }> {
+  const [acct] = await db
+    .select()
+    .from(linkedAccounts)
+    .where(
+      and(
+        eq(linkedAccounts.userId, userId),
+        eq(linkedAccounts.provider, "steam"),
+      ),
+    );
+  if (!acct || !steamConfigured())
+    return { ok: false, count: 0, publicGames: false };
   const games = await steamOwnedGames(acct.externalId);
   if (!games) return { ok: false, count: 0, publicGames: false };
   const players = await steamPlayers([acct.externalId]);
@@ -34,7 +46,16 @@ export async function syncSteamGames(userId: string): Promise<{ ok: boolean; cou
     const last = g.lastPlayed > 0 ? new Date(g.lastPlayed * 1000) : now;
     await db
       .insert(userGames)
-      .values({ userId, gameKey: key, name: g.name, seconds: 0, steamAppId: g.appId, steamSeconds: g.minutes * 60, firstPlayedAt: last, lastPlayedAt: last })
+      .values({
+        userId,
+        gameKey: key,
+        name: g.name,
+        seconds: 0,
+        steamAppId: g.appId,
+        steamSeconds: g.minutes * 60,
+        firstPlayedAt: last,
+        lastPlayedAt: last,
+      })
       .onConflictDoUpdate({
         target: [userGames.userId, userGames.gameKey],
         set: {
@@ -49,7 +70,9 @@ export async function syncSteamGames(userId: string): Promise<{ ok: boolean; cou
     .set({
       syncedAt: now,
       gameCount: played.length,
-      ...(players?.[0] ? { displayName: players[0].name, profileUrl: players[0].profileUrl } : {}),
+      ...(players?.[0]
+        ? { displayName: players[0].name, profileUrl: players[0].profileUrl }
+        : {}),
     })
     .where(eq(linkedAccounts.id, acct.id));
   emitToUser(userId, "games:changed", {});
@@ -59,8 +82,19 @@ export async function syncSteamGames(userId: string): Promise<{ ok: boolean; cou
 
 /** Unlinking takes Steam's part out of My games (games only Steam knew about go entirely). */
 export async function forgetSteamGames(userId: string): Promise<void> {
-  await db.delete(userGames).where(and(eq(userGames.userId, userId), eq(userGames.seconds, 0), isNotNull(userGames.steamAppId)));
-  await db.update(userGames).set({ steamAppId: null, steamSeconds: 0 }).where(eq(userGames.userId, userId));
+  await db
+    .delete(userGames)
+    .where(
+      and(
+        eq(userGames.userId, userId),
+        eq(userGames.seconds, 0),
+        isNotNull(userGames.steamAppId),
+      ),
+    );
+  await db
+    .update(userGames)
+    .set({ steamAppId: null, steamSeconds: 0 })
+    .where(eq(userGames.userId, userId));
   await setDeviceActivity(userId, STEAM_DEVICE, null);
   emitToUser(userId, "games:changed", {});
 }
@@ -71,9 +105,18 @@ export async function sweepSteamSync(): Promise<void> {
   const due = await db
     .select({ userId: linkedAccounts.userId })
     .from(linkedAccounts)
-    .where(and(eq(linkedAccounts.provider, "steam"), or(isNull(linkedAccounts.syncedAt), lt(linkedAccounts.syncedAt, new Date(Date.now() - SYNC_EVERY_MS)))))
+    .where(
+      and(
+        eq(linkedAccounts.provider, "steam"),
+        or(
+          isNull(linkedAccounts.syncedAt),
+          lt(linkedAccounts.syncedAt, new Date(Date.now() - SYNC_EVERY_MS)),
+        ),
+      ),
+    )
     .limit(20);
-  for (const { userId } of due) await syncSteamGames(userId).catch(() => undefined);
+  for (const { userId } of due)
+    await syncSteamGames(userId).catch(() => undefined);
 }
 
 /** Every minute: "Playing …" from Steam for people with Glofly open who allow it. */
@@ -83,18 +126,29 @@ export async function sweepSteamPlaying(): Promise<void> {
   const userIds = [...connected];
   if (!userIds.length) return;
   const accts = await db
-    .select({ userId: linkedAccounts.userId, steamId: linkedAccounts.externalId, settings: linkedAccounts.settings })
+    .select({
+      userId: linkedAccounts.userId,
+      steamId: linkedAccounts.externalId,
+      settings: linkedAccounts.settings,
+    })
     .from(linkedAccounts)
-    .where(and(eq(linkedAccounts.provider, "steam"), inArray(linkedAccounts.userId, userIds)));
+    .where(
+      and(
+        eq(linkedAccounts.provider, "steam"),
+        inArray(linkedAccounts.userId, userIds),
+      ),
+    );
   const wanted = accts.filter((a) => connectionSettingsOf(a.settings).playing);
   for (let i = 0; i < wanted.length; i += 100) {
     const batch = wanted.slice(i, i + 100);
     const players = await steamPlayers(batch.map((a) => a.steamId));
     if (!players) return;
     for (const a of batch) {
-      const playing = players.find((p) => p.steamId === a.steamId)?.playing ?? null;
+      const playing =
+        players.find((p) => p.steamId === a.steamId)?.playing ?? null;
       // Kept 90 seconds (refreshed by each sweep), like a device's own activity.
-      if (await setDeviceActivity(a.userId, STEAM_DEVICE, playing)) await announcePresence(a.userId, emitToUser);
+      if (await setDeviceActivity(a.userId, STEAM_DEVICE, playing))
+        await announcePresence(a.userId, emitToUser);
     }
   }
 }
@@ -104,17 +158,36 @@ export async function steamInMyGames(userId: string): Promise<boolean> {
   const [row] = await db
     .select({ settings: linkedAccounts.settings })
     .from(linkedAccounts)
-    .where(and(eq(linkedAccounts.userId, userId), eq(linkedAccounts.provider, "steam")));
+    .where(
+      and(
+        eq(linkedAccounts.userId, userId),
+        eq(linkedAccounts.provider, "steam"),
+      ),
+    );
   return !!row && connectionSettingsOf(row.settings).myGames;
 }
 
 /** Their Steam profile page for their Glofly profile, when they chose to show it. */
-export async function steamLinkOf(userId: string): Promise<{ steamUrl?: string }> {
+export async function steamLinkOf(
+  userId: string,
+): Promise<{ steamUrl?: string }> {
   const [row] = await db
-    .select({ settings: linkedAccounts.settings, profileUrl: linkedAccounts.profileUrl })
+    .select({
+      settings: linkedAccounts.settings,
+      profileUrl: linkedAccounts.profileUrl,
+    })
     .from(linkedAccounts)
-    .where(and(eq(linkedAccounts.userId, userId), eq(linkedAccounts.provider, "steam")));
+    .where(
+      and(
+        eq(linkedAccounts.userId, userId),
+        eq(linkedAccounts.provider, "steam"),
+      ),
+    );
   if (!row || !connectionSettingsOf(row.settings).showLink) return {};
   const url = row.profileUrl ?? "";
-  return /^https:\/\/steamcommunity\.com\/(id|profiles)\/[A-Za-z0-9_-]{2,64}\/?$/.test(url) ? { steamUrl: url } : {};
+  return /^https:\/\/steamcommunity\.com\/(id|profiles)\/[A-Za-z0-9_-]{2,64}\/?$/.test(
+    url,
+  )
+    ? { steamUrl: url }
+    : {};
 }

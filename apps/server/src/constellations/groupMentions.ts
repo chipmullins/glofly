@@ -25,21 +25,24 @@ export async function groupMentionsFor(
   conversationId: string,
   memberIds: string[],
   senderId: string,
-  // 0.9.3 Live alerts: Glofly posting a ping an admin chose (they were allowed to mention it then).
-  trusted = false,
+  // 0.9.3 Live alerts: exactly the ping an admin chose (checked when they chose it). The text
+  // itself (stream titles come from streamers) never counts as a group mention then.
+  approved: { everyone: "everyone" | "here" | null; roleIds: string[] } | null = null,
 ): Promise<GroupMentions> {
-  if (!text.includes("@")) return NO_GROUP_MENTIONS;
+  if (!approved && !text.includes("@")) return NO_GROUP_MENTIONS;
   const nebula = await nebulaOfChat(conversationId);
   if (!nebula) return NO_GROUP_MENTIONS;
   const roles = await db
     .select({ id: constellationRoles.id, name: constellationRoles.name, kind: constellationRoles.kind, mentionable: constellationRoles.mentionable })
     .from(constellationRoles)
     .where(and(eq(constellationRoles.constellationId, nebula.constellationId), ne(constellationRoles.kind, "member")));
-  const found = groupMentionsIn(text, roles);
+  const found = approved
+    ? { everyone: approved.everyone, roleIds: approved.roleIds.filter((id) => roles.some((r) => r.id === id)) }
+    : groupMentionsIn(text, roles);
   if (!found.everyone && !found.roleIds.length) return NO_GROUP_MENTIONS;
-  const standing = trusted ? null : await standingOf(nebula.constellationId, senderId);
-  if (!trusted && !standing) return NO_GROUP_MENTIONS;
-  const all = trusted || (standing ? can(standing, "mentionEveryone") : false);
+  const standing = approved ? null : await standingOf(nebula.constellationId, senderId);
+  if (!approved && !standing) return NO_GROUP_MENTIONS;
+  const all = !!approved || (standing ? can(standing, "mentionEveryone") : false);
   const everyone = all ? found.everyone : null;
   const roleIds = found.roleIds.filter((id) => all || roles.find((r) => r.id === id)?.mentionable);
   if (!everyone && !roleIds.length) return NO_GROUP_MENTIONS;

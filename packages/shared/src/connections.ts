@@ -173,10 +173,12 @@ export function parseChannel(site: AlertSite, raw: string): { login: string } | 
 
 /** The alert's text ({streamer}, {title}, {game}), with its link last so every app can open it. */
 export function liveAlertText(template: string, card: Pick<LiveCard, 'channelName' | 'title' | 'game' | 'url'>, ping: string | null): string {
+  // What streamers write can't @mention anyone here: their @ becomes a look-alike (＠).
+  const safe = (s: string) => s.replace(/@/g, '＠')
   const text = (template.trim() || DEFAULT_LIVE_MESSAGE)
-    .replace(/\{streamer\}/g, card.channelName)
-    .replace(/\{title\}/g, card.title || 'untitled')
-    .replace(/\{game\}/g, card.game ?? '')
+    .replace(/\{streamer\}/g, () => safe(card.channelName))
+    .replace(/\{title\}/g, () => safe(card.title || 'untitled'))
+    .replace(/\{game\}/g, () => safe(card.game ?? ''))
     .replace(/\s+/g, ' ')
     .trim()
   return `${ping ? `${ping} ` : ''}${text}\n${card.url}`.slice(0, 1000)

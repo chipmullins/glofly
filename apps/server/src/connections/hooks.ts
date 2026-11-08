@@ -10,7 +10,7 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Router, type Request } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { streamWatches } from "../db/schema";
 import { redis } from "../redis";
@@ -19,7 +19,8 @@ import { kickSignatureOk } from "./providers";
 import { channelWentLive, channelWentOffline, eventSubSecret } from "./live";
 
 const MAX_AGE_MS = 10 * 60 * 1000;
-const raw = (req: Request) => (req as Request & { rawBody?: Buffer }).rawBody ?? null;
+const raw = (req: Request) =>
+  (req as Request & { rawBody?: Buffer }).rawBody ?? null;
 const header = (req: Request, name: string) => {
   const v = req.get(name);
   return typeof v === "string" ? v : "";
@@ -27,7 +28,12 @@ const header = (req: Request, name: string) => {
 
 /** First time this message id is seen (both sites send retries)? */
 async function firstTime(site: string, id: string): Promise<boolean> {
-  return (await redis.set(`livehook:${site}:${id.slice(0, 100)}`, "1", { NX: true, EX: 60 * 60 })) === "OK";
+  return (
+    (await redis.set(`livehook:${site}:${id.slice(0, 100)}`, "1", {
+      NX: true,
+      EX: 60 * 60,
+    })) === "OK"
+  );
 }
 
 const fresh = (timestamp: string) => {
@@ -36,7 +42,17 @@ const fresh = (timestamp: string) => {
 };
 
 const watched = async (site: "twitch" | "kick", channelId: string) =>
-  (await db.select({ id: streamWatches.channelId }).from(streamWatches).where(and(eq(streamWatches.provider, site), eq(streamWatches.channelId, channelId)))).length > 0;
+  (
+    await db
+      .select({ id: streamWatches.channelId })
+      .from(streamWatches)
+      .where(
+        and(
+          eq(streamWatches.provider, site),
+          eq(streamWatches.channelId, channelId),
+        ),
+      )
+  ).length > 0;
 
 export const liveHooksRouter = Router();
 
@@ -50,16 +66,31 @@ liveHooksRouter.post("/hooks/twitch", async (req, res) => {
     res.status(403).end();
     return;
   }
-  const want = createHmac("sha256", await eventSubSecret()).update(id + timestamp).update(body).digest();
+  const want = createHmac("sha256", await eventSubSecret())
+    .update(id + timestamp)
+    .update(body)
+    .digest();
   const got = Buffer.from(signature.slice(7), "hex");
-  if (got.length !== want.length || !timingSafeEqual(got, want) || !fresh(timestamp)) {
+  if (
+    got.length !== want.length ||
+    !timingSafeEqual(got, want) ||
+    !fresh(timestamp)
+  ) {
     res.status(403).end();
     return;
   }
   const msg = req.body as {
     challenge?: unknown;
-    subscription?: { id?: unknown; type?: unknown; condition?: { broadcaster_user_id?: unknown } };
-    event?: { broadcaster_user_id?: unknown; broadcaster_user_login?: unknown; started_at?: unknown };
+    subscription?: {
+      id?: unknown;
+      type?: unknown;
+      condition?: { broadcaster_user_id?: unknown };
+    };
+    event?: {
+      broadcaster_user_id?: unknown;
+      broadcaster_user_login?: unknown;
+      started_at?: unknown;
+    };
   };
   if (type === "webhook_callback_verification") {
     if (typeof msg.challenge !== "string") {
@@ -71,21 +102,49 @@ liveHooksRouter.post("/hooks/twitch", async (req, res) => {
   }
   res.status(204).end();
   if (!(await firstTime("twitch", id))) return;
-  const channelId = msg.event?.broadcaster_user_id ?? msg.subscription?.condition?.broadcaster_user_id;
-  if (typeof channelId !== "string" || !/^\d{1,20}$/.test(channelId) || !(await watched("twitch", channelId))) return;
+  const channelId =
+    msg.event?.broadcaster_user_id ??
+    msg.subscription?.condition?.broadcaster_user_id;
+  if (
+    typeof channelId !== "string" ||
+    !/^\d{1,20}$/.test(channelId) ||
+    !(await watched("twitch", channelId))
+  )
+    return;
   if (type === "revocation") {
-    // Twitch stopped sending (the account changed, or too many failures): the renew sweep
-    // subscribes again if someone still needs it.
+    // Twitch stopped sending this one (the account changed, or too many failures): it's taken off
+    // the list, and the sweep subscribes again if someone still needs the channel.
+    const subId =
+      typeof msg.subscription?.id === "string" ? msg.subscription.id : "";
     await db
       .update(streamWatches)
-      .set({ subscriptionIds: [], updatedAt: new Date() })
-      .where(and(eq(streamWatches.provider, "twitch"), eq(streamWatches.channelId, channelId)));
+      .set({
+        subscriptionIds: sql`array(select x from unnest(${streamWatches.subscriptionIds}) as x where x <> ${subId} and x not like ${"%:" + subId})`,
+        updatedAt: new Date(Date.now() - 11 * 60_000),
+      })
+      .where(
+        and(
+          eq(streamWatches.provider, "twitch"),
+          eq(streamWatches.channelId, channelId),
+        ),
+      );
     return;
   }
   if (type !== "notification") return;
-  const login = typeof msg.event?.broadcaster_user_login === "string" ? msg.event.broadcaster_user_login : null;
+  const login =
+    typeof msg.event?.broadcaster_user_login === "string"
+      ? msg.event.broadcaster_user_login
+      : null;
   if (msg.subscription?.type === "stream.online") {
-    inBackground(channelWentLive("twitch", channelId, { login, startedAt: typeof msg.event?.started_at === "string" ? msg.event.started_at : null }));
+    inBackground(
+      channelWentLive("twitch", channelId, {
+        login,
+        startedAt:
+          typeof msg.event?.started_at === "string"
+            ? msg.event.started_at
+            : null,
+      }),
+    );
   } else if (msg.subscription?.type === "stream.offline") {
     inBackground(channelWentOffline("twitch", channelId));
   }
@@ -97,12 +156,17 @@ liveHooksRouter.post("/hooks/kick", async (req, res) => {
   const timestamp = header(req, "Kick-Event-Message-Timestamp");
   const signature = header(req, "Kick-Event-Signature");
   const type = header(req, "Kick-Event-Type");
-  if (!body || !(await kickSignatureOk(id, timestamp, body, signature)) || !fresh(timestamp)) {
+  if (
+    !body ||
+    !(await kickSignatureOk(id, timestamp, body, signature)) ||
+    !fresh(timestamp)
+  ) {
     res.status(403).end();
     return;
   }
   res.status(204).end();
-  if (type !== "livestream.status.updated" || !(await firstTime("kick", id))) return;
+  if (type !== "livestream.status.updated" || !(await firstTime("kick", id)))
+    return;
   const msg = req.body as {
     broadcaster?: { user_id?: unknown; channel_slug?: unknown };
     is_live?: unknown;
@@ -110,9 +174,14 @@ liveHooksRouter.post("/hooks/kick", async (req, res) => {
     started_at?: unknown;
   };
   const rawId = msg.broadcaster?.user_id;
-  const channelId = typeof rawId === "number" || typeof rawId === "string" ? String(rawId) : "";
-  if (!/^\d{1,20}$/.test(channelId) || !(await watched("kick", channelId))) return;
-  const slug = typeof msg.broadcaster?.channel_slug === "string" ? msg.broadcaster.channel_slug : null;
+  const channelId =
+    typeof rawId === "number" || typeof rawId === "string" ? String(rawId) : "";
+  if (!/^\d{1,20}$/.test(channelId) || !(await watched("kick", channelId)))
+    return;
+  const slug =
+    typeof msg.broadcaster?.channel_slug === "string"
+      ? msg.broadcaster.channel_slug
+      : null;
   if (msg.is_live === true) {
     inBackground(
       channelWentLive("kick", channelId, {

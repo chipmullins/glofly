@@ -1,10 +1,10 @@
 import { createReadStream } from "node:fs";
-import { mkdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import { Readable, type Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { noteSent } from "./sentBytes";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 // Where uploaded files (profile photos, and soon chat attachments) are kept.
 //
@@ -19,6 +19,8 @@ export interface Storage {
   /** Bytes start..end (inclusive) of a file, for videos that are played as they load. */
   getRange(key: string, start: number, end: number): Promise<Readable | null>;
   remove(key: string): Promise<void>;
+  /** 0.9.3: copies a file inside storage (forwarding), never through the server's memory. False: no such file. */
+  copy(from: string, to: string): Promise<boolean>;
 }
 
 /** Keys look like "avatars/<userId>/<version>.webp": only safe characters, no "..". */
@@ -62,6 +64,18 @@ class LocalDiskStorage implements Storage {
       return createReadStream(path, { start, end });
     } catch {
       return null;
+    }
+  }
+
+  async copy(from: string, to: string): Promise<boolean> {
+    const src = this.pathFor(from);
+    const dest = this.pathFor(to);
+    try {
+      await mkdir(dirname(dest), { recursive: true });
+      await copyFile(src, dest);
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -128,6 +142,19 @@ class S3Storage implements Storage {
     } catch (err) {
       const name = (err as { name?: string })?.name;
       if (name === "NoSuchKey" || name === "NotFound") return null;
+      throw err;
+    }
+  }
+
+  async copy(from: string, to: string): Promise<boolean> {
+    try {
+      await this.client.send(
+        new CopyObjectCommand({ Bucket: this.bucket, Key: checkKey(to), CopySource: `${this.bucket}/${checkKey(from)}`, MetadataDirective: "COPY" })
+      );
+      return true;
+    } catch (err) {
+      const name = (err as { name?: string })?.name;
+      if (name === "NoSuchKey" || name === "NotFound") return false;
       throw err;
     }
   }

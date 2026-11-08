@@ -1703,7 +1703,7 @@ export async function postScheduledText(
   // Communities round: a bot's buttons (the bot API only).
   buttons: MessageButton[] | null = null,
   // 0.9.3 Live alerts: the card, and the role ping an admin set up (checked when they chose it).
-  extra: { liveCard?: LiveCard; trustedMentions?: boolean } = {},
+  extra: { liveCard?: LiveCard; approvedPing?: { everyone: "everyone" | "here" | null; roleIds: string[] } } = {},
 ): Promise<{ ok: true; messageId: string } | { ok: false; reason: string }> {
   const chat = await access(conversationId, myId);
   if (!chat) return { ok: false, reason: "You're no longer in this chat." };
@@ -1719,9 +1719,12 @@ export async function postScheduledText(
     const original = await findMessage(conversationId, reply);
     if (!original || original.deletedAt || original.event) reply = null; // send it anyway, without the reply
   }
-  const mentions = chat.kind !== "dm" ? await mentionsIn(text, chat.memberIds, myId) : [];
+  // A Live alert @mentions nobody by name (stream titles come from streamers).
+  const mentions = chat.kind !== "dm" && !extra.liveCard ? await mentionsIn(text, chat.memberIds, myId) : [];
   const group =
-    chat.kind === "nebula" ? await groupMentionsFor(text, conversationId, chat.memberIds, myId, !!extra.trustedMentions) : NO_GROUP_MENTIONS;
+    chat.kind === "nebula"
+      ? await groupMentionsFor(text, conversationId, chat.memberIds, myId, extra.liveCard ? (extra.approvedPing ?? { everyone: null, roleIds: [] }) : null)
+      : NO_GROUP_MENTIONS;
   const inserted = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(messages)
@@ -1785,13 +1788,9 @@ async function placeOf(chat: Access): Promise<string | null> {
   return `${c?.name ?? "A constellation"} › #${nebula.name}`.slice(0, 120);
 }
 
-async function copyStored(from: string, to: string, contentType: string): Promise<boolean> {
-  const got = await storage.get(from);
-  if (!got) return false;
-  const chunks: Buffer[] = [];
-  for await (const chunk of got.stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  await storage.put(to, Buffer.concat(chunks), contentType);
-  return true;
+/** Inside storage (S3 CopyObject / a file copy): a big video never passes through memory. */
+function copyStored(from: string, to: string): Promise<boolean> {
+  return storage.copy(from, to);
 }
 
 /**
@@ -1815,6 +1814,9 @@ async function postForward(
   }
   const files = await db.select().from(attachments).where(eq(attachments.messageId, source.id)).orderBy(attachments.position);
   const copies = files.map((a) => ({ ...a, newId: randomUUID() }));
+  const made: string[] = [];
+  // Copies made for a forward that then fails are removed again.
+  const cleanUp = () => Promise.all(made.map((k) => storage.remove(k).catch(() => undefined)));
   for (const c of copies) {
     const base = { id: c.id, conversationId: source.conversationId, kind: c.kind };
     const next = { id: c.newId, conversationId: targetId, kind: c.kind };
@@ -1823,8 +1825,12 @@ async function postForward(
       const fromKey = keyFor(base, v);
       const toKey = keyFor(next, v);
       if (!fromKey || !toKey) continue;
-      const ok = await copyStored(fromKey, toKey, v === "file" ? "application/octet-stream" : "image/webp");
-      if (!ok && v !== "poster") return { ok: false, reason: "One of its files isn't available any more." };
+      const ok = await copyStored(fromKey, toKey).catch(() => false);
+      if (ok) made.push(toKey);
+      else if (v !== "poster") {
+        await cleanUp();
+        return { ok: false, reason: "One of its files isn't available any more." };
+      }
     }
   }
   const inserted = await db.transaction(async (tx) => {
@@ -1855,6 +1861,9 @@ async function postForward(
       .set({ lastReadAt: row.createdAt })
       .where(and(eq(conversationMembers.conversationId, targetId), eq(conversationMembers.userId, myId)));
     return row;
+  }).catch(async (err) => {
+    await cleanUp();
+    throw err;
   });
   const [message] = await hydrate([inserted]);
   for (const userId of chat.memberIds)
@@ -1915,7 +1924,8 @@ conversationsRouter.post("/messages/:messageId/forward", forwardLimiter, async (
     }
   }
   const files = (await attachmentsOf([row.id])).get(row.id) ?? [];
-  if (files.reduce((n, f) => n + (f.size ?? 0), 0) * body.data.to.length > FORWARD_MAX_BYTES) {
+  // A file whose size isn't known counts as too big.
+  if (files.reduce((n, f) => n + (typeof f.size === "number" ? f.size : FORWARD_MAX_BYTES + 1), 0) * body.data.to.length > FORWARD_MAX_BYTES) {
     res.status(400).json({ error: "invalid", message: "Those files are too big to forward to that many places. Pick fewer." });
     return;
   }

@@ -97,7 +97,7 @@ function standInHandler(req: import("node:http").IncomingMessage, res: import("n
     if (req.headers.authorization !== "Bearer tw-app") return json({}, 401);
     return json({
       data: twitchLive
-        ? [{ title: "Speedrun night", game_name: "Celeste", started_at: "2026-11-08T20:00:00Z", viewer_count: 12, thumbnail_url: "https://static-cdn.jtvnw.net/x-{width}x{height}.jpg" }]
+        ? [{ title: "Speedrun night @everyone", game_name: "Celeste", started_at: "2026-11-08T20:00:00Z", viewer_count: 12, thumbnail_url: "https://static-cdn.jtvnw.net/x-{width}x{height}.jpg" }]
         : [],
     });
   }
@@ -190,6 +190,19 @@ async function startLink(token: string, provider: string) {
   const r = await call(`/connections/${provider}/start`, { method: "POST", token });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   return new URL(r.json.url as string);
+}
+/** The "Link X to Glofly?" page: its account line, then pressing Link (or Cancel). */
+async function confirmLink(page: { status: number; text: string }, answer: "yes" | "no" = "yes") {
+  assert.equal(page.status, 200, page.text);
+  assert.match(page.text, /to Glofly\?/);
+  const token = /name="token" value="([A-Za-z0-9_-]+)"/.exec(page.text)?.[1];
+  assert.ok(token, "the page carries a one-use token");
+  const r = await fetch(URL_ + "/connections/confirm", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token: token!, answer }).toString(),
+  });
+  return { status: r.status, text: await r.text() };
 }
 const pathOf = (u: string) => {
   const x = new URL(u);
@@ -301,9 +314,16 @@ test("Steam: link checks Steam's answer, syncs played games into My games", { sk
   assert.equal((await call(`${pathOf(again)}&${answer("good", undefined, "https://evil.example/connections/steam/return")}`)).status, 400);
   assert.equal(seen.checkAuth, checks);
   const third = (await startLink(chip.token, "steam")).searchParams.get("openid.return_to")!;
-  const ok = await call(`${pathOf(third)}&${answer("good", `https://steamcommunity.com/openid/id/${STEAM_ID}`, third)}`);
+  const asked = await call(`${pathOf(third)}&${answer("good", `https://steamcommunity.com/openid/id/${STEAM_ID}`, third)}`);
+  // It names the Glofly account it's for, and nothing is linked until Link is pressed.
+  assert.match(asked.text, new RegExp(`@${chip.username}`));
+  assert.equal((await call("/connections", { token: chip.token })).json.accounts.length, 0);
+  const ok = await confirmLink(asked);
   assert.equal(ok.status, 200, ok.text);
   assert.match(ok.text, /Steam is linked/);
+  // The token works once.
+  const again2 = await fetch(URL_ + "/connections/confirm", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "token=" + /name="token" value="([^"]+)"/.exec(asked.text)![1] + "&answer=yes" });
+  assert.equal(again2.status, 400);
   await wait(async () => (await call("/games/me", { token: chip.token })).json.games.some((g: any) => g.name === `Stardew ${tag}`), "Steam games");
   const games = (await call("/games/me", { token: chip.token })).json.games;
   const stardew = games.find((g: any) => g.name === `Stardew ${tag}`);
@@ -323,10 +343,23 @@ test("Steam: link checks Steam's answer, syncs played games into My games", { sk
   await call("/connections/steam", { method: "PATCH", token: chip.token, body: { settings: { myGames: true } } });
   assert.equal((await call("/connections/steam", { method: "PATCH", token: chip.token, body: { settings: { secret: 1 } } })).status, 400);
 
-  // The same Steam account can't be linked to a second Glofly account.
+  // Signing in on Steam again from another Glofly account says so; Cancel changes nothing, Link
+  // moves it (whoever can sign in to the Steam account owns it).
   const otherReturn = (await startLink(other.token, "steam")).searchParams.get("openid.return_to")!;
   const dup = await call(`${pathOf(otherReturn)}&${answer("good", `https://steamcommunity.com/openid/id/${STEAM_ID}`, otherReturn)}`);
-  assert.equal(dup.status, 409);
+  assert.match(dup.text, /linked to another Glofly account now/);
+  assert.match((await confirmLink(dup, "no")).text, /wasn(&#39;|')t linked/);
+  assert.ok((await call("/connections", { token: chip.token })).json.accounts.some((a: any) => a.provider === "steam"));
+  const otherReturn2 = (await startLink(other.token, "steam")).searchParams.get("openid.return_to")!;
+  const moved = await confirmLink(await call(`${pathOf(otherReturn2)}&${answer("good", `https://steamcommunity.com/openid/id/${STEAM_ID}`, otherReturn2)}`));
+  assert.match(moved.text, /Steam is linked/);
+  assert.ok(!(await call("/connections", { token: chip.token })).json.accounts.some((a: any) => a.provider === "steam"));
+  assert.ok(!(await call("/games/me", { token: chip.token })).json.games.some((g: any) => g.name === `Stardew ${tag}`), "moved away: Steam's games go too");
+  assert.equal((await call("/connections/steam", { method: "DELETE", token: other.token })).status, 204);
+  // Back to Chip for the rest.
+  const back = (await startLink(chip.token, "steam")).searchParams.get("openid.return_to")!;
+  await confirmLink(await call(`${pathOf(back)}&${answer("good", `https://steamcommunity.com/openid/id/${STEAM_ID}`, back)}`));
+  await wait(async () => (await call("/games/me", { token: chip.token })).json.games.some((g: any) => g.name === `Stardew ${tag}`), "Steam games again");
 
   // Unlinking takes Steam's games out.
   assert.equal((await call("/connections/steam", { method: "DELETE", token: chip.token })).status, 204);
@@ -344,7 +377,7 @@ test("Twitch: link, listen, went-live tells friends, signatures are checked", { 
   assert.equal((await call(`/connections/kick/return?code=good-code&state=${s2}`)).status, 400);
   const s3 = (await startLink(chip.token, "twitch")).searchParams.get("state")!;
   const revokedBefore = seen.revoked;
-  const linked = await call(`${pathOf(redirect)}?code=good-code&state=${s3}`);
+  const linked = await confirmLink(await call(`${pathOf(redirect)}?code=good-code&state=${s3}`));
   assert.equal(linked.status, 200, linked.text);
   assert.match(linked.text, /Twitch is linked/);
   await wait(async () => seen.revoked > revokedBefore, "the user token revoked");
@@ -367,7 +400,7 @@ test("Twitch: link, listen, went-live tells friends, signatures are checked", { 
   const stream = (await call("/connections/friends-live", { token: maya.token })).json.streams[0];
   assert.equal(stream.userId, chip.id);
   assert.equal(stream.source, "twitch");
-  assert.equal(stream.title, "Speedrun night");
+  assert.equal(stream.title, "Speedrun night @everyone");
   assert.equal(stream.game, "Celeste");
   assert.equal(stream.url, `https://www.twitch.tv/chip${tag}`);
   assert.equal((await call("/connections/friends-live", { token: other.token })).json.streams.length, 0, "not friends: nothing");
@@ -406,7 +439,7 @@ test("Kick: link with PKCE, RSA-signed live notices", { skip }, async () => {
   const start = await startLink(maya.token, "kick");
   assert.equal(start.searchParams.get("code_challenge_method"), "S256");
   const challenge = start.searchParams.get("code_challenge")!;
-  const linked = await call(`/connections/kick/return?code=kick-code&state=${start.searchParams.get("state")}`);
+  const linked = await confirmLink(await call(`/connections/kick/return?code=kick-code&state=${start.searchParams.get("state")}`));
   assert.equal(linked.status, 200, linked.text);
   const { createHash } = await import("node:crypto");
   assert.equal(createHash("sha256").update(seen.pkce).digest("base64url"), challenge, "the verifier matches the challenge");
@@ -492,11 +525,12 @@ test("Live alerts: Twitch channel posts a card with a role ping; YouTube videos 
     return !!alert?.linkPreview;
   }, "the alert");
   assert.equal(alert.liveCard.site, "twitch");
-  assert.equal(alert.liveCard.title, "Speedrun night");
+  assert.equal(alert.liveCard.title, "Speedrun night @everyone");
   assert.equal(alert.liveCard.game, "Celeste");
   assert.equal(alert.liveCard.watchNebulaId, voice.id);
-  assert.equal(alert.body, `@Fans${tag} Kroof${tag} is live: Speedrun night\nhttps://www.twitch.tv/kroof${tag}`);
+  assert.equal(alert.body, `@Fans${tag} Kroof${tag} is live: Speedrun night ＠everyone\nhttps://www.twitch.tv/kroof${tag}`);
   assert.deepEqual(alert.mentionRoles, [roleId], "the role ping counts");
+  assert.ok(!alert.mentionEveryone, "a stream title can't ping everyone");
   assert.equal(alert.linkPreview.siteName, "Twitch");
   // A second "online" (Twitch retry, or the stream restarting) doesn't post again.
   await twitchHook("notification", { ...online, event: { ...online.event, started_at: new Date(Date.now() + 1000).toISOString() } });
@@ -552,7 +586,7 @@ test("Live alerts: members' streams post where the owner allows them", { skip },
   // Maya links Kick again with "Also post in my constellations" on.
   const start = await startLink(maya.token, "kick");
   if ((await call("/connections", { token: maya.token })).json.accounts.every((a: any) => a.provider !== "kick")) {
-    assert.equal((await call(`/connections/kick/return?code=kick-code&state=${start.searchParams.get("state")}`)).status, 200);
+    assert.equal((await confirmLink(await call(`/connections/kick/return?code=kick-code&state=${start.searchParams.get("state")}`))).status, 200);
   }
   await call("/connections/kick", { method: "PATCH", token: maya.token, body: { settings: { postInConstellations: true } } });
   const before = (await nebulaMessages(chip.token, text.conversationId)).filter((m) => m.liveCard?.site === "kick").length;
