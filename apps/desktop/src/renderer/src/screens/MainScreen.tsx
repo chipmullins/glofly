@@ -25,6 +25,7 @@ import Avatar, { AvatarFace } from '../components/Avatar'
 import ChatView from '../components/ChatView'
 import { ListSkeleton } from '../components/Skeleton'
 import ConfirmDialog from '../components/ConfirmDialog'
+import SidebarPins from '../constellations/SidebarPins'
 import EmptyScene from '../components/EmptyScene'
 import WelcomeFlow from '../components/WelcomeFlow'
 import OAuthConsent, { pendingOAuth } from '../oauth/OAuthConsent'
@@ -1994,6 +1995,16 @@ export default function MainScreen({
                 Constellations
                 {cxNew && <span className="cx-nav-dot" aria-hidden="true" />}
               </button>
+            )}
+            {!restricted && (
+              <SidebarPins
+                cards={cxCards.cards}
+                onOpen={(card, from) =>
+                  // 0.9.3: the quick hop straight into it (at the nebula you were last in there).
+                  cx.enter(from, lastPlaceIn(user.id, [card.id]) ?? { constellationId: card.id, nebulaId: null })
+                }
+                onProblem={setNotice}
+              />
             )}
           </nav>
 

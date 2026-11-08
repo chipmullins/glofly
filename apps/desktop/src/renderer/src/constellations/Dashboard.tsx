@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CONSTELLATION_THEME,
   CONSTELLATION_TYPES,
+  SIDEBAR_PINS_MAX,
   voiceLine,
   type ConstellationCard,
   type ConstellationInvite,
@@ -12,6 +13,7 @@ import type { MyStatus, SignedInUser } from '../../../preload/api-types'
 import { AvatarFace } from '../components/Avatar'
 import StatusDot from '../components/StatusDot'
 import { api } from '../lib/constellations'
+import ContextMenu from '../components/ContextMenu'
 import {
   BannerStars,
   ConstellationIcon,
@@ -87,12 +89,15 @@ function Card({
   card,
   now,
   onOpen,
+  onMenu,
   dragging,
   dragProps
 }: {
   card: ConstellationCard
   now: number
   onOpen: () => void
+  /** 0.9.3: right-click (Pin to sidebar, Mark as read) */
+  onMenu: (x: number, y: number) => void
   dragging: boolean
   dragProps: React.HTMLAttributes<HTMLButtonElement> & { draggable: boolean }
 }): React.JSX.Element {
@@ -108,6 +113,10 @@ function Card({
       type="button"
       className={dragging ? 'cx-card cx-card--mine cx-card--dragging' : 'cx-card cx-card--mine'}
       onClick={onOpen}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onMenu(e.clientX, e.clientY)
+      }}
       aria-label={`${card.name}, ${card.memberCount} members, ${card.onlineCount} online${badge ? `, ${badge}` : ''}`}
       {...dragProps}
     >
@@ -298,6 +307,9 @@ export default function Dashboard({
   onAskToJoin: (entry: DirectoryEntry) => void
 }): React.JSX.Element {
   const [query, setQuery] = useState('')
+  // 0.9.3: a card's right-click menu.
+  const [cardMenu, setCardMenu] = useState<{ card: ConstellationCard; x: number; y: number } | null>(null)
+  const pinCount = cards.filter((c) => c.sidebarPin !== null && c.sidebarPin !== undefined).length
   const [type, setType] = useState<ConstellationType | null>(null)
   const [tag, setTag] = useState<string | null>(null)
   const [found, setResults] = useState<DirectoryEntry[] | null>(null)
@@ -470,6 +482,58 @@ export default function Dashboard({
           </button>
         </div>
 
+        {cardMenu && (
+          <ContextMenu
+            x={cardMenu.x}
+            y={cardMenu.y}
+            label={`${cardMenu.card.name} options`}
+            onClose={() => setCardMenu(null)}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                const id = cardMenu.card.id
+                setCardMenu(null)
+                onOpen(id)
+              }}
+            >
+              Open
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                const card = cardMenu.card
+                const pinned = card.sidebarPin !== null && card.sidebarPin !== undefined
+                setCardMenu(null)
+                if (!pinned && pinCount >= SIDEBAR_PINS_MAX) {
+                  onProblem(`You can pin up to ${SIDEBAR_PINS_MAX}. Unpin one to make room for ${card.name}.`)
+                  return
+                }
+                void api.sidebarPin(card.id, !pinned).then((r) => !r.ok && onProblem(r.message))
+              }}
+            >
+              {cardMenu.card.sidebarPin !== null && cardMenu.card.sidebarPin !== undefined
+                ? 'Unpin from sidebar'
+                : 'Pin to sidebar'}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                const id = cardMenu.card.id
+                setCardMenu(null)
+                void api.readAll(id).then((r) => !r.ok && onProblem(r.message))
+              }}
+            >
+              Mark as read
+            </button>
+          </ContextMenu>
+        )}
         {shown.length > 0 ? (
           <div className="cx-cards">
             {shown.map((card) => (
@@ -478,6 +542,7 @@ export default function Dashboard({
                 card={card}
                 now={now}
                 onOpen={() => onOpen(card.id)}
+                onMenu={(x, y) => setCardMenu({ card, x, y })}
                 dragging={dragId === card.id}
                 dragProps={dragPropsFor(card)}
               />

@@ -1161,6 +1161,8 @@ export const constellationMembers = pgTable(
     notify: text("notify").notNull().default("all"),
     // Where they dragged it on the dashboard / icon strip (null = never moved).
     position: integer("position"),
+    // 0.9.3: pinned to their desktop sidebar (its place among their pins; null = not pinned).
+    sidebarPin: integer("sidebar_pin"),
     // 0.7.5: they saw the welcome screen (null = show it; set for everyone already in) and
     // agreed to the house rules.
     welcomedAt: timestamp("welcomed_at", { withTimezone: true }),

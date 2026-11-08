@@ -1066,6 +1066,20 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               className="cx-menu-item"
               onClick={() => {
                 setHeadMenu(false)
+                // 0.9.3: pinned to the sidebar (up to 5; the server says when it's full).
+                void api.sidebarPin(c.id, !c.me.sidebarPinned).then((r) => {
+                  if (!r.ok) props.onProblem(r.message)
+                })
+              }}
+            >
+              {c.me.sidebarPinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="cx-menu-item"
+              onClick={() => {
+                setHeadMenu(false)
                 setNotifyOpen(true)
               }}
             >

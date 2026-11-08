@@ -1,0 +1,1 @@
+ALTER TABLE "constellation_members" ADD COLUMN "sidebar_pin" integer;

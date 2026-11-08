@@ -137,7 +137,7 @@ async function visiblyOnline(userIds: string[]): Promise<Set<string>> {
 /** My dashboard: every constellation I'm in. */
 export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
   const mine = await db
-    .select({ c: constellations, position: constellationMembers.position, notify: constellationMembers.notify, mutedUntil: constellationMembers.mutedUntil })
+    .select({ c: constellations, position: constellationMembers.position, sidebarPin: constellationMembers.sidebarPin, notify: constellationMembers.notify, mutedUntil: constellationMembers.mutedUntil })
     .from(constellationMembers)
     .innerJoin(constellations, eq(constellations.id, constellationMembers.constellationId))
     .where(and(eq(constellationMembers.userId, userId), isNull(constellations.takenDownAt)));
@@ -183,7 +183,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
 
   const cards: ConstellationCard[] = [];
   const isMutedNow = (d: Date | null) => !!d && d.getTime() > Date.now();
-  for (const { c, position, notify, mutedUntil } of mine) {
+  for (const { c, position, sidebarPin, notify, mutedUntil } of mine) {
     const memberIds = members.filter((m) => m.constellationId === c.id).map((m) => m.userId);
     const myNebulas = allNebulas.filter((n) => n.constellationId === c.id);
     let unreadCount = 0;
@@ -218,6 +218,8 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
       lastMention: null,
       activityAt: c.lastActivityAt.toISOString(),
       position,
+      sidebarPin,
+      muted: isMutedNow(mutedUntil),
       ...identityOf(c),
     });
   }
@@ -389,6 +391,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       followAlerts: constellationMembers.followAlerts,
       onboardingAnswers: constellationMembers.onboardingAnswers,
       onboardedAt: constellationMembers.onboardedAt,
+      sidebarPin: constellationMembers.sidebarPin,
     })
     .from(constellationMembers)
     .where(eq(constellationMembers.constellationId, constellationId));
@@ -504,6 +507,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       rank: me.rank,
       timedOutUntil: me.timedOutUntil?.toISOString() ?? null,
       notify: notifyLevel(myRow?.notify) ?? "all",
+      sidebarPinned: myRow?.sidebarPin !== null && myRow?.sidebarPin !== undefined,
       // 4.2: the rest of the notification window (board 23)
       notifications: {
         mutedUntil: myRow?.mutedUntil && myRow.mutedUntil.getTime() > Date.now() ? myRow.mutedUntil.toISOString() : null,

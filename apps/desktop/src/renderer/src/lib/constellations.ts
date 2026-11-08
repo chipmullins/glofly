@@ -98,6 +98,11 @@ export const api = {
   dismissInvite: (inviteId: string) =>
     call<null>('POST', `/constellations/invites/${inviteId}/dismiss`),
   get: (id: string) => call<Detail>('GET', base(id)),
+  // 0.9.3: pinned to the sidebar (up to 5)
+  sidebarPin: (id: string, on: boolean) =>
+    call<null>(on ? 'PUT' : 'DELETE', `${base(id)}/sidebar-pin`),
+  orderSidebarPins: (ids: string[]) =>
+    call<null>('PUT', '/constellations/sidebar-pins/order', { ids }),
   update: (
     id: string,
     changes: Partial<{

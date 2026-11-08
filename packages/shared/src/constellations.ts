@@ -492,7 +492,14 @@ export type ConstellationCard = {
   bannerVersion?: string | null
   /** Where you dragged it on the dashboard and the icon strip (lower first; null = never moved) */
   position: number | null
+  /** 0.9.3: pinned to your desktop sidebar (its place among your pins; null/missing = not pinned) */
+  sidebarPin?: number | null
+  /** 0.9.3: you muted it (the sidebar pin fades and shows no badge) */
+  muted?: boolean
 }
+
+/** 0.9.3: how many constellations the desktop sidebar holds. */
+export const SIDEBAR_PINS_MAX = 5
 
 export type ConstellationInvite = {
   id: string
@@ -664,6 +671,8 @@ export type ConstellationDetail = {
     notifications?: ConstellationNotifySettings
     /** Communities round 4.3: my answers (when the constellation has onboarding) */
     onboarding?: MyOnboarding
+    /** 0.9.3: pinned to my desktop sidebar */
+    sidebarPinned?: boolean
   }
   /** Communities round 4.3: the questions (null/missing = none) */
   onboarding?: OnboardingSettings | null

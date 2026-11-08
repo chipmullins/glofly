@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import { rateLimit } from "../rateLimit";
-import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
   ALL_PERMISSIONS,
@@ -36,6 +36,7 @@ import { FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
   type ConstellationPermission,
   type NebulaKind,
   PINNED_NEBULAS_MAX,
+  SIDEBAR_PINS_MAX,
   ACCENT_THEME,
   RULE_MAX,
   RULES_MAX,
@@ -289,6 +290,67 @@ constellationsRouter.put("/order", changeLimiter, async (req, res) => {
         .update(constellationMembers)
         .set({ position: position++ })
         .where(and(eq(constellationMembers.constellationId, id), eq(constellationMembers.userId, myId)));
+    }
+  });
+  emitToUser(myId, "constellations:changed", {}, true);
+  res.status(204).end();
+});
+
+// ───────────── 0.9.3: pinned to the desktop sidebar (approved canvas "Glofly pinned constellations") ─────────────
+
+// PUT /constellations/:id/sidebar-pin — pin it (at the end). DELETE — unpin.
+constellationsRouter.put("/:id/sidebar-pin", changeLimiter, async (req, res) => {
+  const s = await standingFor(req, res);
+  if (!s) return;
+  const pins = await db
+    .select({ id: constellationMembers.constellationId, pin: constellationMembers.sidebarPin })
+    .from(constellationMembers)
+    .where(and(eq(constellationMembers.userId, s.userId), isNotNull(constellationMembers.sidebarPin)));
+  if (!pins.some((p) => p.id === s.constellationId)) {
+    if (pins.length >= SIDEBAR_PINS_MAX) {
+      res.status(409).json({ error: "too_many", message: `You can pin up to ${SIDEBAR_PINS_MAX}. Unpin one to make room.` });
+      return;
+    }
+    const next = pins.reduce((n, p) => Math.max(n, (p.pin ?? 0) + 1), 0);
+    await db
+      .update(constellationMembers)
+      .set({ sidebarPin: next })
+      .where(and(eq(constellationMembers.constellationId, s.constellationId), eq(constellationMembers.userId, s.userId)));
+  }
+  emitToUser(s.userId, "constellations:changed", {}, true);
+  emitToUser(s.userId, "constellation:updated", { constellationId: s.constellationId }, true);
+  res.status(204).end();
+});
+constellationsRouter.delete("/:id/sidebar-pin", changeLimiter, async (req, res) => {
+  const id = idParam.safeParse(req.params.id);
+  if (!id.success) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const myId = me(res).id;
+  await db
+    .update(constellationMembers)
+    .set({ sidebarPin: null })
+    .where(and(eq(constellationMembers.constellationId, id.data), eq(constellationMembers.userId, myId)));
+  emitToUser(myId, "constellations:changed", {}, true);
+  emitToUser(myId, "constellation:updated", { constellationId: id.data }, true);
+  res.status(204).end();
+});
+// PUT /constellations/sidebar-pins/order  { ids } — drag to reorder the pins.
+constellationsRouter.put("/sidebar-pins/order", changeLimiter, async (req, res) => {
+  const parsed = z.object({ ids: z.array(idParam).min(1).max(SIDEBAR_PINS_MAX) }).safeParse(req.body);
+  if (!parsed.success || new Set(parsed.data.ids).size !== parsed.data.ids.length) {
+    bad(res, "That order didn't make sense. Try again.");
+    return;
+  }
+  const myId = me(res).id;
+  await db.transaction(async (tx) => {
+    let position = 0;
+    for (const id of parsed.data.ids) {
+      await tx
+        .update(constellationMembers)
+        .set({ sidebarPin: position++ })
+        .where(and(eq(constellationMembers.constellationId, id), eq(constellationMembers.userId, myId), isNotNull(constellationMembers.sidebarPin)));
     }
   });
   emitToUser(myId, "constellations:changed", {}, true);
