@@ -284,6 +284,8 @@ export type Message = {
   lanternFadeAt?: string | null
   /** 0.9.3: a forwarded message (older apps just show its text) */
   forwarded?: ForwardedFrom
+  /** 0.9.3: a constellation's Live alert (older apps show the body, its link and preview) */
+  liveCard?: import('./connections').LiveCard
   /** Communities round (Nov 2026): buttons under a bot's message (constellations only) */
   buttons?: import('./integrations').MessageButton[] | null
   /** Communities round: a reply in a thread / forum post (missing = the nebula's own timeline) */

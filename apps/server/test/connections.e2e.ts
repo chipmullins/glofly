@@ -3,6 +3,7 @@
 //   STEAM_API_KEY=sk STEAM_OPENID_URL=http://127.0.0.1:4792/openid STEAM_API_URL=http://127.0.0.1:4792/steam \
 //   TWITCH_CLIENT_ID=tw TWITCH_CLIENT_SECRET=tws TWITCH_ID_URL=http://127.0.0.1:4792/twid TWITCH_API_URL=http://127.0.0.1:4792/helix \
 //   KICK_CLIENT_ID=kc KICK_CLIENT_SECRET=kcs KICK_ID_URL=http://127.0.0.1:4792/kid KICK_API_URL=http://127.0.0.1:4792/kick \
+//   YOUTUBE_HUB_URL=http://127.0.0.1:4792/yt/hub YOUTUBE_FEED_URL=http://127.0.0.1:4792/yt/feed \
 //   npx tsx src/index.ts
 // then run with GLOFLY_E2E_URL=http://localhost:4000 GLOFLY_E2E_CONNECTIONS=1.
 import { test, before, after } from "node:test";
@@ -31,7 +32,9 @@ const kickPrivate = createPrivateKey(readFileSync(KEY_FILE));
 const kickKeys = { privateKey: kickPrivate, publicKey: createPublicKey(kickPrivate) };
 
 // ---- the stand-in ----
-const seen = { checkAuth: 0, eventsubCreated: [] as string[], eventsubDeleted: [] as string[], kickSubs: 0, revoked: 0, pkce: "" };
+const KROOF_ID = num();
+const YT_ID = `UC${randomBytes(16).toString("base64url").slice(0, 22)}`;
+const seen = { hub: [] as URLSearchParams[], checkAuth: 0, eventsubCreated: [] as string[], eventsubDeleted: [] as string[], kickSubs: 0, revoked: 0, pkce: "" };
 let standIn: Server;
 let twitchLive = false;
 
@@ -80,6 +83,11 @@ function standInHandler(req: import("node:http").IncomingMessage, res: import("n
   if (url.pathname === "/twid/oauth2/revoke") {
     seen.revoked++;
     return json({});
+  }
+  if (url.pathname === "/helix/users" && url.searchParams.get("login")) {
+    if (req.headers.authorization !== "Bearer tw-app") return json({}, 401);
+    const login = url.searchParams.get("login");
+    return json({ data: login === `kroof${tag}` ? [{ id: KROOF_ID, login, display_name: `Kroof${tag}` }] : [] });
   }
   if (url.pathname === "/helix/users") {
     if (req.headers.authorization !== "Bearer tw-user") return json({}, 401);
@@ -131,6 +139,15 @@ function standInHandler(req: import("node:http").IncomingMessage, res: import("n
     return json({ data: [{ subscription_id: `kick-sub-${tag}` }] });
   }
   if (url.pathname === "/kick/events/subscriptions" && req.method === "DELETE") return res.writeHead(204).end();
+  // YouTube
+  if (url.pathname === "/yt/feed") {
+    if (url.searchParams.get("channel_id") !== YT_ID) return res.writeHead(404).end();
+    return res.writeHead(200, { "content-type": "application/atom+xml" }).end(`<?xml version="1.0"?><feed><title>Night Raiders TV &amp; friends</title></feed>`);
+  }
+  if (url.pathname === "/yt/hub/subscribe") {
+    seen.hub.push(new URLSearchParams(body));
+    return res.writeHead(202).end();
+  }
   if (url.pathname === "/kick/public-key") return json({ data: { public_key: kickKeys.publicKey.export({ type: "spki", format: "pem" }) } });
   res.writeHead(404).end();
 }
@@ -238,8 +255,9 @@ before(async () => {
 
 after(async () => {
   if (skip) return;
+  if (cid) await pool.query("delete from constellations where id = $1", [cid]);
   await pool.query("delete from users where id = any($1)", [[chip.id, maya.id, other.id]]);
-  await pool.query("delete from stream_watches where channel_id = any($1)", [[TWITCH_ID, KICK_ID]]);
+  await pool.query("delete from stream_watches where channel_id = any($1)", [[TWITCH_ID, KICK_ID, KROOF_ID, YT_ID]]);
   await pool.end();
   standIn.close();
 });
@@ -415,4 +433,131 @@ test("restricted (family) accounts can't link", { skip }, async () => {
   await pool.query("update users set restricted = true where id = $1", [other.id]);
   assert.equal((await call("/connections/twitch/start", { method: "POST", token: other.token })).status, 403);
   await pool.query("update users set restricted = false where id = $1", [other.id]);
+});
+
+// ───────────── Constellation Live alerts ─────────────
+
+let cid = "";
+const nebulaMessages = async (token: string, conversationId: string) => (await call(`/conversations/${conversationId}/messages`, { token, headers: { "x-glofly-features": "threads" } })).json.messages as any[];
+
+test("Live alerts: Twitch channel posts a card with a role ping; YouTube videos post once", { skip }, async () => {
+  const made = await call("/constellations", { method: "POST", token: chip.token, body: { name: `Alerts ${tag}`, template: "gaming" } });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  cid = made.json.constellation.id;
+  const text = made.json.constellation.nebulas.find((n: any) => n.kind === "text");
+  const voice = made.json.constellation.nebulas.find((n: any) => n.kind === "voice");
+  assert.ok(voice, "the gaming template has a voice nebula");
+  const role = await call(`/constellations/${cid}/roles`, { method: "POST", token: chip.token, body: { name: `Fans${tag}`, color: "violet", permissions: [] } });
+  assert.ok(role.status < 300, JSON.stringify(role.json));
+  const roleId = role.json.constellation.roles.find((r: any) => r.name === `Fans${tag}`).id as string;
+  // Maya joins with the role.
+  const link = await call(`/constellations/${cid}/links`, { method: "POST", token: chip.token, body: { lifetime: "7d" } });
+  assert.ok(link.status < 300, JSON.stringify(link.json));
+  const joined = await call(`/constellations/links/${link.json.link.code}/join`, { method: "POST", token: maya.token });
+  assert.ok(joined.status < 300, JSON.stringify(joined.json));
+  const gave = await call(`/constellations/${cid}/members/${maya.id}/roles`, { method: "PUT", token: chip.token, body: { roleIds: [roleId] } });
+  assert.ok(gave.status < 300, JSON.stringify(gave.json));
+
+  // Members can't set alerts up.
+  assert.equal((await call(`/constellations/${cid}/live-alerts`, { token: maya.token })).status, 403);
+  const list = await call(`/constellations/${cid}/live-alerts`, { token: chip.token });
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.json.alerts, []);
+
+  // Bad input.
+  assert.equal((await call(`/constellations/${cid}/live-alerts`, { method: "POST", token: chip.token, body: { site: "twitch", channel: "evil.com/x y", nebulaId: text.id } })).status, 400);
+  assert.equal((await call(`/constellations/${cid}/live-alerts`, { method: "POST", token: chip.token, body: { site: "twitch", channel: "nobody_here", nebulaId: text.id } })).status, 400);
+  assert.equal((await call(`/constellations/${cid}/live-alerts`, { method: "POST", token: chip.token, body: { site: "twitch", channel: `kroof${tag}`, nebulaId: voice.id } })).status, 400, "posts only in text nebulas");
+  assert.equal((await call(`/constellations/${cid}/live-alerts`, { method: "POST", token: chip.token, body: { site: "twitch", channel: `kroof${tag}`, nebulaId: text.id, watchNebulaId: text.id } })).status, 400, "Watch together needs a voice nebula");
+  const foreignRole = randomBytes(16).toString("hex").replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, "$1-$2-4$3-a$4-$5").slice(0, 36);
+  assert.equal((await call(`/constellations/${cid}/live-alerts`, { method: "POST", token: chip.token, body: { site: "twitch", channel: `kroof${tag}`, nebulaId: text.id, ping: foreignRole } })).status, 400);
+
+  const add = await call(`/constellations/${cid}/live-alerts`, {
+    method: "POST",
+    token: chip.token,
+    body: { site: "twitch", channel: `https://twitch.tv/kroof${tag}`, nebulaId: text.id, ping: roleId, message: "{streamer} is live: {title}", watchNebulaId: voice.id },
+  });
+  assert.equal(add.status, 201, JSON.stringify(add.json));
+  assert.equal(add.json.alert.channelName, `Kroof${tag}`);
+  assert.equal(add.json.alert.channelUrl, `https://www.twitch.tv/kroof${tag}`);
+  assert.equal((await call(`/constellations/${cid}/live-alerts`, { method: "POST", token: chip.token, body: { site: "twitch", channel: `kroof${tag}`, nebulaId: text.id } })).status, 409);
+
+  // Kroof goes live.
+  twitchLive = true;
+  const online = { subscription: { id: "s", type: "stream.online", condition: { broadcaster_user_id: KROOF_ID } }, event: { broadcaster_user_id: KROOF_ID, broadcaster_user_login: `kroof${tag}`, started_at: new Date().toISOString() } };
+  assert.equal((await twitchHook("notification", online)).status, 204);
+  let alert: any;
+  await wait(async () => {
+    alert = (await nebulaMessages(maya.token, text.conversationId)).find((m) => m.liveCard);
+    return !!alert?.linkPreview;
+  }, "the alert");
+  assert.equal(alert.liveCard.site, "twitch");
+  assert.equal(alert.liveCard.title, "Speedrun night");
+  assert.equal(alert.liveCard.game, "Celeste");
+  assert.equal(alert.liveCard.watchNebulaId, voice.id);
+  assert.equal(alert.body, `@Fans${tag} Kroof${tag} is live: Speedrun night\nhttps://www.twitch.tv/kroof${tag}`);
+  assert.deepEqual(alert.mentionRoles, [roleId], "the role ping counts");
+  assert.equal(alert.linkPreview.siteName, "Twitch");
+  // A second "online" (Twitch retry, or the stream restarting) doesn't post again.
+  await twitchHook("notification", { ...online, event: { ...online.event, started_at: new Date(Date.now() + 1000).toISOString() } });
+  await new Promise((r) => setTimeout(r, 600));
+  assert.equal((await nebulaMessages(maya.token, text.conversationId)).filter((m) => m.liveCard).length, 1);
+  twitchLive = false;
+
+  // YouTube.
+  const yt = await call(`/constellations/${cid}/live-alerts`, { method: "POST", token: chip.token, body: { site: "youtube", channel: `https://www.youtube.com/channel/${YT_ID}`, nebulaId: text.id } });
+  assert.equal(yt.status, 201, JSON.stringify(yt.json));
+  assert.equal(yt.json.alert.channelName, "Night Raiders TV & friends");
+  const sub = seen.hub.find((p) => p.get("hub.topic")?.endsWith(YT_ID));
+  assert.ok(sub, "subscribed with the hub");
+  assert.equal(sub!.get("hub.mode"), "subscribe");
+  const secret = sub!.get("hub.secret")!;
+  // The hub's confirmation: only for channels Glofly asked for.
+  const topic = encodeURIComponent(`https://www.youtube.com/xml/feeds/videos.xml?channel_id=${YT_ID}`);
+  const ok = await call(`/hooks/youtube?hub.mode=subscribe&hub.topic=${topic}&hub.challenge=abc123&hub.lease_seconds=432000`);
+  assert.equal(ok.text, "abc123");
+  const other = encodeURIComponent(`https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC${"x".repeat(22)}`);
+  assert.equal((await call(`/hooks/youtube?hub.mode=subscribe&hub.topic=${other}&hub.challenge=abc123`)).status, 404);
+  const videoId = randomBytes(8).toString("base64url").slice(0, 11);
+  const atom = (published: string) =>
+    `<?xml version="1.0"?><feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"><entry><id>yt:video:${videoId}</id><yt:videoId>${videoId}</yt:videoId><yt:channelId>${YT_ID}</yt:channelId><title>Raid recap &amp; tips</title><author><name>Night Raiders TV</name></author><published>${published}</published></entry></feed>`;
+  const sendAtom = (xml: string, key = secret) =>
+    fetch(`${URL_}/hooks/youtube`, { method: "POST", headers: { "content-type": "application/atom+xml", "x-hub-signature": "sha1=" + createHmac("sha1", key).update(xml).digest("hex") }, body: xml });
+  // Forged: answered 204 but ignored.
+  assert.equal((await sendAtom(atom(new Date().toISOString()), "wrong")).status, 204);
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal((await nebulaMessages(chip.token, text.conversationId)).filter((m) => m.liveCard?.site === "youtube").length, 0);
+  // An old video edited: ignored.
+  await sendAtom(atom(new Date(Date.now() - 5 * 86_400_000).toISOString()));
+  const fresh = atom(new Date().toISOString());
+  assert.equal((await sendAtom(fresh)).status, 204);
+  await wait(async () => (await nebulaMessages(chip.token, text.conversationId)).some((m) => m.liveCard?.site === "youtube"), "the YouTube alert");
+  await sendAtom(fresh); // the hub sends title changes too
+  await new Promise((r) => setTimeout(r, 400));
+  const vids = (await nebulaMessages(chip.token, text.conversationId)).filter((m) => m.liveCard?.site === "youtube");
+  assert.equal(vids.length, 1, "each video once");
+  assert.equal(vids[0].liveCard.url, `https://www.youtube.com/watch?v=${videoId}`);
+  assert.equal(vids[0].liveCard.title, "Raid recap & tips");
+  assert.equal(vids[0].liveCard.kind, "video");
+
+  // Removing the YouTube alert unsubscribes.
+  assert.equal((await call(`/constellations/${cid}/live-alerts/${yt.json.alert.id}`, { method: "DELETE", token: chip.token })).status, 204);
+  assert.ok(seen.hub.some((p) => p.get("hub.topic")?.endsWith(YT_ID) && p.get("hub.mode") === "unsubscribe"));
+  assert.equal((await pool.query("select 1 from stream_watches where channel_id = $1", [YT_ID])).rowCount, 0);
+});
+
+test("Live alerts: members' streams post where the owner allows them", { skip }, async () => {
+  const text = (await call(`/constellations/${cid}`, { token: chip.token })).json.constellation.nebulas.find((n: any) => n.kind === "text");
+  assert.equal((await call(`/constellations/${cid}/live-alerts/members`, { method: "PUT", token: chip.token, body: { nebulaId: text.id } })).status, 200);
+  // Maya links Kick again with "Also post in my constellations" on.
+  const start = await startLink(maya.token, "kick");
+  if ((await call("/connections", { token: maya.token })).json.accounts.every((a: any) => a.provider !== "kick")) {
+    assert.equal((await call(`/connections/kick/return?code=kick-code&state=${start.searchParams.get("state")}`)).status, 200);
+  }
+  await call("/connections/kick", { method: "PATCH", token: maya.token, body: { settings: { postInConstellations: true } } });
+  const before = (await nebulaMessages(chip.token, text.conversationId)).filter((m) => m.liveCard?.site === "kick").length;
+  const live = { broadcaster: { user_id: Number(KICK_ID), channel_slug: `maya-${tag}` }, is_live: true, title: "Members stream", started_at: new Date().toISOString() };
+  assert.equal((await kickHook(live)).status, 204);
+  await wait(async () => (await nebulaMessages(chip.token, text.conversationId)).filter((m) => m.liveCard?.site === "kick").length === before + 1, "the member's alert");
+  await kickHook({ ...live, is_live: false });
 });

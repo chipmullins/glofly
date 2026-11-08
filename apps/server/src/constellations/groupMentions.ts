@@ -25,6 +25,8 @@ export async function groupMentionsFor(
   conversationId: string,
   memberIds: string[],
   senderId: string,
+  // 0.9.3 Live alerts: Glofly posting a ping an admin chose (they were allowed to mention it then).
+  trusted = false,
 ): Promise<GroupMentions> {
   if (!text.includes("@")) return NO_GROUP_MENTIONS;
   const nebula = await nebulaOfChat(conversationId);
@@ -35,9 +37,9 @@ export async function groupMentionsFor(
     .where(and(eq(constellationRoles.constellationId, nebula.constellationId), ne(constellationRoles.kind, "member")));
   const found = groupMentionsIn(text, roles);
   if (!found.everyone && !found.roleIds.length) return NO_GROUP_MENTIONS;
-  const standing = await standingOf(nebula.constellationId, senderId);
-  if (!standing) return NO_GROUP_MENTIONS;
-  const all = can(standing, "mentionEveryone");
+  const standing = trusted ? null : await standingOf(nebula.constellationId, senderId);
+  if (!trusted && !standing) return NO_GROUP_MENTIONS;
+  const all = trusted || (standing ? can(standing, "mentionEveryone") : false);
   const everyone = all ? found.everyone : null;
   const roleIds = found.roleIds.filter((id) => all || roles.find((r) => r.id === id)?.mentionable);
   if (!everyone && !roleIds.length) return NO_GROUP_MENTIONS;

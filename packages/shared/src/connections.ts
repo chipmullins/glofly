@@ -107,3 +107,77 @@ export function streamUrl(site: StreamSite, login: string): string | null {
 
 /** "Twitch" / "Kick" in sentences. */
 export const siteName = (site: StreamSite): string => (site === 'twitch' ? 'Twitch' : 'Kick')
+
+// ───────────── Constellation Live alerts (0.9.3, approved boards 4–5) ─────────────
+
+export type AlertSite = 'twitch' | 'kick' | 'youtube'
+export const ALERT_SITES: readonly AlertSite[] = ['twitch', 'kick', 'youtube']
+export const alertSiteName = (site: AlertSite): string => (site === 'youtube' ? 'YouTube' : siteName(site))
+/** At most this many channels per constellation. */
+export const LIVE_ALERTS_MAX = 25
+export const LIVE_ALERT_MESSAGE_MAX = 300
+export const DEFAULT_LIVE_MESSAGE = '{streamer} is live: {title}'
+export const DEFAULT_VIDEO_MESSAGE = '{streamer} posted: {title}'
+
+/** One channel a constellation follows. */
+export type LiveAlert = {
+  id: string
+  site: AlertSite
+  /** The channel's name as shown ("kroof_", "Night Raiders TV") */
+  channelName: string
+  /** Its page */
+  channelUrl: string
+  nebulaId: string
+  /** A role to @mention, "everyone" / "here", or null (no ping) */
+  ping: string | null
+  message: string
+  /** Twitch/Kick: the voice nebula offered for "Watch together" (null = not offered) */
+  watchNebulaId: string | null
+  lastAlertAt: string | null
+  createdAt: string
+}
+
+/** What a live alert message carries (older apps show its body + link preview). */
+export type LiveCard = {
+  site: AlertSite
+  /** 'live' = went live (Twitch, Kick); 'video' = a new video or premiere (YouTube) */
+  kind: 'live' | 'video'
+  channelName: string
+  title: string
+  game: string | null
+  viewers: number | null
+  url: string
+  /** Offer "Watch together in <voice nebula>" */
+  watchNebulaId: string | null
+}
+
+/**
+ * The channel someone pasted ("twitch.tv/mayaplays", "kick.com/maya", "@NightRaidersTV",
+ * "youtube.com/channel/UC…"), or null. YouTube: `handle` needs the server to look it up.
+ */
+export function parseChannel(site: AlertSite, raw: string): { login: string } | { youtubeId: string } | { handle: string } | null {
+  const s = raw.trim().replace(/^https?:\/\//i, '').replace(/^(www\.|m\.)/i, '')
+  if (site === 'twitch') {
+    const m = /^(?:twitch\.tv\/)?([A-Za-z0-9_]{2,25})(?:[/?#].*)?$/i.exec(s)
+    return m ? { login: m[1].toLowerCase() } : null
+  }
+  if (site === 'kick') {
+    const m = /^(?:kick\.com\/)?([A-Za-z0-9_-]{2,40})(?:[/?#].*)?$/i.exec(s)
+    return m ? { login: m[1].toLowerCase() } : null
+  }
+  const id = /(?:^|youtube\.com\/channel\/)(UC[A-Za-z0-9_-]{22})(?:[/?#]|$)/.exec(s)
+  if (id) return { youtubeId: id[1] }
+  const handle = /^(?:youtube\.com\/)?@([A-Za-z0-9._-]{3,30})(?:[/?#]|$)/.exec(s)
+  return handle ? { handle: handle[1] } : null
+}
+
+/** The alert's text ({streamer}, {title}, {game}), with its link last so every app can open it. */
+export function liveAlertText(template: string, card: Pick<LiveCard, 'channelName' | 'title' | 'game' | 'url'>, ping: string | null): string {
+  const text = (template.trim() || DEFAULT_LIVE_MESSAGE)
+    .replace(/\{streamer\}/g, card.channelName)
+    .replace(/\{title\}/g, card.title || 'untitled')
+    .replace(/\{game\}/g, card.game ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return `${ping ? `${ping} ` : ''}${text}\n${card.url}`.slice(0, 1000)
+}

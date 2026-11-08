@@ -276,6 +276,21 @@ export async function previewFor(link: string): Promise<FoundPreview | null> {
   };
 }
 
+/** 0.9.3 Live alerts: a stream's or video's picture, fetched the same safe way, as a preview image. */
+export async function previewImageFrom(src: string): Promise<{ image: Buffer; size: { width: number; height: number } } | null> {
+  try {
+    const pic = await safeFetch(src, "image/*", IMAGE_MAX);
+    if (!pic || !pic.type.startsWith("image/") || pic.type.includes("svg")) return null;
+    const out = await sharp(pic.body, { limitInputPixels: 40_000_000 })
+      .resize(IMAGE_SIZE, IMAGE_SIZE, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 78 })
+      .toBuffer({ resolveWithObject: true });
+    return out.info.width >= 32 && out.info.height >= 32 ? { image: out.data, size: { width: out.info.width, height: out.info.height } } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Where a message's preview picture is kept. */
 export const previewImageKey = (conversationId: string, messageId: string) => `previews/${conversationId}/${messageId}.webp`;
 

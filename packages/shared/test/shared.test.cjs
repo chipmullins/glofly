@@ -714,3 +714,21 @@ test('code colors: pieces join back to the code', () => {
     assert.equal(s.highlightCode(c, lang).map((t) => t.text).join(''), c, lang)
   }
 })
+
+test('0.9.3 live alerts: channel links and alert text', () => {
+  assert.deepEqual(s.parseChannel('twitch', 'https://www.twitch.tv/MayaPlays'), { login: 'mayaplays' })
+  assert.deepEqual(s.parseChannel('twitch', 'twitch.tv/kroof_/videos'), { login: 'kroof_' })
+  assert.deepEqual(s.parseChannel('twitch', 'kroof_'), { login: 'kroof_' })
+  assert.equal(s.parseChannel('twitch', 'twitch.tv'), null)
+  assert.equal(s.parseChannel('twitch', 'evil.com/x'), null)
+  assert.equal(s.parseChannel('twitch', 'a b'), null)
+  assert.deepEqual(s.parseChannel('kick', 'https://kick.com/maya-plays'), { login: 'maya-plays' })
+  assert.equal(s.parseChannel('kick', 'kick.com'), null)
+  assert.deepEqual(s.parseChannel('youtube', 'https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv'), { youtubeId: 'UCabcdefghijklmnopqrstuv' })
+  assert.deepEqual(s.parseChannel('youtube', 'youtube.com/@NightRaidersTV/videos'), { handle: 'NightRaidersTV' })
+  assert.deepEqual(s.parseChannel('youtube', '@NightRaidersTV'), { handle: 'NightRaidersTV' })
+  assert.equal(s.parseChannel('youtube', 'youtube.com/watch?v=abc'), null)
+  const card = { channelName: 'kroof_', title: 'Heist night', game: 'GTA V', url: 'https://www.twitch.tv/kroof_' }
+  assert.equal(s.liveAlertText('{streamer} is live: {title} ({game})', card, '@Stream fans'), '@Stream fans kroof_ is live: Heist night (GTA V)\nhttps://www.twitch.tv/kroof_')
+  assert.equal(s.liveAlertText('', { ...card, title: '' }, null), 'kroof_ is live: untitled\nhttps://www.twitch.tv/kroof_')
+})

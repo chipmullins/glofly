@@ -14,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { ForwardedFrom, OnboardingSettings } from "@glofly/shared";
+import type { ForwardedFrom, LiveCard, OnboardingSettings } from "@glofly/shared";
 
 export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invisible"]);
 // Who can send someone friend requests (Settings → General → Privacy).
@@ -413,6 +413,8 @@ export const messages = pgTable(
     lanternFadeAt: timestamp("lantern_fade_at", { withTimezone: true }),
     // 0.9.3: a forwarded message: whose words and where they came from (the body is their text).
     forwarded: jsonb("forwarded").$type<ForwardedFrom>(),
+    // 0.9.3: a constellation's Live alert (the body + link preview are what older apps show)
+    liveCard: jsonb("live_card").$type<LiveCard>(),
     // Communities round (Nov 2026): a reply in a thread or forum post (nebulas only). Thread
     // replies stay out of the nebula's own timeline unless alsoInNebula ("Also send to #general").
     threadId: uuid("thread_id").references((): AnyPgColumn => nebulaThreads.id, { onDelete: "cascade" }),
@@ -2124,4 +2126,35 @@ export const threadFollows = pgTable(
     lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.threadId, t.userId] }), index("thread_follows_user_idx").on(t.userId)],
+);
+
+// 0.9.3 Constellation settings → Live alerts (approved boards 4–5): post in a nebula when a
+// Twitch or Kick channel goes live, or a YouTube channel posts a video. Listening is shared with
+// linked accounts through stream_watches (provider + channel id).
+export const constellationLiveAlerts = pgTable(
+  "constellation_live_alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    site: text("site").notNull(),
+    channelId: text("channel_id").notNull(),
+    channelLogin: text("channel_login").notNull(),
+    channelName: text("channel_name").notNull(),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    // a role id, "everyone", "here", or null
+    ping: text("ping"),
+    message: text("message").notNull(),
+    watchNebulaId: uuid("watch_nebula_id").references(() => nebulas.id, { onDelete: "set null" }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    lastAlertAt: timestamp("last_alert_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("live_alerts_channel_idx").on(t.constellationId, t.site, t.channelId),
+    index("live_alerts_watch_idx").on(t.site, t.channelId),
+  ],
 );

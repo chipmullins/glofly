@@ -76,7 +76,7 @@ import {
   publicGame,
   shortBody,
   attachmentSummary,
-  type GameState, type MessageButton, type ForwardedFrom } from "@glofly/shared";
+  type GameState, type MessageButton, type ForwardedFrom, type LiveCard } from "@glofly/shared";
 import { toolHook } from "../toolHooks";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
@@ -130,6 +130,7 @@ export const messageFields = {
   threadId: messages.threadId,
   alsoInNebula: messages.alsoInNebula,
   forwarded: messages.forwarded,
+  liveCard: messages.liveCard,
 };
 export type MessageRow = {
   id: string;
@@ -150,6 +151,7 @@ export type MessageRow = {
   game: GameInfo | null;
   threadId?: string | null;
   forwarded?: ForwardedFrom | null;
+  liveCard?: LiveCard | null;
   alsoInNebula?: boolean;
   lantern: boolean;
   lanternFadeAt: Date | null;
@@ -276,6 +278,8 @@ export async function hydrate(rows: MessageRow[]) {
       ...(chips.has(r.id) ? { thread: chips.get(r.id) } : {}),
       // 0.9.3: forwarded (older apps just show the text).
       ...(r.forwarded && !deleted ? { forwarded: r.forwarded } : {}),
+      // 0.9.3: a constellation's Live alert (older apps show the text and link preview).
+      ...(r.liveCard && !deleted ? { liveCard: r.liveCard } : {}),
     };
   });
 }
@@ -1698,6 +1702,8 @@ export async function postScheduledText(
   replyToId: string | null,
   // Communities round: a bot's buttons (the bot API only).
   buttons: MessageButton[] | null = null,
+  // 0.9.3 Live alerts: the card, and the role ping an admin set up (checked when they chose it).
+  extra: { liveCard?: LiveCard; trustedMentions?: boolean } = {},
 ): Promise<{ ok: true; messageId: string } | { ok: false; reason: string }> {
   const chat = await access(conversationId, myId);
   if (!chat) return { ok: false, reason: "You're no longer in this chat." };
@@ -1714,11 +1720,21 @@ export async function postScheduledText(
     if (!original || original.deletedAt || original.event) reply = null; // send it anyway, without the reply
   }
   const mentions = chat.kind !== "dm" ? await mentionsIn(text, chat.memberIds, myId) : [];
-  const group = chat.kind === "nebula" ? await groupMentionsFor(text, conversationId, chat.memberIds, myId) : NO_GROUP_MENTIONS;
+  const group =
+    chat.kind === "nebula" ? await groupMentionsFor(text, conversationId, chat.memberIds, myId, !!extra.trustedMentions) : NO_GROUP_MENTIONS;
   const inserted = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(messages)
-      .values({ conversationId, senderId: myId, body: text, replyToId: reply, mentions, ...group, buttons: buttons?.length ? buttons : null })
+      .values({
+        conversationId,
+        senderId: myId,
+        body: text,
+        replyToId: reply,
+        mentions,
+        ...group,
+        buttons: buttons?.length ? buttons : null,
+        liveCard: chat.kind === "nebula" ? (extra.liveCard ?? null) : null,
+      })
       .returning(messageFields);
     await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));
     await tx
@@ -1736,7 +1752,8 @@ export async function postScheduledText(
   }
   if (chat.partner) await shareReadPosition(conversationId, myId, chat.partner, inserted.createdAt);
   inBackground(notifyMessage({ ...message, groupMentions: group.groupMentions }, chat));
-  inBackground(addLinkPreview(inserted.id, conversationId, text, myId));
+  // A Live alert makes its own preview (the stream's picture), liveAlerts.ts.
+  if (!extra.liveCard) inBackground(addLinkPreview(inserted.id, conversationId, text, myId));
   if (chat.partner) inBackground(noteGlow(myId, chat.partner));
   return { ok: true, messageId: inserted.id };
 }
@@ -2171,7 +2188,7 @@ async function wipeMessage(messageId: string): Promise<void> {
   const removed = await db.transaction(async (tx) => {
     await tx
       .update(messages)
-      .set({ body: "", deletedAt: new Date(), editedAt: null, mentions: [], ...NO_GROUP_MENTIONS, gif: null, linkPreview: null, poll: null, game: null })
+      .set({ body: "", deletedAt: new Date(), editedAt: null, mentions: [], ...NO_GROUP_MENTIONS, gif: null, linkPreview: null, poll: null, game: null, liveCard: null })
       .where(eq(messages.id, messageId));
     await tx.delete(messageReactions).where(eq(messageReactions.messageId, messageId));
     await tx.delete(pollVotes).where(eq(pollVotes.messageId, messageId));

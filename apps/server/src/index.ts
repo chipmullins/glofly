@@ -66,6 +66,8 @@ import { legacyForums } from "./threads/legacy";
 import { connectedAppsRouter, oauthRouter, sweepOAuth } from "./oauth/routes";
 import { noticesRouter, purgeOldReports, reportsRouter } from "./safety/routes";
 import { connectionsReturnRouter, connectionsRouter } from "./connections/routes";
+import { youtubeHooksRouter, sweepYoutube } from "./connections/youtube";
+import { liveAlertsRouter, startLiveAlerts, sweepUnusedWatches } from "./constellations/liveAlerts";
 import { liveHooksRouter } from "./connections/hooks";
 import { publicBase, sweepStreamWatches } from "./connections/live";
 import { sweepSteamPlaying, sweepSteamSync } from "./connections/steam";
@@ -176,6 +178,8 @@ app.use("/constellations", interactionsRouter);
 app.use("/constellations", toolsRouter);
 app.use("/constellations", threadsRouter);
 app.use("/constellations", communityToolsRouter);
+// 0.9.3: Constellation settings → Live alerts (Twitch, Kick, YouTube).
+app.use("/constellations", liveAlertsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
 // Communities round: the bot API (/api/v1, "Authorization: Bot gfk_…"), for game servers and bots.
@@ -185,6 +189,7 @@ app.use(botApiRouter);
 app.use("/connections", connectionsReturnRouter);
 app.use("/connections", connectionsRouter);
 app.use(liveHooksRouter);
+app.use(youtubeHooksRouter);
 // Communities round: incoming webhooks (POST /hooks/<id>/<token> posts into one nebula).
 app.use(incomingHooksRouter);
 // Communities round: Sign in with Glofly (OAuth 2.0 + OpenID Connect) and Settings → Developer.
@@ -261,6 +266,7 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 // Communities round: Glofly tools hear about joins, moderation and message changes.
 startToolHooks();
 startReaderPushes();
+startLiveAlerts();
 
 connectRedis()
   .then(() => {
@@ -330,6 +336,8 @@ connectRedis()
     every(5 * 60_000, "Steam games", sweepSteamSync);
     every(60_000, "Steam playing", sweepSteamPlaying);
     every(10 * 60_000, "Live channels", () => sweepStreamWatches(publicBase(`http://localhost:${PORT}`)));
+    every(60 * 60_000, "YouTube channels", () => sweepYoutube(publicBase(`http://localhost:${PORT}`)));
+    every(6 * 60 * 60_000, "Unused live channels", () => sweepUnusedWatches(publicBase(`http://localhost:${PORT}`)));
     // Resolved reports are removed a year after they were resolved (hourly).
     const sweepReports = () =>
       purgeOldReports().catch((err) => console.error("Report cleanup failed", err));
