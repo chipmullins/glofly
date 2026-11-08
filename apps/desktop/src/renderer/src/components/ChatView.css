@@ -456,6 +456,11 @@
   top: calc(100% + 6px);
   width: 200px;
 }
+/* No room below (the newest message): it opens above the ⋯ button instead. */
+.message-menu--up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
 
 /* Inline editor */
 .edit-box {

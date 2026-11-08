@@ -352,6 +352,29 @@ export default function MessageItem({
   const m = item.message
   const mine = m.senderId === meId
   const [popup, setPopup] = useState<'react' | 'menu' | null>(null)
+  // The ⋯ menu opens below the button, or above it when there isn't room below (the newest
+  // message sits right above the message box, so its menu would hide below the fold). Measured
+  // before paint, against the scrolling message list, so it never jumps.
+  const menuRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const menu = popup === 'menu' ? menuRef.current : null
+    if (!menu) return
+    let box: HTMLElement | null = menu.parentElement
+    while (box && box !== document.body) {
+      const o = getComputedStyle(box).overflowY
+      if (o === 'auto' || o === 'scroll') break
+      box = box.parentElement
+    }
+    const area = box && box !== document.body ? box.getBoundingClientRect() : { top: 0, bottom: window.innerHeight }
+    const r = menu.getBoundingClientRect()
+    const anchor = menu.parentElement?.getBoundingClientRect()
+    if (!anchor) return
+    const below = area.bottom - anchor.bottom
+    const above = anchor.top - area.top
+    // Below unless it doesn't fit there and fits (or fits better) above.
+    menu.classList.toggle('message-menu--up', r.height + 6 > below && above > below)
+  }, [popup])
+
   /** The button the full emoji picker opened from, while it's open. */
   const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null)
   const reactButtonRef = useRef<HTMLButtonElement>(null)
@@ -788,7 +811,7 @@ export default function MessageItem({
           )}
 
           {popup === 'menu' && (
-            <div role="menu" className="menu message-menu">
+            <div ref={menuRef} role="menu" className="menu message-menu">
               {onMarkAnswer && !m.deleted && !item.pending && (
                 <button
                   type="button"
