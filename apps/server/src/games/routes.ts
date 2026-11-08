@@ -11,6 +11,8 @@ import { requireAuth } from "../auth/sessions";
 import { areFriends, blockedEitherWay } from "../friends/rules";
 import { currentActivity } from "../presence";
 import { connectedSummary, emitToUser } from "../realtime";
+import { sendStream } from "../storage";
+import { coverImage, coversFor, igdbConfigured, isCoverId, searchGames } from "./igdb";
 
 // My games (Glofly 2.0): the games someone has played, with their playtime, from the desktop's
 // "Playing …". The server adds a minute every minute while someone's presence says they're
@@ -41,6 +43,60 @@ myGamesRouter.get(
 );
 
 const me = (res: Response) => res.locals.user as { id: string };
+
+// 0.9.1: "Find a game" for the profile board (IGDB through Glofly; games/igdb.ts).
+const searchLimiter = rateLimit("games:search", {
+  windowMs: 60 * 1000,
+  limit: 40,
+  keyGenerator: (_req, res) => (res.locals.user as { id: string }).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "That's a lot of searching. Try again in a minute." },
+});
+myGamesRouter.get("/search", searchLimiter, async (req, res) => {
+  const q = typeof req.query.q === "string" ? req.query.q.slice(0, 100) : "";
+  if (!igdbConfigured) {
+    res.json({ games: [], available: false });
+    return;
+  }
+  const games = await searchGames(q);
+  if (!games) {
+    res.status(502).json({ error: "igdb_unreachable", message: "Couldn't look up games right now. You can still type the name." });
+    return;
+  }
+  res.set("Cache-Control", "private, max-age=300");
+  res.json({ games: games.map(({ igdbId: _i, ...g }) => g), available: true });
+});
+
+// GET /games/cover/:id — a game's box art (fetched from IGDB once, kept and served by Glofly).
+const coverLimiter = rateLimit("games:cover", {
+  windowMs: 60 * 1000,
+  limit: 300,
+  keyGenerator: (_req, res) => (res.locals.user as { id: string }).id,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
+myGamesRouter.get("/cover/:id", coverLimiter, async (req, res) => {
+  const id = req.params.id;
+  if (!isCoverId(id)) {
+    res.status(404).end();
+    return;
+  }
+  const image = await coverImage(id);
+  if (!image) {
+    res.status(404).end();
+    return;
+  }
+  res.setHeader("Content-Type", "image/webp");
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  if (Buffer.isBuffer(image)) {
+    res.setHeader("Content-Length", String(image.length));
+    res.end(image);
+  } else {
+    res.setHeader("Content-Length", String(image.size));
+    sendStream(image.stream, res);
+  }
+});
 const visibilityField = z.enum(["everyone", "friends", "only_me"]);
 
 /** Every minute: a minute of playtime for everyone with Glofly open who's playing something. */
@@ -69,7 +125,9 @@ async function gamesOf(userId: string, includeHidden: boolean): Promise<MyGame[]
     .where(and(eq(userGames.userId, userId), includeHidden ? undefined : eq(userGames.hidden, false)))
     .orderBy(desc(userGames.favorite), desc(userGames.seconds))
     .limit(200);
+  const covers = await coversFor(rows.map((r) => ({ key: r.gameKey, name: r.name })));
   return rows.map((r) => ({
+    ...(covers.has(r.gameKey) ? { cover: covers.get(r.gameKey)! } : {}),
     key: r.gameKey,
     name: r.name,
     seconds: r.seconds,

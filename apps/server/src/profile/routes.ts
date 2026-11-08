@@ -16,6 +16,16 @@ import {
   storedBoard,
 } from "./board";
 import { gamesSharedWith } from "../games/routes";
+import { coversFor } from "../games/igdb";
+import type { BoardTile } from "@glofly/shared";
+
+/** Your own board for editing, with box art on its games (the apps show it in the preview). */
+async function withCovers(tiles: BoardTile[]): Promise<BoardTile[]> {
+  const covers = await coversFor(tiles.flatMap((t) => (t.kind === "games" ? t.games : [])));
+  return tiles.map((t) =>
+    t.kind === "games" ? { ...t, games: t.games.map((g) => (covers.has(g.key) ? { ...g, cover: covers.get(g.key)! } : g)) } : t,
+  );
+}
 import { and, eq, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
@@ -160,7 +170,7 @@ async function extrasOf(
     board: board?.length ? board : null,
     counts: mutualsShown ? await mutualCounts(viewerId, row.id) : { mutualFriends: 0, mutualConstellations: 0 },
     activityShown: shows(privacy.activity, rel),
-    ...(rel.self ? { privacy, boardSource: tiles } : {}),
+    ...(rel.self ? { privacy, boardSource: await withCovers(tiles) } : {}),
   };
 }
 

@@ -879,6 +879,8 @@ export type MyGame = {
   favorite: boolean
   /** Hidden from everyone else (only in your own list) */
   hidden: boolean
+  /** 0.9.1: box art's image id (IGDB), from GET /games/cover/:id; missing = letter tile */
+  cover?: string
 }
 
 /** How games with slightly different names count as one: lower case, ™/® and extra spaces gone. */

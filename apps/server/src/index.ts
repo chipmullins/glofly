@@ -33,6 +33,7 @@ import { sweepCalls } from "./calls/service";
 import { saveSentBytes } from "./admin/usage";
 import { livekitConfigured } from "./calls/livekit";
 import { avatarsRouter, headersRouter, profileRouter } from "./profile/routes";
+import { igdbConfigured } from "./games/igdb";
 import { sweepUnsentUploads } from "./messages/attachments";
 import { startRealtime, stopRealtime } from "./realtime";
 import { connectRedis, redis } from "./redis";
@@ -257,6 +258,7 @@ connectRedis()
       console.log(WEB_ORIGIN ? `Glofly in a browser: ${WEB_ORIGIN}` : "Glofly in a browser is off: set WEB_ORIGIN to turn it on.");
       if (!livekitConfigured) console.log("Calls are off: add the LIVEKIT_ settings to .env to turn them on.");
       console.log(gifsConfigured ? "GIFs: GIPHY" : "GIFs are off: set GIPHY_API_KEY to turn them on.");
+      console.log(igdbConfigured ? "Game pictures: IGDB" : "Game pictures are off: set IGDB_CLIENT_ID and IGDB_CLIENT_SECRET to turn them on.");
       console.log(
         pushKind === "off"
           ? "Push notifications are off: set FCM_SERVICE_ACCOUNT_FILE to turn them on."

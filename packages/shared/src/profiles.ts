@@ -21,7 +21,20 @@ export type ProfilePrivacy = {
 }
 export const DEFAULT_PROFILE_PRIVACY: ProfilePrivacy = { board: 'everyone', activity: 'friends', mutuals: 'everyone' }
 
-export type BoardGame = { key: string; name: string; seconds?: number }
+export type BoardGame = {
+  key: string
+  name: string
+  seconds?: number
+  /** Box art's image id (IGDB), shown from GET /games/cover/:id; missing = letter tile */
+  cover?: string
+}
+
+/** A game from "Find a game" (IGDB). */
+export type GameSearchResult = { key: string; name: string; year: number | null; cover: string | null; igdbId?: number }
+
+/** IGDB's credit, shown where game info or box art appears. */
+export const IGDB_CREDIT = 'Game info by IGDB'
+export const IGDB_URL = 'https://www.igdb.com'
 export type BoardTile =
   | { kind: 'games'; games: BoardGame[] }
   | { kind: 'constellation'; constellationId: string }
@@ -35,7 +48,7 @@ export type BoardTileView =
   | { kind: 'constellation'; constellation: ProfileConstellation }
   | { kind: 'note'; text: string }
   | { kind: 'into'; tags: string[] }
-  | { kind: 'playing'; game: string | null }
+  | { kind: 'playing'; game: string | null; cover?: string }
 
 /** A constellation as a profile shows it (only public ones, or 'approval' = ask to join). */
 export type ProfileConstellation = {
@@ -70,8 +83,8 @@ export type MutualConstellation = { id: string; name: string; color: string; ico
 export type Mutuals = { friends: PublicUser[]; constellations: MutualConstellation[] }
 
 export type ActivityItem =
-  | { kind: 'played'; at: string; game: string; seconds: number }
-  | { kind: 'started'; at: string; game: string }
+  | { kind: 'played'; at: string; game: string; seconds: number; cover?: string }
+  | { kind: 'started'; at: string; game: string; cover?: string }
   | { kind: 'joined'; at: string; constellation: { id: string; name: string; color: string; iconVersion: string | null } }
 
 /** Trims and checks pronouns; null = none. */

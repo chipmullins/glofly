@@ -1379,6 +1379,18 @@ export const userGames = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.gameKey] })],
 );
 
+// 0.9.1: box art from IGDB, one row per game (by Glofly's game key, the name in lower case). Looked
+// up by the server only (games/igdb.ts); igdb_id null = looked up and nothing matched (tried again
+// after 30 days). cover_id is IGDB's image id; the picture is fetched, re-saved and served by Glofly.
+export const gameArt = pgTable("game_art", {
+  gameKey: text("game_key").primaryKey(),
+  igdbId: integer("igdb_id"),
+  name: text("name").notNull(),
+  coverId: text("cover_id"),
+  year: integer("year"),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Glofly 2.0: nebulas someone pinned to the dock on Glofly home ("Pin to Glofly dock"), in their order.
 export const nebulaPins = pgTable(
   "nebula_pins",

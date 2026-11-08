@@ -41,6 +41,7 @@ import {
 import { areFriends, blockedWith, isRestricted } from "../friends/rules";
 import { friendIdsOf } from "../presence";
 import { publicUsers } from "../constellations/views";
+import { coversFor } from "../games/igdb";
 
 const audience = z.enum(["everyone", "friends", "only_me"]);
 
@@ -237,6 +238,11 @@ export async function boardView(
         )
       : new Map<string, number>();
 
+  const covers = await coversFor([
+    ...tiles.flatMap((t) => (t.kind === "games" ? t.games : [])),
+    ...(opts.playing ? [{ key: gameKey(opts.playing), name: opts.playing }] : []),
+  ]);
+  const art = (key: string) => (covers.has(key) ? { cover: covers.get(key)! } : {});
   const out: BoardTileView[] = [];
   for (const t of tiles) {
     if (t.kind === "constellation") {
@@ -256,10 +262,15 @@ export async function boardView(
     } else if (t.kind === "games") {
       out.push({
         kind: "games",
-        games: t.games.map((g) => (played.has(g.key) ? { ...g, seconds: played.get(g.key)! } : { key: g.key, name: g.name })),
+        games: t.games.map((g) => ({
+          key: g.key,
+          name: g.name,
+          ...(played.has(g.key) ? { seconds: played.get(g.key)! } : {}),
+          ...art(g.key),
+        })),
       });
     } else if (t.kind === "playing") {
-      out.push({ kind: "playing", game: opts.playing });
+      out.push({ kind: "playing", game: opts.playing, ...(opts.playing ? art(gameKey(opts.playing)) : {}) });
     } else out.push(t);
   }
   return out;
@@ -400,5 +411,7 @@ export async function activityOf(ownerId: string, gamesShared: boolean): Promise
       constellation: { id: j.id, name: j.name, color: colorOf(j.color), iconVersion: j.iconVersion },
     });
   }
-  return items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, ACTIVITY_MAX);
+  const shown = items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, ACTIVITY_MAX);
+  const covers = await coversFor(shown.flatMap((i) => (i.kind === "joined" ? [] : [{ key: gameKey(i.game), name: i.game }])));
+  return shown.map((i) => (i.kind !== "joined" && covers.has(gameKey(i.game)) ? { ...i, cover: covers.get(gameKey(i.game))! } : i));
 }
