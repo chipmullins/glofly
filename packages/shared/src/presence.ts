@@ -86,3 +86,24 @@ export function mobileLabel(p: Presence | undefined): string | null {
   if (!onMobile(p)) return null
   return p!.status === 'online' ? 'Active on mobile' : `${STATUS_LABEL[p!.status]} · on mobile`
 }
+
+/**
+ * 0.9.3: an offline friend who has sent a message since their "last seen" (e.g. a reply from a
+ * notification) was clearly around then: show the newer of the two. Only when they share their
+ * last seen at all (lastSeenAt null = hidden or unknown stays "Offline").
+ */
+export function seenSince(
+  p: Presence | undefined,
+  messages: readonly { senderId: string; createdAt: string }[] | undefined,
+  partnerId: string | undefined,
+): Presence | undefined {
+  if (!p || p.status !== 'offline' || !p.lastSeenAt || !messages || !partnerId) return p
+  let lastMessageAt: string | null = null
+  for (let i = messages.length - 1; i >= 0 && i >= messages.length - 200; i--)
+    if (messages[i].senderId === partnerId) {
+      lastMessageAt = messages[i].createdAt
+      break
+    }
+  if (!lastMessageAt) return p
+  return Date.parse(lastMessageAt) > Date.parse(p.lastSeenAt) ? { ...p, lastSeenAt: lastMessageAt } : p
+}

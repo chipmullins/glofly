@@ -1,4 +1,4 @@
-import { noteActiveDay } from "../activity";
+import { noteActiveDay, noteSeen } from "../activity";
 import { nicknamesFor, withNicknames } from "../profile/nicknames";
 import { createHash, randomBytes } from "node:crypto";
 import type { RequestHandler } from "express";
@@ -149,6 +149,8 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   res.locals.sessionPlatform = platform;
   // Control → Insights: this person used Glofly today (activity.ts; once a day per person).
   noteActiveDay(found.user.id, platform);
+  // Doing something (not just looking) counts as being seen, open app or not (activity.ts).
+  if (req.method !== "GET" && req.method !== "HEAD") noteSeen(found.user.id);
   // A phone doing something (sending, replying from a notification) while Glofly isn't open on it.
   if (isPhonePlatform(platform) && req.method !== "GET") {
     await phoneActed(found.user.id, found.session.id).catch(() => undefined);

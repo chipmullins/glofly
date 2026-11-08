@@ -19,6 +19,7 @@ import {
   mentionsMe,
   onMobile,
   presenceHeader,
+  seenSince,
   type Message,
 } from '@glofly/shared'
 import * as api from '@/api/glofly'
@@ -477,7 +478,7 @@ export default function ChatScreen() {
 
   const onlineCount = isGroup ? members.filter((m) => allPresence[m.id] && allPresence[m.id].status !== 'offline').length + 1 : 0
   const typingWho = typing ? Object.entries(typing).filter(([, until]) => until > now).map(([uid]) => uid) : []
-  const subtitle = isGroup ? `${memberCountLabel(chat.memberCount)} · ${onlineCount} online` : presenceHeader(presence)
+  const subtitle = isGroup ? `${memberCountLabel(chat.memberCount)} · ${onlineCount} online` : presenceHeader(seenSince(presence, messages?.list, chat.kind === 'dm' ? chat.partner.id : undefined))
   const muted = isMuted(chat, now)
   const inCall = call && (call.status === 'ongoing' || call.status === 'ringing')
   const iAmIn = inCall && call.members.find((m) => m.userId === meId)?.state === 'joined'

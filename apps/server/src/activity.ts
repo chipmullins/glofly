@@ -1,5 +1,6 @@
 import { db } from "./db";
-import { activeDays } from "./db/schema";
+import { activeDays, users } from "./db/schema";
+import { eq } from "drizzle-orm";
 import { redis } from "./redis";
 import { dayIn } from "@glofly/shared";
 import { TIME_ZONE } from "./timeZone";
@@ -17,5 +18,19 @@ export function noteActiveDay(userId: string, platform: string | null): void {
       .insert(activeDays)
       .values({ userId, day, platform: platform ?? "desktop" })
       .onConflictDoNothing();
+  })().catch(() => undefined);
+}
+
+/**
+ * 0.9.3: "Last seen" also moves when someone does something without Glofly open (a reply from a
+ * notification, a message from a Shortcut): before, it only moved when an open app disconnected,
+ * so a friend replying from their lock screen still showed "Last seen 17 hours ago". At most one
+ * write a minute per person. Shown only while they're offline, and only if they share it.
+ */
+export function noteSeen(userId: string): void {
+  void (async () => {
+    const first = await redis.set(`seen:${userId}`, "1", { NX: true, EX: 60 });
+    if (first !== "OK") return;
+    await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
   })().catch(() => undefined);
 }

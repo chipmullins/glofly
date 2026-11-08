@@ -18,7 +18,7 @@ import type {
 } from '../../../preload/api-types'
 import { chatTitle, eventText, memberCountLabel, typingText } from '../lib/groups'
 import GroupAvatar from './GroupAvatar'
-import { onMobile, presenceHeader } from '../lib/presence'
+import { onMobile, presenceHeader, seenSince } from '../lib/presence'
 import { clockTime, continuesGroup, dayLabel, isSameDay } from '../lib/time'
 import Avatar, { AvatarFace } from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
@@ -2157,7 +2157,7 @@ export default function ChatView({
             {partner ? (
               partnerPresence && (
                 <span className="chat-status">
-                  <EmojiText text={presenceHeader(partnerPresence, now)} />
+                  <EmojiText text={presenceHeader(seenSince(partnerPresence, messages, partner.id), now)} />
                 </span>
               )
             ) : (
