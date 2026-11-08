@@ -1,6 +1,7 @@
 // GIFs (0.5.0), from GIPHY. A GIF message keeps only GIPHY's id; every app builds its addresses
 // here (always GIPHY's own servers), so a message can never point an app anywhere else.
 
+import { plainFormatted } from './format'
 import type { GifInfo } from './types'
 
 /** GIPHY ids: letters and numbers. */
@@ -34,5 +35,6 @@ export function shortBody(body: string): string {
   if (/^GIF: https:\/\/giphy\.com\/gifs\/[A-Za-z0-9]+$/.test(body)) return 'GIF'
   if (body.startsWith('📊 Poll: ')) return body.split('\n')[0]
   if (body.startsWith('🎲 started ')) return body.replace(/ — play it in the newest Glofly$/, '')
-  return body
+  // 0.9.3: formatting markers come off and spoilers stay hidden in previews and pushes.
+  return plainFormatted(body)
 }

@@ -12,6 +12,7 @@ import { Rise } from '@/ui/motion'
 import { isJumbo } from '@/lib/emoji'
 import { firstName } from '@/lib/format'
 import { Attachments } from './Attachments'
+import { Formatted } from './Formatted'
 import { GameCard, GifView, LanternTag, LinkCard, PollCard, useLanternFade } from './Extras'
 import { InviteCard, inviteCodeIn } from '@/constellations/community'
 
@@ -55,51 +56,63 @@ type Props = {
 const URL_PATTERN = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g
 
 function Body({ text, members, mine }: { text: string; members: PublicUser[]; mine: boolean }) {
-  const { c } = useTheme()
-  const pieces = splitMentions(text, members)
-  const out: ReactNode[] = []
-  pieces.forEach((p, i) => {
-    if (p.user) {
-      out.push(
-        <Text
-          key={`m${i}`}
-          size={16}
-          weight="bold"
-          style={{
-            color: mine ? c.meInk : c.accentText,
-            backgroundColor: mine ? 'rgba(255,255,255,0.28)' : c.accentSoft,
-            borderRadius: 6,
-          }}
-        >
-          {p.text}
-        </Text>,
-      )
-      return
-    }
-    const parts = p.text.split(URL_PATTERN)
-    parts.forEach((part, j) => {
-      if (j % 2 === 1)
+  const { c, dark } = useTheme()
+  const plain = (t: string, key: string): ReactNode[] => {
+    const out: ReactNode[] = []
+    splitMentions(t, members).forEach((p, i) => {
+      if (p.user) {
         out.push(
           <Text
-            key={`u${i}-${j}`}
+            key={`${key}m${i}`}
             size={16}
+            weight="bold"
             style={{
               color: mine ? c.meInk : c.accentText,
-              textDecorationLine: 'underline',
+              backgroundColor: mine ? 'rgba(255,255,255,0.28)' : c.accentSoft,
+              borderRadius: 6,
             }}
-            onPress={() => void Linking.openURL(part)}
-            accessibilityRole="link"
           >
-            {part}
+            {p.text}
           </Text>,
         )
-      else if (part) out.push(part)
+        return
+      }
+      const parts = p.text.split(URL_PATTERN)
+      parts.forEach((part, j) => {
+        if (j % 2 === 1)
+          out.push(
+            <Text
+              key={`${key}u${i}-${j}`}
+              size={16}
+              style={{
+                color: mine ? c.meInk : c.accentText,
+                textDecorationLine: 'underline',
+              }}
+              onPress={() => void Linking.openURL(part)}
+              accessibilityRole="link"
+            >
+              {part}
+            </Text>,
+          )
+        else if (part) out.push(part)
+      })
     })
-  })
+    return out
+  }
   return (
-    <Text size={16} style={{ color: mine ? c.meInk : c.ink, lineHeight: 22 }} selectable={false}>
-      {out}
-    </Text>
+    <Formatted
+      text={text}
+      renderPlain={plain}
+      look={{
+        size: 16,
+        ink: mine ? c.meInk : c.ink,
+        link: mine ? c.meInk : c.accentText,
+        quoteLine: mine ? 'rgba(42,20,6,0.35)' : dark ? 'rgba(255,255,255,0.25)' : '#D9C7B8',
+        quoteInk: mine ? c.meInk : c.muted,
+        inlineCodeBg: mine ? 'rgba(255,255,255,0.32)' : dark ? 'rgba(255,255,255,0.08)' : 'rgba(36,23,15,0.07)',
+        spoilerBg: mine ? '#2A1406' : dark ? '#F5EDE6' : '#24170F',
+      }}
+    />
   )
 }
 

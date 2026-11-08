@@ -81,6 +81,8 @@ import { useVoiceRecorder, voiceTime, VOICE_MAX_MS, type Recorded } from '../lib
 import { MessagesSkeleton } from './Skeleton'
 import EmptyScene from './EmptyScene'
 import CfxCard from './CfxCard'
+import FormatBar from './FormatBar'
+import { applyFormat, type FormatAction } from '@glofly/shared/format'
 import { cfxJoinCodeIn } from '@glofly/shared/games'
 import * as outbox from '../lib/outbox'
 import { ArrowDownIcon, ChevronIcon, MicIcon, WatchIcon } from './icons'
@@ -428,6 +430,8 @@ export default function ChatView({
   const [loading, setLoading] = useState(() => !prefetched)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [draft, setDraft] = useState('')
+  // 0.9.3: the formatting bar shows while text in the box is selected.
+  const [fmtSel, setFmtSel] = useState<{ start: number; end: number } | null>(null)
   // Communities round: the / menu (a nebula's bot commands) while the box holds just "/word".
   const [commandIndex, setCommandIndex] = useState(0)
   const [commandsClosedFor, setCommandsClosedFor] = useState<string | null>(null)
@@ -1410,7 +1414,36 @@ export default function ChatView({
     return () => document.removeEventListener('keydown', onKey)
   }, [onSearch])
 
+  function noteSelection(el: HTMLTextAreaElement): void {
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    setFmtSel(end > start && document.activeElement === el ? { start, end } : null)
+  }
+
+  function format(action: FormatAction): void {
+    const el = inputRef.current
+    if (!el) return
+    const next = applyFormat(el.value, el.selectionStart, el.selectionEnd, action)
+    setDraft(next.text)
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(next.start, next.end)
+      noteSelection(el)
+    })
+  }
+
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    // 0.9.3: Ctrl+B bold, Ctrl+I italic, Ctrl+Shift+X strike (⌘ on a Mac).
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const k = e.key.toLowerCase()
+      const action: FormatAction | null =
+        k === 'b' && !e.shiftKey ? 'b' : k === 'i' && !e.shiftKey ? 'i' : k === 'x' && e.shiftKey ? 's' : null
+      if (action) {
+        e.preventDefault()
+        format(action)
+        return
+      }
+    }
     // Communities round: the / menu (arrows move, Enter or Tab picks, Escape closes).
     if (commandMatches.length > 0) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -2613,6 +2646,9 @@ export default function ChatView({
               .filter(Boolean)
               .join(' ')}
           >
+            {fmtSel && !mention && commandMatches.length === 0 && (
+              <FormatBar onFormat={format} />
+            )}
             {lantern && (
               <div className="lantern-bar">
                 <LanternIcon size={18} />
@@ -2835,8 +2871,12 @@ export default function ChatView({
                     onSelect={(e) => {
                       if (mention)
                         checkMention(e.currentTarget.value, e.currentTarget.selectionStart)
+                      noteSelection(e.currentTarget)
                     }}
-                    onBlur={() => setMention(null)}
+                    onBlur={() => {
+                      setMention(null)
+                      setFmtSel(null)
+                    }}
                     aria-autocomplete={isGroup ? 'list' : undefined}
                     aria-controls={suggestions.length > 0 ? 'mention-picker' : undefined}
                     aria-activedescendant={

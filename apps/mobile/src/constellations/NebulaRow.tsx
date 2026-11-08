@@ -5,6 +5,7 @@ import { Linking, Pressable, View } from 'react-native'
 import { clockTime, quoteSummary, shortBody, splitGroupMentions, splitMentions, type Message, type PublicUser } from '@glofly/shared'
 import type { MentionGroups } from './roles'
 import { Attachments } from '@/chat/Attachments'
+import { Formatted } from '@/chat/Formatted'
 import { GameCard, GifView, LinkCard, PollCard } from '@/chat/Extras'
 import { isJumbo } from '@/lib/emoji'
 import { firstName } from '@/lib/format'
@@ -33,14 +34,16 @@ export type RoleLook = { name: string | null; color: string; badgeBg: string } |
 const URL_PATTERN = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g
 
 function Body({ text, members, meId, size, groups, message }: { text: string; members: PublicUser[]; meId: string; size: number; groups?: MentionGroups; message?: Message }) {
-  const out: ReactNode[] = []
   // 4.2 (board 30): only what the server counted is drawn as @everyone / @here / @Role.
   const counted = new Set(message?.mentionRoles ?? [])
+  const plain = (text: string, key: string): ReactNode[] => {
+  const out: ReactNode[] = []
   const pieces =
     groups && message && (message.mentionEveryone || counted.size)
       ? splitGroupMentions(text, groups.roles.filter((r) => counted.has(r.id)))
       : [{ kind: 'text' as const, text }]
-  pieces.forEach((g, gi) => {
+  pieces.forEach((g, gi0) => {
+    const gi = `${key}-${gi0}`
     if ((g.kind === 'everyone' || g.kind === 'here') && message?.mentionEveryone) {
       out.push(
         <Text key={`g${gi}`} size={size} weight="bold" style={{ color: N.amber }}>
@@ -79,10 +82,22 @@ function Body({ text, members, meId, size, groups, message }: { text: string; me
       })
     })
   })
+  return out
+  }
   return (
-    <Text size={size} style={{ color: N.ink, lineHeight: Math.round(size * 1.42) }}>
-      {out}
-    </Text>
+    <Formatted
+      text={text}
+      renderPlain={plain}
+      look={{
+        size,
+        ink: N.ink,
+        link: N.amber,
+        quoteLine: 'rgba(245,237,230,0.25)',
+        quoteInk: N.ink,
+        inlineCodeBg: 'rgba(255,255,255,0.09)',
+        spoilerBg: '#F5EDE6',
+      }}
+    />
   )
 }
 

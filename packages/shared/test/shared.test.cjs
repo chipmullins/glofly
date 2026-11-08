@@ -649,3 +649,68 @@ test('cfx.re join links and server names', () => {
   assert.equal(s.cleanCfxName('^1Cozy ^7RP ~r~| Serious​ RP'), 'Cozy RP | Serious RP')
   assert.equal(s.cfxConnectUrl('abc123', 'redm'), 'redm://connect/cfx.re/join/abc123')
 })
+
+// 0.9.3: text formatting
+test('formatting: inline markers, nesting, escapes, links', () => {
+  const p = (t) => s.parseInline(t)
+  assert.deepStrictEqual(p('**bold**'), [{ t: 'b', c: [{ t: 'text', text: 'bold' }] }])
+  assert.deepStrictEqual(p('a *b* c'), [{ t: 'text', text: 'a ' }, { t: 'i', c: [{ t: 'text', text: 'b' }] }, { t: 'text', text: ' c' }])
+  assert.deepStrictEqual(p('~~x~~ ||y||').map((n) => n.t), ['s', 'text', 'spoiler'])
+  assert.deepStrictEqual(p('`**not bold**`'), [{ t: 'code', text: '**not bold**' }])
+  assert.deepStrictEqual(p('**bold *and italic***')[0].c.map((n) => n.t), ['text', 'i'])
+  // snake_case, @mentions and lone markers stay plain
+  assert.deepStrictEqual(p('my_var_name and @maya_p'), [{ t: 'text', text: 'my_var_name and @maya_p' }])
+  assert.deepStrictEqual(p('2 * 3 * 4'), [{ t: 'text', text: '2 * 3 * 4' }])
+  assert.deepStrictEqual(p('_hi_ there'), [{ t: 'i', c: [{ t: 'text', text: 'hi' }] }, { t: 'text', text: ' there' }])
+  assert.deepStrictEqual(p('\\*not italic\\*'), [{ t: 'text', text: '*not italic*' }])
+  assert.deepStrictEqual(p('see https://glofly.app/terms.'), [{ t: 'text', text: 'see ' }, { t: 'link', url: 'https://glofly.app/terms' }, { t: 'text', text: '.' }])
+  assert.deepStrictEqual(p('(https://en.wikipedia.org/wiki/A_(b))'), [{ t: 'text', text: '(' }, { t: 'link', url: 'https://en.wikipedia.org/wiki/A_(b)' }, { t: 'text', text: ')' }])
+  assert.deepStrictEqual(p('ftp://x javascript:alert(1)'), [{ t: 'text', text: 'ftp://x javascript:alert(1)' }])
+})
+
+test('formatting: blocks', () => {
+  const b = s.parseFormatted('hi\n> quoted\n> more\n```lua\nlocal x = 1\n```\nbye')
+  assert.deepStrictEqual(b.map((x) => x.t), ['p', 'quote', 'codeblock', 'p'])
+  assert.equal(b[2].lang, 'lua')
+  assert.equal(b[2].code, 'local x = 1')
+  assert.deepStrictEqual(s.parseFormatted('```one line```')[0], { t: 'codeblock', lang: null, code: 'one line' })
+  // An unclosed fence runs to the end
+  assert.equal(s.parseFormatted('```\nabc\ndef')[0].code, 'abc\ndef')
+  // ">" without a space isn't a quote (">_<")
+  assert.equal(s.parseFormatted('>_<')[0].t, 'p')
+})
+
+test('formatting: plain previews hide spoilers and markers', () => {
+  assert.equal(s.plainFormatted('**Raid** at 9, boss is ||the king||'), 'Raid at 9, boss is Spoiler')
+  assert.equal(s.shortBody('```lua\n\nset x 1\n```'), 'set x 1')
+  assert.equal(s.shortBody('plain text'), 'plain text')
+})
+
+test('formatting: composer buttons wrap and unwrap', () => {
+  assert.deepStrictEqual(s.applyFormat('raid at 9', 0, 4, 'b'), { text: '**raid** at 9', start: 2, end: 6 })
+  assert.deepStrictEqual(s.applyFormat('**raid** at 9', 2, 6, 'b'), { text: 'raid at 9', start: 0, end: 4 })
+  assert.equal(s.applyFormat('a\nb', 0, 3, 'quote').text, '> a\n> b')
+  assert.equal(s.applyFormat('> a\n> b', 0, 7, 'quote').text, 'a\nb')
+  assert.equal(s.applyFormat('x', 0, 1, 'codeblock').text, '```\nx\n```')
+})
+
+test('code colors: pieces join back to the code', () => {
+  const code = 'local x = "hi" -- note\nif x then print(x) end\n--[[ block ]]\nreturn 0x1F'
+  const toks = s.highlightCode(code, 'lua')
+  assert.equal(toks.map((t) => t.text).join(''), code)
+  assert.ok(toks.some((t) => t.k === 'kw' && t.text === 'local'))
+  assert.ok(toks.some((t) => t.k === 'str' && t.text === '"hi"'))
+  assert.ok(toks.some((t) => t.k === 'com'))
+  assert.ok(toks.some((t) => t.k === 'fn' && t.text === 'print'))
+  const cfg = 'set glofly_api_key "gfk_x"\nensure glofly-whitelist\n# comment'
+  const ct = s.highlightCode(cfg, 'ini')
+  assert.equal(ct.map((t) => t.text).join(''), cfg)
+  assert.ok(ct.some((t) => t.k === 'str' && t.text.includes('gfk_x')))
+  const json = '{"a": 1, "b": [true, null]}'
+  assert.equal(s.codeLanguage(null, json), 'json')
+  assert.ok(s.highlightCode(json, 'json').some((t) => t.k === 'key' && t.text === '"a"'))
+  for (const lang of ['js', 'yaml', 'java', 'sh', 'py', 'sql', 'css', 'html']) {
+    const c = 'a: "x" // y\n<b c="d">1</b> # z'
+    assert.equal(s.highlightCode(c, lang).map((t) => t.text).join(''), c, lang)
+  }
+})

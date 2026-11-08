@@ -592,6 +592,8 @@ export type ServerEvent =
       constellationName?: string
       senderName?: string
       preview?: string
+      /** 0.9.3: the sender's photo for the notification (null: initials) */
+      senderAvatarVersion?: string | null
     }
   /** Who's in one of its voice nebulas changed */
   | { type: 'constellation:voice'; constellationId: string; voice: import('./constellations').VoiceNebulaState }

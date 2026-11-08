@@ -985,6 +985,7 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
                   constellationName: text(p.constellationName, 100),
                   senderName: text(p.senderName, 100) || 'Someone',
                   preview: text(p.preview, 200),
+                  senderAvatarVersion: str(p.senderAvatarVersion) ? text(p.senderAvatarVersion, 40) : null,
                 }
               : { alert: null }),
           }

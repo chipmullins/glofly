@@ -7,6 +7,7 @@ import { shortBody } from '@glofly/shared/gifs'
 import { addRecent, isJumbo } from '../lib/emoji'
 import EmojiPicker from './EmojiPicker'
 import EmojiText, { Emoji } from './EmojiText'
+import FormattedText from './FormattedText'
 import { GameCard, GifView, LanternTag, LinkPreviewCard, PollCard } from './ChatExtras'
 import { lanternStyle } from '../lib/lantern'
 import type { FireflyEmoji } from '../../../preload/api-types'
@@ -479,18 +480,24 @@ export default function MessageItem({
             className={jumbo ? `${bodyClass} message-body--jumbo` : bodyClass}
             title={grouped ? time : undefined}
           >
-            {people?.length ? (
-              <MentionText
-                text={m.body}
-                people={people}
-                meId={meId}
-                onClick={onMentionClick}
-                group={groupMentions}
-                message={m}
-              />
-            ) : (
-              <EmojiText text={m.body} />
-            )}
+            <FormattedText
+              text={m.body}
+              renderText={(text, key) =>
+                people?.length ? (
+                  <MentionText
+                    key={key}
+                    text={text}
+                    people={people}
+                    meId={meId}
+                    onClick={onMentionClick}
+                    group={groupMentions}
+                    message={m}
+                  />
+                ) : (
+                  <EmojiText key={key} text={text} />
+                )
+              }
+            />
             {m.editedAt && (
               <span
                 className="message-edited"

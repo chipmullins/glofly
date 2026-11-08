@@ -1,16 +1,27 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { Platform, Pressable, ScrollView, TextInput, View, type NativeSyntheticEvent, type TextInputSelectionChangeEventData } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { MESSAGE_MAX, groupMentionSuggestions, mentionQuery, mentionSuggestions, quoteSummary, type Message, type PublicUser } from '@glofly/shared'
+import { MESSAGE_MAX, applyFormat, type FormatAction, groupMentionSuggestions, mentionQuery, mentionSuggestions, quoteSummary, type Message, type PublicUser } from '@glofly/shared'
 import type { MentionGroups } from '@/constellations/roles'
 import { Avatar } from '@/ui/Avatar'
 import { Icon } from '@/ui/icons'
 import { Text, webNoOutline } from '@/ui/kit'
 import { pickEmoji } from '@/ui/sheets'
 import { font, useTheme } from '@/ui/theme'
+import { MONO } from './Formatted'
 
 // The message box: reply / edit bar, @mention suggestions, + (photos and files), emoji, and
 // Send (which becomes the voice-message mic while the box is empty).
+
+const FORMAT_BUTTONS: { action: FormatAction; label: string; glyph: string; mono?: boolean; italic?: boolean; strike?: boolean }[] = [
+  { action: 'b', label: 'Bold', glyph: 'B' },
+  { action: 'i', label: 'Italic', glyph: 'I', italic: true },
+  { action: 's', label: 'Strikethrough', glyph: 'S', strike: true },
+  { action: 'code', label: 'Code', glyph: '</>', mono: true },
+  { action: 'spoiler', label: 'Spoiler', glyph: '||', mono: true },
+  { action: 'quote', label: 'Quote', glyph: '❝' },
+  { action: 'codeblock', label: 'Code block', glyph: '```', mono: true },
+]
 
 export type ComposerHandle = {
   focus: () => void
@@ -202,6 +213,27 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           >
             <Icon name="close" size={16} color={c.muted} strokeWidth={2.4} />
           </Pressable>
+        </View>
+      ) : null}
+      {focused && !voice && selection.end > selection.start ? (
+        <View accessibilityRole="toolbar" accessibilityLabel="Formatting" style={{ flexDirection: 'row', alignSelf: 'flex-start', gap: 2, padding: 4, marginBottom: 6, marginLeft: 50, borderRadius: 12, backgroundColor: '#1C1210' }}>
+          {FORMAT_BUTTONS.map((b) => (
+            <Pressable
+              key={b.action}
+              accessibilityRole="button"
+              accessibilityLabel={b.label}
+              onPress={() => {
+                const next = applyFormat(text, selection.start, selection.end, b.action)
+                setText(next.text)
+                setSelection({ start: next.start, end: next.end })
+              }}
+              style={({ pressed }) => ({ minWidth: 40, height: 40, paddingHorizontal: 6, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? '#3A2A22' : 'transparent' })}
+            >
+              <Text size={b.mono ? 12 : 16} weight="bold" style={{ color: '#F5EDE6', fontFamily: b.mono ? MONO : undefined, fontStyle: b.italic ? 'italic' : 'normal', textDecorationLine: b.strike ? 'line-through' : 'none' }}>
+                {b.glyph}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       ) : null}
       <View style={{ flexDirection: 'row', alignItems: voice ? 'center' : 'flex-end', gap: 6 }}>
