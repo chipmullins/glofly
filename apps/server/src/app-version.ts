@@ -39,8 +39,10 @@ export const DOWNLOAD_URL = "https://glofly.app/download";
 /** Where each app gets its update ("Please update Glofly" → Download). */
 export const DOWNLOAD_URLS: Record<AppPlatform, string> = {
   desktop: DOWNLOAD_URL,
-  android: "https://play.google.com/store/apps/details?id=com.glofly.app",
-  ios: "https://glofly.app/download/ios",
+  // Nov 9, 2026: the download page until Glofly is on Google Play (then set ANDROID_DOWNLOAD_URL
+  // to the Play link in deploy/.env).
+  android: process.env.ANDROID_DOWNLOAD_URL?.trim() || "https://glofly.app/android",
+  ios: "https://apps.apple.com/us/app/glofly/id6822127148",
   // A browser updates by reloading the page.
   web: process.env.WEB_ORIGIN?.trim() || "https://chat.glofly.app",
 };

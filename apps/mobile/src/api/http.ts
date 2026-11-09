@@ -25,7 +25,14 @@ export function noteUpdateRequired(json: Partial<UpdateRequired> | null): Update
   const required: UpdateRequired = {
     message: typeof json?.message === 'string' ? json.message : 'This version of Glofly is too old. Please update it.',
     minVersion: typeof json?.minVersion === 'string' ? json.minVersion : null,
-    downloadUrl: 'https://play.google.com/store/apps/details?id=com.glofly.app',
+    // The server says where this phone's update is (App Store, the Android download page, later Google
+    // Play); only addresses we know are taken, anything else falls back to the right store.
+    downloadUrl:
+      typeof json?.downloadUrl === 'string' && /^https:\/\/(glofly\.app\/|apps\.apple\.com\/|play\.google\.com\/)/.test(json.downloadUrl)
+        ? json.downloadUrl
+        : Platform.OS === 'ios'
+          ? 'https://apps.apple.com/us/app/glofly/id6822127148'
+          : 'https://glofly.app/android',
   }
   useSession.getState().setUpdateRequired(required)
   return required
