@@ -50,6 +50,13 @@ const CREDITS: Credit[] = [
     licenseUrl: 'https://github.com/socketio/socket.io/blob/main/LICENSE'
   },
   {
+    name: 'U²-Net',
+    url: 'https://github.com/xuebinqin/U-2-Net',
+    detail: 'Cutting out stickers from photos',
+    license: 'Apache 2.0',
+    licenseUrl: 'https://github.com/xuebinqin/U-2-Net/blob/master/LICENSE'
+  },
+  {
     name: 'Emojibase',
     url: 'https://emojibase.dev/',
     detail: 'Emoji names and search words',
@@ -134,6 +141,19 @@ export default function AboutSettings({ version }: { version: string | null }): 
             </li>
           ))}
         </ul>
+        <p className="about-footnote">
+          GIFs: Powered by GIPHY. Game info by IGDB. Steam, Twitch, Kick and YouTube accounts and
+          alerts come from those services; Glofly isn&rsquo;t endorsed by them. YouTube Live alerts
+          use YouTube API Services:{' '}
+          <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">
+            YouTube Terms of Service
+          </a>
+          ,{' '}
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">
+            Google Privacy Policy
+          </a>
+          .
+        </p>
         <p className="about-footnote">
           Glofly’s sounds and firefly artwork were made for Glofly. © 2026 Glofly · Created by Chip
           Mullins.

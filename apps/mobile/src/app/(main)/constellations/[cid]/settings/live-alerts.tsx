@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { View } from 'react-native'
+import { Linking, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { alertSiteName, type LiveAlert } from '@glofly/shared'
 import { request } from '@/api/http'
@@ -52,7 +52,11 @@ export default function LiveAlertsScreen() {
   return (
     <SettingsScreen title="Live alerts" c={c}>
       <Text size={14} style={{ color: N.ink2, lineHeight: 20 }}>
-        Glofly posts in a nebula when a streamer goes live on Twitch or Kick, or a channel posts on YouTube. No bot needed.
+        Glofly posts in a nebula when a streamer goes live on Twitch or Kick, or a channel posts on YouTube. No bot needed. YouTube alerts use YouTube API Services (
+        <Text size={14} style={{ color: N.ink, textDecorationLine: 'underline' }} accessibilityRole="link" onPress={() => void Linking.openURL('https://www.youtube.com/t/terms')}>
+          YouTube Terms
+        </Text>
+        ).
       </Text>
       <Caps>Channels</Caps>
       {view?.alerts.length ? (

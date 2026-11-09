@@ -21,8 +21,13 @@ export default function About() {
       <SettingsRow icon="mail" label="Contact support" detail={SUPPORT_EMAIL} onPress={() => void Linking.openURL(`mailto:${SUPPORT_EMAIL}`)} />
       <SettingsRow icon="link" label="glofly.app" onPress={() => void Linking.openURL(SITE_URL)} />
       <Text size={12} tone="muted" style={{ padding: 20, lineHeight: 18 }}>
-        Emoji names: Emojibase (MIT). Fonts: Outfit and DM Sans (OFL). Built with React Native, Expo, LiveKit and Socket.IO.
+        Emoji names: Emojibase (MIT). Fonts: Outfit and DM Sans (OFL). Sticker cutouts: U²-Net (Apache 2.0). Built with React Native, Expo, LiveKit and Socket.IO.
       </Text>
+      <Text size={12} tone="muted" style={{ paddingHorizontal: 20, lineHeight: 18 }}>
+        GIFs: Powered by GIPHY. Game info by IGDB. Steam, Twitch, Kick and YouTube accounts and alerts come from those services; Glofly isn't endorsed by them. YouTube Live alerts use YouTube API Services.
+      </Text>
+      <SettingsRow icon="link" label="YouTube Terms of Service" onPress={() => void Linking.openURL('https://www.youtube.com/t/terms')} />
+      <SettingsRow icon="shield" label="Google Privacy Policy" onPress={() => void Linking.openURL('https://policies.google.com/privacy')} />
     </Screen>
   )
 }

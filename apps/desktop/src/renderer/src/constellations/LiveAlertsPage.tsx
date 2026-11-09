@@ -377,7 +377,11 @@ export default function LiveAlertsPage({
       <div className="la-top">
         <p className="ix-text">
           Post in a nebula when a streamer goes live on Twitch or Kick, or a channel posts on
-          YouTube. No bot needed.
+          YouTube. No bot needed. YouTube alerts use YouTube API Services (
+          <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">
+            YouTube Terms
+          </a>
+          ).
         </p>
         {manage && (
           <button
