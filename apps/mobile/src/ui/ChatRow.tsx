@@ -13,6 +13,7 @@ import type { Call } from '@glofly/shared'
 import { useStore } from '@/state/store'
 import { useWide } from '@/lib/layout'
 import { RowGlow, RowTypingDots } from './RowLife'
+import { HopFace } from './HopFace'
 
 // One row in the Chats or Groups list, from the design canvas.
 
@@ -84,7 +85,10 @@ export const ChatRow = memo(function ChatRow({ chat, meId, nameOf, presence, typ
       })}
     >
       <RowGlow glowKey={glowKey} />
-      <ChatAvatar chat={chat} size={54} status={chat.kind === 'dm' ? (presence?.status ?? null) : null} mobile={onMobile(presence ?? undefined)} />
+      {/* 0.9.3 Hop: pinned chats hop twice, the others once. */}
+      <HopFace chatId={chat.id} kind={chat.pinnedAt ? 'full' : 'soft'} height={54} radius={27}>
+        <ChatAvatar chat={chat} size={54} status={chat.kind === 'dm' ? (presence?.status ?? null) : null} mobile={onMobile(presence ?? undefined)} />
+      </HopFace>
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
           <Text numberOfLines={1} size={16} weight="bold" style={{ flexShrink: 1, fontWeight: bold ? '700' : '600' }}>

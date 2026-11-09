@@ -324,6 +324,9 @@ export function setQuiet(value: boolean): void {
   quiet = value
 }
 
+/** You're set to Do not disturb (whatever the sound settings say). */
+export const isDnd = (): boolean => quiet
+
 /** True while Do not disturb is silencing Glofly (sounds and notifications). */
 export const isSilenced = (): boolean => quiet && settings.dndSilence
 

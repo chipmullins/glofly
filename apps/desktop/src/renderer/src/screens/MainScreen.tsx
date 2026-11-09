@@ -47,7 +47,8 @@ import {
   SettingsIcon
 } from '../components/icons'
 import { shortDate } from '../lib/names'
-import { playSound, setQuiet } from '../lib/sounds'
+import { isDnd, playSound, setQuiet } from '../lib/sounds'
+import { queueHop } from '../lib/hop'
 import {
   activityLine,
   dotFor,
@@ -106,7 +107,7 @@ import { GalaxyIcon } from '../constellations/sky'
 import { useConstellationCards, usePinnedNebulas } from '../lib/constellations'
 import HomeDock, { type HomeDockHandle } from '../constellations/HomeDock'
 import MyGamesPanel from '../components/MyGames'
-import { setQuietHours } from '../lib/quiet'
+import { inQuiet, setQuietHours } from '../lib/quiet'
 import { quietHours as quietHoursApi } from '../lib/tools'
 import { clearOutbox, retryOffline } from '../lib/outbox'
 import QuickSwitcher from '../components/QuickSwitcher'
@@ -874,6 +875,9 @@ export default function MainScreen({
           const quiet = !!chat && isMuted(chat) && !mentioned
           if (fromOthers && !viewing && !quiet) playSound('message')
           if (fromOthers && !quiet && shouldNotify()) notifyMessage(m, event.people)
+          // 0.9.3 Hop: their face hops in the list and on the dock (lib/hop.ts). Not while you're
+          // in that chat, not for a muted one, and never during Do not disturb or quiet hours.
+          if (fromOthers && !viewing && !quiet && !isDnd() && !inQuiet()) queueHop(m.conversationId)
           setConversations((list) => {
             const existing = list.find((c) => c.id === m.conversationId)
             if (!existing) {

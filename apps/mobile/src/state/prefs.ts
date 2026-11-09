@@ -17,9 +17,11 @@ export type PhonePrefs = {
   constellationSound: string
   /** 0.7.3: send error reports to Glofly (what broke, never message text). On by default. */
   errorReports: boolean
+  /** 0.9.3: a face hops when that person messages you (lib/hop.ts). On by default. */
+  hops: boolean
 }
 
-const defaults: PhonePrefs = { notifications: true, preview: true, sounds: true, vibrate: true, messageSound: DEFAULT_PHONE_MESSAGE_SOUND, ringtone: DEFAULT_PHONE_RINGTONE, constellationSound: DEFAULT_PHONE_CONSTELLATION_SOUND, errorReports: true }
+const defaults: PhonePrefs = { notifications: true, preview: true, sounds: true, vibrate: true, messageSound: DEFAULT_PHONE_MESSAGE_SOUND, ringtone: DEFAULT_PHONE_RINGTONE, constellationSound: DEFAULT_PHONE_CONSTELLATION_SOUND, errorReports: true, hops: true }
 
 export const usePhonePrefs = create<PhonePrefs & { loaded: boolean }>(() => ({ ...defaults, loaded: false }))
 

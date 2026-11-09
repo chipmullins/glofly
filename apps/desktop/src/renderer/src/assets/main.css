@@ -532,3 +532,46 @@ img.emoji {
     animation: glo-fade-out 120ms ease forwards;
   }
 }
+
+/* 0.9.3 Hop (lib/hop.ts, the "Glofly Dock Hop" canvas): a face hops when that person messages you.
+   Full (pinned chats, the dock): up 22 px, land with a squash, a small 8 px hop, settle (~0.9 s).
+   Soft (other chats): one 6 px hop after the row glides to the top. Reduce Motion: a glow instead. */
+@keyframes gloHop {
+  0% { transform: translateY(0) scale(1, 1); }
+  8% { transform: translateY(1px) scale(1.06, 0.94); }
+  30% { transform: translateY(-22px) scale(0.97, 1.03); }
+  52% { transform: translateY(0) scale(1.08, 0.92); }
+  60% { transform: translateY(0) scale(1, 1); }
+  73% { transform: translateY(-8px) scale(0.99, 1.01); }
+  88% { transform: translateY(0) scale(1.03, 0.97); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes gloHopSoft {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+  78% { transform: translateY(0) scale(1.04, 0.96); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes gloHopGlow {
+  0%, 100% { filter: none; }
+  35% { filter: drop-shadow(0 0 8px rgba(255, 179, 71, 0.85)); }
+}
+.hop-face {
+  display: inline-flex;
+  flex: none;
+  transform-origin: 50% 100%;
+}
+.glo-hop {
+  animation: gloHop 900ms cubic-bezier(0.3, 0.7, 0.4, 1);
+  transform-origin: 50% 100%;
+}
+.glo-hop--soft {
+  animation: gloHopSoft 480ms cubic-bezier(0.3, 0.7, 0.4, 1);
+  transform-origin: 50% 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .glo-hop,
+  .glo-hop--soft {
+    animation: gloHopGlow 900ms ease-out;
+  }
+}

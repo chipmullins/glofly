@@ -185,19 +185,22 @@ function DmRow({
           onMenu(e.clientX || rect.left + 40, e.clientY || rect.bottom)
         }}
       >
-        {c.kind === 'dm' ? (
-          <Avatar
-            id={c.partner.id}
-            name={c.partner.displayName}
-            avatarVersion={c.partner.avatarVersion}
-            size={40}
-            status={presence?.status}
-            mobile={onMobile(presence ?? undefined)}
-            ring={ring}
-          />
-        ) : (
-          <GroupAvatar members={c.members} me={me} size={40} ring={ring} group={c} />
-        )}
+        {/* 0.9.3 Hop (lib/hop.ts): pinned chats hop twice, the others once. */}
+        <span className="hop-face" data-hop={c.id} data-hop-kind={c.pinnedAt ? 'full' : 'soft'}>
+          {c.kind === 'dm' ? (
+            <Avatar
+              id={c.partner.id}
+              name={c.partner.displayName}
+              avatarVersion={c.partner.avatarVersion}
+              size={40}
+              status={presence?.status}
+              mobile={onMobile(presence ?? undefined)}
+              ring={ring}
+            />
+          ) : (
+            <GroupAvatar members={c.members} me={me} size={40} ring={ring} group={c} />
+          )}
+        </span>
         <span className="dm-text">
           <span
             className={c.unreadCount > 0 || active ? 'dm-name dm-name--strong' : 'dm-name'}

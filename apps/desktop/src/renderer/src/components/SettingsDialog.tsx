@@ -1,4 +1,5 @@
 import ProfileSettings from './ProfileSettings'
+import { hopsOn, setHopsOn } from '../lib/hop'
 import ConfirmDialog from './ConfirmDialog'
 import { patchSocial, refreshSocial, useSocial } from '../lib/social'
 import { Fragment, useEffect, useRef, useState } from 'react'
@@ -185,6 +186,29 @@ function ErrorReportsRow(): React.JSX.Element {
         label="Send error reports"
         onChange={(v) => {
           setErrorReportsOn(v)
+          setOn(v)
+        }}
+      />
+    </div>
+  )
+}
+
+/** 0.9.3: Settings → Appearance → Hop (lib/hop.ts; kept on this device). */
+function HopRow(): React.JSX.Element {
+  const [on, setOn] = useState(hopsOn)
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <span className="settings-row-label">Hop when someone messages you</span>
+        <span className="settings-row-desc">
+          Their picture hops once in your chats and on the dock. Pinned chats hop a little higher.
+        </span>
+      </div>
+      <Toggle
+        on={on}
+        label="Hop when someone messages you"
+        onChange={(v) => {
+          setHopsOn(v)
           setOn(v)
         }}
       />
@@ -1044,6 +1068,7 @@ export default function SettingsDialog({
                         ))}
                       </select>
                     </div>
+                    <HopRow />
                   </div>
                 </section>
 

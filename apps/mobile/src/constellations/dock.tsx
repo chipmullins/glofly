@@ -31,6 +31,7 @@ import { sendText, setViewing } from '@/chat/send'
 import { MessageRow, type RowInfo } from '@/chat/MessageRow'
 import { chatOpened } from '@/push'
 import { ChatAvatar } from '@/ui/Avatar'
+import { HopFace } from '@/ui/HopFace'
 import { FriendPicker } from '@/ui/FriendPicker'
 import { Icon } from '@/ui/icons'
 import { Button, Text, webNoOutline } from '@/ui/kit'
@@ -144,16 +145,18 @@ function ChatHeads() {
           const title = chatTitle(chat)
           return (
             <Pressable key={chat.id} accessibilityRole="button" accessibilityLabel={`${title}${unread ? `, ${chat.unreadCount} unread` : ''}. ${previewOf(chat, meId, nameOf).text}`} onPress={() => openMini(chat.id)} style={{ width: 64, alignItems: 'center', gap: 6 }}>
-              <View style={unread ? { borderRadius: 30, boxShadow: `0 0 0 2.5px ${c.accent}` } : undefined}>
-                <ChatAvatar chat={chat} size={54} ring={c.bg} />
-                {unread ? (
-                  <View style={{ position: 'absolute', right: -3, top: -3, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: c.accent, borderWidth: 2, borderColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text size={10} weight="bold" style={{ color: c.accentInk }}>
-                      {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
+              <HopFace chatId={chat.id} kind="full" height={54} radius={27}>
+                <View style={unread ? { borderRadius: 30, boxShadow: `0 0 0 2.5px ${c.accent}` } : undefined}>
+                  <ChatAvatar chat={chat} size={54} ring={c.bg} />
+                  {unread ? (
+                    <View style={{ position: 'absolute', right: -3, top: -3, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: c.accent, borderWidth: 2, borderColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text size={10} weight="bold" style={{ color: c.accentInk }}>
+                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </HopFace>
               <Text size={11} weight="medium" numberOfLines={1} style={{ color: unread ? c.ink : c.ink2 }}>
                 {chat.kind === 'dm' ? firstName(chat.partner.displayName) : title}
               </Text>

@@ -121,6 +121,7 @@ export default function NotificationSettings() {
       <SectionLabel>Sounds</SectionLabel>
       <SettingsRow label="Sounds in Glofly" detail="Message sound while the app is open" toggle={{ value: p.sounds, onChange: (v) => void setPhonePref('sounds', v) }} />
       <SettingsRow label="Vibrate" toggle={{ value: p.vibrate, onChange: (v) => void setPhonePref('vibrate', v) }} />
+      <SettingsRow label="Hop when someone messages you" detail="Their picture hops once in your chats and on the dock" toggle={{ value: p.hops, onChange: (v) => void setPhonePref('hops', v) }} />
       <SettingsRow label="Message sound" value={phoneMessageSound(p.messageSound).label} onPress={() => router.push({ pathname: '/settings/sound', params: { kind: 'message' } })} />
       <SettingsRow label="Constellation sound" value={phoneConstellationSound(p.constellationSound).label} onPress={() => router.push({ pathname: '/settings/sound', params: { kind: 'constellation' } })} />
       <SettingsRow label="Ringtone" value={phoneRingtone(p.ringtone).label} onPress={() => router.push({ pathname: '/settings/sound', params: { kind: 'ringtone' } })} />

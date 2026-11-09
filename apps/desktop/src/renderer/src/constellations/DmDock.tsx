@@ -1094,7 +1094,13 @@ export default function DmDock({
     const p = c.kind === 'dm' ? presence[c.partner.id] : undefined
     const label = `${chatTitle(c)}${c.unreadCount ? `, ${c.unreadCount} unread` : ''}${p ? `, ${STATUS_LABEL[p.status]}` : ''}${isOpen ? ' (chat open)' : ''}`
     return (
-      <span key={c.id} className="dock-slot">
+      // 0.9.3 Hop (lib/hop.ts): the whole slot hops, so the face's hover magnify isn't disturbed.
+      <span
+        key={c.id}
+        className="dock-slot"
+        data-hop={expanded === c.id ? undefined : c.id}
+        data-hop-kind="full"
+      >
         <button
           type="button"
           ref={(el) => {
