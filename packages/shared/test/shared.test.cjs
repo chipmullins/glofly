@@ -160,6 +160,33 @@ test('watch together: keeping a player in step', () => {
   assert.equal(r.status, 'blocked')
 })
 
+test('watch together: live streams ask for a tap too; a player stuck even muted lets people click it (0.9.3)', () => {
+  // A Twitch channel the browser won't start with sound: muted after three tries, then a tap.
+  const live = { callId: 'c', videoId: 'c:somechannel', site: 'twitch', live: true, playing: true, position: 0, at: 0, durationSec: null, control: 'everyone', startedBy: 'a' }
+  let m = s.newSyncMemory()
+  let r
+  for (let i = 1; i <= 2; i++) r = s.watchSyncStep(live, 0, { state: 'cued', time: 0, duration: 0, muted: false }, m, i * 2_000)
+  assert.equal(r.status, 'catching')
+  r = s.watchSyncStep(live, 0, { state: 'cued', time: 0, duration: 0, muted: false }, m, 6_000)
+  assert.deepEqual(r.commands.map((c) => c.cmd), ['volume', 'play'])
+  assert.equal(r.status, 'blocked')
+  r = s.watchSyncStep(live, 0, { state: 'playing', time: 1, duration: 0, muted: true }, m, 7_000)
+  assert.equal(r.status, 'sync')
+  // Muted and still not starting (Twitch's "Start watching" screen): a click after ~12 s.
+  m = s.newSyncMemory()
+  for (let i = 1; i <= 7; i++) {
+    r = s.watchSyncStep(live, 0, { state: 'cued', time: 0, duration: 0, muted: i > 3 }, m, i * 2_000)
+    if (i > 3) assert.equal(r.status, 'catching')
+  }
+  r = s.watchSyncStep(live, 0, { state: 'cued', time: 0, duration: 0, muted: true }, m, 16_000)
+  assert.equal(r.status, 'blocked')
+  // Same for a video, and the desktop app (never mutes) gets there too.
+  const vid = { callId: 'c', videoId: 'v123456789', site: 'twitch', playing: true, position: 0, at: 0, durationSec: 100, control: 'everyone', startedBy: 'a' }
+  m = s.newSyncMemory()
+  for (let i = 1; i <= 8; i++) r = s.watchSyncStep(vid, 0, { state: 'unstarted', time: 0, duration: 0, muted: false }, m, i * 2_000, { neverMute: true })
+  assert.equal(r.status, 'blocked')
+})
+
 test('watch together: a playing video is never muted for autoplay (Oct 17)', () => {
   const w = { callId: 'c', videoId: 'dQw4w9WgXcQ', playing: true, position: 0, at: 0, durationSec: 100, control: 'everyone', startedBy: 'a' }
   // YouTube still says "unstarted" but the time moves on: it's playing, so no mute.

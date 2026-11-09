@@ -507,6 +507,16 @@ export function noteWatchChange(mem: SyncMemory, watch: WatchState | null): void
 export type SyncOptions = { neverMute?: boolean }
 
 /**
+ * The person has to click the site's player themselves (the apps lift their click layer and say
+ * "Tap the video to start it"): the browser wants a tap before sound, or (0.9.3) it still won't
+ * start after ~12 s even muted, so the site is showing something only a click gets past
+ * (Twitch's mature-content "Start watching", an ad, a "click to play").
+ */
+function tapNeeded(mem: SyncMemory, player: { muted: boolean }, opts: { neverMute?: boolean }): boolean {
+  return (mem.playTries >= 3 && !player.muted && !opts.neverMute && !mem.heardSound) || mem.playTries >= 8
+}
+
+/**
  * One step (twice a second): compares the player with where everyone is and says what to do.
  * Small differences are left alone (jumping all the time would be worse than being a moment
  * off); a player more than WATCH_DRIFT_SEC away jumps to where everyone is, slightly ahead so the
@@ -543,10 +553,20 @@ export function watchSyncStep(
       commands.push({ cmd: 'pause' })
       mem.lastPlayAt = now
     } else if (watch.playing && !playing && player.state !== 'buffering' && (force || now - mem.lastPlayAt > 1500)) {
+      // 0.9.3: like a video below. Before, a live stream never muted for autoplay and never asked
+      // for a tap, so whoever didn't press play (their browser wants a tap before sound) sat on black.
+      mem.playTries += 1
+      if (mem.playTries >= 3 && !mem.mutedForAutoplay && !opts.neverMute && !mem.heardSound) {
+        mem.mutedForAutoplay = true
+        commands.push({ cmd: 'volume', muted: true })
+      }
       commands.push({ cmd: 'play' })
       mem.lastPlayAt = now
     }
-    return { commands, status: watch.playing ? (playing ? 'sync' : 'catching') : 'paused' }
+    if (playing || !watch.playing) mem.playTries = 0
+    if (!watch.playing) return { commands, status: 'paused' }
+    if (playing) return { commands, status: 'sync' }
+    return { commands, status: tapNeeded(mem, player, opts) ? 'blocked' : 'catching' }
   }
 
   // How long the video is: the server's figure, or this player's own until the server has one
@@ -638,7 +658,11 @@ export function watchSyncStep(
     commands.push({ cmd: 'play' })
     mem.lastPlayAt = now
   }
-  return { commands, status: mem.playTries >= 3 && !player.muted && !opts.neverMute && !mem.heardSound ? 'blocked' : 'catching' }
+  // Blocked = the person has to click the site's player themselves (the apps lift their click
+  // layer and say "Tap the video to start it"). Either the browser wants a tap before sound, or
+  // (0.9.3) it still won't start after ~12 s even muted: the site is showing something only a
+  // click gets past (Twitch's mature-content "Start watching", an ad, a "click to play").
+  return { commands, status: tapNeeded(mem, player, opts) ? 'blocked' : 'catching' }
 }
 
 // ---------------------------------------------------------------------------------------------
