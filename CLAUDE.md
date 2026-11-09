@@ -232,3 +232,7 @@
   respect Lockdown. **Kick in Watch Together** (`WatchSite` 'kick', feature `watchKick`, `?sites=2`, `siteLevel` in
   calls/watch.ts). Desktop Twitch/Kick play in a `<webview>` of the player page (`main/watchView.ts` locks it down;
   preload `watchHost.ts`). A new kind of linked data must be added to `site/privacy.html`.
+- **0.9.3 (Nov 9, 2026)** (project doc `glofly-release-0.9.3.md`): fixes after 0.9.2 (desktop webview queues player
+  commands until dom-ready; live streams get the tap-to-start path in `watchSyncStep`; any change request bumps
+  "last seen", `noteSeen`) + **Hop** (approved canvas "Glofly Dock Hop"): faces hop on a new message
+  (`data-hop` + desktop `lib/hop.ts`; phones `src/lib/hop.ts` + `ui/HopFace.tsx`), off per device in Settings.
