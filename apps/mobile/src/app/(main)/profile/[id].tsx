@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Linking, Pressable, ScrollView, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import Animated, { LinearTransition, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import { NICKNAME_MAX, STATUS_LABEL, activityLine, mobileLabel, onMobile, playing, siteName, type Profile } from '@glofly/shared'
 import { useFriendsLive } from '@/state/friendsLive'
 import { LivePill } from '@/ui/LivePill'
@@ -62,15 +63,64 @@ export default function ProfileCard() {
   const [nickBusy, setNickBusy] = useState(false)
   // 0.9.1: your own card is a preview of what others see (a friend, or anyone else).
   const [viewAs, setViewAs] = useState<'friend' | 'everyone'>('friend')
+  // 0.9.3 smooth preview switch: the buttons change at once; the card fades out, swaps to the other
+  // preview in one go (both are fetched up front, so nothing pops in a piece at a time) and fades
+  // back in while the sheet glides to its new height. shownAs = the preview the card is showing.
+  const [shownAs, setShownAs] = useState<'friend' | 'everyone'>('friend')
+  const previews = useRef<{ friend?: Profile; everyone?: Profile }>({})
+  const fade = useSharedValue(1)
+  const still = useReducedMotion()
   const load = () =>
     (id === meId ? api.getMyProfile(viewAs) : api.getProfile(id)).then((r) => {
-      if (r.ok) setProfile(r.data)
-      else setGone(true)
+      if (r.ok) {
+        if (id === meId) previews.current[viewAs] = r.data
+        setProfile(r.data)
+        setShownAs(viewAs)
+      } else setGone(true)
     })
   useEffect(() => {
-    void load()
+    if (id !== meId || !previews.current.friend) {
+      void load()
+      return
+    }
+    // Switching previews on your own card.
+    const want = viewAs
+    let fetched: Profile | undefined = previews.current[want]
+    let faded = false
+    const swap = () => {
+      if (!faded || !fetched || viewAsNow.current !== want) return
+      setProfile(fetched)
+      setShownAs(want)
+      fade.value = withTiming(1, { duration: still ? 0 : 200 })
+    }
+    if (!fetched)
+      void api.getMyProfile(want).then((r) => {
+        if (!r.ok) {
+          fade.value = withTiming(1, { duration: 150 }) // keep showing what we have
+          return
+        }
+        previews.current[want] = r.data
+        fetched = r.data
+        swap()
+      })
+    else void api.getMyProfile(want).then((r) => r.ok && (previews.current[want] = r.data)) // keep it fresh for next time
+    const onFaded = () => {
+      faded = true
+      swap()
+    }
+    fade.value = withTiming(0, { duration: still ? 0 : 110 }, (done) => {
+      if (done) runOnJS(onFaded)()
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isFriend, viewAs])
+  const viewAsNow = useRef(viewAs)
+  viewAsNow.current = viewAs
+  // Fetch the other preview once yours has loaded, so the first switch is instant too.
+  useEffect(() => {
+    if (id !== meId || !profile || previews.current.everyone) return
+    void api.getMyProfile('everyone').then((r) => r.ok && (previews.current.everyone = r.data))
+  }, [id, meId, profile])
+  const fading = useAnimatedStyle(() => ({ opacity: fade.value }))
 
   // Nicknames: only you see them; the server puts them everywhere for you (lists refresh by themselves).
   async function saveNickname(next: string | null) {
@@ -128,7 +178,8 @@ export default function ProfileCard() {
   return (
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
       <Pressable accessibilityLabel="Close" onPress={close} style={{ position: 'absolute', inset: 0, backgroundColor: c.backdrop }} />
-      <View
+      <Animated.View
+        layout={still ? undefined : LinearTransition.duration(240)}
         style={{ maxHeight: '92%', backgroundColor: c.sheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', width: '100%', maxWidth: SHEET_MAX_WIDTH, alignSelf: 'center' }}
         accessibilityViewIsModal
       >
@@ -171,11 +222,12 @@ export default function ProfileCard() {
                 </View>
               </View>
             ) : null}
+            <Animated.View style={[{ gap: 14 }, fading]}>
             <View style={{ marginHorizontal: -20, marginBottom: -14 }}>
               <ProfileHeaderImage userId={profile.id} header={profile.header} height={profile.header ? 150 : 96} />
             </View>
             <View style={{ marginTop: -52, borderRadius: 60, borderWidth: 5, borderColor: c.sheet, alignSelf: 'flex-start' }}>
-              <Avatar user={profile} size={96} status={isFriend || (isMe && viewAs === 'friend') ? (presence?.status ?? 'offline') : null} mobile={onMobile(presence ?? undefined)} ring={c.sheet} />
+              <Avatar user={profile} size={96} status={isFriend || (isMe && shownAs === 'friend') ? (presence?.status ?? 'offline') : null} mobile={onMobile(presence ?? undefined)} ring={c.sheet} />
             </View>
             <View style={{ gap: 2 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -219,7 +271,7 @@ export default function ProfileCard() {
                 </View>
               </View>
             ) : null}
-            {presence && (isFriend || (isMe && viewAs === 'friend')) ? (
+            {presence && (isFriend || (isMe && shownAs === 'friend')) ? (
               <View style={{ gap: 6 }}>
                 <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, height: 32, borderRadius: 16, backgroundColor: presence.status === 'online' ? c.onlineSoft : c.surface }}>
                   <Text size={14} weight="medium" style={{ color: presence.status === 'online' ? c.onlineText : c.ink2 }}>
@@ -330,7 +382,7 @@ export default function ProfileCard() {
                 ) : tab === 'mutuals' ? (
                   <MutualsList userId={profile.id} name={profile.displayName} />
                 ) : tab === 'activity' ? (
-                  <ActivityFeed userId={profile.id} name={profile.displayName} as={isMe ? viewAs : undefined} />
+                  <ActivityFeed userId={profile.id} name={profile.displayName} as={isMe ? shownAs : undefined} />
                 ) : null}
                 </View>
               </View>
@@ -356,10 +408,11 @@ export default function ProfileCard() {
                 <LinkRow icon="flag" label={`Report @${profile.username}`} danger onPress={() => void openReport({ userId: id, name: profile.displayName })} />
               </View>
             )}
+            </Animated.View>
           </ScrollView>
         )}
         <IconButton name="close" label="Close" onPress={close} color="#FFFFFF" style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(28,18,16,0.5)', borderRadius: 22 }} />
-      </View>
+      </Animated.View>
       {/* This card lies over the app (transparentModal): its dialogs must be drawn from here on iPhone. */}
       <SheetHost />
       <DialogHost />
