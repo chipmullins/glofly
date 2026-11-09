@@ -1,5 +1,6 @@
 import ProfileSettings from './ProfileSettings'
 import { hopsOn, setHopsOn } from '../lib/hop'
+import { contrastChoice, setContrastChoice, type ContrastChoice } from '../lib/appearance'
 import ConfirmDialog from './ConfirmDialog'
 import { patchSocial, refreshSocial, useSocial } from '../lib/social'
 import { Fragment, useEffect, useRef, useState } from 'react'
@@ -189,6 +190,35 @@ function ErrorReportsRow(): React.JSX.Element {
           setOn(v)
         }}
       />
+    </div>
+  )
+}
+
+/** 0.9.3: Settings → Appearance → Contrast (lib/appearance.ts; kept on this device). */
+function ContrastRow(): React.JSX.Element {
+  const [choice, setChoice] = useState<ContrastChoice>(contrastChoice)
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <label className="settings-row-label" htmlFor="settings-contrast">
+          Contrast
+        </label>
+        <span className="settings-row-desc">High makes text darker and lines easier to see.</span>
+      </div>
+      <select
+        id="settings-contrast"
+        className="settings-select"
+        value={choice}
+        onChange={(e) => {
+          const v = e.target.value as ContrastChoice
+          setContrastChoice(v)
+          setChoice(v)
+        }}
+      >
+        <option value="system">Match system</option>
+        <option value="standard">Standard</option>
+        <option value="high">High</option>
+      </select>
     </div>
   )
 }
@@ -1068,6 +1098,7 @@ export default function SettingsDialog({
                         ))}
                       </select>
                     </div>
+                    <ContrastRow />
                     <HopRow />
                   </div>
                 </section>

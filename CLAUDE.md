@@ -236,3 +236,7 @@
   commands until dom-ready; live streams get the tap-to-start path in `watchSyncStep`; any change request bumps
   "last seen", `noteSeen`) + **Hop** (approved canvas "Glofly Dock Hop"): faces hop on a new message
   (`data-hop` + desktop `lib/hop.ts`; phones `src/lib/hop.ts` + `ui/HopFace.tsx`), off per device in Settings.
+  **Contrast** (Settings → Appearance; Match system/Standard/High, per device): desktop/web `:root[data-contrast='high']`
+  token overrides in `main.css` (set by `lib/appearance.ts`, follows `prefers-contrast: more`); phones `useHighContrast()`
+  overlays in `ui/theme.ts` (follows iOS Increase Contrast / Android high text contrast). New colors: use the tokens so
+  they follow it. The night sky's own approved colors are unchanged.

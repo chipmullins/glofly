@@ -8,7 +8,7 @@ import { useFonts } from 'expo-font'
 import { DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-google-fonts/dm-sans'
 import { Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit'
 import * as SystemUI from 'expo-system-ui'
-import { ThemeOverride, useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
+import { ThemeOverride, followSystemContrast, useTheme, useThemeChoice, type AccentChoice, type ContrastChoice, type ThemeChoice } from '@/ui/theme'
 import { useCx } from '@/state/constellations'
 import { DialogHost } from '@/ui/dialogs'
 import { PhotoCropperHost } from '@/ui/PhotoCropper'
@@ -50,9 +50,13 @@ export default function RootLayout() {
     lockPortrait() // only the call screen turns sideways
     void prefs.get<ThemeChoice>('theme', 'system').then((t) => useThemeChoice.getState().set(t))
     void prefs.get<AccentChoice>('accent', 'orange').then((a) => useThemeChoice.getState().setAccent(a))
+    void prefs.get<ContrastChoice>('contrast', 'system').then((v) => useThemeChoice.getState().setContrast(v))
     void loadPhonePrefs()
     void restoreSession()
   }, [])
+
+  // 0.9.3: the phone's own contrast setting, for Contrast → Match system.
+  useEffect(() => followSystemContrast(), [])
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(c.bg).catch(() => {})

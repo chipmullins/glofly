@@ -1,5 +1,5 @@
 import { createContext, createElement, useContext, type ReactNode } from 'react'
-import { useColorScheme } from 'react-native'
+import { AccessibilityInfo, Platform, useColorScheme } from 'react-native'
 import { create } from 'zustand'
 
 // Colors from the "Glofly Mobile" design canvas (Glow Orange, light and dark). Every color in the
@@ -163,19 +163,87 @@ const accentColors: Record<Exclude<AccentChoice, 'orange'>, { light: AccentParts
     dark: accentParts('#E8DDD3', '#1E1916', '#F2E9E1', '#3D342E', '#3D342E', '232,221,211', true),
   },
 }
-const themed: Record<string, Colors> = {}
-function colorsFor(isDark: boolean, accent: AccentChoice): Colors {
-  if (accent === 'orange') return isDark ? dark : light
-  const key = `${accent}-${isDark ? 'd' : 'l'}`
-  return (themed[key] ??= { ...(isDark ? dark : light), ...accentColors[accent][isDark ? 'dark' : 'light'] })
+// 0.9.3 Higher contrast (Settings → Appearance → Contrast, or the phone's own "Increase contrast"):
+// text a step darker (light) or brighter (dark/night), lines and field borders clearly visible.
+// Accent colors stay. Same idea as the desktop's :root[data-contrast='high'].
+const highLight: Partial<Colors> = {
+  surface: '#F3E9DF',
+  surface2: '#E6D6C8',
+  line: '#B9A291',
+  fieldLine: '#806656',
+  ink: '#120A05',
+  ink2: '#24170F',
+  muted: '#3F2C21',
+  faint: '#4D392C',
+  them: '#EFE3D8',
+  mutedBadge: '#806656',
+  onlineText: '#145230',
+  danger: '#8A1A12',
 }
+const highDark: Partial<Colors> = {
+  bg: '#140F0D',
+  line: 'rgba(255,255,255,0.24)',
+  fieldLine: '#8F7F73',
+  ink: '#FFFFFF',
+  ink2: '#F5EDE6',
+  muted: '#E9DDD4',
+  faint: '#D6C7BB',
+  them: '#332925',
+  mutedBadge: '#8F7F73',
+  onlineText: '#9CE6BB',
+  danger: '#FFB0A8',
+}
+const highNight: Partial<Colors> = { line: 'rgba(255,255,255,0.22)', fieldLine: '#8F7F73', ink: '#FFFFFF', ink2: '#F5EDE6', muted: '#E2D4C9', faint: '#CDBDB1', mutedBadge: '#8F7F73' }
 
-export const useThemeChoice = create<{ choice: ThemeChoice; accent: AccentChoice; set: (c: ThemeChoice) => void; setAccent: (a: AccentChoice) => void }>((set) => ({
+const themed: Record<string, Colors> = {}
+function colorsFor(isDark: boolean, accent: AccentChoice, high = false): Colors {
+  if (accent === 'orange' && !high) return isDark ? dark : light
+  const key = `${accent}-${isDark ? 'd' : 'l'}${high ? '-h' : ''}`
+  return (themed[key] ??= { ...(isDark ? dark : light), ...(accent === 'orange' ? {} : accentColors[accent][isDark ? 'dark' : 'light']), ...(high ? (isDark ? highDark : highLight) : {}) })
+}
+let nightHigh: Colors | null = null
+
+export type ContrastChoice = 'system' | 'high' | 'standard'
+
+export const useThemeChoice = create<{
+  choice: ThemeChoice
+  accent: AccentChoice
+  contrast: ContrastChoice
+  /** The phone's own "Increase contrast" (iOS) / high text contrast (Android), set by _layout. */
+  systemHigh: boolean
+  set: (c: ThemeChoice) => void
+  setAccent: (a: AccentChoice) => void
+  setContrast: (c: ContrastChoice) => void
+}>((set) => ({
   choice: 'system',
   accent: 'orange',
+  contrast: 'system',
+  systemHigh: false,
   set: (choice) => set({ choice }),
   setAccent: (accent) => set({ accent: ACCENTS.some((a) => a.key === accent) ? accent : 'orange' }),
+  setContrast: (contrast) => set({ contrast: contrast === 'high' || contrast === 'standard' ? contrast : 'system' }),
 }))
+
+/** Keeps systemHigh in step with iOS "Increase Contrast" / Android "High contrast text". */
+export function followSystemContrast(): () => void {
+  const setHigh = (on: boolean) => useThemeChoice.setState({ systemHigh: !!on })
+  const a11y = AccessibilityInfo as unknown as {
+    isDarkerSystemColorsEnabled?: () => Promise<boolean>
+    isHighTextContrastEnabled?: () => Promise<boolean>
+  }
+  const read = Platform.OS === 'ios' ? a11y.isDarkerSystemColorsEnabled : Platform.OS === 'android' ? a11y.isHighTextContrastEnabled : undefined
+  void read?.().then(setHigh).catch(() => undefined)
+  const event = Platform.OS === 'ios' ? 'darkerSystemColorsChanged' : 'highTextContrastChanged'
+  try {
+    const sub = AccessibilityInfo.addEventListener(event as 'darkerSystemColorsChanged', setHigh)
+    return () => sub.remove()
+  } catch {
+    return () => undefined
+  }
+}
+
+/** Higher contrast is on (the setting, or Match system and the phone asks for it). */
+export const useHighContrast = (): boolean => useThemeChoice((s) => s.contrast === 'high' || (s.contrast === 'system' && s.systemHigh))
 
 /**
  * Glofly 2.0 on phones: the night side (Constellations) is dark in every theme, from the "Glofly
@@ -241,10 +309,11 @@ export function useTheme(): { c: Colors; dark: boolean } {
   const system = useColorScheme()
   const choice = useThemeChoice((s) => s.choice)
   const accent = useThemeChoice((s) => s.accent)
-  if (mode === 'night') return { c: night, dark: true }
-  if (mode === 'dark') return { c: colorsFor(true, accent), dark: true }
+  const high = useHighContrast()
+  if (mode === 'night') return { c: high ? (nightHigh ??= { ...night, ...highNight }) : night, dark: true }
+  if (mode === 'dark') return { c: colorsFor(true, accent, high), dark: true }
   const isDark = choice === 'system' ? system === 'dark' : choice === 'dark'
-  return { c: colorsFor(isDark, accent), dark: isDark }
+  return { c: colorsFor(isDark, accent, high), dark: isDark }
 }
 
 export const themes = { light, dark }

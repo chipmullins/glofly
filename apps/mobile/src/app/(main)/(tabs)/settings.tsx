@@ -18,8 +18,13 @@ import { openShortcutSheet } from '@/ui/KeyShortcuts'
 import { InviteLinkSettings } from '@/ui/InviteLink'
 import { refreshSocial, useSocial } from '@/state/social'
 import { setPhonePref, usePhonePrefs } from '@/state/prefs'
-import { ACCENTS, useTheme, useThemeChoice, type AccentChoice, type ThemeChoice } from '@/ui/theme'
+import { ACCENTS, useTheme, useThemeChoice, type AccentChoice, type ContrastChoice, type ThemeChoice } from '@/ui/theme'
 
+const CONTRASTS: { key: ContrastChoice; label: string }[] = [
+  { key: 'system', label: 'Match system' },
+  { key: 'standard', label: 'Standard' },
+  { key: 'high', label: 'High' },
+]
 const THEMES: { key: ThemeChoice; label: string }[] = [
   { key: 'system', label: 'Match system' },
   { key: 'light', label: 'Light' },
@@ -33,6 +38,7 @@ export default function Settings() {
   const myStatus = useStore((s) => s.myStatus)
   const theme = useThemeChoice((s) => s.choice)
   const accent = useThemeChoice((s) => s.accent)
+  const contrast = useThemeChoice((s) => s.contrast)
   const [privacy, setPrivacy] = useState<PrivacySettings | null>(null)
   const phonePrefs = usePhonePrefs()
   const shareBirthday = useSocial((x) => x.shareBirthday)
@@ -58,6 +64,14 @@ export default function Settings() {
     if (!pick) return
     useThemeChoice.getState().set(pick as ThemeChoice)
     void prefs.set('theme', pick)
+  }
+
+  // 0.9.3: Contrast (kept on this phone). Match system follows the phone's own contrast setting.
+  async function pickContrast() {
+    const pick = await chooseFrom(CONTRASTS.map((t) => ({ key: t.key, label: t.label, checked: t.key === contrast })), 'Contrast')
+    if (!pick) return
+    useThemeChoice.getState().setContrast(pick as ContrastChoice)
+    void prefs.set('contrast', pick)
   }
 
   async function pickAccent() {
@@ -118,6 +132,7 @@ export default function Settings() {
       <SectionLabel>Appearance</SectionLabel>
       <SettingsRow icon="palette" label="Theme" value={THEMES.find((t) => t.key === theme)?.label} onPress={() => void pickTheme()} />
       <SettingsRow icon="palette" label="Accent color" value={ACCENTS.find((a) => a.key === accent)?.label} onPress={() => void pickAccent()} />
+      <SettingsRow icon="eye" label="Contrast" value={CONTRASTS.find((t) => t.key === contrast)?.label} onPress={() => void pickContrast()} />
 
       {/* 0.8.0: your invite link (restricted accounts don't get one) */}
       {!user.restricted ? (

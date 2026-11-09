@@ -276,6 +276,54 @@
   --glo-link-hover: #ffffff;
 }
 
+/* 0.9.3 Higher contrast (Settings → Appearance → Contrast, or the system's own setting; lib/appearance.ts).
+   Text a step darker (light) or brighter (dark), lines and borders clearly visible, quiet greys
+   no longer quiet. Accent colors stay; their text colors already pass. Placed after the accents so
+   the three-part selectors win over the dark theme and accent blocks. */
+:root[data-theme='light'][data-contrast='high'] {
+  --glo-sidebar: #f3e9df;
+  --glo-subtle: #f7efe7;
+  --glo-hover: #e6d6c8;
+  --glo-line: #b9a291;
+  --glo-line-soft: #c9b5a5;
+  --glo-border: #806656;
+  --glo-line-strong: #806656;
+  --glo-edge: #b9a291;
+  --glo-ink: #120a05;
+  --glo-icon: #24170f;
+  --glo-muted: #3f2c21;
+  --glo-faint: #4d392c;
+  --glo-placeholder: #5a4538;
+  --glo-danger-text: #8a1a12;
+  --glo-good-text: #145230;
+  --glo-warn-text: #5c3d00;
+  --glo-focus-width: 3px;
+}
+:root[data-theme='dark'][data-contrast='high'] {
+  --glo-bg: #140f0d;
+  --glo-cream: #140f0d;
+  --glo-sidebar: #0d0908;
+  --glo-line: rgba(255, 255, 255, 0.24);
+  --glo-line-soft: rgba(255, 255, 255, 0.18);
+  --glo-border: #8f7f73;
+  --glo-line-strong: #8f7f73;
+  --glo-edge: rgba(255, 255, 255, 0.24);
+  --glo-lift-edge: rgba(255, 255, 255, 0.24);
+  --glo-ink: #ffffff;
+  --glo-icon: #f5ede6;
+  --glo-muted: #e9ddd4;
+  --glo-faint: #d6c7bb;
+  --glo-placeholder: #cbbaae;
+  --glo-danger-text: #ffb0a8;
+  --glo-good-text: #9ce6bb;
+  --glo-warn-text: #ffd98a;
+  --glo-focus-width: 3px;
+}
+:root[data-contrast='high'] :focus-visible {
+  outline: var(--glo-focus-width, 3px) solid var(--glo-ink) !important;
+  outline-offset: 2px;
+}
+
 *,
 *::before,
 *::after {
