@@ -460,6 +460,11 @@ export type HitEvent = {
   miss?: boolean
   /** The target concentrates: a Constitution save at this DC (owner and GMs only) */
   concentrationDc?: number
+  /**
+   * The damage number isn't for this viewer (a monster whose exact HP the campaign hides): amount is 0;
+   * apps show "Hit!" instead of a number.
+   */
+  amountHidden?: boolean
 }
 
 export type AttackInput = {

@@ -16,7 +16,7 @@ import {
 } from "@glofly/shared";
 import { db } from "../db";
 import { campfireCharacters, campfireTokens } from "../db/schema";
-import type { CampaignRow, Table } from "./perms";
+import { settingsOf, type CampaignRow, type Table } from "./perms";
 import { broadcast, charactersInfo, emitCharacter, emitToken, sceneRow, tokensWithScenes } from "./state";
 import { controls, tokenVisible, type CharacterRow, type TokenRow } from "./view";
 
@@ -141,7 +141,15 @@ export async function emitHit(campaign: CampaignRow, event: HitEvent): Promise<v
     const seesAttacker = !!attacker && tokenVisible(attacker.token, attacker.scene, v, chars);
     // The concentration prompt is for whoever plays the target, and the GMs.
     const theirs = v.gm || controls(target.token, v.userId, chars);
-    return { ...rest, attackerTokenId: seesAttacker ? event.attackerTokenId : null, ...(dc !== undefined && theirs ? { concentrationDc: dc } : {}) };
+    // A monster's exact HP may be hidden from players (campaign setting): then so is the number.
+    const pcTarget = !!target.token.characterId && chars.get(target.token.characterId)?.kind === "pc";
+    const hideAmount = !v.gm && !theirs && !pcTarget && settingsOf(campaign.settings).showMonsterHp !== "exact" && !rest.miss;
+    return {
+      ...rest,
+      ...(hideAmount ? { amount: 0, amountHidden: true } : {}),
+      attackerTokenId: seesAttacker ? event.attackerTokenId : null,
+      ...(dc !== undefined && theirs ? { concentrationDc: dc } : {}),
+    };
   });
 }
 
