@@ -196,7 +196,7 @@ contentRouter.delete("/characters/:id", changeLimiter, async (req, res) => {
   if (!found) return;
   if (!found.mine) return bad(res, "That character isn't yours.", 403);
   await db.delete(campfireCharacters).where(eq(campfireCharacters.id, found.row.id));
-  await emitCharacter(found.t.campaign, found.row.id);
+  await emitCharacter(found.t.campaign, found.row.id, { kind: found.row.kind, ownerId: found.row.ownerId });
   res.json({ ok: true });
 });
 

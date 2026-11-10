@@ -737,7 +737,9 @@ test("security review (Nov 10): no monster bonuses, hidden names or pictures lea
     await call(`/campfire/campaigns/${c}`, { method: "PATCH", token: gm.token, body: { settings: { gmApprovesDamage: false, showMonsterHp: "none" } } });
     const gs = (await call(`/campfire/characters/${boss.characterId}`, { token: gm.token })).json.sheet;
     await call(`/campfire/characters/${boss.characterId}`, { method: "PATCH", token: gm.token, body: { sheet: { ...gs, concentration: "Hex", hp: { ...gs.hp, current: 7, max: 7 } } } });
-    const hit = await atk("1d20+40");
+    // A natural 1 always misses: try again then (a 1-in-20 chance each time).
+    let hit = await atk("1d20+40");
+    for (let i = 0; i < 4 && !hit.json.hit; i++) hit = await atk("1d20+40");
     assert.equal(hit.json.hit, true);
     assert.equal(hit.json.applied.concentrationDc, undefined);
     assert.equal(hit.json.applied.amountHidden, true);

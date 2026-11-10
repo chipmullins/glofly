@@ -60,7 +60,10 @@ async function processImage(kind: Exclude<CampfireFileKind, "audio">, data: Buff
   }
   try {
     const side = KEEP_SIDE[kind];
-    const out = await sharp(data, { limitInputPixels: CAMPFIRE_LIMITS.mapSide * CAMPFIRE_LIMITS.mapSide })
+    // Token, portrait and handout pictures end up small: refuse giant ones before decoding (memory).
+    const pixels = kind === "map" ? CAMPFIRE_LIMITS.mapSide * CAMPFIRE_LIMITS.mapSide : 40_000_000;
+    if ((meta.width ?? 0) * (meta.height ?? 0) > pixels) throw new Error("too big");
+    const out = await sharp(data, { limitInputPixels: pixels })
       .rotate()
       .resize(side, side, { fit: "inside", withoutEnlargement: true })
       .webp({ quality: kind === "map" ? 82 : 85 })

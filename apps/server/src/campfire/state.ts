@@ -158,10 +158,15 @@ export async function emitScene(campaign: CampaignRow, op: "upsert" | "activate"
 }
 
 /** A character changed: the owner and GMs get it all, other players a PC's public part. */
-export async function emitCharacter(campaign: CampaignRow, characterId: string): Promise<void> {
+export async function emitCharacter(
+  campaign: CampaignRow,
+  characterId: string,
+  /** For a delete: what it was, so only people who could see it hear it's gone. */
+  gone?: { kind: string; ownerId: string | null },
+): Promise<void> {
   const [row] = await db.select().from(campfireCharacters).where(eq(campfireCharacters.id, characterId));
   await broadcast(campaign, "campfire:character", (v) => {
-    if (!row) return { op: "delete", characterId };
+    if (!row) return v.gm || !gone || gone.kind === "pc" || gone.ownerId === v.userId ? { op: "delete", characterId } : null;
     const out = characterOut(row, v);
     return out ? { op: "upsert", character: out } : null;
   });
