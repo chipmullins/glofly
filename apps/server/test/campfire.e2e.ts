@@ -332,6 +332,57 @@ test("move rules for players", { skip }, async () => {
   assert.equal((await call(`/campfire/characters/${pcId}`, { method: "PATCH", token: p2.token, body: { name: "Mine" } })).status, 403);
 });
 
+test("sheet extras (Nov 10): XP, inspiration, AC note, senses, subclass, spell details; same write and view rules", { skip }, async () => {
+  const before = (await call(`/campfire/characters/${pcId}`, { token: gm.token })).json.sheet;
+  const extras = {
+    ...before,
+    xp: 6500,
+    inspiration: true,
+    acNote: "Leather",
+    senses: "Darkvision 60 ft",
+    classes: [{ name: "Ranger", level: 5, hitDie: 10, caster: "half", subclass: "Hunter" }],
+    spellcasting: {
+      ...before.spellcasting,
+      spells: [{ slug: "hunters-mark", name: "Hunter's Mark", level: 1, prepared: true, castingTime: "1 bonus action", range: "90 feet", duration: "Up to 1 hour", concentration: true, roll: "1d6", notes: "+1d6 to hits", evil: "<script>" }],
+    },
+    unknown: "dropped",
+  };
+  // The owner saves them (the sheet is locked from the move rules test: AC and HP max still stay).
+  const saved = await call(`/campfire/characters/${pcId}`, { method: "PATCH", token: p1.token, body: { sheet: { ...extras, ac: 30 } } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.json));
+  const sh = saved.json.sheet;
+  assert.equal(sh.xp, 6500);
+  assert.equal(sh.inspiration, true);
+  assert.equal(sh.acNote, "Leather");
+  assert.equal(sh.senses, "Darkvision 60 ft");
+  assert.equal(sh.classes[0].subclass, "Hunter");
+  assert.equal(sh.ac, before.ac, "a locked sheet keeps its AC");
+  assert.equal(sh.unknown, undefined);
+  assert.deepEqual(sh.spellcasting.spells[0], {
+    slug: "hunters-mark", name: "Hunter's Mark", level: 1, prepared: true, castingTime: "1 bonus action", range: "90 feet", duration: "Up to 1 hour", concentration: true, roll: "1d6", notes: "+1d6 to hits",
+  });
+  // Bad values are cleaned like the rest of the sheet.
+  const bad = await call(`/campfire/characters/${pcId}`, { method: "PATCH", token: p1.token, body: { sheet: { ...extras, xp: -5, inspiration: "yes", acNote: "x".repeat(500), spellcasting: { ...extras.spellcasting, spells: [{ name: "Odd", level: 1, roll: "drop table", concentration: 1 }] } } } });
+  assert.equal(bad.status, 200);
+  assert.equal(bad.json.sheet.xp, 0);
+  assert.equal(bad.json.sheet.inspiration, undefined);
+  assert.equal(bad.json.sheet.acNote.length, 60);
+  assert.equal(bad.json.sheet.spellcasting.spells[0].roll, undefined);
+  assert.equal(bad.json.sheet.spellcasting.spells[0].concentration, undefined);
+  // Other players still only get the public part (no sheet, so none of these).
+  const t2 = await call(`/campfire/campaigns/${campaignId}`, { token: p2.token });
+  const theirs = t2.json.characters.find((c: any) => c.id === pcId);
+  assert.equal(theirs.sheet, undefined);
+  assert.equal(JSON.stringify(theirs).includes("Leather"), false);
+  // Someone else's sheet: still refused.
+  assert.equal((await call(`/campfire/characters/${pcId}`, { method: "PATCH", token: p2.token, body: { sheet: extras } })).status, 403);
+  // Older sheets (and apps) without the fields work as before.
+  const restored = await call(`/campfire/characters/${pcId}`, { method: "PATCH", token: gm.token, body: { sheet: before } });
+  assert.equal(restored.status, 200);
+  assert.equal("xp" in restored.json.sheet, false);
+  assert.equal("subclass" in restored.json.sheet.classes[0], false);
+});
+
 test("rolls: server dice, friendly errors, history filtered, whispers", { skip }, async () => {
   const bad = await call(`/campfire/campaigns/${campaignId}/rolls`, { method: "POST", token: p1.token, body: { expression: "1d20+" } });
   assert.equal(bad.status, 400);
