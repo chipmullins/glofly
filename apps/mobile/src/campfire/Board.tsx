@@ -51,6 +51,8 @@ export function TableSheet({
   const hp = sheet?.hp ?? character?.summary.hp
   const target = targetId ? table.tokens.find((t) => t.id === targetId) : undefined
   const gm = table.myRole === 'gm'
+  // Game masters get the full NPC sheets: the picked creature's stat block opens from here.
+  const targetSheet = gm && target?.characterId ? table.characters.find((c) => c.id === target.characterId && c.kind === 'npc') : undefined
   const name = character?.name ?? (gm ? 'Game master' : 'You')
 
   const title = myTurn ? 'Your turn' : combat ? (currentToken ? `${tokenName(currentToken)}'s turn` : 'Someone’s turn') : gm ? 'Game master' : 'Exploring'
@@ -130,7 +132,16 @@ export function TableSheet({
                 )
               })}
             </ScrollView>
-          ) : !character && !gm ? (
+          ) : null}
+          {gm && targetSheet ? (
+            <FireButton
+              label={`${tokenName(target)}'s stat block`}
+              icon="scroll"
+              a11y={`Open ${tokenName(target)}'s stat block (game masters only)`}
+              onPress={() => router.push({ pathname: '/campfire/character/[id]', params: { id: targetSheet.id, campaign: campaignId } })}
+            />
+          ) : null}
+          {character && attacks.length ? null : !character && !gm ? (
             <FireButton label="Make your character" icon="plus" onPress={() => router.push({ pathname: '/campfire/character/[id]', params: { id: 'new', campaign: campaignId } })} />
           ) : null}
           <View style={{ flexDirection: 'row', gap: 6 }}>

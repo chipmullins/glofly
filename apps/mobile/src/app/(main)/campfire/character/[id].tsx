@@ -10,10 +10,12 @@ import { inform } from '@/ui/dialogs'
 import { campfireApi } from '@/campfire/api'
 import { upsertCharacter, useCampfire } from '@/campfire/store'
 import { CharacterSheetView } from '@/campfire/CharacterSheet'
+import { MonsterBlockView } from '@/campfire/MonsterBlock'
 import { FireButton } from '@/campfire/ui'
 import { useFire } from '@/campfire/lib'
 
-// Your Campfire character's sheet (id "new" makes one first: just a name, the rest later).
+// Your Campfire character's sheet (id "new" makes one first: just a name, the rest later), or,
+// for game masters, a monster's stat block.
 
 export default function CharacterScreen() {
   const { id, campaign } = useLocalSearchParams<{ id: string; campaign: string }>()
@@ -52,6 +54,8 @@ function Sheet({ id, campaignId }: { id: string; campaignId: string }) {
       </View>
     )
   }
+  // NPCs (game masters only: the server sends their sheets to nobody else) show as a stat block.
+  if (ch.kind === 'npc') return <MonsterBlockView campaignId={ch.campaignId} initial={ch} />
   return <CharacterSheetView campaignId={ch.campaignId} initial={ch} />
 }
 

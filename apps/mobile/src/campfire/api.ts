@@ -14,6 +14,8 @@ import type {
   RollVisibility,
   Roll,
   Sheet5e,
+  SrdSpell,
+  SrdSpellSummary,
   TableState,
   Token,
 } from '@glofly/shared'
@@ -47,6 +49,10 @@ export const campfireApi = {
     request<Character>('PATCH', `/campfire/characters/${enc(cid)}`, body),
   rest: (cid: string, kind: 'short' | 'long') => request<Character>('POST', `/campfire/characters/${enc(cid)}/rest`, { kind }),
   deathSave: (cid: string) => request<{ roll: Roll; outcome: string; deathSaves: Sheet5e['deathSaves'] }>('POST', `/campfire/characters/${enc(cid)}/death-save`, {}),
+  damageToken: (tokenId: string, amount: number) => request<{ applied: unknown }>('POST', `/campfire/tokens/${enc(tokenId)}/damage`, { amount }),
+  healToken: (tokenId: string, amount: number) => request<{ ok: true }>('POST', `/campfire/tokens/${enc(tokenId)}/heal`, { amount }),
+  srdSpells: (q: string) => request<{ spells: SrdSpellSummary[] }>('GET', `/campfire/srd/spells?q=${enc(q)}`),
+  srdSpell: (slug: string) => request<SrdSpell>('GET', `/campfire/srd/spells/${enc(slug)}`),
   handout: (id: string, handoutId: string) => request<Handout>('GET', `/campfire/campaigns/${enc(id)}/handouts/${enc(handoutId)}`),
   uploadFile: (id: string, kind: CampfireFileKind, file: Upload, onProgress?: (f: number) => void) =>
     upload<CampfireFile>('POST', `/campfire/campaigns/${enc(id)}/files?kind=${kind}`, file, onProgress),

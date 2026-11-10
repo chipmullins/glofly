@@ -140,6 +140,23 @@ export const campfire = {
   spell: '#FFD08A',
   fog: '#0B0807',
   shadow: 'rgba(0,0,0,0.6)',
+  /** The character sheet boards (SheetPhone / SheetActions / SheetNpc) */
+  well: '#120D0B',
+  amberLine: 'rgba(255,179,71,0.45)',
+  temp: '#6F9CFF',
+  tempSoft: '#1A2333',
+  tempText: '#9CC0FF',
+  hurtSoft: '#4A1D18',
+  hurtText: '#FFB0A8',
+  healSoft: '#183A26',
+  healText: '#9CE6BB',
+  conc: '#CFA8FF',
+  concSoft: '#2A1F33',
+  concLine: 'rgba(181,124,255,0.4)',
+  monster: '#1C1411',
+  monsterLine: 'rgba(239,90,74,0.35)',
+  monsterText: '#FFB08A',
+  gmSoft: '#4A2A10',
 }
 export type CampfireColors = typeof campfire
 export const campfireHigh: CampfireColors = {
@@ -155,6 +172,15 @@ export const campfireHigh: CampfireColors = {
   yellow: '#FFD060',
   red: '#FF7A6B',
   redText: '#FFB0A6',
+  amberLine: 'rgba(255,201,120,0.8)',
+  temp: '#8FB4FF',
+  tempText: '#C9DCFF',
+  hurtText: '#FFD0CA',
+  healText: '#C4F5D8',
+  conc: '#E2C8FF',
+  concLine: 'rgba(206,160,255,0.85)',
+  monsterLine: 'rgba(255,122,107,0.8)',
+  monsterText: '#FFD0B8',
 }
 
 export type ThemeChoice = 'system' | 'light' | 'dark'
