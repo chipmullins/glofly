@@ -6,13 +6,15 @@ import { useCalls } from '../calls/callState'
 import { AvatarFace } from '../components/Avatar'
 import { colorsFor } from '../lib/avatarColors'
 import { cf, IMAGE_ACCEPT, pickFile, uploadFile } from './api'
-import { CfContext, type Cf, type RollShare, type Tab } from './ctx'
+import { CfContext, type Cf, type RollShare, type StatBlockFor, type Tab } from './ctx'
 import { THEMES } from './geometry'
 import MapView, { type Tool } from './MapView'
 import { useTable } from './useTable'
 import { TurnOrder } from './TurnOrder'
 import { DiceTray, RollsPanel } from './Rolls'
 import { SheetPanel } from './Sheet'
+import { SheetWindow } from './SheetWindow'
+import { StatBlock } from './StatBlock'
 import { HandoutsPanel } from './Handouts'
 import { MusicPanel } from './Music'
 import { useMusicPlayer } from './music'
@@ -83,6 +85,8 @@ function TableReady({
   const [message, setMessage] = useState<string | null>(null)
   const [builder, setBuilder] = useState<{ sceneId: string | null } | null>(null)
   const [asPlayer, setAsPlayer] = useState(false)
+  const [sheetId, setSheetId] = useState<string | null>(null)
+  const [statBlock, setStatBlock] = useState<StatBlockFor | null>(null)
   const [templateFt, setTemplateFt] = useState(20)
   const centerRef = useRef<(() => Point) | null>(null)
   const msgTimer = useRef<number | null>(null)
@@ -199,7 +203,16 @@ function TableReady({
     mapCenter: () => centerRef.current?.() ?? [0, 0],
     tokenOf,
     openTab: setTab,
-    openBuilder: (sceneId) => setBuilder({ sceneId: sceneId ?? t.scene?.id ?? null })
+    openBuilder: (sceneId) => setBuilder({ sceneId: sceneId ?? t.scene?.id ?? null }),
+    openSheet: (id) => {
+      setStatBlock(null)
+      setSheetId(id)
+    },
+    openStatBlock: (what) => {
+      if (!isGm) return
+      setSheetId(null)
+      setStatBlock(what)
+    }
   }
 
   const scene = t.scene
@@ -713,6 +726,16 @@ function TableReady({
             <DiceTray />
           </aside>
         </div>
+        {sheetId && t.characters.some((c) => c.id === sheetId) && (
+          <SheetWindow key={sheetId} characterId={sheetId} onClose={() => setSheetId(null)} />
+        )}
+        {statBlock && isGm && (
+          <StatBlock
+            key={'slug' in statBlock ? statBlock.slug : statBlock.characterId}
+            what={statBlock}
+            onClose={() => setStatBlock(null)}
+          />
+        )}
       </div>
     </CfContext.Provider>
   )

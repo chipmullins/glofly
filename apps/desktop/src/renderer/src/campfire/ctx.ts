@@ -34,7 +34,13 @@ export type Cf = {
   tokenOf: (characterId: string) => Token | null
   openTab: (tab: Tab) => void
   openBuilder: (sceneId?: string | null) => void
+  /** The character sheet as a window over the table */
+  openSheet: (characterId: string) => void
+  /** GMs: a monster's stat block (an NPC at the table, or one from the compendium) */
+  openStatBlock: (what: StatBlockFor) => void
 }
+
+export type StatBlockFor = { characterId: string } | { slug: string }
 
 export type Tab = 'turn' | 'rolls' | 'sheet' | 'handouts' | 'music' | 'add'
 

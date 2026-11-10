@@ -100,6 +100,8 @@ export type SheetClass = {
   /** 6, 8, 10 or 12 */
   hitDie: number
   caster: CasterType
+  /** "Hunter" (optional, shown as "Ranger 5 (Hunter)") */
+  subclass?: string
 }
 
 export type SheetAttack = {
@@ -129,6 +131,14 @@ export type SheetSpell = {
   /** 0 = cantrip */
   level: number
   prepared: boolean
+  /** Optional details shown on the sheet (filled from the SRD when picked from the rules) */
+  castingTime?: string
+  range?: string
+  duration?: string
+  concentration?: boolean
+  /** Dice rolled when it's cast ("2d4", "1d8+3"); damage or healing */
+  roll?: string
+  notes?: string
 }
 
 export type SpellSlots = { max: number; used: number }
@@ -212,6 +222,15 @@ export type Sheet5e = {
   /** The GM locked it: players can't change HP max or AC */
   locked: boolean
   monster: MonsterInfo | null
+  /** Optional (Nov 10, 2026; older sheets don't have them) */
+  /** Experience points */
+  xp?: number
+  /** Heroic inspiration */
+  inspiration?: boolean
+  /** What the AC comes from ("Leather", "hide armor") */
+  acNote?: string
+  /** Senses for player characters ("Darkvision 60 ft"); monsters keep theirs in `monster.senses` */
+  senses?: string
 }
 
 export type CharacterKind = 'pc' | 'npc'

@@ -14,6 +14,7 @@ import {
   type Sheet5e,
   type SheetAttack,
   type SheetClass,
+  type SheetSpell,
   type SkillId,
   type SkillLevel
 } from './types'
@@ -394,7 +395,14 @@ export function normalizeSheet(raw: unknown): Sheet5e {
       const name = str(o.name, 40).trim()
       if (!name) return null
       const caster = CASTERS.includes(o.caster as CasterType) ? (o.caster as CasterType) : 'none'
-      return { name, level: int(o.level, 1, 20, 1), hitDie: [6, 8, 10, 12].includes(o.hitDie as number) ? (o.hitDie as number) : 8, caster }
+      const subclass = str(o.subclass, 40).trim()
+      return {
+        name,
+        level: int(o.level, 1, 20, 1),
+        hitDie: [6, 8, 10, 12].includes(o.hitDie as number) ? (o.hitDie as number) : 8,
+        caster,
+        ...(subclass ? { subclass } : {})
+      }
     }),
     size: sizes.includes(s.size as string) ? (s.size as CreatureSize) : 'medium',
     abilities: Object.fromEntries(ABILITIES.map((a) => [a, int(abilities[a], 1, 30, 10)])) as Record<Ability, number>,
@@ -455,7 +463,17 @@ export function normalizeSheet(raw: unknown): Sheet5e {
         const name = str(o.name, 80).trim()
         if (!name) return null
         const slug = typeof o.slug === 'string' && /^[a-z0-9-]{1,80}$/.test(o.slug) ? o.slug : null
-        return { slug, name, level: int(o.level, 0, 9, 0), prepared: o.prepared === true }
+        const extra: Partial<SheetSpell> = {}
+        for (const k of ['castingTime', 'range', 'duration'] as const) {
+          const v = str(o[k], 60).trim()
+          if (v) extra[k] = v
+        }
+        if (o.concentration === true) extra.concentration = true
+        const rollText = diceText(o.roll, '')
+        if (rollText) extra.roll = rollText
+        const notes = str(o.notes, 300).trim()
+        if (notes) extra.notes = notes
+        return { slug, name, level: int(o.level, 0, 9, 0), prepared: o.prepared === true, ...extra }
       })
     },
     resources: list(s.resources, SHEET_LIMITS.resources, (v, i) => {
@@ -499,12 +517,46 @@ export function normalizeSheet(raw: unknown): Sheet5e {
           reactions: features(monster.reactions, 20, 'e'),
           conditionImmunities: list(monster.conditionImmunities, 15, (v) => (typeof v === 'string' ? str(v, 30) : null))
         }
-      : null
+      : null,
+    ...optionalExtras(s)
   }
+}
+
+/** The optional fields (Nov 10, 2026): only present when set, so older sheets stay as they were. */
+function optionalExtras(s: Record<string, unknown>): Partial<Sheet5e> {
+  const out: Partial<Sheet5e> = {}
+  if (typeof s.xp === 'number' && Number.isFinite(s.xp)) out.xp = int(s.xp, 0, 1_000_000, 0)
+  if (s.inspiration === true) out.inspiration = true
+  const acNote = str(s.acNote, 60).trim()
+  if (acNote) out.acNote = acNote
+  const senses = str(s.senses, 200).trim()
+  if (senses) out.senses = senses
+  return out
 }
 
 /** "Fighter 3 / Wizard 2" (or the monster's type and CR). */
 export function classLine(sheet: Sheet5e): string {
   if (sheet.monster) return `${sheet.monster.type || 'Creature'} · CR ${crLabel(sheet.monster.cr)}`
   return sheet.classes.map((c) => `${c.name} ${c.level}`).join(' / ')
+}
+
+// ───────────── Experience, hit dice formula ─────────────
+
+/** XP needed to reach each level (index 0 = level 1). */
+export const XP_FOR_LEVEL: readonly number[] = [
+  0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000,
+  265000, 305000, 355000
+]
+/** The XP for the next level (null at 20). */
+export const nextLevelXp = (level: number): number | null => (level >= 20 ? null : XP_FOR_LEVEL[Math.max(1, level)])
+
+/**
+ * A creature's hit points as dice ("7d10+21"): its hit dice plus its Constitution modifier for each
+ * (a monster's stat block formula). Null without hit dice.
+ */
+export function hitPointFormula(sheet: Sheet5e): string | null {
+  const dice = sheet.hitDice.filter((d) => d.max > 0)
+  if (!dice.length) return null
+  const count = dice.reduce((n, d) => n + d.max, 0)
+  return withBonus(dice.map((d) => `${d.max}d${d.die}`).join('+'), abilityMod(sheet.abilities.con) * count)
 }

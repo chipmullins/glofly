@@ -1153,3 +1153,41 @@ test('campfire: fair to-hit rolls, capped fog corners and fog work (security rev
   const open = { enabled: true, revealed: [{ id: 'r', kind: 'rect', points: [[0, 0], [9000, 9000]] }] }
   assert.equal(s.builtForPlayer({ floors: [], walls, objects: [], notes: [] }, open).walls.length, 50)
 })
+
+test('campfire: optional sheet fields (XP, inspiration, AC note, senses, subclass, spell details)', () => {
+  // Older sheets stay exactly as they were: none of the new fields appear unless set.
+  assert.equal('xp' in s.normalizeSheet({}), false)
+  assert.equal('inspiration' in s.normalizeSheet({ inspiration: false }), false)
+  const sheet = s.normalizeSheet({
+    xp: 6500.4,
+    inspiration: true,
+    acNote: '  Leather ',
+    senses: 'Darkvision 60 ft',
+    classes: [{ name: 'Ranger', level: 5, hitDie: 10, caster: 'half', subclass: 'Hunter' }, { name: 'Rogue', level: 1, subclass: '' }],
+    spellcasting: {
+      spells: [
+        { name: "Hunter's Mark", level: 1, castingTime: '1 bonus action', range: '90 feet', duration: 'Up to 1 hour', concentration: true, roll: '1d6', notes: '+1d6 to hits' },
+        { name: 'Bad', level: 1, roll: 'rm -rf', concentration: 'yes', range: 'x'.repeat(100) }
+      ]
+    }
+  })
+  assert.equal(sheet.xp, 6500)
+  assert.equal(sheet.inspiration, true)
+  assert.equal(sheet.acNote, 'Leather')
+  assert.equal(sheet.senses, 'Darkvision 60 ft')
+  assert.equal(sheet.classes[0].subclass, 'Hunter')
+  assert.equal('subclass' in sheet.classes[1], false)
+  assert.deepEqual(sheet.spellcasting.spells[0], {
+    slug: null, name: "Hunter's Mark", level: 1, prepared: false, castingTime: '1 bonus action', range: '90 feet', duration: 'Up to 1 hour', concentration: true, roll: '1d6', notes: '+1d6 to hits'
+  })
+  assert.deepEqual(Object.keys(sheet.spellcasting.spells[1]).sort(), ['level', 'name', 'prepared', 'range', 'slug'])
+  assert.equal(sheet.spellcasting.spells[1].range.length, 60)
+  assert.equal(s.normalizeSheet({ xp: 5e9 }).xp, 1_000_000)
+  assert.deepEqual(s.normalizeSheet(s.normalizeSheet(sheet)), sheet)
+  // XP thresholds and the hit point formula (an ogre: 7d10, Constitution 16 → 7d10+21).
+  assert.equal(s.nextLevelXp(5), 14000)
+  assert.equal(s.nextLevelXp(20), null)
+  const ogre = s.normalizeSheet({ abilities: { con: 16 }, hitDice: [{ die: 10, max: 7 }] })
+  assert.equal(s.hitPointFormula(ogre), '7d10+21')
+  assert.equal(s.hitPointFormula(s.blankSheet()), null)
+})
