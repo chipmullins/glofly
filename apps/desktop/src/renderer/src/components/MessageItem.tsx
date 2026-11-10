@@ -13,6 +13,8 @@ import { GameCard, GifView, LanternTag, LinkPreviewCard, PollCard } from './Chat
 import LiveAlertCard from '../connections/LiveAlertCard'
 import { liveAlertBody } from '../connections/liveAlertBits'
 import { lanternStyle } from '../lib/lantern'
+import { ChatRollCard } from '../campfire/RollCard'
+import { rollOf } from '../campfire/chatRoll'
 import type { FireflyEmoji } from '../../../preload/api-types'
 
 export type ShownMessage = {
@@ -381,8 +383,9 @@ export default function MessageItem({
   const [copied, setCopied] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const showToolbar = !item.pending && !m.deleted && !editing
-  /** A GIF, poll or game: the body is only the plain-text version for older apps. */
-  const special = !!(m.gif || m.poll || m.game)
+  /** A GIF, poll, game or (Campfire) /roll: the body is only the plain-text version for older apps. */
+  const chatRoll = rollOf(m)
+  const special = !!(m.gif || m.poll || m.game || chatRoll)
   // Holding ❤️ or 🔥 in the quick reactions sends fireflies.
   const [charging, setCharging] = useState<string | null>(null)
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -584,6 +587,7 @@ export default function MessageItem({
           )}
 
           {!m.deleted && !editing && m.gif && <GifView gif={m.gif} />}
+          {!m.deleted && chatRoll && <ChatRollCard roll={chatRoll} fallback={m.body} />}
           {!m.deleted && m.poll && (
             <PollCard
               message={m}

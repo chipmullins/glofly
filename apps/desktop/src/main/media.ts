@@ -11,6 +11,7 @@ import { isUserId } from './api'
 //   glofly-media://attachments/<conversationId>/<id>/video          a video, streamed (0.5.0)
 //   glofly-media://previews/<conversationId>/<messageId>            a link preview's picture (0.5.0)
 //   glofly-media://stickers/<stickerId>                             a sticker in your tray (0.5.0)
+//   glofly-media://campfire/<fileId>                                Campfire maps, portraits, music
 // and this fetches them with the token, here in the main process. Only these shapes are
 // allowed, and only WebP images (re-saved by the server) or voice audio (Opus in WebM/Ogg, AAC in MP4; checked
 // by its first bytes) are passed back.
@@ -42,8 +43,18 @@ const empty = (status: number): Response => new Response(null, { status })
 /** The server address for a glofly-media address, or null if it isn't one we allow. */
 function serverPathFor(
   url: URL
-): { path: string; maxBytes: number; audio?: boolean; video?: boolean } | null {
+): {
+  path: string
+  maxBytes: number
+  audio?: boolean
+  video?: boolean
+  campfire?: boolean
+} | null {
   const parts = url.pathname.split('/').slice(1)
+  // Campfire (Nov 2026): a table's map, token picture, portrait, handout picture or music track.
+  if (url.host === 'campfire' && parts.length === 1 && isUserId(parts[0])) {
+    return { path: `/campfire/files/${parts[0]}`, maxBytes: 26 * MB, campfire: true }
+  }
   if (url.host === 'avatars' && parts.length === 2 && parts.every(isUserId)) {
     return { path: `/avatars/${parts[0]}/${parts[1]}`, maxBytes: 2 * MB }
   }
@@ -159,6 +170,80 @@ async function videoResponse(
   return new Response(response.body, { status: response.status, headers })
 }
 
+const CAMPFIRE_AUDIO = new Set(['audio/mpeg', 'audio/ogg', 'audio/mp4', 'audio/wav'])
+
+/**
+ * Campfire files: pictures (WebP, re-saved by the server) are kept like photos; music streams
+ * through piece by piece (Range requests, so it can start anywhere), never kept in memory.
+ */
+async function campfireResponse(
+  req: Request,
+  path: string,
+  token: string,
+  maxBytes: number
+): Promise<Response> {
+  if (cacheOwner !== token) {
+    cache.clear()
+    cacheBytes = 0
+    cacheOwner = token
+  }
+  const cached = cache.get(path)
+  if (cached) {
+    return new Response(cached as BodyInit, {
+      headers: {
+        'Content-Type': 'image/webp',
+        'X-Content-Type-Options': 'nosniff',
+        'Access-Control-Allow-Origin': '*'
+      }
+    })
+  }
+  const range = req.headers.get('range')
+  let response: Response
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(range && /^bytes=\d*-\d*$/.test(range) ? { Range: range } : {})
+      },
+      signal: AbortSignal.any([req.signal, AbortSignal.timeout(10 * 60 * 1000)])
+    })
+  } catch {
+    return empty(502)
+  }
+  const type = response.headers.get('content-type') ?? ''
+  const length = Number(response.headers.get('content-length') ?? 0)
+  if (!response.ok || !response.body || length > maxBytes) {
+    void response.body?.cancel().catch(() => undefined)
+    return empty(response.ok ? 502 : response.status)
+  }
+  if (type === 'image/webp' && response.status === 200) {
+    const data = new Uint8Array(await response.arrayBuffer())
+    if (data.byteLength > maxBytes) return empty(502)
+    remember(path, data)
+    return new Response(data as BodyInit, {
+      headers: {
+        'Content-Type': 'image/webp',
+        'X-Content-Type-Options': 'nosniff',
+        'Access-Control-Allow-Origin': '*'
+      }
+    })
+  }
+  if (!CAMPFIRE_AUDIO.has(type)) {
+    void response.body.cancel().catch(() => undefined)
+    return empty(502)
+  }
+  const headers: Record<string, string> = {
+    'Content-Type': type,
+    'X-Content-Type-Options': 'nosniff',
+    'Accept-Ranges': 'bytes'
+  }
+  for (const h of ['content-length', 'content-range']) {
+    const v = response.headers.get(h)
+    if (v) headers[h] = v
+  }
+  return new Response(response.body, { status: response.status, headers })
+}
+
 export async function handleMediaRequest(req: Request): Promise<Response> {
   if (req.method !== 'GET') return empty(404)
   let url: URL
@@ -173,6 +258,7 @@ export async function handleMediaRequest(req: Request): Promise<Response> {
   const token = getSessionToken()
   if (!token) return empty(401)
   if (target.video) return videoResponse(req, target.path, token, target.maxBytes)
+  if (target.campfire) return campfireResponse(req, target.path, token, target.maxBytes)
   if (cacheOwner !== token) {
     cache.clear()
     cacheBytes = 0

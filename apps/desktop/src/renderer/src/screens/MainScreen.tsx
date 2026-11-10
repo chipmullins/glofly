@@ -99,6 +99,7 @@ import { HangToast, SocialActions, SocialStrip, YearInGlowDialog } from '../comp
 import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcast'
 import { stopLive, useMyBroadcast } from '../lib/broadcast'
 import ConstellationsScreen from '../constellations/ConstellationsScreen'
+import CampfireLayer, { LitBanner } from '../campfire/CampfireLayer'
 import InvitePopup from '../constellations/InvitePopup'
 import EventToasts from '../constellations/EventToasts'
 import { InviteJoinDialog } from '../constellations/InviteJoinDialog'
@@ -2368,6 +2369,10 @@ export default function MainScreen({
         onAppSettings={() => setSettingsOpen('general')}
         onSessionExpired={onSessionExpired}
       />
+      {/* Campfire (Nov 2026): the tabletop's own layer (above the night side), and its
+          "Campfire is lit · Join" banner when a game master lights it in a call I'm in. */}
+      <CampfireLayer me={user} />
+      <LitBanner />
 
       {!restricted && joinCode && (
         <InviteJoinDialog code={joinCode} onClose={() => setJoinCode(null)} onProblem={setToast} />

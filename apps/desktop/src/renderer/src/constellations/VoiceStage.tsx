@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { openCampfire } from '../campfire/store'
+import { FlameIcon } from '../campfire/icons'
 import { enterFullscreen, exitFullscreen, fullscreenElement } from '../lib/fullscreen'
 import { Track, type Participant, type VideoTrack } from 'livekit-client'
 import type { PublicUser, SignedInUser, VoiceNebulaState } from '../../../preload/api-types'
@@ -127,7 +129,8 @@ export default function VoiceStage({
   joinedHere,
   timedOut,
   onJoin,
-  onOpenChat
+  onOpenChat,
+  campfireHome
 }: {
   me: SignedInUser
   nebulaName: string
@@ -140,6 +143,8 @@ export default function VoiceStage({
   timedOut: boolean
   onJoin: () => void
   onOpenChat: () => void
+  /** Campfire (Nov 2026): the voice nebula's conversation (its campaigns live there) */
+  campfireHome?: string
 }): React.JSX.Element {
   const calls = useCalls()
   const { room, current } = calls
@@ -195,6 +200,23 @@ export default function VoiceStage({
             Stop watching
           </button>
         </>
+      )}
+      {campfireHome && (
+        <button
+          type="button"
+          className="cx-voice-head-button"
+          title="Campfire: a tabletop for this voice nebula"
+          onClick={() =>
+            openCampfire({
+              home: { kind: 'nebula', id: campfireHome },
+              callId: joinedHere ? (current?.call?.id ?? null) : null,
+              placeName: `${constellationName} · ${nebulaName}`
+            })
+          }
+        >
+          <FlameIcon size={16} />
+          Campfire
+        </button>
       )}
       <button type="button" className="cx-link-button" onClick={onOpenChat}>
         Open chat

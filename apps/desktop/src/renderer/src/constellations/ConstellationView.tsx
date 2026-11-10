@@ -1991,6 +1991,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         timedOut={!!c.me.timedOutUntil}
         onJoin={() => joinVoice(nebula)}
         onOpenChat={() => setVoiceChatOpen(true)}
+        campfireHome={nebula.conversationId}
       />
     )
   } else if (nebula.kind === 'forum' && chatProps) {

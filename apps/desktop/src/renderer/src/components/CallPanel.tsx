@@ -68,6 +68,8 @@ import { isBackCamera } from '../lib/cameraFacing'
 import { screenSoundSupport } from '../lib/screenSound'
 import { cameraFit, type VideoFit } from '../lib/videoFit'
 import './CallPanel.css'
+import { openCampfire } from '../campfire/store'
+import { FlameIcon as CampfireIcon } from '../campfire/icons'
 
 // The call, shown at the top of its chat. Dark in every theme. 0.2.2 layouts (the "Glofly call
 // layouts" mockups): two people in full frame (their camera fills the call, yours small and
@@ -1916,6 +1918,25 @@ export default function CallPanel({ me }: { me: SignedInUser }): React.JSX.Eleme
             }}
           >
             <WatchIcon size={22} />
+          </button>
+        )}
+        {/* Campfire (Nov 2026): the tabletop for a group's call (a group chat's campaigns). */}
+        {group && call && (
+          <button
+            type="button"
+            className="call-button"
+            aria-label="Campfire: play a tabletop game together"
+            title="Campfire"
+            disabled={!inCall}
+            onClick={() =>
+              openCampfire({
+                home: { kind: 'chat', id: call.conversationId },
+                callId: call.id,
+                placeName: current?.chat.title
+              })
+            }
+          >
+            <CampfireIcon size={22} />
           </button>
         )}
         {/* Browsers without screen sharing (iPad) don't get the button. In a browser, its own
