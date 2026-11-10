@@ -44,7 +44,14 @@ import * as auth from './auth'
 import { API_URL, isApple, isId, isTouch } from './config'
 import { emit, onEvent } from './events'
 import { checkPausedNow, getPaused, getUpdateRequired } from './appStatus'
-import { cleanAnnouncement, connectRealtime, disconnectRealtime, sendTyping } from './realtime'
+import {
+  cleanAnnouncement,
+  connectRealtime,
+  disconnectRealtime,
+  sendCampfireMove,
+  sendTyping
+} from './realtime'
+import { campfireUploadProblem, isCampfirePath } from '../../../desktop/src/main/campfireEvents'
 import { getAppSettings, initialAppearance, setAppSettings, startSettings } from './settings'
 import {
   askPermission,
@@ -754,6 +761,25 @@ export function createBridge(): GloflyApi {
     },
     reportError: (report) => reportError(report),
     setErrorReports: () => undefined, // (the page's own setting decides; nothing else runs here)
+    // Campfire (Nov 2026): the same checks as the desktop app's gateway (main/campfireEvents.ts).
+    campfire: {
+      request: <T>(method: ConstellationMethod, path: string, body?: unknown) =>
+        isCampfirePath(method, path, body)
+          ? request<T>(method, path, body ?? undefined)
+          : Promise.resolve(invalid as ApiResult<T>),
+      upload: (campaignId, kind, data, type) => {
+        const problem = campfireUploadProblem(campaignId, kind, data?.byteLength ?? 0, type)
+        if (problem) return Promise.resolve({ ok: false, error: 'invalid', message: problem })
+        return request('POST', `/campfire/campaigns/${campaignId}/files?kind=${kind}`, undefined, {
+          data,
+          type: type.toLowerCase()
+        })
+      },
+      move: (tokenId, x, y) => {
+        if (isId(tokenId) && Number.isFinite(x) && Number.isFinite(y))
+          sendCampfireMove(tokenId, Math.round(x), Math.round(y))
+      }
+    },
     constellations: {
       request: <T>(method: ConstellationMethod, path: string, body?: unknown) =>
         isConstellationPath(method, path, body)

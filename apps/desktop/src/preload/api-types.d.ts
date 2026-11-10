@@ -391,6 +391,8 @@ export type ShortcutAction =
 
 export type GloflyEvent =
   | ServerEvent
+  /** Campfire (Nov 2026): a tabletop event (name + the server's payload, filtered for me) */
+  | import('../main/campfireEvents').CampfireWireEvent
   /** Oct 30, 2026 (desktop): Glofly is quitting: play the log-off sound, then call app.goodbyeDone */
   | { type: 'app:goodbye' }
   /** 0.7.3: pins changed in a chat; my own devices: marked unread / send-later list changed */
@@ -780,6 +782,21 @@ export type GloflyApi = {
    */
   apps: {
     request: <T = unknown>(method: ConstellationMethod, path: string, body?: unknown) => Promise<ApiResult<T>>
+  }
+  /** Campfire (Nov 2026): /campfire/… routes, uploads (raw file + kind) and live token drags */
+  campfire: {
+    request: <T = unknown>(
+      method: ConstellationMethod,
+      path: string,
+      body?: unknown
+    ) => Promise<ApiResult<T>>
+    upload: (
+      campaignId: string,
+      kind: import('@glofly/shared/campfire/types').CampfireFileKind,
+      data: ArrayBuffer,
+      type: string
+    ) => Promise<ApiResult<import('@glofly/shared/campfire/types').CampfireFile>>
+    move: (tokenId: string, x: number, y: number) => void
   }
   constellations: {
     request: <T = unknown>(

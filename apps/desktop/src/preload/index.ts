@@ -363,6 +363,15 @@ const glofly: GloflyApi = {
     request: (method: ConstellationMethod, path: string, body?: unknown) =>
       ipcRenderer.invoke('apps:request', method, path, body ?? null)
   },
+  // Campfire (Nov 2026): the tabletop's routes, uploads and token drags.
+  campfire: {
+    request: (method: ConstellationMethod, path: string, body?: unknown) =>
+      ipcRenderer.invoke('campfire:request', method, path, body ?? null),
+    upload: (campaignId: string, kind: string, data: ArrayBuffer, type: string) =>
+      ipcRenderer.invoke('campfire:upload', campaignId, kind, data, type),
+    move: (tokenId: string, x: number, y: number) =>
+      ipcRenderer.send('campfire:move', tokenId, x, y)
+  },
   constellations: {
     request: (method: ConstellationMethod, path: string, body?: unknown) =>
       ipcRenderer.invoke('constellations:request', method, path, body ?? null),

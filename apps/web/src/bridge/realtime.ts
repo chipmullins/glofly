@@ -11,6 +11,7 @@ import { upgradeEvents } from '@glofly/shared/events'
 import { cleanWatchReaction, cleanWatchUpdate } from '@glofly/shared/watch'
 import { cleanFireflies } from '@glofly/shared/types'
 import { CONSTELLATION_EVENT_NAMES, cleanConstellationEvent } from '@glofly/shared/constellations'
+import { CAMPFIRE_EVENT_NAMES, cleanCampfireEvent } from '../../../desktop/src/main/campfireEvents'
 import { API_URL, VERSION } from './config'
 import { notePaused, noteUpdateRequired } from './appStatus'
 import { emit } from './events'
@@ -53,7 +54,7 @@ export function connectRealtime(onUnauthorized: () => void): void {
     auth: {
       version: VERSION,
       platform: 'web',
-      features: ['constellations', 'callMove', 'watchSites', 'watchKick']
+      features: ['constellations', 'callMove', 'watchSites', 'watchKick', 'campfire']
     },
     transports: ['websocket'],
     withCredentials: true,
@@ -95,6 +96,13 @@ export function connectRealtime(onUnauthorized: () => void): void {
   for (const name of CONSTELLATION_EVENT_NAMES) {
     socket.on(name, (p) => {
       const event = cleanConstellationEvent(name, p)
+      if (event) forward(event)
+    })
+  }
+  // Campfire (Nov 2026): the tabletop's events (already filtered for me by the server).
+  for (const name of CAMPFIRE_EVENT_NAMES) {
+    socket.on(name, (p) => {
+      const event = cleanCampfireEvent(name, p)
       if (event) forward(event)
     })
   }
@@ -311,6 +319,11 @@ export function setIdle(value: boolean): void {
   if (value === idle) return
   idle = value
   socket?.emit('idle', value)
+}
+
+/** Campfire: a token being dragged (the server checks and throttles it; PATCH on drop). */
+export function sendCampfireMove(tokenId: string, x: number, y: number): void {
+  if (socket?.connected) socket.emit('campfire:move', { tokenId, x, y })
 }
 
 export function sendTyping(conversationId: string): void {

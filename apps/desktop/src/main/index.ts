@@ -129,7 +129,14 @@ import {
   startHidden
 } from './app-settings'
 import { goodbyeFirst, watchShutdown } from './goodbye'
-import { connectRealtime, disconnectRealtime, sendTyping, shareActivity } from './realtime'
+import {
+  connectRealtime,
+  disconnectRealtime,
+  sendCampfireMove,
+  sendTyping,
+  shareActivity
+} from './realtime'
+import { campfireUploadProblem, isCampfirePath } from './campfireEvents'
 import {
   isOverlayWindow,
   overlayClear,
@@ -789,6 +796,32 @@ function registerIpcHandlers(): void {
       return apiRequest(method, path as string, body ?? undefined)
     }
   )
+  // Campfire (Nov 2026): one gateway for the tabletop's routes (/campfire/…), its uploads (checked
+  // by kind, type and size here; the server checks the bytes again) and token drags (live).
+  ipcMain.handle('campfire:request', (event, method: unknown, path: unknown, body: unknown) => {
+    if (!fromApp(event) || !isCampfirePath(method, path, body)) return invalid
+    return apiRequest(method as 'GET', path as string, body ?? undefined)
+  })
+  ipcMain.handle(
+    'campfire:upload',
+    (event, campaignId: unknown, kind: unknown, data: unknown, type: unknown) => {
+      if (!fromApp(event) || !(data instanceof ArrayBuffer)) return invalid
+      const problem = campfireUploadProblem(campaignId, kind, data.byteLength, type)
+      if (problem) return { ok: false, error: 'invalid', message: problem }
+      return apiRequest(
+        'POST',
+        `/campfire/campaigns/${campaignId as string}/files?kind=${kind as string}`,
+        undefined,
+        { data: new Uint8Array(data), type: (type as string).toLowerCase() }
+      )
+    }
+  )
+  ipcMain.on('campfire:move', (event, tokenId: unknown, x: unknown, y: unknown) => {
+    if (!isAppUrl(event.senderFrame?.url ?? '') || !isUserId(tokenId)) return
+    if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y))
+      return
+    sendCampfireMove(tokenId, Math.round(x), Math.round(y))
+  })
   // Communities round: Settings → Connected apps and Developer (Sign in with Glofly).
   ipcMain.handle('apps:request', (event, method: unknown, path: unknown, body: unknown) => {
     if (!fromApp(event) || !isAppsRequest(method, path, body)) return invalid
