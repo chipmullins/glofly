@@ -364,23 +364,30 @@ test("the hit flow: hit/miss without the AC, crits, pending damage, temp HP, con
   const atk = (body: Record<string, unknown>, token = p1.token) =>
     call(`/campfire/campaigns/${campaignId}/attack`, { method: "POST", token, body: { attackerTokenId: tok.thorin, targetTokenId: tok.goblin, ...body } });
   const sword = (toHit: string, damage: string) => ({ attack: { name: "Longsword", toHit, damage, damageType: "slashing", kind: "melee" } });
+  // A player's attack: whatever happens, no pending damage and no AC in the answer. (Players'
+  // d20s can't be clamped, so the exact outcomes below are rolled by the GM with Thorin.)
+  const mine = await atk(sword("1d20+100", "7"));
+  assert.equal(mine.status, 200, JSON.stringify(mine.json));
+  assert.equal(mine.json.pending, null, "players don't see pending damage");
+  assert.equal(JSON.stringify(mine.json).includes('"ac"'), false, "players never learn the AC");
+  for (const p of (await call(`/campfire/campaigns/${campaignId}`, { token: gm.token })).json.pending) {
+    await call(`/campfire/pending/${p.id}/skip`, { method: "POST", token: gm.token });
+  }
   // Never a natural 1 or 20; +100 always hits, −100 always misses (goblin AC 15).
-  const miss = await atk(sword("1d20min2max19-100", "7"));
+  const miss = await atk(sword("1d20min2max19-100", "7"), gm.token);
   assert.equal(miss.status, 200, JSON.stringify(miss.json));
   assert.equal(miss.json.hit, false);
   assert.equal(miss.json.damage, null);
-  const hit = await atk(sword("1d20min2max19+100", "7"));
+  const hit = await atk(sword("1d20min2max19+100", "7"), gm.token);
   assert.equal(hit.json.hit, true);
   assert.equal(hit.json.crit, false);
-  assert.equal(hit.json.pending, null, "players don't see pending damage");
-  assert.equal(JSON.stringify(hit.json).includes('"ac"'), false, "players never learn the AC");
   let state = await call(`/campfire/campaigns/${campaignId}`, { token: gm.token });
   assert.equal(state.json.pending.length, 1);
   assert.equal(state.json.pending[0].amount, 7);
   assert.deepEqual((await call(`/campfire/campaigns/${campaignId}`, { token: p1.token })).json.pending, []);
   assert.equal((await call(`/campfire/pending/${state.json.pending[0].id}/apply`, { method: "POST", token: p1.token })).status, 403);
   // A natural 20: the damage dice are rolled twice.
-  const crit = await atk(sword("1d20min20", "2d2min2+1"));
+  const crit = await atk(sword("1d20min20", "2d2min2+1"), gm.token);
   assert.equal(crit.json.crit, true);
   assert.equal(crit.json.damage.expression, "4d2min2+1");
   assert.equal(crit.json.damage.total, 9);
@@ -408,7 +415,7 @@ test("the hit flow: hit/miss without the AC, crits, pending damage, temp HP, con
   assert.deepEqual([goblinNow.token.bars[0].value, goblinNow.token.bars[0].state], [null, "bloodied"]);
   // Without approval, damage lands at once; 0 HP = defeated.
   await call(`/campfire/campaigns/${campaignId}`, { method: "PATCH", token: gm.token, body: { settings: { gmApprovesDamage: false } } });
-  const kill = await atk(sword("1d20min2max19+100", "10"));
+  const kill = await atk(sword("1d20min2max19+100", "10"), gm.token);
   assert.equal(kill.json.applied.defeated, true);
   const gob = (await call(`/campfire/characters/${goblinCharId}`, { token: gm.token })).json;
   assert.equal(gob.sheet.hp.current, 0);
@@ -448,6 +455,7 @@ test("the hit flow: hit/miss without the AC, crits, pending damage, temp HP, con
   assert.equal(fail.status, 200, JSON.stringify(fail.json));
   assert.deepEqual([fail.json.targets[0].saved, fail.json.targets[0].amount], [false, 10]);
   assert.equal(fail.json.targets[0].save.result.breakdown, "", "a monster's save bonus stays hidden");
+  assert.equal(fail.json.targets[0].save.expression, "1d20", "not even in the expression");
   const made = await call(`/campfire/campaigns/${campaignId}/save-spell`, {
     method: "POST",
     token: gm.token,
@@ -673,6 +681,91 @@ test("Pause: Campfire answers 503 like everything else", { skip }, async () => {
     await wait(5500);
   }
   assert.equal((await call(`/campfire/campaigns/${campaignId}`, { token: p1.token })).status, 200);
+});
+
+test("security review (Nov 10): no monster bonuses, hidden names or pictures leak; fair to-hit; bounded fog work", { skip }, async () => {
+  const p3 = await account("cfpthree");
+  await befriend(gm, p3);
+  const grp = await call("/conversations/group", { method: "POST", token: gm.token, body: { userIds: [p3.id, p2.id], name: "Review" } });
+  const gid = grp.json.conversation.id;
+  try {
+    const c = (await call("/campfire/campaigns", { method: "POST", token: gm.token, body: { home: { kind: "chat", id: gid }, name: "Review" } })).json.id;
+    const sid = (await call(`/campfire/campaigns/${c}/scenes`, { method: "POST", token: gm.token, body: { name: "S", widthPx: 2100, heightPx: 2100, fog: { enabled: true, revealed: [{ id: "r1", kind: "rect", points: [[0, 0], [700, 700]] }] } } })).json.id;
+    const pc = (await call(`/campfire/campaigns/${c}/characters`, { method: "POST", token: p3.token, body: { kind: "pc", name: "Hero" } })).json;
+    const mk = async (body: Record<string, unknown>) => (await call(`/campfire/scenes/${sid}/tokens`, { method: "POST", token: gm.token, body })).json;
+    const hero = await mk({ name: "hero", x: 70, y: 70, characterId: pc.id, controlledBy: [p3.id] });
+    const boss = await mk({ name: "Secret Boss", x: 140, y: 140, srdMonster: "goblin", showName: false });
+    const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: "#00ff00" } }).png().toBuffer();
+    const pic = (await call(`/campfire/campaigns/${c}/files?kind=token`, { method: "POST", token: gm.token, raw: png, type: "image/png" })).json.id;
+    const dragon = await mk({ name: "Dragon", x: 1500, y: 1500, imageFileId: pic, layer: "gm", controlledBy: [p3.id] });
+    const a = listen(p3);
+    await a.ready;
+    await call(`/campfire/campaigns/${c}/presence`, { method: "POST", token: p3.token });
+
+    // A save spell at a monster: the player gets the total only, never its bonus (not even in their own history).
+    const ss = await call(`/campfire/campaigns/${c}/save-spell`, { method: "POST", token: p3.token, body: { casterTokenId: hero.id, targetTokenIds: [boss.id], dc: 13, ability: "dex", damage: "1d6", half: true } });
+    assert.equal(ss.status, 200, JSON.stringify(ss.json));
+    const save = ss.json.targets[0].save;
+    assert.equal(save.expression, "1d20");
+    assert.equal(save.result.expression, "1d20");
+    assert.equal(save.characterId, null);
+    assert.ok(!JSON.stringify(ss.json).includes("Secret Boss") && !JSON.stringify(ss.json).includes("+2"));
+    const hist = await call(`/campfire/campaigns/${c}/rolls`, { token: p3.token });
+    assert.ok(!hist.json.rolls.some((r: any) => /save/.test(r.label ?? "")), "the monster's save isn't in the caster's history");
+    assert.ok((await call(`/campfire/campaigns/${c}/rolls`, { token: gm.token })).json.rolls.some((r: any) => r.expression === "1d20+2"), "the GM still sees it");
+
+    // Hidden names stay hidden in the turn order and initiative rolls.
+    await call(`/campfire/campaigns/${c}/combat`, { method: "POST", token: gm.token, body: { op: "start", tokenIds: [hero.id, boss.id] } });
+    await call(`/campfire/campaigns/${c}/combat`, { method: "POST", token: gm.token, body: { op: "rollAll" } });
+    const st = await call(`/campfire/campaigns/${c}`, { token: p3.token });
+    assert.equal(st.json.combat.entries.find((e: any) => e.tokenId === boss.id).name, "");
+    await wait(300);
+    assert.ok(!JSON.stringify(st.json).includes("Secret Boss") && !JSON.stringify(a.events).includes("Secret Boss"), "no hidden name anywhere");
+
+    // A player can't point their portrait at a GM's picture (a hidden token's) to download it.
+    assert.equal((await call(`/campfire/characters/${pc.id}`, { method: "PATCH", token: p3.token, body: { portraitFileId: pic } })).status, 400);
+    assert.equal((await call(`/campfire/campaigns/${c}/characters`, { method: "POST", token: p3.token, body: { kind: "pc", name: "Two", portraitFileId: pic } })).status, 400);
+    assert.equal((await call(`/campfire/files/${pic}`, { token: p3.token })).status, 404);
+
+    // Players' to-hit d20s are plain: no clamps (always a 20, or a chosen number to find the AC).
+    const atk = (toHit: string) =>
+      call(`/campfire/campaigns/${c}/attack`, { method: "POST", token: p3.token, body: { attackerTokenId: hero.id, targetTokenId: boss.id, attack: { name: "x", toHit, damage: "1", damageType: "slashing", kind: "melee" } } });
+    for (const bad of ["1d20min20", "1d20min14max14-2", "1d20r<20", "1d20!", "100d20kh1", "1d20>=1"]) assert.equal((await atk(bad)).status, 400, bad);
+    assert.equal((await atk("1d20ro1+3")).status, 200);
+
+    // The attacker's own answer is filtered like the live event: no concentration DC or HP state of a monster.
+    await call(`/campfire/campaigns/${c}`, { method: "PATCH", token: gm.token, body: { settings: { gmApprovesDamage: false, showMonsterHp: "none" } } });
+    const gs = (await call(`/campfire/characters/${boss.characterId}`, { token: gm.token })).json.sheet;
+    await call(`/campfire/characters/${boss.characterId}`, { method: "PATCH", token: gm.token, body: { sheet: { ...gs, concentration: "Hex", hp: { ...gs.hp, current: 7, max: 7 } } } });
+    const hit = await atk("1d20+40");
+    assert.equal(hit.json.hit, true);
+    assert.equal(hit.json.applied.concentrationDc, undefined);
+    assert.equal(hit.json.applied.amountHidden, true);
+    await wait(300);
+    const live = a.of("campfire:hit").at(-1);
+    assert.equal(live.concentrationDc, undefined);
+    assert.equal(live.bloodied, false);
+
+    // Dragging over the live connection: never a GM-layer token, even one listed as theirs.
+    a.socket.emit("campfire:move", { tokenId: dragon.id, x: 7, y: 7 });
+    await wait(500);
+    assert.equal((await pool.query("select x from campfire_tokens where id = $1", [dragon.id])).rows[0].x, 1500);
+    a.socket.close();
+
+    // A huge built map under a huge fog can't keep the server busy (the work is capped).
+    const walls = Array.from({ length: 2000 }, (_, i) => ({ points: [[0, 3000 + i], [99999, 3000 + i]] }));
+    const shapes = Array.from({ length: 500 }, (_, i) => ({ kind: "poly", points: Array.from({ length: 24 }, (_, k) => [-90000 + i + Math.round(Math.cos(k) * 10), -90000 + Math.round(Math.sin(k) * 10)]) }));
+    const t0 = Date.now();
+    const big = await call(`/campfire/scenes/${sid}`, { method: "PATCH", token: gm.token, body: { built: { walls }, fog: { enabled: true, revealed: shapes } } });
+    assert.equal(big.status, 200, JSON.stringify(big.json));
+    assert.ok(big.json.fog.revealed.reduce((n: number, s: any) => n + s.points.length, 0) <= 5000, "fog corners are capped");
+    assert.equal((await call(`/campfire/campaigns/${c}`, { token: p3.token })).status, 200);
+    assert.ok(Date.now() - t0 < 10_000, `took ${Date.now() - t0} ms`);
+  } finally {
+    await pool.query("delete from campfire_campaigns where conversation_id = $1", [gid]);
+    await pool.query("delete from conversations where id = $1", [gid]);
+    await pool.query("delete from users where id = $1", [p3.id]);
+  }
 });
 
 test("rolls are rate limited (60 a minute per person)", { skip }, async () => {

@@ -1136,3 +1136,20 @@ test('Campfire fog of war and maps', () => {
   assert.deepEqual(b2.notes, [])
   assert.equal(s.SRD_CREDIT, 'Includes material from the System Reference Document 5.1 by Wizards of the Coast LLC, licensed under CC BY 4.0.')
 })
+
+test('campfire: fair to-hit rolls, capped fog corners and fog work (security review)', () => {
+  const unfair = (t) => s.unfairToHit(s.parseDice(t).expr)
+  for (const ok of ['1d20+5', '2d20kh1+3', '2d20kl1', '3d20kh1', '1d20ro1+2', 'd20+1d4+3', '1d8+4']) assert.equal(unfair(ok), null, ok)
+  for (const bad of ['1d20min20', '1d20min14max14', '1d20r<20', '1d20!', '4d20kh1', '1d20>=10', '(1d20max2)+5', '1d20ro<20']) assert.ok(unfair(bad), bad)
+  // Fog: the newest shapes are kept while their corners fit, and dropping old ones only adds fog.
+  const poly = (x) => ({ kind: 'poly', points: Array.from({ length: 100 }, (_, k) => [x + Math.cos(k), Math.sin(k)]) })
+  const fog = s.normalizeFog({ enabled: true, revealed: Array.from({ length: 80 }, (_, i) => poly(i * 10)) })
+  assert.ok(s.fogPointCount(fog) <= s.CAMPFIRE_LIMITS.fogPoints)
+  assert.equal(fog.revealed.at(-1).points[0][0], 790 + 1)
+  // Running out of work: the rest of the map counts as fogged (players get less, never more).
+  const walls = Array.from({ length: 50 }, (_, i) => ({ id: `w${i}`, points: [[0, 5000 + i], [9000, 5000 + i]] }))
+  const far = { enabled: true, revealed: [{ id: 'r', kind: 'rect', points: [[-10, -10], [-5, -5]] }] }
+  assert.equal(s.builtForPlayer({ floors: [], walls, objects: [], notes: [] }, far, 35, 1000).walls.length, 0)
+  const open = { enabled: true, revealed: [{ id: 'r', kind: 'rect', points: [[0, 0], [9000, 9000]] }] }
+  assert.equal(s.builtForPlayer({ floors: [], walls, objects: [], notes: [] }, open).walls.length, 50)
+})

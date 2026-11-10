@@ -542,3 +542,34 @@ export function inlineRolls(text: string): { start: number; end: number; express
 export function critDice(expression: string): string {
   return expression.replace(/(^|[^0-9a-z])(\d*)d(\d+|%)/gi, (_m, pre: string, n: string, s: string) => `${pre}${(n ? Number(n) : 1) * 2}d${s}`)
 }
+
+/**
+ * Is this a fair attack roll? Its d20s may be rolled with advantage (2d20kh1, up to 3d20) or
+ * rerolled once (ro1, like a halfling's luck), but never clamped (min/max), exploded, counted as
+ * successes or rerolled until they show something: those would let a player always roll a natural
+ * 20, or roll a chosen number to work out a target's AC. Null when it's fine, else why not.
+ */
+export function unfairToHit(expr: DiceExpr): string | null {
+  const walk = (n: DiceNode): string | null => {
+    switch (n.t) {
+      case 'num':
+        return null
+      case 'dice': {
+        if (n.sides !== 20) return null
+        const m = n.mods
+        if (n.count > 3) return 'An attack can roll up to 3d20.'
+        // ro1 / ro<2 / ro<=2 only: rerolling anything higher once is better than advantage.
+        const lowOnce = !m.reroll || (m.reroll.once && (m.reroll.op === '=' || m.reroll.op === '<' || m.reroll.op === '<=') && m.reroll.n <= 2)
+        if (m.min !== undefined || m.max !== undefined || m.explode || m.success || !lowOnce)
+          return 'Attack rolls can use advantage (kh1/kl1) or ro1, nothing else on the d20.'
+        return null
+      }
+      case 'neg':
+      case 'group':
+        return walk(n.a)
+      case 'bin':
+        return walk(n.a) ?? walk(n.b)
+    }
+  }
+  return walk(expr.root)
+}

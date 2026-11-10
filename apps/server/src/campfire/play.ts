@@ -12,6 +12,7 @@ import {
   parseDice,
   rollDice,
   saveBonus,
+  unfairToHit,
   withBonus,
   type AttackResult,
   type CombatEntry,
@@ -29,7 +30,7 @@ import { campfireCampaigns, campfireCharacters, campfirePending } from "../db/sc
 import { inHome, settingsOf, type Table } from "./perms";
 import { bad, firstIssue, idParam, limiter, notFound, recordRoll, rollSlot, serverRng, tableOr, TOO_MANY_ROLLS, uuidList } from "./http";
 import { charactersInfo, emitCharacter, emitCombat, emitPending, rollsFor, tokensWithScenes, visibleTokenIdsFor } from "./state";
-import { applyHeal, applyHit, emitHit, syncTokensFromSheet } from "./sync";
+import { applyHeal, applyHit, emitHit, hitForTable, syncTokensFromSheet } from "./sync";
 import { tokenTable } from "./routes";
 import { combatOut, controls, pendingOut, rollOut, tokenVisible, type CharacterRow, type TokenRow } from "./view";
 
@@ -184,6 +185,13 @@ playRouter.post("/campaigns/:id/attack", actLimiter, async (req, res) => {
   const toHit = serverRoll(withAdvantage(exprs.toHit, d.advantage), `${name}: to hit`);
   if (!toHit.ok) return bad(res, `To hit: ${toHit.error}`);
   if (toHit.result.natural === null) return bad(res, "An attack roll needs a d20, like 1d20+5.");
+  // Players' d20s are rolled plainly (no clamps or rerolls until a 20): always critting, or rolling
+  // a chosen number to find a monster's AC, isn't possible.
+  if (!t.gm) {
+    const parsedToHit = parseDice(withAdvantage(exprs.toHit, d.advantage));
+    const unfair = parsedToHit.ok ? unfairToHit(parsedToHit.expr) : null;
+    if (unfair) return bad(res, `To hit: ${unfair}`);
+  }
   const damageCheck = parseDice(exprs.damage);
   if (!damageCheck.ok) return bad(res, `Damage: ${damageCheck.error}`);
   const visibility: RollVisibility = t.gm ? (d.visibility ?? "all") : visibilityFor(t, "all");
@@ -203,7 +211,7 @@ playRouter.post("/campaigns/:id/attack", actLimiter, async (req, res) => {
   } else {
     await emitHit(t.campaign, { attackerTokenId: tokens.attacker.id, targetTokenId: tokens.targets[0].id, amount: 0, kind, crit: false, defeated: false, bloodied: false, miss: true });
   }
-  const out: AttackResult = { hit, crit, toHit: toHitRoll, damage: damageRoll, ...outcome };
+  const out: AttackResult = { hit, crit, toHit: toHitRoll, damage: damageRoll, pending: outcome.pending, applied: await hitForTable(t, outcome.applied) };
   res.json(out);
 });
 
@@ -240,18 +248,32 @@ playRouter.post("/campaigns/:id/save-spell", actLimiter, async (req, res) => {
     const sheet = await sheetOf(target);
     const save = serverRoll(withBonus("1d20", sheet ? saveBonus(sheet, d.ability) : 0), `${target.name}: ${d.ability.toUpperCase()} save`);
     if (!save.ok) continue;
-    // A monster's save shows its bonus, so it goes to GMs only; players' saves to everyone.
+    // A monster's save shows its bonus, so it goes to GMs only; players' saves to everyone. It's
+    // recorded as nobody's roll: a player who cast the spell must not find it in their history.
     const pc = !!target.characterId && chars.get(target.characterId)?.kind === "pc";
-    const saveRoll = await recordRoll(t.campaign, { userId: t.userId, characterId: target.characterId, result: save.result, visibility: pc ? visibility : "gm" });
+    const saveRoll = await recordRoll(t.campaign, { userId: pc ? t.userId : null, characterId: target.characterId, result: save.result, visibility: pc ? visibility : "gm" });
     const saved = save.result.total >= d.dc;
     const amount = saved ? (d.half ? Math.floor(Math.max(0, dmg.result.total) / 2) : 0) : Math.max(0, dmg.result.total);
     let outcome: { pending: PendingDamage | null; applied: HitEvent | null } = { pending: null, applied: null };
     if (amount > 0) outcome = await damageOrPending(t, { attackerTokenId: tokens.attacker.id, targetTokenId: target.id, amount, damageType: d.damageType ?? null, kind: "spell", crit: false });
     else await emitHit(t.campaign, { attackerTokenId: tokens.attacker.id, targetTokenId: target.id, amount: 0, kind: "spell", crit: false, defeated: false, bloodied: false, miss: true });
-    targets.push({ tokenId: target.id, save: pc || t.gm ? saveRoll : { ...saveRoll, result: { ...saveRoll.result, terms: [], breakdown: "", natural: null, crit: false, fumble: false } }, saved, amount, ...outcome });
+    targets.push({ tokenId: target.id, save: pc || t.gm ? saveRoll : npcSaveForPlayer(saveRoll, d.ability), saved, amount, pending: outcome.pending, applied: await hitForTable(t, outcome.applied) });
   }
   res.json({ damage: damageRoll, targets } satisfies SaveSpellResult);
 });
+
+/** A monster's save as a player sees it: only the total (no bonus, name or sheet). */
+function npcSaveForPlayer(roll: Roll, ability: string): Roll {
+  const label = `${ability.toUpperCase()} save`;
+  return {
+    ...roll,
+    userId: null,
+    characterId: null,
+    label,
+    expression: "1d20",
+    result: { ...roll.result, expression: "1d20", label, terms: [], breakdown: "", natural: null, crit: false, fumble: false },
+  };
+}
 
 async function pendingTable(res: Parameters<typeof tableOr>[0], id: unknown) {
   const pid = idParam.safeParse(id);
@@ -405,9 +427,16 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
     const i = currentId ? c.entries.findIndex((e) => e.tokenId === currentId) : -1;
     c.turn = i >= 0 ? i : Math.min(c.turn, Math.max(0, c.entries.length - 1));
   };
+  // Tokens whose names players don't see (their initiative rolls say just "Initiative").
+  const hiddenNames = new Set(
+    combat?.entries.length
+      ? (await tokensWithScenes(combat.entries.map((e) => e.tokenId))).filter((r) => !r.token.showName).map((r) => r.token.id)
+      : [],
+  );
   const tokensIn = async (ids: string[]) => (await tokensWithScenes(ids)).filter((r) => r.scene.campaignId === t.campaign.id).map((r) => r.token);
   const rollInit = async (entry: CombatEntry, sheet: Sheet5e | null) => {
-    const rolled = serverRoll(withBonus("1d20", sheet ? initiativeBonus(sheet) : 0), `${entry.name}: initiative`);
+    const named = !hiddenNames.has(entry.tokenId);
+    const rolled = serverRoll(withBonus("1d20", sheet ? initiativeBonus(sheet) : 0), named ? `${entry.name}: initiative` : "Initiative");
     if (!rolled.ok) return entry;
     tieBreaks.set(entry.tokenId, serverRng());
     if (tieBreaks.size > 50_000) tieBreaks.clear();

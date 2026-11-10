@@ -18,7 +18,7 @@ import { db } from "../db";
 import { campfireCharacters, campfireTokens } from "../db/schema";
 import { settingsOf, type CampaignRow, type Table } from "./perms";
 import { broadcast, charactersInfo, emitCharacter, emitToken, sceneRow, tokensWithScenes } from "./state";
-import { controls, tokenVisible, type CharacterRow, type TokenRow } from "./view";
+import { controls, tokenVisible, type CharacterInfo, type CharacterRow, type SceneRow, type TokenRow, type Viewer } from "./view";
 
 // HP kept in step between sheets and tokens (a token's bar 0 is HP), and the hit flow's last
 // step: applying damage or healing, telling every app to animate it.
@@ -126,31 +126,52 @@ export async function applyHit(campaign: CampaignRow, hit: HitInput): Promise<Hi
   return event;
 }
 
-/** `campfire:hit` to everyone who can see the target (attackers they can't see become null). */
-export async function emitHit(campaign: CampaignRow, event: HitEvent): Promise<void> {
+type HitTokens = { target: { token: TokenRow; scene: SceneRow } | undefined; attacker: { token: TokenRow; scene: SceneRow } | undefined; chars: CharacterInfo };
+
+async function hitTokens(campaign: CampaignRow, event: HitEvent): Promise<HitTokens> {
   const ids = [event.targetTokenId, ...(event.attackerTokenId ? [event.attackerTokenId] : [])];
   const rows = await tokensWithScenes(ids);
-  const target = rows.find((r) => r.token.id === event.targetTokenId);
-  const attacker = rows.find((r) => r.token.id === event.attackerTokenId);
-  if (!target) return;
-  const chars = await charactersInfo(campaign.id);
-  await broadcast(campaign, "campfire:hit", (v) => {
-    if (!v.gm && target.scene.id !== campaign.activeSceneId) return null;
-    if (!tokenVisible(target.token, target.scene, v, chars)) return null;
-    const { concentrationDc: dc, ...rest } = event;
-    const seesAttacker = !!attacker && tokenVisible(attacker.token, attacker.scene, v, chars);
-    // The concentration prompt is for whoever plays the target, and the GMs.
-    const theirs = v.gm || controls(target.token, v.userId, chars);
-    // A monster's exact HP may be hidden from players (campaign setting): then so is the number.
-    const pcTarget = !!target.token.characterId && chars.get(target.token.characterId)?.kind === "pc";
-    const hideAmount = !v.gm && !theirs && !pcTarget && settingsOf(campaign.settings).showMonsterHp !== "exact" && !rest.miss;
-    return {
-      ...rest,
-      ...(hideAmount ? { amount: 0, amountHidden: true } : {}),
-      attackerTokenId: seesAttacker ? event.attackerTokenId : null,
-      ...(dc !== undefined && theirs ? { concentrationDc: dc } : {}),
-    };
-  });
+  return {
+    target: rows.find((r) => r.token.id === event.targetTokenId),
+    attacker: rows.find((r) => r.token.id === event.attackerTokenId),
+    chars: await charactersInfo(campaign.id),
+  };
+}
+
+/** A hit as this viewer may see it (null: they can't see the target). */
+function hitFor(campaign: CampaignRow, event: HitEvent, v: Viewer, { target, attacker, chars }: HitTokens): HitEvent | null {
+  if (!target) return null;
+  if (!v.gm && target.scene.id !== campaign.activeSceneId) return null;
+  if (!tokenVisible(target.token, target.scene, v, chars)) return null;
+  const { concentrationDc: dc, ...rest } = event;
+  const seesAttacker = !!attacker && tokenVisible(attacker.token, attacker.scene, v, chars);
+  // The concentration prompt is for whoever plays the target, and the GMs.
+  const theirs = v.gm || controls(target.token, v.userId, chars);
+  // A monster's exact HP may be hidden from players (campaign setting): then so is the number,
+  // and with "none" whether it's bloodied too.
+  const pcTarget = !!target.token.characterId && chars.get(target.token.characterId)?.kind === "pc";
+  const showHp = settingsOf(campaign.settings).showMonsterHp;
+  const hideAmount = !theirs && !pcTarget && showHp !== "exact" && !rest.miss;
+  return {
+    ...rest,
+    ...(hideAmount ? { amount: 0, amountHidden: true } : {}),
+    ...(!theirs && !pcTarget && showHp === "none" ? { bloodied: false } : {}),
+    attackerTokenId: seesAttacker ? event.attackerTokenId : null,
+    ...(dc !== undefined && theirs ? { concentrationDc: dc } : {}),
+  };
+}
+
+/** A hit for the person who caused it (their answer is filtered like the live event). */
+export async function hitForTable(t: Table, event: HitEvent | null): Promise<HitEvent | null> {
+  if (!event || t.gm) return event;
+  return hitFor(t.campaign, event, { userId: t.userId, gm: false }, await hitTokens(t.campaign, event));
+}
+
+/** `campfire:hit` to everyone who can see the target (attackers they can't see become null). */
+export async function emitHit(campaign: CampaignRow, event: HitEvent): Promise<void> {
+  const tokens = await hitTokens(campaign, event);
+  if (!tokens.target) return;
+  await broadcast(campaign, "campfire:hit", (v) => hitFor(campaign, event, v, tokens));
 }
 
 /** Healing a token (and its sheet): a PC back above 0 is no longer unconscious or dying. */

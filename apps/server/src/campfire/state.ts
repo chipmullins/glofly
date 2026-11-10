@@ -24,6 +24,7 @@ import {
   pendingOut,
   rollOut,
   sceneOut,
+  shownName,
   tokenOut,
   tokenVisible,
   trackOut,
@@ -173,12 +174,12 @@ export async function emitCombat(campaign: CampaignRow): Promise<void> {
 }
 
 /** Per viewer, which tokens of the active scene they can see (for the turn order). */
-export async function visibleTokenIdsFor(campaign: CampaignRow): Promise<(v: Viewer) => Set<string>> {
+export async function visibleTokenIdsFor(campaign: CampaignRow): Promise<(v: Viewer) => Map<string, string>> {
   const scene = campaign.activeSceneId ? await sceneRow(campaign.activeSceneId) : null;
   const tokens = scene ? await tokensOf(scene.id) : [];
   const chars = await charactersInfo(campaign.id);
   // Turn order entries may be tokens on any scene: GMs see all of them anyway.
-  return (v) => new Set(scene ? tokens.filter((t) => tokenVisible(t, scene, v, chars)).map((t) => t.id) : []);
+  return (v) => new Map(scene ? tokens.filter((t) => tokenVisible(t, scene, v, chars)).map((t) => [t.id, shownName(t, v, chars)]) : []);
 }
 
 export async function emitPending(campaign: CampaignRow): Promise<void> {
@@ -249,7 +250,7 @@ export async function tableState(t: Table): Promise<TableState> {
     scene: scene ? sceneOut(scene, v) : null,
     tokens: tokens.map((tk) => tokenOut(tk, v, info, settings)),
     characters: chars.map((ch) => characterOut(ch, v)).filter((x): x is CharacterView => !!x),
-    combat: combatOut(c.combat, v, new Set(tokens.map((tk) => tk.id))),
+    combat: combatOut(c.combat, v, new Map(tokens.map((tk) => [tk.id, shownName(tk, v, info)]))),
     music: c.music,
     pending: pending.map(pendingOut),
     rolls: rolls.map(rollOut),

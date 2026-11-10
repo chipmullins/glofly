@@ -52,6 +52,16 @@ const fileIn = async (campaignId: string, fileId: string, kinds: string[]): Prom
   return f && kinds.includes(f.kind) ? f : null;
 };
 
+/**
+ * A picture someone may use as a character's portrait. Players: only pictures they uploaded
+ * (a PC's portrait is shown to everyone, so pointing one at a GM's picture, like a hidden
+ * monster's token, would hand it out).
+ */
+const portraitFor = async (t: Table, fileId: string): Promise<FileRow | null> => {
+  const f = await fileIn(t.campaign.id, fileId, ["portrait", "token"]);
+  return f && (t.gm || f.uploadedBy === t.userId) ? f : null;
+};
+
 /** A D&D Beyond character link (opened in the browser; nothing is imported). */
 const ddbUrl = z
   .string()
@@ -92,7 +102,7 @@ contentRouter.post("/campaigns/:id/characters", changeLimiter, async (req, res) 
   let ownerId: string | null = kind === "npc" ? null : t.gm ? (d.ownerId ?? null) : t.userId;
   if (ownerId && ownerId !== t.userId && !(await inHome(t.campaign, [ownerId])).length) return bad(res, "They can't be at this table.");
   if (kind === "pc" && !ownerId) ownerId = t.userId;
-  if (d.portraitFileId && !(await fileIn(t.campaign.id, d.portraitFileId, ["portrait", "token"]))) return bad(res, "Upload that portrait to this campaign first.");
+  if (d.portraitFileId && !(await portraitFor(t, d.portraitFileId))) return bad(res, "Upload that portrait to this campaign first.");
   let sheet = normalizeSheet(d.sheet);
   let name = d.name;
   if (d.srdMonster) {
@@ -150,7 +160,7 @@ contentRouter.patch("/characters/:id", changeLimiter, async (req, res) => {
   const d = parsed.data;
   if (!t.gm && (d.kind !== undefined || d.ownerId !== undefined)) return bad(res, "Only the game master can change that.", 403);
   if (tooBig(d.sheet)) return bad(res, "That sheet is too big.", 413, "too_large");
-  if (d.portraitFileId && !(await fileIn(t.campaign.id, d.portraitFileId, ["portrait", "token"]))) return bad(res, "Upload that portrait to this campaign first.");
+  if (d.portraitFileId && d.portraitFileId !== row.portraitFileId && !(await portraitFor(t, d.portraitFileId))) return bad(res, "Upload that portrait to this campaign first.");
   if (d.ownerId && !(await inHome(t.campaign, [d.ownerId])).length) return bad(res, "They can't be at this table.");
   const before = normalizeSheet(row.sheet);
   let sheet = d.sheet !== undefined ? normalizeSheet(d.sheet) : undefined;

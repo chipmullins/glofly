@@ -113,7 +113,7 @@ export function campfireUploadProblem(
 ): string | null {
   if (typeof campaignId !== 'string' || !UUID.test(campaignId))
     return 'Something about that request was off.'
-  if (typeof kind !== 'string' || !(kind in CAMPFIRE_UPLOADS))
+  if (typeof kind !== 'string' || !Object.prototype.hasOwnProperty.call(CAMPFIRE_UPLOADS, kind))
     return 'Something about that request was off.'
   const rule = CAMPFIRE_UPLOADS[kind as CampfireUploadKind]
   if (typeof type !== 'string' || !rule.types.includes(type.toLowerCase()))
