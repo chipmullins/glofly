@@ -28,15 +28,7 @@ export function AddPanel(): React.JSX.Element {
   const place = async (body: Record<string, unknown>, cells = 1): Promise<void> => {
     if (!scene) return say('Make a scene first.')
     const [cx, cy] = mapCenter()
-    // A little spread, so a few in a row don't sit on top of each other.
-    const n = t.tokens.length % 5
-    const [x, y] = snapToken(
-      cx - (cells * scene.grid.size) / 2 + n * scene.grid.size,
-      cy - (cells * scene.grid.size) / 2,
-      cells,
-      cells,
-      scene.grid
-    )
+    const [x, y] = freeSpot(cx, cy, cells)
     const r = await cf.post<Token>(`/campfire/scenes/${scene.id}/tokens`, {
       x,
       y,
@@ -46,6 +38,33 @@ export function AddPanel(): React.JSX.Element {
     if (!r.ok) return say(r.message)
     ctl.upsertToken(r.data)
     setSelectedId(r.data.id)
+  }
+
+  /** The free spot nearest the middle of the view (so new tokens don't land on each other). */
+  function freeSpot(cx: number, cy: number, cells: number): [number, number] {
+    const g = scene!.grid
+    const size = cells * g.size
+    const taken = t.tokens.map((k) => ({ x: k.x, y: k.y, w: k.w * g.size, h: k.h * g.size }))
+    const free = (x: number, y: number): boolean =>
+      !taken.some(
+        (k) => x < k.x + k.w - 2 && x + size > k.x + 2 && y < k.y + k.h - 2 && y + size > k.y + 2
+      )
+    for (let r = 0; r < 12; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue
+          const [x, y] = snapToken(
+            cx - size / 2 + dx * g.size,
+            cy - size / 2 + dy * g.size,
+            cells,
+            cells,
+            g
+          )
+          if (free(x, y)) return [x, y]
+        }
+      }
+    }
+    return snapToken(cx - size / 2, cy - size / 2, cells, cells, g)
   }
 
   const onScene = new Set(t.tokens.map((x) => x.characterId).filter(Boolean))

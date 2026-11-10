@@ -61,7 +61,7 @@ export default function Builder({
   sceneId: string | null
   onClose: () => void
 }): React.JSX.Element {
-  const { t, say, ctl } = useCf()
+  const { t, say, ctl, message } = useCf()
   const [editing, setEditing] = useState<string | null>(
     sceneId ?? t.scene?.id ?? t.scenes[0]?.id ?? null
   )
@@ -409,6 +409,11 @@ export default function Builder({
               Snaps to the grid · Shift for a free shape · Ctrl+Z to undo
             </span>
           </div>
+          {message && (
+            <div className="cf-builder-toast" role="status">
+              {message}
+            </div>
+          )}
           {draft && scene ? (
             <BuilderMap
               draft={draft}
@@ -572,8 +577,8 @@ export default function Builder({
                             : tool === 'note'
                               ? 'notes'
                               : '') === k
-                          ? 'cf-layer cf-layer--on'
-                          : 'cf-layer'
+                          ? 'cf-lyr cf-lyr--on'
+                          : 'cf-lyr'
                       }
                     >
                       <button

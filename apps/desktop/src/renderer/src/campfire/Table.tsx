@@ -88,13 +88,13 @@ function TableReady({
   const msgTimer = useRef<number | null>(null)
   const calls = useCalls()
   const music = useMusicPlayer(t.music, t.tracks, ctl.serverOffset)
-  const { op: combatOp } = useCombat2(ctl, t.campaign.id)
 
   const say = useCallback((m: string) => {
     setMessage(m)
     if (msgTimer.current) window.clearTimeout(msgTimer.current)
     msgTimer.current = window.setTimeout(() => setMessage(null), 4500)
   }, [])
+  const { op: combatOp } = useCombat2(ctl, t.campaign.id, say)
 
   const names = useMemo(
     () => new Map(t.members.map((m) => [m.userId, m.user?.displayName ?? 'Someone'])),
@@ -120,6 +120,18 @@ function TableReady({
   const pingLine =
     lastPing && lastPing.userId !== me.id ? `${nameOf(lastPing.userId)} pinged a spot` : null
   const line = message ?? pingLine
+
+  // Escape lets go of the selected token and the target (unless typing).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || (e.target as HTMLElement)?.closest?.('input, textarea, select'))
+        return
+      setSelectedId(null)
+      setTargetId(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const roll = useCallback(
     async (
@@ -176,6 +188,7 @@ function TableReady({
     isGm,
     nameOf,
     say,
+    message,
     selectedId,
     setSelectedId,
     targetId,
@@ -520,6 +533,15 @@ function TableReady({
                   {asPlayer ? 'Back to GM view' : 'See as a player'}
                 </button>
               )}
+              {myTurn && (
+                <button
+                  type="button"
+                  className="cf-primary"
+                  onClick={() => void combatOp({ op: 'next' })}
+                >
+                  End my turn
+                </button>
+              )}
               {isGm && combat && (
                 <button
                   type="button"
@@ -616,7 +638,7 @@ function TableReady({
               >
                 <RollCardOverlay />
                 {isGm && !asPlayer && <ApprovalBox />}
-                {selected && (isGm || controls(selected)) && (
+                {selected && tool === 'select' && (isGm || controls(selected)) && (
                   <TokenCard
                     key={selected.id}
                     token={selected}
@@ -699,7 +721,8 @@ function TableReady({
 /** The combat route outside the context (the top bar's Next turn). */
 function useCombat2(
   ctl: ReturnType<typeof useTable>,
-  campaignId: string
+  campaignId: string,
+  say: (m: string) => void
 ): { op: (body: Record<string, unknown>) => Promise<void> } {
   return {
     op: async (body) => {
@@ -708,6 +731,7 @@ function useCombat2(
         body
       )
       if (r.ok) ctl.update((s) => ({ ...s, combat: r.data.combat }))
+      else say(r.message)
     }
   }
 }

@@ -569,7 +569,11 @@ function MapView(p: Props): React.JSX.Element {
   }
 
   const onDoubleClick = (e: React.MouseEvent): void => {
-    const tk = tokenAt(e.target)
+    // The map holds the pointer while it's pressed, so find the token under it by position.
+    const under = document
+      .elementsFromPoint(e.clientX, e.clientY)
+      .find((el) => el.closest('[data-token]'))
+    const tk = tokenAt(under ?? null)
     if (tk) p.onTarget(p.targetId === tk.id ? null : tk.id)
   }
 

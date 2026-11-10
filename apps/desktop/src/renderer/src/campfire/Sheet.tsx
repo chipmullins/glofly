@@ -244,7 +244,7 @@ function FullSheet({ ch }: { ch: Character }): React.JSX.Element {
 
   const d20 = adv === 'adv' ? '2d20kh1' : adv === 'dis' ? '2d20kl1' : '1d20'
   const rollCheck = (bonus: number, label: string): void =>
-    void roll(withBonus(d20, bonus), { label: `${ch.name}: ${label}`, characterId: ch.id })
+    void roll(withBonus(d20, bonus), { label, characterId: ch.id })
   const myToken =
     tokenOf(ch.id) ??
     (isGm && selectedId ? (t.tokens.find((x) => x.id === selectedId) ?? null) : null)

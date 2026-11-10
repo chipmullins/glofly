@@ -9,7 +9,8 @@
   background: #2a201b;
   color: #f3e6da;
   box-shadow: inset 0 0 0 1px rgba(255, 179, 71, 0.45);
-  max-width: 100%;
+  width: fit-content;
+  max-width: min(420px, 100%);
 }
 .chat-roll-die {
   flex: none;

@@ -103,6 +103,7 @@ export function RollCardOverlay(): React.JSX.Element | null {
   const fresh =
     !!newest &&
     Date.parse(newest.createdAt) - ctl.serverOffset >= openedAt - 2000 &&
+    (newest.userId === me.id || newest.result.natural === 20) &&
     newest.id !== doneId
   const shown = fresh ? newest : null
   useEffect(() => {

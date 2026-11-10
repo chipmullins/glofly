@@ -15,6 +15,8 @@ export type Cf = {
   isGm: boolean
   nameOf: (userId: string | null) => string
   say: (message: string) => void
+  /** The short message line (shown over the map) */
+  message: string | null
   selectedId: string | null
   setSelectedId: (id: string | null) => void
   targetId: string | null
