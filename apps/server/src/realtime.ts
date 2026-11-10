@@ -44,6 +44,16 @@ const userRoom = (userId: string) => `user:${userId}`;
 // 2.0: devices whose app knows Constellations (they say so when connecting). Constellation events
 // and anything about a nebula only ever go here, so older apps never hear of them.
 const modernRoom = (userId: string) => `user2:${userId}`;
+// Campfire (Nov 2026): devices whose app sends the `campfire` feature. Tabletop events only go here.
+const campfireRoom = (userId: string) => `campfire:${userId}`;
+
+/** Live-connection events other parts of the server listen for (Campfire's token dragging). */
+type SocketHandler = (me: { id: string; displayName: string }, payload: unknown) => void;
+const socketHandlers: { event: string; handler: SocketHandler; needs?: string }[] = [];
+/** Listens for an event from apps (only from apps that sent `needs` among their features). */
+export function onSocketEvent(event: string, handler: SocketHandler, needs?: string): void {
+  socketHandlers.push({ event, handler, needs });
+}
 
 /** Does this connection's app know Constellations? (`auth.features` includes "constellations") */
 function knowsConstellations(auth: unknown): boolean {
@@ -114,6 +124,18 @@ export function startRealtime(httpServer: HttpServer): void {
     const me = socket.data.user as { id: string; displayName: string };
     void socket.join(userRoom(me.id));
     if (socket.data.constellations) void socket.join(modernRoom(me.id));
+    const features = socket.data.features as string[];
+    if (features.includes("campfire")) void socket.join(campfireRoom(me.id));
+    for (const { event, handler, needs } of socketHandlers) {
+      if (needs && !features.includes(needs)) continue;
+      socket.on(event, (payload: unknown) => {
+        try {
+          handler(me, payload);
+        } catch (err) {
+          console.error(`Live event ${event} failed:`, err);
+        }
+      });
+    }
     socket.data.idle = false;
 
     // Presence: this device is here.
@@ -293,6 +315,11 @@ export async function someAppLacks(userId: string, feature: string): Promise<boo
 export function emitToUser(userId: string, event: string, payload: unknown, modernOnly = false): void {
   // Their nicknames for people go in (loaded when their live connection opened).
   io?.to(modernOnly ? modernRoom(userId) : userRoom(userId)).emit(event, withNicknames(payload, userId, cachedNicknames(userId)));
+}
+
+/** Campfire: an event for the person's devices whose app knows Campfire (feature `campfire`). */
+export function emitToCampfire(userId: string, event: string, payload: unknown): void {
+  io?.to(campfireRoom(userId)).emit(event, withNicknames(payload, userId, cachedNicknames(userId)));
 }
 
 /**

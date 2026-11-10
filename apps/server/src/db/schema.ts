@@ -14,7 +14,22 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { ForwardedFrom, LiveCard, OnboardingSettings } from "@glofly/shared";
+import type {
+  BuiltMap,
+  CampaignSettings,
+  ChatRoll,
+  CombatState,
+  FogState,
+  ForwardedFrom,
+  GridSettings,
+  LiveCard,
+  MusicState,
+  OnboardingSettings,
+  RollResult,
+  Sheet5e,
+  TokenAura,
+  TokenBar,
+} from "@glofly/shared";
 
 export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invisible"]);
 // Who can send someone friend requests (Settings → General → Privacy).
@@ -415,6 +430,8 @@ export const messages = pgTable(
     forwarded: jsonb("forwarded").$type<ForwardedFrom>(),
     // 0.9.3: a constellation's Live alert (the body + link preview are what older apps show)
     liveCard: jsonb("live_card").$type<LiveCard>(),
+    // Campfire: a `/roll` in a chat (the body is the plain text older apps show)
+    roll: jsonb("roll").$type<ChatRoll>(),
     // Communities round (Nov 2026): a reply in a thread or forum post (nebulas only). Thread
     // replies stay out of the nebula's own timeline unless alsoInNebula ("Also send to #general").
     threadId: uuid("thread_id").references((): AnyPgColumn => nebulaThreads.id, { onDelete: "cascade" }),
@@ -2157,4 +2174,228 @@ export const constellationLiveAlerts = pgTable(
     uniqueIndex("live_alerts_channel_idx").on(t.constellationId, t.site, t.channelId),
     index("live_alerts_watch_idx").on(t.site, t.channelId),
   ],
+);
+
+// ───────────── Campfire (phase 1, Nov 2026): the tabletop ─────────────
+// A campaign lives in a constellation (opened from a voice nebula) or a group chat. Everything a
+// player sees is filtered on the server (campfire/view.ts): fog, the GM layer, notes, NPC sheets.
+
+export const campfireCampaigns = pgTable(
+  "campfire_campaigns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    // One of these two is set: the constellation (opened from its voice nebula `home_conversation_id`)
+    // or the group chat.
+    constellationId: uuid("constellation_id").references(() => constellations.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(() => conversations.id, { onDelete: "cascade" }),
+    // The voice nebula's conversation a constellation campaign was made from (its "home").
+    homeConversationId: uuid("home_conversation_id").references(() => conversations.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    activeSceneId: uuid("active_scene_id"),
+    settings: jsonb("settings").$type<CampaignSettings>().notNull(),
+    combat: jsonb("combat").$type<CombatState>(),
+    music: jsonb("music").$type<MusicState>(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("campfire_campaigns_constellation_idx").on(t.constellationId),
+    index("campfire_campaigns_conversation_idx").on(t.conversationId),
+    index("campfire_campaigns_home_idx").on(t.homeConversationId),
+  ],
+);
+
+export const campfireMembers = pgTable(
+  "campfire_members",
+  {
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // "gm" | "player"
+    role: text("role").notNull().default("player"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.campaignId, t.userId] }), index("campfire_members_user_idx").on(t.userId)],
+);
+
+export const campfireScenes = pgTable(
+  "campfire_scenes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    widthPx: integer("width_px").notNull().default(2100),
+    heightPx: integer("height_px").notNull().default(1400),
+    grid: jsonb("grid").$type<GridSettings>().notNull(),
+    backgroundFileId: uuid("background_file_id").references((): AnyPgColumn => campfireFiles.id, { onDelete: "set null" }),
+    theme: text("theme").notNull().default("stone"),
+    built: jsonb("built").$type<BuiltMap>().notNull(),
+    fog: jsonb("fog").$type<FogState>().notNull(),
+    musicTrackId: uuid("music_track_id").references((): AnyPgColumn => campfireTracks.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_scenes_campaign_idx").on(t.campaignId)],
+);
+
+export const campfireCharacters = pgTable(
+  "campfire_characters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    // Null: an NPC (the GMs'). A deleted account's characters go with it.
+    ownerId: uuid("owner_id").references(() => users.id, { onDelete: "cascade" }),
+    // "pc" | "npc"
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    portraitFileId: uuid("portrait_file_id").references((): AnyPgColumn => campfireFiles.id, { onDelete: "set null" }),
+    sheet: jsonb("sheet").$type<Sheet5e>().notNull(),
+    ddbUrl: text("ddb_url"),
+    srdMonster: text("srd_monster"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_characters_campaign_idx").on(t.campaignId)],
+);
+
+export const campfireTokens = pgTable(
+  "campfire_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sceneId: uuid("scene_id")
+      .notNull()
+      .references(() => campfireScenes.id, { onDelete: "cascade" }),
+    // "map" | "tokens" | "gm"
+    layer: text("layer").notNull().default("tokens"),
+    characterId: uuid("character_id").references(() => campfireCharacters.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    imageFileId: uuid("image_file_id").references((): AnyPgColumn => campfireFiles.id, { onDelete: "set null" }),
+    x: integer("x").notNull(),
+    y: integer("y").notNull(),
+    w: integer("w").notNull().default(1),
+    h: integer("h").notNull().default(1),
+    rotation: integer("rotation").notNull().default(0),
+    bars: jsonb("bars").$type<(TokenBar | null)[]>().notNull(),
+    conditions: text("conditions").array().notNull().default(sql`'{}'::text[]`),
+    aura: jsonb("aura").$type<TokenAura>(),
+    showName: boolean("show_name").notNull().default(true),
+    controlledBy: uuid("controlled_by").array().notNull().default(sql`'{}'::uuid[]`),
+    z: integer("z").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_tokens_scene_idx").on(t.sceneId), index("campfire_tokens_character_idx").on(t.characterId)],
+);
+
+export const campfireRolls = pgTable(
+  "campfire_rolls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    characterId: uuid("character_id").references(() => campfireCharacters.id, { onDelete: "set null" }),
+    label: text("label"),
+    expression: text("expression").notNull(),
+    result: jsonb("result").$type<RollResult>().notNull(),
+    total: integer("total").notNull(),
+    // "all" | "gm" | "whisper"
+    visibility: text("visibility").notNull().default("all"),
+    whisperTo: uuid("whisper_to").array().notNull().default(sql`'{}'::uuid[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_rolls_campaign_idx").on(t.campaignId, t.createdAt)],
+);
+
+export const campfirePending = pgTable(
+  "campfire_pending",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    attackerTokenId: uuid("attacker_token_id").references(() => campfireTokens.id, { onDelete: "set null" }),
+    targetTokenId: uuid("target_token_id")
+      .notNull()
+      .references(() => campfireTokens.id, { onDelete: "cascade" }),
+    amount: integer("amount").notNull(),
+    damageType: text("damage_type"),
+    // "melee" | "ranged" | "spell"
+    kind: text("kind").notNull(),
+    crit: boolean("crit").notNull().default(false),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_pending_campaign_idx").on(t.campaignId)],
+);
+
+export const campfireHandouts = pgTable(
+  "campfire_handouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    imageFileId: uuid("image_file_id").references((): AnyPgColumn => campfireFiles.id, { onDelete: "set null" }),
+    // "all" | "gm" | "some"
+    shared: text("shared").notNull().default("gm"),
+    sharedWith: uuid("shared_with").array().notNull().default(sql`'{}'::uuid[]`),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_handouts_campaign_idx").on(t.campaignId)],
+);
+
+export const campfireFiles = pgTable(
+  "campfire_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    // "map" | "token" | "portrait" | "handout" | "audio"
+    kind: text("kind").notNull(),
+    storageKey: text("storage_key").notNull(),
+    mime: text("mime").notNull(),
+    bytes: integer("bytes").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    // Music: its length (from ffprobe when it was uploaded)
+    durationSec: integer("duration_sec"),
+    // A deleted account's uploads go with it (the storage files too: campfire/files.ts).
+    uploadedBy: uuid("uploaded_by").references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_files_campaign_idx").on(t.campaignId), index("campfire_files_uploader_idx").on(t.uploadedBy)],
+);
+
+export const campfireTracks = pgTable(
+  "campfire_tracks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => campfireFiles.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    durationSec: integer("duration_sec"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_tracks_campaign_idx").on(t.campaignId)],
 );

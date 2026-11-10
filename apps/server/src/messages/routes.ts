@@ -76,7 +76,8 @@ import {
   publicGame,
   shortBody,
   attachmentSummary,
-  type GameState, type MessageButton, type ForwardedFrom, type LiveCard } from "@glofly/shared";
+  type GameState, type MessageButton, type ForwardedFrom, type LiveCard, type ChatRoll } from "@glofly/shared";
+import { chatRollFor } from "../campfire/chatRoll";
 import { toolHook } from "../toolHooks";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
@@ -131,6 +132,7 @@ export const messageFields = {
   alsoInNebula: messages.alsoInNebula,
   forwarded: messages.forwarded,
   liveCard: messages.liveCard,
+  roll: messages.roll,
 };
 export type MessageRow = {
   id: string;
@@ -152,6 +154,8 @@ export type MessageRow = {
   threadId?: string | null;
   forwarded?: ForwardedFrom | null;
   liveCard?: LiveCard | null;
+  /** Campfire: a `/roll` (older apps show the body) */
+  roll?: ChatRoll | null;
   alsoInNebula?: boolean;
   lantern: boolean;
   lanternFadeAt: Date | null;
@@ -280,6 +284,8 @@ export async function hydrate(rows: MessageRow[]) {
       ...(r.forwarded && !deleted ? { forwarded: r.forwarded } : {}),
       // 0.9.3: a constellation's Live alert (older apps show the text and link preview).
       ...(r.liveCard && !deleted ? { liveCard: r.liveCard } : {}),
+      // Campfire: a /roll (older apps show the text, "🎲 Chip rolled 1d20+3: 17 (14 + 3)").
+      ...(r.roll && !deleted ? { roll: r.roll } : {}),
     };
   });
 }
@@ -1546,7 +1552,13 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     }
     gif = found;
   }
-  const text = gif ? gifFallback(gif) : body.data;
+  // Campfire: "/roll 1d20+5" is rolled here (not with files or a GIF); the body becomes the result.
+  const rolled = gif || attachmentIds.length ? null : await chatRollFor(body.data, me(res));
+  if (rolled && "status" in rolled) {
+    res.status(rolled.status).json({ error: rolled.error, message: rolled.message });
+    return;
+  }
+  const text = gif ? gifFallback(gif) : rolled ? rolled.body : body.data;
 
   // 0.8.0 AutoMod lite (nebulas): new-member wait, slow mode, blocked words, link spam.
   if (chat.kind === "nebula") {
@@ -1568,7 +1580,7 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     inserted = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)
-        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, ...group, gif, lantern, threadId: thread?.id ?? null, alsoInNebula })
+        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, ...group, gif, lantern, threadId: thread?.id ?? null, alsoInNebula, roll: rolled?.roll ?? null })
         .returning(messageFields);
       const inserted = row;
       // Attach your uploads, in the order given. Each must be yours, for this chat, and unsent.
@@ -2103,7 +2115,7 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
     res.status(403).json({ error: "forbidden", message: "You can only edit your own messages." });
     return;
   }
-  if (message.gif || message.poll || message.game) {
+  if (message.gif || message.poll || message.game || message.roll) {
     res.status(400).json({ error: "invalid", message: "This kind of message can't be edited." });
     return;
   }

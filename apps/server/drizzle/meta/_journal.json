@@ -407,6 +407,13 @@
       "when": 1794130495356,
       "tag": "0057_live_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1794281378232,
+      "tag": "0058_campfire",
+      "breakpoints": true
     }
   ]
 }

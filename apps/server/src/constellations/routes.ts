@@ -86,6 +86,7 @@ import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, un
 import { fireConstellationEvent } from "../integrations/events";
 import { seesNebulaChat, syncNebulaAccess } from "./access";
 import { knowsThreads } from "../threads/legacy";
+import { knowsCampfire } from "../campfire/live";
 import { answerOnboarding, onboardingInput, saveOnboarding, setNebulaShown } from "./onboarding";
 
 // Constellations (Glofly 2.0): communities with nebulas, categories, members and roles.
@@ -2088,6 +2089,11 @@ constellationsRouter.patch("/:id/roles/:rid", changeLimiter, async (req, res) =>
   if (parsed.data.permissions && !knowsThreads(req)) {
     const kept = r.permissions.includes("mentionEveryone");
     parsed.data.permissions = [...parsed.data.permissions.filter((p) => p !== "mentionEveryone"), ...(kept ? (["mentionEveryone"] as const) : [])];
+  }
+  // Campfire: apps that don't know it don't show "Run Campfire games"; saving keeps it as it was.
+  if (parsed.data.permissions && !knowsCampfire(req)) {
+    const kept = r.permissions.includes("runGames");
+    parsed.data.permissions = [...parsed.data.permissions.filter((p) => p !== "runGames"), ...(kept ? (["runGames"] as const) : [])];
   }
   if (parsed.data.permissions) {
     // Only what I have myself can be added or taken away.

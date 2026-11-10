@@ -55,6 +55,8 @@ COPY apps/server/drizzle ./drizzle
 COPY apps/server/models ./models
 # Outfit Bold for the initials on friend invite link previews (0.8.0, src/friends/linkPreview.ts).
 COPY apps/server/fonts ./fonts
+# Campfire's compendium (SRD 5.1 monsters and spells, CC BY 4.0: src/campfire/srd/README.md).
+COPY apps/server/src/campfire/srd ./dist/campfire/srd
 
 # Never run as root inside the container.
 USER node

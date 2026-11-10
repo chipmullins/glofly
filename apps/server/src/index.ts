@@ -71,6 +71,7 @@ import { liveAlertsRouter, startLiveAlerts, sweepUnusedWatches } from "./constel
 import { liveHooksRouter } from "./connections/hooks";
 import { publicBase, sweepStreamWatches } from "./connections/live";
 import { sweepSteamPlaying, sweepSteamSync } from "./connections/steam";
+import { campfireRouter, sweepCampfirePresence, sweepDeletedCampaigns } from "./campfire";
 
 /** Runs a background job every so often, never two runs of it at once. */
 function every(ms: number, name: string, job: () => Promise<void>): void {
@@ -100,17 +101,17 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));
 // Glofly in a browser: CORS for chat.glofly.app only (off unless WEB_ORIGIN is set). Before the
 // pause gate, so the web app can read "Glofly is paused" too.
 app.use(webCors);
-app.use(
-  express.json({
-    limit: "10kb", // rejects oversized request bodies
-    // 0.8.2: Control for iPhone signs its requests, body included (admin/devices.ts).
-    verify: (req, _res, buf) => {
-      const url = (req as { url?: string }).url ?? "";
-      // 0.9.3: Twitch and Kick sign their live notices (connections/hooks.ts).
-      if (url.startsWith("/admin/") || url === "/hooks/twitch" || url === "/hooks/kick") (req as { rawBody?: Buffer }).rawBody = buf;
-    },
-  }),
-);
+const jsonBodies = express.json({
+  limit: "10kb", // rejects oversized request bodies
+  // 0.8.2: Control for iPhone signs its requests, body included (admin/devices.ts).
+  verify: (req, _res, buf) => {
+    const url = (req as { url?: string }).url ?? "";
+    // 0.9.3: Twitch and Kick sign their live notices (connections/hooks.ts).
+    if (url.startsWith("/admin/") || url === "/hooks/twitch" || url === "/hooks/kick") (req as { rawBody?: Buffer }).rawBody = buf;
+  },
+});
+// Campfire reads its own bodies (bigger sheets and maps, after its sign-in check: campfire/index.ts).
+app.use((req, res, next) => (req.path.startsWith("/campfire/") ? next() : jsonBodies(req, res, next)));
 
 app.get("/health", async (_req, res) => {
   try {
@@ -182,6 +183,8 @@ app.use("/constellations", communityToolsRouter);
 app.use("/constellations", liveAlertsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
+// Campfire (phase 1, Nov 2026): the tabletop for fifth edition games in calls.
+app.use("/campfire", campfireRouter);
 // Communities round: the bot API (/api/v1, "Authorization: Bot gfk_…"), for game servers and bots.
 app.use(botApiRouter);
 // 0.9.3: Settings → Connections (Steam, Twitch, Kick), the pages a sign-in comes back to, and
@@ -337,6 +340,9 @@ connectRedis()
     every(60_000, "Steam playing", sweepSteamPlaying);
     every(10 * 60_000, "Live channels", () => sweepStreamWatches(publicBase(`http://localhost:${PORT}`)));
     every(60 * 60_000, "YouTube channels", () => sweepYoutube(publicBase(`http://localhost:${PORT}`)));
+    // Campfire: who's at each table (apps say so every 30 s), and deleted campaigns' files.
+    every(15_000, "Campfire presence", sweepCampfirePresence);
+    every(10 * 60_000, "Campfire cleanup", sweepDeletedCampaigns);
     every(6 * 60 * 60_000, "Unused live channels", () => sweepUnusedWatches(publicBase(`http://localhost:${PORT}`)));
     // Resolved reports are removed a year after they were resolved (hourly).
     const sweepReports = () =>
