@@ -40,7 +40,10 @@ const tables = new Map<string, Map<string, Seat>>();
 export function notePresence(campaignId: string, userId: string, role: CampaignRole): boolean {
   let seats = tables.get(campaignId);
   if (!seats) tables.set(campaignId, (seats = new Map()));
-  const fresh = !seats.has(userId);
+  // A seat whose last ping is too old (not swept yet) counts as just arriving too, so the cached
+  // audience is worked out again and they hear the very next event.
+  const seat = seats.get(userId);
+  const fresh = !seat || Date.now() - seat.at >= PRESENCE_MS;
   seats.set(userId, { at: Date.now(), role });
   return fresh;
 }

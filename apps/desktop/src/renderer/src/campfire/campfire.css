@@ -487,6 +487,64 @@
   flex: 1;
   height: 36px;
 }
+/* Start board: "Your character" */
+.cf-yours {
+  margin-top: 16px;
+}
+.cf-yours-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cf-yours-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--cf-line);
+  background: var(--cf-surface);
+}
+.cf-yours-face {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--cf-raised);
+  box-shadow: 0 0 0 2px var(--cf-amber);
+  color: var(--cf-amber);
+  font: 800 18px/1 var(--glo-font-display);
+}
+.cf-yours-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cf-yours-face--empty {
+  box-shadow: 0 0 0 1px var(--cf-line);
+  color: var(--cf-muted);
+}
+.cf-yours-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cf-yours-text strong {
+  font: 700 14px/1.2 var(--glo-font-body);
+}
+.cf-yours-text span {
+  font-size: 12px;
+  color: var(--cf-muted);
+}
+
 .cf-start-foot {
   margin: 14px 0 0;
   font-size: 12px;
@@ -2047,4 +2105,96 @@ button.cf-stat:hover {
 }
 .cf-handout-body .fmt-link {
   color: var(--cf-amber);
+}
+
+/* My character at 0 HP: the death-save card over the table */
+.cf-dying {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  width: min(420px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 22px 18px;
+  border-radius: 18px;
+  text-align: center;
+  background: #2a1512;
+  box-shadow:
+    0 0 0 1px rgba(239, 90, 74, 0.55),
+    0 0 48px rgba(239, 90, 74, 0.25),
+    0 18px 40px rgba(0, 0, 0, 0.55);
+  animation: cf-dying-in 260ms ease-out;
+}
+.cf-dying h2 {
+  margin: 0;
+  font: 800 22px/1.15 var(--glo-font-display);
+}
+.cf-dying .cf-sub {
+  margin: 0;
+  line-height: 1.45;
+}
+.cf-dying-sets {
+  display: flex;
+  gap: 22px;
+  margin: 4px 0;
+}
+.cf-dying-sets > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.cf-dying-good {
+  color: var(--cf-good);
+}
+.cf-dying-bad {
+  color: #ef8a7a;
+}
+.cf-dying-pips {
+  display: inline-flex;
+  gap: 8px;
+}
+.cf-dying-pip {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+.cf-dying-pip--good {
+  box-shadow: inset 0 0 0 2px var(--cf-good);
+}
+.cf-dying-pip--bad {
+  box-shadow: inset 0 0 0 2px #ef8a7a;
+}
+.cf-dying-pip--good.on {
+  background: var(--cf-good);
+}
+.cf-dying-pip--bad.on {
+  background: #ef8a7a;
+}
+.cf-dying-last {
+  margin: 0;
+  font-weight: 700;
+}
+.cf-dying-roll {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 20px;
+}
+@keyframes cf-dying-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -46%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-dying {
+    animation: none;
+  }
 }

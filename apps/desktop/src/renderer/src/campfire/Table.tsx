@@ -8,7 +8,7 @@ import { colorsFor } from '../lib/avatarColors'
 import { cf, IMAGE_ACCEPT, pickFile, uploadFile } from './api'
 import { CfContext, type Cf, type RollShare, type StatBlockFor, type Tab } from './ctx'
 import { THEMES } from './geometry'
-import MapView, { type Tool } from './MapView'
+import MapView, { type FogBrush, type Tool } from './MapView'
 import { useTable } from './useTable'
 import { TurnOrder } from './TurnOrder'
 import { DiceTray, RollsPanel } from './Rolls'
@@ -19,7 +19,7 @@ import { HandoutsPanel } from './Handouts'
 import { MusicPanel } from './Music'
 import { useMusicPlayer } from './music'
 import { AddPanel } from './AddPanel'
-import { ApprovalBox, RollCardOverlay, TokenCard } from './Overlays'
+import { ApprovalBox, DyingCard, RollCardOverlay, TokenCard } from './Overlays'
 import Builder from './Builder'
 import { FlameIcon, Icon } from './icons'
 
@@ -78,6 +78,7 @@ function TableReady({
   const isGm = t.myRole === 'gm'
   const [tool, setTool] = useState<Tool>('select')
   const [fogMode, setFogMode] = useState<'reveal' | 'hide'>('reveal')
+  const [fogBrush, setFogBrush] = useState<FogBrush>('box')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [targetId, setTargetId] = useState<string | null>(null)
   const [share, setShare] = useState<RollShare>({ mode: 'all', to: [] })
@@ -569,9 +570,33 @@ function TableReady({
             {tool === 'fog' && isGm && scene && (
               <div className="cf-fogbar" role="toolbar" aria-label="Fog of war">
                 <span className="cf-sub">
-                  Drag on the map to {fogMode === 'reveal' ? 'reveal' : 'hide'} an area (Shift: the
-                  other way).
+                  {fogBrush === 'box'
+                    ? 'Drag a box'
+                    : fogBrush === 'lasso'
+                      ? 'Draw around an area'
+                      : 'Click corners, then Enter'}
+                  {' · Shift: the other way'}
                 </span>
+                <div className="cf-seg" role="radiogroup" aria-label="Fog shape">
+                  {(
+                    [
+                      ['box', 'Box'],
+                      ['lasso', 'Freehand'],
+                      ['points', 'Corners']
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="radio"
+                      aria-checked={fogBrush === id}
+                      className={fogBrush === id ? 'cf-chip cf-chip--on' : 'cf-chip'}
+                      onClick={() => setFogBrush(id)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <div className="cf-seg" role="radiogroup" aria-label="Fog brush">
                   <button
                     type="button"
@@ -620,6 +645,7 @@ function TableReady({
                 canMove={(tk) => controls(tk) && (tool === 'select' || tool === 'fog')}
                 tool={tool}
                 fogMode={fogMode}
+                fogBrush={fogBrush}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
                 targetId={targetId}
@@ -641,7 +667,7 @@ function TableReady({
                     .post(`/campfire/campaigns/${t.campaign.id}/ping`, { sceneId: scene.id, x, y })
                     .then((r) => !r.ok && say(r.message))
                 }
-                onFogShape={(points, mode) => void fog(mode, { kind: 'rect', points })}
+                onFogShape={(shape, mode) => void fog(mode, shape)}
                 hits={ctl.hits}
                 pings={ctl.pings}
                 nameOf={nameOf}
@@ -651,6 +677,7 @@ function TableReady({
               >
                 <RollCardOverlay />
                 {isGm && !asPlayer && <ApprovalBox />}
+                {!isGm && <DyingCard />}
                 {selected && tool === 'select' && (isGm || controls(selected)) && (
                   <TokenCard
                     key={selected.id}

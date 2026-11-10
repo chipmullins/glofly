@@ -158,7 +158,7 @@ function Table({ id }: { id: string }) {
 
       <View style={{ flex: 1, flexDirection: wide ? 'row' : 'column', gap: wide ? 12 : 0, paddingHorizontal: 12, paddingBottom: wide ? insets.bottom + 12 : 0 }}>
         <View style={{ flex: 1 }}>
-          <CampfireMap campaignId={id} table={table} meId={meId} targetId={target} onTarget={setTarget} bottomInset={wide ? 0 : Math.max(0, sheetH - 12)} />
+          <CampfireMap campaignId={id} table={table} meId={meId} targetId={target} onTarget={setTarget} bottomInset={wide ? 0 : Math.max(0, sheetH - 12)} rightInset={64} />
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 10, right: 64, top: 10, gap: 8 }}>
             {pending ? <PendingBox table={table} pending={pending} /> : null}
             <RollToast campaignId={id} table={table} meId={meId} />

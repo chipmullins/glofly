@@ -238,3 +238,96 @@ export function normalizeBuilt(raw: unknown): BuiltMap {
     })
   }
 }
+
+// ───────────── Grid math (every app measures the same way) ─────────────
+
+const SQRT3 = Math.sqrt(3)
+
+/** Hexes are pointy-top: `size` is a hex's width, rows overlap by a quarter; odd rows shift right by half a hex. */
+export const hexHeight = (size: number): number => (size * 2) / SQRT3
+
+export function hexCenter(col: number, row: number, g: GridSettings): Point {
+  const w = g.size
+  const h = hexHeight(w)
+  return [g.offsetX + col * w + w / 2 + (row % 2 !== 0 ? w / 2 : 0), g.offsetY + row * 0.75 * h + h / 2]
+}
+
+/** The hex (column, row) whose center is nearest a point. */
+export function hexAt(x: number, y: number, g: GridSettings): [number, number] {
+  const h = hexHeight(g.size)
+  const row0 = Math.round((y - g.offsetY - h / 2) / (0.75 * h))
+  let best: [number, number] = [0, row0]
+  let bestD = Infinity
+  for (let row = row0 - 1; row <= row0 + 1; row++) {
+    const shift = row % 2 !== 0 ? g.size / 2 : 0
+    const col0 = Math.round((x - g.offsetX - g.size / 2 - shift) / g.size)
+    for (let col = col0 - 1; col <= col0 + 1; col++) {
+      const c = hexCenter(col, row, g)
+      const d = (c[0] - x) ** 2 + (c[1] - y) ** 2
+      if (d < bestD) {
+        bestD = d
+        best = [col, row]
+      }
+    }
+  }
+  return best
+}
+
+export const nearestHexCenter = (x: number, y: number, g: GridSettings): Point => {
+  const [c, r] = hexAt(x, y, g)
+  return hexCenter(c, r, g)
+}
+
+/** Steps between two hexes (offset rows → cube coordinates). */
+export function hexSteps(a: [number, number], b: [number, number]): number {
+  const cube = ([col, row]: [number, number]): [number, number, number] => {
+    const x = col - (row - (row & 1)) / 2
+    return [x, row, -x - row]
+  }
+  const [ax, ay, az] = cube(a)
+  const [bx, by, bz] = cube(b)
+  return Math.max(Math.abs(ax - bx), Math.abs(ay - by), Math.abs(az - bz))
+}
+
+/**
+ * How diagonals count on a square grid: '5' = every diagonal is one square (the 5e default),
+ * '5-10' = every second diagonal counts double (the optional rule).
+ */
+export type DiagonalRule = '5' | '5-10'
+
+/** Squares or hexes moved between two points (by the cells they fall in). */
+export function cellsBetween(a: Point, b: Point, g: GridSettings, diagonal: DiagonalRule = '5'): number {
+  if (g.type === 'hex') return hexSteps(hexAt(a[0], a[1], g), hexAt(b[0], b[1], g))
+  const dx = Math.abs(Math.round((b[0] - a[0]) / g.size))
+  const dy = Math.abs(Math.round((b[1] - a[1]) / g.size))
+  if (diagonal === '5-10') {
+    const diag = Math.min(dx, dy)
+    return Math.max(dx, dy) - diag + diag + Math.floor(diag / 2)
+  }
+  return Math.max(dx, dy)
+}
+
+/** Feet between two points on this grid. */
+export const gridFeet = (a: Point, b: Point, g: GridSettings, diagonal: DiagonalRule = '5'): number =>
+  cellsBetween(a, b, g, diagonal) * g.feet
+
+/**
+ * A freehand line made into a fog shape: drops points closer than `minGap` px and evens it out
+ * until it fits `max` points (the server keeps at most 200 per shape and 5,000 per scene). Null when it's too small.
+ */
+export function simplifyLasso(points: Point[], max = 64, minGap = 6): Point[] | null {
+  let pts: Point[] = []
+  for (const p of points) {
+    const last = pts[pts.length - 1]
+    if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) >= minGap) pts.push([Math.round(p[0]), Math.round(p[1])])
+  }
+  if (pts.length > max) {
+    const step = pts.length / max
+    pts = Array.from({ length: max }, (_, i) => pts[Math.floor(i * step)])
+  }
+  if (pts.length < 3) return null
+  // A sliver (no area to speak of) isn't a shape.
+  let area = 0
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) area += (pts[j][0] + pts[i][0]) * (pts[j][1] - pts[i][1])
+  return Math.abs(area) / 2 < 100 ? null : pts
+}

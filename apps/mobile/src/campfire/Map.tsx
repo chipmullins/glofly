@@ -5,6 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing, runOnJS
 import Svg, { Circle, Defs, G, Line, Mask, Path, Pattern, Polygon, Polyline, Rect, Text as SvgText } from 'react-native-svg'
 import { Image } from 'expo-image'
 import type { BuiltMap, CharacterView, FogState, GridSettings, MapTheme, Scene, TableState, Token } from '@glofly/shared'
+import { gridFeet, nearestHexCenter } from '@glofly/shared'
 import { sendLive } from '@/api/realtime'
 import { Text } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
@@ -35,6 +36,7 @@ export function CampfireMap({
   targetId,
   onTarget,
   bottomInset,
+  rightInset = 0,
 }: {
   campaignId: string
   table: TableState
@@ -43,6 +45,8 @@ export function CampfireMap({
   onTarget: (tokenId: string | null) => void
   /** How much of the map the bottom sheet covers (the view centers above it) */
   bottomInset: number
+  /** Width covered by the map buttons on the right: centering and "whole map" leave it free */
+  rightInset?: number
 }) {
   const fire = useFire()
   const scene = table.scene
@@ -61,13 +65,13 @@ export function CampfireMap({
   const H = scene?.heightPx ?? 1000
   const current = table.combat?.current ?? null
 
-  const minScale = box.w ? Math.min(box.w / W, (box.h - bottomInset) / H, 40 / cell) * 0.8 : 0.1
+  const minScale = box.w ? Math.min((box.w - rightInset) / W, (box.h - bottomInset) / H, 40 / cell) * 0.8 : 0.1
   const maxScale = (40 / cell) * 3.5
 
   /** Puts a map point in the middle of what's visible (above the bottom sheet). */
   const centerOn = useCallback(
     (x: number, y: number, s: number, animate: boolean) => {
-      const nx = box.w / 2 - x * s
+      const nx = (box.w - rightInset) / 2 - x * s
       const ny = (box.h - bottomInset) / 2 - y * s
       if (animate) {
         tx.value = withTiming(nx, { duration: 260 })
@@ -80,7 +84,7 @@ export function CampfireMap({
       }
       setZoom(s)
     },
-    [box.w, box.h, bottomInset, tx, ty, sc],
+    [box.w, box.h, bottomInset, rightInset, tx, ty, sc],
   )
 
   const mine = useMemo(() => table.tokens.filter((t) => t.layer !== 'gm' && controls(t, meId, table.characters)), [table.tokens, table.characters, meId])
@@ -309,34 +313,14 @@ const layerRank = (t: Token) => (t.layer === 'map' ? 0 : t.layer === 'gm' ? 1 : 
 export function snap(grid: GridSettings, t: Pick<Token, 'w' | 'h'>, x: number, y: number): [number, number] {
   const s = grid.size
   if (grid.type === 'hex') {
-    const w = s
-    const h = (s * 2) / Math.sqrt(3)
-    const cx = x + (t.w * s) / 2 - grid.offsetX
-    const cy = y + (t.h * s) / 2 - grid.offsetY
-    let best: [number, number] = [cx, cy]
-    let bestD = Infinity
-    const row0 = Math.round((cy - h / 2) / (0.75 * h))
-    for (let row = row0 - 1; row <= row0 + 1; row++) {
-      const shift = row % 2 !== 0 ? w / 2 : 0
-      const col = Math.round((cx - shift - w / 2) / w)
-      const px = col * w + shift + w / 2
-      const py = row * 0.75 * h + h / 2
-      const d = (px - cx) ** 2 + (py - cy) ** 2
-      if (d < bestD) {
-        bestD = d
-        best = [px, py]
-      }
-    }
-    return [Math.round(best[0] + grid.offsetX - (t.w * s) / 2), Math.round(best[1] + grid.offsetY - (t.h * s) / 2)]
+    const [cx, cy] = nearestHexCenter(x + (t.w * s) / 2, y + (t.h * s) / 2, grid)
+    return [Math.round(cx - (t.w * s) / 2), Math.round(cy - (t.h * s) / 2)]
   }
   return [Math.round((x - grid.offsetX) / s) * s + grid.offsetX, Math.round((y - grid.offsetY) / s) * s + grid.offsetY]
 }
 
-/** 5e distance: the longer of the two directions, in cells, times feet per cell. */
-export function feetBetween(a: [number, number], b: [number, number], grid: GridSettings): number {
-  const cells = Math.round(Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1])) / grid.size)
-  return cells * grid.feet
-}
+/** Feet between two points: by cells moved (squares: a diagonal is one; hexes: steps), like desktop. */
+export const feetBetween = (a: [number, number], b: [number, number], grid: GridSettings): number => gridFeet(a, b, grid)
 
 const SceneArt = memo(function SceneArt({ scene }: { scene: Scene }) {
   const W = scene.widthPx

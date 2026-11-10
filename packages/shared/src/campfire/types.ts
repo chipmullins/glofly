@@ -274,6 +274,8 @@ export type CampaignSettings = {
   showMonsterHp: 'bloodied' | 'exact' | 'none'
   /** 'all': players pick who sees each roll. 'gm': players' rolls only go to GMs */
   diceVisibility: 'all' | 'gm'
+  /** GMs only (never sent to players): new monsters go on the GM layer, hidden */
+  placeHidden?: boolean
 }
 export const DEFAULT_CAMPAIGN_SETTINGS: CampaignSettings = { gmApprovesDamage: true, showMonsterHp: 'bloodied', diceVisibility: 'all' }
 
@@ -289,7 +291,12 @@ export type CampaignSummary = {
   openInCallId: string | null
   myRole: CampaignRole
   updatedAt: string
+  /** The Start board's "Your character": my player character in this campaign, if I have one */
+  myCharacter?: CampaignCharacterCard | null
 }
+
+/** A player character in a few words (Start board). */
+export type CampaignCharacterCard = { id: string; name: string; portraitFileId: string | null; line: string }
 
 export type Campaign = CampaignSummary & { settings: CampaignSettings; createdAt: string }
 

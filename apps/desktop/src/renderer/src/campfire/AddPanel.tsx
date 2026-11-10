@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { SRD_CREDIT, type SrdMonsterSummary, type Token } from '@glofly/shared/campfire/types'
 import { crLabel } from '@glofly/shared/campfire/rules5e'
-import { cf, HIDDEN_KEY, IMAGE_ACCEPT, pickFile, placeHidden, uploadFile } from './api'
+import { cf, IMAGE_ACCEPT, pickFile, uploadFile } from './api'
 import { useCf } from './ctx'
-import { usePlace } from './place'
+import { usePlace, usePlaceHidden } from './place'
 
 // GM: put things on the map: characters' tokens, a token from a picture, and monsters from the
 // compendium (SRD 5.1 stat blocks, ready to roll). "Place hidden" puts them on the GM layer.
@@ -12,7 +12,7 @@ export function AddPanel(): React.JSX.Element {
   const { t, say, openStatBlock } = useCf()
   const [q, setQ] = useState('')
   const [list, setList] = useState<SrdMonsterSummary[]>([])
-  const [hidden, setHidden] = useState(placeHidden)
+  const [hidden, setHidden] = usePlaceHidden()
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
@@ -34,14 +34,7 @@ export function AddPanel(): React.JSX.Element {
     <section className="cf-panel" aria-label="Add to the map">
       <h2 className="cf-h2">Add to the map</h2>
       <label className="cf-check">
-        <input
-          type="checkbox"
-          checked={hidden}
-          onChange={(e) => {
-            setHidden(e.target.checked)
-            localStorage.setItem(HIDDEN_KEY, e.target.checked ? '1' : '0')
-          }}
-        />
+        <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
         Place hidden (GM layer: players don&apos;t see them)
       </label>
 

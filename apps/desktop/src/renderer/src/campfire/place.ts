@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Token } from '@glofly/shared/campfire/types'
 import { cf } from './api'
 import { useCf } from './ctx'
@@ -75,4 +75,27 @@ export function usePlace(): (
     }
     return snapToken(cx - size / 2, cy - size / 2, cells, cells, g)
   }
+}
+
+/**
+ * "Place monsters hidden" (Add to the map, the map builder, the stat block): kept with the campaign
+ * (GMs only ever see it), so it follows the GM to any computer or browser.
+ */
+export function usePlaceHidden(): [boolean, (on: boolean) => void] {
+  const { t, say } = useCf()
+  const saved = t.campaign.settings.placeHidden ?? false
+  const [mine, setMine] = useState<boolean | null>(null)
+  useEffect(() => setMine(null), [saved])
+  const set = (on: boolean): void => {
+    setMine(on)
+    void cf
+      .patch(`/campfire/campaigns/${t.campaign.id}`, { settings: { placeHidden: on } })
+      .then((r) => {
+        if (!r.ok) {
+          say(r.message)
+          setMine(null)
+        }
+      })
+  }
+  return [mine ?? saved, set]
 }

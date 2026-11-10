@@ -57,6 +57,13 @@ export type Viewer = { userId: string; gm: boolean };
 
 const iso = (d: Date) => d.toISOString();
 
+/** A campaign's settings as this person may see them: GM-only preferences stay with GMs. */
+function settingsFor(raw: unknown, role: "gm" | "player"): CampaignSettings {
+  const s = settingsOf(raw);
+  if (role !== "gm") delete s.placeHidden;
+  return s;
+}
+
 export function campaignOut(c: CampaignRow, viewer: { role: "gm" | "player" }): Campaign {
   return {
     id: c.id,
@@ -67,7 +74,7 @@ export function campaignOut(c: CampaignRow, viewer: { role: "gm" | "player" }): 
     openInCallId: openCallOf(c.id),
     myRole: viewer.role,
     updatedAt: iso(c.updatedAt),
-    settings: settingsOf(c.settings),
+    settings: settingsFor(c.settings, viewer.role),
     createdAt: iso(c.createdAt),
   };
 }

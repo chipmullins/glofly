@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { PendingDamage, Token, TokenBar } from '@glofly/shared/campfire/types'
+import type { Character, PendingDamage, Token, TokenBar } from '@glofly/shared/campfire/types'
+import { isFullCharacter } from '@glofly/shared/campfire/types'
 import { CONDITIONS, TOKEN_MARKERS } from '@glofly/shared/campfire/rules5e'
 import { cf } from './api'
 import { useCf } from './ctx'
@@ -388,6 +389,90 @@ export function TokenCard({
           </button>
         </details>
       )}
+    </section>
+  )
+}
+
+/**
+ * My character is down (0 HP, still dying): a big card over the table with the death saves and
+ * one button to roll the next one (the phone's death-save card, for computers). The d20 is rolled
+ * on the server; a 20 brings them back with 1 HP, three successes make them stable.
+ */
+export function DyingCard(): React.JSX.Element | null {
+  const { t, say, me } = useCf()
+  const [busy, setBusy] = useState(false)
+  const [last, setLast] = useState<string | null>(null)
+  const mine = t.characters.find(
+    (c) => c.ownerId === me.id && c.kind === 'pc' && isFullCharacter(c)
+  ) as Character | undefined
+  const s = mine?.sheet
+  const dying = !!s && s.hp.current <= 0 && !s.deathSaves.dead && !s.deathSaves.stable
+  useEffect(() => {
+    if (!dying) setLast(null)
+  }, [dying])
+  if (!mine || !s || !dying) return null
+  const roll = async (): Promise<void> => {
+    setBusy(true)
+    const r = await cf.post<{ outcome: string; roll: { result: { total: number } } }>(
+      `/campfire/characters/${mine.id}/death-save`
+    )
+    setBusy(false)
+    if (!r.ok) return say(r.message)
+    const words: Record<string, string> = {
+      success: 'a success',
+      failure: 'a failure',
+      stable: `${mine.name} is stable`,
+      dead: `${mine.name} has died`,
+      revived: `a 20! ${mine.name} is back up with 1 HP`
+    }
+    const line = `Death save: ${r.data.roll.result.total}, ${words[r.data.outcome] ?? r.data.outcome}.`
+    setLast(line)
+    if (r.data.outcome === 'stable' || r.data.outcome === 'dead' || r.data.outcome === 'revived')
+      say(line)
+  }
+  const pips = (n: number, tone: 'good' | 'bad', label: string): React.JSX.Element => (
+    <span className="cf-dying-pips" role="img" aria-label={`${n} of 3 ${label}`}>
+      {[0, 1, 2].map((i) => (
+        <span key={i} className={`cf-dying-pip cf-dying-pip--${tone}${i < n ? ' on' : ''}`} />
+      ))}
+    </span>
+  )
+  return (
+    <section
+      className="cf-dying"
+      role="alertdialog"
+      aria-labelledby="cf-dying-title"
+      aria-describedby="cf-dying-how"
+    >
+      <span className="cf-kicker">0 hit points</span>
+      <h2 id="cf-dying-title">{mine.name} is down</h2>
+      <p id="cf-dying-how" className="cf-sub">
+        Roll a death save on your turn: 10 or higher is a success, three successes and you&apos;re
+        stable. Three failures and you die. A 20 brings you back with 1 HP; healing does too.
+      </p>
+      <div className="cf-dying-sets">
+        <span>
+          <b className="cf-dying-good">Successes</b>
+          {pips(s.deathSaves.successes, 'good', 'successes')}
+        </span>
+        <span>
+          <b className="cf-dying-bad">Failures</b>
+          {pips(s.deathSaves.failures, 'bad', 'failures')}
+        </span>
+      </div>
+      {last && (
+        <p className="cf-dying-last" aria-live="polite">
+          {last}
+        </p>
+      )}
+      <button
+        type="button"
+        className="cf-primary cf-dying-roll"
+        disabled={busy}
+        onClick={() => void roll()}
+      >
+        <DieFace value="20" size={26} /> {busy ? 'Rolling…' : 'Roll a death save'}
+      </button>
     </section>
   )
 }

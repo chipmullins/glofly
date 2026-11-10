@@ -928,7 +928,7 @@ function More({ ch, editing, busyPortrait, onPortrait, onEdit }: { ch: Character
 
 // ───────────── Pieces ─────────────
 
-function Portrait({ fileId, name, size }: { fileId: string | null; name: string; size: number }) {
+export function Portrait({ fileId, name, size }: { fileId: string | null; name: string; size: number }) {
   const fire = useFire()
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: fire.greenDeep, borderWidth: 3, borderColor: fire.green, alignItems: 'center', justifyContent: 'center' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">

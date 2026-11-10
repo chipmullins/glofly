@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Point, Scene, Token, TokenBar } from '@glofly/shared/campfire/types'
-import { tokenCenter } from '@glofly/shared/campfire/map'
+import { simplifyLasso, tokenCenter } from '@glofly/shared/campfire/map'
 import BuiltLayer, { BuiltDefs } from './BuiltLayer'
 import {
   feetBetween,
@@ -21,6 +21,8 @@ import type { HitFx, PingFx } from './useTable'
 // (bump / arrow / spell, shake, flash, the floating number, the bar dropping).
 
 export type Tool = 'select' | 'measure' | 'ping' | 'fog' | 'template'
+/** How the GM draws fog: a box, freehand (lasso), or by clicking corners */
+export type FogBrush = 'box' | 'lasso' | 'points'
 
 type Props = {
   scene: Scene
@@ -33,6 +35,7 @@ type Props = {
   canMove: (t: Token) => boolean
   tool: Tool
   fogMode: 'reveal' | 'hide'
+  fogBrush?: FogBrush
   selectedId: string | null
   onSelect: (id: string | null) => void
   targetId: string | null
@@ -41,7 +44,7 @@ type Props = {
   onDragLive: (id: string, x: number, y: number) => void
   onDrop: (id: string, x: number, y: number) => void
   onPing: (x: number, y: number) => void
-  onFogShape: (points: Point[], mode: 'reveal' | 'hide') => void
+  onFogShape: (shape: { kind: 'rect' | 'poly'; points: Point[] }, mode: 'reveal' | 'hide') => void
   hits: HitFx[]
   pings: PingFx[]
   nameOf: (userId: string) => string
@@ -297,6 +300,49 @@ function MapView(p: Props): React.JSX.Element {
   const [pan, setPan] = useState<{ x: number; y: number } | null>(null)
   const [ruler, setRuler] = useState<{ a: Point; b: Point; circle: boolean } | null>(null)
   const [fogBox, setFogBox] = useState<{ a: Point; b: Point } | null>(null)
+  // Freehand (lasso) line while the button is held, and clicked corners (points brush).
+  const [lasso, setLasso] = useState<Point[] | null>(null)
+  const [corners, setCorners] = useState<Point[] | null>(null)
+  const [hover, setHover] = useState<Point | null>(null)
+  const brush: FogBrush = p.fogBrush ?? 'box'
+  const fogOn = p.tool === 'fog' && isGm
+  // Leaving the fog tool (or switching brush) drops a half-drawn shape.
+  useEffect(() => {
+    setCorners(null)
+    setLasso(null)
+  }, [p.tool, brush])
+  const finishCorners = useCallback(
+    (pts: Point[] | null, flip: boolean): void => {
+      setCorners(null)
+      if (!pts || pts.length < 3) return
+      const clean = simplifyLasso(pts, 200, 2)
+      if (clean)
+        p.onFogShape(
+          { kind: 'poly', points: clean },
+          flip ? (p.fogMode === 'reveal' ? 'hide' : 'reveal') : p.fogMode
+        )
+    },
+    [p]
+  )
+  // Points brush: Enter closes the shape, Escape (or Backspace for the last corner) takes it back.
+  useEffect(() => {
+    if (!corners) return
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.target as HTMLElement)?.closest?.('input, textarea, select')) return
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        finishCorners(corners, e.shiftKey)
+      } else if (e.key === 'Escape') {
+        e.stopPropagation()
+        setCorners(null)
+      } else if (e.key === 'Backspace') {
+        e.preventDefault()
+        setCorners(corners.length > 1 ? corners.slice(0, -1) : null)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [corners, finishCorners])
   const [pops, setPops] = useState<Pop[]>([])
   const [shots, setShots] = useState<Shot[]>([])
   const [barHold, setBarHold] = useState<Map<string, (TokenBar | null)[]>>(new Map())
@@ -459,6 +505,7 @@ function MapView(p: Props): React.JSX.Element {
       setPan(null)
       setRuler(null)
       setFogBox(null)
+      setLasso(null)
       clearLongPress()
       return
     }
@@ -487,8 +534,18 @@ function MapView(p: Props): React.JSX.Element {
       setRuler({ a: at, b: at, circle: p.tool === 'template' })
       return
     }
-    if (p.tool === 'fog' && isGm) {
-      setFogBox({ a: at, b: at })
+    if (fogOn) {
+      if (brush === 'lasso') setLasso([at])
+      else if (brush === 'points') {
+        const first = corners?.[0]
+        // Clicking the first corner again (or a double-click) closes the shape.
+        const near = first && Math.hypot(first[0] - at[0], first[1] - at[1]) < 12 / view.z
+        const last = corners?.[corners.length - 1]
+        if (near) finishCorners(corners, e.shiftKey)
+        // The second click of a double-click lands on the same spot: the double-click finishes.
+        else if (!last || Math.hypot(last[0] - at[0], last[1] - at[1]) * view.z > 4)
+          setCorners([...(corners ?? []), [Math.round(at[0]), Math.round(at[1])]])
+      } else setFogBox({ a: at, b: at })
       return
     }
     const tk = tokenAt(e.target)
@@ -518,6 +575,12 @@ function MapView(p: Props): React.JSX.Element {
       return
     }
     const at = worldOf(e)
+    if (corners) setHover(at)
+    if (lasso) {
+      const last = lasso[lasso.length - 1]
+      if (Math.hypot(last[0] - at[0], last[1] - at[1]) * view.z >= 4) setLasso([...lasso, at])
+      return
+    }
     if (ruler) {
       setRuler({ ...ruler, b: at })
       return
@@ -548,13 +611,25 @@ function MapView(p: Props): React.JSX.Element {
       setFogBox(null)
       if (Math.abs(a[0] - b[0]) > 4 && Math.abs(a[1] - b[1]) > 4) {
         p.onFogShape(
-          [
-            [Math.round(a[0]), Math.round(a[1])],
-            [Math.round(b[0]), Math.round(b[1])]
-          ],
+          {
+            kind: 'rect',
+            points: [
+              [Math.round(a[0]), Math.round(a[1])],
+              [Math.round(b[0]), Math.round(b[1])]
+            ]
+          },
           e.shiftKey ? (p.fogMode === 'reveal' ? 'hide' : 'reveal') : p.fogMode
         )
       }
+    }
+    if (lasso) {
+      setLasso(null)
+      const clean = simplifyLasso(lasso)
+      if (clean)
+        p.onFogShape(
+          { kind: 'poly', points: clean },
+          e.shiftKey ? (p.fogMode === 'reveal' ? 'hide' : 'reveal') : p.fogMode
+        )
     }
     if (drag) {
       const tk = byId.get(drag.id)
@@ -569,6 +644,10 @@ function MapView(p: Props): React.JSX.Element {
   }
 
   const onDoubleClick = (e: React.MouseEvent): void => {
+    if (fogOn) {
+      if (corners) finishCorners(corners, e.shiftKey)
+      return
+    }
     // The map holds the pointer while it's pressed, so find the token under it by position.
     const under = document
       .elementsFromPoint(e.clientX, e.clientY)
@@ -793,6 +872,30 @@ function MapView(p: Props): React.JSX.Element {
               scene={scene}
             />
           )}
+          {(lasso || corners) && (
+            <polyline
+              className="cf-fog-draft"
+              points={[...(lasso ?? corners ?? []), ...(corners && hover ? [hover] : [])]
+                .map((q) => q.join(','))
+                .join(' ')}
+              fill={p.fogMode === 'reveal' ? 'rgba(255,179,71,0.15)' : 'rgba(8,20,32,0.5)'}
+              stroke="#ffb347"
+              strokeWidth={2 / view.z}
+              strokeDasharray="8 6"
+              strokeLinejoin="round"
+            />
+          )}
+          {corners?.map((q, i) => (
+            <circle
+              key={i}
+              cx={q[0]}
+              cy={q[1]}
+              r={(i === 0 ? 7 : 4) / view.z}
+              fill={i === 0 ? '#ffb347' : '#fff3df'}
+              stroke="#1a120d"
+              strokeWidth={1.5 / view.z}
+            />
+          ))}
           {fogBox && (
             <rect
               x={Math.min(fogBox.a[0], fogBox.b[0])}

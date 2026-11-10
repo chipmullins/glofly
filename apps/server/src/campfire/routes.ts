@@ -14,6 +14,8 @@ import {
   normalizeGrid,
   normalizeSheet,
   sizeCells,
+  totalLevel,
+  type CampaignCharacterCard,
   type CampaignSettings,
   type FogShape,
   type TokenBar,
@@ -88,11 +90,27 @@ coreRouter.get("/homes/:kind/:id/campaigns", async (req, res) => {
     const t = await tableFor(row, me(res).id);
     if (t) {
       const { settings: _s, createdAt: _c, ...summary } = campaignOut(row, t);
-      campaigns.push(summary);
+      campaigns.push({ ...summary, myCharacter: await myCharacterIn(row.id, me(res).id) });
     }
   }
   res.json({ campaigns, canCreate: home.canCreate && rows.length < CAMPFIRE_LIMITS.campaignsPerHome, why: home.why });
 });
+
+/** The Start board's "Your character": my first player character in a campaign, in a few words. */
+async function myCharacterIn(campaignId: string, userId: string): Promise<CampaignCharacterCard | null> {
+  const [c] = await db
+    .select({ id: campfireCharacters.id, name: campfireCharacters.name, portraitFileId: campfireCharacters.portraitFileId, sheet: campfireCharacters.sheet })
+    .from(campfireCharacters)
+    .where(and(eq(campfireCharacters.campaignId, campaignId), eq(campfireCharacters.ownerId, userId), eq(campfireCharacters.kind, "pc")))
+    .orderBy(asc(campfireCharacters.createdAt))
+    .limit(1);
+  if (!c) return null;
+  const sheet = normalizeSheet(c.sheet);
+  const classes = sheet.classes.map((k) => k.name).filter(Boolean).join(" / ");
+  const who = [sheet.race, classes].filter((x) => x.trim()).join(" ");
+  const line = [who, `Level ${Math.max(1, totalLevel(sheet))}`].filter(Boolean).join(" · ");
+  return { id: c.id, name: c.name, portraitFileId: c.portraitFileId, line };
+}
 
 coreRouter.post("/campaigns", createLimiter, async (req, res) => {
   const parsed = z
@@ -143,6 +161,7 @@ const settingsInput = z
     gmApprovesDamage: z.boolean().optional(),
     showMonsterHp: z.enum(["bloodied", "exact", "none"]).optional(),
     diceVisibility: z.enum(["all", "gm"]).optional(),
+    placeHidden: z.boolean().optional(),
   })
   .strict();
 

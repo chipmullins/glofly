@@ -11,19 +11,11 @@ import type {
 } from '@glofly/shared/campfire/types'
 import { MAP_THEMES } from '@glofly/shared/campfire/types'
 import BuiltLayer, { BuiltDefs, ObjectShape, type BuiltLayers } from './BuiltLayer'
-import {
-  cf,
-  fileUrl,
-  HIDDEN_KEY,
-  IMAGE_ACCEPT,
-  pickFile,
-  pieceId,
-  placeHidden,
-  uploadFile
-} from './api'
+import { cf, fileUrl, IMAGE_ACCEPT, pickFile, pieceId, uploadFile } from './api'
 import { useCf } from './ctx'
 import { hexPattern, MATERIALS, OBJECTS, Pinch, snapCorner, THEMES, usePanZoom } from './geometry'
 import { Icon } from './icons'
+import { usePlaceHidden } from './place'
 
 // The map builder (Builder board, GMs only): rooms (drag corner to corner, or Shift for a free
 // shape) with floor materials, walls with doors, objects dragged from the palette, GM notes,
@@ -84,7 +76,7 @@ export default function Builder({
   const [sel, setSel] = useState<Sel>(null)
   const [preview, setPreview] = useState(false)
   const [startFogged, setStartFogged] = useState(false)
-  const [hiddenMonsters, setHiddenMonsters] = useState(placeHidden)
+  const [hiddenMonsters, setHiddenMonsters] = usePlaceHidden()
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(
@@ -731,10 +723,7 @@ export default function Builder({
                   <input
                     type="checkbox"
                     checked={hiddenMonsters}
-                    onChange={(e) => {
-                      setHiddenMonsters(e.target.checked)
-                      localStorage.setItem(HIDDEN_KEY, e.target.checked ? '1' : '0')
-                    }}
+                    onChange={(e) => setHiddenMonsters(e.target.checked)}
                   />
                   Place monsters hidden
                 </label>

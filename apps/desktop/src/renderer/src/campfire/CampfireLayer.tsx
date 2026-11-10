@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { SignedInUser } from '../../../preload/api-types'
-import type { Campaign, CampaignSummary } from '@glofly/shared/campfire/types'
+import type {
+  Campaign,
+  CampaignCharacterCard,
+  CampaignSummary
+} from '@glofly/shared/campfire/types'
 import { SRD_CREDIT } from '@glofly/shared/campfire/types'
 import { dayLabel } from '../lib/time'
-import { cf } from './api'
+import { cf, fileUrl, IMAGE_ACCEPT, pickFile, uploadFile } from './api'
 import { closeCampfire, dismissLit, openCampfire, useCampfireOpen, useLitTables } from './store'
 import Table from './Table'
 import { FlameIcon } from './icons'
@@ -169,6 +173,16 @@ function StartBoard({ onPick }: { onPick: (id: string) => void }): React.JSX.Ele
         {!canCreate && list && list.length === 0 && (
           <p className="cf-hint">{why ?? 'No campaigns here yet. A game master can start one.'}</p>
         )}
+        {list && list.some((c) => c.myRole === 'player') && (
+          <YourCharacters
+            campaigns={list.filter((c) => c.myRole === 'player')}
+            onChange={(id, card) =>
+              setList((l) => l && l.map((c) => (c.id === id ? { ...c, myCharacter: card } : c)))
+            }
+            onPick={onPick}
+            onError={setError}
+          />
+        )}
         <p className="cf-start-foot">
           {home.kind === 'nebula'
             ? 'Game masters: people with the "Run Campfire games" permission (or the Owner). '
@@ -177,6 +191,97 @@ function StartBoard({ onPick }: { onPick: (id: string) => void }): React.JSX.Ele
         </p>
       </section>
     </div>
+  )
+}
+
+/** The Start board's "Your character": my character in each campaign I play, with its portrait. */
+function YourCharacters({
+  campaigns,
+  onChange,
+  onPick,
+  onError
+}: {
+  campaigns: CampaignSummary[]
+  onChange: (campaignId: string, card: CampaignCharacterCard) => void
+  onPick: (id: string) => void
+  onError: (message: string) => void
+}): React.JSX.Element {
+  const [busy, setBusy] = useState<string | null>(null)
+  const upload = async (c: CampaignSummary, card: CampaignCharacterCard): Promise<void> => {
+    const file = await pickFile(IMAGE_ACCEPT)
+    if (!file) return
+    setBusy(card.id)
+    const up = await uploadFile(c.id, 'portrait', file)
+    if (!up.ok) {
+      setBusy(null)
+      return onError(up.message)
+    }
+    const r = await cf.patch(`/campfire/characters/${card.id}`, { portraitFileId: up.data.id })
+    setBusy(null)
+    if (!r.ok) return onError(r.message)
+    onChange(c.id, { ...card, portraitFileId: up.data.id })
+  }
+  return (
+    <section className="cf-yours" aria-labelledby="cf-yours-title">
+      <h3 id="cf-yours-title" className="cf-h3">
+        Your character
+      </h3>
+      <ul className="cf-yours-list">
+        {campaigns.map((c) => {
+          const card = c.myCharacter
+          return (
+            <li key={c.id} className="cf-yours-row">
+              {card ? (
+                <>
+                  <span className="cf-yours-face" aria-hidden="true">
+                    {card.portraitFileId ? (
+                      <img src={fileUrl(card.portraitFileId)} alt="" />
+                    ) : (
+                      (card.name.trim()[0] ?? '?').toUpperCase()
+                    )}
+                  </span>
+                  <span className="cf-yours-text">
+                    <strong>{card.name}</strong>
+                    <span>
+                      {card.line}
+                      {campaigns.length > 1 ? ` · ${c.name}` : ''}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="cf-ghost cf-small"
+                    disabled={busy === card.id}
+                    onClick={() => void upload(c, card)}
+                  >
+                    {busy === card.id
+                      ? 'Uploading…'
+                      : card.portraitFileId
+                        ? 'Change portrait'
+                        : 'Upload portrait'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="cf-yours-face cf-yours-face--empty" aria-hidden="true">
+                    +
+                  </span>
+                  <span className="cf-yours-text">
+                    <strong>No character yet</strong>
+                    <span>
+                      {campaigns.length > 1 ? `${c.name}: ` : ''}open the table and make one in the
+                      Sheet tab.
+                    </span>
+                  </span>
+                  <button type="button" className="cf-ghost cf-small" onClick={() => onPick(c.id)}>
+                    Open the table
+                  </button>
+                </>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }
 

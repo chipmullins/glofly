@@ -40,6 +40,7 @@ export const settingsOf = (raw: unknown): CampaignSettings => {
     gmApprovesDamage: typeof s.gmApprovesDamage === "boolean" ? s.gmApprovesDamage : DEFAULT_CAMPAIGN_SETTINGS.gmApprovesDamage,
     showMonsterHp: s.showMonsterHp === "exact" || s.showMonsterHp === "none" ? s.showMonsterHp : "bloodied",
     diceVisibility: s.diceVisibility === "gm" ? "gm" : "all",
+    placeHidden: s.placeHidden === true,
   };
 };
 

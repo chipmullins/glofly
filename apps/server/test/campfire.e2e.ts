@@ -131,7 +131,7 @@ test("homes, permissions to create, restricted accounts", { skip }, async () => 
   assert.equal(made.status, 201, JSON.stringify(made.json));
   assert.equal(made.json.name, "Lost Mine");
   assert.equal(made.json.myRole, "gm");
-  assert.deepEqual(made.json.settings, { gmApprovesDamage: true, showMonsterHp: "bloodied", diceVisibility: "all" });
+  assert.deepEqual(made.json.settings, { gmApprovesDamage: true, showMonsterHp: "bloodied", diceVisibility: "all", placeHidden: false });
   campaignId = made.json.id;
   const list = await call(`/campfire/homes/nebula/${voice.conversationId}/campaigns`, { token: p1.token });
   assert.deepEqual(list.json.campaigns.map((c: any) => [c.id, c.myRole]), [[campaignId, "player"]]);
@@ -245,6 +245,44 @@ test("scenes, tokens and fog: players never get hidden things", { skip }, async 
   await call(`/campfire/campaigns/${campaignId}`, { method: "PATCH", token: gm.token, body: { settings: { showMonsterHp: "none" } } });
   assert.equal((await call(`/campfire/campaigns/${campaignId}`, { token: p1.token })).json.tokens.find((t: any) => t.id === tok.goblin).bars[0], null);
   await call(`/campfire/campaigns/${campaignId}`, { method: "PATCH", token: gm.token, body: { settings: { showMonsterHp: "bloodied" } } });
+});
+
+test("phase 1 gaps (Nov 10): place-hidden setting is the GMs', Your character on the Start board, freehand fog", { skip }, async () => {
+  // "Place monsters hidden" is kept with the campaign and never reaches players.
+  const on = await call(`/campfire/campaigns/${campaignId}`, { method: "PATCH", token: gm.token, body: { settings: { placeHidden: true } } });
+  assert.equal(on.status, 200, JSON.stringify(on.json));
+  assert.equal(on.json.settings.placeHidden, true);
+  assert.equal((await call(`/campfire/campaigns/${campaignId}`, { token: gm.token })).json.campaign.settings.placeHidden, true);
+  const asP = await call(`/campfire/campaigns/${campaignId}`, { token: p1.token });
+  assert.equal("placeHidden" in asP.json.campaign.settings, false, "players don't get the GM's preference");
+  assert.equal((await call(`/campfire/campaigns/${campaignId}`, { method: "PATCH", token: p1.token, body: { settings: { placeHidden: false } } })).status, 403);
+  assert.equal((await call(`/campfire/campaigns/${campaignId}`, { method: "PATCH", token: gm.token, body: { settings: { sneaky: 1 } } })).status, 400);
+  await call(`/campfire/campaigns/${campaignId}`, { method: "PATCH", token: gm.token, body: { settings: { placeHidden: false } } });
+
+  // Your character: my PC in each campaign, in a few words (nobody else's).
+  const mine = await call(`/campfire/homes/nebula/${voice.conversationId}/campaigns`, { token: p1.token });
+  const card = mine.json.campaigns.find((c: any) => c.id === campaignId).myCharacter;
+  assert.equal(card.id, pcId);
+  assert.equal(card.name, "Thorin");
+  assert.match(card.line, /Fighter · Level 3$/);
+  const other = await call(`/campfire/homes/nebula/${voice.conversationId}/campaigns`, { token: p2.token });
+  assert.equal(other.json.campaigns.find((c: any) => c.id === campaignId).myCharacter, null);
+  const gms = await call(`/campfire/homes/nebula/${voice.conversationId}/campaigns`, { token: gm.token });
+  assert.equal(gms.json.campaigns.find((c: any) => c.id === campaignId).myCharacter, null, "GMs see only their own PCs, never others'");
+
+  // Freehand fog: a polygon reveals what's inside it (and only that) for players.
+  const lasso = [[1380, 1380], [1680, 1360], [1720, 1650], [1400, 1700]];
+  const f = await call(`/campfire/scenes/${sceneId}/fog`, { method: "POST", token: gm.token, body: { op: "reveal", shape: { kind: "poly", points: lasso } } });
+  assert.equal(f.status, 200, JSON.stringify(f.json));
+  const seen = (await call(`/campfire/campaigns/${campaignId}`, { token: p2.token })).json.tokens.map((t: any) => t.id);
+  assert.ok(seen.includes(tok.lurker), "the lurker inside the lasso is seen now");
+  assert.ok(!seen.includes(tok.trap), "GM layer still hidden");
+  const hide = await call(`/campfire/scenes/${sceneId}/fog`, { method: "POST", token: gm.token, body: { op: "hide", shape: { kind: "poly", points: lasso } } });
+  assert.equal(hide.status, 200);
+  assert.ok(!(await call(`/campfire/campaigns/${campaignId}`, { token: p2.token })).json.tokens.some((t: any) => t.id === tok.lurker), "hidden again");
+  const tooMany = Array.from({ length: 201 }, (_, i) => [i * 3, (i % 2) * 50]);
+  assert.equal((await call(`/campfire/scenes/${sceneId}/fog`, { method: "POST", token: gm.token, body: { op: "reveal", shape: { kind: "poly", points: tooMany } } })).status, 400);
+  assert.equal((await call(`/campfire/scenes/${sceneId}/fog`, { method: "POST", token: p1.token, body: { op: "reveal", shape: { kind: "poly", points: lasso } } })).status, 403);
 });
 
 test("live events are filtered per person, only to apps that know Campfire", { skip }, async () => {

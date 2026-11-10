@@ -4,40 +4,14 @@ import type { GridSettings, MapTheme, Point } from '@glofly/shared/campfire/type
 // Map math: snapping to the grid (squares or hexes), distances in feet, the hex pattern, and the
 // pan/zoom every map view uses (wheel, drag, pinch).
 
-const SQRT3 = Math.sqrt(3)
-
-/** Hexes are pointy-top: `size` is a hex's width, rows overlap by a quarter. */
-export const hexHeight = (size: number): number => (size * 2) / SQRT3
-
-export function hexCenter(col: number, row: number, g: GridSettings): Point {
-  const w = g.size
-  const h = hexHeight(w)
-  return [
-    g.offsetX + col * w + w / 2 + (row % 2 !== 0 ? w / 2 : 0),
-    g.offsetY + row * 0.75 * h + h / 2
-  ]
-}
-
-/** The hex center nearest a point. */
-export function nearestHexCenter(x: number, y: number, g: GridSettings): Point {
-  const h = hexHeight(g.size)
-  const row0 = Math.round((y - g.offsetY - h / 2) / (0.75 * h))
-  let best: Point = [x, y]
-  let bestD = Infinity
-  for (let row = row0 - 1; row <= row0 + 1; row++) {
-    const shift = row % 2 !== 0 ? g.size / 2 : 0
-    const col0 = Math.round((x - g.offsetX - g.size / 2 - shift) / g.size)
-    for (let col = col0 - 1; col <= col0 + 1; col++) {
-      const c = hexCenter(col, row, g)
-      const d = (c[0] - x) ** 2 + (c[1] - y) ** 2
-      if (d < bestD) {
-        bestD = d
-        best = c
-      }
-    }
-  }
-  return best
-}
+// Hex math and distances live in shared map.ts so phones measure exactly the same way.
+export { hexHeight, hexCenter, nearestHexCenter } from '@glofly/shared/campfire/map'
+import {
+  hexHeight,
+  nearestHexCenter,
+  gridFeet,
+  type DiagonalRule
+} from '@glofly/shared/campfire/map'
 
 /** Where a token (w × h cells) lands when dropped with its top-left at x, y. */
 export function snapToken(
@@ -71,13 +45,13 @@ export function snapCorner(x: number, y: number, g: GridSettings, free = false):
   ]
 }
 
-/** Feet between two points: 5e counts a diagonal square as one (hexes: as the crow flies). */
-export function feetBetween(a: Point, b: Point, g: GridSettings): number {
-  const dx = Math.abs(b[0] - a[0]) / g.size
-  const dy = Math.abs(b[1] - a[1]) / g.size
-  const cells = g.type === 'hex' ? Math.round(Math.hypot(dx, dy)) : Math.round(Math.max(dx, dy))
-  return cells * g.feet
-}
+/** Feet between two points: by cells moved (5e: a diagonal square is one; hexes: steps). */
+export const feetBetween = (
+  a: Point,
+  b: Point,
+  g: GridSettings,
+  diagonal: DiagonalRule = '5'
+): number => gridFeet(a, b, g, diagonal)
 
 /** One tile of the hex pattern (two rows), as an SVG path. */
 export function hexPattern(size: number): { w: number; h: number; d: string } {

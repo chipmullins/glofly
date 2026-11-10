@@ -62,7 +62,9 @@
   box-sizing: border-box;
   border-radius: 20px;
   background: var(--cf-bg);
-  box-shadow: 0 0 0 1px var(--cf-line), 0 30px 80px rgba(0, 0, 0, 0.6);
+  box-shadow:
+    0 0 0 1px var(--cf-line),
+    0 30px 80px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -124,7 +126,9 @@
   place-items: center;
   border-radius: 50%;
   overflow: hidden;
-  font: 800 26px/1 Outfit, var(--glo-font-display);
+  font:
+    800 26px/1 Outfit,
+    var(--glo-font-display);
   box-shadow: 0 0 0 3px var(--cf-good);
 }
 .cfs-portrait--danger {
@@ -156,7 +160,9 @@
   min-width: 0;
 }
 .cfs-title h2 {
-  font: 800 26px/1.05 Outfit, var(--glo-font-display);
+  font:
+    800 26px/1.05 Outfit,
+    var(--glo-font-display);
 }
 .cfs-line {
   font-size: 14px;
@@ -181,7 +187,9 @@
   border-radius: 999px;
   background: var(--cf-surface);
   color: var(--cf-muted);
-  font: 700 11px/1.2 'DM Sans', var(--glo-font-body);
+  font:
+    700 11px/1.2 'DM Sans',
+    var(--glo-font-body);
   align-self: flex-start;
 }
 .cfs-meta .cfs-pill {
@@ -210,7 +218,9 @@
   border: 1px solid var(--cf-line);
   background: var(--cf-surface);
   color: var(--cf-ink);
-  font: 700 13px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 13px/1 'DM Sans',
+    var(--glo-font-body) !important;
   white-space: nowrap;
 }
 .cfs-button:hover:not(:disabled) {
@@ -242,7 +252,9 @@
   border: 0;
   background: var(--cf-surface);
   color: var(--cf-ink);
-  font: 700 18px/1 Outfit, var(--glo-font-display) !important;
+  font:
+    700 18px/1 Outfit,
+    var(--glo-font-display) !important;
   flex: none;
 }
 .cfs-close:hover {
@@ -286,7 +298,9 @@
   color: var(--cf-muted);
 }
 .cfs-vital strong {
-  font: 800 22px/1 Outfit, var(--glo-font-display);
+  font:
+    800 22px/1 Outfit,
+    var(--glo-font-display);
 }
 .cfs-vital strong.cfs-big {
   font-size: 28px;
@@ -333,7 +347,9 @@
   flex: 1;
 }
 .cfs-hp-now {
-  font: 800 26px/1 Outfit, var(--glo-font-display) !important;
+  font:
+    800 26px/1 Outfit,
+    var(--glo-font-display) !important;
   color: var(--cf-ink);
 }
 .cfs-hp-max {
@@ -391,7 +407,9 @@
   border: 0 !important;
   background: transparent !important;
   padding: 0 !important;
-  font: 600 14px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    600 14px/1 'DM Sans',
+    var(--glo-font-body) !important;
   outline: none;
 }
 .cfs-amount:focus-within {
@@ -403,7 +421,9 @@
   padding: 0 12px;
   border-radius: 9px;
   border: 0;
-  font: 700 12px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 12px/1 'DM Sans',
+    var(--glo-font-body) !important;
 }
 .cfs-hp-button--damage {
   background: var(--cfs-damage-bg);
@@ -448,7 +468,9 @@
   border: 0;
   background: transparent;
   color: var(--cf-muted);
-  font: 700 13px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 13px/1 'DM Sans',
+    var(--glo-font-body) !important;
 }
 .cfs-seg-button {
   height: 30px;
@@ -497,7 +519,9 @@
   border: 0;
   background: rgba(255, 255, 255, 0.08);
   color: var(--cf-ink);
-  font: 700 12px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 12px/1 'DM Sans',
+    var(--glo-font-body) !important;
 }
 .cfs-conc-end:hover {
   background: rgba(255, 255, 255, 0.16);
@@ -548,7 +572,9 @@
 }
 .cfs-section-head h3 {
   flex: 1;
-  font: 700 15px/1.2 Outfit, var(--glo-font-display);
+  font:
+    700 15px/1.2 Outfit,
+    var(--glo-font-display);
 }
 .cfs-hint {
   margin: 0;
@@ -564,7 +590,9 @@
   border: 1px solid var(--cf-line);
   background: transparent;
   color: var(--cf-muted);
-  font: 700 11px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 11px/1 'DM Sans',
+    var(--glo-font-body) !important;
 }
 .cfs-edit-toggle:hover,
 .cfs-mini:hover:not(:disabled) {
@@ -582,7 +610,9 @@
   border: 1px dashed var(--cf-line-strong);
   background: transparent;
   color: var(--cf-ink);
-  font: 700 12px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 12px/1 'DM Sans',
+    var(--glo-font-body) !important;
 }
 .cfs-add:hover,
 .cfs-add[aria-expanded='true'] {
@@ -625,12 +655,16 @@ button.cfs-ability:hover {
   background: var(--cf-raised);
 }
 .cfs-ability-name {
-  font: 700 11px/1 'DM Sans', var(--glo-font-body);
+  font:
+    700 11px/1 'DM Sans',
+    var(--glo-font-body);
   letter-spacing: 0.08em;
   color: var(--cf-muted);
 }
 .cfs-ability strong {
-  font: 800 26px/1 Outfit, var(--glo-font-display);
+  font:
+    800 26px/1 Outfit,
+    var(--glo-font-display);
 }
 .cfs-ability-score {
   min-width: 34px;
@@ -685,7 +719,9 @@ button.cfs-ability:hover {
   min-width: 0;
 }
 .cfs-row-num {
-  font: 700 14px/1 Outfit, var(--glo-font-display);
+  font:
+    700 14px/1 Outfit,
+    var(--glo-font-display);
   color: var(--cf-ink);
 }
 .cfs-row-num--prof {
@@ -704,7 +740,9 @@ button.cfs-ability:hover {
 }
 .cfs-dot--2 {
   background: var(--cf-amber);
-  box-shadow: 0 0 0 2px var(--cfs-input), 0 0 0 3px var(--cf-amber);
+  box-shadow:
+    0 0 0 2px var(--cfs-input),
+    0 0 0 3px var(--cf-amber);
 }
 .cfs-legend {
   display: flex;
@@ -742,7 +780,9 @@ button.cfs-ability:hover {
   border: 1px solid var(--cf-line);
   background: transparent;
   color: var(--cf-muted);
-  font: 600 12px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    600 12px/1 'DM Sans',
+    var(--glo-font-body) !important;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -837,7 +877,9 @@ button.cfs-ability:hover {
   border: 1px solid rgba(255, 179, 71, 0.45);
   background: var(--cf-active);
   color: var(--cf-amber) !important;
-  font: 800 16px/1 Outfit, var(--glo-font-display) !important;
+  font:
+    800 16px/1 Outfit,
+    var(--glo-font-display) !important;
 }
 .cfs-tohit:hover {
   background: #4a3018;
@@ -848,7 +890,9 @@ button.cfs-ability:hover {
   border: 1px solid var(--cf-line);
   background: var(--cfs-input);
   color: var(--cf-ink);
-  font: 700 14px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 14px/1 'DM Sans',
+    var(--glo-font-body) !important;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -912,7 +956,9 @@ button.cfs-ability:hover {
   padding: 0 4px !important;
   border: 0 !important;
   background: transparent !important;
-  font: 700 16px/1 Outfit, var(--glo-font-display) !important;
+  font:
+    700 16px/1 Outfit,
+    var(--glo-font-display) !important;
 }
 .cfs-inline-form {
   display: flex;
@@ -1009,7 +1055,9 @@ button.cfs-ability:hover {
   display: grid;
   place-items: center;
   background: var(--cfs-input);
-  font: 700 12px/1 Outfit, var(--glo-font-display);
+  font:
+    700 12px/1 Outfit,
+    var(--glo-font-display);
   color: var(--cf-amber);
   flex: none;
 }
@@ -1034,7 +1082,9 @@ button.cfs-ability:hover {
   border-radius: 5px;
   background: var(--cfs-conc-bg);
   color: var(--cfs-conc-ink);
-  font: 700 10px/1.2 'DM Sans', var(--glo-font-body);
+  font:
+    700 10px/1.2 'DM Sans',
+    var(--glo-font-body);
 }
 .cfs-spell-notes {
   font-size: 12px;
@@ -1049,7 +1099,9 @@ button.cfs-ability:hover {
   border: 0;
   background: var(--cf-accent);
   color: var(--cf-on-accent) !important;
-  font: 700 12px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 12px/1 'DM Sans',
+    var(--glo-font-body) !important;
   white-space: nowrap;
   flex: none;
 }
@@ -1192,7 +1244,9 @@ button.cfs-ability:hover {
 }
 .cfs-table th {
   text-align: left;
-  font: 700 11px/1 'DM Sans', var(--glo-font-body);
+  font:
+    700 11px/1 'DM Sans',
+    var(--glo-font-body);
   color: var(--cf-muted);
   padding: 0 8px 4px;
 }
@@ -1237,7 +1291,9 @@ button.cfs-ability:hover {
   background: var(--cfn-face);
   display: grid;
   place-items: center;
-  font: 800 26px/1 Outfit, var(--glo-font-display);
+  font:
+    800 26px/1 Outfit,
+    var(--glo-font-display);
   box-shadow: 0 0 0 3px var(--cfs-red);
   flex: none;
 }
@@ -1250,7 +1306,9 @@ button.cfs-ability:hover {
   font-size: 13px;
 }
 .cfn-title h2 {
-  font: 800 26px/1.05 Outfit, var(--glo-font-display);
+  font:
+    800 26px/1.05 Outfit,
+    var(--glo-font-display);
 }
 .cfn-gm-pill {
   display: inline-flex;
@@ -1260,7 +1318,9 @@ button.cfs-ability:hover {
   border-radius: 999px;
   background: var(--cfn-gm-bg);
   color: var(--cfn-gm-ink);
-  font: 700 12px/1 'DM Sans', var(--glo-font-body);
+  font:
+    700 12px/1 'DM Sans',
+    var(--glo-font-body);
   white-space: nowrap;
 }
 .cfn-block {
@@ -1294,7 +1354,9 @@ button.cfs-ability:hover {
   gap: 6px;
 }
 .cfn-big {
-  font: 800 18px/1 Outfit, var(--glo-font-display);
+  font:
+    800 18px/1 Outfit,
+    var(--glo-font-display);
 }
 .cfn-hp-line {
   display: flex;
@@ -1306,7 +1368,9 @@ button.cfs-ability:hover {
   border: 0;
   background: none;
   color: var(--cf-amber) !important;
-  font: 700 12px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 12px/1 'DM Sans',
+    var(--glo-font-body) !important;
   padding: 2px 0;
 }
 .cfn-reroll:hover {
@@ -1345,14 +1409,18 @@ button.cfs-ability:hover {
   gap: 2px;
 }
 .cfn-ability-name {
-  font: 700 11px/1 'DM Sans', var(--glo-font-body);
+  font:
+    700 11px/1 'DM Sans',
+    var(--glo-font-body);
   color: var(--cfn-label);
 }
 .cfn-ability-roll {
   border: 0;
   background: none;
   color: var(--cf-ink);
-  font: 700 15px/1.2 Outfit, var(--glo-font-display) !important;
+  font:
+    700 15px/1.2 Outfit,
+    var(--glo-font-display) !important;
   border-radius: 6px;
   padding: 2px 6px;
 }
@@ -1369,7 +1437,9 @@ button.cfs-ability:hover {
 }
 .cfn-h3 {
   margin: 6px 0 0 !important;
-  font: 700 16px/1.2 Outfit, var(--glo-font-display) !important;
+  font:
+    700 16px/1.2 Outfit,
+    var(--glo-font-display) !important;
   color: var(--cfn-label);
   border-bottom: 1px solid var(--cfn-rule);
   padding-bottom: 4px;
@@ -1387,7 +1457,9 @@ button.cfs-ability:hover {
   border: 0;
   background: var(--cf-active);
   color: var(--cf-amber) !important;
-  font: 800 13px/1 Outfit, var(--glo-font-display) !important;
+  font:
+    800 13px/1 Outfit,
+    var(--glo-font-display) !important;
 }
 .cfn-dmg {
   height: 28px;
@@ -1396,7 +1468,9 @@ button.cfs-ability:hover {
   border: 1px solid var(--cf-line);
   background: var(--cfs-input);
   color: var(--cf-ink);
-  font: 700 12px/1 'DM Sans', var(--glo-font-body) !important;
+  font:
+    700 12px/1 'DM Sans',
+    var(--glo-font-body) !important;
 }
 .cfn-tohit:hover,
 .cfn-dmg:hover {
@@ -1500,4 +1574,19 @@ button.cfs-ability:hover {
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
+}
+
+/* Save spells at an area: who's in it (uncheck to leave someone out) */
+.cfs-save-targets {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0 0;
+  padding: 6px 10px 8px;
+  border: 1px solid var(--cf-line);
+  border-radius: 10px;
+}
+.cfs-save-targets legend {
+  padding: 0 4px;
 }

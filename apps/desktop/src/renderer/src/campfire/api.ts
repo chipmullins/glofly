@@ -92,9 +92,3 @@ export const reducedMotion = (): boolean =>
 /** A short random id for map builder pieces. */
 export const pieceId = (prefix: string): string =>
   `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
-
-/** "Place monsters hidden" (map builder and Add to the map): kept on this device. */
-export const HIDDEN_KEY = 'glofly.campfire.placeHidden'
-export function placeHidden(): boolean {
-  return localStorage.getItem(HIDDEN_KEY) === '1'
-}

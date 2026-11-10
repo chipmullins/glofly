@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { SRD_CREDIT, type CampaignHomeKind, type CampaignSummary } from '@glofly/shared'
+import { SRD_CREDIT, type CampaignCharacterCard, type CampaignHomeKind, type CampaignSummary } from '@glofly/shared'
 import { ThemeOverride } from '@/ui/theme'
 import { Text, webNoOutline } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
@@ -11,6 +11,9 @@ import { campfireApi } from '@/campfire/api'
 import { noteLit } from '@/campfire/store'
 import { FireButton } from '@/campfire/ui'
 import { useFire } from '@/campfire/lib'
+import { Portrait } from '@/campfire/CharacterSheet'
+import { pickSquarePhoto } from '@/lib/photos'
+import { APP_SETTINGS } from '@/lib/config'
 
 // "Start Campfire" (Start board): the campaigns saved with this voice nebula or group chat, and a
 // new one. A game master picking one in a call lights it for everyone in the call ("Campfire is
@@ -61,6 +64,24 @@ function Home({ kind, home, callId, title }: { kind: CampaignHomeKind; home: str
     }
     router.replace({ pathname: '/campfire/[id]', params: { id: c.id } })
   }
+
+  /** "Your character": a new portrait for my character in a campaign. */
+  const portrait = async (c: CampaignSummary, card: CampaignCharacterCard) => {
+    const picked = await pickSquarePhoto()
+    if (picked === 'denied') return void inform('Not allowed', `Allow Glofly to use your photos in ${APP_SETTINGS}.`)
+    if (!picked) return
+    setBusy(`portrait:${card.id}`)
+    const up = await campfireApi.uploadFile(c.id, 'portrait', picked)
+    if (!up.ok) {
+      setBusy(null)
+      return void inform("Couldn't upload it", up.message)
+    }
+    const r = await campfireApi.saveCharacter(card.id, { portraitFileId: up.data.id })
+    setBusy(null)
+    if (!r.ok) return void inform("Couldn't save it", r.message)
+    setList((l) => l && l.map((x) => (x.id === c.id ? { ...x, myCharacter: { ...card, portraitFileId: up.data.id } } : x)))
+  }
+  const playing = (list ?? []).filter((c) => c.myRole === 'player')
 
   const create = async () => {
     if (!name.trim()) return
@@ -165,6 +186,38 @@ function Home({ kind, home, callId, title }: { kind: CampaignHomeKind; home: str
             ) : null}
           </View>
         )}
+        {playing.length ? (
+          <View style={{ gap: 8 }}>
+            <Text accessibilityRole="header" size={14} weight="bold" style={{ color: fire.ink }}>
+              Your character
+            </Text>
+            {playing.map((c) => {
+              const card = c.myCharacter
+              return (
+                <View key={c.id} style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, backgroundColor: fire.card, borderWidth: 1, borderColor: fire.line }}>
+                  {card ? <Portrait fileId={card.portraitFileId} name={card.name} size={44} /> : (
+                    <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: fire.line, alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="plus" size={18} color={fire.muted} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text size={15} weight="bold" numberOfLines={1} style={{ color: fire.ink }}>
+                      {card ? card.name : 'No character yet'}
+                    </Text>
+                    <Text size={12} numberOfLines={2} style={{ color: fire.muted }}>
+                      {card ? `${card.line}${playing.length > 1 ? ` · ${c.name}` : ''}` : `${playing.length > 1 ? `${c.name}: ` : ''}sit down at the table to make one.`}
+                    </Text>
+                  </View>
+                  {card ? (
+                    <FireButton label={card.portraitFileId ? 'Change' : 'Portrait'} busy={busy === `portrait:${card.id}`} onPress={() => void portrait(c, card)} />
+                  ) : (
+                    <FireButton label="Sit down" onPress={() => void sit(c)} />
+                  )}
+                </View>
+              )
+            })}
+          </View>
+        ) : null}
         <Text size={12} style={{ color: fire.muted, lineHeight: 18 }}>
           {kind === 'nebula' ? 'Game masters: people with "Run Campfire games" (or the Owner). ' : ''}Maps and the turn order are set up on a computer; on a phone you play, roll and keep your sheet. {SRD_CREDIT}
         </Text>

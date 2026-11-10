@@ -1199,3 +1199,25 @@ test('campfire: massive damage kills outright (5e)', () => {
   assert.equal(s.instantDeath(0, 0, 44, 44), true)
   assert.equal(s.instantDeath(0, 0, 43, 44), false)
 })
+
+test('campfire: grid distances (squares, 5-10-5 diagonals, hexes) and fog lassos', () => {
+  const sq = { ...s.DEFAULT_GRID }
+  assert.equal(s.gridFeet([35, 35], [35 + 70 * 4, 35 + 70 * 3], sq), 20)
+  assert.equal(s.gridFeet([35, 35], [35 + 70 * 4, 35 + 70 * 3], sq, '5-10'), 25)
+  assert.equal(s.gridFeet([35, 35], [35 + 70 * 2, 35 + 70 * 2], sq, '5-10'), 15)
+  const hex = { ...s.DEFAULT_GRID, type: 'hex' }
+  const c = (col, row) => s.hexCenter(col, row, hex)
+  assert.deepEqual(s.hexAt(...c(3, 4), hex), [3, 4])
+  // Straight along a row, and diagonally down through shifted rows.
+  assert.equal(s.gridFeet(c(0, 0), c(4, 0), hex), 20)
+  assert.equal(s.gridFeet(c(0, 0), c(1, 2), hex), 10)
+  assert.equal(s.gridFeet(c(2, 1), c(2, 5), hex), 20)
+  assert.equal(s.hexSteps([0, 0], [0, 1]), 1)
+  assert.equal(s.hexSteps([0, 1], [1, 0]), 1)
+  // Lasso: dense points thinned, tiny or flat ones refused.
+  const ring = Array.from({ length: 1000 }, (_, i) => [500 + 300 * Math.cos(i / 159.15), 500 + 300 * Math.sin(i / 159.15)])
+  const l = s.simplifyLasso(ring)
+  assert.ok(l && l.length <= 120 && l.length >= 3)
+  assert.equal(s.simplifyLasso([[0, 0], [100, 0], [200, 0], [300, 0]]), null)
+  assert.ok(s.cleanFogShape({ kind: 'poly', points: l }, 'x'))
+})

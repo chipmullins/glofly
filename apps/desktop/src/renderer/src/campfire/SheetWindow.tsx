@@ -37,6 +37,7 @@ import {
   withBonus
 } from '@glofly/shared/campfire/rules5e'
 import { SRD_CREDIT } from '@glofly/shared/campfire/types'
+import { tokenCenter } from '@glofly/shared/campfire/map'
 import { cf, IMAGE_ACCEPT, pickFile, pieceId, uploadFile } from './api'
 import { signed, useCf } from './ctx'
 import { NumBox, TextBox } from './ui'
@@ -1374,11 +1375,37 @@ function SpellsSection({
     ability: Ability
     damage: string
     half: boolean
+    /** 0 = just the target; otherwise everyone within this many feet of the target's center */
+    areaFt: number
+    /** Tokens left out of the area by hand */
+    skip: string[]
   } | null>(null)
   const sc = sheet.spellcasting
   const caster =
     tokenOf(ch.id) ??
     (isGm && selectedId ? (t.tokens.find((x) => x.id === selectedId) ?? null) : null)
+  // Who a save spell hits: the target, or every token (that this person can see) inside the area.
+  const saveTargets = useMemo(() => {
+    const target = targetId ? t.tokens.find((x) => x.id === targetId) : null
+    const scene = t.scene
+    if (!target || !saveForm || !scene) return target ? [target] : []
+    if (!saveForm.areaFt) return [target]
+    const g = scene.grid
+    const [cx, cy] = tokenCenter(target, g)
+    const r = (saveForm.areaFt / Math.max(1, g.feet)) * g.size
+    return t.tokens
+      .filter((x) => x.layer !== 'map' && (isGm || x.layer !== 'gm'))
+      .filter((x) => {
+        const [x0, y0] = tokenCenter(x, g)
+        // Inside if any of the token's square is: its center within the radius plus half its size.
+        return Math.hypot(x0 - cx, y0 - cy) <= r + (Math.min(x.w, x.h) * g.size) / 2 - 1
+      })
+      .sort((a, b) =>
+        a.id === target.id ? -1 : b.id === target.id ? 1 : a.name.localeCompare(b.name)
+      )
+      .slice(0, 20)
+  }, [targetId, t.tokens, t.scene, saveForm, isGm])
+  const chosenTargets = saveTargets.filter((x) => !saveForm?.skip.includes(x.id))
   const spells = useMemo(
     () =>
       sc.spells.map((sp, i) => ({ sp, i })).sort((a, b) => a.sp.level - b.sp.level || a.i - b.i),
@@ -1631,19 +1658,21 @@ function SpellsSection({
               className="cfs-button cfs-button--small"
               disabled={!targetId}
               title={targetId ? '' : 'Target a token first'}
-              onClick={() => setSaveForm({ ability: 'dex', damage: '2d8', half: true })}
+              onClick={() =>
+                setSaveForm({ ability: 'dex', damage: '2d8', half: true, areaFt: 0, skip: [] })
+              }
             >
-              Cast a spell with a saving throw at the target…
+              Cast a spell with a saving throw…
             </button>
           ) : (
             <form
               className="cfs-inline-form"
               onSubmit={async (e) => {
                 e.preventDefault()
-                if (!targetId) return
+                if (!chosenTargets.length) return
                 const r = await cf.post(`/campfire/campaigns/${t.campaign.id}/save-spell`, {
                   casterTokenId: caster.id,
-                  targetTokenIds: [targetId],
+                  targetTokenIds: chosenTargets.map((x) => x.id),
                   dc: spellSaveDc(sheet),
                   ability: saveForm.ability,
                   damage: saveForm.damage,
@@ -1680,8 +1709,51 @@ function SpellsSection({
                 />
                 Half on a save
               </label>
-              <button type="submit" className="cfs-button cfs-button--accent cfs-button--small">
-                Cast
+              <select
+                aria-label="Who it hits"
+                value={saveForm.areaFt}
+                onChange={(e) =>
+                  setSaveForm({ ...saveForm, areaFt: Number(e.target.value), skip: [] })
+                }
+              >
+                <option value={0}>Just the target</option>
+                {[5, 10, 15, 20, 30, 40].map((ft) => (
+                  <option key={ft} value={ft}>
+                    Everyone within {ft} ft of the target
+                  </option>
+                ))}
+              </select>
+              {saveForm.areaFt > 0 && (
+                <fieldset className="cfs-save-targets">
+                  <legend className="cfs-muted cfs-small">
+                    {chosenTargets.length} of {saveTargets.length} in the area roll a save
+                  </legend>
+                  {saveTargets.map((x) => (
+                    <label key={x.id} className="cfs-check">
+                      <input
+                        type="checkbox"
+                        checked={!saveForm.skip.includes(x.id)}
+                        onChange={(e) =>
+                          setSaveForm({
+                            ...saveForm,
+                            skip: e.target.checked
+                              ? saveForm.skip.filter((id) => id !== x.id)
+                              : [...saveForm.skip, x.id]
+                          })
+                        }
+                      />
+                      {x.name || 'Someone'}
+                      {x.id === targetId ? ' (target)' : x.id === caster.id ? ' (the caster)' : ''}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+              <button
+                type="submit"
+                className="cfs-button cfs-button--accent cfs-button--small"
+                disabled={!chosenTargets.length}
+              >
+                Cast{chosenTargets.length > 1 ? ` at ${chosenTargets.length}` : ''}
               </button>
               <button
                 type="button"
