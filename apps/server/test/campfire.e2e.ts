@@ -471,7 +471,6 @@ test("the turn order", { skip }, async () => {
   assert.deepEqual([...inits].sort((x, y) => y - x), inits, "highest first");
   const asPlayer = (await call(`/campfire/campaigns/${campaignId}`, { token: p1.token })).json.combat;
   assert.ok(!asPlayer.entries.some((e: any) => e.tokenId === tok.trap));
-  assert.equal((await c({ op: "next" }, p1.token)).status, 403);
   assert.equal((await c({ op: "roll", tokenId: tok.goblin2 }, p1.token)).status, 403);
   const mine = await c({ op: "roll", tokenId: tok.thorin }, p1.token);
   assert.equal(mine.status, 200);
@@ -486,6 +485,15 @@ test("the turn order", { skip }, async () => {
   assert.deepEqual([st.round, st.turn], [2, 0]);
   st = (await c({ op: "prev" })).json.combat;
   assert.deepEqual([st.round, st.turn], [1, 2]);
+  // "End my turn": a player may only end a turn that is theirs (the trap's isn't).
+  assert.equal((await c({ op: "next" }, p1.token)).status, 403);
+  st = (await c({ op: "next" })).json.combat;
+  st = (await c({ op: "next" })).json.combat;
+  assert.equal(st.entries[st.turn].tokenId, tok.thorin);
+  const ended = await c({ op: "next" }, p1.token);
+  assert.equal(ended.status, 200, JSON.stringify(ended.json));
+  // Now it's the hidden trap's turn: the player's (filtered) answer doesn't say whose.
+  assert.deepEqual([ended.json.combat.round, ended.json.combat.current], [2, null]);
   st = (await c({ op: "remove", tokenId: tok.trap })).json.combat;
   assert.equal(st.entries.length, 2);
   st = (await c({ op: "set", tokenId: tok.goblin2, init: 30 })).json.combat;

@@ -395,8 +395,8 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
   const parsed = combatInput.safeParse(req.body);
   if (!parsed.success) return bad(res, firstIssue(parsed.error));
   const d = parsed.data;
-  // Players may only roll initiative for their own token.
-  if (!t.gm && d.op !== "roll") return bad(res, "Only the game master runs the turn order.", 403);
+  // Players may only roll initiative for their own token, and end their own turn ("End my turn").
+  if (!t.gm && d.op !== "roll" && d.op !== "next") return bad(res, "Only the game master runs the turn order.", 403);
   const current = t.campaign.combat;
   if (!current && d.op !== "start") return bad(res, "Start combat first.", 409);
   let combat: CombatState | null = current ? { ...current, entries: [...current.entries] } : null;
@@ -480,6 +480,10 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
       break;
     }
     case "next":
+      if (!t.gm) {
+        const [tk] = currentId ? await tokensIn([currentId]) : [];
+        if (!tk || !controls(tk, t.userId, await charactersInfo(t.campaign.id))) return bad(res, "It isn't your turn.", 403, "not_your_turn");
+      }
       if (combat!.entries.length) {
         combat!.turn += 1;
         if (combat!.turn >= combat!.entries.length) {
