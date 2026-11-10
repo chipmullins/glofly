@@ -770,3 +770,369 @@ test('0.9.3 Watch Together: Kick channels', () => {
   assert.equal(w.isWatchVideoId('kick', 'maya'), false)
   assert.equal(w.isLiveSite('kick'), true)
 })
+
+// ───────────── Campfire (phase 1) ─────────────
+
+/** A small seeded random source (mulberry32), so dice tests are repeatable. */
+function seeded(seed) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+const fixed = (...values) => {
+  let i = 0
+  return () => values[Math.min(i++, values.length - 1)]
+}
+/** rng value that rolls `face` on a die with `sides` sides. */
+const face = (f, sides) => (f - 1 + 0.5) / sides
+
+test('Campfire dice: grammar', () => {
+  const ok = (text, expression) => {
+    const p = s.parseDice(text)
+    assert.equal(p.ok, true, `${text}: ${p.error}`)
+    assert.equal(p.expr.expression, expression)
+    return p.expr
+  }
+  ok('1d20+7', '1d20+7')
+  ok(' 1 D 20 + 7 ', '1d20+7')
+  ok('d20', '1d20')
+  ok('d%', '1d100')
+  ok('4dF', '4dF')
+  ok('adv+3', '2d20kh1+3')
+  ok('DIS', '2d20kl1')
+  ok('4d6dl1', '4d6dl1')
+  ok('4d6d1', '4d6dl1')
+  ok('4d6k3', '4d6kh3')
+  ok('2d20kh', '2d20kh1')
+  ok('3d6!', '3d6!')
+  ok('3d6!>=5', '3d6!>=5')
+  ok('2d10r1', '2d10r1')
+  ok('2d10r<3', '2d10r<3')
+  ok('1d20ro1', '1d20ro1')
+  ok('6d6>=5', '6d6>=5')
+  ok('1d8min3max7', '1d8min3max7')
+  ok('1d8max7min3', '1d8min3max7')
+  ok('(1d4+2)*3-1', '(1d4+2)*3-1')
+  ok('-1d4', '-1d4')
+  ok('[[1d20+5]]', '1d20+5')
+  const labelled = ok('1d20+5 [Stealth] #sneaky', '1d20+5')
+  assert.equal(labelled.label, 'sneaky')
+  assert.equal(ok('1d20+5 [Stealth]', '1d20+5').label, 'Stealth')
+  assert.equal(ok('1d20 [to hit] + 1d6 [fire]', '1d20+1d6').label, null)
+  assert.equal(ok('1d20 #  Perception check ', '1d20').label, 'Perception check')
+  // Precedence: 2 + 3 * 4 = 14, (2 + 3) * 4 = 20, 7 / 2 rounds down.
+  assert.equal(s.roll('2+3*4', Math.random).result.total, 14)
+  assert.equal(s.roll('(2+3)*4', Math.random).result.total, 20)
+  assert.equal(s.roll('7/2', Math.random).result.total, 3)
+  assert.equal(s.roll('-7/2', Math.random).result.total, -4)
+  assert.equal(s.roll('10-2-3', Math.random).result.total, 5)
+})
+
+test('Campfire dice: bad input and limits', () => {
+  const bad = (text, error) => {
+    const p = s.parseDice(text)
+    assert.equal(p.ok, false, text)
+    if (error) assert.equal(p.error, error)
+  }
+  bad('', 'Type a roll, like 1d20+5.')
+  bad('   ', 'Type a roll, like 1d20+5.')
+  bad('#only a label', 'Type a roll, like 1d20+5.')
+  bad('1d20+'.padEnd(201, '1'), 'Rolls can be up to 200 characters.')
+  bad('101d6', 'You can roll 1 to 100 dice at once.')
+  bad('0d6', 'You can roll 1 to 100 dice at once.')
+  bad('60d6+50d6', "That's more than 100 dice. Try fewer.")
+  bad('1d1', 'Dice can have 2 to 1000 sides.')
+  bad('1d1001', 'Dice can have 2 to 1000 sides.')
+  bad(Array(21).fill('1').join('+'), 'Rolls can have up to 20 parts.')
+  bad('2d20kh3', "You can't keep more dice than you roll.")
+  bad('2d20dl3', "You can't drop more dice than you roll.")
+  bad('1d6r<7', 'That reroll would never stop.')
+  bad('1d6!>=1', 'Those dice would explode forever.')
+  bad('1d6min4!>=4', 'Those dice would explode forever.')
+  bad('1d6min9', '“min” and “max” must be numbers the dice can roll.')
+  bad('1d6min5max2', '“min” must be smaller than “max”.')
+  bad('1d6kh1kl1', 'Use each modifier once per dice roll.')
+  bad('1d6/0', "You can't divide by zero.")
+  bad('1d20+', 'That roll ends too soon. Add a number or dice after the + or −.')
+  bad('2d6+1d', 'Dice need a number of sides, like d20.')
+  bad('(1d6+2', 'A bracket ( is missing its ).')
+  bad('1d6 [fire', 'A label [ is missing its ].')
+  bad('fireball', 'I couldn\'t read “fireball” in that roll.')
+  bad('1d20 1d20')
+  bad('99999999')
+  bad('1000000*1000000', 'That roll could get too big. Try smaller numbers.')
+  bad('1d20r', '“r” needs a number after it, like r1.')
+  assert.equal(s.parseDice(42).ok, false)
+})
+
+test('Campfire dice: rolling, breakdowns and flags', () => {
+  const r = s.roll('1d20+7', fixed(face(14, 20))).result
+  assert.equal(r.total, 21)
+  assert.equal(r.breakdown, '1d20+7 → (14) + 7 = 21')
+  assert.equal(s.chatRollText('Chip', r), '🎲 Chip rolled 1d20+7: 21 (14 + 7)')
+  assert.equal(s.chatRollText('Chip', s.roll('1d20 [Stealth]', fixed(face(9, 20))).result), '🎲 Chip rolled 1d20 (Stealth): 9')
+  // Advantage keeps the higher; crit and fumble flags on d20s.
+  const adv = s.roll('adv+5', fixed(face(20, 20), face(1, 20))).result
+  assert.equal(adv.total, 25)
+  assert.equal(adv.natural, 20)
+  assert.equal(adv.crit, true)
+  const dice = s.rollDiceList(adv)
+  assert.deepEqual(dice.map((d) => [d.value, d.kept, !!d.crit, !!d.fumble]), [[20, true, true, false], [1, false, false, true]])
+  assert.equal(adv.breakdown, '2d20kh1+5 → (20, ~1~) + 5 = 25')
+  const dis = s.roll('dis', fixed(face(20, 20), face(1, 20))).result
+  assert.equal(dis.total, 1)
+  assert.equal(dis.fumble, true)
+  // Drop lowest.
+  assert.equal(s.roll('4d6dl1', fixed(face(3, 6), face(6, 6), face(1, 6), face(4, 6))).result.total, 13)
+  assert.equal(s.roll('4d6dh1', fixed(face(3, 6), face(6, 6), face(1, 6), face(4, 6))).result.total, 8)
+  // Explode on max, chained.
+  const ex = s.roll('1d6!', fixed(face(6, 6), face(6, 6), face(2, 6))).result
+  assert.equal(ex.total, 14)
+  assert.deepEqual(s.rollDiceList(ex).map((d) => [d.value, !!d.exploded, !!d.extra]), [[6, true, false], [6, true, true], [2, false, true]])
+  assert.equal(ex.breakdown, '1d6! → (6!, 6!, 2) = 14')
+  // Explosions stop at the cap.
+  const capped = s.roll('1d6!', () => 0.9999).result
+  assert.equal(capped.capped, true)
+  assert.ok(s.rollDiceList(capped).length <= s.DICE_MAX_DICE)
+  // Reroll forever, and once.
+  const rr = s.roll('1d6r<3', fixed(face(1, 6), face(2, 6), face(5, 6))).result
+  assert.equal(rr.total, 5)
+  assert.deepEqual(s.rollDiceList(rr)[0].rerolled, [1, 2])
+  assert.equal(s.roll('1d6ro<3', fixed(face(1, 6), face(2, 6), face(5, 6))).result.total, 2)
+  const stuck = s.roll('1d6r<6', () => 0).result
+  assert.equal(s.rollDiceList(stuck)[0].rerolled.length, s.DICE_MAX_REROLLS)
+  // Success counting, clamping, Fudge.
+  const succ = s.roll('4d6>=5', fixed(face(5, 6), face(2, 6), face(6, 6), face(4, 6))).result
+  assert.equal(succ.total, 2)
+  assert.equal(succ.breakdown, '4d6>=5 → (5✓, 2, 6✓, 4) = 2')
+  assert.equal(s.roll('2d8min3', fixed(face(1, 8), face(8, 8))).result.total, 11)
+  assert.equal(s.roll('2d8max4', fixed(face(1, 8), face(8, 8))).result.total, 5)
+  assert.equal(s.roll('4dF', fixed(0.1, 0.5, 0.9, 0.9)).result.total, 1)
+  // Bad random sources never break a roll.
+  assert.equal(s.roll('1d6', () => NaN).result.total, 1)
+  assert.equal(s.roll('1d6', () => 1).result.total, 6)
+})
+
+test('Campfire dice: distributions with a seeded rng', () => {
+  const rng = seeded(12345)
+  const n = 60000
+  const counts = Array(7).fill(0)
+  const d6 = s.parseDice('1d6').expr
+  for (let i = 0; i < n; i++) counts[s.rollDice(d6, rng).total]++
+  for (let f = 1; f <= 6; f++) assert.ok(Math.abs(counts[f] - n / 6) < 600, `face ${f}: ${counts[f]}`)
+  const mean = (text, runs = 40000) => {
+    const e = s.parseDice(text).expr
+    let sum = 0
+    for (let i = 0; i < runs; i++) sum += s.rollDice(e, rng).total
+    return sum / runs
+  }
+  assert.ok(Math.abs(mean('adv') - 13.825) < 0.15)
+  assert.ok(Math.abs(mean('dis') - 7.175) < 0.15)
+  assert.ok(Math.abs(mean('4dF')) < 0.05)
+  assert.ok(Math.abs(mean('4d6dl1') - 12.24) < 0.1)
+  assert.ok(Math.abs(mean('1d6!') - 4.2) < 0.1)
+  assert.ok(Math.abs(mean('d%') - 50.5) < 0.6)
+})
+
+test('Campfire dice: chat commands and crits', () => {
+  assert.equal(s.rollCommand('/roll 1d20+3'), '1d20+3')
+  assert.equal(s.rollCommand('/R  adv #init'), 'adv #init')
+  assert.equal(s.rollCommand('/rolling'), null)
+  assert.equal(s.rollCommand('hello /roll 1d6'), null)
+  assert.deepEqual(s.inlineRolls('I attack [[1d20+5]] for [[2d6+3]]!').map((r) => r.expression), ['1d20+5', '2d6+3'])
+  assert.equal(s.critDice('1d8+4'), '2d8+4')
+  assert.equal(s.critDice('2d6+1d4+3'), '4d6+2d4+3')
+  assert.equal(s.critDice('d8'), '2d8')
+  assert.equal(s.critDice('4d6dl1'), '8d6dl1')
+})
+
+/** Thorin: a 5th-level fighter (Str 18, Dex 14, Con 16), longsword and longbow. */
+function fighter() {
+  const sheet = s.blankSheet()
+  sheet.classes = [{ name: 'Fighter', level: 5, hitDie: 10, caster: 'none' }]
+  sheet.abilities = { str: 18, dex: 14, con: 16, int: 10, wis: 12, cha: 8 }
+  sheet.saves = { str: true, con: true }
+  sheet.skills = { athletics: 1, perception: 1 }
+  sheet.ac = 18
+  sheet.hp = { current: 44, max: 44, temp: 0 }
+  sheet.hitDice = [{ die: 10, max: 5, used: 4 }]
+  sheet.attacks = [
+    { id: 'a1', name: 'Longsword', kind: 'melee', ability: 'str', proficient: true, bonus: 0, fixedToHit: null, damage: '1d8', damageAbility: true, damageType: 'slashing', range: '', notes: '' },
+    { id: 'a2', name: 'Longbow +1', kind: 'ranged', ability: 'dex', proficient: true, bonus: 1, fixedToHit: null, damage: '1d8+1', damageAbility: true, damageType: 'piercing', range: '150/600', notes: '' }
+  ]
+  sheet.resources = [
+    { id: 'r1', name: 'Second Wind', max: 1, used: 1, reset: 'short' },
+    { id: 'r2', name: 'Indomitable', max: 1, used: 1, reset: 'long' }
+  ]
+  return sheet
+}
+
+test('Campfire 5e rules: a fighter and a wizard', () => {
+  assert.deepEqual([1, 8, 9, 10, 11, 20, 30].map(s.abilityMod), [-5, -1, -1, 0, 0, 5, 10])
+  assert.deepEqual([1, 4, 5, 8, 9, 12, 13, 16, 17, 20].map(s.profBonus), [2, 2, 3, 3, 4, 4, 5, 5, 6, 6])
+  const f = fighter()
+  assert.equal(s.sheetProf(f), 3)
+  assert.equal(s.saveBonus(f, 'str'), 7)
+  assert.equal(s.saveBonus(f, 'dex'), 2)
+  assert.equal(s.skillBonus(f, 'athletics'), 7)
+  assert.equal(s.skillBonus(f, 'stealth'), 2)
+  assert.equal(s.passivePerception(f), 14)
+  assert.equal(s.initiativeBonus(f), 2)
+  assert.deepEqual(s.attackExpressions(f, f.attacks[0]), { toHit: '1d20+7', damage: '1d8+4', critDamage: '2d8+4' })
+  assert.deepEqual(s.attackExpressions(f, f.attacks[1]), { toHit: '1d20+6', damage: '1d8+1+2', critDamage: '2d8+1+2' })
+  // A rogue with Stealth expertise.
+  const rogue = s.blankSheet()
+  rogue.classes = [{ name: 'Rogue', level: 3, hitDie: 8, caster: 'none' }]
+  rogue.abilities.dex = 16
+  rogue.skills = { stealth: 2 }
+  assert.equal(s.skillBonus(rogue, 'stealth'), 7)
+  // A 5th-level wizard (Int 18): DC 15, +7 to hit, slots 4/3/2.
+  const wiz = s.blankSheet()
+  wiz.classes = [{ name: 'Wizard', level: 5, hitDie: 6, caster: 'full' }]
+  wiz.abilities.int = 18
+  wiz.spellcasting.ability = 'int'
+  assert.equal(s.spellSaveDc(wiz), 15)
+  assert.equal(s.spellAttackBonus(wiz), 7)
+  const bolt = { id: 'a', name: 'Fire Bolt', kind: 'spell', ability: 'spell', proficient: true, bonus: 0, fixedToHit: null, damage: '2d10', damageAbility: false, damageType: 'fire', range: '120', notes: '' }
+  assert.deepEqual(s.attackExpressions(wiz, bolt), { toHit: '1d20+7', damage: '2d10', critDamage: '4d10' })
+  // A monster's fixed numbers win.
+  const ogre = s.blankSheet()
+  ogre.profOverride = 2
+  ogre.saveOverrides = { con: 9 }
+  ogre.skillOverrides = { perception: 5 }
+  assert.equal(s.saveBonus(ogre, 'con'), 9)
+  assert.equal(s.passivePerception(ogre), 15)
+  const club = { ...bolt, ability: null, fixedToHit: 6, damage: '2d8+4', kind: 'melee' }
+  assert.deepEqual(s.attackExpressions(ogre, club), { toHit: '1d20+6', damage: '2d8+4', critDamage: '4d8+4' })
+})
+
+test('Campfire 5e rules: damage, healing, death saves, rests', () => {
+  assert.deepEqual(s.applyDamage(20, 5, 8), { hp: 17, temp: 0, taken: 8 })
+  assert.deepEqual(s.applyDamage(20, 10, 8), { hp: 20, temp: 2, taken: 8 })
+  assert.deepEqual(s.applyDamage(5, 0, 30), { hp: 0, temp: 0, taken: 30 })
+  assert.deepEqual(s.applyDamage(20, 0, 9, { resist: true }), { hp: 16, temp: 0, taken: 4 })
+  assert.deepEqual(s.applyDamage(20, 0, 9, { vulnerable: true }), { hp: 2, temp: 0, taken: 18 })
+  assert.deepEqual(s.applyDamage(20, 0, 9, { immune: true }), { hp: 20, temp: 0, taken: 0 })
+  const sheet = fighter()
+  sheet.resist = ['fire']
+  assert.deepEqual(s.damageModsFor(sheet, 'fire'), { resist: true, vulnerable: false, immune: false })
+  assert.equal(s.heal(0, 44, 10), 10)
+  assert.equal(s.heal(40, 44, 10), 44)
+  assert.equal(s.hpState(22, 44), 'bloodied')
+  assert.equal(s.hpState(23, 44), 'healthy')
+  assert.equal(s.hpState(0, 44), 'defeated')
+  assert.equal(s.concentrationDc(25), 12)
+  assert.equal(s.concentrationDc(5), 10)
+  const none = s.NO_DEATH_SAVES
+  assert.equal(s.deathSave(12, none).outcome, 'success')
+  assert.equal(s.deathSave(9, none).state.failures, 1)
+  assert.equal(s.deathSave(1, none).state.failures, 2)
+  assert.equal(s.deathSave(20, { ...none, failures: 2 }).outcome, 'revived')
+  assert.equal(s.deathSave(15, { ...none, successes: 2 }).outcome, 'stable')
+  assert.equal(s.deathSave(3, { ...none, failures: 2 }).outcome, 'dead')
+  assert.equal(s.deathSaveFailures(none, 2).state.failures, 2)
+  assert.equal(s.deathSaveFailures({ ...none, failures: 2 }, 1).state.dead, true)
+  // Rests.
+  sheet.hp = { current: 3, max: 44, temp: 4 }
+  sheet.exhaustion = 2
+  sheet.concentration = 'Bless'
+  const short = s.shortRest(sheet)
+  assert.deepEqual(short.resources.map((r) => r.used), [0, 1])
+  assert.equal(short.hp.current, 3)
+  const long = s.longRest(sheet)
+  assert.deepEqual(long.hp, { current: 44, max: 44, temp: 0 })
+  assert.deepEqual(long.resources.map((r) => r.used), [0, 0])
+  assert.deepEqual(long.hitDice, [{ die: 10, max: 5, used: 2 }]) // half of 5 = 2 back
+  assert.equal(long.exhaustion, 1)
+  assert.equal(long.concentration, null)
+})
+
+test('Campfire 5e rules: spell slots, CR, sizes, conditions', () => {
+  const cls = (name, level, caster) => ({ name, level, hitDie: 8, caster })
+  assert.deepEqual(s.slotsForClasses([cls('Wizard', 5, 'full')]).slots.slice(0, 4), [4, 3, 2, 0])
+  assert.deepEqual(s.slotsForClasses([cls('Wizard', 20, 'full')]).slots, [4, 3, 3, 3, 3, 2, 2, 1, 1])
+  assert.deepEqual(s.slotsForClasses([cls('Paladin', 1, 'half')]).slots[0], 0)
+  assert.deepEqual(s.slotsForClasses([cls('Paladin', 5, 'half')]).slots.slice(0, 3), [4, 2, 0])
+  assert.deepEqual(s.slotsForClasses([cls('Fighter', 3, 'third')]).slots.slice(0, 2), [2, 0])
+  // Multiclass: paladin 2 (1) + sorcerer 3 (3) = caster level 4: 4/3.
+  assert.deepEqual(s.slotsForClasses([cls('Paladin', 2, 'half'), cls('Sorcerer', 3, 'full')]).slots.slice(0, 3), [4, 3, 0])
+  assert.deepEqual(s.slotsForClasses([cls('Warlock', 5, 'pact')]).pact, { slots: 2, level: 3 })
+  assert.equal(s.slotsForClasses([cls('Rogue', 5, 'none')]).pact, null)
+  assert.equal(s.xpForCr(0.25), 50)
+  assert.equal(s.xpForCr(10), 5900)
+  assert.equal(s.crLabel(0.125), '1/8')
+  assert.deepEqual(['tiny', 'medium', 'large', 'huge', 'gargantuan'].map(s.sizeCells), [1, 1, 2, 3, 4])
+  assert.equal(s.CONDITIONS.length, 15)
+  assert.equal(s.EXHAUSTION_LEVELS.length, 6)
+  assert.equal(s.isCondition('prone'), true)
+  assert.equal(s.isCondition('sleepy'), false)
+})
+
+test('Campfire sheets: cleaning up what apps send', () => {
+  const clean = s.normalizeSheet({
+    abilities: { str: 99, dex: -4, con: 'x' },
+    hp: { current: 500, max: 40, temp: -3 },
+    ac: 12.6,
+    skills: { stealth: 2, perception: 7, hacking: 1 },
+    saves: { dex: true, luck: true },
+    attacks: [{ name: 'Bite', damage: '1d6+2' }, { name: 'Evil', damage: 'rm -rf' }, { name: '' }],
+    conditions: ['prone', 'prone', 'sleepy'],
+    notes: 'x'.repeat(30000),
+    extra: 'dropped',
+    monster: { cr: 0.5, traits: [{ name: 'Keen Smell', text: 'Sniff' }] }
+  })
+  assert.deepEqual(clean.abilities, { str: 30, dex: 1, con: 10, int: 10, wis: 10, cha: 10 })
+  assert.deepEqual(clean.hp, { current: 40, max: 40, temp: 0 })
+  assert.equal(clean.ac, 13)
+  assert.deepEqual(clean.skills, { stealth: 2 })
+  assert.deepEqual(clean.saves, { dex: true })
+  assert.deepEqual(clean.attacks.map((a) => [a.name, a.damage]), [['Bite', '1d6+2'], ['Evil', '1d4']])
+  assert.deepEqual(clean.conditions, ['prone'])
+  assert.equal(clean.notes.length, 20000)
+  assert.equal(clean.extra, undefined)
+  assert.equal(clean.monster.cr, 0.5)
+  assert.equal(clean.monster.traits[0].name, 'Keen Smell')
+  assert.deepEqual(s.normalizeSheet(null), s.blankSheet())
+  assert.deepEqual(s.normalizeSheet(s.normalizeSheet(clean)), clean)
+  assert.equal(s.classLine(fighter()), 'Fighter 5')
+})
+
+test('Campfire fog of war and maps', () => {
+  const fog = { enabled: true, revealed: [{ id: 'a', kind: 'rect', points: [[0, 0], [200, 200]] }, { id: 'b', kind: 'rect', points: [[100, 100], [150, 150]], mode: 'hide' }] }
+  assert.equal(s.isFogged(fog, [50, 50]), false)
+  assert.equal(s.isFogged(fog, [120, 120]), true) // hidden again
+  assert.equal(s.isFogged(fog, [300, 300]), true)
+  assert.equal(s.isFogged({ ...fog, enabled: false }, [300, 300]), false)
+  const tri = { id: 't', kind: 'poly', points: [[400, 0], [500, 0], [450, 100]] }
+  assert.equal(s.isFogged({ enabled: true, revealed: [tri] }, [450, 30]), false)
+  assert.equal(s.isFogged({ enabled: true, revealed: [tri] }, [405, 90]), true)
+  assert.deepEqual(s.tokenCenter({ x: 70, y: 0, w: 2, h: 2 }, { size: 70 }), [140, 70])
+  const built = {
+    floors: [{ id: 'in', points: [[10, 10], [90, 10], [90, 90]], material: 'wood' }, { id: 'out', points: [[1000, 1000], [1100, 1000], [1100, 1100]], material: 'stone' }],
+    walls: [{ id: 'cross', points: [[-500, 50], [900, 50]] }, { id: 'far', points: [[1000, 2000], [1200, 2000]] }],
+    objects: [{ id: 'box', kind: 'crate', x: 20, y: 20, w: 10, h: 10, rotation: 0 }, { id: 'hid', kind: 'crate', x: 110, y: 110, w: 20, h: 20, rotation: 0 }],
+    notes: [{ id: 'n', x: 1, y: 1, text: 'Trap here' }]
+  }
+  const seen = s.builtForPlayer(built, fog)
+  assert.deepEqual(seen.floors.map((f) => f.id), ['in'])
+  assert.deepEqual(seen.walls.map((w) => w.id), ['cross'])
+  assert.deepEqual(seen.objects.map((o) => o.id), ['box'])
+  assert.deepEqual(seen.notes, [])
+  // A big floor with a small reveal in its middle still shows (the reveal's corners are inside it).
+  const big = { floors: [{ id: 'hall', points: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], material: 'stone' }], walls: [], objects: [], notes: [] }
+  assert.equal(s.builtForPlayer(big, { enabled: true, revealed: [{ id: 'r', kind: 'rect', points: [[2400, 2400], [2410, 2410]] }] }).floors.length, 1)
+  // Cleaning up.
+  const f2 = s.normalizeFog({ enabled: true, revealed: [{ kind: 'rect', points: [[0, 0], [1, 1]] }, { kind: 'poly', points: [[0, 0]] }, { kind: 'circle' }] })
+  assert.equal(f2.revealed.length, 1)
+  assert.equal(s.normalizeGrid({ size: 5000, type: 'hex', color: 'red' }).size, 500)
+  assert.equal(s.normalizeGrid({ color: 'red' }).color, '#000000')
+  const b2 = s.normalizeBuilt({ walls: [{ points: [[0, 0], [1, 'x']] }, { points: [[0, 0], [5, 5]], door: { state: 'locked' } }], notes: [{ x: 0, y: 0, text: '  ' }] })
+  assert.deepEqual(b2.walls, [{ id: 'w1', points: [[0, 0], [5, 5]], door: { state: 'locked' } }])
+  assert.deepEqual(b2.notes, [])
+  assert.equal(s.SRD_CREDIT, 'Includes material from the System Reference Document 5.1 by Wizards of the Coast LLC, licensed under CC BY 4.0.')
+})

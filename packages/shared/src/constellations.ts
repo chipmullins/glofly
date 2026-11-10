@@ -227,6 +227,7 @@ export type ConstellationPermission =
   | 'manageConstellation'
   | 'events'
   | 'mentionEveryone'
+  | 'runGames'
 
 export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; what: string | null }[] = [
   { id: 'deleteMessages', name: 'Delete messages', what: "Anyone's, in every nebula" },
@@ -243,6 +244,9 @@ export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; 
   // Communities round 4.2 (approved board 24): off for Members by default. Without it, @everyone
   // is plain text (the server checks every mention).
   { id: 'mentionEveryone', name: 'Mention @everyone, @here and all roles', what: 'Without it, @everyone is plain text' },
+  // Campfire (Nov 2026): create tabletop campaigns and be a game master in any of them. Owner and
+  // Admins have it (Admin gets every permission); apps that don't know Campfire leave it as it was.
+  { id: 'runGames', name: 'Run Campfire games', what: 'Create tabletop campaigns and be a game master in any' },
 ]
 export const ALL_PERMISSIONS: readonly ConstellationPermission[] = PERMISSIONS.map((p) => p.id)
 /** Any of these opens Settings from the constellation's main view (0.7.1: the gear by its name). */
