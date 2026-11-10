@@ -2186,11 +2186,12 @@ export const campfireCampaigns = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
     // One of these two is set: the constellation (opened from its voice nebula `home_conversation_id`)
-    // or the group chat.
-    constellationId: uuid("constellation_id").references(() => constellations.id, { onDelete: "cascade" }),
-    conversationId: uuid("conversation_id").references(() => conversations.id, { onDelete: "cascade" }),
+    // or the group chat. When its home is deleted they become null (not a cascade), so the cleanup
+    // sweep can remove the campaign's stored files too before removing it (campfire/routes.ts).
+    constellationId: uuid("constellation_id").references(() => constellations.id, { onDelete: "set null" }),
+    conversationId: uuid("conversation_id").references(() => conversations.id, { onDelete: "set null" }),
     // The voice nebula's conversation a constellation campaign was made from (its "home").
-    homeConversationId: uuid("home_conversation_id").references(() => conversations.id, { onDelete: "cascade" }),
+    homeConversationId: uuid("home_conversation_id").references(() => conversations.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     activeSceneId: uuid("active_scene_id"),
     settings: jsonb("settings").$type<CampaignSettings>().notNull(),

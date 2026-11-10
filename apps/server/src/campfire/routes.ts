@@ -181,10 +181,20 @@ export async function purgeCampaign(campaignId: string): Promise<void> {
   await db.delete(campfireCampaigns).where(eq(campfireCampaigns.id, campaignId));
 }
 
-/** Retries removing campaigns whose removal didn't finish (every 10 minutes). */
+/**
+ * Every 10 minutes: campaigns that were deleted but not removed yet, and campaigns whose group
+ * chat, voice nebula or constellation was deleted (their home became null), go for good.
+ */
 export async function sweepDeletedCampaigns(): Promise<void> {
-  const rows = await db.select({ id: campfireCampaigns.id }).from(campfireCampaigns).where(sql`${campfireCampaigns.deletedAt} is not null`).limit(20);
-  for (const r of rows) await purgeCampaign(r.id);
+  const rows = await db
+    .select({ id: campfireCampaigns.id })
+    .from(campfireCampaigns)
+    .where(sql`${campfireCampaigns.deletedAt} is not null or (${campfireCampaigns.homeConversationId} is null and ${campfireCampaigns.conversationId} is null)`)
+    .limit(50);
+  for (const r of rows) {
+    forgetCampaign(r.id);
+    await purgeCampaign(r.id);
+  }
 }
 
 // ───────────── Lit in a call, presence, members, pings ─────────────

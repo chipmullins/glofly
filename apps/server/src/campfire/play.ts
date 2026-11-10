@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   ABILITIES,
   attackExpressions,
@@ -25,10 +25,10 @@ import {
   type Sheet5e,
 } from "@glofly/shared";
 import { db } from "../db";
-import { campfireCampaigns, campfireCharacters, campfirePending, campfireRolls } from "../db/schema";
+import { campfireCampaigns, campfireCharacters, campfirePending } from "../db/schema";
 import { inHome, settingsOf, type Table } from "./perms";
 import { bad, firstIssue, idParam, limiter, notFound, recordRoll, rollSlot, serverRng, tableOr, TOO_MANY_ROLLS, uuidList } from "./http";
-import { charactersInfo, emitCharacter, emitCombat, emitPending, tokensWithScenes, visibleTokenIdsFor } from "./state";
+import { charactersInfo, emitCharacter, emitCombat, emitPending, rollsFor, tokensWithScenes, visibleTokenIdsFor } from "./state";
 import { applyHeal, applyHit, emitHit, syncTokensFromSheet } from "./sync";
 import { tokenTable } from "./routes";
 import { combatOut, controls, pendingOut, rollOut, tokenVisible, type CharacterRow, type TokenRow } from "./view";
@@ -105,24 +105,7 @@ playRouter.get("/campaigns/:id/rolls", async (req, res) => {
   const t = await tableOr(res, req.params.id);
   if (!t) return;
   const before = typeof req.query.before === "string" && !Number.isNaN(Date.parse(req.query.before)) ? new Date(req.query.before) : null;
-  const rows = await db
-    .select()
-    .from(campfireRolls)
-    .where(
-      and(
-        eq(campfireRolls.campaignId, t.campaign.id),
-        before ? lt(campfireRolls.createdAt, before) : undefined,
-        t.gm
-          ? undefined
-          : or(
-              eq(campfireRolls.visibility, "all"),
-              eq(campfireRolls.userId, t.userId),
-              and(eq(campfireRolls.visibility, "whisper"), sql`${t.userId}::uuid = any(${campfireRolls.whisperTo})`),
-            ),
-      ),
-    )
-    .orderBy(desc(campfireRolls.createdAt))
-    .limit(50);
+  const rows = await rollsFor(t.campaign.id, t, before);
   res.json({ rolls: rows.map(rollOut) });
 });
 

@@ -139,9 +139,9 @@ CREATE TABLE "campfire_tracks" (
 );
 --> statement-breakpoint
 ALTER TABLE "messages" ADD COLUMN "roll" jsonb;--> statement-breakpoint
-ALTER TABLE "campfire_campaigns" ADD CONSTRAINT "campfire_campaigns_constellation_id_constellations_id_fk" FOREIGN KEY ("constellation_id") REFERENCES "public"."constellations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "campfire_campaigns" ADD CONSTRAINT "campfire_campaigns_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "campfire_campaigns" ADD CONSTRAINT "campfire_campaigns_home_conversation_id_conversations_id_fk" FOREIGN KEY ("home_conversation_id") REFERENCES "public"."conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "campfire_campaigns" ADD CONSTRAINT "campfire_campaigns_constellation_id_constellations_id_fk" FOREIGN KEY ("constellation_id") REFERENCES "public"."constellations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "campfire_campaigns" ADD CONSTRAINT "campfire_campaigns_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "campfire_campaigns" ADD CONSTRAINT "campfire_campaigns_home_conversation_id_conversations_id_fk" FOREIGN KEY ("home_conversation_id") REFERENCES "public"."conversations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "campfire_campaigns" ADD CONSTRAINT "campfire_campaigns_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "campfire_characters" ADD CONSTRAINT "campfire_characters_campaign_id_campfire_campaigns_id_fk" FOREIGN KEY ("campaign_id") REFERENCES "public"."campfire_campaigns"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "campfire_characters" ADD CONSTRAINT "campfire_characters_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

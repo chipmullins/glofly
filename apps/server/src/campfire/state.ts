@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { CampaignMember, CharacterView, TableState } from "@glofly/shared";
 import { db } from "../db";
 import {
@@ -23,7 +23,6 @@ import {
   handoutVisible,
   pendingOut,
   rollOut,
-  rollVisible,
   sceneOut,
   tokenOut,
   tokenVisible,
@@ -205,6 +204,28 @@ export async function membersOf(campaign: CampaignRow): Promise<CampaignMember[]
     }));
 }
 
+/** The newest rolls this viewer may see (before a time, for history pages). */
+export async function rollsFor(campaignId: string, v: Viewer, before: Date | null = null, limit = 50) {
+  return db
+    .select()
+    .from(campfireRolls)
+    .where(
+      and(
+        eq(campfireRolls.campaignId, campaignId),
+        before ? lt(campfireRolls.createdAt, before) : undefined,
+        v.gm
+          ? undefined
+          : or(
+              eq(campfireRolls.visibility, "all"),
+              eq(campfireRolls.userId, v.userId),
+              and(eq(campfireRolls.visibility, "whisper"), sql`${v.userId}::uuid = any(${campfireRolls.whisperTo})`),
+            ),
+      ),
+    )
+    .orderBy(desc(campfireRolls.createdAt))
+    .limit(limit);
+}
+
 /** GET /campfire/campaigns/:id: the whole table for one viewer. */
 export async function tableState(t: Table): Promise<TableState> {
   const v = viewerOf(t);
@@ -214,7 +235,7 @@ export async function tableState(t: Table): Promise<TableState> {
   const info = charInfo(chars);
   const settings = settingsOf(c.settings);
   const tokens = scene ? (await tokensOf(scene.id)).filter((tk) => tokenVisible(tk, scene, v, info)) : [];
-  const rolls = await db.select().from(campfireRolls).where(eq(campfireRolls.campaignId, c.id)).orderBy(desc(campfireRolls.createdAt)).limit(200);
+  const rolls = await rollsFor(c.id, v);
   const handouts = await db.select().from(campfireHandouts).where(eq(campfireHandouts.campaignId, c.id)).orderBy(asc(campfireHandouts.createdAt));
   const tracks = await db.select().from(campfireTracks).where(eq(campfireTracks.campaignId, c.id)).orderBy(asc(campfireTracks.createdAt));
   const pending = t.gm ? await db.select().from(campfirePending).where(eq(campfirePending.campaignId, c.id)).orderBy(asc(campfirePending.createdAt)) : [];
@@ -231,10 +252,7 @@ export async function tableState(t: Table): Promise<TableState> {
     combat: combatOut(c.combat, v, new Set(tokens.map((tk) => tk.id))),
     music: c.music,
     pending: pending.map(pendingOut),
-    rolls: rolls
-      .filter((r) => rollVisible(r, v))
-      .slice(0, 50)
-      .map(rollOut),
+    rolls: rolls.map(rollOut),
     handouts: handouts.filter((h) => handoutVisible(h, v)).map(handoutSummary),
     tracks: tracks.map(trackOut),
     present: presentAt(c.id),

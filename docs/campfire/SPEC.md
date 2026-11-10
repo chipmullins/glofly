@@ -222,3 +222,73 @@ NPC sheets, GM rolls, AC), move rules, attack flow (hit/miss, crit doubles dice,
 temp HP, concentration prompt, death saves), combat order, files access, uploads limits, `/roll` in chat,
 restricted accounts, Lockdown, Pause. Shared unit tests. Desktop/web: Playwright through the web build
 against a local server (two windows: GM and player). Phones: the Expo web build (`npx expo export -p web`).
+
+## Decisions (server + shared, Nov 9, 2026)
+
+Where the spec was silent, the server does the simplest secure thing:
+
+- **Data.** `campfire_campaigns.home_conversation_id` = the voice nebula's conversation a constellation
+  campaign belongs to (needed for "can see the voice nebula"). Its home columns are `on delete set null`
+  (not cascade): a campaign whose group chat / voice nebula / constellation is deleted becomes homeless,
+  and the 10-minute sweep removes it with its stored files (a cascade would have left files in storage).
+  `campfire_files.duration_sec` (music length from ffprobe). `messages.roll` jsonb for `/roll`.
+- **Shared.** Besides types/dice/rules5e there's `campfire/map.ts` (fog geometry, `builtForPlayer`,
+  `normalizeBuilt/Fog/Grid`), and `normalizeSheet` / `blankSheet` in rules5e: the server cleans every
+  sheet, map and fog it's sent with these (unknown fields dropped, numbers clamped, lists capped).
+- **Fog.** Shapes apply in order; a shape may carry `mode: 'hide'`; the latest shape covering a point
+  decides (nothing covering it = fogged). `reveal`/`hide` add a shape (≤ 500), `reset` = fog on with
+  nothing revealed, `revealAll` = fog off. Built pieces count as "fully under fog" when none of their
+  sample points (corners, along edges, inside, the fog's own corners inside them) is visible: a barely
+  uncovered piece may stay hidden (the safe side). Players get no `notes` at all.
+- **Tokens.** Bar 0 is HP (from the linked sheet; new HP bars `show: 'all'`). An "NPC token" is any token
+  not linked to a PC. For players who don't control it, `showMonsterHp` applies to bar 0: `exact` numbers,
+  `bloodied` = `value`/`max` null with `state` (`healthy`/`bloodied`/`defeated`), `none` = no bar. Bars
+  with `show: 'gm'` never reach players; `owner` only controllers (listed in `controlledBy`, or the linked
+  PC's owner). Players get `characterId: null` on NPC tokens and `name: ''` when `showName` is off.
+  Only GMs create/delete tokens in phase 1; players may change x/y, bar values and conditions of tokens
+  they control (never who sees a bar, nor GM-only bars).
+- **Hit flow.** A target without a sheet has AC 10. With `attack.id` naming one of the attacker's sheet
+  attacks, the server works the expressions out from the sheet; otherwise it uses the app's (`toHit` must
+  contain a d20). `advantage` replaces the first d20. Natural 20 always hits and doubles the damage dice
+  (`critDice`), natural 1 always misses. A miss also sends `campfire:hit` with `miss: true, amount: 0`.
+  `concentrationDc` in `campfire:hit` only goes to the target's controllers and GMs. NPCs at 0 HP get the
+  token marker `defeated`; PCs get `unconscious`, and damage while at 0 adds death save failures (2 on a
+  crit). The heal route doesn't heal the dead. GMs may send `visibility: 'gm'` on attack and save-spell
+  rolls (the hit animation still shows the amount). Save spells: an NPC target's save roll is GM-only
+  (players get its total without the breakdown), so monsters' save bonuses stay hidden.
+- **Extra routes/events** (additive): `GET /campfire/scenes/:id` (GMs any scene, players the active one,
+  `{ scene, tokens }`), `POST /campfire/characters/:id/death-save` (owner or GM; d20 rolled on the server),
+  `POST …/presence { away: true }` (leave at once), `campfire:members` (role changes). `GET …/homes/…`
+  also returns `why` (why `canCreate` is false).
+- **Live events.** `seq` is per campaign *and per person* (everyone gets different events), kept in
+  memory: a restart starts again at 1, which apps treat as a gap. Events go to the people at the table
+  (a presence ping in the last 75 s) plus GMs who can be at it, re-checked every 5 s. "Lit in a call" is
+  in memory too: only GMs light/close it, the call must be in the campaign's home and the GM in it;
+  `campfire:opened` goes to everyone in the call who can be at the table.
+- **Rolls.** GMs see every roll (whispers included). `diceVisibility: 'gm'` makes every player roll
+  GM-only. 60 rolls a minute per person covers the table and `/roll` in chats together. History is kept
+  to the newest 2,000 per campaign.
+- **Turn order.** Players may only `roll` initiative for their own token; everything else is GM. GM-layer
+  tokens join hidden; `set` takes `init` and/or `hidden`; reordering/removing keeps the turn with whoever
+  had it; `start` without ids takes the active scene's `tokens` layer. Ties: Dexterity score, then a random
+  tie-break kept for the session.
+- **Files.** Players may upload `portrait` and `token` pictures; everything else is the GM's. Pictures
+  are re-saved as WebP (maps up to 8192 px, tokens/portraits 1024, handout pictures 2048); music is copied
+  by ffmpeg without tags or cover art (MP3/Ogg/M4A/WAV by their first bytes). Players may download: maps
+  of the active scene, pictures of PCs' portraits or of tokens they can see right now, handout pictures
+  shared with them, music that's a track, and anything they uploaded. Range requests are answered.
+- **Campaigns.** In chats any group member may start one. Deleting: the creator (or, in a constellation,
+  the Owner or anyone with "Edit constellation settings"), and it's removed for good at once (files
+  included). Frozen constellations, timed-out members and accounts being deleted are read-only. Restricted
+  accounts: refused in constellation campaigns; in chat campaigns the group's own rules already apply.
+- **Characters.** Players make PCs for themselves only; NPCs and SRD monsters are GM-only. A locked sheet
+  keeps its AC and HP max (and `locked`) when a player saves it. `ddbUrl` must be an https link on
+  dndbeyond.com (or ddb.ac). Account removal deletes the person's characters and uploads (files too).
+- **`/roll` in chats.** `/roll ` or `/r ` at the start. Locked-down senders get 403 `lockdown` (nothing
+  is posted); a bad roll is 400 `invalid_roll` with the friendly error; roll messages can't be edited.
+  Inline `[[…]]` in ordinary chat text is not rolled (so code and old messages never change);
+  `parseDice` accepts a whole `[[…]]` and `inlineRolls(text)` finds them for the apps.
+- **Older apps.** Apps that don't send `campfire` in `X-Glofly-Features` keep `runGames` as it was when
+  they save a role (like `mentionEveryone`). Campfire apps should send that header on requests too.
+- **Bodies.** `/campfire` reads its own JSON (512 KB; sheets ≤ 128 KB) after the sign-in check; the global
+  10 KB parser skips it. Uploads are read only up to their kind's limit.

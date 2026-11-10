@@ -105,8 +105,8 @@ export async function tableFor(campaignOrId: string | CampaignRow, userId: strin
   let gm = member?.role === "gm" || campaign.createdBy === userId;
   let readOnly: string | null = null;
   let admin = false;
-  if (campaign.constellationId) {
-    if (!campaign.homeConversationId || (await isRestricted(userId))) return null;
+  if (campaign.homeConversationId) {
+    if (!campaign.constellationId || (await isRestricted(userId))) return null;
     const s = await standingOf(campaign.constellationId, userId);
     if (!s || !(await seesNebulaChat(userId, campaign.homeConversationId))) return null;
     gm ||= can(s, "runGames");

@@ -4,10 +4,10 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { CAMPFIRE_LIMITS, type CampfireFile, type CampfireFileKind } from "@glofly/shared";
 import { db } from "../db";
-import { campfireCampaigns, campfireFiles, conversationMembers } from "../db/schema";
+import { campfireCampaigns, campfireFiles } from "../db/schema";
 import { storage } from "../storage";
 
 // Campfire uploads: maps, token pictures, portraits, handout pictures and music. Pictures are
@@ -195,32 +195,10 @@ export async function removeStored(keys: string[]): Promise<void> {
 }
 
 /**
- * Account removal (account/deletion.ts): the person's uploads go (rows by cascade, files here),
- * and so do the files of chat campaigns whose group goes with them (they were its last member).
- * Returns the storage keys to remove once the account is gone.
+ * Account removal (account/deletion.ts): the person's uploads go with them (rows by cascade, the
+ * stored files here). Campaigns whose group goes too are removed by the cleanup sweep.
  */
 export async function campfireFilesOfLeaver(userId: string): Promise<string[]> {
   const mine = await db.select({ key: campfireFiles.storageKey }).from(campfireFiles).where(eq(campfireFiles.uploadedBy, userId));
-  const groups = await db
-    .select({ id: conversationMembers.conversationId })
-    .from(conversationMembers)
-    .where(eq(conversationMembers.userId, userId));
-  const ids = groups.map((g) => g.id);
-  let lonely: string[] = [];
-  if (ids.length) {
-    const counts = await db
-      .select({ id: conversationMembers.conversationId, n: sql<number>`count(*)::int` })
-      .from(conversationMembers)
-      .where(inArray(conversationMembers.conversationId, ids))
-      .groupBy(conversationMembers.conversationId);
-    lonely = counts.filter((c) => c.n <= 1).map((c) => c.id);
-  }
-  const theirs = lonely.length
-    ? await db
-        .select({ key: campfireFiles.storageKey })
-        .from(campfireFiles)
-        .innerJoin(campfireCampaigns, eq(campfireCampaigns.id, campfireFiles.campaignId))
-        .where(inArray(campfireCampaigns.conversationId, lonely))
-    : [];
-  return [...new Set([...mine, ...theirs].map((r) => r.key))];
+  return mine.map((r) => r.key);
 }

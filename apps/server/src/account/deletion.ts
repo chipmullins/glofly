@@ -135,7 +135,7 @@ export async function purgeDeletedAccounts(onlyUserId?: string): Promise<void> {
     const partners = await chatPartnersOf(user.id);
     // 2.0: constellations they own pass to someone else (or go, if nobody else is in them).
     await constellationsOnAccountRemoval(user.id);
-    // Campfire: their uploads go with them (and chat campaigns whose group goes too).
+    // Campfire: their uploads go with them.
     const campfireKeys = await campfireFilesOfLeaver(user.id);
 
     // Their direct messages are removed (both sides); group chats just lose them as a member.

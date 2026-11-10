@@ -1,5 +1,5 @@
 {
-  "id": "f86abb31-d475-4848-8d49-bc7a47b6646d",
+  "id": "722db0c5-6f27-43df-8271-c6b407c36549",
   "prevId": "514e5103-49df-4a10-a51f-e398969ef482",
   "version": "7",
   "dialect": "postgresql",
@@ -1744,7 +1744,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "campfire_campaigns_conversation_id_conversations_id_fk": {
@@ -1757,7 +1757,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "campfire_campaigns_home_conversation_id_conversations_id_fk": {
@@ -1770,7 +1770,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "campfire_campaigns_created_by_users_id_fk": {
