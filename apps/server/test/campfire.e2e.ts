@@ -477,8 +477,9 @@ test("the hit flow: hit/miss without the AC, crits, pending damage, temp HP, con
   assert.equal(dmg.json.applied.concentrationDc, 10);
   let pc = (await call(`/campfire/characters/${pcId}`, { token: p1.token })).json;
   assert.deepEqual(pc.sheet.hp, { current: 17, max: 20, temp: 0 });
-  const big = await call(`/campfire/tokens/${tok.thorin}/damage`, { method: "POST", token: gm.token, body: { amount: 40 } });
-  assert.equal(big.json.applied.concentrationDc, 20);
+  // 30 at 17 HP: 13 left over, under the 20 HP maximum, so down but not dead (massive damage would be 37+).
+  const big = await call(`/campfire/tokens/${tok.thorin}/damage`, { method: "POST", token: gm.token, body: { amount: 30 } });
+  assert.equal(big.json.applied.concentrationDc, 15);
   assert.equal(big.json.applied.defeated, true);
   pc = (await call(`/campfire/characters/${pcId}`, { token: p1.token })).json;
   assert.equal(pc.sheet.hp.current, 0);

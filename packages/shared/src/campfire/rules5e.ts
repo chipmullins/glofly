@@ -114,6 +114,16 @@ export function applyDamage(hp: number, temp: number, amount: number, mods: Dama
   return { hp: Math.max(0, hp - (taken - fromTemp)), temp: Math.max(temp, 0) - fromTemp, taken }
 }
 
+/**
+ * Massive damage (5e): if the damage left over after dropping to 0 HP (or the damage taken while
+ * already at 0) is at least the creature's hit point maximum, it dies outright. Temp HP soak first.
+ */
+export function instantDeath(hp: number, temp: number, taken: number, max: number): boolean {
+  if (max <= 0) return false
+  const afterTemp = Math.max(0, taken - Math.max(0, temp))
+  return afterTemp - Math.max(0, hp) >= max
+}
+
 export const heal = (hp: number, max: number, amount: number): number => Math.min(max, Math.max(0, hp) + Math.max(0, Math.floor(amount)))
 
 export const hpState = (value: number, max: number): 'healthy' | 'bloodied' | 'defeated' =>

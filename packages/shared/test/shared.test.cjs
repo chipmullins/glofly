@@ -1191,3 +1191,11 @@ test('campfire: optional sheet fields (XP, inspiration, AC note, senses, subclas
   assert.equal(s.hitPointFormula(ogre), '7d10+21')
   assert.equal(s.hitPointFormula(s.blankSheet()), null)
 })
+
+test('campfire: massive damage kills outright (5e)', () => {
+  assert.equal(s.instantDeath(38, 0, 99, 44), true)
+  assert.equal(s.instantDeath(38, 0, 81, 44), false)
+  assert.equal(s.instantDeath(38, 5, 87, 44), true)
+  assert.equal(s.instantDeath(0, 0, 44, 44), true)
+  assert.equal(s.instantDeath(0, 0, 43, 44), false)
+})

@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import {
+  instantDeath,
   applyDamage,
   concentrationDc,
   damageModsFor,
@@ -95,7 +96,8 @@ export async function applyHit(campaign: CampaignRow, hit: HitInput): Promise<Hi
   if (sheet && character) {
     sheet.hp = { max, current: result.hp, temp: result.temp };
     if (pc && result.taken > 0) {
-      if (hp === 0) sheet.deathSaves = deathSaveFailures(sheet.deathSaves, hit.crit ? 2 : 1).state;
+      if (instantDeath(hp, temp, result.taken, max)) sheet.deathSaves = { ...NO_DEATH_SAVES, failures: 3, dead: true };
+      else if (hp === 0) sheet.deathSaves = deathSaveFailures(sheet.deathSaves, hit.crit ? 2 : 1).state;
       else if (result.hp === 0) sheet.deathSaves = { ...NO_DEATH_SAVES };
       if (result.hp === 0 && !sheet.conditions.includes("unconscious")) sheet.conditions = [...sheet.conditions, "unconscious"];
     }
