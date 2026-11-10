@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Campfire: a full combat round, animated</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffb347}a:hover{color:#ffd08a}
+.tok{position:absolute;transition:left .45s cubic-bezier(.3,.7,.4,1),top .45s cubic-bezier(.3,.7,.4,1),transform .16s ease-out,opacity .6s,filter .6s}
+.hpfill{transition:width .7s cubic-bezier(.3,.7,.4,1),background-color .4s}
+.shake{animation:shk .38s}
+@keyframes shk{0%,100%{translate:0 0}20%{translate:-7px 0}40%{translate:6px 0}60%{translate:-4px 0}80%{translate:3px 0}}
+.hitflash{animation:flash .45s}
+@keyframes flash{0%{filter:brightness(2.2) saturate(.3)}100%{filter:none}}
+.dodge{animation:ddg .4s}
+@keyframes ddg{0%,100%{translate:0 0}40%{translate:10px -6px}}
+.rise{animation:rise 1.1s ease-out forwards}
+@keyframes rise{0%{opacity:0;transform:translate(-50%,0) scale(.7)}15%{opacity:1;transform:translate(-50%,-10px) scale(1.15)}100%{opacity:0;transform:translate(-50%,-56px) scale(1)}}
+.spin{animation:spn .5s linear infinite}
+@keyframes spn{to{transform:rotate(360deg)}}
+.proj{position:absolute;transition:left .32s linear,top .32s linear;pointer-events:none}
+.pulse{animation:pls 1s ease-in-out infinite}
+@keyframes pls{0%,100%{box-shadow:0 0 0 0 rgba(255,179,71,.55)}50%{box-shadow:0 0 0 8px rgba(255,179,71,0)}}
+.logrow{animation:logIn .3s ease-out}
+@keyframes logIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #140f0d; color: #f3e6da; font-family: 'DM Sans', system-ui, sans-serif; display: flex; flex-direction: column">
+  <header style="display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.10)">
+    <div style="display: flex; flex-direction: column; gap: 3px">
+      <h1 style="margin: 0; font: 700 18px/1.1 Outfit, sans-serif">Round {{round}} · The Sunken Crypt</h1>
+      <span style="font-size: 13px; color: #c9b6a8">A full round by the 5e rules: attack rolls against armor class, damage rolls, a saving throw, Extra Attack and Sneak Attack</span>
+    </div>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 8px">
+      <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #f3e6da; padding: 0 10px"><input type="checkbox" checked="{{waitForDm}}" onChange="{{toggleWait}}" style="width: 18px; height: 18px; accent-color: #f47a1f">Game master approves damage</label>
+      <button type="button" onClick="{{togglePlay}}" style="height: 38px; min-width: 96px; padding: 0 14px; border-radius: 10px; border: 0; background: #f47a1f; color: #2a1406; font: 700 14px/1 'DM Sans', sans-serif">{{playLabel}}</button>
+      <button type="button" onClick="{{restart}}" style="height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.10); background: #2a201b; color: #f3e6da; font: 700 14px/1 'DM Sans', sans-serif">Start over</button>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; min-height: 0">
+    <main style="flex: 1; min-width: 0; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: center; gap: 10px; min-height: 32px">
+        <span class="pulse" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: #3a2614; color: #ffb347; font: 700 14px/1 'DM Sans', sans-serif">{{banner}}</span>
+        <span style="font-size: 13px; color: #c9b6a8">{{subBanner}}</span>
+      </div>
+
+      <div style="position: relative; width: 860px; height: 520px; border-radius: 14px; overflow: hidden; background: #0b0807">
+        <div style="position: absolute; left: 30px; top: 30px; width: 800px; height: 460px; background-color: #5b4f46; background-image: linear-gradient(rgba(0,0,0,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.22) 1px, transparent 1px); background-size: 40px 40px; box-shadow: 0 0 0 6px #2b221d, 0 0 0 7px rgba(0,0,0,0.6)"></div>
+        <div style="position: absolute; left: 120px; top: 90px; width: 24px; height: 24px; border-radius: 50%; background: #8a7d72"></div>
+        <div style="position: absolute; left: 120px; top: 420px; width: 24px; height: 24px; border-radius: 50%; background: #8a7d72"></div>
+        <div style="position: absolute; left: 740px; top: 90px; width: 40px; height: 80px; background: #6e4a2f; box-shadow: inset 0 0 0 2px #4a301d"></div>
+
+        <sc-for list="{{tokens}}" as="t" hint-placeholder-count="7">
+          <div class="tok {{t.cls}}" style="{{t.style}}">
+            <div style="{{t.faceStyle}}">{{t.label}}</div>
+            <div style="position: absolute; left: 0; right: 0; bottom: -10px; height: 6px; border-radius: 3px; background: rgba(0,0,0,0.75)"><div class="hpfill" style="{{t.hpStyle}}"></div></div>
+            <div style="position: absolute; top: -22px; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 700 11px/1 'DM Sans', sans-serif; color: #fff; background: rgba(20,15,13,0.85); padding: 3px 6px; border-radius: 6px">{{t.tag}}</div>
+          </div>
+        </sc-for>
+
+        <sc-if value="{{proj.show}}" hint-placeholder-val="{{ false }}">
+          <div class="proj" style="{{proj.style}}"></div>
+        </sc-if>
+        <sc-if value="{{pop.show}}" hint-placeholder-val="{{ false }}">
+          <div class="rise" style="{{pop.style}}">{{pop.text}}</div>
+        </sc-if>
+      </div>
+
+      <div style="display: flex; gap: 12px; min-height: 120px">
+        <section aria-label="Dice" style="flex: 1; display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: 14px; background: #1f1714; box-shadow: 0 0 0 1px rgba(255,255,255,0.08)">
+          <div class="{{dice.spinCls}}" style="flex: none; width: 70px; height: 70px; display: grid; place-items: center; background: {{dice.color}}; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); font: 800 26px/1 Outfit, sans-serif; color: #2a1406">{{dice.face}}</div>
+          <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+            <span style="font: 700 16px/1.2 Outfit, sans-serif">{{dice.title}}</span>
+            <span style="font: 500 14px/1.3 ui-monospace, monospace; color: #c9b6a8">{{dice.math}}</span>
+            <span style="font: 800 18px/1.2 Outfit, sans-serif; color: {{dice.resultColor}}">{{dice.result}}</span>
+          </div>
+        </section>
+        <section aria-label="Game master" style="width: 300px; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 14px 16px; border-radius: 14px; background: #241712; box-shadow: 0 0 0 1px rgba(255,179,71,0.35)">
+          <span style="font: 700 11px/1 'DM Sans', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #ffd08a">Game master</span>
+          <span style="font-size: 14px; color: #f3e6da">{{dm.text}}</span>
+          <div style="display: flex; gap: 8px">
+            <button type="button" onClick="{{applyNow}}" disabled="{{dm.disabled}}" style="{{dm.applyStyle}}">{{dm.applyLabel}}</button>
+            <button type="button" disabled="{{dm.disabled}}" style="height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #2a201b; color: #f3e6da; font: 700 13px/1 'DM Sans', sans-serif">Change amount</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <aside style="width: 360px; border-left: 1px solid rgba(255,255,255,0.10); background: #1f1714; display: flex; flex-direction: column; min-height: 0">
+      <section style="padding: 14px; display: flex; flex-direction: column; gap: 6px">
+        <h2 style="margin: 0 0 4px; font: 700 15px/1.2 Outfit, sans-serif">Turn order</h2>
+        <sc-for list="{{order}}" as="o" hint-placeholder-count="6">
+          <div style="{{o.rowStyle}}">
+            <span style="width: 24px; text-align: right; font: 700 14px/1 Outfit, sans-serif; color: #c9b6a8">{{o.init}}</span>
+            <span style="flex: 1; font-weight: 700; font-size: 14px">{{o.name}}</span>
+            <span style="font-size: 12px; color: #c9b6a8">{{o.hpText}}</span>
+          </div>
+        </sc-for>
+      </section>
+      <section style="flex: 1; min-height: 0; padding: 0 14px 14px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid rgba(255,255,255,0.10)">
+        <h2 style="margin: 12px 0 4px; font: 700 15px/1.2 Outfit, sans-serif">Roll history</h2>
+        <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 6px">
+          <sc-for list="{{log}}" as="l" hint-placeholder-count="5">
+            <div class="logrow" style="padding: 8px 10px; border-radius: 10px; background: #2a201b; font-size: 13px; line-height: 1.35"><b style="color: {{l.color}}">{{l.who}}</b> <span style="color: #e5d6ca">{{l.text}}</span></div>
+          </sc-for>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.frames = this.buildFrames();
+    this.state = { i: 0, playing: true, waitForDm: false };
+    this.timer = null;
+  }
+
+  // ---------- the round, frame by frame (5e rules) ----------
+  buildFrames() {
+    const C = {
+      lyra:   { name: 'Lyra',     label: 'L', x: 110, y: 290, size: 44, hp: 38, max: 44, ac: 15, ring: '#57c27a', fill: '#2f7a4a', party: true },
+      thorin: { name: 'Thorin',   label: 'T', x: 470, y: 230, size: 44, hp: 41, max: 50, ac: 18, ring: '#4f8cff', fill: '#2f5aa8', party: true },
+      mira:   { name: 'Mira',     label: 'M', x: 200, y: 380, size: 44, hp: 33, max: 33, ac: 16, ring: '#f0b429', fill: '#a8761c', party: true },
+      vex:    { name: 'Vex',      label: 'V', x: 470, y: 330, size: 44, hp: 21, max: 35, ac: 14, ring: '#b57cff', fill: '#6b3fa8', party: true },
+      ogre:   { name: 'Ogre',     label: 'O', x: 540, y: 250, size: 84, hp: 41, max: 59, ac: 11, ring: '#ef5a4a', fill: '#5c1f1a' },
+      gob1:   { name: 'Goblin 1', label: 'G', x: 690, y: 400, size: 44, hp: 3,  max: 7,  ac: 15, ring: '#ef5a4a', fill: '#7a2a22' },
+      gob2:   { name: 'Goblin 2', label: 'G', x: 560, y: 380, size: 44, hp: 7,  max: 7,  ac: 15, ring: '#ef5a4a', fill: '#7a2a22' },
+    };
+    const order = [
+      { id: 'lyra', init: 19 }, { id: 'ogre', init: 17 }, { id: 'thorin', init: 15 },
+      { id: 'gobs', init: 12 }, { id: 'mira', init: 9 }, { id: 'vex', init: 6 },
+    ];
+    const frames = [];
+    let cur = { round: 3, turn: 'lyra', banner: 'Round 3 begins', sub: 'Lyra rolled highest initiative, so she goes first',
+      tokens: JSON.parse(JSON.stringify(C)), fx: {}, dice: null, dm: null, proj: null, pop: null, log: [] };
+    const push = (ms, patch) => {
+      cur = Object.assign({}, cur, patch || {});
+      frames.push({ ms, s: JSON.parse(JSON.stringify(cur)) });
+      cur.fx = {}; cur.proj = null; cur.pop = null;
+    };
+    const log = (who, text, color) => { cur.log = [{ who, text, color: color || '#ffb347' }].concat(cur.log).slice(0, 9); };
+    const center = (id) => { const t = cur.tokens[id]; return { x: t.x + t.size / 2, y: t.y + t.size / 2 }; };
+    const move = (id, x, y) => { cur.tokens[id].x = x; cur.tokens[id].y = y; };
+
+    // One attack: roll to hit → (hit) roll damage → game master applies → bump/arrow + health drops.
+    const attack = (a, t, o) => {
+      const A = cur.tokens[a], T = cur.tokens[t];
+      push(650, { dice: { title: A.name + ' · ' + o.weapon, math: '1d20' + o.bonusText + ' vs AC ' + T.ac, face: '', spin: true, result: '' }, dm: null });
+      const total = o.d20 + o.bonus;
+      const hit = total >= T.ac;
+      log(A.name, o.weapon + ' at ' + T.name + ': ' + o.d20 + ' + ' + o.bonus + ' = ' + total + (hit ? ' vs AC ' + T.ac + ', hits' : ' vs AC ' + T.ac + ', misses'));
+      if (!hit) {
+        push(1000, { dice: { title: A.name + ' · ' + o.weapon, math: '1d20' + o.bonusText + ' → ' + o.d20 + ' + ' + o.bonus + ' = ' + total + ' vs AC ' + T.ac, face: String(o.d20), result: 'Miss', resultColor: '#c9b6a8' } });
+        if (o.melee) bump(a, t);
+        cur.fx = { [t]: 'dodge' };
+        push(900, { pop: popAt(t, 'Miss', '#e5d6ca') });
+        return;
+      }
+      push(850, { dice: { title: A.name + ' · ' + o.weapon, math: '1d20' + o.bonusText + ' → ' + o.d20 + ' + ' + o.bonus + ' = ' + total + ' vs AC ' + T.ac, face: String(o.d20), result: o.d20 === 20 ? 'Critical hit!' : 'Hit!', resultColor: '#57c27a' } });
+      push(650, { dice: { title: A.name + ' · damage', math: o.dmgText, face: '', spin: true, result: '' } });
+      log(A.name, 'damage: ' + o.dmgMath + ' = ' + o.dmg + (o.note ? ' (' + o.note + ')' : ''));
+      push(900, { dice: { title: A.name + ' · damage', math: o.dmgText + ' → ' + o.dmgMath, face: String(o.dmg), result: o.dmg + ' damage' + (o.note ? ' · ' + o.note : ''), resultColor: '#ffb347' },
+        dm: { text: 'Apply ' + o.dmg + ' damage to ' + T.name + '?', prompt: true } });
+      land(a, t, o.dmg, o);
+    };
+    const save = (a, t, o) => {
+      const A = cur.tokens[a], T = cur.tokens[t];
+      push(700, { dice: { title: T.name + ' · Dexterity save', math: o.spell + ' · 1d20' + o.bonusText + ' vs DC ' + o.dc, face: '', spin: true, result: '' }, dm: null });
+      const total = o.d20 + o.bonus;
+      log(T.name, 'Dexterity save vs ' + o.spell + ': ' + o.d20 + ' + ' + o.bonus + ' = ' + total + ' vs DC ' + o.dc + ', fails', '#ef8a7a');
+      push(900, { dice: { title: T.name + ' · Dexterity save', math: '1d20' + o.bonusText + ' → ' + o.d20 + ' + ' + o.bonus + ' = ' + total + ' vs DC ' + o.dc, face: String(o.d20), result: 'Fails the save', resultColor: '#57c27a' } });
+      push(650, { dice: { title: A.name + ' · ' + o.spell + ' damage', math: o.dmgText, face: '', spin: true, result: '' } });
+      log(A.name, o.spell + ' damage: ' + o.dmgMath + ' = ' + o.dmg + ' radiant');
+      push(900, { dice: { title: A.name + ' · ' + o.spell + ' damage', math: o.dmgText + ' → ' + o.dmgMath, face: String(o.dmg), result: o.dmg + ' radiant damage', resultColor: '#ffd08a' },
+        dm: { text: 'Apply ' + o.dmg + ' radiant damage to ' + T.name + '?', prompt: true } });
+      land(a, t, o.dmg, { flame: true });
+    };
+    const popAt = (id, text, color) => { const c = center(id); return { x: c.x, y: c.y - cur.tokens[id].size / 2 - 6, text, color }; };
+    const bump = (a, t) => {
+      const ca = center(a), ct = center(t);
+      const dx = (ct.x - ca.x), dy = (ct.y - ca.y), d = Math.max(1, Math.hypot(dx, dy));
+      cur.tokens[a].bx = Math.round(dx / d * 26); cur.tokens[a].by = Math.round(dy / d * 26);
+      push(170);
+      cur.tokens[a].bx = 0; cur.tokens[a].by = 0;
+    };
+    const land = (a, t, dmg, o) => {
+      // The game master's "Apply" press (auto in the demo, or wait for a click).
+      push(650, { dm: { text: 'Applied ' + dmg + ' damage to ' + cur.tokens[t].name, done: true } });
+      if (o.ranged) {
+        const ca = center(a), ct = center(t);
+        push(30, { proj: { x: ca.x, y: ca.y, kind: 'arrow' } });
+        push(330, { proj: { x: ct.x, y: ct.y, kind: 'arrow' } });
+      } else if (o.flame) {
+        const ct = center(t);
+        push(30, { proj: { x: ct.x, y: ct.y - 140, kind: 'flame' } });
+        push(330, { proj: { x: ct.x, y: ct.y, kind: 'flame' } });
+      } else {
+        bump(a, t);
+      }
+      const T = cur.tokens[t];
+      T.hp = Math.max(0, T.hp - dmg);
+      cur.fx = { [t]: 'shake hitflash' };
+      push(1000, { pop: popAt(t, '−' + dmg, o.flame ? '#ffd08a' : '#ff6b5a') });
+      if (T.hp === 0) {
+        T.dead = true;
+        log(T.name, 'drops to 0 hit points and is defeated', '#ef8a7a');
+        push(900, { pop: popAt(t, 'Defeated', '#ef8a7a') });
+      } else if (!T.party && T.hp <= T.max / 2 && !T.bloodied) {
+        T.bloodied = true;
+        push(700, { pop: popAt(t, 'Bloodied', '#ffb08a') });
+      }
+    };
+    const turn = (id, banner, sub) => push(1100, { turn: id, banner, sub, dice: null, dm: null });
+
+    push(1300);
+    // 1. Lyra (ranged): Longbow at Goblin 1
+    turn('lyra', "Lyra's turn", 'Wood elf ranger · stays back and shoots');
+    attack('lyra', 'gob1', { weapon: 'Longbow', bonus: 7, bonusText: '+7', d20: 14, dmgText: '1d8+4', dmgMath: '6 + 4', dmg: 10, ranged: true });
+    // 2. Ogre: moves next to Thorin, Greatclub misses
+    turn('ogre', "Ogre's turn", 'Moves 10 ft and swings its greatclub at Thorin');
+    move('ogre', 520, 200); push(700);
+    attack('ogre', 'thorin', { weapon: 'Greatclub', bonus: 6, bonusText: '+6', d20: 9, melee: true });
+    // 3. Thorin: Extra Attack, two longsword swings
+    turn('thorin', "Thorin's turn", 'Fighter, level 5: Extra Attack means two swings');
+    attack('thorin', 'ogre', { weapon: 'Longsword (1st attack)', bonus: 7, bonusText: '+7', d20: 16, dmgText: '1d8+4', dmgMath: '7 + 4', dmg: 11, melee: true });
+    attack('thorin', 'ogre', { weapon: 'Longsword (2nd attack)', bonus: 7, bonusText: '+7', d20: 3, melee: true });
+    // 4. Goblins: Goblin 1 is down, Goblin 2 slashes Vex
+    turn('gob2', "Goblins' turn", 'Goblin 1 is down; Goblin 2 attacks Vex with its scimitar');
+    attack('gob2', 'vex', { weapon: 'Scimitar', bonus: 4, bonusText: '+4', d20: 12, dmgText: '1d6+2', dmgMath: '3 + 2', dmg: 5, melee: true });
+    // 5. Mira: Sacred Flame (a saving throw, not an attack roll)
+    turn('mira', "Mira's turn", 'Cleric casts Sacred Flame: no attack roll, the target makes a save');
+    save('mira', 'gob2', { spell: 'Sacred Flame', dc: 14, bonus: 2, bonusText: '+2', d20: 8, dmgText: '2d8', dmgMath: '5 + 4', dmg: 9 });
+    // 6. Vex: Sneak Attack (Thorin is next to the ogre)
+    turn('vex', "Vex's turn", 'Rogue · Thorin is next to the ogre, so Sneak Attack applies');
+    move('vex', 600, 330); push(700);
+    attack('vex', 'ogre', { weapon: 'Shortsword', bonus: 7, bonusText: '+7', d20: 15, dmgText: '1d6+4 + Sneak Attack 3d6', dmgMath: '4 + 4 + (5 + 2 + 6)', dmg: 21, note: 'Sneak Attack', melee: true });
+    push(1600, { turn: '', banner: 'End of round 3', sub: 'Goblins defeated · the ogre is bloodied with 9 hit points left', dice: null, dm: null, round: 3 });
+    push(1600, { turn: 'lyra', banner: 'Round 4 · Lyra\'s turn', sub: 'Back to the top of the turn order', round: 4 });
+    this.order = order;
+    return frames;
+  }
+
+  componentDidMount() { this.schedule(); }
+  componentWillUnmount() { clearTimeout(this.timer); }
+  schedule() {
+    clearTimeout(this.timer);
+    if (!this.state.playing) return;
+    const f = this.frames[this.state.i];
+    if (!f) return;
+    const waiting = this.state.waitForDm && f.s.dm && f.s.dm.prompt;
+    if (waiting) return;
+    this.timer = setTimeout(() => {
+      if (this.state.i >= this.frames.length - 1) { this.setState({ playing: false }); return; }
+      this.setState({ i: this.state.i + 1 }, () => this.schedule());
+    }, f.ms);
+  }
+
+  renderVals() {
+    const f = this.frames[this.state.i] || this.frames[0];
+    const s = f.s;
+    const tokens = Object.keys(s.tokens).map((id) => {
+      const t = s.tokens[id];
+      const pct = Math.round(t.hp / t.max * 100);
+      const col = pct > 50 ? '#57c27a' : pct > 25 ? '#f0b429' : '#ef5a4a';
+      const active = s.turn === id || (s.turn === 'gob2' && id === 'gob2');
+      const glow = active ? '0 0 0 3px ' + t.ring + ', 0 0 22px 7px rgba(255,179,71,0.7)' : '0 0 0 3px ' + t.ring + ', 0 3px 6px rgba(0,0,0,0.6)';
+      const face = t.party ? 'radial-gradient(circle at 50% 36%, #e7c9a8 0 22%, ' + t.fill + ' 23% 100%)' : t.fill;
+      return {
+        label: t.party ? '' : t.label,
+        tag: t.name + (t.party ? ' · ' + t.hp + '/' + t.max : ''),
+        cls: (s.fx && s.fx[id]) || '',
+        style: 'left: ' + t.x + 'px; top: ' + t.y + 'px; width: ' + t.size + 'px; height: ' + t.size + 'px; z-index: ' + (active ? 5 : 2) + '; transform: translate(' + (t.bx || 0) + 'px, ' + (t.by || 0) + 'px); opacity: ' + (t.dead ? 0.35 : 1) + '; filter: ' + (t.dead ? 'grayscale(1)' : 'none'),
+        faceStyle: 'width: 100%; height: 100%; border-radius: 50%; background: ' + face + '; box-shadow: ' + glow + '; display: grid; place-items: center; font: 700 ' + Math.round(t.size * 0.38) + 'px/1 Outfit, sans-serif; color: #fff',
+        hpStyle: 'height: 100%; border-radius: 3px; width: ' + pct + '%; background-color: ' + col,
+      };
+    });
+    const proj = s.proj ? {
+      show: true,
+      style: s.proj.kind === 'flame'
+        ? 'left: ' + (s.proj.x - 14) + 'px; top: ' + (s.proj.y - 40) + 'px; width: 28px; height: 56px; border-radius: 14px; background: linear-gradient(#fff6c8, #ffd08a 40%, rgba(255,179,71,0)); box-shadow: 0 0 24px 8px rgba(255,208,138,0.7)'
+        : 'left: ' + (s.proj.x - 14) + 'px; top: ' + (s.proj.y - 2) + 'px; width: 28px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, rgba(255,255,255,0), #f3e6da 40%, #ffb347); box-shadow: 0 0 8px rgba(255,179,71,0.8)',
+    } : { show: false, style: '' };
+    const pop = s.pop ? { show: true, text: s.pop.text, style: 'position: absolute; left: ' + s.pop.x + 'px; top: ' + s.pop.y + 'px; font: 800 26px/1 Outfit, sans-serif; color: ' + s.pop.color + '; text-shadow: 0 2px 6px rgba(0,0,0,0.9); white-space: nowrap; pointer-events: none; z-index: 9' } : { show: false, text: '', style: '' };
+    const d = s.dice;
+    const dice = d ? {
+      title: d.title, math: d.math, result: d.result || (d.spin ? 'Rolling…' : ''), resultColor: d.resultColor || '#c9b6a8',
+      face: d.spin ? '?' : d.face, spinCls: d.spin ? 'spin' : '', color: '#f47a1f',
+    } : { title: 'Waiting for a roll', math: 'Rolls show here for everyone at the table', result: '', resultColor: '#c9b6a8', face: '–', spinCls: '', color: '#3a2a20' };
+    const waiting = this.state.waitForDm && s.dm && s.dm.prompt;
+    const dm = s.dm ? {
+      text: s.dm.text + (waiting ? ' (waiting for you)' : ''),
+      disabled: !waiting,
+      applyLabel: s.dm.done ? 'Applied ✓' : (waiting ? 'Apply' : 'Applying…'),
+      applyStyle: 'height: 36px; padding: 0 14px; border-radius: 10px; border: 0; font: 700 13px/1 \'DM Sans\', sans-serif; ' + (s.dm.done ? 'background: #2f7a4a; color: #fff' : 'background: #f47a1f; color: #2a1406'),
+    } : { text: 'Damage waits for your OK. You can change the amount or skip it.', disabled: true, applyLabel: 'Apply', applyStyle: 'height: 36px; padding: 0 14px; border-radius: 10px; border: 0; background: #3a2a20; color: #c9b6a8; font: 700 13px/1 \'DM Sans\', sans-serif' };
+    const order = this.order.map((o) => {
+      const isGobs = o.id === 'gobs';
+      const t = isGobs ? null : s.tokens[o.id];
+      const active = s.turn === o.id || (isGobs && s.turn === 'gob2');
+      let hpText = '';
+      if (isGobs) { const alive = ['gob1', 'gob2'].filter((g) => !s.tokens[g].dead).length; hpText = alive ? alive + ' standing' : 'Defeated'; }
+      else if (t.party) hpText = t.hp + ' / ' + t.max + ' HP';
+      else hpText = t.hp === 0 ? 'Defeated' : (t.hp <= t.max / 2 ? 'Bloodied' : 'Healthy');
+      return {
+        init: o.init, name: isGobs ? 'Goblins ×2' : t.name, hpText,
+        rowStyle: 'display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; transition: background .3s; ' + (active ? 'background: #3a2614; box-shadow: inset 0 0 0 1px rgba(255,179,71,0.55)' : ''),
+      };
+    });
+    return {
+      round: s.round, banner: s.banner, subBanner: s.sub,
+      tokens, proj, pop, dice, dm, order, log: s.log,
+      playLabel: this.state.playing ? 'Pause' : (this.state.i >= this.frames.length - 1 ? 'Replay' : 'Play'),
+      waitForDm: this.state.waitForDm,
+      togglePlay: () => {
+        if (this.state.i >= this.frames.length - 1) { this.setState({ i: 0, playing: true }, () => this.schedule()); return; }
+        this.setState({ playing: !this.state.playing }, () => this.schedule());
+      },
+      restart: () => this.setState({ i: 0, playing: true }, () => this.schedule()),
+      toggleWait: () => this.setState({ waitForDm: !this.state.waitForDm }, () => this.schedule()),
+      applyNow: () => {
+        if (this.state.i < this.frames.length - 1) this.setState({ i: this.state.i + 1 }, () => this.schedule());
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+# Campfire: phase 1 spec (branch `campfire`)
+
+Campfire is a virtual tabletop for 5e-style games inside Glofly calls, meant to replace Roll20 for a group
+that already hangs out on Glofly. Built on the `campfire` branch only: never merge into `dev` until Chip says
+so. "Campfire" is a working name; never call it "D&D" or "Dungeons & Dragons" anywhere users see
+(Wizards of the Coast trademarks). Say "5e" or "fifth edition rules".
+
+Approved look: the "Glofly Campfire (tabletop)" canvas, copied into `docs/design/campfire/*.dc.html`
+(Main = game master view, Player = player view, Phone, Start = starting a table + roll card in chat,
+Builder = map builder, Round = the animated combat round: attack → hit → damage → GM applies → bump/arrow
+→ health bar drops). Keep screens matching those boards (dark call colors, Outfit + DM Sans).
+
+Follow CLAUDE.md in the repo for everything else (add-only migrations, older apps keep working, restricted
+family accounts, Lockdown, Pause gate, privacy policy for new data, shared code rules).
+
+## Scope of phase 1
+
+1. Campaigns that live in a constellation (opened from a voice nebula) or a group chat (opened from its
+   call). Saved: next session picks up where it left off.
+2. Scenes (pages): uploaded map image or a built map, square or hex grid (cell size in px, feet per cell),
+   map theme, background music cue.
+3. Layers: `map` (background objects), `tokens`, `gm` (only GMs see), plus the built map's own floors/walls/
+   objects/notes.
+4. Tokens: image or portrait, size in cells, rotation, three bars (value/max, who can see), conditions
+   (5e list), aura (radius ft + color), name shown or hidden, who controls it.
+5. Fog of war (manual): GM reveals/hides rectangles and polygons. Players' apps NEVER receive what's hidden:
+   tokens whose center is in fog (except their own), `gm` layer tokens, GM notes, built-map pieces fully
+   under fog. (An uploaded map image is sent whole; that's accepted for phase 1 and noted in the help text.)
+6. Dice: Roll20-style expressions, rolled on the server (crypto RNG), shown to everyone, GM only, or
+   whispered. Roll history per campaign. `/roll` works at the table and in any Glofly chat.
+7. Turn tracker: add tokens, roll initiative for everyone (d20 + initiative bonus from the sheet, ties by
+   dex then random), drag to reorder, next/previous turn, round counter, remove, end combat.
+8. 5e character sheets with automation (PC and NPC): abilities, proficiency from level, saves, skills
+   (proficient/expertise), AC, HP + temp HP, hit dice, speed, initiative, attacks, spells (slots by level,
+   spell attack/save DC), class resources (short/long rest), death saves, conditions, concentration,
+   inventory/features/notes, portrait, optional D&D Beyond link (opens the sheet; no import).
+9. The hit flow from the Round board: attack roll vs target AC (players learn hit/miss, never the AC), damage
+   roll (crits double the dice), pending damage that the GM approves/changes/skips (campaign setting
+   "GM approves damage", default on), then apply: temp HP first, token HP bar + linked sheet, live
+   `campfire:hit` event so every app animates the bump/arrow/spell, the floating number and the bar. Spells
+   with saves: target save roll vs DC, half damage on success when the spell says so. Concentration check
+   prompt (DC max(10, half damage)) when a concentrating creature takes damage. At 0 HP: PCs get death
+   saves, NPCs show Defeated.
+10. Monster stat blocks from the SRD (5.1, CC BY 4.0) to drop on the map ready to roll; spells list from
+    the SRD for sheets. Credit line wherever the compendium shows: "Includes material from the System
+    Reference Document 5.1 by Wizards of the Coast LLC, licensed under CC BY 4.0."
+11. Handouts (title, formatted text, optional image; shared with all, GM only, or chosen players) and a
+    journal list.
+12. Jukebox: GM uploads audio (mp3/ogg/m4a/wav, ≤ 20 MB each, ≤ 50 per campaign), plays/pauses/loops one
+    track for the table, synced by server time; per-person volume and mute.
+13. Map builder (desktop/web, GM only): draw rooms (rect/poly) with floor materials, walls (lines) with
+    doors (open/closed/locked), drag objects from a palette, layers, GM notes, undo/redo, preview as a
+    player, several scenes per campaign, start fogged, place monsters hidden.
+14. Phones: join the table, watch the map (pan/zoom), move your own tokens, roll, your sheet, turn order,
+    handouts, music. Running the game and building maps is desktop/web.
+
+Not in phase 1: dynamic lighting/line of sight, macros, map imports, other game systems, card decks.
+
+## Shared (`packages/shared/src/campfire/`, exported from the index)
+
+- `types.ts`: every API type below.
+- `dice.ts`: parser + roller. Grammar (case-insensitive, spaces ignored):
+  - terms joined by `+`/`-`: `NdS` (N 1–100, default 1; S 2–1000, plus `d%` = d100 and `dF` = Fudge),
+    numbers, and `(…)` groups; `*` and `/` (rounded down) with normal precedence.
+  - modifiers after a dice term, any order: `khN`/`klN` keep highest/lowest, `dhN`/`dlN` drop, `!` explode
+    (on max, cap 100 extra dice), `!>=N`, `rN`/`r<N`/`r>N` reroll forever (cap 100), `roN` reroll once,
+    `>=N`/`>N`/`<N`/`<=N` success counting, `minN`/`maxN` clamp each die.
+  - shorthands: `adv` = `2d20kh1`, `dis` = `2d20kl1`; inline `[[…]]` in chat text.
+  - labels: anything after `#` or in `[brackets]` after a term is a label (`1d20+5 [Stealth] #sneaky`).
+  - `parseDice(text) → { ok: true, expr } | { ok: false, error }` (friendly errors, max 200 chars, ≤ 100
+    dice total after explosions, ≤ 20 terms); `rollDice(expr, rng)` → `RollResult` with every die
+    (value, kept/dropped, exploded, rerolled, crit 20/fumble 1 flags on d20s), total and a plain-text
+    breakdown `"1d20+7 → (14) + 7 = 21"`. `rng` is injected (server uses crypto).
+- `rules5e.ts`: `abilityMod`, `profBonus(level)`, `saveBonus`, `skillBonus` (18 skills with abilities),
+  `passivePerception`, `initiativeBonus`, `spellSaveDc`, `spellAttackBonus`, `attackExpressions(sheet,
+  attack)` → `{ toHit: '1d20+7', damage: '1d8+4', critDamage: '2d8+4' }`, `applyDamage(hp, temp, amount,
+  { resist?, vulnerable?, immune? })`, `heal`, `deathSave(roll, state)`, `shortRest`/`longRest` (resources,
+  hit dice half back, slots), `concentrationDc(damage)`, `CONDITIONS` (the 15 5e conditions + exhaustion
+  levels), `SPELL_SLOTS` table by caster level (full/half/pact), `XP`/CR table, `sizeCells`.
+- `srd.ts` data is NOT in shared (too big): it's served by the server (see below).
+- Tests in `test/shared.test.cjs` (dice grammar incl. bad input and limits, distributions with a seeded
+  rng, rules math against known characters).
+
+## Data (server migration `0058_campfire.sql`, generated by drizzle-kit, add-only)
+
+- `campfire_campaigns`: id, name, constellation_id (nullable FK cascade), conversation_id (nullable FK
+  cascade: the group chat for chat campaigns), created_by, active_scene_id, settings jsonb
+  (`{ gmApprovesDamage: true, showMonsterHp: 'bloodied' | 'exact' | 'none', diceVisibility: 'all' }`),
+  combat jsonb (null or `{ round, turn, entries: [{ tokenId, name, init, dex, hidden }] }`), music jsonb
+  (null or `{ trackId, playing, startedAt, position, loop, volume }`), deleted_at, created_at, updated_at.
+  One of constellation_id / conversation_id is set.
+- `campfire_members`: campaign_id, user_id, role `gm` | `player`, joined_at (PK campaign+user).
+- `campfire_scenes`: id, campaign_id, name, position, width_px, height_px, grid jsonb (`{ type: 'square' |
+  'hex', size: 70, feet: 5, color, opacity, offsetX, offsetY }`), background_file_id, theme
+  (`stone` | `wood` | `grass` | `cave` | `snow` | `sand` | `night`), built jsonb (map builder data:
+  `{ floors: [{ id, points, material }], walls: [{ id, points, door?: { state: 'open' | 'closed' | 'locked' } }],
+  objects: [{ id, kind, x, y, w, h, rotation }], notes: [{ id, x, y, text }] }`), fog jsonb (`{ enabled,
+  revealed: [{ id, kind: 'rect' | 'poly', points }] }`), music_track_id, created_at, updated_at.
+- `campfire_tokens`: id, scene_id, layer `map` | `tokens` | `gm`, character_id (nullable), name, image_file_id,
+  x, y (px, top-left), w, h (cells), rotation, bars jsonb (3 × `{ value, max, color, show: 'all' | 'owner' | 'gm' }`),
+  conditions text[], aura jsonb, show_name boolean, controlled_by uuid[], z, created_at, updated_at.
+- `campfire_characters`: id, campaign_id, owner_id (nullable: NPCs belong to the GMs), kind `pc` | `npc`,
+  name, portrait_file_id, sheet jsonb (`Sheet5e` in types), ddb_url, srd_monster (slug or null), created_at,
+  updated_at.
+- `campfire_rolls`: id, campaign_id, user_id, character_id, label, expression, result jsonb, total,
+  visibility `all` | `gm` | `whisper`, whisper_to uuid[], created_at. Keep the newest 2,000 per campaign.
+- `campfire_pending`: pending damage waiting for the GM: id, campaign_id, attacker_token_id,
+  target_token_id, amount, damage_type, kind `melee` | `ranged` | `spell`, crit, created_by, created_at.
+- `campfire_handouts`: id, campaign_id, title, body, image_file_id, shared `all` | `gm` | `some`,
+  shared_with uuid[], created_by, created_at, updated_at.
+- `campfire_files`: id, campaign_id, kind `map` | `token` | `portrait` | `handout` | `audio`, storage_key,
+  mime, bytes, width, height, uploaded_by, created_at. Images re-encoded (strip metadata) like other photos.
+- `campfire_tracks`: id, campaign_id, file_id, title, duration_sec, created_at.
+
+Limits: 20 campaigns per constellation/chat, 30 scenes per campaign, 500 tokens per scene, 300 characters,
+200 handouts, map images ≤ 25 MB and ≤ 8192 px a side, portraits/tokens ≤ 8 MB, audio as above, a
+campaign's files ≤ 1 GB total. Rate limits in Redis (rolls 60/min per person, token moves 30/s per person).
+
+## Who can do what (server-checked, `campfire/perms.ts`)
+
+- Constellation campaigns: members of the constellation who can see the voice nebula it's opened from.
+  New constellation permission `runGames` ("Run Campfire games": create campaigns and be a GM in any);
+  Owner/admins have it. A campaign's creator is a GM; GMs can make other members GMs.
+- Chat campaigns: members of the group chat; creator is GM; GMs can add GMs.
+- GM: everything. Player: see what's not hidden, move tokens they control, edit their own characters
+  (not HP max/AC locks if the GM locks sheets: `sheet.locked`), roll, see handouts shared with them,
+  ping, measure, change their own volume.
+- Restricted (family) accounts: can't create or join campaigns in constellations (constellations refuse
+  them already); in group chats follow `groupBreaksRestriction` rules (only with family-approved people).
+- Lockdown (`lockedDown`) blocks creating campaigns and posting rolls into chats. Frozen constellations:
+  read-only. Pause gate: all routes mounted after it.
+
+## API (`/campfire`, desktop main process allow-lists `/campfire/...`; web bridge the same)
+
+All JSON unless noted. Errors use the app's usual `{ error, message }`.
+
+- `GET /campfire/homes/:kind/:id/campaigns` (kind `nebula` = a voice nebula's conversation id, `chat` = a
+  group chat id) → `{ campaigns: CampaignSummary[], canCreate }`.
+- `POST /campfire/campaigns` `{ home: { kind, id }, name }` → `Campaign`.
+- `GET /campfire/campaigns/:id` → `TableState` for this viewer (filtered: see fog rules): campaign,
+  my role, members, scenes list, active scene (full, filtered), tokens (filtered), characters I can see
+  (players: all PCs' public parts + their own full sheet; NPC sheets GM only), combat, music, pending damage
+  (GM only), recent rolls (50, filtered), handouts list (filtered), tracks.
+- `PATCH /campfire/campaigns/:id` (GM) name/settings. `DELETE` (GM creator or constellation admin).
+- `POST /campfire/campaigns/:id/open` `{ callId }` → marks the table open in that call: everyone in the
+  call gets `campfire:opened` (a "Campfire is lit · Join" banner); `POST …/close` (GM).
+- `POST /campfire/campaigns/:id/presence` (every 30 s while the table is open in an app) → who's at the
+  table; events go to the people at the table (+ GMs).
+- Members: `PUT /campfire/campaigns/:id/members/:userId` `{ role }` (GM).
+- Scenes: `POST /campfire/campaigns/:id/scenes`, `PATCH /campfire/scenes/:id` (name, grid, theme, size,
+  built, fog, music), `DELETE`, `POST /campfire/campaigns/:id/scenes/:sceneId/activate` (moves everyone),
+  `POST /campfire/scenes/:id/fog` `{ op: 'reveal' | 'hide' | 'reset' | 'revealAll', shape }`.
+- Tokens: `POST /campfire/scenes/:id/tokens`, `PATCH /campfire/tokens/:id` (move: `{ x, y }` allowed for
+  controllers; everything else GM, plus controllers may change their own bars/conditions), `DELETE`.
+  Moves are also accepted over the socket (`campfire:move`, throttled) for smooth dragging; the HTTP route
+  is the fallback.
+- Characters: `POST /campfire/campaigns/:id/characters` (`{ kind, name, sheet?, srdMonster? }`), `GET/PATCH
+  /campfire/characters/:id`, `DELETE`, `POST /campfire/characters/:id/rest` `{ kind: 'short' | 'long' }`.
+- Files: `POST /campfire/campaigns/:id/files?kind=…&name=…` (raw body), `GET /campfire/files/:id` (access
+  checked: members only; GM-only scenes' maps to GMs), `DELETE` (GM).
+- Rolls: `POST /campfire/campaigns/:id/rolls` `{ expression, label?, characterId?, visibility, whisperTo? }`
+  → `Roll`; `GET /campfire/campaigns/:id/rolls?before=` (history, filtered).
+- Attacks: `POST /campfire/campaigns/:id/attack` `{ attackerTokenId, targetTokenId, attack: { name, toHit,
+  damage, damageType, kind }, advantage?: 'adv' | 'dis' }` → rolls to hit and (if hit) damage on the
+  server, creates pending damage (or applies at once if the campaign doesn't need approval).
+  `POST …/save-spell` `{ casterTokenId, targetTokenIds, dc, ability, damage, half }` the same for save spells.
+  `POST /campfire/pending/:id/apply` `{ amount? }` (GM), `POST /campfire/pending/:id/skip` (GM).
+  `POST /campfire/tokens/:id/damage` `{ amount, type? }` / `…/heal` (GM; players for tokens they control).
+- Combat: `POST /campfire/campaigns/:id/combat` `{ op: 'start' | 'add' | 'remove' | 'rollAll' | 'roll' |
+  'set' | 'reorder' | 'next' | 'prev' | 'end', … }`.
+- Handouts: CRUD under `/campfire/campaigns/:id/handouts` (GM writes; players read what's shared).
+- Music: `POST /campfire/campaigns/:id/tracks` (after uploading the file), `DELETE /campfire/tracks/:id`,
+  `POST /campfire/campaigns/:id/music` `{ op: 'play' | 'pause' | 'seek' | 'stop', trackId?, position?, loop?, volume? }`.
+- Ping: `POST /campfire/campaigns/:id/ping` `{ sceneId, x, y }` (anyone at the table; 1 per second).
+- Compendium (SRD): `GET /campfire/srd/monsters?q=` (name, CR, type, size), `GET /campfire/srd/monsters/:slug`
+  (full stat block mapped to `Sheet5e`), `GET /campfire/srd/spells?q=&level=&class=`, `GET /campfire/srd/spells/:slug`.
+  Data from the 5e-bits/5e-database SRD JSON (content CC BY 4.0), trimmed and committed under
+  `apps/server/src/campfire/srd/*.json` with the credit line in a README there.
+- `/roll` in chats: in the normal message send path, a message whose text starts with `/roll ` (and the
+  sender isn't locked down) is rolled on the server and saved with an optional `roll` field
+  (`{ expression, label, total, breakdown, dice }`) and a plain `body` like "🎲 Chip rolled 1d20+3: 17
+  (14 + 3)" for older apps. Works in DMs, groups and nebulas (AutoMod still applies to the label).
+
+## Live events (modern apps only: socket feature `campfire`; never sent to apps without it)
+
+Sent per recipient after filtering (a player never gets hidden things):
+`campfire:opened` / `campfire:closed` (call members), `campfire:state` (full refresh hint with `seq`),
+`campfire:token` (upsert/delete; filtered: tokens moving into fog become `delete` for players, out of fog
+`upsert`), `campfire:scene` (scene changed/activated), `campfire:fog`, `campfire:roll`, `campfire:pending`
+(GMs), `campfire:hit` (`{ attackerTokenId, targetTokenId, amount, kind: 'melee' | 'ranged' | 'spell',
+crit, defeated, bloodied }`, drives the animation), `campfire:combat`, `campfire:character` (owner + GMs;
+others get the public part), `campfire:handout`, `campfire:music`, `campfire:ping`, `campfire:presence`.
+Every event carries `campaignId` and a per-campaign `seq`; an app that sees a gap reloads `GET …/campaigns/:id`.
+
+## Apps
+
+- Desktop/web (`apps/desktop/src/renderer/src/campfire/`): opens as its own full layer from the call
+  ("Campfire" in the call's activities menu, next to Watch Together) or the voice nebula header, and from the
+  "Campfire is lit · Join" banner. Map in SVG with pan/zoom (wheel, drag, pinch on touch), tokens with drag,
+  snap to grid, rulers, ping (Alt-click or long-press), the left tool rail, right panel tabs (Turn order,
+  Rolls, Sheet, Handouts, Music), dice tray + `/roll` box, the GM approval box, the Round board's
+  animations (bump, arrow, spell beam, shake, floating number, bar drop; Reduce Motion: no movement, a
+  glow and the number). Map builder as its own screen for GMs. Main process: `campfire:request` allow-list
+  (`^/campfire/...`), `campfire:upload` (file + kind), media through `glofly-media://campfire/<fileId>`.
+- Phones (`apps/mobile/src/campfire/` + `src/app/(main)/campfire/[id].tsx`): the Phone board. react-native-svg
+  map with gesture-handler pan/pinch, drag own token, bottom sheet (your turn, HP, actions, dice), sheet
+  screen, turn order, rolls, handouts, music (expo-audio), the hit animations. JS only (no native code).
+- Every app sends the `campfire` feature on its live connection so the server knows it can show Campfire.
+
+## Privacy and terms
+
+New data: campaign content, characters, rolls, uploaded maps/portraits/handouts/audio. Add to
+`site/privacy.html` (what's stored, who sees it, deleted with the campaign or when the account is deleted)
+and a terms line that people must have the rights to what they upload (music especially; DMCA applies).
+Account deletion removes a person's characters' ownership (NPC-ify) and their uploads stay with the
+campaign only if a GM keeps them (simplest: delete their uploaded files and characters). SRD credit line.
+
+## Testing
+
+Server e2e like the others (`test/campfire.e2e.ts`): permissions (player can't see GM layer, fogged tokens,
+NPC sheets, GM rolls, AC), move rules, attack flow (hit/miss, crit doubles dice, pending/apply/skip,
+temp HP, concentration prompt, death saves), combat order, files access, uploads limits, `/roll` in chat,
+restricted accounts, Lockdown, Pause. Shared unit tests. Desktop/web: Playwright through the web build
+against a local server (two windows: GM and player). Phones: the Expo web build (`npx expo export -p web`).
