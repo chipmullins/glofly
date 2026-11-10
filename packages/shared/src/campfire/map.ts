@@ -28,11 +28,31 @@ export function pointInShape(p: Point, shape: FogShape): boolean {
   return pointInPolygon(p, shape.points)
 }
 
+// Each shape's bounding box, worked out once (most points are outside most shapes).
+const boxes = new WeakMap<FogShape, [number, number, number, number]>()
+function boxOf(s: FogShape): [number, number, number, number] {
+  let b = boxes.get(s)
+  if (!b) {
+    const xs = s.points.map((q) => q[0])
+    const ys = s.points.map((q) => q[1])
+    b = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
+    boxes.set(s, b)
+  }
+  return b
+}
+
+/** Counts the work fog checks do, so one scene can't keep the server busy (see builtForPlayer). */
+type Work = { left: number }
+
 /** Is this point under fog? (The latest shape covering it decides; nothing covering it = fogged.) */
-export function isFogged(fog: FogState, p: Point): boolean {
+export function isFogged(fog: FogState, p: Point, work?: Work): boolean {
   if (!fog.enabled) return false
   for (let i = fog.revealed.length - 1; i >= 0; i--) {
     const s = fog.revealed[i]
+    const [x0, y0, x1, y1] = boxOf(s)
+    if (work) work.left--
+    if (p[0] < x0 || p[0] > x1 || p[1] < y0 || p[1] > y1) continue
+    if (work) work.left -= s.points.length
     if (pointInShape(p, s)) return s.mode === 'hide'
   }
   return true
@@ -65,9 +85,11 @@ function samplePath(points: Point[], closed: boolean, step: number): Point[] {
  * along its edges, inside it, and the fog's own corners inside it), so a piece that is only
  * barely uncovered may still count as fogged: the safe side (players get less, never more).
  */
-export function pieceVisible(fog: FogState, points: Point[], closed: boolean, step = 35): boolean {
+export function pieceVisible(fog: FogState, points: Point[], closed: boolean, step = 35, work?: Work): boolean {
   if (!fog.enabled) return true
   if (!points.length) return false
+  // Out of work for this map: the rest counts as fogged (the safe side).
+  if (work && work.left <= 0) return false
   const samples = samplePath(points, closed, Math.max(5, step))
   if (closed && points.length >= 3) {
     const xs = points.map((p) => p[0])
@@ -83,7 +105,8 @@ export function pieceVisible(fog: FogState, points: Point[], closed: boolean, st
       for (const c of corners) if (pointInPolygon(c, points)) samples.push(c)
     }
   }
-  return samples.some((p) => !isFogged(fog, p))
+  if (work) work.left -= samples.length
+  return samples.some((p) => (work ? work.left > 0 : true) && !isFogged(fog, p, work))
 }
 
 const rectPoints = (x: number, y: number, w: number, h: number): Point[] => [
@@ -93,15 +116,26 @@ const rectPoints = (x: number, y: number, w: number, h: number): Point[] => [
   [x, y + h]
 ]
 
-/** What a player may see of a built map: no GM notes, and nothing fully under fog. */
-export function builtForPlayer(built: BuiltMap, fog: FogState, step = 35): BuiltMap {
+/** How much checking one built map may take for a player (a real map needs far less). */
+export const BUILT_FOG_WORK = 10_000_000
+
+/**
+ * What a player may see of a built map: no GM notes, and nothing fully under fog. The work is
+ * capped (a huge map under a huge fog could otherwise keep the server busy for minutes): pieces
+ * left when it runs out count as fogged.
+ */
+export function builtForPlayer(built: BuiltMap, fog: FogState, step = 35, budget = BUILT_FOG_WORK): BuiltMap {
+  const work: Work = { left: budget }
   return {
-    floors: built.floors.filter((f) => pieceVisible(fog, f.points, true, step)),
-    walls: built.walls.filter((w) => pieceVisible(fog, w.points, false, step)),
-    objects: built.objects.filter((o) => pieceVisible(fog, rectPoints(o.x, o.y, o.w, o.h), true, step)),
+    floors: built.floors.filter((f) => pieceVisible(fog, f.points, true, step, work)),
+    walls: built.walls.filter((w) => pieceVisible(fog, w.points, false, step, work)),
+    objects: built.objects.filter((o) => pieceVisible(fog, rectPoints(o.x, o.y, o.w, o.h), true, step, work)),
     notes: []
   }
 }
+
+/** All the corners of a fog's shapes together (at most CAMPFIRE_LIMITS.fogPoints are kept). */
+export const fogPointCount = (fog: FogState): number => fog.revealed.reduce((n, s) => n + s.points.length, 0)
 
 // ───────────── Cleaning up what apps send ─────────────
 
@@ -137,7 +171,12 @@ export function cleanFogShape(raw: unknown, fallbackId: string): FogShape | null
 export function normalizeFog(raw: unknown): FogState {
   const o = obj(raw)
   const shapes = Array.isArray(o.revealed) ? o.revealed.slice(-CAMPFIRE_LIMITS.fogShapes) : []
-  return { enabled: o.enabled === true, revealed: shapes.map((s, i) => cleanFogShape(s, `f${i}`)).filter((s): s is FogShape => !!s) }
+  const clean = shapes.map((s, i) => cleanFogShape(s, `f${i}`)).filter((s): s is FogShape => !!s)
+  // The newest shapes are kept while their corners fit (older ones matter least).
+  let room: number = CAMPFIRE_LIMITS.fogPoints
+  let from = clean.length
+  while (from > 0 && room - clean[from - 1].points.length >= 0) room -= clean[--from].points.length
+  return { enabled: o.enabled === true, revealed: clean.slice(from) }
 }
 
 export function normalizeGrid(raw: unknown): GridSettings {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   builtForPlayer,
   classLine,
@@ -23,6 +24,8 @@ import {
   type Token,
   type TokenBar,
   type Track,
+  type BuiltMap,
+  type FogState,
 } from "@glofly/shared";
 import type {
   campfireCharacters,
@@ -71,10 +74,33 @@ export function campaignOut(c: CampaignRow, viewer: { role: "gm" | "player" }): 
 
 const THEMES: MapTheme[] = ["stone", "wood", "grass", "cave", "snow", "sand", "night"];
 
+// A scene row is cleaned up (and its players' map worked out) once, not once per viewer or token:
+// an event about a scene builds the same thing for everyone at the table.
+const fogs = new WeakMap<object, FogState>();
+export function fogOf(row: Pick<SceneRow, "fog">): FogState {
+  const raw = row.fog;
+  if (!raw || typeof raw !== "object") return normalizeFog(raw);
+  let fog = fogs.get(raw);
+  if (!fog) fogs.set(raw, (fog = normalizeFog(raw)));
+  return fog;
+}
+// Keyed by what it's worked out from, so every event about one change shares it.
+const playerBuilt = new Map<string, BuiltMap>();
+function builtForPlayers(row: SceneRow, fog: FogState, grid: { size: number }): BuiltMap {
+  const key = createHash("sha256").update(JSON.stringify([row.id, row.fog, row.built, row.grid])).digest("base64url");
+  let built = playerBuilt.get(key);
+  if (!built) {
+    built = builtForPlayer(normalizeBuilt(row.built), fog, Math.max(10, grid.size / 2));
+    if (playerBuilt.size >= 64) playerBuilt.delete(playerBuilt.keys().next().value!);
+    playerBuilt.set(key, built);
+  }
+  return built;
+}
+
 export function sceneOut(row: SceneRow, viewer: Viewer): Scene {
   const grid = normalizeGrid(row.grid);
-  const fog = normalizeFog(row.fog);
-  const built = normalizeBuilt(row.built);
+  const fog = fogOf(row);
+  const built = viewer.gm ? normalizeBuilt(row.built) : builtForPlayers(row, fog, grid);
   return {
     id: row.id,
     campaignId: row.campaignId,
@@ -85,7 +111,7 @@ export function sceneOut(row: SceneRow, viewer: Viewer): Scene {
     grid,
     backgroundFileId: row.backgroundFileId,
     theme: THEMES.includes(row.theme as MapTheme) ? (row.theme as MapTheme) : "stone",
-    built: viewer.gm ? built : builtForPlayer(built, fog, Math.max(10, grid.size / 2)),
+    built,
     fog,
     musicTrackId: row.musicTrackId,
     updatedAt: iso(row.updatedAt),
@@ -105,7 +131,7 @@ export function tokenVisible(t: TokenRow, scene: Pick<SceneRow, "fog" | "grid">,
   if (viewer.gm) return true;
   if (t.layer === "gm") return false;
   if (controls(t, viewer.userId, chars)) return true;
-  return !isFogged(normalizeFog(scene.fog), tokenCenter(t, normalizeGrid(scene.grid)));
+  return !isFogged(fogOf(scene), tokenCenter(t, normalizeGrid(scene.grid)));
 }
 
 function barFor(bar: TokenBar | null, index: number, isNpc: boolean, mine: boolean, settings: CampaignSettings): TokenBar | null {
@@ -122,6 +148,10 @@ function barFor(bar: TokenBar | null, index: number, isNpc: boolean, mine: boole
   return { value: bar.value, max: bar.max, color: bar.color, show: bar.show };
 }
 
+/** A token's name as this viewer sees it ("" when the GM hid it from players). */
+export const shownName = (t: Pick<TokenRow, "name" | "showName" | "controlledBy" | "characterId">, viewer: Viewer, chars: CharacterInfo): string =>
+  !viewer.gm && !t.showName && !controls(t, viewer.userId, chars) ? "" : t.name;
+
 /** A token as this viewer sees it (call tokenVisible first). */
 export function tokenOut(t: TokenRow, viewer: Viewer, chars: CharacterInfo, settings: CampaignSettings): Token {
   const char = t.characterId ? chars.get(t.characterId) : undefined;
@@ -137,7 +167,7 @@ export function tokenOut(t: TokenRow, viewer: Viewer, chars: CharacterInfo, sett
     layer: t.layer as Token["layer"],
     // An NPC's sheet is GM-only, so players don't get which one it is.
     characterId: viewer.gm || (char && (char.kind === "pc" || mine)) ? t.characterId : null,
-    name: !viewer.gm && !t.showName && !mine ? "" : t.name,
+    name: shownName(t, viewer, chars),
     imageFileId: t.imageFileId,
     x: t.x,
     y: t.y,
@@ -245,12 +275,15 @@ export const trackOut = (t: TrackRow): Track => ({
   createdAt: iso(t.createdAt),
 });
 
-/** The turn order as this viewer sees it: players get no hidden entries (or tokens they can't see). */
-export function combatOut(combat: CombatState | null, viewer: Viewer, visibleTokenIds: Set<string>): CombatView | null {
+/**
+ * The turn order as this viewer sees it: players get no hidden entries (or tokens they can't see),
+ * and names as the tokens show them. `visible`: the tokens they can see, with their shown names.
+ */
+export function combatOut(combat: CombatState | null, viewer: Viewer, visible: Map<string, string>): CombatView | null {
   if (!combat) return null;
   const current = combat.entries[combat.turn]?.tokenId ?? null;
   if (viewer.gm) return { ...combat, current };
-  const entries = combat.entries.filter((e) => !e.hidden && visibleTokenIds.has(e.tokenId));
+  const entries = combat.entries.filter((e) => !e.hidden && visible.has(e.tokenId)).map((e) => ({ ...e, name: visible.get(e.tokenId) ?? "" }));
   const turn = entries.findIndex((e) => e.tokenId === current);
   return { round: combat.round, turn, entries, current: turn >= 0 ? current : null };
 }

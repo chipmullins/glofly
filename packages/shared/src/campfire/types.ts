@@ -602,6 +602,8 @@ export const CAMPFIRE_LIMITS = {
   audioBytes: 20 * 1024 * 1024,
   campaignBytes: 1024 * 1024 * 1024,
   fogShapes: 500,
+  /** Corners of every fog shape together (keeps fog checks cheap) */
+  fogPoints: 5000,
   builtPieces: 2000,
   noteText: 1000,
   rollsKept: 2000,

@@ -4,6 +4,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import {
   CAMPFIRE_LIMITS,
   cleanFogShape,
+  fogPointCount,
   DEFAULT_CAMPAIGN_SETTINGS,
   EMPTY_BUILT,
   isColor,
@@ -60,6 +61,8 @@ export const coreRouter = Router();
 
 const createLimiter = limiter("campfire:create", 10, 60 * 60 * 1000, "That's a lot of new campaigns. Try again later.");
 const changeLimiter = limiter("campfire:change", 600, 60 * 1000, "That's a lot of changes. Wait a moment and try again.");
+// Fog and built-map changes make the server work out what every player sees: fewer of those.
+const mapLimiter = limiter("campfire:map", 60, 60 * 1000, "That's a lot of map changes. Wait a moment and try again.");
 
 const COORD = 100_000;
 const coord = z.number().finite().min(-COORD).max(COORD).transform(Math.round);
@@ -368,7 +371,7 @@ coreRouter.get("/scenes/:id", async (req, res) => {
   res.json({ scene: sceneOut(scene, t), tokens });
 });
 
-coreRouter.patch("/scenes/:id", changeLimiter, async (req, res) => {
+coreRouter.patch("/scenes/:id", changeLimiter, (req, res, next) => (req.body?.built !== undefined || req.body?.fog !== undefined ? mapLimiter(req, res, next) : next()), async (req, res) => {
   const found = await sceneTable(res, req.params.id, { gm: true });
   if (!found) return;
   const { t, scene } = found;
@@ -428,7 +431,7 @@ coreRouter.post("/campaigns/:id/scenes/:sceneId/activate", changeLimiter, async 
   res.json({ ok: true, activeSceneId: scene.id });
 });
 
-coreRouter.post("/scenes/:id/fog", changeLimiter, async (req, res) => {
+coreRouter.post("/scenes/:id/fog", changeLimiter, mapLimiter, async (req, res) => {
   const found = await sceneTable(res, req.params.id, { gm: true });
   if (!found) return;
   const { t, scene } = found;
@@ -444,7 +447,7 @@ coreRouter.post("/scenes/:id/fog", changeLimiter, async (req, res) => {
   } else {
     const shape = cleanFogShape(req.body?.shape, `f${Date.now().toString(36)}`);
     if (!shape) return bad(res, "Draw a rectangle or a shape to reveal or hide.");
-    if (fog.revealed.length >= CAMPFIRE_LIMITS.fogShapes) return bad(res, "This scene's fog has too many pieces. Reset the fog and reveal it again.", 409);
+    if (fog.revealed.length >= CAMPFIRE_LIMITS.fogShapes || fogPointCount(fog) + shape.points.length > CAMPFIRE_LIMITS.fogPoints) return bad(res, "This scene's fog has too many pieces. Reset the fog and reveal it again.", 409);
     fog.enabled = true;
     const next: FogShape = op.data === "hide" ? { ...shape, mode: "hide" } : { id: shape.id, kind: shape.kind, points: shape.points };
     fog.revealed.push(next);
@@ -649,7 +652,7 @@ export async function socketMove(userId: string, payload: unknown): Promise<void
   const t = await cachedTable(scene.campaignId, userId);
   if (!t || t.readOnly) return;
   const chars = await charactersInfo(t.campaign.id);
-  if (!t.gm && (scene.id !== t.campaign.activeSceneId || !controls(token, userId, chars))) return;
+  if (!t.gm && (scene.id !== t.campaign.activeSceneId || !controls(token, userId, chars) || !tokenVisible(token, scene, t, chars))) return;
   const [row]: TokenRow[] = await db
     .update(campfireTokens)
     .set({ x: parsed.data.x, y: parsed.data.y, updatedAt: new Date() })
