@@ -240,3 +240,8 @@
   token overrides in `main.css` (set by `lib/appearance.ts`, follows `prefers-contrast: more`); phones `useHighContrast()`
   overlays in `ui/theme.ts` (follows iOS Increase Contrast / Android high text contrast). New colors: use the tokens so
   they follow it. The night sky's own approved colors are unchanged.
+- **Campfire (branch `campfire` only, Nov 9–10, 2026):** a 5e virtual tabletop inside calls (project docs
+  `glofly-campfire.md` = what's built, `glofly-campfire-next.md` = next rounds). Spec `docs/campfire/SPEC.md`, approved
+  boards `docs/design/campfire/`. Server `src/campfire/` (all fog/GM-only filtering is server-side; players never receive
+  hidden things), shared `packages/shared/src/campfire/`, desktop `renderer/src/campfire/`, phones `src/campfire/`.
+  Never "D&D" in the product (say 5e); SRD content only with the CC BY 4.0 credit. Never merge into `dev` without Chip.
