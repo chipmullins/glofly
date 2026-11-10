@@ -373,6 +373,37 @@ const strokes: Record<string, (fill: string) => React.ReactNode> = {
       <Path d="M12 10.5c1 .9 1.2 1.8.6 2.7-.4.5-1 .6-1.4.2-.5-.5-.3-1.4.8-2.9z" />
     </>
   ),
+  // Campfire (the tabletop): the flame from the Start board, a d20, turn order, handouts, music
+  campfire: () => <Path d="M12 3c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-8z" />,
+  dice: () => (
+    <>
+      <Path d="M12 2l9 5v10l-9 5-9-5V7z" />
+      <Path d="M12 22V12M21 7l-9 5-9-5" />
+    </>
+  ),
+  order: () => <Path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" />,
+  scroll: () => (
+    <>
+      <Path d="M8 3h11a2 2 0 0 1 2 2v1h-4" />
+      <Path d="M17 6v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1h10v1a2 2 0 0 0 2 2" />
+      <Path d="M8 3a2 2 0 0 0-2 2v13M10 9h4M10 13h4" />
+    </>
+  ),
+  music: () => (
+    <>
+      <Path d="M9 18V5l12-2v13" />
+      <Circle cx="6" cy="18" r="3" />
+      <Circle cx="18" cy="16" r="3" />
+    </>
+  ),
+  heart: () => <Path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" />,
+  target: () => (
+    <>
+      <Circle cx="12" cy="12" r="9" />
+      <Circle cx="12" cy="12" r="5" />
+      <Circle cx="12" cy="12" r="1" />
+    </>
+  ),
 }
 
 export type IconName = keyof typeof strokes

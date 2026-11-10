@@ -14,6 +14,7 @@ import { firstName } from '@/lib/format'
 import { Attachments } from './Attachments'
 import { Formatted } from './Formatted'
 import { GameCard, GifView, LanternTag, LinkCard, PollCard, useLanternFade } from './Extras'
+import { RollCard, chatRollOf } from '@/campfire/RollCard'
 import { InviteCard, inviteCodeIn } from '@/constellations/community'
 
 // One message in a chat, drawn like the design canvas: bubbles (yours in Glow Orange), reply
@@ -207,7 +208,9 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
         borderBottomLeftRadius: small,
       }
   // A GIF, poll or game: the body is only the plain-text version for older apps.
-  const special = !m.deleted && !!(m.gif || m.poll || m.game)
+  // Campfire (Nov 2026): a `/roll` message carries `roll` (a card); its body is the plain text.
+  const roll = m.deleted ? null : chatRollOf(m)
+  const special = !m.deleted && !!(m.gif || m.poll || m.game || roll)
   const lantern = !!m.lantern && !m.deleted
   const hasText = !!m.body && !m.deleted && !special
   const onlyPhotos = !hasText && !m.replyTo && m.attachments.length > 0 && m.attachments.every((a) => a.kind === 'image')
@@ -274,6 +277,8 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
                     <GifView gif={m.gif} onLongPress={() => onLongPress(m)} />
                   ) : special && m.poll ? (
                     <PollCard message={m} meId={meId} nameOf={nameOf} canAct={canAct} />
+                  ) : special && roll ? (
+                    <RollCard roll={roll} />
                   ) : special && m.game ? (
                     <GameCard message={m} meId={meId} nameOf={nameOf} canAct={canAct} memberIds={memberIds} />
                   ) : jumbo ? (

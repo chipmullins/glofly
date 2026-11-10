@@ -24,6 +24,7 @@ import { call as callColors, useTheme } from '@/ui/theme'
 import { canControlWatch } from '@glofly/shared'
 import { useWatchStore } from '@/calls/watch'
 import { StartWatchSheet, WatchScreen } from '@/calls/WatchMode'
+import { openCampfireFor, useCampfire } from '@/campfire/store'
 
 // The call screen, from the design: 1-on-1 video fills the screen with your camera on top (drag
 // it to any corner), voice calls show their photo with firefly glow rings, groups are a grid
@@ -53,6 +54,7 @@ export default function CallScreen() {
   // 0.9.1: upright, the video can shrink to a corner so the call (everyone's faces) shows.
   const [watchSmall, setWatchSmall] = useState(false)
   const watchState = useWatchStore((x) => (s.call && x.callId === s.call.id ? x.watch : null))
+  const campfireLit = useCampfire((x) => !!s.call && Object.values(x.lit).some((l) => l.callId === s.call?.id))
   const landscape = width > height
   // Which video goes into iOS's floating window when you leave the app: the pinned person, else
   // someone with their camera on. 0.8.3: it stays on that person while their camera stays on,
@@ -237,7 +239,14 @@ export default function CallScreen() {
             <Pressable accessibilityRole="button" accessibilityLabel="Change video" onPress={() => setWatchSheet('change')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="swapVideo" size={22} color="#FFFFFF" />
             </Pressable>
-          ) : canAdd ? (
+          ) : null}
+          {/* Campfire (the tabletop) for a group's call: the table lit in this call, or the campaigns. */}
+          {isGroup && meJoined && call && !watch ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={campfireLit ? 'Campfire is lit: join the table' : 'Campfire: play a tabletop game'} onPress={() => openCampfireFor('chat', call.conversationId, call.id, title)} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="campfire" size={22} color={campfireLit ? callColors.glow : '#FFFFFF'} />
+            </Pressable>
+          ) : null}
+          {canWatchControl ? null : canAdd ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Add people to call" onPress={() => setAdding(true)} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="addPerson" size={22} color="#FFFFFF" />
             </Pressable>

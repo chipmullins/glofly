@@ -19,6 +19,7 @@ import {
 import { notePaused, noteUpdateRequired } from './http'
 import { refreshMe } from './auth'
 import { refreshAccount } from '@/state/account'
+import { CAMPFIRE_EVENTS } from '@/campfire/events'
 
 // The live connection to the server. It's open while Glofly is on screen (and during a call);
 // in the background Android delivers push notifications instead, so the server knows to send them.
@@ -69,8 +70,8 @@ function connect() {
   socket = io(origin, {
     path,
     // features: what this app knows beyond its version (0.5.2: a call can move to a new group;
-    // 0.7.0: Constellations, whose live events only go to apps that say so).
-    auth: { token, version: APP_VERSION, platform: PLATFORM, features: ['callMove', 'constellations', 'watchSites', 'watchKick'] },
+    // 0.7.0: Constellations, whose live events only go to apps that say so; Nov 2026: Campfire).
+    auth: { token, version: APP_VERSION, platform: PLATFORM, features: ['callMove', 'constellations', 'watchSites', 'watchKick', 'campfire'] },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000,
     // A fresh connection every time instead of socket.io's cached one, which could still be
@@ -242,6 +243,8 @@ function connect() {
       if (event) emit('cx', event)
     })
   }
+  // Campfire (the tabletop): its events go to campfire/live.ts, which checks each one's seq.
+  for (const name of CAMPFIRE_EVENTS) s.on(name, (payload: unknown) => emit(name, payload))
   s.on('notice:new', () => void refreshNotices())
   s.on('announcement', () => void refreshNotices())
 }
@@ -255,6 +258,13 @@ function disconnect() {
 
 /** Tells the people in a chat you're typing (at most every 3 seconds, like the desktop app). */
 const lastTyping = new Map<string, number>()
+/** Sends an event over the live connection (Campfire's token dragging). False when it's not open. */
+export function sendLive(event: string, payload: unknown): boolean {
+  if (!socket?.connected) return false
+  socket.emit(event, payload)
+  return true
+}
+
 export function sendTyping(conversationId: string) {
   const now = Date.now()
   if ((lastTyping.get(conversationId) ?? 0) > now - 3000) return

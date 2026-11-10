@@ -111,6 +111,52 @@ export const call = {
   talking: '#FFC15E',
 }
 
+/**
+ * Campfire (the tabletop, Nov 2026): dark call colors from the approved "Glofly Campfire" boards,
+ * the same in every theme. `campfireHigh` is laid over it with higher contrast on.
+ */
+export const campfire = {
+  bg: '#140F0D',
+  deep: '#0B0807',
+  panel: '#1F1714',
+  card: '#2A201B',
+  raised: '#3A2A20',
+  line: 'rgba(255,255,255,0.10)',
+  handle: 'rgba(255,255,255,0.25)',
+  track: 'rgba(255,255,255,0.10)',
+  ink: '#F3E6DA',
+  muted: '#C9B6A8',
+  amber: '#FFB347',
+  amberSoft: '#3A2614',
+  amberGlow: 'rgba(255,179,71,0.65)',
+  accent: '#F47A1F',
+  accentInk: '#2A1406',
+  green: '#57C27A',
+  greenDeep: '#2F7A4A',
+  yellow: '#F0B429',
+  red: '#EF5A4A',
+  redText: '#FF8A7A',
+  hurt: '#FF6B5A',
+  spell: '#FFD08A',
+  fog: '#0B0807',
+  shadow: 'rgba(0,0,0,0.6)',
+}
+export type CampfireColors = typeof campfire
+export const campfireHigh: CampfireColors = {
+  ...campfire,
+  card: '#2E231D',
+  line: 'rgba(255,255,255,0.42)',
+  handle: 'rgba(255,255,255,0.6)',
+  track: 'rgba(255,255,255,0.28)',
+  ink: '#FFFFFF',
+  muted: '#EDE1D7',
+  amber: '#FFC978',
+  green: '#7DDB9C',
+  yellow: '#FFD060',
+  red: '#FF7A6B',
+  redText: '#FFB0A6',
+}
+
 export type ThemeChoice = 'system' | 'light' | 'dark'
 
 /** Accent colors, the same as the desktop app (Settings → Appearance → Accent color). */

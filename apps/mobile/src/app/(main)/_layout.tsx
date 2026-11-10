@@ -25,6 +25,8 @@ import { startQuietHours } from '@/state/quiet'
 import { startKeyCommands } from '@/lib/keys'
 import { KeyShortcuts } from '@/ui/KeyShortcuts'
 import { refreshFriendsLive, startFriendsLive } from '@/state/friendsLive'
+import { startCampfire } from '@/campfire/store'
+import { CampfireLitBanner } from '@/campfire/LitBanner'
 
 // Everything after signing in: the live connection, push notifications and calls start here.
 
@@ -37,6 +39,8 @@ export default function MainLayout() {
   const path = usePathname()
   // Glofly 2.0: the night side (Constellations) takes the whole screen, on iPad too.
   const night = path === '/constellations' || path.startsWith('/constellations/')
+  // Campfire (the tabletop) takes the whole screen too, like a call.
+  const table = path.startsWith('/campfire/')
   const homeAway = useHomeAwayStyle()
   useEffect(() => {
     watchReduceMotion()
@@ -49,6 +53,7 @@ export default function MainLayout() {
     startQuietHours()
     startKeyCommands()
     startFriendsLive()
+    startCampfire()
     void refreshFriendsLive()
   }, [])
   return (
@@ -56,7 +61,7 @@ export default function MainLayout() {
       <WithCallStrip>
         <View style={{ flex: 1, flexDirection: 'row', backgroundColor: c.bg }}>
           {wide ? (
-            <Animated.View style={[{ display: path === '/call' || night ? 'none' : 'flex' }, homeAway]}>
+            <Animated.View style={[{ display: path === '/call' || night || table ? 'none' : 'flex' }, homeAway]}>
               <LeftPane />
             </Animated.View>
           ) : null}
@@ -67,6 +72,7 @@ export default function MainLayout() {
               <Stack.Screen name="profile/[id]" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom', contentStyle: { backgroundColor: 'transparent' } }} />
               <Stack.Screen name="call" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
               <Stack.Screen name="live/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: '#120D0B' } }} />
+              <Stack.Screen name="campfire/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: '#140F0D' } }} />
               <Stack.Screen name="year" options={{ animation: 'fade', contentStyle: { backgroundColor: '#1A1030' } }} />
               {/* Glofly 2.0: over Glofly home (which stays drawn underneath for the trip back). */}
               <Stack.Screen name="constellations" options={{ presentation: 'transparentModal', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
@@ -79,6 +85,7 @@ export default function MainLayout() {
       <CallOverlay />
       <FriendAlert />
       <InvitePopup />
+      <CampfireLitBanner />
       {/* 0.7.5: a brand-new account's three welcome steps, over everything but calls */}
       <WelcomeFlowHost />
       <TeamNotice />

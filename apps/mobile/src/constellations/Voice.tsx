@@ -14,6 +14,7 @@ import { ROUTE_ICON, ROUTE_LABEL, useAudioRoute } from '@/calls/audioRoute'
 import { featured } from '@/calls/CallPip'
 import { useWatchStore } from '@/calls/watch'
 import { StartWatchSheet, WatchPortrait } from '@/calls/WatchMode'
+import { openCampfireFor, useCampfire } from '@/campfire/store'
 import { Avatar } from '@/ui/Avatar'
 import Reanimated from 'react-native-reanimated'
 import { GlowFace, TalkingRing, TileGlow, tileEntering, tileExiting, tileLayout } from '@/calls/TileGlow'
@@ -151,6 +152,7 @@ export function VoiceStage({ wide }: { wide?: boolean }) {
   const [full, setFull] = useState(false)
   const [who, setWho] = useState(false)
   const now = useNow(1000)
+  const campfireLit = useCampfire((x) => !!s.call && Object.values(x.lit).some((l) => l.callId === s.call?.id))
 
   if (!s.call || !s.voice) {
     return (
@@ -207,6 +209,10 @@ export function VoiceStage({ wide }: { wide?: boolean }) {
             {voice.constellationName} · {tiles.length} in voice · {s.connecting ? 'connecting…' : timer(started, now)}
           </Text>
         </View>
+        {/* Campfire (the tabletop) for this voice nebula: the table lit here, or its campaigns. */}
+        <Pressable accessibilityRole="button" accessibilityLabel={campfireLit ? 'Campfire is lit: join the table' : 'Campfire: play a tabletop game'} onPress={() => openCampfireFor('nebula', s.call!.conversationId, s.call!.id, `${voice.constellationName} · ${voice.nebulaName}`)} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: campfireLit ? 'rgba(255,179,71,0.14)' : N.card, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="campfire" size={20} color={campfireLit ? N.amber : N.ink2} />
+        </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="People in voice" onPress={() => setWho(true)} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: N.card, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="friends" size={20} color={N.ink2} />
         </Pressable>
