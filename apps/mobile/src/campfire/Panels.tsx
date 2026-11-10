@@ -302,21 +302,22 @@ export function PendingBox({ table, pending }: { table: TableState; pending: Pen
     if (!r.ok) void inform(what === 'apply' ? "Couldn't apply it" : "Couldn't skip it", r.message)
   }
   return (
-    <View accessibilityRole="alert" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 14, backgroundColor: 'rgba(31,23,20,0.96)', borderWidth: 1, borderColor: 'rgba(255,179,71,0.45)' }}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text size={13} weight="bold" numberOfLines={2} style={{ color: fire.ink }}>
-          Apply {amount}
-          {pending.damageType ? ` ${pending.damageType}` : ''} damage to {who}?{pending.crit ? ' (critical)' : ''}
-        </Text>
+    <View accessibilityRole="alert" style={{ gap: 8, padding: 10, borderRadius: 14, backgroundColor: 'rgba(31,23,20,0.96)', borderWidth: 1, borderColor: 'rgba(255,179,71,0.45)' }}>
+      <Text size={14} weight="bold" numberOfLines={2} style={{ color: fire.ink }}>
+        Apply {amount}
+        {pending.damageType ? ` ${pending.damageType}` : ''} damage to {who}?{pending.crit ? ' (critical)' : ''}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Less damage" onPress={() => setAmount((a) => Math.max(0, a - 1))} style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: fire.card, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="minus" size={18} color={fire.ink} />
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="More damage" onPress={() => setAmount((a) => a + 1)} style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: fire.card, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="plus" size={18} color={fire.ink} />
+        </Pressable>
+        <View style={{ flex: 1 }} />
+        <FireButton label="Skip" kind="quiet" height={44} busy={busy === 'skip'} onPress={() => void go('skip')} style={{ paddingHorizontal: 12 }} size={13} />
+        <FireButton label="Apply" kind="primary" height={44} busy={busy === 'apply'} onPress={() => void go('apply')} style={{ paddingHorizontal: 18 }} size={13} />
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Less damage" onPress={() => setAmount((a) => Math.max(0, a - 1))} style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: fire.card, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name="minus" size={18} color={fire.ink} />
-      </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="More damage" onPress={() => setAmount((a) => a + 1)} style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: fire.card, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name="plus" size={18} color={fire.ink} />
-      </Pressable>
-      <FireButton label="Skip" kind="quiet" height={44} busy={busy === 'skip'} onPress={() => void go('skip')} style={{ paddingHorizontal: 10 }} size={13} />
-      <FireButton label="Apply" kind="primary" height={44} busy={busy === 'apply'} onPress={() => void go('apply')} style={{ paddingHorizontal: 14 }} size={13} />
     </View>
   )
 }

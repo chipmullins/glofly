@@ -8,6 +8,7 @@ import { Attachments } from '@/chat/Attachments'
 import { Formatted } from '@/chat/Formatted'
 import { ForwardedLabel } from '@/chat/MessageRow'
 import { GameCard, GifView, LinkCard, PollCard } from '@/chat/Extras'
+import { RollCard, chatRollOf } from '@/campfire/RollCard'
 import { LiveAlertCard, liveAlertBody } from './LiveAlertCard'
 import { isJumbo } from '@/lib/emoji'
 import { firstName } from '@/lib/format'
@@ -155,7 +156,9 @@ export const NebulaRow = memo(function NebulaRow({
   const size = compact ? 15 : 15
   const name = sender ? (m.senderId === meId ? sender.displayName : sender.displayName) : 'Someone'
   const nameOf = (id: string) => (id === meId ? 'You' : firstName(people[id]?.displayName ?? 'Someone', people[id]?.username))
-  const special = !m.deleted && !!(m.gif || m.poll || m.game)
+  // Campfire: a `/roll` message is a roll card (its body is the plain text for older apps).
+  const roll = m.deleted ? null : chatRollOf(m)
+  const special = !m.deleted && !!(m.gif || m.poll || m.game || roll)
   const jumbo = !m.deleted && !special && !m.replyTo && !m.attachments.length && isJumbo(m.body)
   const day = row.day ? (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
@@ -255,6 +258,10 @@ export const NebulaRow = memo(function NebulaRow({
           ) : special && m.poll ? (
             <View style={{ marginTop: 6 }}>
               <PollCard message={m} meId={meId} nameOf={nameOf} canAct={canAct} />
+            </View>
+          ) : special && roll ? (
+            <View style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+              <RollCard roll={roll} />
             </View>
           ) : special && m.game ? (
             <View style={{ marginTop: 6 }}>

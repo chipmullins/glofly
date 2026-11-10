@@ -84,7 +84,8 @@ export function CampfireMap({
   )
 
   const mine = useMemo(() => table.tokens.filter((t) => t.layer !== 'gm' && controls(t, meId, table.characters)), [table.tokens, table.characters, meId])
-  const myMain = mine.find((t) => table.characters.some((c) => c.id === t.characterId && c.ownerId === meId)) ?? mine[0]
+  // "Me" on the map: my PC's token (players: else any token I control; GMs control many, so none).
+  const myMain = mine.find((t) => table.characters.some((c) => c.id === t.characterId && c.ownerId === meId)) ?? (gm ? undefined : mine[0])
 
   // First view of a scene: a cell about 40 pt wide, centered on my token (or the middle).
   useEffect(() => {
@@ -501,7 +502,7 @@ function PingRing({ x, y, zoom }: { x: number; y: number; zoom: number }) {
   const still = useStill()
   const t = useSharedValue(0)
   useEffect(() => {
-    t.value = withTiming(1, { duration: still ? 0 : 1400, easing: Easing.out(Easing.quad) })
+    t.value = still ? 0 : withTiming(1, { duration: 1400, easing: Easing.out(Easing.quad) })
   }, [t, still])
   const r = 36 / Math.max(0.05, zoom)
   const style = useAnimatedStyle(() => ({ opacity: still ? 0.9 : 1 - t.value * 0.8, transform: [{ scale: still ? 1 : 0.4 + t.value * 0.9 }] }))

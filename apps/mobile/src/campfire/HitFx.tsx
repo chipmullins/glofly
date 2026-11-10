@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { View } from 'react-native'
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated'
+import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated'
 import type { Token } from '@glofly/shared'
 import { useCampfire, type Hit } from './store'
 import { centerOf, useFire, useStill } from './lib'
@@ -12,9 +12,11 @@ import { centerOf, useFire, useStill } from './lib'
 // then the target shakes and flashes, a number floats up ("−10", "Hit!" when the campaign hides
 // that monster's HP, "Miss" with a dodge), and its bar drops (the bar itself animates in Map.tsx
 // when the token's new HP arrives). "Defeated" / "Bloodied" follow.
-// Reduce Motion: nothing moves; the target glows and the number shows in place.
+// Reduce Motion: nothing moves; the target glows and the number shows in place (those fades run
+// with ReduceMotion.Never, or reanimated would skip them and nothing would show at all).
 
 const TRAVEL_MS = 330
+const KEEP = ReduceMotion.Never
 const BUMP_MS = 170
 
 /** The bump / shake / dodge / glow of one token for hits that involve it. */
@@ -46,7 +48,7 @@ export function useTokenFx(campaignId: string, tokenId: string, cell: number, st
       }
       if (h.targetTokenId === tokenId) {
         if (still) {
-          glow.value = withSequence(withTiming(1, { duration: 0 }), withDelay(900, withTiming(0, { duration: 400 })))
+          glow.value = withSequence(withTiming(1, { duration: 0, reduceMotion: KEEP }), withDelay(1200, withTiming(0, { duration: 400, reduceMotion: KEEP }), KEEP))
         } else if (h.miss) {
           const s = cell / 70
           dx.value = withDelay(travel, withSequence(withTiming(10 * s, { duration: 160 }), withTiming(0, { duration: 240 })))
@@ -101,8 +103,9 @@ function OneHit({ hit, tokens, cell, zoom }: { hit: Hit; tokens: Token[]; cell: 
   const after = useSharedValue(0)
   useEffect(() => {
     p.value = withTiming(1, { duration: travel, easing: Easing.in(Easing.quad) })
-    rise.value = withDelay(travel, withTiming(1, { duration: still ? 1600 : 1000, easing: Easing.out(Easing.cubic) }))
-    after.value = withDelay(travel + 1000, withTiming(1, { duration: 900 }))
+    const keep = still ? KEEP : ReduceMotion.System
+    rise.value = withDelay(travel, withTiming(1, { duration: still ? 1600 : 1000, easing: Easing.out(Easing.cubic), reduceMotion: keep }), keep)
+    after.value = withDelay(travel + (still ? 1600 : 1000), withTiming(1, { duration: 900, reduceMotion: keep }), keep)
   }, [p, rise, after, travel, still])
 
   const b = frozen.b
