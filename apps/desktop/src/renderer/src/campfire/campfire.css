@@ -2035,3 +2035,16 @@ button.cf-stat:hover {
   background: var(--cf-surface);
   font-size: 13px;
 }
+/* Handout text uses the chat's formatting, in the table's dark colors. */
+.cf-handout-body .fmt-quote {
+  color: var(--cf-soft);
+  border-color: var(--cf-line-strong);
+}
+.cf-handout-body .fmt-code,
+.cf-handout-body .fmt-codeblock {
+  background: var(--cf-surface);
+  color: var(--cf-ink);
+}
+.cf-handout-body .fmt-link {
+  color: var(--cf-amber);
+}

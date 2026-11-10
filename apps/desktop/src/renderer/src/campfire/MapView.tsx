@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Point, Scene, Token, TokenBar } from '@glofly/shared/campfire/types'
 import { tokenCenter } from '@glofly/shared/campfire/map'
 import BuiltLayer, { BuiltDefs } from './BuiltLayer'
@@ -83,8 +83,7 @@ function TokenGlyph({
   dragging,
   canMove,
   fxRef,
-  onKey,
-  onFocusSelect
+  onKey
 }: {
   t: Token
   size: number
@@ -97,9 +96,9 @@ function TokenGlyph({
   bars: (TokenBar | null)[]
   dragging: boolean
   canMove: boolean
-  fxRef: (el: SVGGElement | null) => void
-  onKey: (e: React.KeyboardEvent) => void
-  onFocusSelect: () => void
+  /** Stable (by token id): keeps memo working with 200+ tokens */
+  fxRef: (id: string, el: SVGGElement | null) => void
+  onKey: (id: string, e: React.KeyboardEvent) => void
 }): React.JSX.Element {
   const w = t.w * size
   const h = t.h * size
@@ -119,12 +118,11 @@ function TokenGlyph({
       tabIndex={0}
       aria-label={label}
       aria-pressed={selected}
-      onKeyDown={onKey}
-      onFocus={onFocusSelect}
+      onKeyDown={(e) => onKey(t.id, e)}
       style={{ cursor: canMove ? 'grab' : 'pointer' }}
     >
       <g
-        ref={fxRef}
+        ref={(el) => fxRef(t.id, el)}
         className="cf-token-fx"
         style={{
           opacity: defeated ? 0.4 : hidden ? 0.6 : 1,
@@ -281,6 +279,8 @@ function TokenGlyph({
     </g>
   )
 }
+
+const Token_ = memo(TokenGlyph)
 
 function MapView(p: Props): React.JSX.Element {
   const { scene, isGm } = p
@@ -598,6 +598,20 @@ function MapView(p: Props): React.JSX.Element {
     }
   }
 
+  // Stable callbacks for the (memoized) tokens; they read the latest props through a ref.
+  const keyRef = useRef<(id: string, e: React.KeyboardEvent) => void>(() => undefined)
+  useEffect(() => {
+    keyRef.current = (id, e) => {
+      const t = byId.get(id)
+      if (t) onTokenKey(t)(e)
+    }
+  })
+  const tokenKey = useCallback((id: string, e: React.KeyboardEvent) => keyRef.current(id, e), [])
+  const registerFx = useCallback((id: string, el: SVGGElement | null) => {
+    if (el) fxEls.current.set(id, el)
+    else fxEls.current.delete(id)
+  }, [])
+
   const hex = g.type === 'hex' ? hexPattern(g.size) : null
   const tokenShown = (t: Token): Token =>
     drag && drag.id === t.id ? { ...t, x: drag.x, y: drag.y } : t
@@ -711,7 +725,7 @@ function MapView(p: Props): React.JSX.Element {
           {sorted.map((t0) => {
             const t = tokenShown(t0)
             return (
-              <TokenGlyph
+              <Token_
                 key={t.id}
                 t={t}
                 size={g.size}
@@ -724,12 +738,8 @@ function MapView(p: Props): React.JSX.Element {
                 bars={barHold.get(t.id) ?? t.bars}
                 dragging={drag?.id === t.id}
                 canMove={p.canMove(t)}
-                fxRef={(el) => {
-                  if (el) fxEls.current.set(t.id, el)
-                  else fxEls.current.delete(t.id)
-                }}
-                onKey={onTokenKey(t0)}
-                onFocusSelect={() => undefined}
+                fxRef={registerFx}
+                onKey={tokenKey}
               />
             )
           })}
@@ -802,7 +812,7 @@ function MapView(p: Props): React.JSX.Element {
               x={x.x}
               y={x.y}
               textAnchor="middle"
-              fontSize={x.big ? 32 : 26}
+              fontSize={(x.big ? 32 : 26) / Math.min(1, Math.max(0.45, view.z))}
               fontWeight={800}
               fontFamily="Outfit, sans-serif"
               fill={x.color}
