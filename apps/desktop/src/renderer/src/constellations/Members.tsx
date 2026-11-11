@@ -329,8 +329,18 @@ export function MembersPanel({
   )
 }
 
-type Big = ReturnType<typeof useBigMembers>
-function useBigMembers(c: ConstellationDetail) {
+type Big = {
+  q: string
+  browsing: boolean
+  list: ConstellationMember[]
+  next: string | null
+  loading: boolean
+  search: (v: string) => void
+  browse: () => Promise<void>
+  stop: () => void
+  more: () => Promise<void>
+}
+function useBigMembers(c: ConstellationDetail): Big {
   const [q, setQ] = useState('')
   const [browsing, setBrowsing] = useState(false)
   const [list, setList] = useState<ConstellationMember[]>([])

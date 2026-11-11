@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { DISCORD_PAIRS_MAX, type DiscordBridgeInfo, type DiscordBridgeSettings } from '@glofly/shared/discord'
+import {
+  DISCORD_PAIRS_MAX,
+  type DiscordBridgeInfo,
+  type DiscordBridgeSettings
+} from '@glofly/shared/discord'
 import type { ApiResult, ConstellationDetail } from '../../../preload/api-types'
 import './DiscordBridge.css'
 
@@ -7,8 +11,11 @@ import './DiscordBridge.css'
 // (add the bot, pick channels, tell members), the connected server with its channel pairs, and
 // what goes across. Owner or "Edit constellation settings" (like Integrations).
 
-const call = <T,>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<ApiResult<T>> =>
-  window.glofly.constellations.request<T>(method, path, body)
+const call = <T,>(
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown
+): Promise<ApiResult<T>> => window.glofly.constellations.request<T>(method, path, body)
 
 const TOGGLES: { key: keyof DiscordBridgeSettings; label: string }[] = [
   { key: 'edits', label: 'Edits and deletes' },
@@ -68,24 +75,32 @@ export default function DiscordBridgePage({
     return (
       <div className="cx-settings-body">
         <p className="cx-settings-text">
-          The Discord bridge isn’t switched on for Glofly yet. It needs Glofly’s Discord app, which the Glofly team is setting up.
+          The Discord bridge isn’t switched on for Glofly yet. It needs Glofly’s Discord app, which
+          the Glofly team is setting up.
         </p>
       </div>
     )
   const b = info.bridge
   const textNebulas = c.nebulas.filter(
-    (n) => (n.kind === 'text' || n.kind === 'announcement') && (n.visibility ?? 'everyone') === 'everyone' && !n.optional
+    (n) =>
+      (n.kind === 'text' || n.kind === 'announcement') &&
+      (n.visibility ?? 'everyone') === 'everyone' &&
+      !n.optional
   )
   const free = textNebulas.filter((n) => !b?.pairs.some((p) => p.nebulaId === n.id))
-  const freeChannels = info.channels.filter((ch) => !b?.pairs.some((p) => p.discordChannelId === ch.id))
-  const nebulaName = (id: string): string => `#${c.nebulas.find((n) => n.id === id)?.name ?? 'nebula'}`
+  const freeChannels = info.channels.filter(
+    (ch) => !b?.pairs.some((p) => p.discordChannelId === ch.id)
+  )
+  const nebulaName = (id: string): string =>
+    `#${c.nebulas.find((n) => n.id === id)?.name ?? 'nebula'}`
 
   return (
     <div className="cx-settings-body dc-bridge">
       <div className="dc-steps">
         <Step n={1} done={!!b} title="Add the Glofly Bridge bot to your Discord server">
           <span>
-            Opens Discord. You need “Manage Server” there. Glofly learns which server you picked, nothing else about your account.
+            Opens Discord. You need “Manage Server” there. Glofly learns which server you picked,
+            nothing else about your account.
           </span>
           {!b && (
             <button
@@ -102,7 +117,11 @@ export default function DiscordBridgePage({
               Add to Discord
             </button>
           )}
-          {waiting && !b && <span className="dc-wait">Waiting for Discord… finish in your browser, then come back.</span>}
+          {waiting && !b && (
+            <span className="dc-wait">
+              Waiting for Discord… finish in your browser, then come back.
+            </span>
+          )}
         </Step>
         <Step n={2} done={!!b && b.pairs.length > 0} title="Pick channels to bridge">
           <span>Up to {DISCORD_PAIRS_MAX} pairs. Each Discord channel pairs with one nebula.</span>
@@ -129,7 +148,8 @@ export default function DiscordBridgePage({
           )}
         </Step>
         <span className="cx-settings-text" style={{ fontSize: 12.5 }}>
-          Owner or “Edit constellation settings” only. Turning the bridge off keeps everything already copied.
+          Owner or “Edit constellation settings” only. Turning the bridge off keeps everything
+          already copied.
         </span>
       </div>
 
@@ -147,7 +167,11 @@ export default function DiscordBridgePage({
             <div style={{ flex: 1, minWidth: 0 }}>
               <b>{b.guildName} (Discord)</b>
               <div className="dc-sub">
-                Connected {new Date(b.connectedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                Connected{' '}
+                {new Date(b.connectedAt).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric'
+                })}
                 {b.connectedBy ? ` by ${b.connectedBy.displayName}` : ''} · {b.pairs.length}{' '}
                 {b.pairs.length === 1 ? 'channel' : 'channels'}
               </div>
@@ -163,7 +187,8 @@ export default function DiscordBridgePage({
           </div>
           {b.lost && (
             <p className="dc-lost" role="alert">
-              Glofly Bridge isn’t in {b.guildName} any more (someone removed it). Add it again to keep bridging.
+              Glofly Bridge isn’t in {b.guildName} any more (someone removed it). Add it again to
+              keep bridging.
             </p>
           )}
           {b.pairs.map((p) => (
@@ -172,13 +197,17 @@ export default function DiscordBridgePage({
               <span aria-hidden="true">⇄</span>
               <span className="dc-chip dc-chip--glofly">{nebulaName(p.nebulaId)}</span>
               <span style={{ flex: 1 }} />
-              <span className={p.paused ? 'dc-state dc-state--paused' : 'dc-state'}>{p.paused ? 'Paused' : 'Live'}</span>
+              <span className={p.paused ? 'dc-state dc-state--paused' : 'dc-state'}>
+                {p.paused ? 'Paused' : 'Live'}
+              </span>
               <button
                 type="button"
                 className="cx-link-button"
                 disabled={busy}
                 onClick={() =>
-                  void run(() => call<DiscordBridgeInfo>('PATCH', `${base}/pairs/${p.id}`, { paused: !p.paused }))
+                  void run(() =>
+                    call<DiscordBridgeInfo>('PATCH', `${base}/pairs/${p.id}`, { paused: !p.paused })
+                  )
                 }
               >
                 {p.paused ? 'Resume' : 'Pause'}
@@ -187,7 +216,9 @@ export default function DiscordBridgePage({
                 type="button"
                 className="cx-link-button"
                 disabled={busy}
-                onClick={() => void run(() => call<DiscordBridgeInfo>('DELETE', `${base}/pairs/${p.id}`))}
+                onClick={() =>
+                  void run(() => call<DiscordBridgeInfo>('DELETE', `${base}/pairs/${p.id}`))
+                }
               >
                 Remove
               </button>
@@ -212,7 +243,11 @@ export default function DiscordBridgePage({
                   }
                 }}
               >
-                <select aria-label="Discord channel" value={channel || freeChannels[0]?.id || ''} onChange={(e) => setChannel(e.target.value)}>
+                <select
+                  aria-label="Discord channel"
+                  value={channel || freeChannels[0]?.id || ''}
+                  onChange={(e) => setChannel(e.target.value)}
+                >
                   {freeChannels.map((ch) => (
                     <option key={ch.id} value={ch.id}>
                       Discord #{ch.name}
@@ -221,14 +256,22 @@ export default function DiscordBridgePage({
                   ))}
                 </select>
                 <span aria-hidden="true">⇄</span>
-                <select aria-label="Nebula" value={nebula || free[0]?.id || ''} onChange={(e) => setNebula(e.target.value)}>
+                <select
+                  aria-label="Nebula"
+                  value={nebula || free[0]?.id || ''}
+                  onChange={(e) => setNebula(e.target.value)}
+                >
                   {free.map((n) => (
                     <option key={n.id} value={n.id}>
                       #{n.name}
                     </option>
                   ))}
                 </select>
-                <button type="submit" className="cx-button cx-button--primary" disabled={busy || !freeChannels.length || !free.length}>
+                <button
+                  type="submit"
+                  className="cx-button cx-button--primary"
+                  disabled={busy || !freeChannels.length || !free.length}
+                >
                   Bridge
                 </button>
                 <button type="button" className="cx-button" onClick={() => setAdding(false)}>
@@ -254,7 +297,11 @@ export default function DiscordBridgePage({
                 checked={b.settings[t.key]}
                 disabled={busy}
                 onChange={(e) =>
-                  void run(() => call<DiscordBridgeInfo>('PUT', `${base}/settings`, { [t.key]: e.target.checked }))
+                  void run(() =>
+                    call<DiscordBridgeInfo>('PUT', `${base}/settings`, {
+                      [t.key]: e.target.checked
+                    })
+                  )
                 }
               />
               <span className="dc-switch" aria-hidden="true" />
