@@ -321,3 +321,45 @@ LevelUp, Inventory, Hub, HubPhone, Homebrew, Tour. Keep screens matching them.
   AC), weapons from the rules add an attack, coins, attunement (3), carrying weight.
 - **Tour.** First time per device (desktop/web localStorage, phones prefs); "?" on the table opens
   "How Campfire works". Coach marks point at real buttons (`data-tour`); no practice table yet.
+
+## Round B (Nov 10, 2026): movement, the game master screen, table control, voice, sound board
+
+Approved boards (in `docs/design/campfire/`): MoveDesktop, GmScreen, PhoneMove, PhonePaused, Voice,
+Terrain. Keep screens matching them. Migration 0060 (add-only): `campfire_sounds`, `campaigns.live`,
+`members.removed_at`, tokens `elevation` / `locked` / `condition_timers`.
+
+- **Movement** (shared `roundB.ts`): `speedFor` (sheet speed; 0 with grappled/restrained/paralyzed/
+  petrified/stunned/unconscious), `moveBudget` (Dash doubles), `pathCost` (square by square or hex by
+  hex; painted terrain costs double; at most `MAX_PATH_STEPS` per path, past that it's "too far").
+  The turn's entry keeps `moved`, `dashed`, `lastMove`, `anchor` (players get `moved`/`dashed` and a
+  coordinate-free `lastMove`). Token PATCH takes `path` (token centers, ≤ 50, on the map). With
+  "move on your turn" players are refused past their budget (`too_far`), re-checked under the
+  campaign row lock (`noteMove`); live drags stop at the edge. A GM moving a player's token isn't
+  charged to that player's turn. Combat ops `dash`, `undoMove` (one step; locked tokens can't undo),
+  `legendary`. `startTurn` resets movement and legendary actions and ticks condition timers
+  (`campfire:notice` "Poisoned ended on …" by the name each viewer sees).
+- **Players can't take off** the no-move conditions (GM or their timer does). Locked sheets keep speed.
+- **Terrain** (builder tool): `BuiltMap.terrain` (difficult / water). Players get only what isn't under
+  fog, and their moves price fogged ground as plain.
+- **GM screen** (desktop/web tab): encounter builder (SRD 5.2 XP budget for both rule sets: Low /
+  Moderate / High; the 2014 DMG thresholds aren't in the SRD), Quick NPC, legendary actions, table
+  controls (pause with a message, move everyone's view to a spot, lock all tokens, spotlight, remove
+  someone / let them back). Group bar: box-select or Shift-click tokens, then damage / heal / save /
+  condition / hide / lock for all.
+- **Pause** (`campaigns.live.paused`): players get 423 `paused` for moves, rolls, attacks, damage,
+  heal, death saves, rests and token changes; their map is covered (phones fold the sheet down).
+- **Voice**: tokens glow while their player talks (per-device setting). Hold V (desktop/web GM) to
+  whisper: LiveKit track permissions let only the chosen player hear; `campfire:whisper` tells the two.
+- **Sound board**: 9 built-in sounds (`tools/sounds/campfire.py`, .ogg in desktop and mobile assets)
+  plus up to 40 uploads (≤ 15 s, audio files cleaned like music). `POST /campaigns/:id/sound` plays
+  for everyone (`campfire:sound`), at the GM's volume × each person's own.
+- **Live events** (allow-listed in desktop main, web bridge and phones): `campfire:live`, `view`,
+  `sound`, `whisper`, `notice`, `removed`.
+- **Phones** (`src/campfire/roundB.ts`, `BoardB.tsx`): on your turn a drag draws a path (rest your
+  finger to turn a corner), the cost pill shows "X of Y ft" (and difficult ground), the sheet shows
+  Undo / Dash / Move here; nothing is sent until Move here. Paused cover, spotlight, moved-view,
+  whisper and notice cards; sounds play; heights, locks and timers on tokens; terrain on the map.
+- **Security review** (Nov 10, independent): fixed the unbounded path cost, movement races, GM moves
+  charged to players, players lifting no-move conditions, pause gaps, fogged-terrain probing, hidden
+  names in notices and the drag cache after removal. Accepted: players' unlocked sheets can still
+  change their own speed (lock the sheet to stop it); removed players stay in the voice call.
