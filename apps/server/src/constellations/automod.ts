@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { dropFromStages } from "../stages/state";
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import {
   AUTOMOD_ACTIONS,
@@ -276,6 +277,7 @@ export async function mentionCapGate(
       .set({ timedOutUntil: until })
       .where(and(eq(constellationMembers.constellationId, nebula.constellationId), eq(constellationMembers.userId, userId)));
     await logModeration(nebula.constellationId, null, "timed_out", userId, { length: minutes === 10 ? "10 minutes" : "1 hour", reason: `Mentioned ${count} people or roles in one message`, by: "automod" });
+    await dropFromStages(nebula.constellationId, userId, false);
   }
   return {
     status: 403,

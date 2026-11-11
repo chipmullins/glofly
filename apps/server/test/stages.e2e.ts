@@ -240,3 +240,26 @@ test("announcement nebulas: staff-only, followed by another constellation, copie
   const last = (await call(`/conversations/${partnerNews.conversationId}/messages`, { token: partner.token })).json.messages;
   assert.ok(!last.some((m: any) => m.body === "Nobody follows"));
 });
+
+test("security review: role-only announcement nebulas can't be followed; a timed-out speaker is moved down", { skip }, async () => {
+  const detail = await call(`/constellations/${cid}`, { token: owner.token });
+  const roles = detail.json.constellation.roles;
+  const modRole = roles.find((r: any) => r.kind === "moderator").id;
+  const r = await call(`/constellations/${cid}/nebulas`, { method: "POST", token: owner.token, body: { name: "staff-news", kind: "announcement", visibility: "roles", roleIds: [modRole] } });
+  assert.equal(r.status, 201);
+  const staff = r.json.constellation.nebulas.find((n: any) => n.name === "staff-news");
+  // Public constellation, but the nebula is for moderators only: nobody can follow it, not even them.
+  assert.equal((await call(`/constellations/announcements/targets?nebulaId=${staff.id}`, { token: partner.token })).status, 404);
+  assert.equal((await call(`/constellations/${cid}/nebulas/${staff.id}/follow`, { method: "POST", token: mod.token, body: { targetNebulaId: partnerNews.id } })).status, 404);
+
+  const base = `/constellations/${cid}/nebulas/${stage.id}/stage`;
+  await call(base, { method: "POST", token: owner.token, body: { topic: "Second" } });
+  await call(`${base}/invite`, { method: "POST", token: owner.token, body: { userId: member.id } });
+  assert.equal((await call(`${base}/join`, { method: "POST", token: member.token, body: { as: "speaker" } })).status, 200);
+  const t = await call(`/constellations/${cid}/members/${member.id}/timeout`, { method: "POST", token: owner.token, body: { length: "1h" } });
+  assert.equal(t.status, 200, JSON.stringify(t.json));
+  const after = await call(base, { token: member.token });
+  assert.ok(!after.json.stage.speakers.some((s: any) => s.userId === member.id));
+  assert.equal((await call(`${base}/join`, { method: "POST", token: member.token, body: { as: "speaker" } })).status, 403);
+  await call(base, { method: "DELETE", token: owner.token });
+});

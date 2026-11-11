@@ -420,8 +420,8 @@ stagesRouter.post("/:id/nebulas/:nid/stage/audience", changeLimiter, async (req,
       return;
     }
     const t = await standingOf(f.s.constellationId, uid.data);
-    // The host can't be moved down by someone ranked below them (nor the owner, ever).
-    if (t && (t.owner || (uid.data === stage.startedBy && !outranks(f.s, t)))) {
+    // Only people ranked below you (never the owner), like every other moderation action.
+    if (t && !outranks(f.s, t)) {
       bad(res, "You can only do that to people with a lower role than yours.", 403);
       return;
     }

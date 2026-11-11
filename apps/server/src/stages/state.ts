@@ -10,7 +10,7 @@ import { db } from "../db";
 import { constellationMemberRoles, constellationRoles, constellations, nebulas, stagePeople, stages } from "../db/schema";
 import { emitToUser, emitToUsersPlain } from "../realtime";
 import { viewersOf } from "../constellations/access";
-import { closeRoom } from "../calls/livekit";
+import { closeRoom, removeByPrefix, removeFromRoom } from "../calls/livekit";
 
 // Communities round 2 (board 3a): live stages. The stage itself and who's up / asked up / has a hand
 // raised are kept in the database (stages, stage_people) and mirrored here; who's actually on it right
@@ -260,4 +260,30 @@ export function stageChatClosedFor(nebulaId: string, userId: string): boolean {
   const stage = live.get(nebulaId);
   if (!stage || stage.listenerChat) return false;
   return !stage.people.get(userId)?.speaker;
+}
+
+/**
+ * Security review (Nov 11): someone timed out, kicked, banned or who left is taken off every live
+ * stage in that constellation at once (speaking or listening), not just when their pass runs out.
+ * `listenToo` false (a time-out): they may keep listening, but not speak or keep a raised hand.
+ */
+export async function dropFromStages(constellationId: string, userId: string, listenToo = true): Promise<void> {
+  await ready();
+  for (const stage of [...live.values()].filter((s) => s.constellationId === constellationId)) {
+    const p = stage.people.get(userId);
+    const h = stage.here.get(userId);
+    if (!p && !h) continue;
+    await removeFromRoom(roomOf(stage.id), userId);
+    if (listenToo) {
+      await removeByPrefix(roomOf(stage.id), `listen:${userId}:`);
+      stage.here.delete(userId);
+    } else if (h) h.speaker = false;
+    if (p) {
+      const next = { ...p, speaker: false, invited: false, handAt: null, upAt: null };
+      stage.people.set(userId, next);
+      await db.update(stagePeople).set({ speaker: false, invited: false, handAt: null, upAt: null }).where(and(eq(stagePeople.stageId, stage.id), eq(stagePeople.userId, userId)));
+    }
+    if (h && !listenToo) emitToUser(userId, "stage:moved", { constellationId, nebulaId: stage.nebulaId }, true);
+    announce(stage.nebulaId, true);
+  }
 }

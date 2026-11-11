@@ -1,4 +1,5 @@
 import express, { Router, type NextFunction, type Request, type Response } from "express";
+import { nebulaBusy } from "../constellations/busy";
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import sharp from "sharp";
 import { z } from "zod";
@@ -266,6 +267,14 @@ emojiRouter.post("/emoji/:id/send", sendLimiter, async (req, res) => {
   const chunks: Buffer[] = [];
   for await (const c of file.stream) chunks.push(c as Buffer);
   const reply = parsed.data.replyToId ? await messageIn(parsed.data.conversationId, parsed.data.replyToId) : null;
+  // Communities round 2: a busy nebula's limits count stickers, polls and games too.
+  if (chat.kind === "nebula") {
+    const busy = await nebulaBusy(chat.conversationId);
+    if (busy) {
+      res.status(429).json({ error: "too_many_requests", message: busy });
+      return;
+    }
+  }
   const message = await postSpecial(
     chat,
     parsed.data.conversationId,

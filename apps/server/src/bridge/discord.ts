@@ -31,7 +31,7 @@ import { requireAuth } from "../auth/sessions";
 import { isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
 import { rateLimit } from "../rateLimit";
 import { registerToolHooks } from "../toolHooks";
-import { can, standingOf, type Standing } from "../constellations/perms";
+import { can, frozen, FROZEN_MESSAGE, standingOf, type Standing } from "../constellations/perms";
 import { constellationChanged } from "../constellations/activity";
 import { addMember, ConstellationFull } from "../constellations/members";
 import { syncNebulaAccess } from "../constellations/access";
@@ -108,6 +108,11 @@ async function manager(req: Request, res: Response): Promise<Standing | null> {
     bad(res, "Only people who can edit this constellation's settings can set up the Discord bridge.", 403);
     return null;
   }
+  // A frozen constellation can be looked at, not changed.
+  if (req.method !== "GET" && (await frozen(s.constellationId))) {
+    bad(res, FROZEN_MESSAGE, 403);
+    return null;
+  }
   return s;
 }
 
@@ -146,7 +151,15 @@ async function pairs(): Promise<void> {
 /** The API key's nebulas follow the pairs (the members' "shared with Discord" notice). */
 async function syncKey(bridge: typeof discordBridges.$inferSelect): Promise<void> {
   if (!bridge.apiKeyId) return;
-  const ids = (await db.select({ id: discordBridgeChannels.nebulaId }).from(discordBridgeChannels).where(eq(discordBridgeChannels.bridgeId, bridge.id))).map((r) => r.id);
+  const ids = (
+    await db
+      .select({ id: discordBridgeChannels.nebulaId, visibility: nebulas.visibility, optional: nebulas.optional, userIds: nebulas.userIds })
+      .from(discordBridgeChannels)
+      .innerJoin(nebulas, eq(nebulas.id, discordBridgeChannels.nebulaId))
+      .where(eq(discordBridgeChannels.bridgeId, bridge.id))
+  )
+    .filter((r) => r.visibility === "everyone" && !r.optional && !r.userIds.length)
+    .map((r) => r.id);
   await db.update(constellationApiKeys).set({ readNebulaIds: ids, postNebulaIds: ids }).where(eq(constellationApiKeys.id, bridge.apiKeyId));
   await loadPairs();
   await constellationChanged(bridge.constellationId);
@@ -197,7 +210,16 @@ async function infoFor(constellationId: string): Promise<DiscordBridgeInfo> {
   };
 }
 
-discordRouter.get("/constellations/:id/discord", async (req, res) => {
+const readLimiter = rateLimit("discord:read", {
+  windowMs: 60 * 1000,
+  limit: 20,
+  keyGenerator: (req) => String(req.params.id),
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "Try again in a minute." },
+});
+
+discordRouter.get("/constellations/:id/discord", readLimiter, async (req, res) => {
   const s = await manager(req, res);
   if (!s) return;
   res.json(await infoFor(s.constellationId));
@@ -264,7 +286,12 @@ discordRouter.get("/bridge/discord/callback", async (req, res) => {
       if (existing) {
         // Added again (or to a different server): keep the bot, point it at this server.
         await tx.update(discordBridges).set({ guildId: guild.id, guildName: guild.name, guildIcon: guild.icon, lostAt: null }).where(eq(discordBridges.id, existing.id));
-        if (existing.guildId !== guild.id) await tx.delete(discordBridgeChannels).where(eq(discordBridgeChannels.bridgeId, existing.id));
+        if (existing.guildId !== guild.id) {
+          // Moved to another server: the old server's webhooks go, and the bot leaves it.
+          const old = await tx.delete(discordBridgeChannels).where(eq(discordBridgeChannels.bridgeId, existing.id)).returning({ webhookId: discordBridgeChannels.webhookId });
+          for (const o of old) void discord("DELETE", `/webhooks/${o.webhookId}`).catch(() => undefined);
+          void discord("DELETE", `/users/@me/guilds/${existing.guildId}`).catch(() => undefined);
+        }
         return;
       }
       const name = `Discord · ${guild.name}`.slice(0, 40);
@@ -534,7 +561,10 @@ async function inbound(m: DiscordMessage): Promise<void> {
   if (m.webhook_id === p.webhookId || m.author?.id === gateway?.botUserId) return;
   if (m.type !== undefined && m.type !== 0 && m.type !== 19) return; // only messages and replies
   const settings = cleanDiscordSettings(p.bridge.settings);
-  const name = settings.names ? (m.member?.nick || m.author.global_name || m.author.username || "Someone on Discord").slice(0, 64) : "Someone on Discord";
+  // Names can't ping anyone in Glofly (a nickname like "@everyone").
+  const name = settings.names
+    ? (m.member?.nick || m.author.global_name || m.author.username || "Someone on Discord").replace(/@/g, "@\u200b").replace(/[\r\n]/g, " ").slice(0, 64)
+    : "Someone on Discord";
   let avatar: string | null = null;
   if (settings.names && m.author.avatar && /^(a_)?[0-9a-f]{32}$/.test(m.author.avatar) && (await saveAvatar(m.author.id, m.author.avatar))) avatar = `${m.author.id}/${m.author.avatar}`;
   const files = settings.files ? (m.attachments ?? []) : [];
@@ -599,10 +629,17 @@ async function inboundDelete(d: { id: string; channel_id: string }): Promise<voi
 
 // ───────────── Glofly → Discord ─────────────
 
+/** Security review (Nov 11): a paired nebula that became role-only or optional stops going to Discord. */
+async function stillOpen(nebulaId: string): Promise<boolean> {
+  const [n] = await db.select({ visibility: nebulas.visibility, optional: nebulas.optional, userIds: nebulas.userIds }).from(nebulas).where(eq(nebulas.id, nebulaId));
+  return !!n && n.visibility === "everyone" && !n.optional && !n.userIds.length;
+}
+
 async function outbound(conversationId: string, messageId: string, change: "created" | "edited" | "deleted"): Promise<void> {
   await pairs();
   const p = byNebulaChat.get(conversationId);
   if (!p || p.paused || p.bridge.lostAt) return;
+  if (!(await stillOpen(p.nebulaId))) return;
   const settings = cleanDiscordSettings(p.bridge.settings);
   if (change === "deleted") {
     if (!settings.edits) return;

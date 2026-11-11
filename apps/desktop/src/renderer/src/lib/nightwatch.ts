@@ -206,6 +206,8 @@ export function logLine(e: Pick<ModLogEntry, 'action' | 'target' | 'details'>): 
           : ''
   const nebula = s('nebulaName')
   if (nebula && e.action.startsWith('automod_')) extra = ` in #${nebula}${extra}`
+  // A nebula you can't see (role-only): the server leaves out what happened there.
+  if ((e.details as { hidden?: unknown } | null)?.hidden === true) extra = ' in a nebula you can’t see'
   const reason = s('reason') && s('reason') !== 'account_removed' ? s('reason') : null
   return {
     verb: WORDS[e.action] ?? e.action.replace(/_/g, ' '),

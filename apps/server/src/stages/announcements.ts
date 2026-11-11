@@ -21,6 +21,7 @@ import {
   users,
 } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
+import { lockedDown, LOCKDOWN_MESSAGE } from "../admin/lockdown";
 import { isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
 import { rateLimit } from "../rateLimit";
 import { registerToolHooks } from "../toolHooks";
@@ -97,9 +98,15 @@ async function sourceOf(nebulaId: string): Promise<SourceRow | null> {
  * Can this person follow that announcement nebula? Public constellation and a nebula for everyone, or
  * they can see it as a member. The same answer for "not there" and "not allowed".
  */
+/**
+ * Security review (Nov 11): only announcement nebulas everyone in their constellation can see are
+ * followable (never role-only or onboarding-optional ones, whose posts would leak to the follower).
+ */
+const openToAll = (n: typeof nebulas.$inferSelect) => n.visibility === "everyone" && !n.optional && !n.userIds.length;
+
 async function mayFollow(userId: string, src: SourceRow | null): Promise<boolean> {
-  if (!src || src.nebula.kind !== "announcement" || src.c.takenDownAt) return false;
-  if (src.c.visibility === "public" && src.nebula.visibility === "everyone" && !src.nebula.optional && !src.nebula.userIds.length) return true;
+  if (!src || src.nebula.kind !== "announcement" || src.c.takenDownAt || !openToAll(src.nebula)) return false;
+  if (src.c.visibility === "public") return true;
   return seesNebulaChat(userId, src.nebula.conversationId);
 }
 
@@ -170,8 +177,12 @@ announcementsRouter.post("/:id/nebulas/:nid/follow", changeLimiter, async (req, 
     bad(res, "Posts can only go into a text nebula.");
     return;
   }
-  if (await frozen(t.constellationId)) {
+  if ((await frozen(t.constellationId)) || (await frozen(src.c.id))) {
     bad(res, FROZEN_MESSAGE, 403);
+    return;
+  }
+  if (await lockedDown(me(res).id)) {
+    bad(res, LOCKDOWN_MESSAGE.message, 403);
     return;
   }
   const [{ n: followers }] = await db.select({ n: count() }).from(announcementFollows).where(eq(announcementFollows.sourceNebulaId, src.nebula.id));
@@ -357,8 +368,10 @@ async function copyPost(messageId: string): Promise<void> {
     .innerJoin(constellations, eq(constellations.id, nebulas.constellationId))
     .where(eq(nebulas.conversationId, m.conversationId));
   if (!src || src.nebula.kind !== "announcement" || src.c.takenDownAt || src.c.frozenAt) return;
+  // It became role-only or optional since it was followed: nothing goes out (follows stay, paused).
+  if (!openToAll(src.nebula)) return;
   const follows = await db
-    .select({ id: announcementFollows.id, target: nebulas })
+    .select({ id: announcementFollows.id, target: nebulas, createdBy: announcementFollows.createdBy })
     .from(announcementFollows)
     .innerJoin(nebulas, eq(nebulas.id, announcementFollows.targetNebulaId))
     .where(eq(announcementFollows.sourceNebulaId, src.nebula.id));
@@ -376,6 +389,12 @@ async function copyPost(messageId: string): Promise<void> {
   };
   const forwarded = { name: crosspost.authorName, where: `${src.c.name} › #${src.nebula.name}`.slice(0, 120), at: m.createdAt.toISOString() };
   for (const f of follows) {
+    // A private constellation's posts only go where the person who followed can still read them
+    // (they left, were banned or lost access: the follow is removed).
+    if (src.c.visibility !== "public" && (!f.createdBy || !(await seesNebulaChat(f.createdBy, src.nebula.conversationId)))) {
+      await db.delete(announcementFollows).where(eq(announcementFollows.id, f.id));
+      continue;
+    }
     try {
       const [c] = await db.select({ takenDownAt: constellations.takenDownAt, frozenAt: constellations.frozenAt }).from(constellations).where(eq(constellations.id, f.target.constellationId));
       if (!c || c.takenDownAt || c.frozenAt) continue;

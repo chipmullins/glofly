@@ -1858,6 +1858,8 @@ async function postForward(
   if (chat.kind === "nebula") {
     const refused = await automodGate(targetId, myId, source.body, null);
     if (refused) return { ok: false, reason: refused.message };
+    const busy = await nebulaBusy(targetId);
+    if (busy) return { ok: false, reason: busy };
   }
   const made = await copyMessageInto(targetId, myId, source, { forwarded }, chat.memberIds, modernOnly(chat));
   if (!made.ok) return made;

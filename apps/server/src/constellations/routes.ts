@@ -79,7 +79,7 @@ import { can, OWNER_RANK, outranks, ranksOf, standingOf, type Standing , frozen,
 import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstellations } from "./members";
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
 import { afterJoinSafety } from "./raid";
-import { forgetStage } from "../stages/state";
+import { dropFromStages, forgetStage } from "../stages/state";
 import { removeConstellationEmoji } from "../emoji/routes";
 import { closeReportsOnBan, deleteRecentMessages } from "./nightwatch";
 import { joinsPaused, JOINS_PAUSED_MESSAGE } from "./safety";
@@ -2288,6 +2288,8 @@ constellationsRouter.post("/:id/members/:uid/timeout", changeLimiter, async (req
       void removeFromRoom(room.id, t.userId);
     }
   }
+  // …and stops speaking on any live stage (they may still listen).
+  await dropFromStages(s.constellationId, t.userId, false);
   await logModeration(s.constellationId, s.userId, "timed_out", t.userId, { length: length.name, reason: reasonField.parse(req.body?.reason ?? null) });
   await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });

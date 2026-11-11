@@ -300,7 +300,7 @@ export async function nightWatchFor(s: Standing): Promise<NightWatch> {
     raid: { pausedUntil: paused, raidAt: c?.raidAt?.toISOString() ?? null, heldJoiners: heldJoiners?.n ?? 0 },
     joinsToday: today?.n ?? 0,
     joinsUsual: Math.round((twoWeeks?.n ?? 0) / 14),
-    latest: latestRows.map((r) => ({
+    latest: (await redactHidden(s, latestRows)).map((r) => ({
       id: r.id,
       actor: r.actorId ? (people.get(r.actorId) ?? null) : null,
       by: byOf(r.actorId, r.action, r.details ?? null),
@@ -359,7 +359,37 @@ async function logRows(s: Standing, query: unknown, limit: number) {
       )!,
     );
   }
-  return db.select().from(L).where(and(...conds)).orderBy(desc(L.createdAt)).limit(limit);
+  return redactHidden(s, await db.select().from(L).where(and(...conds)).orderBy(desc(L.createdAt)).limit(limit));
+}
+
+/**
+ * Security review (Nov 11): log lines about a nebula this moderator can't see (role-only) keep
+ * their action but lose their details (the held message's text, a deleted message's excerpt, the
+ * nebula's name), like 0.8.0's AutoMod page.
+ */
+async function redactHidden<T extends { details: Record<string, unknown> | null }>(s: Standing, rows: T[]): Promise<T[]> {
+  const nebulaIds = new Set<string>();
+  const chatIds = new Set<string>();
+  for (const r of rows) {
+    const d = (r.details ?? {}) as { nebulaId?: unknown; conversationId?: unknown };
+    if (typeof d.nebulaId === "string") nebulaIds.add(d.nebulaId);
+    if (typeof d.conversationId === "string") chatIds.add(d.conversationId);
+  }
+  if (!nebulaIds.size && !chatIds.size) return rows;
+  const known = nebulaIds.size
+    ? await db.select({ id: nebulas.id, conversationId: nebulas.conversationId }).from(nebulas).where(inArray(nebulas.id, [...nebulaIds]))
+    : [];
+  const seen = await visibleChats(s.userId, [...new Set([...chatIds, ...known.map((n) => n.conversationId)])]);
+  const hiddenNebula = (id: string) => {
+    const n = known.find((k) => k.id === id);
+    return !n || !seen.has(n.conversationId);
+  };
+  return rows.map((r) => {
+    const d = (r.details ?? {}) as { nebulaId?: unknown; conversationId?: unknown };
+    const hidden =
+      (typeof d.nebulaId === "string" && hiddenNebula(d.nebulaId)) || (typeof d.conversationId === "string" && !seen.has(d.conversationId));
+    return hidden ? { ...r, details: { hidden: true } } : r;
+  });
 }
 
 nightWatchRouter.get("/:id/modlog", async (req, res) => {
