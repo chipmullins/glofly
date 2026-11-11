@@ -296,6 +296,10 @@ function onEvent(e: ServerEvent) {
       set({ bansTick: get().bansTick + 1 })
       refreshCardsSoon()
       return
+    // Communities round 2: a constellation's emoji or stickers changed (the picker reloads).
+    case 'emoji:changed':
+      void import('@/chat/customEmoji').then((m) => m.loadEmojiSets())
+      return
     default:
       return
   }

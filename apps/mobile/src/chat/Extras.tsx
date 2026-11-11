@@ -1,3 +1,5 @@
+import { emojiSource, loadEmojiSets, usableSets, useEmojiSets } from './customEmoji'
+import { useCx } from '@/state/constellations'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Animated, Easing, FlatList, Linking, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
 import { pickChatMedia } from '@/lib/photos'
@@ -70,7 +72,7 @@ export function GifSheet({ onPick, onPickSticker }: { onPick: (gif: GifInfo | nu
           {(['gifs', 'stickers'] as const).map((t) => (
             <Pressable key={t} accessibilityRole="tab" accessibilityState={{ selected: tab === t }} onPress={() => setTab(t)} style={{ flex: 1, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: tab === t ? c.sheet : 'transparent' }}>
               <Text size={14} weight="bold" tone={tab === t ? 'ink' : 'muted'}>
-                {t === 'gifs' ? 'GIFs' : 'My stickers'}
+                {t === 'gifs' ? 'GIFs' : 'Stickers'}
               </Text>
             </Pressable>
           ))}
@@ -142,6 +144,13 @@ export function GifSheet({ onPick, onPickSticker }: { onPick: (gif: GifInfo | nu
 
 /** Your stickers, and "Make a sticker" from a photo (the server cuts out the background). */
 function StickerTray({ onPick }: { onPick: (sticker: Sticker) => void }) {
+  const allSets = useEmojiSets((s) => s.sets)
+  const viewing = useCx((s) => s.viewing)
+  const place = useCx((s) => (viewing ? (s.chats[viewing]?.constellationId ?? null) : null))
+  const cxSets = usableSets(allSets, place).filter((s) => s.stickers.length)
+  useEffect(() => {
+    void loadEmojiSets()
+  }, [])
   const { c } = useTheme()
   const { width } = useWindowDimensions()
   const [stickers, setStickers] = useState<Sticker[] | null>(null)
@@ -195,6 +204,27 @@ function StickerTray({ onPick }: { onPick: (sticker: Sticker) => void }) {
           </Pressable>
         ))}
       </View>
+      {/* Communities round 2: each constellation's stickers (inside-only ones only there). */}
+      {cxSets.map((set) => (
+        <View key={set.constellation.id} style={{ gap: 8, marginTop: 14 }}>
+          <Text size={12} weight="bold" tone="muted" style={{ letterSpacing: 0.6 }}>
+            {set.constellation.name.toUpperCase()}
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            {set.stickers.map((st) => (
+              <Pressable
+                key={st.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Send sticker: ${st.name}`}
+                onPress={() => onPick({ id: `cx:${st.id}`, width: st.width, height: st.height, createdAt: st.createdAt })}
+                style={{ width: cell, height: cell, borderRadius: 16, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', padding: 8 }}
+              >
+                <Image source={emojiSource(st.id)} style={{ width: '100%', height: '100%' }} contentFit="contain" />
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ))}
     </ScrollView>
   )
 }

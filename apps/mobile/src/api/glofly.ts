@@ -145,7 +145,7 @@ export const loadMessages = (id: string, before?: string) => request<MessagePage
 /** Messages containing these words (newest first), in one chat or all; `before` = the last result you have. */
 export const searchMessages = (q: string, chat?: string, before?: string) =>
   request<MessageSearchPage>('GET', `/conversations/messages/search?q=${enc(q)}${chat ? `&chat=${chat}` : ''}${before ? `&before=${before}` : ''}`)
-export const sendMessage = async (id: string, body: string, replyToId?: string, attachmentIds?: string[], lantern?: boolean, clientId?: string) =>
+export const sendMessage = async (id: string, body: string, replyToId?: string, attachmentIds?: string[], lantern?: boolean, clientId?: string, emojis?: string[]) =>
   map(
     await request<{ message: Message }>('POST', `/conversations/${id}/messages`, {
       body,
@@ -154,14 +154,23 @@ export const sendMessage = async (id: string, body: string, replyToId?: string, 
       ...(lantern ? { lantern: true } : {}),
       // 0.7.5: the same on a retry, so the server never makes a copy
       ...(clientId ? { clientId } : {}),
+      // Communities round 2: which custom emoji the text's :names: are
+      ...(emojis?.length ? { emojis } : {}),
     }),
     (d) => d.message,
   )
 export const editMessage = async (id: string, messageId: string, body: string) =>
   map(await request<{ message: Message }>('PATCH', `/conversations/${id}/messages/${messageId}`, { body }), (d) => d.message)
 export const deleteMessage = async (id: string, messageId: string) => map(await request<{ message: Message }>('DELETE', `/conversations/${id}/messages/${messageId}`), (d) => d.message)
-export const react = async (id: string, messageId: string, emoji: string, on: boolean) =>
-  map(await request<{ message: Message }>(on ? 'PUT' : 'DELETE', `/conversations/${id}/messages/${messageId}/reactions/${enc(emoji)}`), (d) => d.message)
+export const react = async (id: string, messageId: string, emoji: string, on: boolean) => {
+  // Communities round 2: a custom emoji comes as ":name:#<id>" (the id says which picture).
+  const custom = /^(:[A-Za-z0-9_]{2,32}:)#([0-9a-f-]{36})$/i.exec(emoji)
+  const key = custom ? custom[1] : emoji
+  return map(
+    await request<{ message: Message }>(on ? 'PUT' : 'DELETE', `/conversations/${id}/messages/${messageId}/reactions/${enc(key)}${custom && on ? `?id=${custom[2]}` : ''}`),
+    (d) => d.message,
+  )
+}
 
 /** Uploads a photo, file or voice message to send; attached when the message is sent. */
 export async function uploadAttachment(
@@ -276,7 +285,15 @@ export const stickers = async () => map(await request<{ stickers: Sticker[] }>('
 export const makeSticker = async (file: Upload) => map(await upload<{ sticker: Sticker }>('POST', '/stickers', file), (d) => d.sticker)
 export const removeSticker = async (id: string) => none(await request('DELETE', `/stickers/${id}`))
 export const sendSticker = async (id: string, conversationId: string, replyToId?: string) =>
-  map(await request<{ message: Message }>('POST', `/stickers/${id}/send`, { conversationId, ...(replyToId ? { replyToId } : {}) }), (d) => d.message)
+  map(
+    await request<{ message: Message }>(
+      'POST',
+      // Communities round 2: a constellation's sticker ("cx:<id>").
+      id.startsWith('cx:') ? `/emoji/${id.slice(3)}/send` : `/stickers/${id}/send`,
+      { conversationId, ...(replyToId ? { replyToId } : {}) },
+    ),
+    (d) => d.message,
+  )
 export const stickerImagePath = (id: string) => `/stickers/${id}/image`
 
 /** A pass to watch a friend's broadcast. The address must be LiveKit's, never anything else. */

@@ -1,3 +1,4 @@
+import { InlineEmoji, reactionRef, withCustomEmoji } from './customEmoji'
 import { memo, type ReactNode } from 'react'
 import { CfxCard } from '@/constellations/CfxCard'
 import { cfxJoinCodeIn } from '@glofly/shared'
@@ -55,7 +56,7 @@ type Props = {
 
 const URL_PATTERN = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g
 
-function Body({ text, members, mine }: { text: string; members: PublicUser[]; mine: boolean }) {
+function Body({ text, members, mine, emojis }: { text: string; members: PublicUser[]; mine: boolean; emojis?: Message['emojis'] }) {
   const { c, dark } = useTheme()
   const plain = (t: string, key: string): ReactNode[] => {
     const out: ReactNode[] = []
@@ -102,7 +103,7 @@ function Body({ text, members, mine }: { text: string; members: PublicUser[]; mi
   return (
     <Formatted
       text={text}
-      renderPlain={plain}
+      renderPlain={withCustomEmoji(plain, emojis, 16)}
       look={{
         size: 16,
         ink: mine ? c.meInk : c.ink,
@@ -350,7 +351,7 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
                           }}
                         >
                           {m.forwarded ? <ForwardedLabel forwarded={m.forwarded} color={mine ? c.meInk : c.muted} /> : null}
-                          <Body text={m.body} members={members} mine={mine} />
+                          <Body emojis={m.emojis} text={m.body} members={members} mine={mine} />
                         </View>
                       ) : special && m.gif ? (
                         <View style={{ marginTop: 6 }}>
@@ -410,7 +411,7 @@ export const MessageRow = memo(function MessageRow({ row, meId, isGroup, people,
                           gap: 4,
                         }}
                       >
-                        <Text size={14}>{rx.emoji}</Text>
+                        {reactionRef(rx.emoji, m.emojis) ? <InlineEmoji emoji={reactionRef(rx.emoji, m.emojis)!} size={18} /> : <Text size={14}>{rx.emoji}</Text>}
                         <Text size={13} weight="bold">
                           {rx.userIds.length}
                         </Text>

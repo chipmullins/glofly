@@ -1,3 +1,4 @@
+import { InlineEmoji, reactionRef, withCustomEmoji } from '@/chat/customEmoji'
 import { memo, type ReactNode } from 'react'
 import { CfxCard } from '@/constellations/CfxCard'
 import { cfxJoinCodeIn } from '@glofly/shared'
@@ -89,7 +90,7 @@ function Body({ text, members, meId, size, groups, message }: { text: string; me
   return (
     <Formatted
       text={text}
-      renderPlain={plain}
+      renderPlain={withCustomEmoji(plain, message?.emojis, size)}
       look={{
         size,
         ink: N.ink,
@@ -370,7 +371,7 @@ export const NebulaRow = memo(function NebulaRow({
                     hitSlop={{ top: 8, bottom: 8 }}
                     style={{ height: 26, paddingHorizontal: 10, borderRadius: 13, backgroundColor: minePicked ? N.raised : N.card, borderWidth: 1, borderColor: minePicked ? N.amber : N.edge2, flexDirection: 'row', alignItems: 'center', gap: 4 }}
                   >
-                    <Text size={13}>{rx.emoji}</Text>
+                    {reactionRef(rx.emoji, m.emojis) ? <InlineEmoji emoji={reactionRef(rx.emoji, m.emojis)!} size={17} /> : <Text size={13}>{rx.emoji}</Text>}
                     <Text size={12} weight="bold">
                       {rx.userIds.length}
                     </Text>

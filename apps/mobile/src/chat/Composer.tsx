@@ -1,3 +1,4 @@
+import { typedFor } from './customEmoji'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { Platform, Pressable, ScrollView, TextInput, View, type NativeSyntheticEvent, type TextInputSelectionChangeEventData } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -119,8 +120,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   }
 
   async function addEmoji() {
-    const e = await pickEmoji()
-    if (!e) return
+    const picked = await pickEmoji()
+    if (!picked) return
+    // Communities round 2: a custom emoji goes in as ":name:".
+    const e = typedFor(picked)
     const next = text.slice(0, selection.start) + e + text.slice(selection.end)
     setText(next)
     const at = selection.start + e.length

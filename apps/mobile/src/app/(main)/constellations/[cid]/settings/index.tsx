@@ -36,6 +36,8 @@ export default function SettingsMenu() {
     // Communities round 2: Night watch (board 1e) and the mod log.
     { key: 'watch', label: 'Night watch', icon: <Glyph name="shield" size={17} />, detail: c.watch?.open ? String(c.watch.open) : undefined, show: modViewer },
     { key: 'moderation', label: 'Mod log', icon: <Icon name="clock" size={17} color={N.ink} />, show: modViewer },
+    // Communities round 2: emoji + stickers (board 2c).
+    { key: 'emoji', label: 'Emoji & stickers', icon: <Icon name="emoji" size={17} color={N.ink} />, show: true },
     // Communities round (Nov 2026): API keys for bots and game servers.
     { key: 'integrations', label: 'Integrations', icon: <Glyph name="external" size={17} />, show: can(c, 'manageConstellation') },
     // 0.9.3: Twitch, Kick and YouTube alerts.
