@@ -1,5 +1,6 @@
 import { ROLE_COLORS, playingFor, type ConstellationDetail, type ConstellationMember, type ConstellationPermission, type ConstellationRole, type Nebula } from '@glofly/shared'
 import { hexA, roleNight } from './ui'
+import { useSession } from '@/state/session'
 import type { RoleLook } from './NebulaRow'
 
 // What someone can do in a constellation, read from what the server sent (the server checks every
@@ -110,6 +111,9 @@ export function cantPost(c: ConstellationDetail, n: Nebula): { kind: 'timeout' |
   }
   // Communities round 2 (Night watch → Safety): the verification level.
   if (c.me.verification) return { kind: 'readonly', text: c.me.verification }
+  // Communities round 2: a live stage with listener chat off (only speakers and stage managers post).
+  const stage = n.kind === 'stage' ? c.stages?.find((s) => s.nebulaId === n.id) : undefined
+  if (stage && !stage.listenerChat && !can(c, 'manageStages') && !stage.speakers.some((s) => s.userId === useSession.getState().user?.id)) return { kind: 'readonly', text: 'Only speakers can chat here while the stage is live.' }
   return null
 }
 

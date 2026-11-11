@@ -290,6 +290,13 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   // Communities round 2: live stages by nebula
   const stageOf = (nebulaId: string): StageState | undefined =>
     c.stages?.find((s) => s.nebulaId === nebulaId)
+  /** A live stage with listener chat off: only speakers and stage managers post (the server checks too). */
+  const stageChatClosed = (n: { id: string; kind: string } | null): string | null => {
+    const st = n?.kind === 'stage' ? stageOf(n.id) : undefined
+    if (!st || st.listenerChat || can(c, 'manageStages') || st.speakers.some((x) => x.userId === me.id))
+      return null
+    return 'Only speakers can chat here while the stage is live.'
+  }
   // Communities round: this constellation's slash commands (reloaded whenever it changes).
   const [commands, setCommands] = useState<ConstellationCommand[]>([])
   useEffect(() => {
@@ -705,7 +712,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       : chatNebula.readOnly && !can(c, 'manageNebulas') && !can(c, 'deleteMessages')
         ? 'Only moderators can post here.'
         : // Communities round 2: the verification level (Night watch → Safety)
-          (c.me.verification ?? null)
+          (c.me.verification ?? stageChatClosed(chatNebula))
     return {
       id: chatNebula.conversationId,
       kind: 'group',
@@ -729,7 +736,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         ? "You're timed out for now, so you can read but not post."
         : chatNebula?.readOnly && !can(c, 'manageNebulas') && !can(c, 'deleteMessages')
           ? 'Only moderators can post here.'
-          : (c.me.verification ?? 'Only moderators can post here.')
+          : (c.me.verification ??
+            stageChatClosed(chatNebula) ??
+            'Only moderators can post here.')
       : null
 
   const voiceCards = c.nebulas

@@ -7,6 +7,7 @@ import { Spinner, Text } from '@/ui/kit'
 import { NebulaChat } from '@/constellations/NebulaChat'
 import { ForumList } from '@/constellations/Threads'
 import { VoiceLobby } from '@/constellations/Voice'
+import { StageLobby } from '@/constellations/Stage'
 import { N, NightButton, NightCenter } from '@/constellations/ui'
 import { rememberCxPlace } from '@/constellations/nav'
 import { stepNebula } from '@/constellations/roles'
@@ -16,7 +17,7 @@ import { useKeyCommand } from '@/lib/keys'
 // inside the constellation's layout instead.
 
 export default function NebulaScreen() {
-  const { cid, nid } = useLocalSearchParams<{ cid: string; nid: string }>()
+  const { cid, nid, chat } = useLocalSearchParams<{ cid: string; nid: string; chat?: string }>()
   const c = useCx((s) => s.details[cid]) ?? null
   const problem = useCx((s) => s.problems[cid])
   const wide = useWide()
@@ -67,5 +68,7 @@ export default function NebulaScreen() {
       </View>
     )
   }
+  // Communities round 2: a stage (its chat with ?chat=1); announcement nebulas are chats.
+  if (n.kind === 'stage' && chat !== '1') return <StageLobby c={c} n={n} />
   return n.kind === 'voice' ? <VoiceLobby c={c} n={n} /> : n.kind === 'forum' ? <ForumList c={c} n={n} /> : <NebulaChat c={c} n={n} />
 }

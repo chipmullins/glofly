@@ -286,6 +286,15 @@ function onEvent(e: ServerEvent) {
       if (e.reason === 'banned') set({ bansTick: get().bansTick + 1 })
       return
     }
+    // Communities round 2: a stage started, changed or ended.
+    case 'stage:updated': {
+      const d = get().details[e.constellationId]
+      if (d) {
+        const others = (d.stages ?? []).filter((s) => s.nebulaId !== e.nebulaId)
+        set({ details: { ...get().details, [d.id]: { ...d, stages: e.stage ? [...others, e.stage] : others } } })
+      }
+      return
+    }
     // Communities round 2: Night watch
     case 'nightwatch:changed':
     case 'constellation:raid':

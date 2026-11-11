@@ -15,6 +15,7 @@ import { firstName } from '@/lib/format'
 import { Icon } from '@/ui/icons'
 import { Text } from '@/ui/kit'
 import { Face, N } from './ui'
+import { Megaphone } from './Stage'
 import { CxJoinLine, CxMilestone, InviteCard, inviteCodeIn } from './community'
 
 // One message in a nebula, drawn like the "Glofly 2.0 Mobile" canvas (board 4): a face, the name
@@ -154,7 +155,8 @@ export const NebulaRow = memo(function NebulaRow({
   const m = row.message
   const face = compact ? 32 : 36
   const size = compact ? 15 : 15
-  const name = sender ? (m.senderId === meId ? sender.displayName : sender.displayName) : 'Someone'
+  // Communities round 2: a copy of a followed announcement shows its constellation's name.
+  const name = m.crosspost && !m.deleted ? m.crosspost.constellationName : sender ? sender.displayName : 'Someone'
   const nameOf = (id: string) => (id === meId ? 'You' : firstName(people[id]?.displayName ?? 'Someone', people[id]?.username))
   const special = !m.deleted && !!(m.gif || m.poll || m.game)
   const jumbo = !m.deleted && !special && !m.replyTo && !m.attachments.length && isJumbo(m.body)
@@ -274,7 +276,18 @@ export const NebulaRow = memo(function NebulaRow({
               ) : null}
               {m.body ? (
                 <View style={{ marginTop: 3 }}>
-                  {m.forwarded ? <ForwardedLabel forwarded={m.forwarded} color={N.muted} /> : null}
+                  {m.crosspost ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <Megaphone size={13} color={N.muted} />
+                      <View style={{ paddingHorizontal: 7, paddingVertical: 1, borderRadius: 9, backgroundColor: '#2e1065' }}>
+                        <Text size={11.5} weight="bold" style={{ color: '#ddd6fe' }}>
+                          #{m.crosspost.nebulaName}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : m.forwarded ? (
+                    <ForwardedLabel forwarded={m.forwarded} color={N.muted} />
+                  ) : null}
                   {jumbo ? (
                     <Text size={40} style={{ lineHeight: 48 }}>
                       {m.body}
@@ -282,6 +295,11 @@ export const NebulaRow = memo(function NebulaRow({
                   ) : (
                     <Body text={m.liveCard ? liveAlertBody(m.body, m.liveCard) : m.body} members={members} meId={meId} size={size} groups={groups} message={m} />
                   )}
+                  {m.crosspost ? (
+                    <Text size={12} style={{ color: '#c9b8ab', marginTop: 4 }}>
+                      Posted by {m.crosspost.authorName}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
               {/* 0.9.3: a Live alert (Twitch, Kick, YouTube) */}
