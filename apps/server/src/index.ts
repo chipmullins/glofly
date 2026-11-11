@@ -26,6 +26,7 @@ import { constellationsRouter } from "./constellations/routes";
 import { nightWatchRouter, purgeOldModeration } from "./constellations/nightwatch";
 import { emojiRouter } from "./emoji/routes";
 import { stagesRouter } from "./stages/routes";
+import { memberPagesRouter } from "./constellations/memberPages";
 import { announcementsRouter, startAnnouncements } from "./stages/announcements";
 import { ready as loadStages, sweepStages } from "./stages/state";
 import { invitePageRouter, sweepConstellationBirthdays } from "./constellations/community";
@@ -191,6 +192,8 @@ app.use("/constellations", nightWatchRouter);
 app.use(emojiRouter);
 // Communities round 2: stage nebulas and announcement nebulas you can follow.
 app.use("/constellations", stagesRouter);
+// Communities round 2: the member list page by page (big constellations).
+app.use("/constellations", memberPagesRouter);
 app.use("/constellations", announcementsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);

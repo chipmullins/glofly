@@ -721,7 +721,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       createdBy: null,
       partnerReadAt: null,
       members: c.members.map((m) => m.user).filter((u) => u.id !== me.id),
-      memberCount: c.members.length,
+      memberCount: c.memberCount ?? c.members.length,
       canMessage: !cantPost,
       lastMessage: null,
       unreadCount: chatNebula.unreadCount,
@@ -1079,7 +1079,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           </button>
         </div>
         <div className="cx-side-count">
-          {c.members.length} {c.members.length === 1 ? 'member' : 'members'} · {onlineCount} online
+          {(c.memberCount ?? c.members.length).toLocaleString('en-US')}{' '}
+          {(c.memberCount ?? c.members.length) === 1 ? 'member' : 'members'} · {onlineCount} online
         </div>
         {headMenu && (
           <div role="menu" className="cx-menu cx-head-menu">

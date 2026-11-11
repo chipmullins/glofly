@@ -1567,7 +1567,7 @@ function MembersPage({
         />
       </label>
       <section className="cx-settings-group">
-        <h2>Members · {c.members.length}</h2>
+        <h2>Members · {(c.memberCount ?? c.members.length).toLocaleString('en-US')}</h2>
         {shown.map((m) => {
           const role = topRole(c, m.user.id)
           const theirRoles = c.roles

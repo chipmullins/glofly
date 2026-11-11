@@ -15,8 +15,16 @@ export const NEBULA_NAME_MAX = 32
 export const NEBULA_TOPIC_MAX = 120
 export const CATEGORY_NAME_MAX = 32
 export const ROLE_NAME_MAX = 24
-/** People in one constellation */
-export const CONSTELLATION_MEMBERS_MAX = 250
+/** People in one constellation (communities round 2: 25,000, was 250) */
+export const CONSTELLATION_MEMBERS_MAX = 25_000
+/**
+ * Communities round 2: above this many members a constellation is "big": its detail lists only staff
+ * and people online (members load page by page, search finds anyone), and presence changes only go
+ * to people looking at the member list.
+ */
+export const BIG_CONSTELLATION_MEMBERS = 1000
+/** Communities round 2: one page of the member list */
+export const MEMBERS_PAGE = 100
 /** Nebulas (text + voice) in one constellation */
 export const NEBULAS_MAX = 50
 export const CATEGORIES_MAX = 20
@@ -676,6 +684,10 @@ export type ConstellationDetail = {
   voice: VoiceNebulaState[]
   /** Communities round 2: live stages (missing from older servers) */
   stages?: import('./stages').StageState[]
+  /** Communities round 2: everyone in it (members may be only staff + online in big ones) */
+  memberCount?: number
+  /** Communities round 2: true when `members` isn't everyone (big constellations): load the rest page by page */
+  membersPartial?: boolean
   /** What you can do here */
   me: {
     owner: boolean

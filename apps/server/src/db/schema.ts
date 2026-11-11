@@ -2280,6 +2280,10 @@ export const stages = pgTable(
     handsOn: boolean("hands_on").notNull().default(true),
     listenerChat: boolean("listener_chat").notNull().default(false),
     speakerLimit: integer("speaker_limit").notNull().default(25),
+    // Glofly Control → Insights → Big constellations: the most listeners at once, and everyone's
+    // minutes on it (LiveKit bills each connected minute, speaker or listener).
+    peakListeners: integer("peak_listeners").notNull().default(0),
+    participantMinutes: integer("participant_minutes").notNull().default(0),
   },
   (t) => [uniqueIndex("stages_live_idx").on(t.nebulaId).where(sql`${t.endedAt} is null`)],
 );

@@ -291,8 +291,57 @@ export async function someAppLacks(userId: string, feature: string): Promise<boo
  * whose app knows Constellations (everything about constellations and nebulas).
  */
 export function emitToUser(userId: string, event: string, payload: unknown, modernOnly = false): void {
+  noteFanOut(1);
   // Their nicknames for people go in (loaded when their live connection opened).
   io?.to(modernOnly ? modernRoom(userId) : userRoom(userId)).emit(event, withNicknames(payload, userId, cachedNicknames(userId)));
+}
+
+/**
+ * Communities round 2 (big constellations): which of these people have Glofly open on this server
+ * right now (a quick look at the live connections' rooms, no round trips). Live events for anyone
+ * else would go nowhere.
+ */
+export function onlineNow(userIds: Iterable<string>): string[] {
+  const rooms = io?.sockets.adapter.rooms;
+  if (!rooms) return [];
+  const out: string[] = [];
+  for (const id of userIds) if (rooms.has(userRoom(id))) out.push(id);
+  return out;
+}
+
+/**
+ * Communities round 2 (big constellations): one event to many people. People with nicknames get
+ * their own copy (names swapped, like emitToUser); everyone else shares one send, so the payload
+ * is encoded once instead of once per member.
+ */
+export function emitToUsers(userIds: Iterable<string>, event: string, payload: unknown, modernOnly = false): void {
+  if (!io) return;
+  const plain: string[] = [];
+  for (const id of userIds) {
+    const nicks = cachedNicknames(id);
+    if (nicks && nicks.size) emitToUser(id, event, payload, modernOnly);
+    else plain.push(id);
+  }
+  emitToUsersPlain(plain, event, payload, modernOnly);
+}
+
+// Communities round 2: live events sent per minute (Control → Insights → Big constellations).
+let fanOutMinute = 0;
+let fanOutThisMinute = 0;
+let fanOutLastMinute = 0;
+function noteFanOut(n: number): void {
+  const minute = Math.floor(Date.now() / 60_000);
+  if (minute !== fanOutMinute) {
+    fanOutLastMinute = minute === fanOutMinute + 1 ? fanOutThisMinute : 0;
+    fanOutThisMinute = 0;
+    fanOutMinute = minute;
+  }
+  fanOutThisMinute += n;
+}
+/** Live events sent to people in the last full minute (and so far this minute). */
+export function fanOutPerMinute(): { last: number; now: number } {
+  noteFanOut(0);
+  return { last: fanOutLastMinute, now: fanOutThisMinute };
 }
 
 /**
@@ -305,6 +354,7 @@ export function emitToUsersPlain(userIds: string[], event: string, payload: unkn
     const rooms = userIds.slice(i, i + 1000).map((id) => (modernOnly ? modernRoom(id) : userRoom(id)));
     io.to(rooms).emit(event, payload);
   }
+  noteFanOut(userIds.length);
 }
 
 /**

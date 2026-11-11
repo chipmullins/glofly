@@ -124,7 +124,7 @@ export function ConstellationBanner({ c, width, onInvite, onSettings }: { c: Con
             {c.name}
           </Text>
           <Text size={12} style={{ color: N.ink2 }}>
-            {c.members.length} {c.members.length === 1 ? 'member' : 'members'} · <Text size={12} style={{ color: N.greenText }}>{online} online</Text>
+            {(c.memberCount ?? c.members.length).toLocaleString('en-US')} {(c.memberCount ?? c.members.length) === 1 ? 'member' : 'members'} · <Text size={12} style={{ color: N.greenText }}>{online} online</Text>
           </Text>
         </View>
       </View>
@@ -157,7 +157,7 @@ export function SideBanner({ c }: { c: ConstellationDetail }) {
         {c.name}
       </Text>
       <Text size={12} style={{ position: 'absolute', right: 14, bottom: 15, color: N.ink2 }}>
-        {c.members.length} · <Text size={12} style={{ color: N.greenText }}>{online} on</Text>
+        {(c.memberCount ?? c.members.length).toLocaleString('en-US')} · <Text size={12} style={{ color: N.greenText }}>{online} on</Text>
       </Text>
     </View>
   )

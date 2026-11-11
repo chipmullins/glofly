@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   STAGE_EMPTY_END_MS,
   STAGE_GONE_MS,
@@ -36,6 +36,10 @@ export type LiveStage = {
   here: Map<string, { at: number; speaker: boolean }>;
   /** The last time a speaker was on it (it ends by itself after STAGE_EMPTY_END_MS without one) */
   lastSpeakerAt: number;
+  /** Control's numbers: most listeners at once, everyone's minutes (fractional), last sweep */
+  peak?: number;
+  minutes?: number;
+  sweptAt?: number;
 };
 
 const live = new Map<string, LiveStage>(); // nebulaId → stage
@@ -70,6 +74,8 @@ async function loadLive(): Promise<void> {
       people: map,
       here: new Map(),
       lastSpeakerAt: Date.now(),
+      peak: r.s.peakListeners,
+      minutes: r.s.participantMinutes,
     });
   }
 }
@@ -228,6 +234,18 @@ export async function sweepStages(): Promise<void> {
         changed = true;
       }
     }
+    // Glofly Control → Insights: the peak and everyone's minutes on it (saved when they change).
+    const listening = listenersOf(stage).length;
+    const people = listening + speakersOf(stage).length;
+    const before = { peak: stage.peak ?? 0, minutes: Math.floor(stage.minutes ?? 0) };
+    if (stage.sweptAt) stage.minutes = (stage.minutes ?? 0) + (people * (now - stage.sweptAt)) / 60_000;
+    stage.sweptAt = now;
+    stage.peak = Math.max(stage.peak ?? 0, listening);
+    if (stage.peak !== before.peak || Math.floor(stage.minutes ?? 0) !== before.minutes)
+      await db
+        .update(stages)
+        .set({ peakListeners: sql`greatest(${stages.peakListeners}, ${stage.peak})`, participantMinutes: sql`greatest(${stages.participantMinutes}, ${Math.floor(stage.minutes ?? 0)})` })
+        .where(eq(stages.id, stage.id));
     if (speakersOf(stage).length) stage.lastSpeakerAt = now;
     else if (now - stage.lastSpeakerAt >= STAGE_EMPTY_END_MS) {
       await endStage(stage.nebulaId);

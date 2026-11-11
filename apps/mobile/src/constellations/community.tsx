@@ -400,7 +400,7 @@ export function WelcomeSheet({ c }: { c: ConstellationDetail }) {
                   Welcome to {c.name}, {first(me)}!
                 </Text>
                 <Text size={13} style={{ color: N.ink2, marginTop: 4 }}>
-                  {c.members.length} members · <Text size={13} style={{ color: N.greenText }}>{online} online now</Text>
+                  {(c.memberCount ?? c.members.length).toLocaleString('en-US')} members · <Text size={13} style={{ color: N.greenText }}>{online} online now</Text>
                   {owner ? ` · made by ${first(owner)}` : ''}
                 </Text>
               </View>

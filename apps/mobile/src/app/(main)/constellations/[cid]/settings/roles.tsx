@@ -68,7 +68,7 @@ export default function RolesScreen() {
           ) : null}
         </View>
         <Text size={13} style={{ color: N.muted }}>
-          {r.kind === 'member' ? c.members.length : r.memberCount}
+          {r.kind === 'member' ? (c.memberCount ?? c.members.length) : r.memberCount}
         </Text>
         {r.kind !== 'owner' ? <Icon name="chevronRight" size={16} color={N.faint} /> : null}
       </Pressable>

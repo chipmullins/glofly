@@ -18,6 +18,7 @@ import { appErrors, pushDevices, sessions, users } from "../db/schema";
 import { getMinVersion } from "../app-version";
 import { WEB_ORIGIN } from "../web/session";
 import { TIME_ZONE } from "../timeZone";
+import { bigConstellations } from "./bigConstellations";
 import { logAction, noteSchema } from "./audit";
 import { admin, invalid, ip, target } from "./routes";
 
@@ -322,6 +323,11 @@ export async function funnelInsights(days: number) {
     medianMinutesToFirstMessage: f.median_first_message_min,
   };
 }
+
+// GET /admin/insights/big — Communities round 2 (board 4b): big constellations.
+insightsRouter.get("/insights/big", async (_req, res) => {
+  res.json(await bigConstellations());
+});
 
 // GET /admin/insights?days=7|30|90
 insightsRouter.get("/insights", async (req, res) => {

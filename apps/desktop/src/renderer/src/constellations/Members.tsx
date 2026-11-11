@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ROLE_COLORS, gameInitials, playingFor } from '@glofly/shared/constellations'
 import type {
   ConstellationDetail,
@@ -171,8 +171,68 @@ export function MembersPanel({
     if (m.user.id === c.ownerId || topRole(c, m.user.id).kind !== 'member') return 'Online'
     return null
   }
+  // Communities round 2 (board 4a): big constellations list staff + people online; search and
+  // "Everyone A–Z" load the rest from the server, a page at a time.
+  const big = useBigMembers(c)
+  const renderRows = (list: ConstellationMember[]): React.ReactNode => (
+    <>
+      {list.map((m) => {
+        const s = sub(m)
+        const mine = m.user.id === me.id
+        return (
+          <button
+            key={m.user.id}
+            type="button"
+            className={[
+              'cx-member',
+              m.status === 'offline' && !m.user.bot && 'cx-member--offline',
+              openId === m.user.id && 'cx-member--open'
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={(e) => onOpen(m, e.currentTarget.getBoundingClientRect())}
+            aria-haspopup="dialog"
+            aria-expanded={openId === m.user.id}
+          >
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <Face person={m.user} size={32} me={mine} />
+              {!m.user.bot && <StatusDot status={m.status} ring="var(--glo-subtle)" size={11} />}
+            </span>
+            <span className="cx-member-text">
+              <span className="cx-member-name" style={{ color: nameColor(m.user.id) }}>
+                {mine ? `${firstName(m.user)} (you)` : m.user.displayName}
+              </span>
+              {s && <span className="cx-member-sub cx-member-sub--row">{s}</span>}
+            </span>
+          </button>
+        )
+      })}
+    </>
+  )
+  if (c.membersPartial && (big.q.trim() || big.browsing)) {
+    return (
+      <>
+        <BigSearch c={c} big={big} />
+        {big.list.length === 0 && !big.loading && (
+          <p className="cx-big-note">Nobody by that name.</p>
+        )}
+        {renderRows(big.list)}
+        {big.next && (
+          <button
+            type="button"
+            className="cx-big-more"
+            disabled={big.loading}
+            onClick={() => void big.more()}
+          >
+            {big.loading ? 'Loading…' : 'Show more'}
+          </button>
+        )}
+      </>
+    )
+  }
   return (
     <>
+      {c.membersPartial && <BigSearch c={c} big={big} />}
       {groups.map((g) => {
         const isOffline = g.key === 'offline'
         const rows = (
@@ -197,12 +257,20 @@ export function MembersPanel({
                 >
                   <span style={{ position: 'relative', display: 'inline-flex' }}>
                     <Face person={m.user} size={32} me={mine} />
-                    {!m.user.bot && <StatusDot status={m.status} ring="var(--glo-subtle)" size={11} />}
+                    {!m.user.bot && (
+                      <StatusDot status={m.status} ring="var(--glo-subtle)" size={11} />
+                    )}
                   </span>
                   <span className="cx-member-text">
                     <span className="cx-member-name" style={{ color: nameColor(m.user.id) }}>
                       {mine ? `${firstName(m.user)} (you)` : m.user.displayName}
-                      {m.user.bot && <span className={m.user.tool ? 'cx-bot-tag cx-bot-tag--tool' : 'cx-bot-tag'}>{m.user.tool ? 'TOOL' : 'BOT'}</span>}
+                      {m.user.bot && (
+                        <span
+                          className={m.user.tool ? 'cx-bot-tag cx-bot-tag--tool' : 'cx-bot-tag'}
+                        >
+                          {m.user.tool ? 'TOOL' : 'BOT'}
+                        </span>
+                      )}
                     </span>
                     {s && <span className="cx-member-sub cx-member-sub--row">{s}</span>}
                   </span>
@@ -248,7 +316,100 @@ export function MembersPanel({
           </div>
         )
       })}
+      {c.membersPartial && (
+        <p className="cx-big-note">
+          Offline members ({((c.memberCount ?? 0) - c.members.length).toLocaleString('en-US')}) are
+          hidden in constellations over 1,000 people. Search finds anyone.{' '}
+          <button type="button" className="cx-link-button" onClick={() => void big.browse()}>
+            Everyone A–Z
+          </button>
+        </p>
+      )}
     </>
+  )
+}
+
+type Big = ReturnType<typeof useBigMembers>
+function useBigMembers(c: ConstellationDetail) {
+  const [q, setQ] = useState('')
+  const [browsing, setBrowsing] = useState(false)
+  const [list, setList] = useState<ConstellationMember[]>([])
+  const [next, setNext] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const load = async (query: string, after: string | null): Promise<void> => {
+    setLoading(true)
+    const p = new URLSearchParams({ limit: '100' })
+    if (query.trim()) p.set('q', query.trim())
+    if (after) p.set('after', after)
+    const r = await window.glofly.constellations.request<{
+      members: ConstellationMember[]
+      next: string | null
+    }>('GET', `/constellations/${c.id}/members?${p.toString()}`)
+    setLoading(false)
+    if (!r.ok) return
+    setList((l) => (after ? [...l, ...r.data.members] : r.data.members))
+    setNext(r.data.next)
+  }
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  return {
+    q,
+    browsing,
+    list,
+    next,
+    loading,
+    search: (v: string): void => {
+      setQ(v)
+      if (timer.current) clearTimeout(timer.current)
+      if (!v.trim()) {
+        setList([])
+        setNext(null)
+        return
+      }
+      timer.current = setTimeout(() => void load(v, null), 250)
+    },
+    browse: async (): Promise<void> => {
+      setBrowsing(true)
+      await load('', null)
+    },
+    stop: (): void => {
+      setBrowsing(false)
+      setQ('')
+      setList([])
+      setNext(null)
+    },
+    more: () => load(q, next)
+  }
+}
+
+function BigSearch({ c, big }: { c: ConstellationDetail; big: Big }): React.JSX.Element {
+  return (
+    <div className="cx-big-search">
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </svg>
+      <input
+        type="search"
+        value={big.q}
+        aria-label="Search members"
+        placeholder={`Search ${(c.memberCount ?? c.members.length).toLocaleString('en-US')} members`}
+        onChange={(e) => big.search(e.target.value)}
+      />
+      {(big.q || big.browsing) && (
+        <button type="button" className="cx-link-button" onClick={big.stop}>
+          Back
+        </button>
+      )}
+    </div>
   )
 }
 

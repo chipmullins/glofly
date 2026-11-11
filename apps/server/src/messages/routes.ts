@@ -48,7 +48,7 @@ import {
 } from "./attachments";
 import { requireAuth } from "../auth/sessions";
 import { blockedEitherWay, canMessage, deletionPending, groupBreaksRestriction, isRestricted, messageableAmong, pair } from "../friends/rules";
-import { emitToUser } from "../realtime";
+import { emitToUser, emitToUsers } from "../realtime";
 import { isNebulaChat, nebulaOfChat } from "../constellations/chats";
 import { canModerateNebula, canPostInNebula, nebulaChatOpen, whyCantPostInNebula } from "../constellations/perms";
 import { logModeration, nebulaActivity } from "../constellations/activity";
@@ -79,6 +79,7 @@ import {
   attachmentSummary,
   type GameState, type MessageButton, type ForwardedFrom, type LiveCard, type EmojiRef, type Crosspost, isCustomReaction } from "@glofly/shared";
 import { toolHook } from "../toolHooks";
+import { nebulaBusy } from "../constellations/busy";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
 export const conversationsRouter = Router();
@@ -315,7 +316,7 @@ async function broadcast(conversationId: string, event: string, payload: unknown
     .from(conversationMembers)
     .where(eq(conversationMembers.conversationId, conversationId));
   const modern = await isNebulaChat(conversationId);
-  for (const m of members) emitToUser(m.userId, event, payload, modern);
+  emitToUsers(members.map((m) => m.userId), event, payload, modern);
 }
 
 /** Loads one message of a conversation (only if you're in that conversation). */
@@ -1527,6 +1528,14 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     res.status(400).json({ error: "star_chart", message: FORUM_NEEDS_SIGNAL });
     return;
   }
+  // Communities round 2: per-nebula and per-constellation limits (big constellations).
+  if (chat.kind === "nebula") {
+    const busy = await nebulaBusy(id.data);
+    if (busy) {
+      res.status(429).json({ error: "too_many_requests", message: busy });
+      return;
+    }
+  }
   const alsoInNebula = !!thread && wantsAlsoInNebula && thread.nebulaKind === "text";
   // A reply must point at a message in this same chat (and the same thread) that still exists.
   const replyToId = replyTo.success ? (replyTo.data ?? null) : null;
@@ -1643,8 +1652,9 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     // notified, by their own nebula settings.
     await noteReply(thread, inserted.id, myId, inserted.createdAt);
     const [summary] = await threadSummaries([(await threadRowOf(thread.id)) ?? thread], null, new Map([[thread.nebulaId, thread.closeDays]]));
-    for (const userId of chat.memberIds) {
-      const m = userId === myId ? mineCopy : message;
+    emitToUsers(chat.memberIds.filter((id) => id !== myId), "thread:message", { constellationId: thread.constellationId, thread: summary, message }, true);
+    for (const userId of chat.memberIds.filter((id) => id === myId)) {
+      const m = mineCopy;
       emitToUser(userId, "thread:message", { constellationId: thread.constellationId, thread: summary, message: m }, true);
     }
     toolHook("onNebulaMessage", id.data, inserted.id, "created");
@@ -1657,8 +1667,10 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
       return;
     }
   }
-  for (const userId of chat.memberIds) {
-    const m = userId === myId ? mineCopy : message;
+  // Communities round 2: one send to everyone but me (big constellations), my own copy to me.
+  emitToUsers(chat.memberIds.filter((id) => id !== myId), "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  for (const userId of chat.memberIds.filter((id) => id === myId)) {
+    const m = mineCopy;
     emitToUser(userId, "message:new", modernOnly(chat) ? { message: m, nebula: true } : { message: m }, modernOnly(chat));
   }
   if (chat.kind === "nebula") {
@@ -1732,6 +1744,9 @@ export async function postScheduledText(
   if (chat.kind === "nebula") {
     const refused = await automodGate(conversationId, myId, text, replyToId);
     if (refused) return { ok: false, reason: refused.message };
+    // Communities round 2: bots and scheduled messages count toward a busy nebula's limits too.
+    const busy = await nebulaBusy(conversationId);
+    if (busy) return { ok: false, reason: busy };
   }
   let reply = replyToId;
   if (reply) {
@@ -1770,8 +1785,7 @@ export async function postScheduledText(
     return row;
   });
   const [message] = await hydrate([inserted]);
-  for (const userId of chat.memberIds)
-    emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  emitToUsers(chat.memberIds, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
   if (chat.kind === "nebula") {
     inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, mentions, nebulaPreview(message), group.groupMentions));
     toolHook("onNebulaMessage", conversationId, inserted.id, "created");
@@ -1911,7 +1925,7 @@ export async function copyMessageInto(
     throw err;
   });
   const [message] = await hydrate([inserted]);
-  for (const userId of memberIds) emitToUser(userId, "message:new", modern ? { message, nebula: true } : { message }, modern);
+  emitToUsers(memberIds, "message:new", modern ? { message, nebula: true } : { message }, modern);
   if (modern) {
     inBackground(nebulaActivity(targetId, myId, inserted.createdAt, [], nebulaPreview(message), []));
     toolHook("onNebulaMessage", targetId, inserted.id, "created");
@@ -2092,7 +2106,7 @@ export async function postSpecial(
     return row;
   });
   const [message] = await hydrate([inserted]);
-  for (const userId of chat.memberIds) emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  emitToUsers(chat.memberIds, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
   if (chat.kind === "nebula") {
     inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, [], nebulaPreview(message)));
     toolHook("onNebulaMessage", conversationId, inserted.id, "created");

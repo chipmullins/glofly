@@ -31,7 +31,7 @@ export default function SettingsMenu() {
     { key: 'overview', label: 'Overview', icon: <Icon name="info" size={17} color={N.ink} />, show: can(c, 'manageConstellation') },
     { key: 'nebulas', label: 'Nebulas & categories', icon: <StarGlyph size={16} color={N.ink} />, detail: String(c.nebulas.length), show: can(c, 'manageNebulas') },
     { key: 'roles', label: 'Roles', icon: <Glyph name="shield" size={17} />, detail: String(c.roles.length), show: can(c, 'manageRoles') },
-    { key: 'members', label: 'Members', icon: <Icon name="friends" size={17} color={N.ink} />, detail: c.pendingRequests ? `${c.pendingRequests} ${c.pendingRequests === 1 ? 'request' : 'requests'}` : String(c.members.length), show: manageMembers },
+    { key: 'members', label: 'Members', icon: <Icon name="friends" size={17} color={N.ink} />, detail: c.pendingRequests ? `${c.pendingRequests} ${c.pendingRequests === 1 ? 'request' : 'requests'}` : String(c.memberCount ?? c.members.length), show: manageMembers },
     { key: 'invites', label: 'Invites', icon: <Glyph name="invite" size={17} />, show: can(c, 'invite') },
     // Communities round 2: Night watch (board 1e) and the mod log.
     { key: 'watch', label: 'Night watch', icon: <Glyph name="shield" size={17} />, detail: c.watch?.open ? String(c.watch.open) : undefined, show: modViewer },
