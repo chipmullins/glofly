@@ -16,6 +16,10 @@ import {
 } from "drizzle-orm/pg-core";
 import type {
   BuiltMap,
+  CampaignProgress,
+  HomebrewData,
+  PartyLoot,
+  SessionStats,
   CampaignSettings,
   ChatRoll,
   CombatState,
@@ -2197,6 +2201,11 @@ export const campfireCampaigns = pgTable(
     settings: jsonb("settings").$type<CampaignSettings>().notNull(),
     combat: jsonb("combat").$type<CombatState>(),
     music: jsonb("music").$type<MusicState>(),
+    // Round A (Nov 2026): the hub's pitch and banner, party loot, and where it stood when it moved here.
+    pitch: text("pitch").notNull().default(""),
+    bannerFileId: uuid("banner_file_id").references((): AnyPgColumn => campfireFiles.id, { onDelete: "set null" }),
+    loot: jsonb("loot").$type<PartyLoot>(),
+    progress: jsonb("progress").$type<CampaignProgress>(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -2339,6 +2348,106 @@ export const campfirePending = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("campfire_pending_campaign_idx").on(t.campaignId)],
+);
+
+// ───────────── Campfire Round A: sessions, quests, journal, homebrew (Nov 2026) ─────────────
+
+export const campfireSessions = pgTable(
+  "campfire_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    title: text("title").notNull().default(""),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    recap: text("recap").notNull().default(""),
+    recapPostedAt: timestamp("recap_posted_at", { withTimezone: true }),
+    stats: jsonb("stats").$type<SessionStats>(),
+    // "The story so far" for a campaign that switched over (always number 0)
+    before: boolean("before").notNull().default(false),
+    // Reminders sent: "day" (the day before) and "soon" (30 minutes ahead)
+    reminded: text("reminded").array().notNull().default(sql`'{}'::text[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_sessions_campaign_idx").on(t.campaignId, t.number), index("campfire_sessions_starts_idx").on(t.startsAt)],
+);
+
+export const campfireRsvps = pgTable(
+  "campfire_rsvps",
+  {
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => campfireSessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // "yes" | "maybe" | "no"
+    answer: text("answer").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
+);
+
+export const campfireQuests = pgTable(
+  "campfire_quests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    detail: text("detail").notNull().default(""),
+    giver: text("giver").notNull().default(""),
+    // "open" | "done" | "failed"
+    status: text("status").notNull().default("open"),
+    hidden: boolean("hidden").notNull().default(false),
+    sort: integer("sort").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_quests_campaign_idx").on(t.campaignId)],
+);
+
+export const campfireJournal = pgTable(
+  "campfire_journal",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    // "npc" | "place" | "item" | "lore"
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    text: text("text").notNull().default(""),
+    hidden: boolean("hidden").notNull().default(false),
+    gmNotes: text("gm_notes").notNull().default(""),
+    pictureFileId: uuid("picture_file_id").references((): AnyPgColumn => campfireFiles.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_journal_campaign_idx").on(t.campaignId)],
+);
+
+export const campfireHomebrew = pgTable(
+  "campfire_homebrew",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    // "item" | "spell" | "monster" | "species" | "subclass" | "background" | "feat"
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    data: jsonb("data").$type<HomebrewData>().notNull(),
+    // Players can see it (and pick it in the builder)
+    shared: boolean("shared").notNull().default(false),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_homebrew_campaign_idx").on(t.campaignId, t.kind)],
 );
 
 export const campfireHandouts = pgTable(

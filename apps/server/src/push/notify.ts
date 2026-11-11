@@ -526,3 +526,59 @@ export async function notifyEventReminder(
       })),
   );
 }
+
+/**
+ * Campfire (Round A): a game session starts soon (the day before, then 30 minutes ahead). Sent as
+ * a message notification from the campaign's chat (the group, or the voice nebula on phones that
+ * know Constellations), so every phone build shows it and a tap opens that chat. Not the phone in
+ * use, not on Do not disturb or quiet hours.
+ */
+export async function notifySessionReminder(
+  userIds: string[],
+  s: { campaignName: string; sessionTitle: string; conversationId: string; nebula: boolean; constellationId: string | null; minutes: number; startsAt: Date },
+): Promise<void> {
+  if (!pushConfigured || !userIds.length) return;
+  const devices = await db
+    .select({
+      userId: pushDevices.userId,
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
+      status: users.statusPreference,
+      quiet: users.quietHours,
+    })
+    .from(pushDevices)
+    .innerJoin(users, eq(users.id, pushDevices.userId))
+    .where(and(inArray(pushDevices.userId, userIds), ...(s.nebula ? [sql`'constellations' = any(${pushDevices.features})`] : [])));
+  if (!devices.length) return;
+  const live = await liveSessions([...new Set(devices.map((d) => d.userId))]);
+  const title = `🔥 ${s.campaignName.slice(0, 80)}`;
+  const text = s.minutes <= 45 ? `${s.sessionTitle} starts in ${s.minutes} min` : `${s.sessionTitle} is tomorrow`;
+  await deliver(
+    devices
+      .filter((d) => !quietOrDnd(d) && !live.get(d.userId)?.has(d.sessionId))
+      .map((device) => ({
+        device,
+        ttl: s.minutes <= 45 ? 30 * 60 : 12 * 60 * 60,
+        data: {
+          type: "message",
+          conversationId: s.conversationId,
+          messageId: "",
+          chatKind: "group",
+          chatTitle: s.campaignName.slice(0, 80),
+          groupPhoto: "",
+          senderId: "",
+          senderName: title,
+          senderAvatar: "",
+          title,
+          text,
+          preview: "1",
+          mention: "1",
+          sentAt: new Date().toISOString(),
+          ...(s.nebula && s.constellationId ? { nebula: "1", thread: `constellation:${s.constellationId}` } : {}),
+        },
+      })),
+  );
+}

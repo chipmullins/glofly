@@ -14,6 +14,7 @@ import {
   normalizeGrid,
   normalizeSheet,
   sizeCells,
+  rulesOf,
   totalLevel,
   type CampaignCharacterCard,
   type CampaignSettings,
@@ -162,6 +163,10 @@ const settingsInput = z
     showMonsterHp: z.enum(["bloodied", "exact", "none"]).optional(),
     diceVisibility: z.enum(["all", "gm"]).optional(),
     placeHidden: z.boolean().optional(),
+    rules: z.enum(["2014", "2024"]).optional(),
+    moveOnTurn: z.boolean().optional(),
+    leveling: z.enum(["milestone", "xp"]).optional(),
+    diagonal: z.enum(["5", "5-10"]).optional(),
   })
   .strict();
 
@@ -537,7 +542,7 @@ coreRouter.post("/scenes/:id/tokens", changeLimiter, async (req, res) => {
     if (d.w === undefined && d.h === undefined) size = { w: sizeCells(sheet.size), h: sizeCells(sheet.size) };
   } else if (d.srdMonster) {
     // A monster from the compendium: its stat block becomes an NPC, ready to roll.
-    const monster = monsterBySlug(d.srdMonster);
+    const monster = monsterBySlug(d.srdMonster, rulesOf(t.campaign.settings as { rules?: unknown }));
     if (!monster) return bad(res, "That monster isn't in the compendium.");
     const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(campfireCharacters).where(eq(campfireCharacters.campaignId, t.campaign.id));
     if (n >= CAMPFIRE_LIMITS.characters) return bad(res, `A campaign can have up to ${CAMPFIRE_LIMITS.characters} characters.`, 409);
@@ -616,6 +621,7 @@ coreRouter.patch("/tokens/:id", async (req, res) => {
     if (!controls(token, t.userId, chars)) return bad(res, "That token isn't yours to move.", 403);
     const allowed = new Set(["x", "y", "bars", "conditions"]);
     if (Object.keys(d).some((k) => !allowed.has(k))) return bad(res, "Only the game master can change that.", 403);
+    if ((d.x !== undefined || d.y !== undefined) && notMyTurn(t, token.id)) return bad(res, "Wait for your turn to move (the game master's table rule).", 403, "not_your_turn");
     if (d.bars) {
       // Who sees each bar stays as the GM set it.
       d.bars = d.bars.map((b, i) => {
@@ -649,6 +655,18 @@ coreRouter.delete("/tokens/:id", changeLimiter, async (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * Round A table rule "Players move only on their turn": during a fight, a player's token that's in
+ * the turn order moves only when it's that token's turn (tokens not in the fight move freely).
+ */
+function notMyTurn(t: Table, tokenId: string): boolean {
+  if (t.gm || !settingsOf(t.campaign.settings).moveOnTurn) return false;
+  const combat = t.campaign.combat;
+  if (!combat?.entries.length) return false;
+  if (!combat.entries.some((e) => e.tokenId === tokenId)) return false;
+  return combat.entries[combat.turn]?.tokenId !== tokenId;
+}
+
 // Dragging: moves over the live connection (30 a second at most), checked like PATCH.
 const tableCache = new Map<string, { at: number; t: Table | null }>();
 async function cachedTable(campaignId: string, userId: string): Promise<Table | null> {
@@ -672,6 +690,11 @@ export async function socketMove(userId: string, payload: unknown): Promise<void
   if (!t || t.readOnly) return;
   const chars = await charactersInfo(t.campaign.id);
   if (!t.gm && (scene.id !== t.campaign.activeSceneId || !controls(token, userId, chars) || !tokenVisible(token, scene, t, chars))) return;
+  // The cached table can be 5 s old: the turn order is read fresh.
+  if (!t.gm && settingsOf(t.campaign.settings).moveOnTurn) {
+    const fresh = await campaignRow(t.campaign.id);
+    if (!fresh || notMyTurn({ ...t, campaign: fresh }, token.id)) return;
+  }
   const [row]: TokenRow[] = await db
     .update(campfireTokens)
     .set({ x: parsed.data.x, y: parsed.data.y, updatedAt: new Date() })

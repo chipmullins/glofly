@@ -71,7 +71,7 @@ import { liveAlertsRouter, startLiveAlerts, sweepUnusedWatches } from "./constel
 import { liveHooksRouter } from "./connections/hooks";
 import { publicBase, sweepStreamWatches } from "./connections/live";
 import { sweepSteamPlaying, sweepSteamSync } from "./connections/steam";
-import { campfireRouter, sweepCampfirePresence, sweepDeletedCampaigns } from "./campfire";
+import { campfireRouter, sweepCampfirePresence, sweepDeletedCampaigns, sweepSessionReminders } from "./campfire";
 
 /** Runs a background job every so often, never two runs of it at once. */
 function every(ms: number, name: string, job: () => Promise<void>): void {
@@ -343,6 +343,7 @@ connectRedis()
     // Campfire: who's at each table (apps say so every 30 s), and deleted campaigns' files.
     every(15_000, "Campfire presence", sweepCampfirePresence);
     every(10 * 60_000, "Campfire cleanup", sweepDeletedCampaigns);
+    every(60_000, "Campfire session reminders", sweepSessionReminders);
     every(6 * 60 * 60_000, "Unused live channels", () => sweepUnusedWatches(publicBase(`http://localhost:${PORT}`)));
     // Resolved reports are removed a year after they were resolved (hourly).
     const sweepReports = () =>

@@ -1,3 +1,4 @@
+import { noteSessionLater } from "./sessionHook";
 import { Router } from "express";
 import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
@@ -456,6 +457,7 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
         entries.push(e);
       }
       combat = { round: 1, turn: 0, entries };
+      noteSessionLater(t.campaign, (s) => ({ ...s, fights: s.fights + 1 }));
       break;
     }
     case "add": {

@@ -151,7 +151,28 @@ export type SheetResource = {
   reset: 'short' | 'long' | 'none'
 }
 
-export type SheetItem = { id: string; name: string; qty: number; notes: string }
+export type SheetItem = {
+  id: string
+  name: string
+  qty: number
+  notes: string
+  /** Optional (Round A, Nov 2026): weight in lb each, worn/held, attuned, and what the item is */
+  weight?: number
+  equipped?: boolean
+  attuned?: boolean
+  kind?: 'armor' | 'shield' | 'weapon' | 'gear' | 'magic' | 'ammo'
+  /** Armor: base AC, adds Dexterity (up to maxDex) */
+  armor?: { base: number; dex: boolean; maxDex: number | null }
+  /** A shield's (or a magic item's) bonus to AC while equipped */
+  acBonus?: number
+  /** Magic: needs attunement to work */
+  attunement?: boolean
+  rarity?: string
+  /** The attack this weapon added to Actions */
+  attackId?: string
+  /** From the campaign's homebrew library */
+  homebrewId?: string
+}
 export type SheetFeature = { id: string; name: string; text: string }
 export type DeathSaves = { successes: number; failures: number; stable: boolean; dead: boolean }
 
@@ -231,6 +252,12 @@ export type Sheet5e = {
   acNote?: string
   /** Senses for player characters ("Darkvision 60 ft"); monsters keep theirs in `monster.senses` */
   senses?: string
+  /** Round A (Nov 2026): coins, and how the character was made */
+  coins?: { cp: number; sp: number; ep: number; gp: number; pp: number }
+  /** Which 5e rules it was built with ("2014" / "2024") */
+  rules?: '2014' | '2024'
+  /** Builder ids, so level-up knows the class, species and background */
+  build?: { species?: string; sub?: string; background?: string; classId?: string; subclass?: string; feats?: string[] }
 }
 
 export type CharacterKind = 'pc' | 'npc'
@@ -276,6 +303,15 @@ export type CampaignSettings = {
   diceVisibility: 'all' | 'gm'
   /** GMs only (never sent to players): new monsters go on the GM layer, hidden */
   placeHidden?: boolean
+  /** Round A (Nov 2026; older campaigns don't have them) */
+  /** Which 5e rules: '2014' (SRD 5.1, older campaigns) or '2024' (SRD 5.2) */
+  rules?: '2014' | '2024'
+  /** During a fight, players move their tokens only on their own turn */
+  moveOnTurn?: boolean
+  /** How the party levels up */
+  leveling?: 'milestone' | 'xp'
+  /** How the ruler and movement count diagonals on squares */
+  diagonal?: '5' | '5-10'
 }
 export const DEFAULT_CAMPAIGN_SETTINGS: CampaignSettings = { gmApprovesDamage: true, showMonsterHp: 'bloodied', diceVisibility: 'all' }
 
@@ -591,6 +627,8 @@ export type CampfireEvents = {
   'campfire:opened': CampfireEventBase & { callId: string; name: string; by: string }
   'campfire:closed': CampfireEventBase & { callId: string }
   'campfire:state': CampfireEventBase & { reason: string }
+  /** Round A: the campaign hub changed (sessions, RSVPs, quests, journal, loot, homebrew) */
+  'campfire:hub': CampfireEventBase & { reason: string }
   'campfire:token': CampfireEventBase & ({ op: 'upsert'; token: Token } | { op: 'delete'; tokenId: string; sceneId: string })
   'campfire:scene': CampfireEventBase & { op: 'upsert' | 'activate' | 'delete'; scene: Scene | null; sceneId: string; scenes: SceneSummary[]; tokens?: Token[] }
   'campfire:fog': CampfireEventBase & { sceneId: string; fog: FogState; built: BuiltMap; tokens: Token[] }

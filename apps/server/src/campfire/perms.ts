@@ -41,6 +41,11 @@ export const settingsOf = (raw: unknown): CampaignSettings => {
     showMonsterHp: s.showMonsterHp === "exact" || s.showMonsterHp === "none" ? s.showMonsterHp : "bloodied",
     diceVisibility: s.diceVisibility === "gm" ? "gm" : "all",
     placeHidden: s.placeHidden === true,
+    // Round A: only present once set, so campaigns made before it read as they always did.
+    ...(s.rules === "2014" || s.rules === "2024" ? { rules: s.rules } : {}),
+    ...(s.moveOnTurn === true ? { moveOnTurn: true } : {}),
+    ...(s.leveling === "xp" ? { leveling: "xp" as const } : {}),
+    ...(s.diagonal === "5-10" ? { diagonal: "5-10" as const } : {}),
   };
 };
 

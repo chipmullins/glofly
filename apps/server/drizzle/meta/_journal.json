@@ -414,6 +414,13 @@
       "when": 1794282993264,
       "tag": "0058_campfire",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1794361012596,
+      "tag": "0059_campfire_round_a",
+      "breakpoints": true
     }
   ]
 }

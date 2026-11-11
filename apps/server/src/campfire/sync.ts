@@ -1,3 +1,4 @@
+import { noteSessionLater } from "./sessionHook";
 import { eq } from "drizzle-orm";
 import {
   instantDeath,
@@ -125,6 +126,17 @@ export async function applyHit(campaign: CampaignRow, hit: HitInput): Promise<Hi
   };
   await emitToken(campaign, scene, token, row);
   await emitHit(campaign, event);
+  // Round A: the session's counts (who was defeated or went down, the biggest hit).
+  if (result.taken > 0) {
+    const who = character?.name || token.name || "Someone";
+    const [by] = hit.attackerTokenId ? await db.select({ name: campfireTokens.name }).from(campfireTokens).where(eq(campfireTokens.id, hit.attackerTokenId)) : [];
+    noteSessionLater(campaign, (s) => ({
+        ...s,
+        ...(!pc && result.hp <= 0 && hp > 0 ? { defeated: { ...s.defeated, [who]: (s.defeated[who] ?? 0) + 1 } } : {}),
+        ...(pc && result.hp === 0 && hp > 0 ? { downs: { ...s.downs, [who]: (s.downs[who] ?? 0) + 1 } } : {}),
+        ...(by?.name && (!s.biggest || result.taken > s.biggest.amount) ? { biggest: { name: by.name, amount: result.taken } } : {}),
+      }));
+  }
   return event;
 }
 

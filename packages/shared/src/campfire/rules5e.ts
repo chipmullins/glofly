@@ -14,6 +14,7 @@ import {
   type Sheet5e,
   type SheetAttack,
   type SheetClass,
+  type SheetItem,
   type SheetSpell,
   type SkillId,
   type SkillLevel
@@ -508,7 +509,7 @@ export function normalizeSheet(raw: unknown): Sheet5e {
     inventory: list(s.inventory, SHEET_LIMITS.items, (v, i) => {
       const o = obj(v)
       const name = str(o.name, 80).trim()
-      return name ? { id: idOf(o.id, i, 'i'), name, qty: int(o.qty, 0, 99_999, 1), notes: str(o.notes, 500) } : null
+      return name ? { id: idOf(o.id, i, 'i'), name, qty: int(o.qty, 0, 99_999, 1), notes: str(o.notes, 500), ...itemExtras(o) } : null
     }),
     features: features(s.features, SHEET_LIMITS.features, 'f'),
     notes: str(s.notes, SHEET_LIMITS.notes),
@@ -541,7 +542,69 @@ function optionalExtras(s: Record<string, unknown>): Partial<Sheet5e> {
   if (acNote) out.acNote = acNote
   const senses = str(s.senses, 200).trim()
   if (senses) out.senses = senses
+  if (s.coins && typeof s.coins === 'object') {
+    const c = obj(s.coins)
+    out.coins = { cp: int(c.cp, 0, 9_999_999, 0), sp: int(c.sp, 0, 9_999_999, 0), ep: int(c.ep, 0, 9_999_999, 0), gp: int(c.gp, 0, 9_999_999, 0), pp: int(c.pp, 0, 9_999_999, 0) }
+  }
+  if (s.rules === '2014' || s.rules === '2024') out.rules = s.rules
+  if (s.build && typeof s.build === 'object') {
+    const b = obj(s.build)
+    const slug = (x: unknown) => (typeof x === 'string' && /^[a-z0-9-]{1,80}$/.test(x) ? x : undefined)
+    const build: NonNullable<Sheet5e['build']> = {}
+    for (const k of ['species', 'sub', 'background', 'classId', 'subclass'] as const) {
+      const v = slug(b[k])
+      if (v) build[k] = v
+    }
+    const feats = list(b.feats, 40, (v) => slug(v) ?? null)
+    if (feats.length) build.feats = feats
+    if (Object.keys(build).length) out.build = build
+  }
   return out
+}
+
+const ITEM_KINDS = ['armor', 'shield', 'weapon', 'gear', 'magic', 'ammo'] as const
+/** An item's optional fields (Round A), only when set. */
+function itemExtras(o: Record<string, unknown>): Partial<SheetItem> {
+  const out: Partial<SheetItem> = {}
+  if (typeof o.weight === 'number' && Number.isFinite(o.weight)) out.weight = num(o.weight, 0, 10_000, 0)
+  if (o.equipped === true) out.equipped = true
+  if (o.attuned === true) out.attuned = true
+  if (typeof o.kind === 'string' && (ITEM_KINDS as readonly string[]).includes(o.kind)) out.kind = o.kind as SheetItem['kind']
+  if (o.armor && typeof o.armor === 'object') {
+    const a = obj(o.armor)
+    out.armor = { base: int(a.base, 0, 30, 10), dex: a.dex === true, maxDex: typeof a.maxDex === 'number' ? int(a.maxDex, 0, 10, 2) : null }
+  }
+  if (typeof o.acBonus === 'number') out.acBonus = int(o.acBonus, -5, 10, 0)
+  if (o.attunement === true) out.attunement = true
+  const rarity = str(o.rarity, 30).trim()
+  if (rarity) out.rarity = rarity
+  for (const k of ['attackId', 'homebrewId'] as const) if (typeof o[k] === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(o[k] as string)) out[k] = o[k] as string
+  return out
+}
+
+/**
+ * The armor class from what's equipped (Round A): the best equipped armor (or 10 + Dexterity
+ * without any), plus shields and magic bonuses of equipped (and, when needed, attuned) items.
+ * Null when nothing equipped says anything about AC, so the sheet keeps its own number.
+ */
+export function armorClassFromItems(sheet: Pick<Sheet5e, 'inventory' | 'abilities'>): number | null {
+  const dexMod = abilityMod(sheet.abilities.dex)
+  const worn = sheet.inventory.filter((i) => i.equipped && (!i.attunement || i.attuned))
+  const armors = worn.filter((i) => i.armor)
+  const bonus = worn.reduce((n, i) => n + (i.acBonus ?? 0), 0)
+  if (!armors.length && !bonus) return null
+  const base = armors.length
+    ? Math.max(...armors.map((i) => i.armor!.base + (i.armor!.dex ? (i.armor!.maxDex === null ? dexMod : Math.min(dexMod, i.armor!.maxDex)) : 0)))
+    : 10 + dexMod
+  return base + bonus
+}
+
+/** Pounds carried (items × weight, plus 50 coins to the pound). */
+export function carriedWeight(sheet: Pick<Sheet5e, 'inventory' | 'coins'>): number {
+  const items = sheet.inventory.reduce((n, i) => n + (i.weight ?? 0) * i.qty, 0)
+  const c = sheet.coins
+  const coins = c ? (c.cp + c.sp + c.ep + c.gp + c.pp) / 50 : 0
+  return Math.round((items + coins) * 10) / 10
 }
 
 /** "Fighter 3 / Wizard 2" (or the monster's type and CR). */

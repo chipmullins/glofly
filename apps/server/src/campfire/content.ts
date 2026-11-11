@@ -3,10 +3,14 @@ import { z } from "zod";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
   CAMPFIRE_LIMITS,
+  creditFor,
+  isRulesSet,
+  rulesOf,
   longRest,
   normalizeSheet,
   shortRest,
   type MusicState,
+  type RulesSet,
 } from "@glofly/shared";
 import { db } from "../db";
 import {
@@ -14,6 +18,7 @@ import {
   campfireCharacters,
   campfireFiles,
   campfireHandouts,
+  campfireJournal,
   campfireScenes,
   campfireTokens,
   campfireTracks,
@@ -25,7 +30,7 @@ import { broadcast, charactersInfo, emitCharacter, sceneRow } from "./state";
 import { characterOut, handoutOut, handoutSummary, handoutVisible, tokenVisible, trackOut, type HandoutRow } from "./view";
 import { fileOut, isFileKind, maxBytesFor, removeStored, saveUpload, UploadProblem, type FileRow } from "./files";
 import { syncTokensFromSheet } from "./sync";
-import { isSrdSlug, monsterBySlug, searchMonsters, searchSpells, spellBySlug } from "./srd";
+import { builderData, isSrdSlug, monsterBySlug, searchItems, searchMonsters, searchSpells, spellBySlug } from "./srd";
 
 // Campfire content: character sheets, uploaded files, handouts, the jukebox and the SRD
 // compendium.
@@ -106,7 +111,7 @@ contentRouter.post("/campaigns/:id/characters", changeLimiter, async (req, res) 
   let sheet = normalizeSheet(d.sheet);
   let name = d.name;
   if (d.srdMonster) {
-    const m = monsterBySlug(d.srdMonster);
+    const m = monsterBySlug(d.srdMonster, rulesOf(t.campaign.settings as { rules?: unknown }));
     if (!m) return bad(res, "That monster isn't in the compendium.");
     sheet = m.sheet;
     name ||= m.name;
@@ -254,6 +259,9 @@ contentRouter.post(
 /** May a player have this file? (GMs may have any of the campaign's.) */
 async function playerMayHave(t: Table, f: FileRow): Promise<boolean> {
   if (f.uploadedBy === t.userId) return true;
+  // Round A: the campaign's banner, and pictures of journal entries players can see.
+  if (t.campaign.bannerFileId === f.id) return true;
+  if ((await db.select({ id: campfireJournal.id }).from(campfireJournal).where(and(eq(campfireJournal.campaignId, t.campaign.id), eq(campfireJournal.pictureFileId, f.id), eq(campfireJournal.hidden, false)))).length) return true;
   const active = t.campaign.activeSceneId;
   if (f.kind === "map") {
     return !!active && (await db.select({ id: campfireScenes.id }).from(campfireScenes).where(and(eq(campfireScenes.id, active), eq(campfireScenes.backgroundFileId, f.id)))).length > 0;
@@ -510,15 +518,18 @@ contentRouter.post("/campaigns/:id/music", changeLimiter, async (req, res) => {
   res.json({ music, serverNow: now });
 });
 
-// ───────────── Compendium (SRD 5.1) ─────────────
+// ───────────── Compendium (SRD 5.1 = 2014 rules, SRD 5.2 = 2024 rules: `?rules=2024`) ─────────────
+
+/** `?rules=2024` picks SRD 5.2; anything else (older apps send nothing) is SRD 5.1. */
+const rulesParam = (req: { query: Record<string, unknown> }): RulesSet => (isRulesSet(req.query.rules) ? req.query.rules : "2014");
 
 contentRouter.get("/srd/monsters", srdLimiter, (req, res) => {
   const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
-  res.json({ monsters: searchMonsters(q) });
+  res.json({ monsters: searchMonsters(q, 50, rulesParam(req)) });
 });
 
 contentRouter.get("/srd/monsters/:slug", srdLimiter, (req, res) => {
-  const m = isSrdSlug(req.params.slug) ? monsterBySlug(req.params.slug) : null;
+  const m = isSrdSlug(req.params.slug) ? monsterBySlug(req.params.slug, rulesParam(req)) : null;
   if (!m) return notFound(res, "That monster isn't in the compendium.");
   res.json(m);
 });
@@ -527,12 +538,24 @@ contentRouter.get("/srd/spells", srdLimiter, (req, res) => {
   const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
   const level = typeof req.query.level === "string" && /^[0-9]$/.test(req.query.level) ? Number(req.query.level) : null;
   const cls = typeof req.query.class === "string" && /^[a-z ]{1,20}$/i.test(req.query.class) ? req.query.class : null;
-  res.json({ spells: searchSpells(q, level, cls) });
+  res.json({ spells: searchSpells(q, level, cls, 100, rulesParam(req)) });
 });
 
 contentRouter.get("/srd/spells/:slug", srdLimiter, (req, res) => {
-  const s = isSrdSlug(req.params.slug) ? spellBySlug(req.params.slug) : null;
+  const s = isSrdSlug(req.params.slug) ? spellBySlug(req.params.slug, rulesParam(req)) : null;
   if (!s) return notFound(res, "That spell isn't in the compendium.");
   res.json(s);
+});
+
+// The character builder's data (species, classes, backgrounds, feats), cached by the apps.
+contentRouter.get("/srd/builder", srdLimiter, (req, res) => {
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.json(builderData(rulesParam(req)));
+});
+
+contentRouter.get("/srd/items", srdLimiter, (req, res) => {
+  const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
+  const kind = typeof req.query.kind === "string" && /^(armor|shield|weapon|gear|magic|ammo)$/.test(req.query.kind) ? req.query.kind : null;
+  res.json({ items: searchItems(rulesParam(req), q, kind), credit: creditFor(rulesParam(req)) });
 });
 

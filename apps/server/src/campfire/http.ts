@@ -1,3 +1,4 @@
+import { noteSessionLater } from "./sessionHook";
 import { randomInt } from "node:crypto";
 import type { Response } from "express";
 import { z } from "zod";
@@ -110,6 +111,9 @@ export async function recordRoll(
       select id from campfire_rolls where campaign_id = ${campaign.id} order by created_at desc offset ${CAMPFIRE_LIMITS.rollsKept})`);
   const roll = rollOut(row);
   await broadcast(campaign, "campfire:roll", (v) => (rollVisible(row, v) ? { roll } : null));
+  // Round A: the session's counts (rolls, natural 20s and 1s on d20s) for the recap draft.
+  const r = input.result;
+  noteSessionLater(campaign, (s) => ({ ...s, rolls: s.rolls + 1, crits: s.crits + (r.natural === 20 ? 1 : 0), fumbles: s.fumbles + (r.natural === 1 ? 1 : 0) }));
   return roll;
 }
 
