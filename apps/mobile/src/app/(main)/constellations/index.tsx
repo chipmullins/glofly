@@ -18,6 +18,7 @@ import { CreateJoinSheet, AskToJoinSheet, JoinButton } from '@/constellations/Cr
 import { haptic } from '@/constellations/motion'
 import { BannerStars, Caps, StarChart, Chip, ChipRow, ConstellationIcon, FireflyMark, Face, Live, MemberLine, N, NightButton, SpeakerGlyph, StarGlyph, hexA } from '@/constellations/ui'
 import { StatusDot } from '@/ui/Avatar'
+import { YourBans } from '@/constellations/YourBans'
 
 // Board 2: your constellations (full-width cards), invites, and "Adventure to new
 // constellations" (kinds, popular tags, three to try). Scrolling down tucks the header into a bar.
@@ -150,6 +151,7 @@ export default function Dashboard() {
               <Text size={14} style={{ color: N.ink2, textAlign: 'center' }}>Create one for your friends, or find one to join below.</Text>
             </View>
           ) : null}
+          <YourBans />
           {invites.length ? (
             <View style={{ gap: 10 }}>
               <Caps>Invites</Caps>

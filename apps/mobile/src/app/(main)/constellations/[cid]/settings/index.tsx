@@ -33,7 +33,9 @@ export default function SettingsMenu() {
     { key: 'roles', label: 'Roles', icon: <Glyph name="shield" size={17} />, detail: String(c.roles.length), show: can(c, 'manageRoles') },
     { key: 'members', label: 'Members', icon: <Icon name="friends" size={17} color={N.ink} />, detail: c.pendingRequests ? `${c.pendingRequests} ${c.pendingRequests === 1 ? 'request' : 'requests'}` : String(c.members.length), show: manageMembers },
     { key: 'invites', label: 'Invites', icon: <Glyph name="invite" size={17} />, show: can(c, 'invite') },
-    { key: 'moderation', label: 'Moderation log', icon: <Icon name="clock" size={17} color={N.ink} />, show: modViewer },
+    // Communities round 2: Night watch (board 1e) and the mod log.
+    { key: 'watch', label: 'Night watch', icon: <Glyph name="shield" size={17} />, detail: c.watch?.open ? String(c.watch.open) : undefined, show: modViewer },
+    { key: 'moderation', label: 'Mod log', icon: <Icon name="clock" size={17} color={N.ink} />, show: modViewer },
     // Communities round (Nov 2026): API keys for bots and game servers.
     { key: 'integrations', label: 'Integrations', icon: <Glyph name="external" size={17} />, show: can(c, 'manageConstellation') },
     // 0.9.3: Twitch, Kick and YouTube alerts.

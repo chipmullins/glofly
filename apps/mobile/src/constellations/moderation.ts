@@ -1,4 +1,5 @@
-import { TIMEOUT_LENGTHS, type ConstellationDetail, type PublicUser, type TimeoutLength } from '@glofly/shared'
+import { BAN_DELETE_WINDOWS, QUICK_BAN_REASONS, TIMEOUT_LENGTHS, type BanAppeals, type BanDeleteWindow, type ConstellationDetail, type PublicUser, type TimeoutLength } from '@glofly/shared'
+import { nightWatch } from '@/api/nightwatch'
 import { cx } from '@/api/constellations'
 import { cxSay, putDetail, refreshCardsSoon } from '@/state/constellations'
 import { firstName } from '@/lib/format'
@@ -37,7 +38,48 @@ export async function endTimeout(c: ConstellationDetail, user: PublicUser) {
   cxSay(`${nameOf(user)} can post again.`)
 }
 
+/**
+ * Communities round 2 (board 1c): a ban with a reason they see, deleting their recent messages,
+ * and whether they can appeal. True when banned.
+ */
+export async function banWithOptions(c: ConstellationDetail, user: PublicUser): Promise<boolean> {
+  const ok = await confirm({
+    title: `Ban ${user.displayName}?`,
+    message: `They're removed and can't come back to ${c.name} until they're unbanned.`,
+    confirmLabel: 'Ban',
+    danger: true,
+  })
+  if (!ok) return false
+  const reason = await askText(`Why ban ${nameOf(user)}? (they see this)`, QUICK_BAN_REASONS.join(', '), '', true)
+  if (reason === null) return false
+  const window = await chooseFrom(
+    BAN_DELETE_WINDOWS.map((w) => ({ key: w.id, label: w.name, icon: 'trash' as const })),
+    'Delete their messages from',
+  )
+  if (!window) return false
+  const appeals = await chooseFrom(
+    [
+      { key: 'now', label: 'Can appeal right away', icon: 'mail' as const },
+      { key: 'later', label: 'Can appeal after 7 days', icon: 'clock' as const },
+      { key: 'never', label: 'No appeals', icon: 'block' as const },
+    ],
+    'Appeals',
+  )
+  if (!appeals) return false
+  const r = await nightWatch.ban(c.id, user.id, { reason: reason || undefined, appeals: appeals as BanAppeals, deleteWindow: window as BanDeleteWindow })
+  if (!r.ok) {
+    cxSay(r.message)
+    return false
+  }
+  haptic.success()
+  putDetail(r.data.constellation)
+  refreshCardsSoon()
+  cxSay(`${nameOf(user)} is banned.`)
+  return true
+}
+
 export async function kickOrBan(c: ConstellationDetail, user: PublicUser, ban: boolean): Promise<boolean> {
+  if (ban) return banWithOptions(c, user)
   const ok = await confirm({
     title: ban ? `Ban ${user.displayName}?` : `Kick ${user.displayName} from ${c.name}?`,
     message: ban ? `They're removed and can't come back to ${c.name} until they're unbanned.` : 'They can join again with an invite.',

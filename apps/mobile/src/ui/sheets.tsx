@@ -1,3 +1,4 @@
+import { isNebulaChat } from '@/state/constellations'
 import { useEffect, useMemo, useState } from 'react'
 import { FlatList, Pressable, ScrollView, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -156,6 +157,8 @@ function ReportSheet({ target, onDone }: { target: ReportTarget; onDone: (sent: 
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<ReportReason | null>(null)
   const first = target.name.split(/\s+/)[0]
+  // Communities round 2: a nebula message also goes to that constellation's moderators.
+  const nebula = !!target.conversationId && isNebulaChat(target.conversationId)
 
   async function send() {
     if (!reason) return setError('Pick what’s wrong.')
@@ -183,7 +186,7 @@ function ReportSheet({ target, onDone }: { target: ReportTarget; onDone: (sent: 
             Thanks for telling us
           </Text>
           <Text size={15} tone="ink2" style={{ lineHeight: 22 }}>
-            The Glofly team will look at it. {first} won't know you reported them.
+            {nebula ? 'The moderators of this constellation and the Glofly team will look at it.' : 'The Glofly team will look at it.'} {first} won't know you reported them.
             {block ? ` You've also blocked ${first}.` : ' If you feel unsafe, you can also block them from their profile.'}
           </Text>
           {sent === 'self_harm' ? (
@@ -202,7 +205,7 @@ function ReportSheet({ target, onDone }: { target: ReportTarget; onDone: (sent: 
           {target.messageId ? 'Report message' : `Report ${target.name}`}
         </Text>
         <Text size={14} tone="muted" style={{ lineHeight: 20 }}>
-          What's wrong with it? Only the Glofly team sees reports. {first} isn't told.
+          What's wrong with it? {nebula ? 'The moderators here and the Glofly team see reports.' : 'Only the Glofly team sees reports.'} {first} isn't told.
         </Text>
         {error ? <Notice>{error}</Notice> : null}
         <View accessibilityRole="radiogroup" accessibilityLabel="Reason">

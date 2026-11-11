@@ -108,6 +108,8 @@ export function cantPost(c: ConstellationDetail, n: Nebula): { kind: 'timeout' |
     const who = top.length ? `${top[top.length - 1].name}s` : 'moderators'
     return { kind: 'readonly', text: `Only ${who} can post in #${n.name}` }
   }
+  // Communities round 2 (Night watch → Safety): the verification level.
+  if (c.me.verification) return { kind: 'readonly', text: c.me.verification }
   return null
 }
 

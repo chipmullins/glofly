@@ -616,6 +616,13 @@ export function NebulaChat({
         </View>
       ) : null}
 
+      {c.me.raidHold ? (
+        <View accessibilityRole="text" style={{ marginHorizontal: 12, marginBottom: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: N.raised, borderWidth: 1, borderColor: N.edge2 }}>
+          <Text size={12.5} style={{ color: N.ink2 }}>
+            You joined during a busy moment, so your messages wait for a moderator before they show.
+          </Text>
+        </View>
+      ) : null}
       {n.sharedWith?.length ? (
         <View accessibilityRole="text" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 6, borderTopWidth: 1, borderTopColor: N.line }}>
           <Glyph name="external" size={13} color={N.muted} />

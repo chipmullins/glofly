@@ -84,6 +84,26 @@ const ACTION_WORDS: Record<string, string> = {
   request_approved: 'let in',
   request_denied: 'turned down',
   ownership_transferred: 'gave ownership to',
+  // Communities round 2 (Night watch)
+  messages_deleted: 'deleted recent messages by',
+  automod_hidden: 'held a message by',
+  automod_links: 'held links by',
+  automod_mentions: 'held a message with too many mentions by',
+  automod_raid: 'held a message by a raid joiner,',
+  automod_wait: 'asked a new member to wait:',
+  automod_undo: 'let a held message through from',
+  automod_kept: 'kept a held message hidden from',
+  automod_changed: 'changed AutoMod',
+  safety_changed: 'changed Safety',
+  joins_locked: 'paused joins',
+  joins_unlocked: 'reopened joins',
+  raid_cleared: 'let raid joiners talk',
+  raid_kicked: 'kicked raid joiners',
+  report_dismissed: 'dismissed a report about',
+  report_actioned: 'acted on a report about',
+  appeal_accepted: 'accepted the appeal of',
+  appeal_denied: 'turned down the appeal of',
+  settings_changed: 'changed settings',
 }
 
 const LENGTH_WORDS: Record<string, string> = { '5m': '5 minutes', '1h': '1 hour', '1d': '1 day', '1w': '1 week' }
@@ -98,7 +118,16 @@ export function moderationKind(e: ModerationEntry): 'messages' | 'members' | 'ro
 
 export function moderationParts(e: ModerationEntry, meId: string): { actor: string; verb: string; target: string | null; extra: string; detail: string | null } {
   const name = (u: PublicUser | null) => (u ? (u.id === meId ? 'you' : u.displayName.trim().split(/\s+/)[0] || u.username) : 'someone')
-  const actor = e.actor ? (e.actor.id === meId ? 'You' : e.actor.displayName.trim().split(/\s+/)[0] || e.actor.username) : 'Glofly'
+  const d0 = (e.details ?? {}) as Record<string, unknown>
+  const actor = e.actor
+    ? e.actor.id === meId
+      ? 'You'
+      : e.actor.displayName.trim().split(/\s+/)[0] || e.actor.username
+    : d0.by === 'safety' || e.action === 'joins_locked'
+      ? 'Safety'
+      : d0.by === 'automod' || e.action.startsWith('automod_')
+        ? 'AutoMod'
+        : 'Glofly'
   const verb = ACTION_WORDS[e.action] ?? e.action.replace(/_/g, ' ')
   const d = e.details ?? {}
   const extra =

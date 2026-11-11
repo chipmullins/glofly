@@ -35,6 +35,10 @@ type State = {
   news: NebulaNews[]
   /** 0.7.1: invites that just arrived (the pop-up), oldest first */
   invitePopups: InvitePopup[]
+  /** Communities round 2: bumped when Night watch changes (constellation id → count) */
+  watchTick: Record<string, number>
+  /** Communities round 2: bumped when my bans or appeals change */
+  bansTick: number
 }
 
 const empty = (): State => ({
@@ -51,6 +55,8 @@ const empty = (): State => ({
   toast: null,
   news: [],
   invitePopups: [],
+  watchTick: {},
+  bansTick: 0,
 })
 
 export const useCx = create<State>(() => empty())
@@ -276,9 +282,20 @@ function onEvent(e: ServerEvent) {
       forget(e.constellationId)
       refreshCardsSoon()
       for (const fn of removedListeners) fn(e.constellationId)
-      if (had) cxSay(REMOVED_TEXT[e.reason] ?? 'That constellation is gone.')
+      if (had) cxSay((REMOVED_TEXT[e.reason] ?? 'That constellation is gone.') + (e.reason === 'banned' && e.banReason ? ` Reason: “${e.banReason}”` : ''))
+      if (e.reason === 'banned') set({ bansTick: get().bansTick + 1 })
       return
     }
+    // Communities round 2: Night watch
+    case 'nightwatch:changed':
+    case 'constellation:raid':
+      set({ watchTick: { ...get().watchTick, [e.constellationId]: (get().watchTick[e.constellationId] ?? 0) + 1 } })
+      loadDetailSoon(e.constellationId)
+      return
+    case 'constellation:appeal':
+      set({ bansTick: get().bansTick + 1 })
+      refreshCardsSoon()
+      return
     default:
       return
   }
