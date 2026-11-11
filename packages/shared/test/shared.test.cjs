@@ -1269,6 +1269,13 @@ test('campfire Round A: building a 2024 wood elf ranger and leveling her up', ()
   // 28 before; +6 average +3 Con, and +1 for each of the 3 earlier levels (Con 14 → 16).
   assert.equal(up.hp.max, 28 + 9 + 3)
   assert.equal(up.hitDice[0].max, 4)
+  // A class-table "Ranger Subclass" row means the subclass's own feature at that level.
+  const l6 = s.buildSheet(data, { ...choices, level: 6, asi: [{ kind: 'asi', plus: { dex: 2 } }] })
+  const p7 = s.levelUpPreview(data, l6)
+  assert.ok(!p7.newFeatures.some((f) => /subclass$/i.test(f.name)), 'no placeholder row')
+  assert.ok(p7.newFeatures.some((f) => p7.subclass.features.some((g) => g.level === 7 && g.name === f.name)), 'Hunter level 7 feature')
+  const up7 = s.levelUpSheet(data, l6, { rolled: null })
+  assert.ok(!up7.features.some((f) => /Subclass \(/i.test(f.name)))
   // 2014 rules: species give the bonuses; a cleric prepares level + Wisdom.
   const d14 = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../apps/server/src/campfire/srd/2014/builder.json'), 'utf8'))
   const dwarf = s.buildSheet(d14, { ...choices, rules: '2014', speciesId: 'dwarf', subId: 'hill-dwarf', classId: 'cleric', subclassId: 'life', backgroundId: 'acolyte', bonus: {}, base: { str: 14, dex: 10, con: 14, int: 8, wis: 15, cha: 12 }, level: 6, equipment: [], skills: ['medicine', 'history'] })

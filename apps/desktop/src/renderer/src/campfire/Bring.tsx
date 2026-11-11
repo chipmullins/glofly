@@ -24,7 +24,8 @@ import { blankSheet } from '@glofly/shared/campfire/rules5e'
 import type { RulesSet } from '@glofly/shared/campfire/rulesData'
 import { cf, pickFile } from './api'
 import { signed, useCf } from './ctx'
-import { loadBuilder, searchSpells, sheetSpellFrom, spellDetails } from './rulesApi'
+import { loadBuilder, searchItems, searchSpells, sheetSpellFrom, spellDetails } from './rulesApi'
+import { inventoryFromItem } from '@glofly/shared/campfire/builder'
 
 // Round A, switching over (approved board "SwitchOver"): import a character sheet PDF (read here
 // with pdf-lib: the PDF never leaves this computer), or copy a character in from another sheet.
@@ -70,6 +71,32 @@ async function matchSpells(
   return { spells, unmatched }
 }
 
+/** Gives items that match the rules by name their weight, armor and attack (armor and shields
+ *  worn: the sheet's AC already counts them). */
+async function matchItems(rules: RulesSet, sheet: Sheet5e): Promise<void> {
+  const inventory: Sheet5e['inventory'] = []
+  const attacks = [...sheet.attacks]
+  for (const it of sheet.inventory.slice(0, 80)) {
+    const hit = (await searchItems(rules, it.name)).find(
+      (r) => r.name.toLowerCase() === it.name.toLowerCase()
+    )
+    if (!hit) {
+      inventory.push(it)
+      continue
+    }
+    const rich = {
+      ...inventoryFromItem(hit, it.id, !!(hit.armor || hit.kind === 'shield')),
+      qty: it.qty,
+      notes: it.notes
+    }
+    // A weapon the PDF already listed as an attack keeps that attack.
+    const known = attacks.find((a) => a.name.toLowerCase() === hit.name.toLowerCase())
+    if (known) rich.attackId = known.id
+    inventory.push(rich)
+  }
+  sheet.inventory = inventory
+}
+
 export function ImportPanel({
   rules,
   onBack,
@@ -105,6 +132,8 @@ export function ImportPanel({
       setBusy('Matching spells to the rules…')
       const { spells, unmatched } = await matchSpells(rules, r.spellNames)
       r.sheet.spellcasting.spells = spells
+      setBusy('Matching items to the rules…')
+      await matchItems(rules, r.sheet)
       setResult({ ...r, file: file.name, unmatched })
     } catch {
       setError(

@@ -138,6 +138,9 @@ const toughness = (species: BuilderSpecies | null, sub: BuildPick['sub']): numbe
   [...(species?.traits ?? []), ...(sub?.traits ?? [])].some((t) => /toughness/i.test(t.name)) ? 1 : 0
 
 /** Builds the character sheet from the builder's choices. */
+/** Class-table rows that only mark "your subclass gives a feature here". */
+const SUBCLASS_SLOT = /(^|\s)(subclass|subclass feature|archetype feature)$/i
+
 export function buildSheet(data: BuilderRules, c: BuildChoices, feats: BuilderFeat[] = data.feats): Sheet5e {
   const { species, sub, cls, bg } = pickFrom(data, c)
   const sheet = blankSheet()
@@ -178,7 +181,7 @@ export function buildSheet(data: BuilderRules, c: BuildChoices, feats: BuilderFe
     ...featureList([...(species?.traits ?? []), ...(sub?.traits ?? [])], 's'),
     ...featureList([...(bg?.feature ? [bg.feature] : []), ...(bg?.feat ? [{ name: `${bg.feat.name} (feat)`, text: bg.feat.text }] : [])], 'b'),
     ...featureList(
-      reached.flatMap((l) => l.features.filter((f) => !/^(Ability Score Improvement|Spellcasting)$/i.test(f.name)).map((f) => ({ name: `${f.name} (${cls.name} ${l.level})`, text: f.text }))),
+      reached.flatMap((l) => l.features.filter((f) => !/^(Ability Score Improvement|Spellcasting)$/i.test(f.name) && !SUBCLASS_SLOT.test(f.name)).map((f) => ({ name: `${f.name} (${cls.name} ${l.level})`, text: f.text }))),
       'c'
     ),
     ...featureList((subclass?.features ?? []).filter((f) => f.level <= level).map((f) => ({ name: `${f.name} (${subclass!.name} ${f.level})`, text: f.text })), 'u'),
@@ -221,7 +224,10 @@ export type LevelUpChoice = {
 }
 
 /** What leveling this sheet's (first) class up one level brings. Null at 20 or for an unknown class. */
-export function levelUpPreview(data: BuilderRules, sheet: Sheet5e): { cls: BuilderClass; next: number; level: BuilderClass['levels'][number]; needsSubclass: boolean } | null {
+export function levelUpPreview(
+  data: BuilderRules,
+  sheet: Sheet5e
+): { cls: BuilderClass; next: number; level: BuilderClass['levels'][number]; needsSubclass: boolean; subclass: BuilderClass['subclasses'][number] | null; newFeatures: { name: string; text: string }[] } | null {
   const own = sheet.classes[0]
   if (!own || own.level >= 20) return null
   const cls = data.classes.find((c) => c.id === sheet.build?.classId) ?? data.classes.find((c) => c.name.toLowerCase() === own.name.toLowerCase())
@@ -229,8 +235,15 @@ export function levelUpPreview(data: BuilderRules, sheet: Sheet5e): { cls: Build
   const next = own.level + 1
   const level = cls.levels.find((l) => l.level === next)
   if (!level) return null
-  return { cls, next, level, needsSubclass: next === cls.subclassLevel && !own.subclass }
+  const subclass = cls.subclasses.find((s) => s.id === sheet.build?.subclass) ?? cls.subclasses.find((s) => !!own.subclass && s.name.toLowerCase() === own.subclass.toLowerCase()) ?? null
+  // The class table says "Fighter Subclass" where the subclass gives something: show what it gives.
+  const newFeatures = [
+    ...level.features.filter((f) => !/^(Ability Score Improvement|Spellcasting)$/i.test(f.name) && !SUBCLASS_SLOT.test(f.name)),
+    ...(subclass?.features ?? []).filter((f) => f.level === next)
+  ]
+  return { cls, next, level, needsSubclass: next === cls.subclassLevel && !own.subclass, subclass, newFeatures }
 }
+
 
 /** Levels the sheet's first class up by one with the player's choices. */
 export function levelUpSheet(data: BuilderRules, sheet: Sheet5e, choice: LevelUpChoice, feats: BuilderFeat[] = data.feats): Sheet5e {
@@ -256,9 +269,9 @@ export function levelUpSheet(data: BuilderRules, sheet: Sheet5e, choice: LevelUp
       out.build = { ...(out.build ?? {}), subclass: sc.id }
     }
   }
-  const subclass = p.cls.subclasses.find((s) => s.id === out.build?.subclass) ?? null
+  const subclass = p.cls.subclasses.find((s) => s.id === out.build?.subclass) ?? p.subclass
   const added: { name: string; text: string }[] = [
-    ...p.level.features.filter((f) => !/^(Ability Score Improvement|Spellcasting)$/i.test(f.name)).map((f) => ({ name: `${f.name} (${p.cls.name} ${p.next})`, text: f.text })),
+    ...p.level.features.filter((f) => !/^(Ability Score Improvement|Spellcasting)$/i.test(f.name) && !SUBCLASS_SLOT.test(f.name)).map((f) => ({ name: `${f.name} (${p.cls.name} ${p.next})`, text: f.text })),
     ...(subclass?.features ?? []).filter((f) => f.level === p.next || (choice.subclassId && f.level <= p.next)).map((f) => ({ name: `${f.name} (${subclass!.name} ${f.level})`, text: f.text }))
   ]
   if (choice.asi?.kind === 'feat') {

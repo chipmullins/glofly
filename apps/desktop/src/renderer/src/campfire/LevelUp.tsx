@@ -315,11 +315,11 @@ export function LevelUp({
               {preview.cls.spellAbility && (
                 <li>✓ Spell slots from the {preview.cls.name.toLowerCase()} table</li>
               )}
-              {preview.level.features
-                .filter((f) => !/^(Ability Score Improvement|Spellcasting)$/i.test(f.name))
-                .map((f) => (
-                  <li key={f.name}>✓ New: {f.name}</li>
-                ))}
+              {preview.newFeatures.map((f) => (
+                <li key={f.name} title={f.text}>
+                  ✓ New: {f.name}
+                </li>
+              ))}
               <li>✓ Attacks, saves and skills recalculated</li>
             </ul>
           </section>

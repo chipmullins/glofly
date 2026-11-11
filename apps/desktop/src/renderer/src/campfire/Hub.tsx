@@ -585,7 +585,9 @@ function RecapBody({
             {s.recapPostedAt
               ? 'Posted: players see it.'
               : 'Not posted yet: only game masters see it.'}{' '}
-            Drafted from the session’s fights and rolls, then edited by you.
+            {s.before
+              ? 'From your setup: the story before Campfire.'
+              : 'Drafted from the session’s fights and rolls, then edited by you.'}
           </span>
           <button type="button" className="cf-ghost cf-small" onClick={() => setEditing(true)}>
             Edit
@@ -608,7 +610,7 @@ function LootSummary({
   loot: PartyLoot
   partySize: number
   campaignId: string
-  onAll: () => void
+  onAll?: () => void
 }): React.JSX.Element {
   const per = (n: number): number => Math.floor(n / Math.max(1, partySize))
   const split = async (): Promise<void> => {
@@ -624,10 +626,12 @@ function LootSummary({
   return (
     <section className="cfa-panel" aria-labelledby="hub-loot">
       <div className="cfa-panel-head">
-        <h2 id="hub-loot">Party loot</h2>
-        <button type="button" className="cf-link" onClick={onAll}>
-          Open
-        </button>
+        <h2 id="hub-loot">{onAll ? 'Party loot' : 'Split the coins'}</h2>
+        {onAll && (
+          <button type="button" className="cf-link" onClick={onAll}>
+            Open
+          </button>
+        )}
       </div>
       <div className="cfa-coins">
         <span>
@@ -954,7 +958,6 @@ function LootTab({
         campaignId={campaignId}
         onChanged={onChanged}
         say={say}
-        onAll={() => undefined}
       />
       <section className="cfa-panel">
         <h2 className="cf-h3">Items</h2>

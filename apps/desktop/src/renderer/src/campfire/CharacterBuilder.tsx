@@ -343,10 +343,16 @@ function Build({
       (!pick.species.skillChoice || !!d.speciesSkill),
     !!pick.cls && (d.level < (pick.cls?.subclassLevel ?? 99) || !!d.subclassId),
     !!pick.bg && backgroundBonusOk(pick.bg, d.bonus),
-    d.method === 'points'
+    (d.method === 'points'
       ? (pointBuySpent(ABILITIES.map((a) => d.points[a])) ?? 99) <= POINT_BUY_BUDGET
       : ABILITIES.every((a) => d.assign[a] !== undefined) &&
-        (d.method !== 'roll' || d.rolled.length === 6),
+        (d.method !== 'roll' || d.rolled.length === 6)) &&
+      // Every Ability Score Improvement spent: +2 in all, or a feat.
+      Array.from({ length: asiCount }, (_, i) => d.asi[i]).every((a) =>
+        a?.kind === 'feat'
+          ? !!a.featId
+          : !!a && Object.values(a.plus).reduce((n: number, v) => n + (v ?? 0), 0) === 2
+      ),
     !!pick.cls && d.skills.length === pick.cls.skillChoice.count,
     true,
     true,
@@ -654,7 +660,7 @@ function ClassStep({ data, d, set }: StepProps): React.JSX.Element {
               set({ classId: c.id, subclassId: null, skills: [], spells: [], asi: [] })
             }
             title={c.name}
-            meta={`d${c.hitDie} · ${c.primary.map((a) => ABILITY_NAMES[a]).join(' and ') || 'Any'}`}
+            meta={`d${c.hitDie} · ${c.primary.map((a) => ABILITY_NAMES[a]).join(c.id === 'fighter' ? ' or ' : ' and ') || 'Any'}`}
             text={short(c.levels[0]?.features.map((f) => f.name).join(', ') ?? '')}
           />
         ))}
@@ -849,7 +855,12 @@ function AbilityStep({
             {pick.cls ? (
               <>
                 {pick.cls.name}s want{' '}
-                <b>{pick.cls.primary.map((a) => ABILITY_NAMES[a]).join(' and ')}</b> first.
+                <b>
+                  {pick.cls.primary
+                    .map((a) => ABILITY_NAMES[a])
+                    .join(pick.cls.id === 'fighter' ? ' or ' : ' and ')}
+                </b>{' '}
+                first.
               </>
             ) : null}
           </p>

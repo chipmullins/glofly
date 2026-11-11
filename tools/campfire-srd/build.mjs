@@ -283,7 +283,11 @@ function classesFor(set) {
       id: c.index,
       name: c.name,
       hitDie: c.hit_die,
-      primary: (c.primary_ability?.ability_scores ?? []).map((a) => a.index).concat(c.primary_ability ? [] : PRIMARY[c.index] ?? []),
+      // Fighter's 2024 entry says "Strength or Dexterity" without listing scores: use the map then.
+      primary: (() => {
+        const listed = (c.primary_ability?.ability_scores ?? []).map((a) => a.index)
+        return listed.length ? listed : (PRIMARY[c.index] ?? [])
+      })(),
       saves: (c.saving_throws ?? []).map((a) => a.index),
       armor: (c.proficiencies ?? []).filter((p) => /armor|shield/i.test(p.name) && !/saving/i.test(p.name)).map((p) => p.name),
       weapons: (c.proficiencies ?? []).filter((p) => /weapon/i.test(p.name)).map((p) => p.name),

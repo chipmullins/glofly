@@ -187,6 +187,15 @@
   gap: 6px;
   min-width: 260px;
 }
+.cfa-row > .cfa-seg:first-child {
+  flex: none;
+  flex-direction: row;
+  min-width: 0;
+}
+.cfa-row > .cfa-search {
+  flex: 1;
+  min-width: 200px;
+}
 .cfa-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -1248,6 +1257,11 @@
   min-height: 0;
   display: flex;
 }
+.cfa-brew.cfa-panel {
+  flex-direction: row;
+  gap: 0;
+  overflow: hidden;
+}
 .cfa-brew-kinds {
   width: 220px;
   flex: none;
@@ -1459,8 +1473,46 @@ button.cf-link {
   flex-direction: column;
   gap: 12px;
 }
+.cfa-inv-table {
+  table-layout: fixed;
+}
+.cfa-inv-table th:nth-child(1),
+.cfa-inv-table td:nth-child(1) {
+  width: 64px !important;
+}
+.cfa-inv-table th:nth-child(3) {
+  width: 38%;
+}
+.cfa-inv-table th:nth-child(5) {
+  width: 36px;
+}
 .cfa-inv-table td {
   vertical-align: top;
+}
+.cfa-inv-side .cfa-coins {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.cfa-inv-side .cfa-coins .cfa-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+.cfa-inv-side .cfa-coins span {
+  padding: 0;
+  background: none;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--cf-muted);
+}
+.cfa-inv-side .cfa-coins input {
+  width: 100% !important;
+  min-width: 0;
+  box-sizing: border-box;
+  text-align: center;
 }
 .cfa-inv-on td {
   background: rgba(255, 179, 71, 0.06);
@@ -1489,4 +1541,8 @@ button.cf-link {
   .cfa-inv {
     grid-template-columns: 1fr;
   }
+}
+
+.cfa-box .cf-chip {
+  text-transform: none;
 }
