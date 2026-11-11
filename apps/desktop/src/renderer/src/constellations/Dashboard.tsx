@@ -1,3 +1,4 @@
+import { YourBans } from './NightWatch'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CONSTELLATION_THEME,
@@ -308,7 +309,11 @@ export default function Dashboard({
 }): React.JSX.Element {
   const [query, setQuery] = useState('')
   // 0.9.3: a card's right-click menu.
-  const [cardMenu, setCardMenu] = useState<{ card: ConstellationCard; x: number; y: number } | null>(null)
+  const [cardMenu, setCardMenu] = useState<{
+    card: ConstellationCard
+    x: number
+    y: number
+  } | null>(null)
   const pinCount = cards.filter((c) => c.sidebarPin !== null && c.sidebarPin !== undefined).length
   const [type, setType] = useState<ConstellationType | null>(null)
   const [tag, setTag] = useState<string | null>(null)
@@ -510,7 +515,9 @@ export default function Dashboard({
                 const pinned = card.sidebarPin !== null && card.sidebarPin !== undefined
                 setCardMenu(null)
                 if (!pinned && pinCount >= SIDEBAR_PINS_MAX) {
-                  onProblem(`You can pin up to ${SIDEBAR_PINS_MAX}. Unpin one to make room for ${card.name}.`)
+                  onProblem(
+                    `You can pin up to ${SIDEBAR_PINS_MAX}. Unpin one to make room for ${card.name}.`
+                  )
                   return
                 }
                 void api.sidebarPin(card.id, !pinned).then((r) => !r.ok && onProblem(r.message))
@@ -571,6 +578,7 @@ export default function Dashboard({
           </p>
         ) : null}
 
+        {!searching && <YourBans />}
         {invites.length > 0 && !searching && (
           <section className="cx-invites" aria-labelledby="cx-inv-head">
             <h2 id="cx-inv-head" className="cx-section-head">

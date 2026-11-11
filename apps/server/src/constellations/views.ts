@@ -40,6 +40,8 @@ import { can, OWNER_RANK, standingOf, type Standing } from "./perms";
 import { voiceStatesFor, voiceStatesOf } from "./voice";
 import { seesAllNebulas, unlocksFor, visibleChats } from "./access";
 import { mentionsUserSql } from "./groupMentions";
+import { verificationBlock } from "./safety";
+import { watchSummaryFor } from "./watchSummary";
 
 // What the apps get about constellations (2.0): dashboard cards, directory entries, and the whole
 // constellation when it's open.
@@ -392,6 +394,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       onboardingAnswers: constellationMembers.onboardingAnswers,
       onboardedAt: constellationMembers.onboardedAt,
       sidebarPin: constellationMembers.sidebarPin,
+      raidHold: constellationMembers.raidHold,
     })
     .from(constellationMembers)
     .where(eq(constellationMembers.constellationId, constellationId));
@@ -517,7 +520,13 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       },
       // 4.3: my answers (boards 26–27)
       onboarding: { answers: myRow?.onboardingAnswers ?? {}, onboardedAt: myRow?.onboardedAt?.toISOString() ?? null },
+      // Communities round 2 (Night watch → Safety): why I can't chat yet (verification), and
+      // whether my messages wait for a moderator (joined during a raid).
+      verification: await verificationBlock(me),
+      raidHold: myRow?.raidHold ?? false,
     },
+    // Communities round 2: the "Night watch · 5" badge and the joins-paused banner (moderators only)
+    watch: await watchSummaryFor(me),
     // 4.3: the questions, and the optional nebulas I could still pick (Browse nebulas)
     onboarding: c.onboarding ?? null,
     browse: await browseFor(constellationId, new Set(nebulaRows.map((n) => n.id)), c.onboarding ?? null),

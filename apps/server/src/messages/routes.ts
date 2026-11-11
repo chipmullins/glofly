@@ -52,7 +52,7 @@ import { emitToUser } from "../realtime";
 import { isNebulaChat, nebulaOfChat } from "../constellations/chats";
 import { canModerateNebula, canPostInNebula, nebulaChatOpen, whyCantPostInNebula } from "../constellations/perms";
 import { logModeration, nebulaActivity } from "../constellations/activity";
-import { automodGate, automodWordInEdit } from "../constellations/automod";
+import { automodGate, automodWordInEdit, mentionCapGate } from "../constellations/automod";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
 import { groupMentionsFor, NO_GROUP_MENTIONS } from "../constellations/groupMentions";
@@ -1562,6 +1562,14 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   // Communities round 4.2: @everyone, @here and @Role (nebulas; only if you may).
   const group = chat.kind === "nebula" && !gif ? await groupMentionsFor(text, id.data, chat.memberIds, myId) : NO_GROUP_MENTIONS;
   const mentioned = [...new Set([...mentions, ...group.groupMentions])];
+  // Communities round 2: AutoMod's mention cap (Night watch → Safety).
+  if (chat.kind === "nebula") {
+    const capped = await mentionCapGate(id.data, myId, text, mentions, group.mentionRoles, !!group.mentionEveryone);
+    if (capped) {
+      res.status(capped.status).json({ error: capped.error, message: capped.message });
+      return;
+    }
+  }
 
   let inserted: MessageRow;
   try {
@@ -1725,6 +1733,10 @@ export async function postScheduledText(
     chat.kind === "nebula"
       ? await groupMentionsFor(text, conversationId, chat.memberIds, myId, extra.liveCard ? (extra.approvedPing ?? { everyone: null, roleIds: [] }) : null)
       : NO_GROUP_MENTIONS;
+  if (chat.kind === "nebula" && !extra.liveCard) {
+    const capped = await mentionCapGate(conversationId, myId, text, mentions, group.mentionRoles, !!group.mentionEveryone);
+    if (capped) return { ok: false, reason: capped.message };
+  }
   const inserted = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(messages)

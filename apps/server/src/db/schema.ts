@@ -1112,6 +1112,12 @@ export const constellations = pgTable(
     celebratedYears: integer("celebrated_years").notNull().default(0),
     // 0.9.3: owners can stop members forwarding its messages to other chats.
     forwardingOff: boolean("forwarding_off").notNull().default(false),
+    // Communities round 2 (Night watch, board 1d): @glofly/shared SafetySettings (null = the
+    // defaults: raid protection and the mention cap on, verification off), and the raid state:
+    // joins paused until then, and when the last raid was noticed.
+    safety: jsonb("safety"),
+    joinsPausedUntil: timestamp("joins_paused_until", { withTimezone: true }),
+    raidAt: timestamp("raid_at", { withTimezone: true }),
   },
   (t) => [
     index("constellations_owner_idx").on(t.ownerId),
@@ -1184,6 +1190,8 @@ export const constellationMembers = pgTable(
     onboardingAnswers: jsonb("onboarding_answers").$type<Record<string, string[]>>().notNull().default({}),
     onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
     shownNebulas: uuid("shown_nebulas").array().notNull().default(sql`'{}'::uuid[]`),
+    // Communities round 2: joined during a raid; their messages wait for a moderator (raidHold).
+    raidHold: boolean("raid_hold").notNull().default(false),
   },
   (t) => [
     primaryKey({ columns: [t.constellationId, t.userId] }),
@@ -1343,8 +1351,66 @@ export const constellationBans = pgTable(
     bannedBy: uuid("banned_by").references(() => users.id, { onDelete: "set null" }),
     reason: text("reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Communities round 2 (board 1c): appeals "now" / "later" (after 7 days) / "never".
+    appeals: text("appeals").notNull().default("now"),
   },
   (t) => [primaryKey({ columns: [t.constellationId, t.userId] })],
+);
+
+// Communities round 2 (board 1c): a banned person asking the moderators to reconsider. One per
+// ban at a time; another 30 days after a "no". Moderators see their name and this message only.
+export const constellationAppeals = pgTable(
+  "constellation_appeals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The ban it's about (bans have no id: its time tells a later ban apart).
+    banCreatedAt: timestamp("ban_created_at", { withTimezone: true }).notNull(),
+    body: text("body").notNull(),
+    status: text("status").notNull().default("open"),
+    reply: text("reply"),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("constellation_appeals_queue_idx").on(t.constellationId, t.status, t.createdAt),
+    index("constellation_appeals_user_idx").on(t.userId, t.constellationId),
+  ],
+);
+
+// Communities round 2 (board 1a): nebula messages members reported to the constellation's
+// moderators (Night watch → Reports). One open report per message; more people reporting it add
+// to `reporter_ids`. `excerpt` is the message as first reported (kept 180 days, like the mod log).
+export const constellationReports = pgTable(
+  "constellation_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(() => conversations.id, { onDelete: "set null" }),
+    messageId: uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
+    reportedUserId: uuid("reported_user_id").references(() => users.id, { onDelete: "set null" }),
+    reporterIds: uuid("reporter_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    reason: text("reason").notNull(),
+    excerpt: text("excerpt").notNull(),
+    status: text("status").notNull().default("open"),
+    assignedTo: uuid("assigned_to").references(() => users.id, { onDelete: "set null" }),
+    resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: "set null" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    outcome: text("outcome"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("constellation_reports_queue_idx").on(t.constellationId, t.status, t.createdAt),
+    uniqueIndex("constellation_reports_open_message_idx").on(t.messageId).where(sql`${t.status} = 'open'`),
+  ],
 );
 
 // Settings → Moderation: what moderators and admins did (kicks, bans, time-outs, deleted
@@ -1362,7 +1428,12 @@ export const constellationAuditLog = pgTable(
     details: jsonb("details").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("constellation_audit_constellation_idx").on(t.constellationId, t.createdAt)],
+  (t) => [
+    index("constellation_audit_constellation_idx").on(t.constellationId, t.createdAt),
+    // Communities round 2: the mod log's filters (one member, one kind of action).
+    index("constellation_audit_target_idx").on(t.constellationId, t.targetUserId, t.createdAt),
+    index("constellation_audit_action_idx").on(t.constellationId, t.action, t.createdAt),
+  ],
 );
 
 // ───────────── My games (Glofly 2.0) ─────────────
@@ -1627,6 +1698,9 @@ export const automodHeld = pgTable(
     releasedAt: timestamp("released_at", { withTimezone: true }),
     releasedBy: uuid("released_by").references(() => users.id, { onDelete: "set null" }),
     releasedMessageId: uuid("released_message_id").references(() => messages.id, { onDelete: "set null" }),
+    // Communities round 2: "Keep hidden" in Night watch (out of the queue, never posted).
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    dismissedBy: uuid("dismissed_by").references(() => users.id, { onDelete: "set null" }),
   },
   (t) => [index("automod_held_constellation_idx").on(t.constellationId, t.createdAt)],
 );

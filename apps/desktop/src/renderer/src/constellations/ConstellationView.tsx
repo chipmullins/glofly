@@ -75,6 +75,7 @@ import { threads as threadApi } from '../lib/threads'
 import { usePresence } from '../lib/usePresence'
 import type { ThreadSummary } from '@glofly/shared/threads'
 import { integrations } from '../lib/integrations'
+import { BanDialog, RaidBanner } from './NightWatch'
 import type { ConstellationCommand } from '@glofly/shared/integrations'
 
 /** Communities round: a bot's badge in chats (approved board 4). */
@@ -227,6 +228,10 @@ export type SettingsPageName =
   | 'members'
   | 'invites'
   | 'moderation'
+  | 'watch'
+  | 'modlog'
+  | 'appeals'
+  | 'safety'
   | 'automod'
   | 'integrations'
   | 'liveAlerts'
@@ -689,7 +694,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       ? "You're timed out for now, so you can read but not post."
       : chatNebula.readOnly && !can(c, 'manageNebulas') && !can(c, 'deleteMessages')
         ? 'Only moderators can post here.'
-        : null
+        : // Communities round 2: the verification level (Night watch → Safety)
+          (c.me.verification ?? null)
     return {
       id: chatNebula.conversationId,
       kind: 'group',
@@ -711,7 +717,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     summary && !summary.canMessage
       ? c.me.timedOutUntil
         ? "You're timed out for now, so you can read but not post."
-        : 'Only moderators can post here.'
+        : chatNebula?.readOnly && !can(c, 'manageNebulas') && !can(c, 'deleteMessages')
+          ? 'Only moderators can post here.'
+          : (c.me.verification ?? 'Only moderators can post here.')
       : null
 
   const voiceCards = c.nebulas
@@ -1080,6 +1088,19 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             >
               Constellation settings
             </button>
+            {c.watch && (
+              <button
+                type="button"
+                role="menuitem"
+                className="cx-menu-item"
+                onClick={() => {
+                  setHeadMenu(false)
+                  props.onSettings('watch')
+                }}
+              >
+                Night watch{c.watch.open > 0 ? ` · ${c.watch.open}` : ''}
+              </button>
+            )}
             {c.pendingRequests > 0 && (
               <button
                 type="button"
@@ -2034,6 +2055,12 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             Back to {chatNebula.name}
           </button>
         )}
+        <RaidBanner c={c} onOpen={() => props.onSettings('watch')} />
+        {c.me.raidHold && (
+          <p className="nw-composer-note" role="status">
+            You joined during a busy moment, so your messages wait for a moderator before they show.
+          </p>
+        )}
         <ChatView key={summary.id} {...chatProps!} />
         {newSince.info?.nebulaId === chatNebula.id && !voiceChatOpen && (
           <NewSincePill
@@ -2228,6 +2255,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             busy={busy}
             onConfirm={() => void confirmAction()}
             onCancel={() => setConfirm(null)}
+          />
+        ) : confirm.kind === 'ban' ? (
+          <BanDialog
+            c={c}
+            person={confirm.member!.user}
+            onClose={() => setConfirm(null)}
+            onDone={(d) => {
+              setConfirm(null)
+              props.onChanged(d)
+            }}
+            onProblem={props.onProblem}
           />
         ) : (
           <div

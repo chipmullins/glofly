@@ -3,7 +3,7 @@ import express, { Router, type NextFunction, type Request, type Response } from 
 import { rateLimit } from "../rateLimit";
 import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import { FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
+import { BAN_DELETE_WINDOWS, FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
   ALL_PERMISSIONS,
   ONBOARDING_ANSWERS_MAX,
   ONBOARDING_QUESTIONS_MAX,
@@ -78,6 +78,9 @@ import { nebulaOfChat, rememberNebulaChat } from "./chats";
 import { can, OWNER_RANK, outranks, ranksOf, standingOf, type Standing , frozen, FROZEN_MESSAGE } from "./perms";
 import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstellations } from "./members";
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
+import { afterJoinSafety } from "./raid";
+import { closeReportsOnBan, deleteRecentMessages } from "./nightwatch";
+import { joinsPaused, JOINS_PAUSED_MESSAGE } from "./safety";
 import { cardsFor, detailFor, entriesFor, publicUsers, welcomeOf } from "./views";
 import { bannerKey, memberCard } from "./community";
 import { bannerPhoto } from "../profile/photo";
@@ -727,6 +730,11 @@ async function joinNow(res: Response, constellationId: string, userId: string, a
     bad(res, "You can't join this constellation.", 403);
     return;
   }
+  // Communities round 2: raid protection (or a moderator) paused joins.
+  if (await joinsPaused(constellationId)) {
+    res.status(403).json({ error: "joins_paused", message: JOINS_PAUSED_MESSAGE });
+    return;
+  }
   if (await deletionPending(userId)) {
     bad(res, "Your account is set to be deleted.", 403);
     return;
@@ -741,6 +749,7 @@ async function joinNow(res: Response, constellationId: string, userId: string, a
     if (added) {
       await afterJoin(constellationId, userId);
       await logModeration(constellationId, userId, "joined", userId);
+      await afterJoinSafety(constellationId, userId).catch((err) => console.error("Raid check failed", err));
     }
     res.json({ constellation: await detailFor(constellationId, userId) });
   } catch (err) {
@@ -2312,14 +2321,23 @@ constellationsRouter.post("/:id/members/:uid/ban", changeLimiter, async (req, re
     return;
   }
   const reason = reasonField.parse(req.body?.reason ?? null);
+  // Communities round 2 (board 1c): appeals ("now" for older apps, like before) and deleting their
+  // recent messages.
+  const appeals = z.enum(["now", "later", "never"]).catch("now").parse(req.body?.appeals);
+  const window = BAN_DELETE_WINDOWS.find((w) => w.id === req.body?.deleteWindow) ?? BAN_DELETE_WINDOWS[0];
   await db
     .insert(constellationBans)
-    .values({ constellationId: s.constellationId, userId: t.userId, bannedBy: s.userId, reason })
+    .values({ constellationId: s.constellationId, userId: t.userId, bannedBy: s.userId, reason, appeals })
     .onConflictDoNothing();
   await db.delete(constellationInvites).where(and(eq(constellationInvites.constellationId, s.constellationId), eq(constellationInvites.inviteeId, t.userId)));
   await removeMember(s.constellationId, t.userId);
-  emitToUser(t.userId, "constellation:removed", { constellationId: s.constellationId, reason: "banned" }, true);
-  await logModeration(s.constellationId, s.userId, "banned", t.userId, { reason });
+  emitToUser(t.userId, "constellation:removed", { constellationId: s.constellationId, reason: "banned", banReason: reason }, true);
+  await logModeration(s.constellationId, s.userId, "banned", t.userId, { reason, appeals, ...(window.ms ? { deleted: window.id } : {}) });
+  await closeReportsOnBan(s.constellationId, t.userId, s.userId);
+  if (window.ms) {
+    const n = await deleteRecentMessages(s.constellationId, t.userId, window.ms);
+    if (n) await logModeration(s.constellationId, s.userId, "messages_deleted", t.userId, { count: n, window: window.id });
+  }
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
 

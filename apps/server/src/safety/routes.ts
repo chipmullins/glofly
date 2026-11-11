@@ -1,3 +1,4 @@
+import { fileNebulaReport } from "../constellations/nightwatch";
 import { Router, type Response } from "express";
 import { rateLimit } from "../rateLimit";
 import { and, desc, eq, gt, inArray, isNull, lt, ne, or } from "drizzle-orm";
@@ -190,6 +191,13 @@ reportsRouter.post("/", reportLimiter, async (req, res) => {
       people: await peopleOf([myId, ...context.map((c) => c.senderId)]),
       chat: chat ? await reportChat(chat, row.conversationId) : null,
     };
+    // Communities round 2: a nebula message also goes to that constellation's moderators
+    // (Night watch → Reports), from every app version.
+    if (snapshot.chat?.kind === "nebula" && snapshot.chat.constellation) {
+      await fileNebulaReport(snapshot.chat.constellation.id, row.conversationId, { id: row.id, senderId: row.senderId, body: row.body }, myId, reason).catch((err) =>
+        console.error("Night watch report failed", err),
+      );
+    }
     const duplicate = await db
       .select({ id: reports.id })
       .from(reports)

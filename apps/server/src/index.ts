@@ -23,6 +23,7 @@ import { stickersRouter } from "./stickers/routes";
 import { broadcastsRouter, sweepBroadcasts } from "./broadcasts/routes";
 import { callsRouter } from "./calls/routes";
 import { constellationsRouter } from "./constellations/routes";
+import { nightWatchRouter, purgeOldModeration } from "./constellations/nightwatch";
 import { invitePageRouter, sweepConstellationBirthdays } from "./constellations/community";
 // 0.8.0 community tools: search, events with RSVP, AutoMod lite, the Inbox.
 import { communityToolsRouter } from "./constellations/communityTools";
@@ -180,6 +181,8 @@ app.use("/constellations", threadsRouter);
 app.use("/constellations", communityToolsRouter);
 // 0.9.3: Constellation settings → Live alerts (Twitch, Kick, YouTube).
 app.use("/constellations", liveAlertsRouter);
+// Communities round 2: Night watch (before the main router so /constellations/bans/mine isn't taken).
+app.use("/constellations", nightWatchRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
 // Communities round: the bot API (/api/v1, "Authorization: Bot gfk_…"), for game servers and bots.
@@ -331,6 +334,8 @@ connectRedis()
     every(60 * 60 * 1000, "Sign in with Glofly cleanup", sweepOAuth);
     every(60_000, "Giveaways", sweepGiveaways);
     every(10 * 60_000, "Unfinished forum posts", sweepUnfinishedPosts);
+    // Communities round 2: the mod log, finished reports and appeals keep 180 days.
+    every(60 * 60_000, "Mod log cleanup", purgeOldModeration);
     // 0.9.3 Connections: Steam games (each account every 6 hours), what's playing on Steam, and
     // live notices Twitch or Kick stopped sending.
     every(5 * 60_000, "Steam games", sweepSteamSync);

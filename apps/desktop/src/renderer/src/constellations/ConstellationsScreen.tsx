@@ -212,7 +212,12 @@ function Space(props: Props): React.JSX.Element {
     const stop = window.glofly.onEvent((event) => {
       const here = placeRef.current?.constellationId
       if (event.type === 'constellation:updated' && event.constellationId === here) load(here)
-      else if (event.type === 'constellation:activity' && event.constellationId === here)
+      else if (
+        (event.type === 'constellation:activity' ||
+          event.type === 'nightwatch:changed' ||
+          event.type === 'constellation:raid') &&
+        event.constellationId === here
+      )
         later(here)
       else if (event.type === 'constellation:voice' && event.constellationId === here) {
         setDetail((d) => {
@@ -225,7 +230,10 @@ function Space(props: Props): React.JSX.Element {
           setPlace(null)
           setDetail(null)
           setDialog(null)
-          say(REMOVED_TEXT[event.reason] ?? 'That constellation is gone.')
+          say(
+            (REMOVED_TEXT[event.reason] ?? 'That constellation is gone.') +
+              (event.reason === 'banned' && event.banReason ? ` Reason: “${event.banReason}”` : '')
+          )
         }
       } else if (event.type === 'connection' && event.connected && here) load(here)
     })

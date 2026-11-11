@@ -602,7 +602,13 @@ export type ServerEvent =
   /** Who's in one of its voice nebulas changed */
   | { type: 'constellation:voice'; constellationId: string; voice: import('./constellations').VoiceNebulaState }
   /** It's gone for me (deleted, I was kicked or banned, or it was taken down) */
-  | { type: 'constellation:removed'; constellationId: string; reason: 'kicked' | 'banned' | 'taken_down' | 'deleted' }
+  | { type: 'constellation:removed'; constellationId: string; reason: 'kicked' | 'banned' | 'taken_down' | 'deleted'; banReason?: string | null }
+  /** Communities round 2: Night watch changed (moderators: refresh the dashboard and badge) */
+  | { type: 'nightwatch:changed'; constellationId: string }
+  /** Communities round 2: raid protection paused joins (moderators) */
+  | { type: 'constellation:raid'; constellationId: string; pausedUntil: string; joins: number; newAccounts: number; seconds: number }
+  /** Communities round 2: moderators decided about my ban appeal */
+  | { type: 'constellation:appeal'; constellationId: string; decision: 'accept' | 'deny' }
   /** 0.7.1: someone invited you to a constellation (a pop-up with Join / Not now) */
   | { type: 'constellation:invited'; invite: import('./constellations').InvitePopup }
   /** My games changed (on another device) */

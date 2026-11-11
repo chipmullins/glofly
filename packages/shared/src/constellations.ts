@@ -673,7 +673,13 @@ export type ConstellationDetail = {
     onboarding?: MyOnboarding
     /** 0.9.3: pinned to my desktop sidebar */
     sidebarPinned?: boolean
+    /** Communities round 2: why I can't chat yet (the verification level), null = I can */
+    verification?: string | null
+    /** Communities round 2: I joined during a raid; my messages wait for a moderator */
+    raidHold?: boolean
   }
+  /** Communities round 2: Night watch for moderators (null for everyone else) */
+  watch?: { open: number; pausedUntil: string | null } | null
   /** Communities round 4.3: the questions (null/missing = none) */
   onboarding?: OnboardingSettings | null
   /** Communities round 4.3: optional nebulas I don't see yet (Browse nebulas) */
@@ -943,6 +949,10 @@ export const CONSTELLATION_EVENT_NAMES = [
   // 0.9.3 Connections: Steam/Twitch/Kick linked or changed; a friend live on Twitch or Kick
   'connections:changed',
   'friend:live',
+  // Communities round 2: Night watch
+  'nightwatch:changed',
+  'constellation:raid',
+  'constellation:appeal',
 ] as const
 
 /** A thread summary from the server, checked (null if it doesn't look right). */
@@ -1013,8 +1023,30 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
     case 'constellation:removed': {
       if (!str(p.constellationId)) return null
       const reason = p.reason === 'kicked' || p.reason === 'banned' || p.reason === 'taken_down' ? p.reason : 'deleted'
-      return { type: 'constellation:removed', constellationId: p.constellationId, reason }
+      return {
+        type: 'constellation:removed',
+        constellationId: p.constellationId,
+        reason,
+        ...(reason === 'banned' && typeof p.banReason === 'string' ? { banReason: text(p.banReason, 200) } : {}),
+      }
     }
+    case 'nightwatch:changed':
+      return str(p.constellationId) ? { type: 'nightwatch:changed', constellationId: p.constellationId } : null
+    case 'constellation:raid':
+      return str(p.constellationId) && typeof p.pausedUntil === 'string'
+        ? {
+            type: 'constellation:raid',
+            constellationId: p.constellationId,
+            pausedUntil: text(p.pausedUntil, 40),
+            joins: typeof p.joins === 'number' ? p.joins : 0,
+            newAccounts: typeof p.newAccounts === 'number' ? p.newAccounts : 0,
+            seconds: typeof p.seconds === 'number' ? p.seconds : 60,
+          }
+        : null
+    case 'constellation:appeal':
+      return str(p.constellationId) && (p.decision === 'accept' || p.decision === 'deny')
+        ? { type: 'constellation:appeal', constellationId: p.constellationId, decision: p.decision }
+        : null
     case 'constellation:activity':
       return str(p.constellationId) && str(p.nebulaId) && str(p.conversationId) && str(p.senderId)
         ? {
