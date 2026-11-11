@@ -79,7 +79,7 @@ export function Hub({
     if (h) setHub(h)
   }, [t.campaign.id])
   useEffect(() => {
-    void reload()
+    void loadHub(t.campaign.id).then((h) => h && setHub(h))
     const off = window.glofly.onEvent((e) => {
       if (
         e.type === 'campfire' &&
@@ -92,6 +92,8 @@ export function Hub({
   }, [reload, t.campaign.id])
   const rules = campaignRules(t.campaign.settings)
   const data = useBuilder(rules)
+  // "Now" for the session list: when the hub opened (it's reopened often enough).
+  const [now] = useState(Date.now)
 
   if (!hub)
     return (
@@ -101,13 +103,10 @@ export function Hub({
     )
 
   const next = hub.sessions
-    .filter(
-      (s) => !s.before && s.startsAt && new Date(s.startsAt).getTime() > Date.now() - 4 * 3600_000
-    )
+    .filter((s) => !s.before && s.startsAt && new Date(s.startsAt).getTime() > now - 4 * 3600_000)
     .sort((a, b) => new Date(a.startsAt!).getTime() - new Date(b.startsAt!).getTime())[0]
   const played = hub.sessions.filter(
-    (s) =>
-      !s.before && (s.recapPostedAt || (s.startsAt && new Date(s.startsAt).getTime() < Date.now()))
+    (s) => !s.before && (s.recapPostedAt || (s.startsAt && new Date(s.startsAt).getTime() < now))
   )
   const last = played.sort((a, b) => b.number - a.number)[0] ?? hub.sessions.find((s) => s.before)
   const mine = t.characters.find(
@@ -118,9 +117,8 @@ export function Hub({
     !!mine && !!data && !!levelUpPreview(data, mine.sheet) && myLevel < hub.progress.level
   const sessionsPlayed =
     hub.progress.sessionsBefore +
-    hub.sessions.filter(
-      (s) => !s.before && s.startsAt && new Date(s.startsAt).getTime() < Date.now()
-    ).length
+    hub.sessions.filter((s) => !s.before && s.startsAt && new Date(s.startsAt).getTime() < now)
+      .length
   const banner = hub.bannerFileId
     ? {
         backgroundImage: `linear-gradient(180deg, rgba(20,15,13,0) 30%, var(--cf-bg) 100%), url("${fileUrl(hub.bannerFileId)}")`
@@ -528,7 +526,11 @@ function RecapBody({
 }: Common & { s: CampfireSession }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(s.recap)
-  useEffect(() => setText(s.recap), [s.recap])
+  const [seen, setSeen] = useState(s.recap)
+  if (seen !== s.recap) {
+    setSeen(s.recap)
+    setText(s.recap)
+  }
   const save = async (post: boolean): Promise<void> => {
     const r = await cf.patch(`/campfire/sessions/${s.id}`, {
       recap: text,
@@ -905,7 +907,11 @@ function LootTab({
 }: Common & { hub: CampaignHub; campaignId: string }): React.JSX.Element {
   const [loot, setLoot] = useState<PartyLoot>(hub.loot)
   const [item, setItem] = useState('')
-  useEffect(() => setLoot(hub.loot), [hub.loot])
+  const [seen, setSeen] = useState(hub.loot)
+  if (seen !== hub.loot) {
+    setSeen(hub.loot)
+    setLoot(hub.loot)
+  }
   const save = async (next: PartyLoot): Promise<void> => {
     setLoot(next)
     const r = await cf.put(`/campfire/campaigns/${campaignId}/loot`, { loot: next })
@@ -1050,7 +1056,11 @@ function JournalTab({
     gmNotes: string
     pictureFileId: string | null
   }>({ kind: 'npc', name: '', text: '', hidden: false, gmNotes: '', pictureFileId: null })
-  useEffect(() => {
+  // The draft follows the picked entry (and its saved copy after a reload).
+  const [shown, setShown] = useState<JournalEntry | string | null | undefined>(undefined)
+  const showing = cur ?? sel
+  if (shown !== showing) {
+    setShown(showing)
     if (cur)
       setDraft({
         kind: cur.kind,
@@ -1062,7 +1072,7 @@ function JournalTab({
       })
     else if (sel === 'new')
       setDraft({ kind: 'npc', name: '', text: '', hidden: false, gmNotes: '', pictureFileId: null })
-  }, [cur, sel])
+  }
   const save = async (): Promise<void> => {
     const r =
       sel === 'new'

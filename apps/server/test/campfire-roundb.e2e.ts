@@ -234,3 +234,51 @@ test("whispers and the sound board", { skip }, async () => {
   assert.equal((await call(`/campfire/sounds/${snd.json.id}`, { method: "DELETE", token: p1.token })).status, 403);
   assert.equal((await call(`/campfire/sounds/${snd.json.id}`, { method: "DELETE", token: gm.token })).status, 200);
 });
+
+test("security review fixes: paths, GM moves, conditions, pause on actions, undo locks", { skip }, async () => {
+  await call(`/campfire/tokens/${tok1}`, { method: "PATCH", token: gm.token, body: { ...at(1, 1), conditions: [], locked: false } });
+  await combatOp(gm, { op: "start", tokenIds: [tok1] });
+  // A path far off the map is refused at once (no cell-by-cell walk).
+  const zig: [number, number][] = Array.from({ length: 50 }, (_, i) => (i % 2 ? [100_000, 100_000] : [-100_000, -100_000]));
+  const t0 = Date.now();
+  const off = await move(p1, tok1, at(2, 1), zig);
+  assert.equal(off.status, 403);
+  assert.ok(Date.now() - t0 < 1500, "answered quickly");
+  // A long zig-zag inside the map stops counting past the step limit (too far, not slow).
+  const inside: [number, number][] = Array.from({ length: 50 }, (_, i) => (i % 2 ? [1300, 900] : [50, 50]));
+  const t1 = Date.now();
+  assert.equal((await move(p1, tok1, at(2, 1), inside)).status, 403);
+  assert.ok(Date.now() - t1 < 1500, "answered quickly");
+  // The GM shoving Lyra isn't charged to her turn, and she can't undo it.
+  assert.equal((await move(gm, tok1, at(4, 1))).status, 200);
+  let c = (await call(`/campfire/campaigns/${cid}`, { token: gm.token })).json.combat;
+  assert.equal(c.entries[0].moved ?? 0, 0);
+  assert.equal((await combatOp(p1, { op: "undoMove" })).status, 409, "nothing of hers to undo");
+  // Her move counts from where the GM put her: 1 square = 5 ft.
+  assert.equal((await move(p1, tok1, at(5, 1))).status, 200);
+  c = (await call(`/campfire/campaigns/${cid}`, { token: gm.token })).json.combat;
+  assert.equal(c.entries[0].moved, 5);
+  // Locked: no undo for the player.
+  await call(`/campfire/tokens/${tok1}`, { method: "PATCH", token: gm.token, body: { locked: true } });
+  assert.equal((await combatOp(p1, { op: "undoMove" })).status, 403);
+  await call(`/campfire/tokens/${tok1}`, { method: "PATCH", token: gm.token, body: { locked: false } });
+  // Players can't take off a condition that stops movement.
+  await call(`/campfire/tokens/${tok1}`, { method: "PATCH", token: gm.token, body: { conditions: ["restrained", "prone"] } });
+  assert.equal((await call(`/campfire/tokens/${tok1}`, { method: "PATCH", token: p1.token, body: { conditions: ["prone"] } })).status, 403);
+  assert.equal((await call(`/campfire/tokens/${tok1}`, { method: "PATCH", token: p1.token, body: { conditions: ["restrained"] } })).status, 200, "prone is theirs to drop");
+  await call(`/campfire/tokens/${tok1}`, { method: "PATCH", token: gm.token, body: { conditions: [] } });
+  // Paused: damage, healing, rests and token changes wait too.
+  await call(`/campfire/campaigns/${cid}/pause`, { method: "POST", token: gm.token, body: { on: true, message: "  " } });
+  assert.equal((await call(`/campfire/tokens/${tok1}/damage`, { method: "POST", token: p1.token, body: { amount: 1 } })).status, 423);
+  assert.equal((await call(`/campfire/tokens/${tok1}/heal`, { method: "POST", token: p1.token, body: { amount: 1 } })).status, 423);
+  assert.equal((await call(`/campfire/characters/${pc1}/rest`, { method: "POST", token: p1.token, body: { kind: "short" } })).status, 423);
+  assert.equal((await call(`/campfire/tokens/${tok1}`, { method: "PATCH", token: p1.token, body: { conditions: ["prone"] } })).status, 423);
+  await call(`/campfire/campaigns/${cid}/pause`, { method: "POST", token: gm.token, body: { on: false } });
+  // A locked sheet keeps its speed.
+  const sheet = (await call(`/campfire/characters/${pc1}`, { token: gm.token })).json.sheet;
+  await call(`/campfire/characters/${pc1}`, { method: "PATCH", token: gm.token, body: { sheet: { ...sheet, locked: true } } });
+  await call(`/campfire/characters/${pc1}`, { method: "PATCH", token: p1.token, body: { sheet: { ...sheet, locked: true, speed: 500 } } });
+  assert.equal((await call(`/campfire/characters/${pc1}`, { token: p1.token })).json.sheet.speed, sheet.speed);
+  await call(`/campfire/characters/${pc1}`, { method: "PATCH", token: gm.token, body: { sheet: { ...sheet, locked: false } } });
+  await combatOp(gm, { op: "end" });
+});

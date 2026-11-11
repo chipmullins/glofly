@@ -45,6 +45,7 @@ export function StatBlock({
   const [srd, setSrd] = useState<SrdMonster | null>(null)
   const [srdHp, setSrdHp] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
+  const rules = rulesOf(t.campaign.settings)
   const ch =
     'characterId' in what
       ? ((t.characters.find((c) => c.id === what.characterId && isFullCharacter(c)) as
@@ -54,17 +55,15 @@ export function StatBlock({
   useEffect(() => {
     if (!('slug' in what)) return
     let live = true
-    void cf
-      .get<SrdMonster>(`/campfire/srd/monsters/${what.slug}?rules=${rulesOf(t.campaign.settings)}`)
-      .then((r) => {
-        if (!live) return
-        if (r.ok) setSrd(r.data)
-        else say(r.message)
-      })
+    void cf.get<SrdMonster>(`/campfire/srd/monsters/${what.slug}?rules=${rules}`).then((r) => {
+      if (!live) return
+      if (r.ok) setSrd(r.data)
+      else say(r.message)
+    })
     return () => {
       live = false
     }
-  }, [what, say])
+  }, [what, say, rules])
 
   const sheet: Sheet5e | null = ch ? ch.sheet : srd ? srd.sheet : null
   const name = ch?.name ?? srd?.name ?? ''

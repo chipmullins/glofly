@@ -91,8 +91,12 @@ export function HomebrewLibrary(): React.JSX.Element {
   const [sel, setSel] = useState<string | 'new' | null>(null)
   const reload = useCallback(async () => setAll(await loadHomebrew(t.campaign.id)), [t.campaign.id])
   useEffect(() => {
-    void reload()
-  }, [reload])
+    let live = true
+    void loadHomebrew(t.campaign.id).then((list) => live && setAll(list))
+    return () => {
+      live = false
+    }
+  }, [t.campaign.id])
   const list = all.filter((h) => h.kind === kind)
   const cur = sel && sel !== 'new' ? (all.find((h) => h.id === sel) ?? null) : null
 

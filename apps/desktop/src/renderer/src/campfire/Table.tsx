@@ -23,21 +23,18 @@ import { ApprovalBox, DyingCard, RollCardOverlay, TokenCard } from './Overlays'
 import Builder from './Builder'
 import { Hub } from './Hub'
 import { SetupWizard } from './SetupWizard'
-import { HowCampfireWorks, Tour, tourSeen } from './Tour'
+import { HowCampfireWorks, Tour } from './Tour'
+import { tourSeen } from './tourState'
 import { PracticeTable } from './Practice'
+import { GmScreenPanel, GroupBar, MovementBar, SoundsPanel, TableBanners } from './TableB'
 import {
-  GmScreenPanel,
-  GroupBar,
-  MovementBar,
-  SoundsPanel,
-  TableBanners,
   speakingGlowOn,
   useMovement,
   reachFor,
   useSoundPlayer,
   useSpeakingTokens,
   useWhisperKey
-} from './TableB'
+} from './tableHooks'
 import { FlameIcon, Icon } from './icons'
 
 // The table (Main board for game masters, Player board for players): header with who's at the

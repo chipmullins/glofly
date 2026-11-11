@@ -418,10 +418,13 @@ function MapView(p: Props): React.JSX.Element {
   const brush: FogBrush = p.fogBrush ?? 'box'
   const fogOn = p.tool === 'fog' && isGm
   // Leaving the fog tool (or switching brush) drops a half-drawn shape.
-  useEffect(() => {
+  const toolKey = `${p.tool}|${brush}`
+  const [lastTool, setLastTool] = useState(toolKey)
+  if (lastTool !== toolKey) {
+    setLastTool(toolKey)
     setCorners(null)
     setLasso(null)
-  }, [p.tool, brush])
+  }
   const finishCorners = useCallback(
     (pts: Point[] | null, flip: boolean): void => {
       setCorners(null)

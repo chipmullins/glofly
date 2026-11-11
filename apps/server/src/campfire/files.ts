@@ -145,7 +145,7 @@ async function processAudio(data: Buffer) {
     if (!cleaned) throw refuse();
     const clean = await readFile(out);
     if (!clean.length) throw refuse();
-    return { data: clean, mime: kind.mime, ext: kind.ext, width: null, height: null, durationSec: Number.isFinite(duration) && duration > 0 ? Math.round(duration) : null };
+    return { data: clean, mime: kind.mime, ext: kind.ext, width: null, height: null, durationSec: Number.isFinite(duration) && duration > 0 ? Math.max(1, Math.round(duration)) : null };
   } finally {
     running--;
     if (dir) await rm(dir, { recursive: true, force: true }).catch(() => undefined);

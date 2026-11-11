@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ABILITIES,
   ABILITY_NAMES,
@@ -49,18 +49,16 @@ export function LevelUp({
   const avg = preview ? averageHitDie(preview.cls.hitDie) : 0
   const asiTotal =
     asi.kind === 'asi' ? Object.values(asi.plus).reduce((n, v) => n + (v ?? 0), 0) : 2
-  const next = useMemo(
-    () =>
-      data && preview
-        ? levelUpSheet(data, ch.sheet, {
-            rolled: hp === 'average' ? null : hp,
-            asi: preview.level.asi ? asi : undefined,
-            subclassId: subclass,
-            spells
-          })
-        : null,
-    [data, preview, ch.sheet, hp, asi, subclass, spells]
-  )
+  // Cheap to work out; the React compiler memoizes it.
+  const next =
+    data && preview
+      ? levelUpSheet(data, ch.sheet, {
+          rolled: hp === 'average' ? null : hp,
+          asi: preview.level.asi ? asi : undefined,
+          subclassId: subclass,
+          spells
+        })
+      : null
 
   const rollHp = async (): Promise<void> => {
     if (!preview) return

@@ -95,7 +95,7 @@ export function fogOf(row: Pick<SceneRow, "fog">): FogState {
 }
 // Keyed by what it's worked out from, so every event about one change shares it.
 const playerBuilt = new Map<string, BuiltMap>();
-function builtForPlayers(row: SceneRow, fog: FogState, grid: { size: number }): BuiltMap {
+export function builtForPlayers(row: SceneRow, fog: FogState, grid: { size: number }): BuiltMap {
   const key = createHash("sha256").update(JSON.stringify([row.id, row.fog, row.built, row.grid])).digest("base64url");
   let built = playerBuilt.get(key);
   if (!built) {

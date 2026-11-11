@@ -1880,7 +1880,7 @@ function SpellPicker({
       if (r.ok) setList(r.data.spells.slice(0, 60))
     }, 180)
     return () => window.clearTimeout(timer)
-  }, [q, level, onlyClass, cls])
+  }, [q, level, onlyClass, cls, spellRules])
   const have = new Set(sheet.spellcasting.spells.map((s) => s.slug).filter(Boolean))
   return (
     <div

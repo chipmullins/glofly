@@ -327,7 +327,7 @@ const amountInput = z.object({
 
 /** GMs, or players for tokens they control. */
 async function hpTokenTable(res: Parameters<typeof tableOr>[0], id: unknown) {
-  const found = await tokenTable(res, id, { write: true });
+  const found = await tokenTable(res, id, { write: true, play: true });
   if (!found) return null;
   if (!found.t.gm && !controls(found.token, found.t.userId, found.chars)) {
     bad(res, "That token isn't yours.", 403);
@@ -365,7 +365,7 @@ playRouter.post("/characters/:id/death-save", actLimiter, async (req, res) => {
   const id = idParam.safeParse(req.params.id);
   const [ch] = id.success ? await db.select().from(campfireCharacters).where(eq(campfireCharacters.id, id.data)) : [];
   if (!ch) return notFound(res);
-  const t = await tableOr(res, ch.campaignId, { write: true });
+  const t = await tableOr(res, ch.campaignId, { write: true, play: true });
   if (!t) return;
   if (!t.gm && ch.ownerId !== t.userId) return notFound(res);
   const sheet = normalizeSheet(ch.sheet);

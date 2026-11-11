@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Token } from '@glofly/shared/campfire/types'
 import { cf } from './api'
 import { useCf } from './ctx'
@@ -85,7 +85,11 @@ export function usePlaceHidden(): [boolean, (on: boolean) => void] {
   const { t, say } = useCf()
   const saved = t.campaign.settings.placeHidden ?? false
   const [mine, setMine] = useState<boolean | null>(null)
-  useEffect(() => setMine(null), [saved])
+  const [seen, setSeen] = useState(saved)
+  if (seen !== saved) {
+    setSeen(saved)
+    setMine(null)
+  }
   const set = (on: boolean): void => {
     setMine(on)
     void cf

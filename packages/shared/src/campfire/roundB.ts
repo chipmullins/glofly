@@ -21,7 +21,17 @@ export function speedFor(sheet: Pick<Sheet5e, 'speed'> | null, conditions: reado
 /** How far it may move this turn: its speed, twice with Dash. */
 export const moveBudget = (speed: number, dashed: boolean): number => speed * (dashed ? 2 : 1)
 
-const terrainAt = (p: Point, terrain: readonly BuiltTerrain[]): boolean => terrain.some((t) => pointInPolygon(p, t.points))
+type Area = { points: readonly Point[]; x0: number; y0: number; x1: number; y1: number }
+const areasOf = (terrain: readonly BuiltTerrain[]): Area[] =>
+  terrain.map((t) => {
+    const xs = t.points.map((p) => p[0])
+    const ys = t.points.map((p) => p[1])
+    return { points: t.points, x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }
+  })
+const terrainAt = (p: Point, areas: readonly Area[]): boolean => areas.some((a) => p[0] >= a.x0 && p[0] <= a.x1 && p[1] >= a.y0 && p[1] <= a.y1 && pointInPolygon(p, a.points))
+
+/** Most squares (or hexes) one path may cross before it's simply "too far" (keeps the check cheap). */
+export const MAX_PATH_STEPS = 600
 
 /**
  * Feet a path costs: square by square (5e: a diagonal square costs the same as a straight one,
@@ -32,6 +42,8 @@ export function pathCost(points: readonly Point[], g: GridSettings, terrain: rea
   if (points.length < 2) return 0
   let feet = 0
   let diagonals = 0
+  let walked = 0
+  const areas = areasOf(terrain)
   const per = g.feet > 0 ? g.feet : 5
   for (let s = 1; s < points.length; s++) {
     const a = points[s - 1]
@@ -40,9 +52,11 @@ export function pathCost(points: readonly Point[], g: GridSettings, terrain: rea
       const ha = hexAt(a[0], a[1], g)
       const hb = hexAt(b[0], b[1], g)
       const n = hexSteps(ha, hb)
+      walked += n
+      if (!Number.isFinite(n) || walked > MAX_PATH_STEPS) return Number.MAX_SAFE_INTEGER
       for (let k = 1; k <= n; k++) {
         const p: Point = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]
-        feet += per * (terrainAt(p, terrain) ? 2 : 1)
+        feet += per * (terrainAt(p, areas) ? 2 : 1)
       }
       continue
     }
@@ -52,8 +66,8 @@ export function pathCost(points: readonly Point[], g: GridSettings, terrain: rea
     const tx = cell(b[0], g.offsetX)
     const ty = cell(b[1], g.offsetY)
     // Guard: a huge jump is priced without walking every square.
-    const steps = Math.max(Math.abs(tx - cx), Math.abs(ty - cy))
-    if (steps > 2000) return Number.MAX_SAFE_INTEGER
+    walked += Math.max(Math.abs(tx - cx), Math.abs(ty - cy))
+    if (!Number.isFinite(walked) || walked > MAX_PATH_STEPS) return Number.MAX_SAFE_INTEGER
     while (cx !== tx || cy !== ty) {
       const sx = Math.sign(tx - cx)
       const sy = Math.sign(ty - cy)
@@ -66,7 +80,7 @@ export function pathCost(points: readonly Point[], g: GridSettings, terrain: rea
         diagonals++
         if (diagonals % 2 === 0) step = per * 2
       }
-      feet += step * (terrainAt(centre, terrain) ? 2 : 1)
+      feet += step * (terrainAt(centre, areas) ? 2 : 1)
     }
   }
   return feet

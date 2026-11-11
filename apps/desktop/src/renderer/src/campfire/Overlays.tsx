@@ -473,9 +473,7 @@ export function DyingCard(): React.JSX.Element | null {
   ) as Character | undefined
   const s = mine?.sheet
   const dying = !!s && s.hp.current <= 0 && !s.deathSaves.dead && !s.deathSaves.stable
-  useEffect(() => {
-    if (!dying) setLast(null)
-  }, [dying])
+  if (!dying && last !== null) setLast(null)
   if (!mine || !s || !dying) return null
   const roll = async (): Promise<void> => {
     setBusy(true)

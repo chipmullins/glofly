@@ -22,6 +22,7 @@ import {
   type FogShape,
   type TokenBar,
 } from "@glofly/shared";
+import { NO_MOVE_CONDITIONS } from "@glofly/shared";
 import { db } from "../db";
 import {
   campfireCampaigns,
@@ -43,6 +44,7 @@ import { monsterBySlug, isSrdSlug } from "./srd";
 import { removeStored } from "./files";
 import { syncSheetFromToken } from "./sync";
 import { moveCheck, noteMove, PAUSED, pausedFor } from "./roundB";
+import { cachedTable, forgetCachedTable } from "./tableCache";
 import { emitCombat } from "./state";
 
 // Campfire (phase 1): campaigns, members, the table being lit in a call, presence, pings, scenes,
@@ -289,6 +291,7 @@ coreRouter.put("/campaigns/:id/members/:userId", changeLimiter, async (req, res)
     .values({ campaignId: t.campaign.id, userId: userId.data, role: role.data })
     .onConflictDoUpdate({ target: [campfireMembers.campaignId, campfireMembers.userId], set: { role: role.data } });
   forgetAudience(t.campaign.id);
+  forgetCachedTable(t.campaign.id, userId.data);
   const members = await membersOf(t.campaign);
   await broadcast(t.campaign, "campfire:members", () => ({ members }));
   // Their view changes completely (GM layer, sheets): their apps load the table again.
@@ -598,7 +601,7 @@ coreRouter.post("/scenes/:id/tokens", changeLimiter, async (req, res) => {
 });
 
 /** A token, its scene and the table (players: only on the active scene and only if they see it). */
-export async function tokenTable(res: Parameters<typeof tableOr>[0], tokenId: unknown, opts: { write?: boolean; gm?: boolean } = {}) {
+export async function tokenTable(res: Parameters<typeof tableOr>[0], tokenId: unknown, opts: { write?: boolean; gm?: boolean; play?: boolean } = {}) {
   const id = idParam.safeParse(tokenId);
   const [token] = id.success ? await db.select().from(campfireTokens).where(eq(campfireTokens.id, id.data)) : [];
   const scene = token ? await sceneRow(token.sceneId) : null;
@@ -632,9 +635,12 @@ coreRouter.patch("/tokens/:id", async (req, res) => {
     if (!controls(token, t.userId, chars)) return bad(res, "That token isn't yours to move.", 403);
     const allowed = new Set(["x", "y", "bars", "conditions", "elevation"]);
     if (Object.keys(d).some((k) => !allowed.has(k))) return bad(res, "Only the game master can change that.", 403);
-    if (moving && pausedFor(t)) return bad(res, PAUSED, 423, "paused");
+    if (pausedFor(t)) return bad(res, PAUSED, 423, "paused");
     if (moving && (token.locked || settingsOf(t.campaign.settings).tokensLocked)) return bad(res, "The game master locked this token.", 403, "locked");
     if (moving && notMyTurn(t, token.id)) return bad(res, "Wait for your turn to move (the game master's table rule).", 403, "not_your_turn");
+    // Conditions that stop movement come off only by the game master (or their timer running out).
+    if (d.conditions && NO_MOVE_CONDITIONS.some((c) => token.conditions.includes(c) && !d.conditions!.includes(c)))
+      return bad(res, "The game master takes that condition off.", 403, "gm_condition");
     if (d.bars) {
       // Who sees each bar stays as the GM set it.
       d.bars = d.bars.map((b, i) => {
@@ -659,16 +665,20 @@ coreRouter.patch("/tokens/:id", async (req, res) => {
     const conditions = d.conditions ?? token.conditions;
     d.conditionTimers = normalizeTimers(d.conditionTimers ?? token.conditionTimers ?? {}, conditions);
   }
+  // The move is counted (under the campaign's lock) before the token moves. A game master moving a
+  // player's token isn't charging that player's turn.
+  if (check && check.cost > 0) {
+    const anchor = (t.campaign.combat?.entries[t.campaign.combat.turn] as { anchor?: { x: number; y: number } | null } | undefined)?.anchor ?? { x: token.x, y: token.y };
+    const charge = !t.gm || !playerControlled(token, chars);
+    const c = await noteMove(t.campaign.id, token.id, anchor, to, check.cost, { charge, budget: check.enforce ? check.budget : null });
+    if (c === "too_far") return bad(res, "That's more movement than you have left this turn.", 403, "too_far");
+    if (c) await emitCombat(c);
+  }
   const [row] = await db
     .update(campfireTokens)
     .set({ ...d, updatedAt: new Date() })
     .where(eq(campfireTokens.id, token.id))
     .returning();
-  if (check && check.cost > 0) {
-    const anchor = (t.campaign.combat?.entries[t.campaign.combat.turn] as { anchor?: { x: number; y: number } | null } | undefined)?.anchor ?? { x: token.x, y: token.y };
-    const c = await noteMove(t.campaign.id, token.id, anchor, to, check.cost);
-    if (c) await emitCombat(c);
-  }
   if (d.bars && row.characterId) await syncSheetFromToken(t, row, !t.gm);
   await emitToken(t.campaign, scene, token, row);
   res.json(tokenOut(row, t, chars, settingsOf(t.campaign.settings)));
@@ -683,6 +693,10 @@ coreRouter.delete("/tokens/:id", changeLimiter, async (req, res) => {
   res.json({ ok: true });
 });
 
+/** A token a player runs (their character's, or one handed to them). */
+const playerControlled = (token: TokenRow, chars: Awaited<ReturnType<typeof charactersInfo>>): boolean =>
+  token.controlledBy.length > 0 || (!!token.characterId && !!chars.get(token.characterId)?.ownerId);
+
 /**
  * Round A table rule "Players move only on their turn": during a fight, a player's token that's in
  * the turn order moves only when it's that token's turn (tokens not in the fight move freely).
@@ -696,16 +710,6 @@ function notMyTurn(t: Table, tokenId: string): boolean {
 }
 
 // Dragging: moves over the live connection (30 a second at most), checked like PATCH.
-const tableCache = new Map<string, { at: number; t: Table | null }>();
-async function cachedTable(campaignId: string, userId: string): Promise<Table | null> {
-  const key = `${campaignId}:${userId}`;
-  const hit = tableCache.get(key);
-  if (hit && Date.now() - hit.at < 5000) return hit.t;
-  const t = await tableFor(campaignId, userId);
-  if (tableCache.size > 10_000) tableCache.clear();
-  tableCache.set(key, { at: Date.now(), t });
-  return t;
-}
 
 const moveInput = z.object({ tokenId: z.uuid(), x: coord, y: coord });
 export async function socketMove(userId: string, payload: unknown): Promise<void> {

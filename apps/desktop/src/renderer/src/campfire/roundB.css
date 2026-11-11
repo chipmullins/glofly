@@ -16,7 +16,7 @@
 .cfb-move {
   position: absolute;
   left: 20px;
-  right: 76px;
+  max-width: calc(100% - 230px);
   bottom: 20px;
   z-index: 6;
   display: flex;
@@ -141,9 +141,9 @@
 }
 .cfb-banners {
   position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 100px;
+  left: 20px;
+  right: 20px;
   z-index: 7;
   display: flex;
   flex-direction: column;
@@ -304,4 +304,45 @@
 }
 .cfb-banner b {
   white-space: nowrap;
+}
+
+/* Entrances (the motion system's short rise; reduced motion: a plain fade). */
+.cfb-banner,
+.cfb-group,
+.cfb-move {
+  animation: cfb-rise 200ms ease-out;
+}
+.cfb-paused {
+  animation: cf-in 220ms ease-out;
+}
+@keyframes cfb-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cfb-banner,
+  .cfb-group,
+  .cfb-move,
+  .cfb-paused {
+    animation: cf-in 120ms ease-out;
+  }
+}
+
+/* High contrast: stronger edges and brighter secondary text on the Round B surfaces. */
+:root[data-contrast='high'] .cfb-move,
+:root[data-contrast='high'] .cfb-group,
+:root[data-contrast='high'] .cfb-banner,
+:root[data-contrast='high'] .cfb-card,
+:root[data-contrast='high'] .cfb-pad {
+  box-shadow: 0 0 0 2px var(--cf-line-strong);
+}
+:root[data-contrast='high'] .cfb-banner--violet span,
+:root[data-contrast='high'] .cfb-tip,
+:root[data-contrast='high'] .cfb-legend {
+  color: #ffffff;
+}
+:root[data-contrast='high'] .cfb-paused {
+  background: rgba(8, 6, 5, 0.94);
 }

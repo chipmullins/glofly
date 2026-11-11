@@ -134,7 +134,7 @@ contentRouter.post("/campaigns/:id/characters", changeLimiter, async (req, res) 
 });
 
 /** A character and its table; players only reach their own and other PCs. */
-async function characterTable(res: Parameters<typeof tableOr>[0], id: unknown, opts: { write?: boolean } = {}) {
+async function characterTable(res: Parameters<typeof tableOr>[0], id: unknown, opts: { write?: boolean; play?: boolean } = {}) {
   const cid = idParam.safeParse(id);
   const [row] = cid.success ? await db.select().from(campfireCharacters).where(eq(campfireCharacters.id, cid.data)) : [];
   if (!row) {
@@ -175,6 +175,7 @@ contentRouter.patch("/characters/:id", changeLimiter, async (req, res) => {
     sheet.locked = before.locked;
     if (before.locked) {
       sheet.ac = before.ac;
+      sheet.speed = before.speed;
       sheet.hp = { ...sheet.hp, max: before.hp.max, current: Math.min(sheet.hp.current, before.hp.max) };
     }
   }
@@ -207,7 +208,7 @@ contentRouter.delete("/characters/:id", changeLimiter, async (req, res) => {
 });
 
 contentRouter.post("/characters/:id/rest", changeLimiter, async (req, res) => {
-  const found = await characterTable(res, req.params.id, { write: true });
+  const found = await characterTable(res, req.params.id, { write: true, play: true });
   if (!found) return;
   if (!found.mine) return bad(res, "That character isn't yours.", 403);
   const kind = z.enum(["short", "long"]).safeParse(req.body?.kind);

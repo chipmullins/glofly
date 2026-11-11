@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react'
 import { creditFor } from '@glofly/shared/campfire/rulesData'
 import { useCf } from './ctx'
+import { markSeen } from './tourState'
 import { CfWindow } from './sheetBits'
 import { campaignRules } from './rulesApi'
 import './roundA.css'
@@ -81,22 +82,6 @@ const GM: Mark[] = [
     text: 'Plan sessions (players get reminders), write recaps, track quests and loot, and keep your homebrew. Settings are there too.'
   }
 ]
-
-const key = (gm: boolean): string => `campfire.tour.${gm ? 'gm' : 'player'}`
-export const tourSeen = (gm: boolean): boolean => {
-  try {
-    return localStorage.getItem(key(gm)) === 'done'
-  } catch {
-    return true
-  }
-}
-const markSeen = (gm: boolean): void => {
-  try {
-    localStorage.setItem(key(gm), 'done')
-  } catch {
-    /* private window: shows again next time */
-  }
-}
 
 export function Tour({
   onDone,

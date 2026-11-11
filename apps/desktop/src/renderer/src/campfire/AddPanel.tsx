@@ -14,16 +14,17 @@ export function AddPanel(): React.JSX.Element {
   const [q, setQ] = useState('')
   const [list, setList] = useState<SrdMonsterSummary[]>([])
   const [hidden, setHidden] = usePlaceHidden()
+  const rules = rulesOf(t.campaign.settings)
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
       const r = await cf.get<{ monsters: SrdMonsterSummary[] }>(
-        `/campfire/srd/monsters?q=${encodeURIComponent(q.trim())}&rules=${rulesOf(t.campaign.settings)}`
+        `/campfire/srd/monsters?q=${encodeURIComponent(q.trim())}&rules=${rules}`
       )
       if (r.ok) setList(r.data.monsters.slice(0, 40))
     }, 200)
     return () => window.clearTimeout(timer)
-  }, [q])
+  }, [q, rules])
 
   const place = usePlace()
   const placeHere = (body: Record<string, unknown>, cells = 1): Promise<Token | null> =>
