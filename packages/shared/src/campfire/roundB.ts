@@ -21,12 +21,12 @@ export function speedFor(sheet: Pick<Sheet5e, 'speed'> | null, conditions: reado
 /** How far it may move this turn: its speed, twice with Dash. */
 export const moveBudget = (speed: number, dashed: boolean): number => speed * (dashed ? 2 : 1)
 
-type Area = { points: readonly Point[]; x0: number; y0: number; x1: number; y1: number }
+type Area = { points: Point[]; x0: number; y0: number; x1: number; y1: number }
 const areasOf = (terrain: readonly BuiltTerrain[]): Area[] =>
   terrain.map((t) => {
     const xs = t.points.map((p) => p[0])
     const ys = t.points.map((p) => p[1])
-    return { points: t.points, x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }
+    return { points: t.points as Point[], x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }
   })
 const terrainAt = (p: Point, areas: readonly Area[]): boolean => areas.some((a) => p[0] >= a.x0 && p[0] <= a.x1 && p[1] >= a.y0 && p[1] <= a.y1 && pointInPolygon(p, a.points))
 

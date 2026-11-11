@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { SRD_CREDIT, type CampaignCharacterCard, type CampaignHomeKind, type CampaignSummary } from '@glofly/shared'
+import { SRD_CREDIT_ANY, type CampaignCharacterCard, type CampaignHomeKind, type CampaignSummary } from '@glofly/shared'
 import { ThemeOverride } from '@/ui/theme'
 import { Text, webNoOutline } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
@@ -219,7 +219,7 @@ function Home({ kind, home, callId, title }: { kind: CampaignHomeKind; home: str
           </View>
         ) : null}
         <Text size={12} style={{ color: fire.muted, lineHeight: 18 }}>
-          {kind === 'nebula' ? 'Game masters: people with "Run Campfire games" (or the Owner). ' : ''}Maps and the turn order are set up on a computer; on a phone you play, roll and keep your sheet. {SRD_CREDIT}
+          {kind === 'nebula' ? 'Game masters: people with "Run Campfire games" (or the Owner). ' : ''}Maps and the turn order are set up on a computer; on a phone you play, roll and keep your sheet. {SRD_CREDIT_ANY}
         </Text>
       </ScrollView>
     </View>

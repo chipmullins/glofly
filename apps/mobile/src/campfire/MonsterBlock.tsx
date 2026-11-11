@@ -22,13 +22,13 @@ import { Text } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
 import { rollAtTable } from './actions'
 import { useCampfire } from './store'
+import { creditFor, rulesOf } from '@glofly/shared'
 import { hpColor, initialOf, signed, useFire } from './lib'
 import { RollModeSwitch, modeLabel, withMode, type RollMode } from './sheetParts'
 
 // A monster's stat block for game masters on a phone (SheetNpc board): read-only, tap a number to
 // roll it. Rolls go to game masters only, so players never learn the numbers.
 
-const SRD_CREDIT = 'Includes material from the System Reference Document 5.1 by Wizards of the Coast LLC, licensed under CC BY 4.0.'
 
 export function MonsterBlockView({ campaignId, initial }: { campaignId: string; initial: Character }) {
   const fire = useFire()
@@ -144,7 +144,7 @@ export function MonsterBlockView({ campaignId, initial }: { campaignId: string; 
         </View>
         <Text size={12} style={{ color: fire.muted, lineHeight: 18 }}>
           Players see the name, a health state (Healthy, Bloodied, Defeated) and whether attacks hit, never these numbers. Rolls from here go to game masters only. Change HP and place monsters from the map on a computer.
-          {ch.srdMonster || m ? ` ${SRD_CREDIT}` : ''}
+          {ch.srdMonster || m ? ` ${creditFor(rulesOf(useCampfire.getState().tables[campaignId]?.campaign.settings))}` : ''}
         </Text>
       </ScrollView>
     </View>

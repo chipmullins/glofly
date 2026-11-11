@@ -16,6 +16,9 @@ export const creditFor = (rules: RulesSet): string =>
   rules === '2024'
     ? SRD_CREDIT_2024
     : 'Includes material from the System Reference Document 5.1 by Wizards of the Coast LLC, licensed under CC BY 4.0.'
+/** For places that cover campaigns of either rule set (campaign lists, the hub's start). */
+export const SRD_CREDIT_ANY =
+  'Includes material from the System Reference Documents 5.1 and 5.2 by Wizards of the Coast LLC, licensed under CC BY 4.0.'
 export const RULES_LABEL: Record<RulesSet, string> = { '2014': '5e, 2014 rules', '2024': '5e, 2024 rules' }
 
 export type RulesText = { name: string; text: string }

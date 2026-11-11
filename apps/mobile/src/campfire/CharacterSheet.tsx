@@ -48,6 +48,7 @@ import { APP_SETTINGS } from '@/lib/config'
 import { campfireApi, fileSource } from './api'
 import { rollAtTable } from './actions'
 import { upsertCharacter, useCampfire } from './store'
+import { creditFor } from '@glofly/shared'
 import { FireButton } from './ui'
 import { hpColor, initialOf, signed, useFire, useStill } from './lib'
 import { RollModeSwitch, SheetTabs, modeLabel, spellDice, useSrdSpells, withMode, type RollMode, type SheetExtras, type SpellExtras } from './sheetParts'
@@ -791,7 +792,7 @@ function Spells({ s, mode, roll, onEdit }: { s: Sheet5e; mode: RollMode; roll: (
         </View>
       ))}
       <Text size={11} style={{ color: fire.muted }}>
-        Spell details include material from the System Reference Document 5.1 by Wizards of the Coast LLC, licensed under CC BY 4.0.
+        {creditFor(s.rules ?? '2014')}
       </Text>
     </>
   )

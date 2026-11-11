@@ -1,6 +1,6 @@
-import { rulesOf } from '@glofly/shared/campfire/rulesData'
+import { creditFor, rulesOf } from '@glofly/shared/campfire/rulesData'
 import { useEffect, useState } from 'react'
-import { SRD_CREDIT, type SrdMonsterSummary, type Token } from '@glofly/shared/campfire/types'
+import { type SrdMonsterSummary, type Token } from '@glofly/shared/campfire/types'
 import { crLabel } from '@glofly/shared/campfire/rules5e'
 import { cf, IMAGE_ACCEPT, pickFile, uploadFile } from './api'
 import { useCf } from './ctx'
@@ -125,7 +125,7 @@ export function AddPanel(): React.JSX.Element {
           </li>
         ))}
       </ul>
-      <p className="cf-credit">{SRD_CREDIT}</p>
+      <p className="cf-credit">{creditFor(rules)}</p>
     </section>
   )
 }

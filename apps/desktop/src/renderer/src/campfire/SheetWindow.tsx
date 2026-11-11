@@ -36,7 +36,6 @@ import {
   totalLevel,
   withBonus
 } from '@glofly/shared/campfire/rules5e'
-import { SRD_CREDIT } from '@glofly/shared/campfire/types'
 import { tokenCenter } from '@glofly/shared/campfire/map'
 import { cf, IMAGE_ACCEPT, pickFile, pieceId, uploadFile } from './api'
 import { signed, useCf } from './ctx'
@@ -54,7 +53,7 @@ import {
 } from './sheetCore'
 import { CfWindow, Portrait, SvgIcon } from './sheetBits'
 import { InventoryTab } from './Inventory'
-import { rulesOf } from '@glofly/shared/campfire/rulesData'
+import { creditFor, rulesOf } from '@glofly/shared/campfire/rulesData'
 import { LevelUp } from './LevelUp'
 import './sheet.css'
 
@@ -1954,7 +1953,7 @@ function SpellPicker({
         ))}
         {list && list.length === 0 && <li className="cfs-hint">No spells match.</li>}
       </ul>
-      <p className="cfs-credit">{SRD_CREDIT}</p>
+      <p className="cfs-credit">{creditFor(spellRules)}</p>
     </div>
   )
 }

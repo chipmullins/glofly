@@ -1,10 +1,9 @@
-import { rulesOf } from '@glofly/shared/campfire/rulesData'
+import { creditFor, rulesOf } from '@glofly/shared/campfire/rulesData'
 import { useEffect, useState } from 'react'
 import {
   ABILITIES,
   ABILITY_NAMES,
   isFullCharacter,
-  SRD_CREDIT,
   type AttackResult,
   type Character,
   type Sheet5e,
@@ -433,7 +432,7 @@ export function StatBlock({
         <p className="cfn-foot">
           Players see the name, a health state (Healthy, Bloodied, Defeated) and whether attacks
           hit, never these numbers.
-          {slug ? ` ${SRD_CREDIT}` : ''}
+          {slug ? ` ${creditFor(rules)}` : ''}
         </p>
       </div>
     </CfWindow>

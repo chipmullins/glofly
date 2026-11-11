@@ -5,7 +5,7 @@ import type {
   CampaignCharacterCard,
   CampaignSummary
 } from '@glofly/shared/campfire/types'
-import { SRD_CREDIT } from '@glofly/shared/campfire/types'
+import { SRD_CREDIT_ANY } from '@glofly/shared/campfire/rulesData'
 import { dayLabel } from '../lib/time'
 import { cf, fileUrl, IMAGE_ACCEPT, pickFile, uploadFile } from './api'
 import { closeCampfire, dismissLit, openCampfire, useCampfireOpen, useLitTables } from './store'
@@ -198,7 +198,7 @@ function StartBoard({
           {home.kind === 'nebula'
             ? 'Game masters: people with the "Run Campfire games" permission (or the Owner). '
             : 'Anyone in the group can start a campaign and run it. '}
-          {SRD_CREDIT}
+          {SRD_CREDIT_ANY}
         </p>
       </section>
     </div>
