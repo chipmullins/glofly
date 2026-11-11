@@ -173,11 +173,55 @@ function MentionText({
 /** 0.9.3: a forwarded message sits in a card that says whose words they are and where from. */
 function ForwardWrap({
   forwarded,
+  crosspost,
   children
 }: {
   forwarded?: Message['forwarded']
+  /** Communities round 2 (board 3b): a copy of a followed announcement */
+  crosspost?: Message['crosspost']
   children: React.ReactNode
 }): React.JSX.Element {
+  if (crosspost) {
+    return (
+      <div className="message-forward message-crosspost">
+        <span className="message-forward-label">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 10v4h4l7 4V6L7 10z" />
+            <path d="M17 9a4 4 0 0 1 0 6" />
+          </svg>
+          <b>{crosspost.constellationName}</b>
+          <span className="message-crosspost-tag">#{crosspost.nebulaName}</span>
+        </span>
+        {children}
+        <span className="message-crosspost-foot">
+          Posted by {crosspost.authorName} ·{' '}
+          <button
+            type="button"
+            className="message-crosspost-open"
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent('glofly:cx-open', {
+                  detail: { constellationId: crosspost.constellationId, code: crosspost.inviteCode }
+                })
+              )
+            }
+          >
+            Open {crosspost.constellationName}
+          </button>
+        </span>
+      </div>
+    )
+  }
   if (!forwarded) return <>{children}</>
   const when = new Date(forwarded.at)
   const at = Number.isNaN(when.getTime())
@@ -533,7 +577,7 @@ export default function MessageItem({
               className={mine ? 'message-author message-author--mine' : 'message-author'}
               style={authorRole ? { color: authorRole.light } : undefined}
             >
-              {authorName}
+              {!m.deleted && m.crosspost ? m.crosspost.constellationName : authorName}
             </span>
             {authorRole && (
               <span
@@ -547,7 +591,10 @@ export default function MessageItem({
           </div>
         )}
 
-        <ForwardWrap forwarded={!m.deleted && !editing ? m.forwarded : undefined}>
+        <ForwardWrap
+          forwarded={!m.deleted && !editing ? m.forwarded : undefined}
+          crosspost={!m.deleted && !editing ? m.crosspost : undefined}
+        >
           {editing ? (
             <EditBox initial={m.body} onSave={onSaveEdit} onCancel={onCancelEdit} />
           ) : m.deleted ? (

@@ -201,6 +201,8 @@ export const api = {
       visibility?: NebulaVisibility
       roleIds?: string[]
       forum?: Partial<Omit<ForumSettings, 'tags'>> & { tags?: (Omit<ForumTag, 'id'> & { id?: string })[] }
+      // Communities round 2: stage nebulas
+      stageSpeakerLimit?: number
     }
   ) => call<Detail & { nebulaId: string }>('POST', `${base(id)}/nebulas`, values),
   updateNebula: (
@@ -217,6 +219,8 @@ export const api = {
       threadsStaffOnly: boolean
       threadCloseDays: number
       forum: Partial<Omit<ForumSettings, 'tags'>> & { tags?: (Omit<ForumTag, 'id'> & { id?: string })[] }
+      // Communities round 2: stage nebulas
+      stageSpeakerLimit: number
     }>
   ) => call<Detail>('PATCH', `${base(id)}/nebulas/${nebulaId}`, changes),
   removeNebula: (id: string, nebulaId: string) =>

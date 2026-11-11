@@ -49,6 +49,9 @@ import { hexA } from './colors'
 import { LockIcon, gateLabel } from './RoleVisibility'
 import { FireflyMark, GalaxyIcon } from './sky'
 import VoiceStage from './VoiceStage'
+import StageView, { MegaphoneIcon } from './StageView'
+import { FollowButton } from './Follow'
+import { stageLine, type StageState } from '@glofly/shared/stages'
 import { BannerArt } from './identity'
 import { accentStyle, hasAccent, needsWelcome } from './communityLib'
 import { MemberCardTop, MembersPanel } from './Members'
@@ -284,6 +287,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   }
 
   const people = useMemo(() => new Map(c.members.map((m) => [m.user.id, m.user])), [c.members])
+  // Communities round 2: live stages by nebula
+  const stageOf = (nebulaId: string): StageState | undefined =>
+    c.stages?.find((s) => s.nebulaId === nebulaId)
   // Communities round: this constellation's slash commands (reloaded whenever it changes).
   const [commands, setCommands] = useState<ConstellationCommand[]>([])
   useEffect(() => {
@@ -642,7 +648,10 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   }, [calls.current?.phase, calls.current?.call?.id, startWatchIn])
 
   // The chat of the open nebula, as the chat screen expects it.
-  const chatNebula = nebula && (nebula.kind !== 'voice' || voiceChatOpen) ? nebula : null
+  const chatNebula =
+    nebula && ((nebula.kind !== 'voice' && nebula.kind !== 'stage') || voiceChatOpen)
+      ? nebula
+      : null
   // Communities round: the open thread (text nebulas, on the right) and forum post (in the middle).
   const [openThread, setOpenThread] = useState<{
     thread: ThreadSummary
@@ -1280,7 +1289,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               {section.nebulas.map((n) => {
                 const current = nebula?.id === n.id
                 const unread =
-                  n.kind === 'text' &&
+                  (n.kind === 'text' || n.kind === 'announcement') &&
                   !current &&
                   n.unreadCount > 0 &&
                   (n.notify ?? c.me.notify) !== 'none'
@@ -1332,6 +1341,15 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                       {canArrange && <GripDots />}
                       {n.kind === 'text' ? (
                         <StarIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
+                      ) : n.kind === 'stage' || n.kind === 'announcement' ? (
+                        <span
+                          style={{
+                            color: current || stageOf(n.id) ? '#ffb347' : undefined,
+                            display: 'inline-flex'
+                          }}
+                        >
+                          <MegaphoneIcon size={16} />
+                        </span>
                       ) : n.kind === 'forum' ? (
                         <ForumIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
                       ) : (
@@ -1368,8 +1386,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                         </span>
                       ) : n.kind === 'voice' && inIt.length > 0 ? (
                         <InVoiceCount count={inIt.length} />
+                      ) : n.kind === 'stage' && stageOf(n.id) ? (
+                        <span className="cx-neb-live">LIVE</span>
+                      ) : n.kind === 'announcement' &&
+                        (n.followers ?? 0) > 0 &&
+                        can(c, 'manageNebulas') ? (
+                        <span className="cx-neb-follow">{n.followers} follow</span>
                       ) : null}
                     </button>
+                    {n.kind === 'stage' && stageOf(n.id) && (
+                      <div className="cx-neb-stage-line">{stageLine(stageOf(n.id)!)}</div>
+                    )}
                     <VoiceFaces
                       people={inIt}
                       state={v}
@@ -1970,8 +1997,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 />
               )
             },
+            icon:
+              chatNebula.kind === 'announcement' || chatNebula.kind === 'stage' ? (
+                <span style={{ color: '#f47a1f', display: 'inline-flex' }}>
+                  <MegaphoneIcon size={20} />
+                </span>
+              ) : undefined,
             headerExtra: (
               <>
+                {chatNebula.kind === 'announcement' && (
+                  <FollowButton c={c} nebula={chatNebula} onProblem={props.onProblem} />
+                )}
                 {chatNebula.kind === 'text' && (
                   <ThreadsButton
                     constellationId={c.id}
@@ -2017,6 +2053,18 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         onOpenChat={() => setVoiceChatOpen(true)}
       />
     )
+  } else if (nebula.kind === 'stage' && !voiceChatOpen) {
+    // Communities round 2 (board 3a): a stage nebula.
+    main = (
+      <StageView
+        c={c}
+        nebula={nebula}
+        me={me}
+        people={people}
+        onOpenChat={() => setVoiceChatOpen(true)}
+        onProblem={props.onProblem}
+      />
+    )
   } else if (nebula.kind === 'forum' && chatProps) {
     // Communities round: a forum's posts, or one post (boards 17–18).
     main = openPost ? (
@@ -2054,8 +2102,12 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             className="cx-back-to-voice"
             onClick={() => setVoiceChatOpen(false)}
           >
-            <SpeakerIcon size={16} color="currentColor" />
-            Back to {chatNebula.name}
+            {chatNebula.kind === 'stage' ? (
+              <MegaphoneIcon size={16} />
+            ) : (
+              <SpeakerIcon size={16} color="currentColor" />
+            )}
+            Back to {chatNebula.kind === 'stage' ? 'the stage' : chatNebula.name}
           </button>
         )}
         <RaidBanner c={c} onOpen={() => props.onSettings('watch')} />
@@ -2180,7 +2232,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         />
       ) : (
         nebula &&
-        (nebula.kind === 'text' || voiceChatOpen) &&
+        (nebula.kind === 'text' || nebula.kind === 'announcement' || voiceChatOpen) &&
         (openThread && chatProps && nebula.kind === 'text' ? (
           <ThreadPanel
             c={c}

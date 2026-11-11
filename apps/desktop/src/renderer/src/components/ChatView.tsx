@@ -149,6 +149,8 @@ export type ThreadMode = {
 export type NebulaMode = {
   /** Communities round 2: its constellation (inside-only custom emoji work here) */
   constellationId?: string
+  /** Communities round 2: the header's icon instead of the star (announcement and stage nebulas) */
+  icon?: React.ReactNode
   name: string
   topic: string | null
   /** Why you can't post here (timed out, read-only), or null when you can */
@@ -2021,9 +2023,11 @@ export default function ChatView({
       >
         {threadMode ? null : nebula ? (
           <header className="chat-header cx-nebula-header">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#f47a1f" aria-hidden="true">
-              <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" />
-            </svg>
+            {nebula.icon ?? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#f47a1f" aria-hidden="true">
+                <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" />
+              </svg>
+            )}
             <div className="cx-nebula-name">
               <EmojiText text={nebula.name} />
             </div>

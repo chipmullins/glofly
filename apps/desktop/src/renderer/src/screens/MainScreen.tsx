@@ -1483,12 +1483,19 @@ export default function MainScreen({
   // 0.7.5 Constellations polish: an invite card's Join / Open shows that constellation, the
   // member card's Call calls them, and Glofly in a browser opened from an invite page's "use it
   // in your browser" (?join=<code>) shows that invite.
-  const cxEventsRef = useRef<{ cxOpen: (id: string) => void; call: (id: string) => void } | null>(
-    null
-  )
+  const cxEventsRef = useRef<{
+    cxOpen: (id: string, code?: string | null) => void
+    call: (id: string) => void
+  } | null>(null)
   useEffect(() => {
     cxEventsRef.current = {
-      cxOpen: (id) => {
+      cxOpen: (id, code) => {
+        // Communities round 2: "Open Night Raiders" on a followed announcement. Not a member yet:
+        // its invite (public constellations), or nothing.
+        if (code && !cxCards.cards.some((c) => c.id === id)) {
+          setJoinCode(code)
+          return
+        }
         cxCards.reload()
         cx.enter(cxNavRef.current, { constellationId: id, nebulaId: null })
       },
@@ -1497,8 +1504,10 @@ export default function MainScreen({
   })
   useEffect(() => {
     const open = (e: Event): void => {
-      const id = (e as CustomEvent<{ constellationId?: unknown }>).detail?.constellationId
-      if (typeof id === 'string') cxEventsRef.current?.cxOpen(id)
+      const d = (e as CustomEvent<{ constellationId?: unknown; code?: unknown }>).detail
+      const code = typeof d?.code === 'string' && /^[A-Za-z0-9]{4,32}$/.test(d.code) ? d.code : null
+      if (typeof d?.constellationId === 'string')
+        cxEventsRef.current?.cxOpen(d.constellationId, code)
     }
     const call = (e: Event): void => {
       const id = (e as CustomEvent<{ userId?: unknown }>).detail?.userId

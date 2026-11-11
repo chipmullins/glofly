@@ -52,6 +52,8 @@ import AutoModPage from './AutoModPage'
 import IntegrationsPage from './IntegrationsPage'
 import WhoCanSee, { LockIcon, gateLabel } from './RoleVisibility'
 import type { NebulaVisibility } from '@glofly/shared/constellations'
+import { STAGE_SPEAKER_CHOICES } from '@glofly/shared/stages'
+import { FollowersList, FollowingList } from './Follow'
 import './Settings2.css'
 
 // Constellation settings (Roles.dc.html, approved): a left menu (Overview, Nebulas & categories,
@@ -536,7 +538,9 @@ function Overview({
 function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
   const editable = can(c, 'manageNebulas')
   const [newName, setNewName] = useState('')
-  const [newKind, setNewKind] = useState<'text' | 'voice' | 'forum'>('text')
+  const [newKind, setNewKind] = useState<'text' | 'voice' | 'forum' | 'stage' | 'announcement'>(
+    'text'
+  )
   const [newCategory, setNewCategory] = useState<string>(c.categories[0]?.id ?? '')
   const [catName, setCatName] = useState('')
   /** 0.7.1: "+ New category" picked in the new nebula's Category list: its name, typed in place */
@@ -552,7 +556,9 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
     threadsStaffOnly: boolean
     threadCloseDays: number
     forum: ForumDraft | null
+    stageSpeakerLimit: number
   }>({
+    stageSpeakerLimit: 25,
     threadsStaffOnly: false,
     threadCloseDays: 7,
     forum: null,
@@ -652,6 +658,24 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                 >
                   Voice
                 </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={newKind === 'stage'}
+                  title="Town halls, Q&As and events: speakers talk, everyone else listens"
+                  onClick={() => setNewKind('stage')}
+                >
+                  Stage
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={newKind === 'announcement'}
+                  title="Only staff post; other constellations can follow it"
+                  onClick={() => setNewKind('announcement')}
+                >
+                  Announcements
+                </button>
               </div>
             </div>
             <label className="cx-field" style={{ minWidth: 180 }}>
@@ -660,7 +684,15 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                 type="text"
                 value={newName}
                 maxLength={NEBULA_NAME_MAX}
-                placeholder={newKind === 'text' ? 'looking-for-group' : 'Campfire'}
+                placeholder={
+                  newKind === 'voice'
+                    ? 'Campfire'
+                    : newKind === 'stage'
+                      ? 'town-hall'
+                      : newKind === 'announcement'
+                        ? 'announcements'
+                        : 'looking-for-group'
+                }
                 onChange={(e) => setNewName(e.target.value)}
               />
             </label>
@@ -837,6 +869,9 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                                 threadCloseDays: draft.threadCloseDays
                               }
                             : {}),
+                          ...(n.kind === 'stage'
+                            ? { stageSpeakerLimit: draft.stageSpeakerLimit }
+                            : {}),
                           ...(n.kind === 'forum' && draft.forum
                             ? {
                                 threadCloseDays: draft.threadCloseDays,
@@ -912,6 +947,27 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                         />
                       </>
                     )}
+                    {n.kind === 'stage' && (
+                      <label className="cx-field">
+                        <span>Speaker limit (each stage starts with it)</span>
+                        <select
+                          value={draft.stageSpeakerLimit}
+                          onChange={(e) =>
+                            setDraft({ ...draft, stageSpeakerLimit: Number(e.target.value) })
+                          }
+                        >
+                          {STAGE_SPEAKER_CHOICES.map((x) => (
+                            <option key={x} value={x}>
+                              {x}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {n.kind === 'announcement' && <FollowersList c={c} nebula={n} />}
+                    {(n.kind === 'text' || n.kind === 'announcement') && (
+                      <FollowingList c={c} nebula={n} />
+                    )}
                     <WhoCanSee
                       c={c}
                       what="nebula"
@@ -937,18 +993,28 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                 ) : (
                   <>
                     <span className="cx-settings-item-kind" aria-hidden="true">
-                      {n.kind === 'text' ? '✦' : n.kind === 'forum' ? '💬' : '🔊'}
+                      {n.kind === 'text'
+                        ? '✦'
+                        : n.kind === 'forum'
+                          ? '💬'
+                          : n.kind === 'stage' || n.kind === 'announcement'
+                            ? '📣'
+                            : '🔊'}
                     </span>
                     <span className="cx-settings-item-text">
                       <strong>{n.name}</strong>
                       <span>
                         {n.kind === 'voice'
                           ? 'Voice nebula'
-                          : n.kind === 'forum'
-                            ? 'Star chart'
-                            : n.readOnly
-                              ? 'Announcements'
-                              : 'Text nebula'}
+                          : n.kind === 'stage'
+                            ? 'Stage'
+                            : n.kind === 'announcement'
+                              ? `Announcements${n.followers ? ` · ${n.followers} following` : ''}`
+                              : n.kind === 'forum'
+                                ? 'Star chart'
+                                : n.readOnly
+                                  ? 'Announcements'
+                                  : 'Text nebula'}
                         {n.topic ? ` · ${n.topic}` : ''}
                       </span>
                     </span>
@@ -973,7 +1039,8 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                               roleIds: n.roleIds ?? [],
                               threadsStaffOnly: n.threadsStaffOnly ?? false,
                               threadCloseDays: n.threadCloseDays ?? 7,
-                              forum: n.kind === 'forum' ? forumDraftOf(n) : null
+                              forum: n.kind === 'forum' ? forumDraftOf(n) : null,
+                              stageSpeakerLimit: n.stageSpeakerLimit ?? 25
                             })
                           }}
                         >
