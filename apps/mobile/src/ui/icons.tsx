@@ -404,6 +404,13 @@ const strokes: Record<string, (fill: string) => React.ReactNode> = {
       <Circle cx="12" cy="12" r="1" />
     </>
   ),
+  undo: () => <Path d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />,
+  run: () => (
+    <>
+      <Circle cx="14" cy="4.5" r="2" />
+      <Path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 4h3M11 15l2-6" />
+    </>
+  ),
 }
 
 export type IconName = keyof typeof strokes

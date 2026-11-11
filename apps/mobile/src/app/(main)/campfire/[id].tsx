@@ -18,6 +18,7 @@ import { FireButton, MapButton, RollToast } from '@/campfire/ui'
 import { useTableMusic } from '@/campfire/music'
 import { myCharacter, myToken, useFire } from '@/campfire/lib'
 import { PhoneTour, useTourOnce } from '@/campfire/PhoneTour'
+import { PausedCover, TableCards } from '@/campfire/BoardB'
 
 // Campfire's table on a phone (the approved Phone board): the map on top, your turn, HP,
 // actions and dice in the sheet below it. Turn order, rolls, handouts and music are behind the
@@ -75,6 +76,12 @@ function Table({ id }: { id: string }) {
     return () => sub.remove()
   }, [panel])
 
+  // Paused (players): the sheet folds down so the map's message and cards have room.
+  const pausedNow = !!table?.campaign.live?.paused && table?.myRole !== 'gm'
+  useEffect(() => {
+    if (pausedNow) setCollapsed(true)
+  }, [pausedNow])
+
   // A target that left the map (or went into fog) is let go.
   useEffect(() => {
     if (target && table && !table.tokens.some((t) => t.id === target)) setTarget(null)
@@ -131,7 +138,12 @@ function Table({ id }: { id: string }) {
   return (
     <View style={{ flex: 1, backgroundColor: fire.bg, paddingLeft: insets.left, paddingRight: insets.right }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 12 }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back to the call" onPress={leave} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: fire.card, alignItems: 'center', justifyContent: 'center' }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to the call"
+          onPress={leave}
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: fire.card, alignItems: 'center', justifyContent: 'center' }}
+        >
           <Icon name="chevronLeft" size={20} color={fire.ink} />
         </Pressable>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -164,6 +176,10 @@ function Table({ id }: { id: string }) {
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 10, right: 64, top: 10, gap: 8 }}>
             {pending ? <PendingBox table={table} pending={pending} /> : null}
             <RollToast campaignId={id} table={table} meId={meId} />
+          </View>
+          <PausedCover table={table} bottomInset={wide ? 0 : Math.max(0, sheetH - 12)} />
+          <View pointerEvents="box-none" style={{ position: 'absolute', left: 10, right: 10, bottom: (wide ? 0 : Math.max(0, sheetH - 12)) + 10 }}>
+            <TableCards campaignId={id} table={table} meId={meId} />
           </View>
           <View style={{ position: 'absolute', right: 10, top: 10, gap: 8 }}>
             <MapButton icon="order" label="Turn order" lit={!!table.combat} onPress={() => setPanel('order')} />

@@ -4,6 +4,8 @@ import type { CampfireEvents, CharacterView, HitEvent, Roll, TableState, Token }
 import { onLive } from '@/api/realtime'
 import { campfireApi } from './api'
 import { isCampfireEvent, type CampfireEventName } from './events'
+import { forgetFx, playCampfireSound, setFx, setPlan, useMovePlan, useTableFx } from './roundB'
+import { useSession } from '@/state/session'
 
 // Campfire on the phone: the tables this phone has open, kept up to date by the live events.
 //
@@ -78,6 +80,8 @@ export function forgetTable(id: string) {
     delete tables[id]
     return { tables }
   })
+  forgetFx(id)
+  if (useMovePlan.getState().plan?.campaignId === id) setPlan(null)
 }
 
 /** Changes the loaded table (no-op when it isn't loaded). */
@@ -109,6 +113,11 @@ export function noteLit(lit: Lit) {
 }
 
 const later = (ms: number, fn: () => void) => setTimeout(fn, ms)
+
+/** Clears a notice after a while, unless a newer one replaced it. */
+function setFxIf(id: string, at: number) {
+  if (useTableFx.getState().fx[id]?.notice?.at === at) setFx(id, { notice: null })
+}
 
 const hubListeners = new Set<(campaignId: string) => void>()
 /** The campaign hub changed (sessions, RSVPs, recaps, quests, loot, journal): the hub screen reloads. */
@@ -230,6 +239,40 @@ function apply<K extends CampfireEventName>(name: K, p: CampfireEvents[K]) {
     case 'campfire:members': {
       const e = p as CampfireEvents['campfire:members']
       patchTable(id, () => ({ members: e.members }))
+      return
+    }
+    case 'campfire:live': {
+      const e = p as CampfireEvents['campfire:live']
+      patchTable(id, (t) => ({ campaign: { ...t.campaign, live: e.live } }))
+      return
+    }
+    case 'campfire:view': {
+      const e = p as CampfireEvents['campfire:view']
+      setFx(id, { focus: { sceneId: e.sceneId, x: e.x, y: e.y, by: e.by, at: Date.now() } })
+      return
+    }
+    case 'campfire:sound': {
+      const e = p as CampfireEvents['campfire:sound']
+      playCampfireSound(e.builtin, e.fileId, e.volume)
+      return
+    }
+    case 'campfire:whisper': {
+      const e = p as CampfireEvents['campfire:whisper']
+      if (e.to === useSession.getState().user?.id) setFx(id, { whisper: e.on ? { from: e.from, at: Date.now() } : null })
+      return
+    }
+    case 'campfire:notice': {
+      const e = p as CampfireEvents['campfire:notice']
+      const notice = { text: e.text, at: Date.now() }
+      setFx(id, { notice })
+      later(5000, () => setFxIf(id, notice.at))
+      return
+    }
+    case 'campfire:removed': {
+      const e = p as CampfireEvents['campfire:removed']
+      if (e.userId !== useSession.getState().user?.id) return
+      forgetTable(id)
+      useCampfire.setState((s) => ({ errors: { ...s.errors, [id]: 'The game master took you off this table.' } }))
       return
     }
   }

@@ -80,7 +80,7 @@
 .cfb-group {
   position: absolute;
   left: 16px;
-  top: 16px;
+  top: 64px;
   z-index: 6;
   display: flex;
   flex-wrap: wrap;
@@ -297,4 +297,11 @@
   left: 20px;
   bottom: 96px;
   z-index: 7;
+}
+.cf-tokencard .cf-chip,
+.cfb-pop .cf-chip {
+  text-transform: none;
+}
+.cfb-banner b {
+  white-space: nowrap;
 }

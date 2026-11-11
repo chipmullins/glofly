@@ -181,8 +181,6 @@ export function MovementBar(): React.JSX.Element | null {
       >
         Undo last move
       </button>
-      <span className="cfb-grow" />
-      <span className="cf-sub cfb-tip">Drag to move · Space adds a turn · Esc cancels</span>
     </div>
   )
 }
@@ -361,7 +359,7 @@ export function TableBanners({
           <b>The table is paused</b>
           <span>
             {nameOf(live.paused.by)} paused the game
-            {live.paused.message ? `: “${live.paused.message}”` : '.'} Tokens and rolls wait until
+            {live.paused.message ? `: “${live.paused.message}”.` : '.'} Tokens and rolls wait until
             it starts again. You can still look at your sheet.
           </span>
         </div>
@@ -474,6 +472,21 @@ export function reachFor(t: TableState): (tk: Token) => number | null {
 }
 
 // ───────────── The game master screen ─────────────
+
+/** Everyday people for quick NPCs (in both rule sets' monster lists). */
+const QUICK_NPCS: [string, string][] = [
+  ['commoner', 'Commoner'],
+  ['guard', 'Guard'],
+  ['bandit', 'Bandit'],
+  ['bandit-captain', 'Bandit captain'],
+  ['noble', 'Noble'],
+  ['scout', 'Scout'],
+  ['spy', 'Spy'],
+  ['knight', 'Knight'],
+  ['cultist', 'Cultist'],
+  ['priest', 'Priest'],
+  ['mage', 'Mage']
+]
 
 export function GmScreenPanel({
   onWhere
@@ -637,20 +650,9 @@ export function GmScreenPanel({
             value={npcKind}
             onChange={(e) => setNpcKind(e.target.value)}
           >
-            {[
-              'commoner',
-              'guard',
-              'bandit',
-              'noble',
-              'acolyte',
-              'scout',
-              'thug',
-              'veteran',
-              'mage',
-              'priest'
-            ].map((k) => (
+            {QUICK_NPCS.map(([k, label]) => (
               <option key={k} value={k}>
-                {k[0].toUpperCase() + k.slice(1)}
+                {label}
               </option>
             ))}
           </select>

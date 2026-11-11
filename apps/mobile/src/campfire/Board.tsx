@@ -11,6 +11,9 @@ import { haptic } from '@/constellations/motion'
 import { campfireApi, fileSource } from './api'
 import { rollAtTable, takeAction } from './actions'
 import { Bar, FireButton } from './ui'
+import { MovementRow } from './BoardB'
+import { useMovement } from './roundB'
+import { useSession } from '@/state/session'
 import { hpColor, initialOf, signed, tokenName, useFire, useStill } from './lib'
 
 // The Phone board's bottom sheet: whose turn it is (yours glows), your HP, your actions (tap to
@@ -51,22 +54,29 @@ export function TableSheet({
   const hp = sheet?.hp ?? character?.summary.hp
   const target = targetId ? table.tokens.find((t) => t.id === targetId) : undefined
   const gm = table.myRole === 'gm'
+  const meId = useSession((s) => s.user?.id ?? '')
+  const mv = useMovement(table, meId)
+  const paused = !!table.campaign.live?.paused && !gm
   // Game masters get the full NPC sheets: the picked creature's stat block opens from here.
   const targetSheet = gm && target?.characterId ? table.characters.find((c) => c.id === target.characterId && c.kind === 'npc') : undefined
   const name = character?.name ?? (gm ? 'Game master' : 'You')
 
   const title = myTurn ? 'Your turn' : combat ? (currentToken ? `${tokenName(currentToken)}'s turn` : 'Someone’s turn') : gm ? 'Game master' : 'Exploring'
-  const subtitle = myTurn
-    ? `Drag ${character?.name ?? 'your token'} on the map to move · ${sheet?.speed ?? 30} ft`
-    : target
-      ? `Targeting ${tokenName(target)} · tap an action to attack`
-      : combat
-        ? `Round ${combat.round}${myEntry && myEntry.init === null ? ' · roll your initiative' : ''}`
-        : token
-          ? 'Tap a token to target it · long-press to ping'
-          : gm
-            ? 'Run the game on a computer; roll from here.'
-            : 'You don’t have a token on this map yet.'
+  const subtitle = paused
+    ? 'The table is paused · you can still look at your sheet'
+    : myTurn
+      ? mv
+        ? `Drag ${character?.name ?? 'your token'} to plan a move · rest your finger to turn a corner`
+        : `Drag ${character?.name ?? 'your token'} on the map to move · ${sheet?.speed ?? 30} ft`
+      : target
+        ? `Targeting ${tokenName(target)} · tap an action to attack`
+        : combat
+          ? `Round ${combat.round}${myEntry && myEntry.init === null ? ' · roll your initiative' : ''}`
+          : token
+            ? 'Tap a token to target it · long-press to ping'
+            : gm
+              ? 'Run the game on a computer; roll from here.'
+              : 'You don’t have a token on this map yet.'
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key)
@@ -80,13 +90,49 @@ export function TableSheet({
   const portrait = character?.portraitFileId ?? token?.imageFileId ?? null
   const attacks = sheet?.attacks ?? []
   return (
-    <Animated.View layout={still ? undefined : LinearTransition.duration(220)} style={{ borderTopLeftRadius: 26, borderTopRightRadius: 26, backgroundColor: fire.panel, boxShadow: '0 -10px 30px rgba(0,0,0,0.5)', paddingTop: 10, paddingHorizontal: 16, paddingBottom: bottomPad + 14, gap: 12 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={collapsed ? 'Show actions and dice' : 'Fold the actions down'} accessibilityState={{ expanded: !collapsed }} onPress={onToggle} hitSlop={8} style={{ alignSelf: 'stretch', alignItems: 'center', height: 20, justifyContent: 'center', marginTop: -6 }}>
+    <Animated.View
+      layout={still ? undefined : LinearTransition.duration(220)}
+      style={{
+        borderTopLeftRadius: 26,
+        borderTopRightRadius: 26,
+        backgroundColor: fire.panel,
+        boxShadow: '0 -10px 30px rgba(0,0,0,0.5)',
+        paddingTop: 10,
+        paddingHorizontal: 16,
+        paddingBottom: bottomPad + 14,
+        gap: 12,
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={collapsed ? 'Show actions and dice' : 'Fold the actions down'}
+        accessibilityState={{ expanded: !collapsed }}
+        onPress={onToggle}
+        hitSlop={8}
+        style={{ alignSelf: 'stretch', alignItems: 'center', height: 20, justifyContent: 'center', marginTop: -6 }}
+      >
         <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: fire.handle }} />
       </Pressable>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }} accessible accessibilityLabel={`${title}. ${subtitle}${hp ? `. ${hp.current} of ${hp.max} hit points` : ''}`}>
-        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: fire.greenDeep, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 3, borderColor: fire.green, boxShadow: myTurn ? '0 0 16px 4px rgba(255,179,71,0.5)' : undefined }}>
-          {portrait ? <Image source={fileSource(portrait)} style={{ width: '100%', height: '100%' }} contentFit="cover" /> : <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#fff' }}>{initialOf(name)}</Text>}
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: fire.greenDeep,
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            borderWidth: 3,
+            borderColor: fire.green,
+            boxShadow: myTurn ? '0 0 16px 4px rgba(255,179,71,0.5)' : undefined,
+          }}
+        >
+          {portrait ? (
+            <Image source={fileSource(portrait)} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+          ) : (
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#fff' }}>{initialOf(name)}</Text>
+          )}
         </View>
         <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
           <Text numberOfLines={1} style={{ fontFamily: 'Outfit_700Bold', fontSize: 17, color: myTurn ? fire.amber : fire.ink }}>
@@ -104,6 +150,7 @@ export function TableSheet({
         ) : null}
       </View>
       {hp && hp.max > 0 ? <Bar fraction={hp.current / hp.max} color={hpColor(fire, hp.current, hp.max)} /> : null}
+      {mv && !paused ? <MovementRow campaignId={campaignId} mv={mv} /> : null}
 
       {collapsed ? null : (
         <>
@@ -118,7 +165,19 @@ export function TableSheet({
                     accessibilityLabel={`${a.name}, ${signed(toHit)} to hit, ${a.damage} ${a.damageType}${target ? `. Attack ${tokenName(target)}` : '. Roll it'}`}
                     disabled={busy !== null}
                     onPress={() => void run(a.id, () => takeAction(campaignId, character, a, token, targetId))}
-                    style={({ pressed }) => ({ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: target ? 'rgba(239,90,74,0.45)' : fire.line, backgroundColor: fire.card, opacity: pressed || busy === a.id ? 0.75 : 1 })}
+                    style={({ pressed }) => ({
+                      minHeight: 44,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: target ? 'rgba(239,90,74,0.45)' : fire.line,
+                      backgroundColor: fire.card,
+                      opacity: pressed || busy === a.id ? 0.75 : 1,
+                    })}
                   >
                     <Text size={14} weight="bold" numberOfLines={1} style={{ flex: 1, color: fire.ink }}>
                       {a.name}

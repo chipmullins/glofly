@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing, runOnJS } from 'react-native-reanimated'
 import Svg, { Circle, Defs, G, Line, Mask, Path, Pattern, Polygon, Polyline, Rect, Text as SvgText } from 'react-native-svg'
 import { Image } from 'expo-image'
-import type { BuiltMap, CharacterView, FogState, GridSettings, MapTheme, Scene, TableState, Token } from '@glofly/shared'
+import type { BuiltMap, BuiltTerrain, CharacterView, FogState, GridSettings, MapTheme, Point, Scene, TableState, Token } from '@glofly/shared'
 import { gridFeet, nearestHexCenter } from '@glofly/shared'
 import { sendLive } from '@/api/realtime'
 import { Text } from '@/ui/kit'
@@ -14,6 +14,7 @@ import { campfireApi, fileSource } from './api'
 import { patchTable, useCampfire, type Ping } from './store'
 import { barFraction, centerOf, controls, hpColor, initialOf, tokenColors, tokenName, useFire, useStill } from './lib'
 import { HitLayer, useTokenFx } from './HitFx'
+import { centerAt, costOf, mayDrag, setPlan, useFx, useMovePlan, useMovement, useSpeakingTokens, type Movement, type MovePlan } from './roundB'
 import type { CampfireColors } from '@/ui/theme'
 
 // The table's map (Phone board): the scene drawn in SVG (a built map or an uploaded picture, the
@@ -25,9 +26,22 @@ import type { CampfireColors } from '@/ui/theme'
 
 const THEME_BG: Record<MapTheme, string> = { stone: '#2B221D', wood: '#33251A', grass: '#1F2E1C', cave: '#1A1715', snow: '#AEB8BF', sand: '#5E4E33', night: '#11131D' }
 const MATERIAL: Record<string, string> = { stone: '#5B4F46', wood: '#6E4A2F', grass: '#4F6B3A', water: '#3F7E92', sand: '#A08A5C', cave: '#3F4A4C', snow: '#D7DEE3', dirt: '#5E4A35' }
-const OBJECT: Record<string, string> = { table: '#6E4A2F', chest: '#8B5A2B', crate: '#7A5A3A', door: '#8B5A2B', stairs: '#6B5D52', pillar: '#8A7D72', tree: '#3E6B35', campfire: '#F47A1F', trap: '#9C3A2F', statue: '#8A7D72' }
+const OBJECT: Record<string, string> = {
+  table: '#6E4A2F',
+  chest: '#8B5A2B',
+  crate: '#7A5A3A',
+  door: '#8B5A2B',
+  stairs: '#6B5D52',
+  pillar: '#8A7D72',
+  tree: '#3E6B35',
+  campfire: '#F47A1F',
+  trap: '#9C3A2F',
+  statue: '#8A7D72',
+}
 
-type Drag = { id: string; x: number; y: number; startX: number; startY: number }
+/** A drag: where the finger has the token (x, y), where the drag began (startX/Y), where the token
+ * really stands (originX/Y: a planned move starts from its end) and the corners picked on the way. */
+type Drag = { id: string; x: number; y: number; startX: number; startY: number; originX: number; originY: number; path: Point[] }
 
 export function CampfireMap({
   campaignId,
@@ -54,6 +68,8 @@ export function CampfireMap({
   const tx = useSharedValue(0)
   const ty = useSharedValue(0)
   const sc = useSharedValue(1)
+  /** A token is being dragged: the map itself doesn't pan meanwhile (web gets both gestures). */
+  const tokenDrag = useSharedValue(0)
   const [zoom, setZoom] = useState(1)
   const [drag, setDrag] = useState<Drag | null>(null)
   const placed = useRef<string | null>(null)
@@ -64,6 +80,11 @@ export function CampfireMap({
   const W = scene?.widthPx ?? 1000
   const H = scene?.heightPx ?? 1000
   const current = table.combat?.current ?? null
+  const mv = useMovement(table, meId)
+  const planAll = useMovePlan((s) => s.plan)
+  const plan = planAll && planAll.campaignId === campaignId && mv?.tokenId === planAll.tokenId ? planAll : null
+  const speaking = useSpeakingTokens(table)
+  const focus = useFx(campaignId).focus
 
   const minScale = box.w ? Math.min((box.w - rightInset) / W, (box.h - bottomInset) / H, 40 / cell) * 0.8 : 0.1
   const maxScale = (40 / cell) * 3.5
@@ -99,6 +120,33 @@ export function CampfireMap({
     const [x, y] = myMain ? centerOf(myMain, cell) : [W / 2, H / 2]
     centerOn(x, y, s, false)
   }, [scene, box.w, myMain, cell, W, H, minScale, maxScale, centerOn])
+
+  // The game master moved everyone's view: go there (their own phone stays put).
+  const focused = useRef(0)
+  useEffect(() => {
+    if (!focus || !scene || focus.sceneId !== scene.id || focus.at === focused.current || focus.by === meId) return
+    focused.current = focus.at
+    centerOn(focus.x, focus.y, Math.max(minScale, Math.min(maxScale, sc.value)), true)
+  }, [focus, scene, meId, minScale, maxScale, centerOn, sc])
+
+  // A plan whose token moved meanwhile (the game master, an Undo) or whose turn ended is dropped.
+  useEffect(() => {
+    if (!planAll || planAll.campaignId !== campaignId) return
+    if (mv?.tokenId !== planAll.tokenId) setPlan(null)
+  }, [planAll, mv?.tokenId, campaignId])
+  const planFrom = useRef<{ x: number; y: number } | null>(null)
+  const planTok = plan ? table.tokens.find((k) => k.id === plan.tokenId) : undefined
+  useEffect(() => {
+    if (!plan || !planTok) {
+      planFrom.current = null
+      return
+    }
+    if (!planFrom.current) planFrom.current = { x: planTok.x, y: planTok.y }
+    else if (planFrom.current.x !== planTok.x || planFrom.current.y !== planTok.y) {
+      planFrom.current = null
+      setPlan(null)
+    }
+  }, [plan, planTok])
 
   // Browser preview: the mouse wheel zooms (phones pinch).
   const viewRef = useRef<View>(null)
@@ -146,6 +194,7 @@ export function CampfireMap({
       .minDistance(6)
       .averageTouches(true)
       .onChange((e) => {
+        if (tokenDrag.value) return
         tx.value += e.changeX
         ty.value += e.changeY
         keep(sc.value)
@@ -171,7 +220,7 @@ export function CampfireMap({
       runOnJS(onTarget)(null)
     })
     return Gesture.Simultaneous(pinch, Gesture.Race(pan, press, tap))
-  }, [box.w, box.h, W, H, minScale, maxScale, tx, ty, sc, ping, onTarget])
+  }, [box.w, box.h, W, H, minScale, maxScale, tx, ty, sc, ping, onTarget, tokenDrag])
 
   const world = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: sc.value }] }))
 
@@ -179,15 +228,45 @@ export function CampfireMap({
   // The drag works from where the token was when it started (other moves meanwhile don't jump it).
   const lastSent = useRef(0)
   const dragRef = useRef<Drag | null>(null)
-  const latest = useRef({ tokens: table.tokens, scene, cell, W, H })
-  latest.current = { tokens: table.tokens, scene, cell, W, H }
-  const startDrag = useCallback((id: string) => {
-    const t = latest.current.tokens.find((k) => k.id === id)
-    if (!t) return
-    haptic.light()
-    dragRef.current = { id, x: t.x, y: t.y, startX: t.x, startY: t.y }
+  const latest = useRef({ tokens: table.tokens, scene, cell, W, H, mv, plan, table })
+  latest.current = { tokens: table.tokens, scene, cell, W, H, mv, plan, table }
+  // Movement on your turn: rest your finger for a moment to turn a corner there.
+  const linger = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const addCorner = useCallback(() => {
+    const d = dragRef.current
+    const { tokens: all, scene: sc0, mv: mv0 } = latest.current
+    const t = d ? all.find((k) => k.id === d.id) : undefined
+    if (!d || !t || !sc0 || mv0?.tokenId !== d.id) return
+    const [x, y] = snap(sc0.grid, t, d.x, d.y)
+    const c = centerAt(t, x, y, sc0.grid.size)
+    const last = d.path[d.path.length - 1] ?? centerAt(t, d.originX, d.originY, sc0.grid.size)
+    if (last[0] === c[0] && last[1] === c[1]) return
+    if (d.path.length >= 40) return
+    haptic.select()
+    dragRef.current = { ...d, path: [...d.path, c] }
     setDrag(dragRef.current)
   }, [])
+  const startDrag = useCallback((id: string) => {
+    const { tokens: all, plan: p0, cell: c0 } = latest.current
+    const t = all.find((k) => k.id === id)
+    if (!t) return
+    haptic.light()
+    tokenDrag.value = 1
+    // Dragging a planned move again carries on from its end (the corners so far are kept).
+    const pl = p0?.tokenId === id ? p0 : null
+    const from = pl ? { x: pl.x, y: pl.y } : { x: t.x, y: t.y }
+    dragRef.current = {
+      id,
+      x: from.x,
+      y: from.y,
+      startX: from.x,
+      startY: from.y,
+      originX: t.x,
+      originY: t.y,
+      path: pl ? [...pl.path, centerAt(t, pl.x, pl.y, latest.current.scene?.grid.size ?? c0)] : [],
+    }
+    setDrag(dragRef.current)
+  }, [tokenDrag])
   const moveDrag = useCallback(
     (id: string, dx: number, dy: number) => {
       const d = dragRef.current
@@ -197,26 +276,41 @@ export function CampfireMap({
       const y = Math.round(d.startY + dy / s)
       dragRef.current = { ...d, x, y }
       setDrag(dragRef.current)
+      if (linger.current) clearTimeout(linger.current)
+      if (latest.current.mv?.tokenId === id) linger.current = setTimeout(addCorner, 450)
       const now = Date.now()
-      if (now - lastSent.current > 70) {
+      // A planned move (your turn) isn't shown to the others until "Move here".
+      if (latest.current.mv?.tokenId !== id && now - lastSent.current > 70) {
         lastSent.current = now
         sendLive('campfire:move', { tokenId: id, x, y })
       }
     },
-    [sc],
+    [sc, addCorner],
   )
   const endDrag = useCallback(
     (id: string, dx: number, dy: number) => {
       const d = dragRef.current
       dragRef.current = null
       setDrag(null)
-      const { tokens: all, scene: sc0, cell: c0, W: w0, H: h0 } = latest.current
+      tokenDrag.value = 0
+      if (linger.current) clearTimeout(linger.current)
+      const { tokens: all, scene: sc0, cell: c0, W: w0, H: h0, mv: mv0, table: tb0 } = latest.current
       const t = all.find((k) => k.id === id)
       if (!d || d.id !== id || !sc0 || !t) return
       const s = sc.value || 1
       const [x, y] = snap(sc0.grid, t, d.startX + dx / s, d.startY + dy / s)
       const cx = Math.max(-c0, Math.min(w0, x))
       const cy = Math.max(-c0, Math.min(h0, y))
+      // Your turn: the move waits on the map until "Move here" (Undo drops it).
+      if (mv0?.tokenId === id) {
+        if (cx === d.originX && cy === d.originY) return setPlan(null)
+        const size = sc0.grid.size
+        const path = d.path.filter((pt, i, all2) => !(i === all2.length - 1 && pt[0] === centerAt(t, cx, cy, size)[0] && pt[1] === centerAt(t, cx, cy, size)[1]))
+        const { cost, extra } = costOf(tb0, [centerAt(t, d.originX, d.originY, size), ...path, centerAt(t, cx, cy, size)])
+        haptic.select()
+        setPlan({ campaignId, tokenId: id, x: cx, y: cy, path, cost, extra })
+        return
+      }
       if (cx === d.startX && cy === d.startY) {
         sendLive('campfire:move', { tokenId: id, x: cx, y: cy })
         return
@@ -228,7 +322,7 @@ export function CampfireMap({
         if (!r.ok) patchTable(campaignId, (tb) => ({ tokens: tb.tokens.map((k) => (k.id === id ? { ...k, x: d.startX, y: d.startY } : k)) }))
       })
     },
-    [sc, campaignId],
+    [sc, campaignId, tokenDrag],
   )
 
   const onLayout = (e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
@@ -244,23 +338,44 @@ export function CampfireMap({
   }
 
   const draggingToken = drag ? table.tokens.find((t) => t.id === drag.id) : undefined
+  const mvToken = mv ? table.tokens.find((t) => t.id === mv.tokenId) : undefined
+  // The path being drawn (dragging on your turn) or waiting for "Move here".
+  const live: { tk: Token; to: [number, number]; path: Point[] } | null =
+    mvToken && drag?.id === mvToken.id ? { tk: mvToken, to: [drag.x, drag.y], path: drag.path } : mvToken && plan ? { tk: mvToken, to: [plan.x, plan.y], path: plan.path } : null
+  const liveCost = live
+    ? drag
+      ? costOf(table, [centerAt(live.tk, live.tk.x, live.tk.y, cell), ...live.path, centerAt(live.tk, ...snap(scene.grid, live.tk, live.to[0], live.to[1]), cell)])
+      : { cost: plan!.cost, extra: plan!.extra }
+    : null
   const tokens = [...table.tokens].sort((a, b) => layerRank(a) - layerRank(b) || a.z - b.z)
   const recentPings = (pings ?? []).filter((p) => p.sceneId === scene.id)
   const pinger = recentPings.length ? recentPings[recentPings.length - 1] : null
   const pingerName = pinger ? (pinger.userId === meId ? 'You' : (table.members.find((m) => m.userId === pinger.userId)?.user?.displayName.split(' ')[0] ?? 'Someone')) : ''
 
   return (
-    <View ref={viewRef} onLayout={onLayout} style={{ flex: 1, overflow: 'hidden', backgroundColor: fire.deep, borderRadius: 14 }} accessibilityLabel={`Map: ${scene.name}. Drag to look around, pinch to zoom, long-press to ping.`}>
+    <View
+      ref={viewRef}
+      onLayout={onLayout}
+      style={{ flex: 1, overflow: 'hidden', backgroundColor: fire.deep, borderRadius: 14 }}
+      accessibilityLabel={`Map: ${scene.name}. Drag to look around, pinch to zoom, long-press to ping.`}
+    >
       <GestureDetector gesture={mapGesture}>
         <View style={{ flex: 1 }} collapsable={false}>
           <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width: W, height: H, transformOrigin: '0 0' }, world]}>
             <SceneArt scene={scene} />
+            {scene.built?.terrain?.length ? <TerrainLayer terrain={scene.built.terrain} w={W} h={H} fire={fire} /> : null}
             <FogLayer fog={scene.fog} w={W} h={H} gm={gm} fire={fire} />
             <AuraLayer tokens={table.tokens} cell={cell} feet={scene.grid.feet} w={W} h={H} />
             {tokens.map((t) => (
               <TokenView
                 key={t.id}
-                token={drag?.id === t.id ? { ...t, x: drag.x, y: drag.y } : t}
+                token={drag?.id === t.id ? { ...t, x: drag.x, y: drag.y } : plan?.tokenId === t.id ? { ...t, x: plan.x, y: plan.y } : t}
+                canDrag={mayDrag(
+                  table,
+                  t,
+                  mine.some((m) => m.id === t.id),
+                )}
+                speaking={speaking.has(t.id)}
                 campaignId={campaignId}
                 cell={cell}
                 characters={table.characters}
@@ -276,18 +391,74 @@ export function CampfireMap({
                 onTap={(id) => onTarget(id === targetId ? null : id)}
               />
             ))}
-            {drag && draggingToken ? <Measure from={centerOf({ ...draggingToken, x: drag.startX, y: drag.startY }, cell)} to={centerOf({ ...draggingToken, x: drag.x, y: drag.y }, cell)} grid={scene.grid} zoom={zoom} w={W} h={H} /> : null}
+            {mv && mvToken ? <MoveLayer mv={mv} token={mvToken} cell={cell} feet={scene.grid.feet} live={live} over={!!liveCost && liveCost.cost > mv.left} zoom={zoom} w={W} h={H} /> : null}
+            {drag && draggingToken && !live ? (
+              <Measure
+                from={centerOf({ ...draggingToken, x: drag.startX, y: drag.startY }, cell)}
+                to={centerOf({ ...draggingToken, x: drag.x, y: drag.y }, cell)}
+                grid={scene.grid}
+                zoom={zoom}
+                w={W}
+                h={H}
+              />
+            ) : null}
             <PingLayer pings={recentPings} w={W} h={H} zoom={zoom} />
             <HitLayer hits={hits ?? []} tokens={table.tokens} cell={cell} zoom={zoom} />
           </Animated.View>
         </View>
       </GestureDetector>
       {pinger ? (
-        <View pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', left: 10, bottom: bottomInset + 10, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 30, borderRadius: 15, backgroundColor: 'rgba(20,15,13,0.85)' }}>
+        <View
+          pointerEvents="none"
+          accessibilityLiveRegion="polite"
+          style={{
+            position: 'absolute',
+            left: 10,
+            bottom: bottomInset + 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: 10,
+            height: 30,
+            borderRadius: 15,
+            backgroundColor: 'rgba(20,15,13,0.85)',
+          }}
+        >
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: fire.amber }} />
           <Text size={12} weight="bold" style={{ color: fire.ink }}>
             {pingerName} pinged a spot
           </Text>
+        </View>
+      ) : null}
+      {live && liveCost && mv ? (
+        <View
+          pointerEvents="none"
+          accessibilityLiveRegion="polite"
+          style={{
+            position: 'absolute',
+            left: 10,
+            top: 10,
+            maxWidth: box.w - 90,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 12,
+            backgroundColor: 'rgba(20,15,13,0.9)',
+            borderWidth: 1,
+            borderColor: liveCost.cost > mv.left ? fire.red : fire.amber,
+          }}
+        >
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: liveCost.cost > mv.left ? fire.red : fire.ink }}>
+            {liveCost.cost} of {Math.max(0, mv.left)} ft
+          </Text>
+          {liveCost.extra > 0 ? (
+            <Text size={12} style={{ color: fire.muted }}>
+              {liveCost.extra} through difficult ground counts {liveCost.extra * 2}
+            </Text>
+          ) : liveCost.cost > mv.left ? (
+            <Text size={12} style={{ color: fire.muted }}>
+              {mv.dashed ? 'Too far for this turn' : 'Too far · Dash for more'}
+            </Text>
+          ) : null}
         </View>
       ) : null}
       {myMain ? (
@@ -298,7 +469,19 @@ export function CampfireMap({
             const [x, y] = centerOf(myMain, cell)
             centerOn(x, y, Math.max(minScale, Math.min(maxScale, sc.value)), true)
           }}
-          style={{ position: 'absolute', right: 10, bottom: bottomInset + 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(20,15,13,0.85)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: fire.line }}
+          style={{
+            position: 'absolute',
+            right: 10,
+            bottom: bottomInset + 10,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: 'rgba(20,15,13,0.85)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: fire.line,
+          }}
         >
           <Icon name="target" size={20} color={fire.ink} />
         </Pressable>
@@ -329,7 +512,15 @@ const SceneArt = memo(function SceneArt({ scene }: { scene: Scene }) {
   return (
     <>
       <View style={{ position: 'absolute', left: 0, top: 0, width: W, height: H, backgroundColor: THEME_BG[scene.theme] ?? THEME_BG.stone }} />
-      {scene.backgroundFileId ? <Image source={fileSource(scene.backgroundFileId)} style={{ position: 'absolute', left: 0, top: 0, width: W, height: H }} contentFit="fill" cachePolicy="disk" accessibilityIgnoresInvertColors /> : null}
+      {scene.backgroundFileId ? (
+        <Image
+          source={fileSource(scene.backgroundFileId)}
+          style={{ position: 'absolute', left: 0, top: 0, width: W, height: H }}
+          contentFit="fill"
+          cachePolicy="disk"
+          accessibilityIgnoresInvertColors
+        />
+      ) : null}
       <Svg width={W} height={H} style={{ position: 'absolute', left: 0, top: 0 }}>
         <Defs>
           {g.type === 'square' ? (
@@ -455,6 +646,81 @@ function AuraLayer({ tokens, cell, feet, w, h }: { tokens: Token[]; cell: number
   )
 }
 
+/** Difficult ground and water from the map builder: hatched, like desktop's terrain tool. */
+function TerrainLayer({ terrain, w, h, fire }: { terrain: BuiltTerrain[]; w: number; h: number; fire: CampfireColors }) {
+  return (
+    <Svg width={w} height={h} style={{ position: 'absolute', left: 0, top: 0 }} pointerEvents="none">
+      <Defs>
+        <Pattern id="cf-mud" width={14} height={14} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <Rect width={14} height={14} fill="rgba(140,96,52,0.28)" />
+          <Line x1={0} y1={0} x2={0} y2={14} stroke="rgba(255,179,71,0.45)" strokeWidth={3} />
+        </Pattern>
+        <Pattern id="cf-water" width={14} height={14} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <Rect width={14} height={14} fill="rgba(63,126,146,0.3)" />
+          <Line x1={0} y1={0} x2={0} y2={14} stroke="rgba(156,192,255,0.45)" strokeWidth={3} />
+        </Pattern>
+      </Defs>
+      {terrain.map((a) => (
+        <Polygon
+          key={a.id}
+          points={a.points.map((p) => p.join(',')).join(' ')}
+          fill={`url(#${a.kind === 'water' ? 'cf-water' : 'cf-mud'})`}
+          stroke={a.kind === 'water' ? fire.tempText : fire.amber}
+          strokeOpacity={0.7}
+          strokeWidth={2}
+          strokeDasharray="8 6"
+        />
+      ))}
+    </Svg>
+  )
+}
+
+/** Your turn's movement: how far you can still go (and with Dash), and the path being planned. */
+function MoveLayer({
+  mv,
+  token,
+  cell,
+  feet,
+  live,
+  over,
+  zoom,
+  w,
+  h,
+}: {
+  mv: Movement
+  token: Token
+  cell: number
+  feet: number
+  live: { tk: Token; to: [number, number]; path: Point[] } | null
+  over: boolean
+  zoom: number
+  w: number
+  h: number
+}) {
+  const fire = useFire()
+  const z = 1 / Math.max(0.05, zoom)
+  const [cx, cy] = centerAt(token, token.x, token.y, cell)
+  const px = (ft: number) => (Math.max(0, ft) / Math.max(1, feet)) * cell + (token.w * cell) / 2
+  const pts: Point[] = live ? [[cx, cy], ...live.path, centerAt(token, live.to[0], live.to[1], cell)] : []
+  const color = over ? fire.red : fire.amber
+  return (
+    <Svg width={w} height={h} style={{ position: 'absolute', left: 0, top: 0 }} pointerEvents="none">
+      {mv.left > 0 ? <Circle cx={cx} cy={cy} r={px(mv.left)} fill="rgba(87,194,122,0.06)" stroke={fire.green} strokeWidth={2.5 * z} strokeDasharray={`${10 * z} ${7 * z}`} /> : null}
+      {!mv.dashed ? <Circle cx={cx} cy={cy} r={px(mv.left + mv.speed)} fill="none" stroke={fire.amber} strokeOpacity={0.4} strokeWidth={1.5 * z} strokeDasharray={`${4 * z} ${8 * z}`} /> : null}
+      {live ? (
+        <>
+          <Circle cx={cx} cy={cy} r={(token.w * cell) / 2 + 6 * z} fill="none" stroke={fire.amber} strokeWidth={2.5 * z} strokeDasharray={`${6 * z} ${5 * z}`} />
+          <Polyline points={pts.map((p) => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={5 * z} strokeLinejoin="round" strokeLinecap="round" />
+          {live.path.map((p, i) => (
+            <Circle key={i} cx={p[0]} cy={p[1]} r={6 * z} fill={color} />
+          ))}
+          <Circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r={7 * z} fill={color} />
+        </>
+      ) : null}
+    </Svg>
+  )
+}
+
 function Measure({ from, to, grid, zoom, w, h }: { from: [number, number]; to: [number, number]; grid: GridSettings; zoom: number; w: number; h: number }) {
   const fire = useFire()
   const ft = feetBetween(from, to, grid)
@@ -491,7 +757,22 @@ function PingRing({ x, y, zoom }: { x: number; y: number; zoom: number }) {
   const r = 36 / Math.max(0.05, zoom)
   const style = useAnimatedStyle(() => ({ opacity: still ? 0.9 : 1 - t.value * 0.8, transform: [{ scale: still ? 1 : 0.4 + t.value * 0.9 }] }))
   return (
-    <Animated.View style={[{ position: 'absolute', left: x - r, top: y - r, width: r * 2, height: r * 2, borderRadius: r, borderWidth: 4 / Math.max(0.05, zoom), borderColor: fire.amber, backgroundColor: 'rgba(255,179,71,0.18)' }, style]} />
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: x - r,
+          top: y - r,
+          width: r * 2,
+          height: r * 2,
+          borderRadius: r,
+          borderWidth: 4 / Math.max(0.05, zoom),
+          borderColor: fire.amber,
+          backgroundColor: 'rgba(255,179,71,0.18)',
+        },
+        style,
+      ]}
+    />
   )
 }
 
@@ -508,13 +789,15 @@ type TokenProps = {
   targeted: boolean
   gm: boolean
   zoom: number
+  canDrag: boolean
+  speaking: boolean
   onStart: (id: string) => void
   onMove: (id: string, dx: number, dy: number) => void
   onEnd: (id: string, dx: number, dy: number) => void
   onTap: (id: string) => void
 }
 
-const TokenView = memo(function TokenView({ token: t, campaignId, cell, characters, mine, me, active, targeted, gm, zoom, onStart, onMove, onEnd, onTap }: TokenProps) {
+const TokenView = memo(function TokenView({ token: t, campaignId, cell, characters, me, active, targeted, gm, zoom, canDrag, speaking, onStart, onMove, onEnd, onTap }: TokenProps) {
   const fire = useFire()
   const still = useStill()
   const w = t.w * cell
@@ -528,8 +811,7 @@ const TokenView = memo(function TokenView({ token: t, campaignId, cell, characte
   const fx = useTokenFx(campaignId, t.id, cell, still)
   const ringW = Math.max(2, cell * 0.075)
   const showName = me || active || (gm && !!t.name)
-  const canDrag = mine || gm
-  const label = `${tokenName(t)}${me ? ' (you)' : ''}${hp && hp.value !== null && hp.max !== null ? `, ${hp.value} of ${hp.max} hit points` : hp?.state ? `, ${hp.state}` : ''}${t.conditions.length ? `, ${t.conditions.join(', ')}` : ''}${active ? ', their turn' : ''}${targeted ? ', targeted' : ''}`
+  const label = `${tokenName(t)}${me ? ' (you)' : ''}${t.elevation ? `, ${t.elevation > 0 ? `${t.elevation} ft up` : `${-t.elevation} ft down`}` : ''}${t.locked ? ', locked' : ''}${speaking ? ', talking' : ''}${hp && hp.value !== null && hp.max !== null ? `, ${hp.value} of ${hp.max} hit points` : hp?.state ? `, ${hp.state}` : ''}${t.conditions.length ? `, ${t.conditions.join(', ')}` : ''}${active ? ', their turn' : ''}${targeted ? ', targeted' : ''}`
 
   // The gesture stays the same while dragging (the parent moves the token), so it never restarts.
   const calls = useRef({ onStart, onMove, onEnd, onTap })
@@ -595,15 +877,105 @@ const TokenView = memo(function TokenView({ token: t, campaignId, cell, characte
           )}
         </View>
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', inset: -ringW * 2, borderRadius: w, borderWidth: ringW * 1.4, borderColor: '#FFF6C8', opacity: 0 }, fx.glow]} />
+        {speaking ? (
+          <View
+            pointerEvents="none"
+            style={{ position: 'absolute', inset: -ringW * 1.6, borderRadius: w, borderWidth: ringW, borderColor: fire.green, boxShadow: `0 0 ${cell * 0.3}px ${cell * 0.08}px ${fire.green}` }}
+          />
+        ) : null}
         {targeted ? <View pointerEvents="none" style={{ position: 'absolute', inset: -ringW * 2.5, borderRadius: w, borderWidth: ringW, borderColor: fire.red, borderStyle: 'dashed' }} /> : null}
         {frac !== null ? (
-          <View pointerEvents="none" style={{ position: 'absolute', left: cell * 0.05, right: cell * 0.05, bottom: -cell * 0.22, height: Math.max(3, cell * 0.12), borderRadius: cell, backgroundColor: 'rgba(0,0,0,0.7)' }}>
-            <Animated.View style={[{ height: '100%', borderRadius: cell, backgroundColor: hp && hp.value !== null && hp.max ? hpColor(fire, hp.value, hp.max) : hp?.state === 'bloodied' ? fire.yellow : hp?.state === 'defeated' ? fire.red : fire.green }, barStyle]} />
+          <View
+            pointerEvents="none"
+            style={{ position: 'absolute', left: cell * 0.05, right: cell * 0.05, bottom: -cell * 0.22, height: Math.max(3, cell * 0.12), borderRadius: cell, backgroundColor: 'rgba(0,0,0,0.7)' }}
+          >
+            <Animated.View
+              style={[
+                {
+                  height: '100%',
+                  borderRadius: cell,
+                  backgroundColor: hp && hp.value !== null && hp.max ? hpColor(fire, hp.value, hp.max) : hp?.state === 'bloodied' ? fire.yellow : hp?.state === 'defeated' ? fire.red : fire.green,
+                },
+                barStyle,
+              ]}
+            />
           </View>
         ) : null}
         {t.conditions.length ? (
-          <View pointerEvents="none" style={{ position: 'absolute', right: -cell * 0.12, top: -cell * 0.12, minWidth: cell * 0.36, height: cell * 0.36, paddingHorizontal: cell * 0.06, borderRadius: cell, backgroundColor: fire.amber, alignItems: 'center', justifyContent: 'center' }}>
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              right: -cell * 0.12,
+              top: -cell * 0.12,
+              minWidth: cell * 0.36,
+              height: cell * 0.36,
+              paddingHorizontal: cell * 0.06,
+              borderRadius: cell,
+              backgroundColor: fire.amber,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             <Text style={{ color: fire.accentInk, fontFamily: 'Outfit_700Bold', fontSize: cell * 0.22 }}>{t.conditions.length > 1 ? t.conditions.length : initialOf(t.conditions[0])}</Text>
+          </View>
+        ) : null}
+        {t.conditionTimers && Object.keys(t.conditionTimers).length ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              right: -cell * 0.14,
+              top: cell * 0.26,
+              height: cell * 0.28,
+              paddingHorizontal: cell * 0.06,
+              borderRadius: cell,
+              backgroundColor: 'rgba(20,15,13,0.9)',
+              borderWidth: 1,
+              borderColor: fire.amberLine,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: fire.amber, fontFamily: 'Outfit_700Bold', fontSize: cell * 0.17 }}>{`${Math.min(...Object.values(t.conditionTimers))}r`}</Text>
+          </View>
+        ) : null}
+        {t.elevation ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: -cell * 0.14,
+              top: -cell * 0.14,
+              height: cell * 0.32,
+              paddingHorizontal: cell * 0.07,
+              borderRadius: cell,
+              backgroundColor: fire.concSoft,
+              borderWidth: 1,
+              borderColor: fire.concLine,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: fire.conc, fontFamily: 'Outfit_700Bold', fontSize: cell * 0.19 }}>{`${t.elevation > 0 ? '↑' : '↓'}${Math.abs(t.elevation)}`}</Text>
+          </View>
+        ) : null}
+        {t.locked ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: -cell * 0.1,
+              bottom: -cell * 0.05,
+              width: cell * 0.3,
+              height: cell * 0.3,
+              borderRadius: cell,
+              backgroundColor: 'rgba(20,15,13,0.9)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="lock" size={cell * 0.18} color={fire.ink} />
           </View>
         ) : null}
         {showName && t.name ? (
