@@ -1502,7 +1502,13 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     >
       {/* Oct 17: invite right from here, for anyone who can invite (no trip into Settings). */}
       <div className="cx-members-head">
-        <span>Members · {c.members.filter((m) => !m.user.bot).length}</span>
+        <span>
+          Members ·{' '}
+          {(c.membersPartial && c.memberCount
+            ? c.memberCount
+            : c.members.filter((m) => !m.user.bot).length
+          ).toLocaleString('en-US')}
+        </span>
         {can(c, 'invite') && (
           <button
             type="button"

@@ -171,7 +171,7 @@
   made a cycle that crashed the server at start; the time zone is in `src/timeZone.ts`). Desktop Control's main
   process only allows listed routes (`main/api.ts ALLOWED`): add new Control routes there too. Control for iPhone:
   Face ID sign-in for 14 days (`POST /admin/auth/resume`, `admin_devices.remember_*`, test `test/faceid.e2e.ts`).
-- **Next (Nov 8, 2026):** start with the project doc `glofly-status-nov8.md` (0.9.2 = profile follow-ups + the bulk round, waiting to ship; setup steps and what's untested), then `glofly-release-0.9.2.md`.
+- **Next (Nov 11, 2026):** communities round 2 is built on `dev` (project doc `glofly-communities-round-2.md`), waiting for Chip to test and ship. Before that: the project doc `glofly-status-nov8.md` (0.9.2 = profile follow-ups + the bulk round, waiting to ship; setup steps and what's untested), then `glofly-release-0.9.2.md`.
 - **0.8.6 (Oct 28, 2026): update on every launch, Windows + Mac** (project doc `glofly-release-0.8.6.md`).
   `src/main/launchUpdate.ts` runs before Glofly's window opens (`openGlofly` in index.ts starts everything
   else, once); the window is its own page `src/renderer/updater.html` + `src/renderer/src/updater/` (no
@@ -232,6 +232,22 @@
   respect Lockdown. **Kick in Watch Together** (`WatchSite` 'kick', feature `watchKick`, `?sites=2`, `siteLevel` in
   calls/watch.ts). Desktop Twitch/Kick play in a `<webview>` of the player page (`main/watchView.ts` locks it down;
   preload `watchHost.ts`). A new kind of linked data must be added to `site/privacy.html`.
+- **Communities round 2 (Nov 11, 2026; suggested 0.10.0, on `dev`)** (project doc `glofly-communities-round-2.md`,
+  migrations 0058–0062; the `campfire` branch's 0058–0060 get renumbered when it merges). Approved canvas "Glofly
+  communities round 2"; keep screens matching it. **Night watch** (`constellations/nightwatch.ts`, `safety.ts`,
+  `raid.ts`): reports, mod log (180 days), ban reasons + appeals, raid protection, verification, mention cap.
+  **Custom emoji + stickers** (`emoji/routes.ts`, `/emoji/…` passes the apps' gateways). **Stage + announcement
+  nebulas** (`stages/`): listeners get receive-only hidden LiveKit passes (`stageToken`), presence in memory with
+  30 s pings; announcement posts are copied into followers' nebulas (`crosspost`), edits/deletes follow; apps that
+  don't send feature `round2` get both kinds as read-only text (`threads/legacy.ts`). `toolHooks` now allows several
+  listeners per hook. **Big constellations**: up to 25,000 members; over 1,000 the detail lists staff + people
+  around (`membersPartial`, `memberCount`) and `GET …/members` pages/searches; send fan-out through `emitToUsers`
+  (one encode) and `onlineNow`; per-nebula/per-constellation limits (`constellations/busy.ts`); unread capped at
+  1,000. Control → Insights → Big constellations (`admin/bigConstellations.ts`). Load test:
+  `test/load/bigConstellation.ts`. **Discord bridge** (`bridge/`): one Glofly Bridge bot (needs DISCORD_CLIENT_ID,
+  DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN; stand-in `test/discordStandIn.ts`), acts as a bot member with an API key
+  so the "shared with" notice shows; bridged messages carry `bridged` (body starts "name: " for older apps).
+  New kinds of data shared with others → `site/privacy.html`.
 - **0.9.3 (Nov 9, 2026)** (project doc `glofly-release-0.9.3.md`): fixes after 0.9.2 (desktop webview queues player
   commands until dom-ready; live streams get the tap-to-start path in `watchSyncStep`; any change request bumps
   "last seen", `noteSeen`) + **Hop** (approved canvas "Glofly Dock Hop"): faces hop on a new message
