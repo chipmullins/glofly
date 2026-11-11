@@ -363,3 +363,98 @@ Terrain. Keep screens matching them. Migration 0060 (add-only): `campfire_sounds
   charged to players, players lifting no-move conditions, pause gaps, fogged-terrain probing, hidden
   names in notices and the drag cache after removal. Accepted: players' unlocked sheets can still
   change their own speed (lock the sheet to stop it); removed players stay in the voice call.
+
+## Round C (PROPOSAL, Nov 11, 2026; not approved, nothing built): lighting and vision, map imports, faster rolls
+
+Boards (canvas "Glofly Campfire (tabletop)", Round C row at y=11420): C_WallsTool, C_DarkView, C_Lighting, C_Import,
+C_QuickRoll, C_Tables, C_PhoneDark, C_PhoneQuick. When Chip approves, copy them into `docs/design/campfire/` and
+change this heading to approved. Size: about 1.5–2× Round B. Migration 0061 (add-only).
+
+### Decisions to confirm with Chip (proposed answers)
+1. **"Players see"** defaults to *their own character* (GM can switch a campaign to *the whole party*).
+2. **Existing scenes keep today's behavior** (manual fog only). Line of sight and lighting are per scene; new scenes
+   start in Daylight with line of sight on; GM picks Darkness when it matters.
+3. **Uploaded map pictures are still sent whole** to players (as with fog today): the darkness is drawn by the app,
+   so the room layout of a picture is in the app's memory. Creatures, notes, doors' state, secret doors and built-map
+   pieces outside what a player has seen are never sent. (Later option: send only explored tiles.)
+4. **Walls and closed doors block movement** too (the Round B path check gains wall crossings).
+5. Rollable tables ship with **Glofly-written starter tables** (the SRD has almost no random tables; no Wizards text).
+
+### Data (migration 0061, add-only)
+- `BuiltWall` gains `kind?: 'wall' | 'window' | 'invisible'` (window: blocks movement, not sight; invisible: blocks
+  movement only) and `door?: { state, secret?: boolean, playersOpen?: boolean }`. Uploaded-map scenes use the same
+  `built.walls` (walls without floors). `BuiltMap.lights?: { id, x, y, bright, dim, color, flicker, on }[]`.
+- `campfire_scenes.lighting` jsonb: `{ mode: 'daylight' | 'dim' | 'dark', los: boolean, remember: boolean }`
+  (null = Round B behavior). `campfire_files.tiles` jsonb: `{ size: 1024, cols, rows, overview }` for maps.
+- `campfire_tokens.light` jsonb `{ bright, dim, color, from: 'sheet' | 'gm' }` and `vision` jsonb (override; normally
+  from the sheet's senses / monster senses: darkvision, blindsight, truesight, tremorsense as blindsight on ground).
+- Campaign `settings.partyVision: 'own' | 'party'`.
+- `campfire_explored` (scene_id, user_id, bits bytea, updated_at; PK scene+user): one bit per square, set by the
+  server only. 100×100 squares = 1.25 KB.
+- `campfire_macros` (id, campaign_id, owner_id, character_id, name, icon, steps jsonb, message, visibility, pinned,
+  position, timestamps). `campfire_tables` (id, campaign_id, name, dice, rows jsonb `[{ min, max, text, monster?,
+  table? }]`, shared boolean, created_by, timestamps). `campfire_requests` (door pick/force asks: id, campaign_id,
+  token_id, wall_id, kind, created_by, created_at; like `campfire_pending`).
+- Limits: 5,000 wall pieces and 200 lights per scene, 100 macros per person per campaign (10 steps each), 200 tables
+  per campaign (200 rows each, nesting 3 deep), imported files ≤ 60 MB.
+
+### Vision (shared `packages/shared/src/campfire/vision.ts`, run on the server)
+- `visibility(origin, segments)`: angle-sweep visibility polygon over sight-blocking segments (walls, windows don't
+  block sight, closed/locked doors do, open doors don't), with a grid bucket index so a move costs a few ms at
+  2,000 walls. Light polygons are cached per (scene walls version, light) and recomputed when walls/doors/lights or a
+  carried light move.
+- A point is **seen** by a character when it's inside their sight polygon and either lit (inside some light's polygon
+  and radius, or the scene is Daylight/Dim), within darkvision (shown as dim, gray) or within blindsight/truesight.
+  Blinded: only blindsight. A token is seen when its center or any of 4 inset points is seen.
+- **Server-enforced**: `tokenVisible` gains the viewer's vision (union of their characters, or the party's), so every
+  existing path (`emitToken`, `emitFog`, table state, combat list, hit events, notices, pings, measure) filters by it.
+  Doors/walls/notes/built pieces outside explored squares are stripped for players; secret doors go out as plain walls.
+- Each player gets `campfire:vision` `{ sceneId, shapes: { bright[], dim[], dark[] }, explored }` (polygons in map
+  pixels; apps only draw them, they never compute sight). Sent when their sight changes (own move, door, light,
+  condition, lighting change), throttled to 10/s during drags. GM "See as" = `GET .../scenes/:id/view-as/:userId`.
+- Explored bits are set from what's seen (when `remember` is on); "Forget explored areas" clears them.
+
+### Doors
+- Players with `playersOpen` doors open/close them only when one of their tokens is within 5 ft (server-checked,
+  paused tables refuse). Locked: "Locked" + Pick the lock / Force it → `campfire_requests` → the GM screen shows it,
+  GM sets a DC; the player rolls (Thieves' tools / Athletics); GM opens or not.
+- Door changes re-run vision for everyone on the scene (one `campfire:door` + `campfire:vision` per affected player).
+
+### Imports (desktop/web)
+- `.dd2vtt` / `.uvtt` / `.df2vtt` (Universal VTT JSON: `resolution`, `line_of_sight`, `objects_line_of_sight`,
+  `portals`, `lights`, `environment`, base64 `image`). Read in the app; the picture uploads like any map
+  (re-encoded, metadata stripped, scaled to ≤ 8192 px a side with a notice); the walls/doors/lights JSON is validated
+  again on the server (counts, coordinates inside the map). Portals become doors as saved; windows aren't marked by
+  every exporter, so the GM can switch a door to a window. A light's single range → dim radius, bright = half.
+- **Tiles**: every map picture (imported or uploaded) gets 1024 px WebP tiles + a ≤ 2048 px overview at upload; phones
+  load the overview, then the tiles on screen. Old maps get tiles the first time they're opened.
+
+### Speed at the table
+- **Quick-roll bar** (desktop/web bottom bar, phones a strip above the sheet): starts with the character's attacks,
+  prepared spells and favorite skills; pin/unpin, drag to reorder, keys 1–9 (only while the table has focus; no
+  clash with Space/W/V). Right-click / Shift / Ctrl (phones: long-press, or the Normal/Advantage/Disadvantage switch).
+- **Macros**: steps (attack with an action, add damage dice on a hit, roll an expression, a check, a save, cast a
+  spell at a level) + an optional message with `[[...]]` inline rolls. `@str…@cha` (mods), `@prof`, `@level`,
+  `@spellmod`, `@spelldc` only, read from the roller's own sheet on the server. No scripts. Made on desktop/web;
+  phones run them.
+- **Rollable tables** (GM screen tab "Tables"): dice, ranges, `[[1d4]]` inside results, link a row to an SRD/homebrew
+  monster (Place N hidden on the GM layer / Add to encounter) or to another table. Roll only me / for everyone;
+  shared tables players can roll; `/table <name>` in the table chat or the group's Glofly chats (roll card + plain
+  text for older apps, like `/roll`). Paste a list (one row per line) to make a table.
+
+### Phones
+- Dark view from `campfire:vision` shapes (one even-odd darkness path per kind: cheaper than masks on Android),
+  remembered squares dimmed, tap a door within 5 ft → the door sheet, light a torch from inventory, quick-roll strip,
+  macros run. Drawing walls, lights, imports and table editing stay on computers.
+
+### Build order and checks
+1. Shared `vision.ts` + unit tests (polygons, doors, windows, darkvision, blinded, party union) and a benchmark
+   (2,000 walls, 20 lights, 6 players, 200 tokens: target < 15 ms per move).
+2. Server: migration 0061, lighting/walls/lights/doors routes, `tokenVisible` with vision, `campfire:vision`,
+   explored bits, door requests, walls blocking movement, See as. e2e tests for every "never sent" case.
+3. Desktop/web: walls/doors/windows/lights tool, Lighting tab, See as, dark view, door popover, light a torch.
+4. Phones: dark view, doors, tiles.
+5. Imports + tiles (server tiler, desktop/web import flow), then quick-roll bar, macros, rollable tables (+ `/table`).
+6. Playwright GM + player (desktop and 390 pt phone web build), independent security review (vision leaks, door
+   adjacency, explored writes, import parsing/decoding limits, macro refs, table loops, rate limits), privacy page
+   (explored areas, macros, tables, imported maps), project docs, report with screenshots.
