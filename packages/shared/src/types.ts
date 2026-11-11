@@ -286,6 +286,8 @@ export type Message = {
   forwarded?: ForwardedFrom
   /** Communities round 2: a copy of a followed announcement (older apps show it as a forward) */
   crosspost?: import('./stages').Crosspost
+  /** Communities round 2: copied from Discord by the bridge (show `bridged.name` + "via Discord") */
+  bridged?: import('./discord').BridgedFrom
   /** Communities round 2: custom emoji its text or reactions use (`:name:`; older apps show the text) */
   emojis?: import('./emoji').EmojiRef[]
   /** 0.9.3: a constellation's Live alert (older apps show the body, its link and preview) */

@@ -85,6 +85,8 @@ import CfxCard from './CfxCard'
 import FormatBar from './FormatBar'
 import ForwardDialog from './ForwardDialog'
 import { applyFormat, type FormatAction } from '@glofly/shared/format'
+import { bridgedText } from '@glofly/shared/discord'
+import { bridgeAvatarUrl } from '../lib/media'
 import { cfxJoinCodeIn } from '@glofly/shared/games'
 import * as outbox from '../lib/outbox'
 import { ArrowDownIcon, ChevronIcon, MicIcon, WatchIcon } from './icons'
@@ -1861,14 +1863,16 @@ export default function ChatView({
             {newLine}
             <MessageItem
               item={
-                nebula?.bodyFor && !m.deleted && nebula.bodyFor(m) !== null
-                  ? { ...item, message: { ...m, body: nebula.bodyFor(m)! } }
-                  : item
+                m.bridged && !m.deleted
+                  ? { ...item, message: { ...m, body: bridgedText(m.body, m.bridged) } }
+                  : nebula?.bodyFor && !m.deleted && nebula.bodyFor(m) !== null
+                    ? { ...item, message: { ...m, body: nebula.bodyFor(m)! } }
+                    : item
               }
               grouped={grouped}
               meId={me.id}
-              authorName={nameOf(m.senderId)}
-              authorRole={nebula ? nebula.roleOf(m.senderId) : null}
+              authorName={m.bridged ? m.bridged.name : nameOf(m.senderId)}
+              authorRole={nebula && !m.bridged ? nebula.roleOf(m.senderId) : null}
               groupMentions={nebula?.mentions}
               canDeleteOthers={!!nebula && m.senderId !== me.id && nebula.canDelete(m.senderId)}
               isAnswer={isAnswer}
@@ -1902,7 +1906,16 @@ export default function ChatView({
                     ) : null))
               }
               avatar={
-                m.senderId === me.id ? (
+                m.bridged ? (
+                  // Communities round 2 (board 5b): a Discord person, with their Discord picture
+                  <span className="avatar message-bridged-face" aria-hidden="true">
+                    {m.bridged.avatar ? (
+                      <img className="avatar-photo" src={bridgeAvatarUrl(m.bridged.avatar)} alt="" />
+                    ) : (
+                      m.bridged.name.slice(0, 2).toUpperCase()
+                    )}
+                  </span>
+                ) : m.senderId === me.id ? (
                   <span className="avatar avatar--mine" aria-hidden="true">
                     <AvatarFace id={me.id} name={me.displayName} avatarVersion={me.avatarVersion} />
                   </span>

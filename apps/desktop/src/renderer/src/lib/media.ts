@@ -39,3 +39,7 @@ export const constellationIconUrl = (constellationId: string, version: string): 
 /** Communities round 2: a constellation's custom emoji or sticker picture. */
 export const emojiUrl = (id: string): string =>
   server ? `${server}/emoji/${id}/image` : `glofly-media://emoji/${id}`
+
+/** Communities round 2: a Discord person's picture (the bridge's copy), "<discordUserId>/<hash>". */
+export const bridgeAvatarUrl = (avatar: string): string =>
+  server ? `${server}/bridge/avatars/${avatar}` : `glofly-media://bridge-avatars/${avatar}`

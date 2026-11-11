@@ -226,3 +226,36 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Communities round 2 (board 5b): a message from Discord through the bridge. */
+.message-via {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: #eef0fb;
+  color: #3b3f9e;
+  border: 1px solid #d6d9f6;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.message-bridged-face {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #5865f2;
+  color: #fff;
+  font: 700 14px var(--glo-font-body);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: none;
+}
+.message-bridged-face .avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

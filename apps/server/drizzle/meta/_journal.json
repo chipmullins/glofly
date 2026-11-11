@@ -435,6 +435,13 @@
       "when": 1794433641197,
       "tag": "0061_big_constellations",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1794434254473,
+      "tag": "0062_discord_bridge",
+      "breakpoints": true
     }
   ]
 }

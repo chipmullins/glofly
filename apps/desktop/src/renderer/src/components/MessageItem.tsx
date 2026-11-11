@@ -579,6 +579,7 @@ export default function MessageItem({
             >
               {!m.deleted && m.crosspost ? m.crosspost.constellationName : authorName}
             </span>
+            {m.bridged && <span className="message-via">via Discord</span>}
             {authorRole && (
               <span
                 className="cx-role-badge"

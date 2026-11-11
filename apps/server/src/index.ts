@@ -27,6 +27,7 @@ import { nightWatchRouter, purgeOldModeration } from "./constellations/nightwatc
 import { emojiRouter } from "./emoji/routes";
 import { stagesRouter } from "./stages/routes";
 import { memberPagesRouter } from "./constellations/memberPages";
+import { discordRouter, startDiscordBridge, stopDiscordBridge } from "./bridge/discord";
 import { announcementsRouter, startAnnouncements } from "./stages/announcements";
 import { ready as loadStages, sweepStages } from "./stages/state";
 import { invitePageRouter, sweepConstellationBirthdays } from "./constellations/community";
@@ -194,6 +195,8 @@ app.use(emojiRouter);
 app.use("/constellations", stagesRouter);
 // Communities round 2: the member list page by page (big constellations).
 app.use("/constellations", memberPagesRouter);
+// Communities round 2: the Discord bridge (/constellations/:id/discord…, /bridge/…).
+app.use(discordRouter);
 app.use("/constellations", announcementsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
@@ -262,6 +265,7 @@ async function shutdown(signal: string): Promise<void> {
   setTimeout(() => process.exit(0), 10_000).unref();
   // 0.8.2: Control's uptime history counts this as an update, not an outage.
   await noteStopping("update");
+  stopDiscordBridge();
   try {
     // Closing the live connections also closes the HTTP server, once its requests are done.
     await stopRealtime();
@@ -283,6 +287,7 @@ startToolHooks();
 startReaderPushes();
 startLiveAlerts();
 startAnnouncements();
+startDiscordBridge();
 
 connectRedis()
   .then(() => {

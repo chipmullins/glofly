@@ -77,7 +77,7 @@ import {
   publicGame,
   shortBody,
   attachmentSummary,
-  type GameState, type MessageButton, type ForwardedFrom, type LiveCard, type EmojiRef, type Crosspost, isCustomReaction } from "@glofly/shared";
+  type GameState, type MessageButton, type ForwardedFrom, type LiveCard, type EmojiRef, type Crosspost, type BridgedFrom, isCustomReaction } from "@glofly/shared";
 import { toolHook } from "../toolHooks";
 import { nebulaBusy } from "../constellations/busy";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
@@ -133,6 +133,7 @@ export const messageFields = {
   alsoInNebula: messages.alsoInNebula,
   forwarded: messages.forwarded,
   crosspost: messages.crosspost,
+  bridged: messages.bridged,
   liveCard: messages.liveCard,
   emojis: messages.emojis,
 };
@@ -156,6 +157,7 @@ export type MessageRow = {
   threadId?: string | null;
   forwarded?: ForwardedFrom | null;
   crosspost?: Crosspost | null;
+  bridged?: BridgedFrom | null;
   liveCard?: LiveCard | null;
   emojis?: EmojiRef[] | null;
   alsoInNebula?: boolean;
@@ -286,6 +288,8 @@ export async function hydrate(rows: MessageRow[]) {
       ...(r.forwarded && !deleted ? { forwarded: r.forwarded } : {}),
       // Communities round 2: a copy of a followed announcement.
       ...(r.crosspost && !deleted ? { crosspost: r.crosspost } : {}),
+      // Communities round 2: copied from Discord (deleted ones keep the name: who it was).
+      ...(r.bridged ? { bridged: r.bridged } : {}),
       // 0.9.3: a constellation's Live alert (older apps show the text and link preview).
       ...(r.liveCard && !deleted ? { liveCard: r.liveCard } : {}),
       // Communities round 2: custom emoji in its text or reactions (older apps show :name:).
@@ -1734,7 +1738,12 @@ export async function postScheduledText(
   // Communities round: a bot's buttons (the bot API only).
   buttons: MessageButton[] | null = null,
   // 0.9.3 Live alerts: the card, and the role ping an admin set up (checked when they chose it).
-  extra: { liveCard?: LiveCard; approvedPing?: { everyone: "everyone" | "here" | null; roleIds: string[] } } = {},
+  extra: {
+    liveCard?: LiveCard;
+    approvedPing?: { everyone: "everyone" | "here" | null; roleIds: string[] };
+    // Communities round 2: a message the Discord bridge copied in (its author's Discord name).
+    bridged?: BridgedFrom;
+  } = {},
 ): Promise<{ ok: true; messageId: string } | { ok: false; reason: string }> {
   const chat = await access(conversationId, myId);
   if (!chat) return { ok: false, reason: "You're no longer in this chat." };
@@ -1775,6 +1784,7 @@ export async function postScheduledText(
         ...group,
         buttons: buttons?.length ? buttons : null,
         liveCard: chat.kind === "nebula" ? (extra.liveCard ?? null) : null,
+        bridged: chat.kind === "nebula" ? (extra.bridged ?? null) : null,
       })
       .returning(messageFields);
     await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));

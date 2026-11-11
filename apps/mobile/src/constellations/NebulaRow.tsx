@@ -1,8 +1,9 @@
 import { InlineEmoji, reactionRef, withCustomEmoji } from '@/chat/customEmoji'
 import { memo, type ReactNode } from 'react'
 import { CfxCard } from '@/constellations/CfxCard'
-import { cfxJoinCodeIn } from '@glofly/shared'
-import { Linking, Pressable, View } from 'react-native'
+import { bridgedText, cfxJoinCodeIn } from '@glofly/shared'
+import { Image, Linking, Pressable, View } from 'react-native'
+import { SERVER_URL } from '@/lib/config'
 import { clockTime, quoteSummary, shortBody, splitGroupMentions, splitMentions, type Message, type PublicUser } from '@glofly/shared'
 import type { MentionGroups } from './roles'
 import { Attachments } from '@/chat/Attachments'
@@ -156,7 +157,8 @@ export const NebulaRow = memo(function NebulaRow({
   const face = compact ? 32 : 36
   const size = compact ? 15 : 15
   // Communities round 2: a copy of a followed announcement shows its constellation's name.
-  const name = m.crosspost && !m.deleted ? m.crosspost.constellationName : sender ? sender.displayName : 'Someone'
+  // Communities round 2 (board 5b): someone on Discord through the bridge shows with their Discord name.
+  const name = m.bridged ? m.bridged.name : m.crosspost && !m.deleted ? m.crosspost.constellationName : sender ? sender.displayName : 'Someone'
   const nameOf = (id: string) => (id === meId ? 'You' : firstName(people[id]?.displayName ?? 'Someone', people[id]?.username))
   const special = !m.deleted && !!(m.gif || m.poll || m.game)
   const jumbo = !m.deleted && !special && !m.replyTo && !m.attachments.length && isJumbo(m.body)
@@ -212,9 +214,21 @@ export const NebulaRow = memo(function NebulaRow({
         {row.joined ? (
           <View style={{ width: face }} />
         ) : (
-          <Pressable accessibilityLabel={`${name}'s profile`} onPress={() => sender && onFacePress?.(sender.id)} disabled={!onFacePress}>
-            {sender ? <Face user={sender} size={face} me={sender.id === meId} /> : <View style={{ width: face, height: face, borderRadius: face / 2, backgroundColor: N.card2 }} />}
-          </Pressable>
+          m.bridged ? (
+            <View accessibilityElementsHidden style={{ width: face, height: face, borderRadius: face / 2, backgroundColor: '#5865f2', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {m.bridged.avatar ? (
+                <Image source={{ uri: `${SERVER_URL}/bridge/avatars/${m.bridged.avatar}` }} style={{ width: face, height: face }} />
+              ) : (
+                <Text size={face * 0.36} weight="bold" style={{ color: '#fff' }}>
+                  {m.bridged.name.slice(0, 2).toUpperCase()}
+                </Text>
+              )}
+            </View>
+          ) : (
+            <Pressable accessibilityLabel={`${name}'s profile`} onPress={() => sender && onFacePress?.(sender.id)} disabled={!onFacePress}>
+              {sender ? <Face user={sender} size={face} me={sender.id === meId} /> : <View style={{ width: face, height: face, borderRadius: face / 2, backgroundColor: N.card2 }} />}
+            </Pressable>
+          )
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
           {row.joined ? null : (
@@ -222,6 +236,13 @@ export const NebulaRow = memo(function NebulaRow({
               <Text size={compact ? 12 : 13} weight="bold" style={{ color: role?.color ?? N.ink }} numberOfLines={1}>
                 {name}
               </Text>
+              {m.bridged ? (
+                <View style={{ paddingHorizontal: 7, paddingVertical: 1, borderRadius: 9, backgroundColor: '#eef0fb' }}>
+                  <Text size={10.5} weight="bold" style={{ color: '#3b3f9e' }}>
+                    via Discord
+                  </Text>
+                </View>
+              ) : null}
               {role?.name ? (
                 <View style={{ paddingHorizontal: compact ? 5 : 6, paddingVertical: 1, borderRadius: 4, backgroundColor: role.badgeBg }}>
                   <Text size={10} weight="bold" style={{ color: role.color }}>
@@ -293,7 +314,7 @@ export const NebulaRow = memo(function NebulaRow({
                       {m.body}
                     </Text>
                   ) : (
-                    <Body text={m.liveCard ? liveAlertBody(m.body, m.liveCard) : m.body} members={members} meId={meId} size={size} groups={groups} message={m} />
+                    <Body text={m.liveCard ? liveAlertBody(m.body, m.liveCard) : bridgedText(m.body, m.bridged)} members={members} meId={meId} size={size} groups={groups} message={m} />
                   )}
                   {m.crosspost ? (
                     <Text size={12} style={{ color: '#c9b8ab', marginTop: 4 }}>

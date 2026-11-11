@@ -14,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Crosspost, ForwardedFrom, LiveCard, OnboardingSettings } from "@glofly/shared";
+import type { BridgedFrom, Crosspost, DiscordBridgeSettings, ForwardedFrom, LiveCard, OnboardingSettings } from "@glofly/shared";
 
 export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invisible"]);
 // Who can send someone friend requests (Settings → General → Privacy).
@@ -419,6 +419,8 @@ export const messages = pgTable(
     emojis: jsonb("emojis").$type<{ id: string; name: string; animated: boolean }[]>(),
     // Communities round 2: a copy of a followed announcement (forwarded is set too, for older apps).
     crosspost: jsonb("crosspost").$type<Crosspost>(),
+    // Communities round 2: copied from Discord by the bridge (the body starts "name: " for older apps).
+    bridged: jsonb("bridged").$type<BridgedFrom>(),
     // Communities round (Nov 2026): a reply in a thread or forum post (nebulas only). Thread
     // replies stay out of the nebula's own timeline unless alsoInNebula ("Also send to #general").
     threadId: uuid("thread_id").references((): AnyPgColumn => nebulaThreads.id, { onDelete: "cascade" }),
@@ -2338,4 +2340,71 @@ export const crosspostCopies = pgTable(
     followId: uuid("follow_id").references(() => announcementFollows.id, { onDelete: "set null" }),
   },
   (t) => [index("crosspost_copies_source_idx").on(t.sourceMessageId)],
+);
+
+// Communities round 2 (boards 5a–5b): a constellation's Discord bridge. One Discord server per
+// constellation (and per Discord server). The bridge acts in Glofly as a bot with an API key
+// (messages:read + messages:write on the paired nebulas), so members see "shared with Discord".
+export const discordBridges = pgTable(
+  "discord_bridges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .unique()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    guildId: text("guild_id").notNull().unique(),
+    guildName: text("guild_name").notNull(),
+    guildIcon: text("guild_icon"),
+    apiKeyId: uuid("api_key_id").references(() => constellationApiKeys.id, { onDelete: "set null" }),
+    botUserId: uuid("bot_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    settings: jsonb("settings").$type<DiscordBridgeSettings>().notNull(),
+    connectedBy: uuid("connected_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // The bot was removed from the Discord server (nothing goes across until it's added back).
+    lostAt: timestamp("lost_at", { withTimezone: true }),
+  },
+);
+
+// A Discord channel paired with a nebula. Glofly posts there through the channel's webhook (its
+// token is kept to post with; it only lets Glofly post in that one channel).
+export const discordBridgeChannels = pgTable(
+  "discord_bridge_channels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bridgeId: uuid("bridge_id")
+      .notNull()
+      .references(() => discordBridges.id, { onDelete: "cascade" }),
+    discordChannelId: text("discord_channel_id").notNull().unique(),
+    discordChannelName: text("discord_channel_name").notNull(),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .unique()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    webhookId: text("webhook_id").notNull(),
+    webhookToken: text("webhook_token").notNull(),
+    paused: boolean("paused").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("discord_bridge_channels_bridge_idx").on(t.bridgeId)],
+);
+
+// Which Glofly message is which Discord message (edits and deletes follow along).
+export const discordBridgeMessages = pgTable(
+  "discord_bridge_messages",
+  {
+    messageId: uuid("message_id")
+      .primaryKey()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    discordMessageId: text("discord_message_id").notNull(),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => discordBridgeChannels.id, { onDelete: "cascade" }),
+    // "in" = came from Discord, "out" = went to Discord
+    direction: text("direction").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("discord_bridge_messages_discord_idx").on(t.discordMessageId)],
 );

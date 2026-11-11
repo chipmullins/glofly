@@ -238,6 +238,7 @@ export type SettingsPageName =
   | 'emoji'
   | 'automod'
   | 'integrations'
+  | 'discord'
   | 'liveAlerts'
   | 'onboarding'
   | 'delete'

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { AppealsPage, ModLogPage, NightWatchPage, SafetyPage } from './NightWatch'
 import EmojiSettings from './EmojiSettings'
+import DiscordBridgePage from './DiscordBridgePage'
 import { OnboardingSetup } from './Onboarding'
 import {
   CloseDaysField,
@@ -183,6 +184,8 @@ export default function ConstellationSettings({
       name: 'Integrations',
       show: can(c, 'manageConstellation')
     },
+    // Communities round 2 (board 5a): the Discord ↔ Glofly bridge.
+    { id: 'discord', name: 'Discord bridge', show: can(c, 'manageConstellation'), group: 'Extras', isNew: true },
     // 0.9.3: Twitch, Kick and YouTube alerts (board 4).
     { id: 'liveAlerts', name: 'Live alerts', show: can(c, 'manageConstellation') }
   ]
@@ -307,6 +310,7 @@ export default function ConstellationSettings({
           {page === 'emoji' && <EmojiSettings c={c} onProblem={onProblem} />}
           {page === 'integrations' && <IntegrationsPage c={c} onProblem={onProblem} />}
           {page === 'liveAlerts' && <LiveAlertsPage c={c} onProblem={onProblem} />}
+          {page === 'discord' && <DiscordBridgePage c={c} onProblem={onProblem} />}
           {page === 'onboarding' && (
             <OnboardingSetup c={c} onChanged={onChanged} onProblem={onProblem} />
           )}
