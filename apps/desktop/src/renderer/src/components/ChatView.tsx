@@ -1,3 +1,4 @@
+import { EmojiPlace, emojiApi, emojiIdsFor, typedFor } from '../lib/customEmoji'
 import { parseSlashCommand, type ConstellationCommand } from '@glofly/shared/integrations'
 import { shortBody } from '@glofly/shared/gifs'
 import type { ThreadSummary } from '@glofly/shared/threads'
@@ -146,6 +147,8 @@ export type ThreadMode = {
 
 /** How a nebula's chat differs from a group chat (2.0, Constellation.dc.html). */
 export type NebulaMode = {
+  /** Communities round 2: its constellation (inside-only custom emoji work here) */
+  constellationId?: string
   name: string
   topic: string | null
   /** Why you can't post here (timed out, read-only), or null when you can */
@@ -542,7 +545,12 @@ export default function ChatView({
     mention && isGroup
       ? [
           ...(nebula?.mentions
-            ? groupMentionSuggestions(mention.query, nebula.mentions.roles, nebula.mentions.canEveryone, 5)
+            ? groupMentionSuggestions(
+                mention.query,
+                nebula.mentions.roles,
+                nebula.mentions.canEveryone,
+                5
+              )
             : []),
           ...mentionSuggestions(mention.query, conversation.members).map(
             (person): MentionChoice => ({ kind: 'person', person })
@@ -983,11 +991,14 @@ export default function ChatView({
       return
     }
     stickToBottom.current = true
+    // Communities round 2: which custom emoji its :names: mean.
+    const emojis = emojiIdsFor(body, nebula?.constellationId ?? threadMode?.constellationId ?? null)
     outbox.enqueue(outboxKey, {
       body,
       replyTo: replyingTo ? preview(replyingTo) : null,
       attachments: readyFiles,
       lantern: lantern && !threadId,
+      ...(emojis.length ? { emojis } : {}),
       ...threadExtras
     })
     setDraft('')
@@ -1023,6 +1034,18 @@ export default function ChatView({
     inputRef.current?.focus()
   }
 
+  /** Communities round 2: one of a constellation's stickers. */
+  async function sendCxSticker(stickerId: string): Promise<void> {
+    setGifAnchor(null)
+    const replyTo = replyingTo
+    setReplyingTo(null)
+    stickToBottom.current = true
+    const result = await emojiApi.sendSticker(stickerId, conversation.id, replyTo?.id)
+    if (result.ok) upsert(result.data.message)
+    else handleFailure(result.error, result.message)
+    inputRef.current?.focus()
+  }
+
   async function createPoll(question: string, options: string[], multi: boolean): Promise<boolean> {
     stickToBottom.current = true
     const result = await window.glofly.chat.createPoll(conversation.id, question, options, multi)
@@ -1042,7 +1065,8 @@ export default function ChatView({
   /** Long-press ❤️ or 🔥: the reaction stays on (never toggled off), and fireflies fly. */
   async function sendFireflies(m: Message, emoji: FireflyEmoji): Promise<void> {
     if (!conversation.canMessage) return
-    const mine = m.reactions.find((r) => r.emoji === emoji)?.userIds.includes(me.id) ?? false
+    const mine =
+      m.reactions.find((r) => r.emoji === typedFor(emoji))?.userIds.includes(me.id) ?? false
     const [reacted, flew] = await Promise.all([
       mine ? null : window.glofly.conversations.react(conversation.id, m.id, emoji, true),
       window.glofly.chat.fireflies(conversation.id, emoji)
@@ -1446,7 +1470,13 @@ export default function ChatView({
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
       const k = e.key.toLowerCase()
       const action: FormatAction | null =
-        k === 'b' && !e.shiftKey ? 'b' : k === 'i' && !e.shiftKey ? 'i' : k === 'x' && e.shiftKey ? 's' : null
+        k === 'b' && !e.shiftKey
+          ? 'b'
+          : k === 'i' && !e.shiftKey
+            ? 'i'
+            : k === 'x' && e.shiftKey
+              ? 's'
+              : null
       if (action) {
         e.preventDefault()
         format(action)
@@ -1584,7 +1614,9 @@ export default function ChatView({
   const muted = isMuted(conversation, now)
 
   /** Puts an emoji where the cursor was (replacing any selected text). */
-  function insertEmoji(emoji: string, keepOpen: boolean): void {
+  function insertEmoji(picked: string, keepOpen: boolean): void {
+    // Communities round 2: a custom emoji goes in as ":name:".
+    const emoji = typedFor(picked)
     const input = inputRef.current
     const start = input?.selectionStart ?? draft.length
     const end = input?.selectionEnd ?? draft.length
@@ -1979,1212 +2011,1233 @@ export default function ChatView({
   )
 
   return (
-    <div
-      className="chat"
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
-      {threadMode ? null : nebula ? (
-        <header className="chat-header cx-nebula-header">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="#f47a1f" aria-hidden="true">
-            <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" />
-          </svg>
-          <div className="cx-nebula-name">
-            <EmojiText text={nebula.name} />
-          </div>
-          {nebula.topic && (
-            <div className="cx-nebula-topic">
-              <EmojiText text={nebula.topic} />
-            </div>
-          )}
-          {/* 0.7.5: "📌 3" next to the topic opens the pins right there */}
-          {pinList.length > 0 && (
-            <span className="cx-pins-anchor">
-              <NebulaPinsChip
-                count={pinList.length}
-                open={pinsOpen}
-                onToggle={() => setPinsOpen((v) => !v)}
-              />
-              {pinsOpen && (
-                <NebulaPinsPopover
-                  nebulaName={nebula.name}
-                  pins={pinList}
-                  canPin={canPin}
-                  personOf={personOf}
-                  onJump={(id) => {
-                    setPinsOpen(false)
-                    setLocalJump({ messageId: id, nonce: Date.now() })
-                  }}
-                  onUnpin={(id) => {
-                    const m = pinList.find((p) => p.message.id === id)?.message
-                    if (m) void setPinned(m, false)
-                  }}
-                  onClose={() => setPinsOpen(false)}
-                />
-              )}
-            </span>
-          )}
-          <span style={{ flex: 1 }} />
-          <button
-            type="button"
-            className="chat-header-button"
-            aria-label={
-              nebula.onSearchAll ? 'Search the whole constellation' : 'Search this nebula'
-            }
-            title={
-              nebula.onSearchAll
-                ? `Search every nebula (${shortcutLabel('F')} searches this one)`
-                : `Search messages (${shortcutLabel('F')})`
-            }
-            onClick={nebula.onSearchAll ?? onSearch}
-          >
-            <SearchIcon size={19} />
-          </button>
-
-          {/* 0.7.3: pinned messages (0.7.5: with pins, the chip by the topic opens them) */}
-          {pinList.length === 0 && (
-            <span className="pins-wrap">
-              <button
-                type="button"
-                className={
-                  pinsOpen ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
-                }
-                aria-label="Pinned messages"
-                aria-expanded={pinsOpen}
-                title="Pinned messages"
-                onClick={() => setPinsOpen((v) => !v)}
-              >
-                <PinnedMessagesIcon size={20} />
-              </button>
-              {pinsOpen && (
-                <PinsPanel
-                  pins={pinList}
-                  canPin={canPin}
-                  nameOf={nameOf}
-                  onJump={(id) => {
-                    setPinsOpen(false)
-                    setLocalJump({ messageId: id, nonce: Date.now() })
-                  }}
-                  onUnpin={(id) => {
-                    const m = pinList.find((p) => p.message.id === id)?.message
-                    if (m) void setPinned(m, false)
-                  }}
-                  onClose={() => setPinsOpen(false)}
-                />
-              )}
-            </span>
-          )}
-          {nebula.headerExtra}
-          <button
-            type="button"
-            className={
-              nebula.membersOpen ? 'chat-header-button cx-members-toggle--on' : 'chat-header-button'
-            }
-            aria-label={nebula.membersOpen ? 'Hide member list' : 'Show member list'}
-            aria-pressed={nebula.membersOpen}
-            title="Members"
-            onClick={nebula.onToggleMembers}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <circle cx="9" cy="8" r="3.5" />
-              <path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" />
-              <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.9.7 3.1 2.4 3.5 5.2" />
+    <EmojiPlace.Provider value={nebula?.constellationId ?? threadMode?.constellationId ?? null}>
+      <div
+        className="chat"
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        {threadMode ? null : nebula ? (
+          <header className="chat-header cx-nebula-header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#f47a1f" aria-hidden="true">
+              <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" />
             </svg>
-          </button>
-        </header>
-      ) : (
-        <header className="chat-header">
-          {partner ? (
-            <button
-              type="button"
-              className="chat-header-face"
-              aria-label={`View ${partner.displayName}'s profile`}
-              title="View profile"
-              onClick={() => onViewProfile(partner)}
-            >
-              <Avatar
-                id={partner.id}
-                name={partner.displayName}
-                avatarVersion={partner.avatarVersion}
-                status={partnerPresence?.status}
-                mobile={onMobile(partnerPresence ?? undefined)}
-                ring="var(--glo-bg)"
-              />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="chat-header-face"
-              aria-label="Group settings"
-              onClick={onGroupSettings}
-            >
-              <GroupAvatar
-                members={conversation.members}
-                me={me}
-                size={44}
-                ring="var(--glo-bg)"
-                group={conversation}
-              />
-            </button>
-          )}
-          <div className="chat-title">
-            <div className="chat-names">
-              <span className="chat-name">
-                <EmojiText text={title} />
-              </span>
-              {partner && <span className="chat-user">@{partner.username}</span>}
-              {partner && social.glows[partner.id] && (
-                <span className="chat-glow">
-                  <GlowMark glow={social.glows[partner.id]} name={partner.displayName} />
-                  {glowLabel(social.glows[partner.id])}
-                </span>
-              )}
-              {partner && social.birthdays.includes(partner.id) && (
-                <BirthdayMark name={partner.displayName} />
-              )}
+            <div className="cx-nebula-name">
+              <EmojiText text={nebula.name} />
             </div>
-            {partner ? (
-              partnerPresence && (
-                <span className="chat-status">
-                  <EmojiText text={presenceHeader(seenSince(partnerPresence, messages, partner.id), now)} />
-                </span>
-              )
-            ) : (
-              <button type="button" className="chat-status chat-members" onClick={onGroupSettings}>
-                {memberCountLabel(conversation.memberCount)}
-                {(() => {
-                  const online = conversation.members.filter(
-                    (m) => (presence[m.id]?.status ?? 'offline') !== 'offline'
-                  ).length
-                  return online > 0 ? ` · ${online} online` : ''
-                })()}
-              </button>
+            {nebula.topic && (
+              <div className="cx-nebula-topic">
+                <EmojiText text={nebula.topic} />
+              </div>
             )}
-          </div>
-          <div className="chat-header-actions">
-            {/* 0.7.4 (Chip, Oct 20): Call, Video and Search stay as buttons; Profile, Pinned
-                messages, Pin chat and Mute moved into ⋯ More. Pins and Muted still show as their
-                own button while they apply, so they stay one click away. */}
-            <button
-              type="button"
-              className="chat-header-button"
-              aria-label={groupCallOn ? 'Join call' : 'Start voice call'}
-              title={callTitle('Voice')}
-              disabled={!canCall}
-              onClick={() => calls.start(conversation, false)}
-            >
-              <PhoneIcon size={20} />
-            </button>
-            <button
-              type="button"
-              className="chat-header-button"
-              aria-label={groupCallOn ? 'Join call with video' : 'Start video call'}
-              title={callTitle('Video')}
-              disabled={!canCall}
-              onClick={() => calls.start(conversation, true)}
-            >
-              <VideoIcon size={21} />
-            </button>
-            {/* Groups (0.5.2): ring only some of the group. */}
-            {isGroup && !groupCallOn && conversation.memberCount > 2 && (
-              <button
-                type="button"
-                className="chat-header-button chat-header-button--narrow"
-                aria-label="Choose who to ring"
-                title="Choose who to ring"
-                disabled={!canCall}
-                onClick={() => setRingSome(true)}
-              >
-                <ChevronIcon direction="down" size={16} strokeWidth={2.4} />
-              </button>
+            {/* 0.7.5: "📌 3" next to the topic opens the pins right there */}
+            {pinList.length > 0 && (
+              <span className="cx-pins-anchor">
+                <NebulaPinsChip
+                  count={pinList.length}
+                  open={pinsOpen}
+                  onToggle={() => setPinsOpen((v) => !v)}
+                />
+                {pinsOpen && (
+                  <NebulaPinsPopover
+                    nebulaName={nebula.name}
+                    pins={pinList}
+                    canPin={canPin}
+                    personOf={personOf}
+                    onJump={(id) => {
+                      setPinsOpen(false)
+                      setLocalJump({ messageId: id, nonce: Date.now() })
+                    }}
+                    onUnpin={(id) => {
+                      const m = pinList.find((p) => p.message.id === id)?.message
+                      if (m) void setPinned(m, false)
+                    }}
+                    onClose={() => setPinsOpen(false)}
+                  />
+                )}
+              </span>
             )}
+            <span style={{ flex: 1 }} />
             <button
               type="button"
               className="chat-header-button"
-              aria-label="Search this chat"
-              title={`Search messages (${shortcutLabel('F')})`}
-              onClick={onSearch}
+              aria-label={
+                nebula.onSearchAll ? 'Search the whole constellation' : 'Search this nebula'
+              }
+              title={
+                nebula.onSearchAll
+                  ? `Search every nebula (${shortcutLabel('F')} searches this one)`
+                  : `Search messages (${shortcutLabel('F')})`
+              }
+              onClick={nebula.onSearchAll ?? onSearch}
             >
               <SearchIcon size={19} />
             </button>
-            {pinList.length > 0 && (
+
+            {/* 0.7.3: pinned messages (0.7.5: with pins, the chip by the topic opens them) */}
+            {pinList.length === 0 && (
               <span className="pins-wrap">
                 <button
                   type="button"
                   className={
                     pinsOpen ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
                   }
-                  aria-label={`Pinned messages (${pinList.length})`}
+                  aria-label="Pinned messages"
                   aria-expanded={pinsOpen}
                   title="Pinned messages"
                   onClick={() => setPinsOpen((v) => !v)}
                 >
                   <PinnedMessagesIcon size={20} />
-                  <span className="pins-count">{pinList.length}</span>
                 </button>
-                {pinsOpen && pinsPanel}
+                {pinsOpen && (
+                  <PinsPanel
+                    pins={pinList}
+                    canPin={canPin}
+                    nameOf={nameOf}
+                    onJump={(id) => {
+                      setPinsOpen(false)
+                      setLocalJump({ messageId: id, nonce: Date.now() })
+                    }}
+                    onUnpin={(id) => {
+                      const m = pinList.find((p) => p.message.id === id)?.message
+                      if (m) void setPinned(m, false)
+                    }}
+                    onClose={() => setPinsOpen(false)}
+                  />
+                )}
               </span>
             )}
-            {muted && (
+            {nebula.headerExtra}
+            <button
+              type="button"
+              className={
+                nebula.membersOpen
+                  ? 'chat-header-button cx-members-toggle--on'
+                  : 'chat-header-button'
+              }
+              aria-label={nebula.membersOpen ? 'Hide member list' : 'Show member list'}
+              aria-pressed={nebula.membersOpen}
+              title="Members"
+              onClick={nebula.onToggleMembers}
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <circle cx="9" cy="8" r="3.5" />
+                <path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" />
+                <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.9.7 3.1 2.4 3.5 5.2" />
+              </svg>
+            </button>
+          </header>
+        ) : (
+          <header className="chat-header">
+            {partner ? (
               <button
                 type="button"
-                className="chat-header-button chat-header-button--on"
-                aria-label={isGroup ? 'Unmute this group' : 'Unmute this chat'}
-                title={
-                  conversation.mutedUntil
-                    ? `${mutedLabel(conversation.mutedUntil)} · Unmute`
-                    : 'Unmute'
-                }
-                onClick={() => onMute(null)}
+                className="chat-header-face"
+                aria-label={`View ${partner.displayName}'s profile`}
+                title="View profile"
+                onClick={() => onViewProfile(partner)}
               >
-                <BellOffIcon size={19} />
+                <Avatar
+                  id={partner.id}
+                  name={partner.displayName}
+                  avatarVersion={partner.avatarVersion}
+                  status={partnerPresence?.status}
+                  mobile={onMobile(partnerPresence ?? undefined)}
+                  ring="var(--glo-bg)"
+                />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="chat-header-face"
+                aria-label="Group settings"
+                onClick={onGroupSettings}
+              >
+                <GroupAvatar
+                  members={conversation.members}
+                  me={me}
+                  size={44}
+                  ring="var(--glo-bg)"
+                  group={conversation}
+                />
               </button>
             )}
-            <div className="chat-header-wrap" ref={muteRef}>
+            <div className="chat-title">
+              <div className="chat-names">
+                <span className="chat-name">
+                  <EmojiText text={title} />
+                </span>
+                {partner && <span className="chat-user">@{partner.username}</span>}
+                {partner && social.glows[partner.id] && (
+                  <span className="chat-glow">
+                    <GlowMark glow={social.glows[partner.id]} name={partner.displayName} />
+                    {glowLabel(social.glows[partner.id])}
+                  </span>
+                )}
+                {partner && social.birthdays.includes(partner.id) && (
+                  <BirthdayMark name={partner.displayName} />
+                )}
+              </div>
+              {partner ? (
+                partnerPresence && (
+                  <span className="chat-status">
+                    <EmojiText
+                      text={presenceHeader(seenSince(partnerPresence, messages, partner.id), now)}
+                    />
+                  </span>
+                )
+              ) : (
+                <button
+                  type="button"
+                  className="chat-status chat-members"
+                  onClick={onGroupSettings}
+                >
+                  {memberCountLabel(conversation.memberCount)}
+                  {(() => {
+                    const online = conversation.members.filter(
+                      (m) => (presence[m.id]?.status ?? 'offline') !== 'offline'
+                    ).length
+                    return online > 0 ? ` · ${online} online` : ''
+                  })()}
+                </button>
+              )}
+            </div>
+            <div className="chat-header-actions">
+              {/* 0.7.4 (Chip, Oct 20): Call, Video and Search stay as buttons; Profile, Pinned
+                messages, Pin chat and Mute moved into ⋯ More. Pins and Muted still show as their
+                own button while they apply, so they stay one click away. */}
               <button
                 type="button"
-                className={
-                  moreOpen || muteOpen
-                    ? 'chat-header-button chat-header-button--on'
-                    : 'chat-header-button'
-                }
-                aria-label="More"
-                aria-haspopup="menu"
-                aria-expanded={moreOpen}
-                title="More"
-                onClick={() => {
-                  setMuteOpen(false)
-                  setMoreOpen((v) => !v)
-                }}
+                className="chat-header-button"
+                aria-label={groupCallOn ? 'Join call' : 'Start voice call'}
+                title={callTitle('Voice')}
+                disabled={!canCall}
+                onClick={() => calls.start(conversation, false)}
               >
-                <MoreIcon size={20} />
+                <PhoneIcon size={20} />
               </button>
-              {moreOpen && (
-                <div
-                  role="menu"
-                  className="menu chat-more-menu"
+              <button
+                type="button"
+                className="chat-header-button"
+                aria-label={groupCallOn ? 'Join call with video' : 'Start video call'}
+                title={callTitle('Video')}
+                disabled={!canCall}
+                onClick={() => calls.start(conversation, true)}
+              >
+                <VideoIcon size={21} />
+              </button>
+              {/* Groups (0.5.2): ring only some of the group. */}
+              {isGroup && !groupCallOn && conversation.memberCount > 2 && (
+                <button
+                  type="button"
+                  className="chat-header-button chat-header-button--narrow"
+                  aria-label="Choose who to ring"
+                  title="Choose who to ring"
+                  disabled={!canCall}
+                  onClick={() => setRingSome(true)}
+                >
+                  <ChevronIcon direction="down" size={16} strokeWidth={2.4} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="chat-header-button"
+                aria-label="Search this chat"
+                title={`Search messages (${shortcutLabel('F')})`}
+                onClick={onSearch}
+              >
+                <SearchIcon size={19} />
+              </button>
+              {pinList.length > 0 && (
+                <span className="pins-wrap">
+                  <button
+                    type="button"
+                    className={
+                      pinsOpen ? 'chat-header-button chat-header-button--on' : 'chat-header-button'
+                    }
+                    aria-label={`Pinned messages (${pinList.length})`}
+                    aria-expanded={pinsOpen}
+                    title="Pinned messages"
+                    onClick={() => setPinsOpen((v) => !v)}
+                  >
+                    <PinnedMessagesIcon size={20} />
+                    <span className="pins-count">{pinList.length}</span>
+                  </button>
+                  {pinsOpen && pinsPanel}
+                </span>
+              )}
+              {muted && (
+                <button
+                  type="button"
+                  className="chat-header-button chat-header-button--on"
+                  aria-label={isGroup ? 'Unmute this group' : 'Unmute this chat'}
+                  title={
+                    conversation.mutedUntil
+                      ? `${mutedLabel(conversation.mutedUntil)} · Unmute`
+                      : 'Unmute'
+                  }
+                  onClick={() => onMute(null)}
+                >
+                  <BellOffIcon size={19} />
+                </button>
+              )}
+              <div className="chat-header-wrap" ref={muteRef}>
+                <button
+                  type="button"
+                  className={
+                    moreOpen || muteOpen
+                      ? 'chat-header-button chat-header-button--on'
+                      : 'chat-header-button'
+                  }
                   aria-label="More"
-                  onKeyDown={(e) => {
-                    // Up / Down move between the items, like the other menus' keyboard use.
-                    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-                    e.preventDefault()
-                    const items = [
-                      ...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
-                    ]
-                    const at = items.indexOf(document.activeElement as HTMLButtonElement)
-                    const next =
-                      e.key === 'ArrowDown'
-                        ? (at + 1) % items.length
-                        : (at - 1 + items.length) % items.length
-                    items[next]?.focus()
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
+                  title="More"
+                  onClick={() => {
+                    setMuteOpen(false)
+                    setMoreOpen((v) => !v)
                   }}
                 >
-                  {partner ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="menu-item"
-                      autoFocus
-                      onClick={() => {
-                        setMoreOpen(false)
-                        onViewProfile(partner)
-                      }}
-                    >
-                      <ProfileIcon size={18} strokeWidth={1.9} />
-                      View profile
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="menu-item"
-                      autoFocus
-                      onClick={() => {
-                        setMoreOpen(false)
-                        onGroupSettings()
-                      }}
-                    >
-                      <GroupIcon size={18} />
-                      Group settings
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="menu-item"
-                    onClick={() => {
-                      setMoreOpen(false)
-                      setPinsOpen(true)
+                  <MoreIcon size={20} />
+                </button>
+                {moreOpen && (
+                  <div
+                    role="menu"
+                    className="menu chat-more-menu"
+                    aria-label="More"
+                    onKeyDown={(e) => {
+                      // Up / Down move between the items, like the other menus' keyboard use.
+                      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+                      e.preventDefault()
+                      const items = [
+                        ...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
+                      ]
+                      const at = items.indexOf(document.activeElement as HTMLButtonElement)
+                      const next =
+                        e.key === 'ArrowDown'
+                          ? (at + 1) % items.length
+                          : (at - 1 + items.length) % items.length
+                      items[next]?.focus()
                     }}
                   >
-                    <PinnedMessagesIcon size={18} />
-                    Pinned messages
-                    {pinList.length > 0 && (
-                      <span className="menu-item-count">{pinList.length}</span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="menu-item"
-                    onClick={() => {
-                      setMoreOpen(false)
-                      onTogglePin()
-                    }}
-                  >
-                    <PinIcon size={18} />
-                    {conversation.pinnedAt
-                      ? `Unpin ${isGroup ? 'group' : 'chat'}`
-                      : `Pin ${isGroup ? 'group' : 'chat'} to the top`}
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="menu-item"
-                    aria-haspopup={muted ? undefined : 'menu'}
-                    onClick={() => {
-                      setMoreOpen(false)
-                      if (muted) onMute(null)
-                      else setMuteOpen(true)
-                    }}
-                  >
-                    {muted ? <BellIcon size={18} /> : <BellOffIcon size={18} />}
-                    {muted ? 'Unmute' : `Mute ${isGroup ? 'group' : 'chat'}…`}
-                  </button>
-                </div>
-              )}
-              {muteOpen && (
-                <div role="menu" className="menu chat-mute-menu">
-                  {muted && conversation.mutedUntil ? (
-                    <>
-                      <span className="menu-subhead">{mutedLabel(conversation.mutedUntil)}</span>
+                    {partner ? (
                       <button
                         type="button"
                         role="menuitem"
                         className="menu-item"
+                        autoFocus
                         onClick={() => {
-                          setMuteOpen(false)
-                          onMute(null)
+                          setMoreOpen(false)
+                          onViewProfile(partner)
                         }}
                       >
-                        <BellIcon size={18} />
-                        Unmute
+                        <ProfileIcon size={18} strokeWidth={1.9} />
+                        View profile
                       </button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="menu-subhead">Mute {isGroup ? 'group' : 'chat'}</span>
-                      {MUTE_CHOICES.map((c) => (
+                    ) : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="menu-item"
+                        autoFocus
+                        onClick={() => {
+                          setMoreOpen(false)
+                          onGroupSettings()
+                        }}
+                      >
+                        <GroupIcon size={18} />
+                        Group settings
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        setMoreOpen(false)
+                        setPinsOpen(true)
+                      }}
+                    >
+                      <PinnedMessagesIcon size={18} />
+                      Pinned messages
+                      {pinList.length > 0 && (
+                        <span className="menu-item-count">{pinList.length}</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        setMoreOpen(false)
+                        onTogglePin()
+                      }}
+                    >
+                      <PinIcon size={18} />
+                      {conversation.pinnedAt
+                        ? `Unpin ${isGroup ? 'group' : 'chat'}`
+                        : `Pin ${isGroup ? 'group' : 'chat'} to the top`}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      aria-haspopup={muted ? undefined : 'menu'}
+                      onClick={() => {
+                        setMoreOpen(false)
+                        if (muted) onMute(null)
+                        else setMuteOpen(true)
+                      }}
+                    >
+                      {muted ? <BellIcon size={18} /> : <BellOffIcon size={18} />}
+                      {muted ? 'Unmute' : `Mute ${isGroup ? 'group' : 'chat'}…`}
+                    </button>
+                  </div>
+                )}
+                {muteOpen && (
+                  <div role="menu" className="menu chat-mute-menu">
+                    {muted && conversation.mutedUntil ? (
+                      <>
+                        <span className="menu-subhead">{mutedLabel(conversation.mutedUntil)}</span>
                         <button
-                          key={c.duration}
                           type="button"
                           role="menuitem"
-                          className="menu-item menu-item--indent"
+                          className="menu-item"
                           onClick={() => {
                             setMuteOpen(false)
-                            onMute(c.duration)
+                            onMute(null)
                           }}
                         >
-                          {c.label}
+                          <BellIcon size={18} />
+                          Unmute
                         </button>
-                      ))}
-                      <span className="menu-note">
-                        {isGroup
-                          ? 'No sounds or notifications. You’ll still hear about @mentions.'
-                          : 'No sounds or notifications from this chat.'}
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-              {pinsOpen && pinList.length === 0 && pinsPanel}
-            </div>
-          </div>
-        </header>
-      )}
-
-      {nebula ? null : inThisCall ? (
-        <CallPanel me={me} />
-      ) : (
-        <JoinCallBar conversation={conversation} me={me} />
-      )}
-      {ringSome && (
-        <RingSomeDialog
-          conversation={conversation}
-          onClose={() => setRingSome(false)}
-          onStart={(video, ring) => {
-            setRingSome(false)
-            calls.start(conversation, video, ring)
-          }}
-        />
-      )}
-
-      <div className="chat-day-anchor" aria-hidden="true">
-        {floatDay && (
-          <span className={floatDayOn ? 'chat-day-pill chat-day-pill--on' : 'chat-day-pill'}>
-            {floatDay}
-          </span>
-        )}
-      </div>
-      <div
-        className="chat-messages"
-        ref={listRef}
-        onScroll={onScroll}
-        onWheel={noteUserScroll}
-        onPointerDown={noteUserScroll}
-        onTouchMove={noteUserScroll}
-        tabIndex={-1}
-        onKeyDown={(e) => {
-          noteUserScroll()
-          if (e.key === 'End' && e.target === e.currentTarget && farUp) {
-            e.preventDefault()
-            jumpToLatest()
-          }
-        }}
-      >
-        {loading && messages.length === 0 && <MessagesSkeleton />}
-        {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}
-        {/* Communities round: a thread starts with the message it came from */}
-        {threadMode && !hasMore && threadMode.parent && (
-          <div className="thread-parent">
-            <span className="thread-parent-label">
-              {threadMode.parent.senderId === me.id ? 'You' : nameOf(threadMode.parent.senderId)} ·{' '}
-              {clockTime(threadMode.parent.createdAt)}
-            </span>
-            <p>
-              <EmojiText
-                text={
-                  threadMode.parent.deleted ? 'This message was deleted.' : threadMode.parent.body
-                }
-              />
-            </p>
-          </div>
-        )}
-        {threadMode && !loading && !hasMore && threadMode.parent && (
-          <div className="thread-count">
-            <span>
-              {messages.length === 0 && pending.length === 0
-                ? 'No replies yet'
-                : `${messages.length} ${messages.length === 1 ? 'reply' : 'replies'}`}
-            </span>
-          </div>
-        )}
-        {!loading && !hasMore && nebula && !threadMode && (
-          <div className="chat-start cx-nebula-start">
-            <span className="cx-nebula-start-mark" aria-hidden="true">
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="#ffb347">
-                <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" />
-              </svg>
-            </span>
-            <h2>
-              Welcome to <EmojiText text={nebula.name} />
-            </h2>
-            <p>
-              {nebula.topic ? (
-                <EmojiText text={nebula.topic} />
-              ) : (
-                'This is the start of this nebula.'
-              )}
-            </p>
-          </div>
-        )}
-        {/* 0.7.5: a brand-new chat says hi with a wave instead of an empty page */}
-        {!loading && !hasMore && !nebula && messages.length === 0 && pending.length === 0 && (
-          <EmptyScene
-            kind={partner ? 'hello' : 'group'}
-            title={
-              partner ? (
-                <>
-                  Say hi to <EmojiText text={partner.displayName.split(/\s+/)[0]} /> 👋
-                </>
-              ) : (
-                <>
-                  <EmojiText text={title} /> is all set
-                </>
-              )
-            }
-            text={
-              partner
-                ? `This is the start of your messages with @${partner.username}.`
-                : 'This is the beginning of the group. Say hello to everyone!'
-            }
-          >
-            {conversation.canMessage && (
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => {
-                  stickToBottom.current = true
-                  outbox.enqueue(conversation.id, {
-                    body: '👋',
-                    replyTo: null,
-                    attachments: [],
-                    lantern: false
-                  })
-                }}
-              >
-                Wave 👋
-              </button>
-            )}
-          </EmptyScene>
-        )}
-        {!loading && !hasMore && !nebula && (messages.length > 0 || pending.length > 0) && (
-          <div className="chat-start">
-            {partner ? (
-              <Avatar
-                id={partner.id}
-                name={partner.displayName}
-                avatarVersion={partner.avatarVersion}
-                size={72}
-              />
-            ) : (
-              <GroupAvatar
-                members={conversation.members}
-                me={me}
-                size={72}
-                ring="var(--glo-bg)"
-                group={conversation}
-              />
-            )}
-            <h2>
-              <EmojiText text={title} />
-            </h2>
-            {partner ? (
-              <p>
-                This is the beginning of your messages with <strong>@{partner.username}</strong>.
-                Say hello!
-              </p>
-            ) : (
-              <p>This is the beginning of the group. Say hello to everyone!</p>
-            )}
-          </div>
-        )}
-
-        {messageRows}
-        {seenLine}
-      </div>
-
-      <div className="chat-jump-anchor">
-        {(farUp || newBelow > 0) && !loading && (
-          <button
-            type="button"
-            className={newBelow > 0 ? 'chat-jump chat-jump--new' : 'chat-jump'}
-            onClick={jumpToLatest}
-            aria-label={
-              newBelow > 0
-                ? `Jump to latest, ${newBelow} new ${newBelow === 1 ? 'message' : 'messages'}`
-                : 'Jump to latest'
-            }
-            title="Jump to latest (End)"
-          >
-            {newBelow > 0 && (
-              <span className="chat-jump-count">{newBelow > 99 ? '99+' : newBelow} new</span>
-            )}
-            <ArrowDownIcon size={18} />
-          </button>
-        )}
-      </div>
-
-      <div className="composer-area">
-        {nebula?.sharedWith?.length ? (
-          <p className="cx-shared-note">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
-            </svg>
-            Messages here are also shared with {nebula.sharedWith.join(' and ')}, set up by this
-            constellation&rsquo;s staff.
-          </p>
-        ) : null}
-        <div className="typing-line" aria-live="polite">
-          {someoneTyping && (
-            <>
-              <span className="typing-dots" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
-              {typingNames.length === 1 ? (
-                <span>
-                  <strong>{typingNames[0]}</strong> is typing…
-                </span>
-              ) : (
-                <span>{typingText(typingNames)}</span>
-              )}
-            </>
-          )}
-        </div>
-
-        {forwardNote && (
-          <p className="chat-notice chat-notice--good" role="status">
-            {forwardNote}
-            <button type="button" aria-label="Dismiss" onClick={() => setForwardNote(null)}>
-              ×
-            </button>
-          </p>
-        )}
-        {notice && (
-          <p className="chat-notice" role="alert">
-            {notice}
-            <button type="button" aria-label="Dismiss" onClick={() => setNotice(null)}>
-              ×
-            </button>
-          </p>
-        )}
-
-        <ScheduledStrip list={laterList} onOpen={() => setLaterOpen(true)} />
-
-        {conversation.canMessage ? (
-          <div
-            className={[
-              'composer',
-              replyingTo && 'composer--replying',
-              lantern && 'composer--lantern'
-            ]
-              .filter(Boolean)
-              .join(' ')}
-          >
-            {fmtSel && !mention && commandMatches.length === 0 && (
-              <FormatBar onFormat={format} />
-            )}
-            {lantern && (
-              <div className="lantern-bar">
-                <LanternIcon size={18} />
-                <span>
-                  <strong>Lantern message</strong> · fades away once everyone has read it
-                </span>
-                <button
-                  type="button"
-                  aria-label="Turn off lantern"
-                  title="Turn off lantern"
-                  onClick={() => setLantern(false)}
-                >
-                  ×
-                </button>
-              </div>
-            )}
-            {uploads.length > 0 && (
-              <UploadTray
-                conversationId={conversation.id}
-                uploads={uploads}
-                onRemove={removeUpload}
-              />
-            )}
-            {replyingTo && (
-              <div className="reply-bar">
-                <span>
-                  Replying to <strong>{nameOf(replyingTo.senderId)}</strong>
-                  <span className="reply-bar-text">
-                    <EmojiText text={textOf(replyingTo)} />
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  aria-label="Cancel reply"
-                  title="Cancel reply (Esc)"
-                  onClick={() => setReplyingTo(null)}
-                >
-                  ×
-                </button>
-              </div>
-            )}
-            {commandMatches.length > 0 && (
-              <div
-                className="mention-picker"
-                role="listbox"
-                id="command-picker"
-                aria-label="Commands"
-              >
-                <span className="mention-picker-head">Commands</span>
-                {commandMatches.map((c, i) => (
-                  <button
-                    key={c.name}
-                    type="button"
-                    role="option"
-                    id={`command-option-${i}`}
-                    aria-selected={i === commandIndex}
-                    className="mention-option"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onMouseEnter={() => setCommandIndex(i)}
-                    onClick={() => pickCommand(c.name)}
-                  >
-                    <span className="mention-option-name">/{c.name}</span>
-                    <span className="mention-option-user command-option-what">{c.description}</span>
-                    <span className="mention-option-user">{c.bot.displayName}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {suggestions.length > 0 && mention && (
-              <div
-                className="mention-picker"
-                role="listbox"
-                id="mention-picker"
-                aria-label="People to mention"
-              >
-                <span className="mention-picker-head">Mention someone</span>
-                {suggestions.map((choice, i) => (
-                  <button
-                    key={
-                      choice.kind === 'person'
-                        ? choice.person.id
-                        : choice.kind === 'role'
-                          ? choice.role.id
-                          : choice.kind
-                    }
-                    type="button"
-                    role="option"
-                    id={`mention-option-${i}`}
-                    aria-selected={i === mention.index}
-                    className={
-                      choice.kind === 'person' ? 'mention-option' : 'mention-option mention-option--group'
-                    }
-                    // Keep the cursor in the message box.
-                    onMouseDown={(e) => e.preventDefault()}
-                    onMouseEnter={() => setMention({ ...mention, index: i })}
-                    onClick={() => pickMention(choice)}
-                  >
-                    {choice.kind === 'person' ? (
-                      <>
-                        <Avatar
-                          id={choice.person.id}
-                          name={choice.person.displayName}
-                          avatarVersion={choice.person.avatarVersion}
-                          size={28}
-                        />
-                        <span className="mention-option-name">{choice.person.displayName}</span>
-                        <span className="mention-option-user">@{choice.person.username}</span>
-                      </>
-                    ) : choice.kind === 'role' ? (
-                      <>
-                        <span className="mention-option-group" style={{ color: choice.role.color }}>
-                          @{choice.role.name}
-                        </span>
-                        <span className="mention-option-user">
-                          Role · {choice.role.count} {choice.role.count === 1 ? 'person' : 'people'}
-                        </span>
                       </>
                     ) : (
                       <>
-                        <span className="mention-option-group mention-option-group--all">
-                          @{choice.kind}
-                        </span>
-                        <span className="mention-option-user">
-                          {choice.kind === 'everyone'
-                            ? `Notifies all ${conversation.members.length} people who can see #${nebula?.name ?? ''}`
-                            : `Only people online now (${conversation.members.filter((p) => nebula?.mentions?.onlineIds.includes(p.id)).length})`}
+                        <span className="menu-subhead">Mute {isGroup ? 'group' : 'chat'}</span>
+                        {MUTE_CHOICES.map((c) => (
+                          <button
+                            key={c.duration}
+                            type="button"
+                            role="menuitem"
+                            className="menu-item menu-item--indent"
+                            onClick={() => {
+                              setMuteOpen(false)
+                              onMute(c.duration)
+                            }}
+                          >
+                            {c.label}
+                          </button>
+                        ))}
+                        <span className="menu-note">
+                          {isGroup
+                            ? 'No sounds or notifications. You’ll still hear about @mentions.'
+                            : 'No sounds or notifications from this chat.'}
                         </span>
                       </>
                     )}
-                  </button>
-                ))}
+                  </div>
+                )}
+                {pinsOpen && pinList.length === 0 && pinsPanel}
               </div>
-            )}
-            {threadMode?.alsoInName && (
-              <label className="thread-also">
-                <input
-                  type="checkbox"
-                  checked={alsoInNebula}
-                  onChange={(e) => setAlsoInNebula(e.target.checked)}
-                />
-                Also send to #{threadMode.alsoInName}
-              </label>
-            )}
-            <div className={recording ? 'composer-row composer-row--recording' : 'composer-row'}>
-              {recording ? (
-                <div className="voice-recording" role="status" aria-live="polite">
-                  <button
-                    type="button"
-                    className="voice-cancel"
-                    aria-label="Cancel voice message"
-                    title="Cancel (Esc)"
-                    onClick={recorder.cancel}
-                  >
-                    <TrashIcon />
-                  </button>
-                  <span className="voice-rec-dot" aria-hidden="true" />
-                  <span className="voice-rec-time">
-                    {voiceTime(recorder.elapsedMs)}
-                    <span className="voice-rec-max"> / {voiceTime(VOICE_MAX_MS)}</span>
-                  </span>
-                  <span className="voice-rec-bars" aria-hidden="true">
-                    {recorder.live.map((l, i) => (
-                      <span key={i} style={{ height: `${Math.max(10, Math.round(l * 100))}%` }} />
-                    ))}
-                  </span>
-                  <span
-                    className="voice-rec-hint"
-                    style={holding ? { opacity: 1 - slid / SLIDE_TO_CANCEL } : undefined}
-                  >
-                    {recorder.state === 'starting'
-                      ? 'Starting your mic…'
-                      : holding
-                        ? '‹ Slide left to cancel · let go to send'
-                        : 'Recording · Esc to cancel'}
-                  </span>
-                </div>
-              ) : (
-                <>
-                  <button
-                    ref={plusRef}
-                    type="button"
-                    className={plusAnchor ? 'attach-button attach-button--open' : 'attach-button'}
-                    aria-label="Add photos, files, a poll or a game"
-                    aria-haspopup="menu"
-                    aria-expanded={!!plusAnchor}
-                    title="Photos, videos, files and more"
-                    onClick={(e) => {
-                      const button = e.currentTarget
-                      setPlusAnchor((a) => (a ? null : button))
-                    }}
-                  >
-                    <AttachIcon />
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    hidden
-                    onChange={(e) => {
-                      addFiles(Array.from(e.target.files ?? []))
-                      e.target.value = '' // so the same file can be picked again
-                    }}
-                  />
-                  <textarea
-                    ref={inputRef}
-                    rows={1}
-                    aria-label={`Message ${title}`}
-                    placeholder={
-                      threadMode
-                        ? threadMode.placeholder
-                        : partner
-                          ? `Message @${partner.username}`
-                          : `Message ${title}`
-                    }
-                    value={draft}
-                    maxLength={MESSAGE_MAX + 200}
-                    onChange={onChange}
-                    onKeyDown={onKeyDown}
-                    onPaste={onPaste}
-                    onSelect={(e) => {
-                      if (mention)
-                        checkMention(e.currentTarget.value, e.currentTarget.selectionStart)
-                      noteSelection(e.currentTarget)
-                    }}
-                    onBlur={() => {
-                      setMention(null)
-                      setFmtSel(null)
-                    }}
-                    aria-autocomplete={isGroup ? 'list' : undefined}
-                    aria-controls={suggestions.length > 0 ? 'mention-picker' : undefined}
-                    aria-activedescendant={
-                      suggestions.length > 0 && mention
-                        ? `mention-option-${mention.index}`
-                        : undefined
-                    }
-                  />
-                  {!threadId && (
-                    <button
-                      type="button"
-                      className={gifAnchor ? 'gif-button gif-button--open' : 'gif-button'}
-                      aria-label="GIF"
-                      aria-expanded={!!gifAnchor}
-                      aria-haspopup="dialog"
-                      title="Send a GIF"
-                      onClick={(e) => (gifAnchor ? closeGifs() : setGifAnchor(e.currentTarget))}
-                    >
-                      <GifIcon />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className={emojiAnchor ? 'emoji-button emoji-button--open' : 'emoji-button'}
-                    aria-label="Emoji"
-                    aria-expanded={!!emojiAnchor}
-                    aria-haspopup="dialog"
-                    title="Emoji"
-                    onClick={(e) => (emojiAnchor ? closeEmoji() : setEmojiAnchor(e.currentTarget))}
-                  >
-                    <EmojiIcon />
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                className={[
-                  'mic-button',
-                  recording && 'mic-button--recording',
-                  holding && 'mic-button--holding'
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                aria-label={recording && !holding ? 'Send voice message' : 'Record a voice message'}
-                title={
-                  recording ? undefined : 'Voice message (click to record, or hold and let go)'
-                }
-                style={
-                  holding && slid
-                    ? { transform: `translateX(-${Math.min(slid, 60)}px)` }
-                    : undefined
-                }
-                onPointerDown={micDown}
-                onPointerMove={micMove}
-                onPointerUp={micUp}
-                onPointerCancel={() => {
-                  sendPress.current = false
-                  micUp()
-                }}
-                onClick={(e) => {
-                  // From the keyboard (Enter / Space): start recording, then send.
-                  if (e.detail !== 0) return
-                  if (recording) recorder.finish()
-                  else recorder.start()
-                }}
-              >
-                {recording && !holding ? <SendIcon /> : <MicIcon size={20} />}
-              </button>
-              {!recording && !threadId && draft.trim().length > 0 && (
-                <button
-                  type="button"
-                  className="composer-later"
-                  aria-label="Send later"
-                  aria-haspopup="menu"
-                  title="Send later"
-                  onClick={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect()
-                    setLaterMenu({ x: r.right, y: r.top })
-                  }}
-                >
-                  <ClockIcon size={19} />
-                </button>
-              )}
-              {!recording && (
-                <button
-                  type="button"
-                  className="send-button"
-                  aria-label="Send message"
-                  title={
-                    uploading ? 'Waiting for files to upload…' : 'Send (right-click: send later)'
+            </div>
+          </header>
+        )}
+
+        {nebula ? null : inThisCall ? (
+          <CallPanel me={me} />
+        ) : (
+          <JoinCallBar conversation={conversation} me={me} />
+        )}
+        {ringSome && (
+          <RingSomeDialog
+            conversation={conversation}
+            onClose={() => setRingSome(false)}
+            onStart={(video, ring) => {
+              setRingSome(false)
+              calls.start(conversation, video, ring)
+            }}
+          />
+        )}
+
+        <div className="chat-day-anchor" aria-hidden="true">
+          {floatDay && (
+            <span className={floatDayOn ? 'chat-day-pill chat-day-pill--on' : 'chat-day-pill'}>
+              {floatDay}
+            </span>
+          )}
+        </div>
+        <div
+          className="chat-messages"
+          ref={listRef}
+          onScroll={onScroll}
+          onWheel={noteUserScroll}
+          onPointerDown={noteUserScroll}
+          onTouchMove={noteUserScroll}
+          tabIndex={-1}
+          onKeyDown={(e) => {
+            noteUserScroll()
+            if (e.key === 'End' && e.target === e.currentTarget && farUp) {
+              e.preventDefault()
+              jumpToLatest()
+            }
+          }}
+        >
+          {loading && messages.length === 0 && <MessagesSkeleton />}
+          {loadingOlder && <p className="chat-loading">Loading earlier messages…</p>}
+          {/* Communities round: a thread starts with the message it came from */}
+          {threadMode && !hasMore && threadMode.parent && (
+            <div className="thread-parent">
+              <span className="thread-parent-label">
+                {threadMode.parent.senderId === me.id ? 'You' : nameOf(threadMode.parent.senderId)}{' '}
+                · {clockTime(threadMode.parent.createdAt)}
+              </span>
+              <p>
+                <EmojiText
+                  text={
+                    threadMode.parent.deleted ? 'This message was deleted.' : threadMode.parent.body
                   }
-                  disabled={!canSend}
-                  onClick={send}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    if (!draft.trim()) return
-                    setLaterMenu({ x: e.clientX, y: e.clientY })
+                />
+              </p>
+            </div>
+          )}
+          {threadMode && !loading && !hasMore && threadMode.parent && (
+            <div className="thread-count">
+              <span>
+                {messages.length === 0 && pending.length === 0
+                  ? 'No replies yet'
+                  : `${messages.length} ${messages.length === 1 ? 'reply' : 'replies'}`}
+              </span>
+            </div>
+          )}
+          {!loading && !hasMore && nebula && !threadMode && (
+            <div className="chat-start cx-nebula-start">
+              <span className="cx-nebula-start-mark" aria-hidden="true">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="#ffb347">
+                  <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" />
+                </svg>
+              </span>
+              <h2>
+                Welcome to <EmojiText text={nebula.name} />
+              </h2>
+              <p>
+                {nebula.topic ? (
+                  <EmojiText text={nebula.topic} />
+                ) : (
+                  'This is the start of this nebula.'
+                )}
+              </p>
+            </div>
+          )}
+          {/* 0.7.5: a brand-new chat says hi with a wave instead of an empty page */}
+          {!loading && !hasMore && !nebula && messages.length === 0 && pending.length === 0 && (
+            <EmptyScene
+              kind={partner ? 'hello' : 'group'}
+              title={
+                partner ? (
+                  <>
+                    Say hi to <EmojiText text={partner.displayName.split(/\s+/)[0]} /> 👋
+                  </>
+                ) : (
+                  <>
+                    <EmojiText text={title} /> is all set
+                  </>
+                )
+              }
+              text={
+                partner
+                  ? `This is the start of your messages with @${partner.username}.`
+                  : 'This is the beginning of the group. Say hello to everyone!'
+              }
+            >
+              {conversation.canMessage && (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    stickToBottom.current = true
+                    outbox.enqueue(conversation.id, {
+                      body: '👋',
+                      replyTo: null,
+                      attachments: [],
+                      lantern: false
+                    })
                   }}
                 >
-                  <SendIcon />
+                  Wave 👋
                 </button>
+              )}
+            </EmptyScene>
+          )}
+          {!loading && !hasMore && !nebula && (messages.length > 0 || pending.length > 0) && (
+            <div className="chat-start">
+              {partner ? (
+                <Avatar
+                  id={partner.id}
+                  name={partner.displayName}
+                  avatarVersion={partner.avatarVersion}
+                  size={72}
+                />
+              ) : (
+                <GroupAvatar
+                  members={conversation.members}
+                  me={me}
+                  size={72}
+                  ring="var(--glo-bg)"
+                  group={conversation}
+                />
+              )}
+              <h2>
+                <EmojiText text={title} />
+              </h2>
+              {partner ? (
+                <p>
+                  This is the beginning of your messages with <strong>@{partner.username}</strong>.
+                  Say hello!
+                </p>
+              ) : (
+                <p>This is the beginning of the group. Say hello to everyone!</p>
               )}
             </div>
+          )}
+
+          {messageRows}
+          {seenLine}
+        </div>
+
+        <div className="chat-jump-anchor">
+          {(farUp || newBelow > 0) && !loading && (
+            <button
+              type="button"
+              className={newBelow > 0 ? 'chat-jump chat-jump--new' : 'chat-jump'}
+              onClick={jumpToLatest}
+              aria-label={
+                newBelow > 0
+                  ? `Jump to latest, ${newBelow} new ${newBelow === 1 ? 'message' : 'messages'}`
+                  : 'Jump to latest'
+              }
+              title="Jump to latest (End)"
+            >
+              {newBelow > 0 && (
+                <span className="chat-jump-count">{newBelow > 99 ? '99+' : newBelow} new</span>
+              )}
+              <ArrowDownIcon size={18} />
+            </button>
+          )}
+        </div>
+
+        <div className="composer-area">
+          {nebula?.sharedWith?.length ? (
+            <p className="cx-shared-note">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+              </svg>
+              Messages here are also shared with {nebula.sharedWith.join(' and ')}, set up by this
+              constellation&rsquo;s staff.
+            </p>
+          ) : null}
+          <div className="typing-line" aria-live="polite">
+            {someoneTyping && (
+              <>
+                <span className="typing-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                {typingNames.length === 1 ? (
+                  <span>
+                    <strong>{typingNames[0]}</strong> is typing…
+                  </span>
+                ) : (
+                  <span>{typingText(typingNames)}</span>
+                )}
+              </>
+            )}
           </div>
-        ) : (
-          <p className="composer-locked">
-            {nebula
-              ? (nebula.cantPost ?? "You can't post here right now.")
-              : partner
-                ? `You can only message friends. Add @${partner.username} as a friend to chat again.`
-                : "You can't send messages right now."}
-          </p>
+
+          {forwardNote && (
+            <p className="chat-notice chat-notice--good" role="status">
+              {forwardNote}
+              <button type="button" aria-label="Dismiss" onClick={() => setForwardNote(null)}>
+                ×
+              </button>
+            </p>
+          )}
+          {notice && (
+            <p className="chat-notice" role="alert">
+              {notice}
+              <button type="button" aria-label="Dismiss" onClick={() => setNotice(null)}>
+                ×
+              </button>
+            </p>
+          )}
+
+          <ScheduledStrip list={laterList} onOpen={() => setLaterOpen(true)} />
+
+          {conversation.canMessage ? (
+            <div
+              className={[
+                'composer',
+                replyingTo && 'composer--replying',
+                lantern && 'composer--lantern'
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {fmtSel && !mention && commandMatches.length === 0 && <FormatBar onFormat={format} />}
+              {lantern && (
+                <div className="lantern-bar">
+                  <LanternIcon size={18} />
+                  <span>
+                    <strong>Lantern message</strong> · fades away once everyone has read it
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Turn off lantern"
+                    title="Turn off lantern"
+                    onClick={() => setLantern(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {uploads.length > 0 && (
+                <UploadTray
+                  conversationId={conversation.id}
+                  uploads={uploads}
+                  onRemove={removeUpload}
+                />
+              )}
+              {replyingTo && (
+                <div className="reply-bar">
+                  <span>
+                    Replying to <strong>{nameOf(replyingTo.senderId)}</strong>
+                    <span className="reply-bar-text">
+                      <EmojiText text={textOf(replyingTo)} />
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Cancel reply"
+                    title="Cancel reply (Esc)"
+                    onClick={() => setReplyingTo(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {commandMatches.length > 0 && (
+                <div
+                  className="mention-picker"
+                  role="listbox"
+                  id="command-picker"
+                  aria-label="Commands"
+                >
+                  <span className="mention-picker-head">Commands</span>
+                  {commandMatches.map((c, i) => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      role="option"
+                      id={`command-option-${i}`}
+                      aria-selected={i === commandIndex}
+                      className="mention-option"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setCommandIndex(i)}
+                      onClick={() => pickCommand(c.name)}
+                    >
+                      <span className="mention-option-name">/{c.name}</span>
+                      <span className="mention-option-user command-option-what">
+                        {c.description}
+                      </span>
+                      <span className="mention-option-user">{c.bot.displayName}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {suggestions.length > 0 && mention && (
+                <div
+                  className="mention-picker"
+                  role="listbox"
+                  id="mention-picker"
+                  aria-label="People to mention"
+                >
+                  <span className="mention-picker-head">Mention someone</span>
+                  {suggestions.map((choice, i) => (
+                    <button
+                      key={
+                        choice.kind === 'person'
+                          ? choice.person.id
+                          : choice.kind === 'role'
+                            ? choice.role.id
+                            : choice.kind
+                      }
+                      type="button"
+                      role="option"
+                      id={`mention-option-${i}`}
+                      aria-selected={i === mention.index}
+                      className={
+                        choice.kind === 'person'
+                          ? 'mention-option'
+                          : 'mention-option mention-option--group'
+                      }
+                      // Keep the cursor in the message box.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setMention({ ...mention, index: i })}
+                      onClick={() => pickMention(choice)}
+                    >
+                      {choice.kind === 'person' ? (
+                        <>
+                          <Avatar
+                            id={choice.person.id}
+                            name={choice.person.displayName}
+                            avatarVersion={choice.person.avatarVersion}
+                            size={28}
+                          />
+                          <span className="mention-option-name">{choice.person.displayName}</span>
+                          <span className="mention-option-user">@{choice.person.username}</span>
+                        </>
+                      ) : choice.kind === 'role' ? (
+                        <>
+                          <span
+                            className="mention-option-group"
+                            style={{ color: choice.role.color }}
+                          >
+                            @{choice.role.name}
+                          </span>
+                          <span className="mention-option-user">
+                            Role · {choice.role.count}{' '}
+                            {choice.role.count === 1 ? 'person' : 'people'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="mention-option-group mention-option-group--all">
+                            @{choice.kind}
+                          </span>
+                          <span className="mention-option-user">
+                            {choice.kind === 'everyone'
+                              ? `Notifies all ${conversation.members.length} people who can see #${nebula?.name ?? ''}`
+                              : `Only people online now (${conversation.members.filter((p) => nebula?.mentions?.onlineIds.includes(p.id)).length})`}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {threadMode?.alsoInName && (
+                <label className="thread-also">
+                  <input
+                    type="checkbox"
+                    checked={alsoInNebula}
+                    onChange={(e) => setAlsoInNebula(e.target.checked)}
+                  />
+                  Also send to #{threadMode.alsoInName}
+                </label>
+              )}
+              <div className={recording ? 'composer-row composer-row--recording' : 'composer-row'}>
+                {recording ? (
+                  <div className="voice-recording" role="status" aria-live="polite">
+                    <button
+                      type="button"
+                      className="voice-cancel"
+                      aria-label="Cancel voice message"
+                      title="Cancel (Esc)"
+                      onClick={recorder.cancel}
+                    >
+                      <TrashIcon />
+                    </button>
+                    <span className="voice-rec-dot" aria-hidden="true" />
+                    <span className="voice-rec-time">
+                      {voiceTime(recorder.elapsedMs)}
+                      <span className="voice-rec-max"> / {voiceTime(VOICE_MAX_MS)}</span>
+                    </span>
+                    <span className="voice-rec-bars" aria-hidden="true">
+                      {recorder.live.map((l, i) => (
+                        <span key={i} style={{ height: `${Math.max(10, Math.round(l * 100))}%` }} />
+                      ))}
+                    </span>
+                    <span
+                      className="voice-rec-hint"
+                      style={holding ? { opacity: 1 - slid / SLIDE_TO_CANCEL } : undefined}
+                    >
+                      {recorder.state === 'starting'
+                        ? 'Starting your mic…'
+                        : holding
+                          ? '‹ Slide left to cancel · let go to send'
+                          : 'Recording · Esc to cancel'}
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      ref={plusRef}
+                      type="button"
+                      className={plusAnchor ? 'attach-button attach-button--open' : 'attach-button'}
+                      aria-label="Add photos, files, a poll or a game"
+                      aria-haspopup="menu"
+                      aria-expanded={!!plusAnchor}
+                      title="Photos, videos, files and more"
+                      onClick={(e) => {
+                        const button = e.currentTarget
+                        setPlusAnchor((a) => (a ? null : button))
+                      }}
+                    >
+                      <AttachIcon />
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      hidden
+                      onChange={(e) => {
+                        addFiles(Array.from(e.target.files ?? []))
+                        e.target.value = '' // so the same file can be picked again
+                      }}
+                    />
+                    <textarea
+                      ref={inputRef}
+                      rows={1}
+                      aria-label={`Message ${title}`}
+                      placeholder={
+                        threadMode
+                          ? threadMode.placeholder
+                          : partner
+                            ? `Message @${partner.username}`
+                            : `Message ${title}`
+                      }
+                      value={draft}
+                      maxLength={MESSAGE_MAX + 200}
+                      onChange={onChange}
+                      onKeyDown={onKeyDown}
+                      onPaste={onPaste}
+                      onSelect={(e) => {
+                        if (mention)
+                          checkMention(e.currentTarget.value, e.currentTarget.selectionStart)
+                        noteSelection(e.currentTarget)
+                      }}
+                      onBlur={() => {
+                        setMention(null)
+                        setFmtSel(null)
+                      }}
+                      aria-autocomplete={isGroup ? 'list' : undefined}
+                      aria-controls={suggestions.length > 0 ? 'mention-picker' : undefined}
+                      aria-activedescendant={
+                        suggestions.length > 0 && mention
+                          ? `mention-option-${mention.index}`
+                          : undefined
+                      }
+                    />
+                    {!threadId && (
+                      <button
+                        type="button"
+                        className={gifAnchor ? 'gif-button gif-button--open' : 'gif-button'}
+                        aria-label="GIF"
+                        aria-expanded={!!gifAnchor}
+                        aria-haspopup="dialog"
+                        title="Send a GIF"
+                        onClick={(e) => (gifAnchor ? closeGifs() : setGifAnchor(e.currentTarget))}
+                      >
+                        <GifIcon />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={emojiAnchor ? 'emoji-button emoji-button--open' : 'emoji-button'}
+                      aria-label="Emoji"
+                      aria-expanded={!!emojiAnchor}
+                      aria-haspopup="dialog"
+                      title="Emoji"
+                      onClick={(e) =>
+                        emojiAnchor ? closeEmoji() : setEmojiAnchor(e.currentTarget)
+                      }
+                    >
+                      <EmojiIcon />
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className={[
+                    'mic-button',
+                    recording && 'mic-button--recording',
+                    holding && 'mic-button--holding'
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  aria-label={
+                    recording && !holding ? 'Send voice message' : 'Record a voice message'
+                  }
+                  title={
+                    recording ? undefined : 'Voice message (click to record, or hold and let go)'
+                  }
+                  style={
+                    holding && slid
+                      ? { transform: `translateX(-${Math.min(slid, 60)}px)` }
+                      : undefined
+                  }
+                  onPointerDown={micDown}
+                  onPointerMove={micMove}
+                  onPointerUp={micUp}
+                  onPointerCancel={() => {
+                    sendPress.current = false
+                    micUp()
+                  }}
+                  onClick={(e) => {
+                    // From the keyboard (Enter / Space): start recording, then send.
+                    if (e.detail !== 0) return
+                    if (recording) recorder.finish()
+                    else recorder.start()
+                  }}
+                >
+                  {recording && !holding ? <SendIcon /> : <MicIcon size={20} />}
+                </button>
+                {!recording && !threadId && draft.trim().length > 0 && (
+                  <button
+                    type="button"
+                    className="composer-later"
+                    aria-label="Send later"
+                    aria-haspopup="menu"
+                    title="Send later"
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect()
+                      setLaterMenu({ x: r.right, y: r.top })
+                    }}
+                  >
+                    <ClockIcon size={19} />
+                  </button>
+                )}
+                {!recording && (
+                  <button
+                    type="button"
+                    className="send-button"
+                    aria-label="Send message"
+                    title={
+                      uploading ? 'Waiting for files to upload…' : 'Send (right-click: send later)'
+                    }
+                    disabled={!canSend}
+                    onClick={send}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      if (!draft.trim()) return
+                      setLaterMenu({ x: e.clientX, y: e.clientY })
+                    }}
+                  >
+                    <SendIcon />
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="composer-locked">
+              {nebula
+                ? (nebula.cantPost ?? "You can't post here right now.")
+                : partner
+                  ? `You can only message friends. Add @${partner.username} as a friend to chat again.`
+                  : "You can't send messages right now."}
+            </p>
+          )}
+        </div>
+
+        {laterMenu && (
+          <SendLaterMenu
+            anchor={laterMenu}
+            disabledReason={laterBlocked}
+            onPick={(at) => void sendLater(at)}
+            onClose={() => setLaterMenu(null)}
+          />
+        )}
+        {laterOpen && (
+          <ScheduledPanel
+            conversationId={conversation.id}
+            list={laterList}
+            onProblem={setNotice}
+            onClose={() => setLaterOpen(false)}
+          />
+        )}
+
+        {dragging && (
+          <div className="drop-overlay" aria-hidden="true">
+            <span className="drop-overlay-icon">
+              <FileIcon size={30} />
+            </span>
+            <strong>
+              Drop to send to <EmojiText text={title} />
+            </strong>
+            <span>Photos, videos and files (files up to 25 MB, videos up to 64 MB)</span>
+          </div>
+        )}
+
+        <ChatFireflies conversationId={conversation.id} nameOf={nameOf} meId={me.id} />
+        {partner && social.birthdays.includes(partner.id) && (
+          <BirthdayConfetti key={partner.id} userId={partner.id} name={partner.displayName} />
+        )}
+
+        {plusAnchor && conversation.canMessage && (
+          <div
+            ref={plusMenuRef}
+            role="menu"
+            className="menu plus-menu"
+            style={plusMenuPlace(plusAnchor)}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                setPlusAnchor(null)
+                fileInputRef.current?.click()
+              }}
+            >
+              <FileIcon size={18} />
+              Photos, videos or files
+            </button>
+            {isGroup && !threadId && (
+              <button
+                type="button"
+                role="menuitem"
+                className="menu-item"
+                onClick={() => {
+                  setPlusAnchor(null)
+                  setPollOpen(true)
+                }}
+              >
+                <PollIcon />
+                Poll
+              </button>
+            )}
+            {!threadId && (
+              <button
+                type="button"
+                role="menuitem"
+                className="menu-item"
+                onClick={() => {
+                  setPlusAnchor(null)
+                  setGameAnchor(plusRef.current)
+                }}
+              >
+                <GameIcon />
+                Play a game
+              </button>
+            )}
+            {!nebula && (
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={lantern}
+                className={lantern ? 'menu-item menu-item--on' : 'menu-item'}
+                onClick={() => {
+                  setPlusAnchor(null)
+                  setLantern((on) => !on)
+                  inputRef.current?.focus()
+                }}
+              >
+                <LanternIcon />
+                <span className="menu-item-text">
+                  <span>Lantern message</span>
+                  <span className="menu-item-sub">Fades away once it’s read</span>
+                </span>
+                {lantern && <span className="plus-menu-check">✓</span>}
+              </button>
+            )}
+          </div>
+        )}
+
+        {gameAnchor && conversation.canMessage && (
+          <GameMenu anchor={gameAnchor} onPick={(k) => void startGame(k)} onClose={closeGames} />
+        )}
+
+        {gifAnchor && conversation.canMessage && (
+          <GifPicker
+            anchor={gifAnchor}
+            onPick={(g) => void sendGif(g)}
+            onPickSticker={(st) => void sendSticker(st)}
+            onPickCxSticker={(id) => void sendCxSticker(id)}
+            onClose={closeGifs}
+          />
+        )}
+
+        {pollOpen && <NewPollDialog onCreate={createPoll} onClose={() => setPollOpen(false)} />}
+
+        {emojiAnchor && conversation.canMessage && (
+          <EmojiPicker
+            anchor={emojiAnchor}
+            userId={me.id}
+            label="Add emoji to your message"
+            allowMultiple
+            onPick={insertEmoji}
+            onClose={closeEmoji}
+          />
+        )}
+
+        {viewing && (
+          <ChatPhotoViewer
+            conversationId={conversation.id}
+            chatName={nebula ? nebula.name : isGroup ? title : null}
+            messages={messages}
+            start={viewing.photos[viewing.index]}
+            fallback={viewing.photos}
+            personOf={personOf}
+            nameOf={nameOf}
+            onShowInChat={jumpTo}
+            onClose={() => setViewing(null)}
+            onFailure={handleFailure}
+          />
+        )}
+
+        {forwarding && (
+          <ForwardDialog
+            message={forwarding}
+            sender={personOf(forwarding.senderId) ?? null}
+            onClose={() => setForwarding(null)}
+            onSent={(summary) => {
+              setForwarding(null)
+              setForwardNote(summary)
+            }}
+          />
+        )}
+        {deleting && (
+          <ConfirmDialog
+            title="Delete message?"
+            message={
+              nebula
+                ? deleting.senderId === me.id
+                  ? "It will be removed for everyone in this nebula. This can't be undone."
+                  : `You're deleting ${nameOf(deleting.senderId)}'s message as a moderator. It's removed for everyone and noted in Moderation.`
+                : isGroup
+                  ? "It will be removed for everyone in the group. This can't be undone."
+                  : "It will be removed for both of you. This can't be undone."
+            }
+            confirmLabel="Delete"
+            danger
+            onConfirm={() => void confirmDelete()}
+            onCancel={() => setDeleting(null)}
+          />
         )}
       </div>
-
-      {laterMenu && (
-        <SendLaterMenu
-          anchor={laterMenu}
-          disabledReason={laterBlocked}
-          onPick={(at) => void sendLater(at)}
-          onClose={() => setLaterMenu(null)}
-        />
-      )}
-      {laterOpen && (
-        <ScheduledPanel
-          conversationId={conversation.id}
-          list={laterList}
-          onProblem={setNotice}
-          onClose={() => setLaterOpen(false)}
-        />
-      )}
-
-      {dragging && (
-        <div className="drop-overlay" aria-hidden="true">
-          <span className="drop-overlay-icon">
-            <FileIcon size={30} />
-          </span>
-          <strong>
-            Drop to send to <EmojiText text={title} />
-          </strong>
-          <span>Photos, videos and files (files up to 25 MB, videos up to 64 MB)</span>
-        </div>
-      )}
-
-      <ChatFireflies conversationId={conversation.id} nameOf={nameOf} meId={me.id} />
-      {partner && social.birthdays.includes(partner.id) && (
-        <BirthdayConfetti key={partner.id} userId={partner.id} name={partner.displayName} />
-      )}
-
-      {plusAnchor && conversation.canMessage && (
-        <div
-          ref={plusMenuRef}
-          role="menu"
-          className="menu plus-menu"
-          style={plusMenuPlace(plusAnchor)}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item"
-            onClick={() => {
-              setPlusAnchor(null)
-              fileInputRef.current?.click()
-            }}
-          >
-            <FileIcon size={18} />
-            Photos, videos or files
-          </button>
-          {isGroup && !threadId && (
-            <button
-              type="button"
-              role="menuitem"
-              className="menu-item"
-              onClick={() => {
-                setPlusAnchor(null)
-                setPollOpen(true)
-              }}
-            >
-              <PollIcon />
-              Poll
-            </button>
-          )}
-          {!threadId && (
-            <button
-              type="button"
-              role="menuitem"
-              className="menu-item"
-              onClick={() => {
-                setPlusAnchor(null)
-                setGameAnchor(plusRef.current)
-              }}
-            >
-              <GameIcon />
-              Play a game
-            </button>
-          )}
-          {!nebula && (
-            <button
-              type="button"
-              role="menuitemcheckbox"
-              aria-checked={lantern}
-              className={lantern ? 'menu-item menu-item--on' : 'menu-item'}
-              onClick={() => {
-                setPlusAnchor(null)
-                setLantern((on) => !on)
-                inputRef.current?.focus()
-              }}
-            >
-              <LanternIcon />
-              <span className="menu-item-text">
-                <span>Lantern message</span>
-                <span className="menu-item-sub">Fades away once it’s read</span>
-              </span>
-              {lantern && <span className="plus-menu-check">✓</span>}
-            </button>
-          )}
-        </div>
-      )}
-
-      {gameAnchor && conversation.canMessage && (
-        <GameMenu anchor={gameAnchor} onPick={(k) => void startGame(k)} onClose={closeGames} />
-      )}
-
-      {gifAnchor && conversation.canMessage && (
-        <GifPicker
-          anchor={gifAnchor}
-          onPick={(g) => void sendGif(g)}
-          onPickSticker={(st) => void sendSticker(st)}
-          onClose={closeGifs}
-        />
-      )}
-
-      {pollOpen && <NewPollDialog onCreate={createPoll} onClose={() => setPollOpen(false)} />}
-
-      {emojiAnchor && conversation.canMessage && (
-        <EmojiPicker
-          anchor={emojiAnchor}
-          userId={me.id}
-          label="Add emoji to your message"
-          allowMultiple
-          onPick={insertEmoji}
-          onClose={closeEmoji}
-        />
-      )}
-
-      {viewing && (
-        <ChatPhotoViewer
-          conversationId={conversation.id}
-          chatName={nebula ? nebula.name : isGroup ? title : null}
-          messages={messages}
-          start={viewing.photos[viewing.index]}
-          fallback={viewing.photos}
-          personOf={personOf}
-          nameOf={nameOf}
-          onShowInChat={jumpTo}
-          onClose={() => setViewing(null)}
-          onFailure={handleFailure}
-        />
-      )}
-
-      {forwarding && (
-        <ForwardDialog
-          message={forwarding}
-          sender={personOf(forwarding.senderId) ?? null}
-          onClose={() => setForwarding(null)}
-          onSent={(summary) => {
-            setForwarding(null)
-            setForwardNote(summary)
-          }}
-        />
-      )}
-      {deleting && (
-        <ConfirmDialog
-          title="Delete message?"
-          message={
-            nebula
-              ? deleting.senderId === me.id
-                ? "It will be removed for everyone in this nebula. This can't be undone."
-                : `You're deleting ${nameOf(deleting.senderId)}'s message as a moderator. It's removed for everyone and noted in Moderation.`
-              : isGroup
-                ? "It will be removed for everyone in the group. This can't be undone."
-                : "It will be removed for both of you. This can't be undone."
-          }
-          confirmLabel="Delete"
-          danger
-          onConfirm={() => void confirmDelete()}
-          onCancel={() => setDeleting(null)}
-        />
-      )}
-    </div>
+    </EmojiPlace.Provider>
   )
 }
 

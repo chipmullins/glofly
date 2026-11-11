@@ -28,6 +28,8 @@ export type Pending = {
   lantern: boolean
   /** Failed because the connection was down: retried once on reconnect */
   offline?: boolean
+  /** Communities round 2: the custom emoji the text uses (their ids) */
+  emojis?: string[]
   /**
    * Communities round: a reply in a thread. `conversationId` is then the outbox's own key
    * ("<chat>#<thread>", see threadKey) and the message goes to `sendTo` with this threadId.
@@ -38,10 +40,11 @@ export type Pending = {
 }
 
 export type NewPending = Pick<Pending, 'body' | 'replyTo' | 'attachments' | 'lantern'> &
-  Partial<Pick<Pending, 'sendTo' | 'threadId' | 'alsoInNebula'>>
+  Partial<Pick<Pending, 'sendTo' | 'threadId' | 'alsoInNebula' | 'emojis'>>
 
 /** The outbox key for a thread's messages (kept apart from the nebula's own). */
-export const threadKey = (conversationId: string, threadId: string): string => `${conversationId}#${threadId}`
+export const threadKey = (conversationId: string, threadId: string): string =>
+  `${conversationId}#${threadId}`
 
 /** How long before a message still on its way says "Sending…". */
 export const SLOW_AFTER_MS = 1500
@@ -157,7 +160,10 @@ async function deliver(item: Pending, attempt = 0): Promise<void> {
     {
       ...(item.lantern ? { lantern: true } : {}),
       clientId: item.clientId,
-      ...(item.threadId ? { threadId: item.threadId, alsoInNebula: item.alsoInNebula === true } : {})
+      ...(item.emojis?.length ? { emojis: item.emojis } : {}),
+      ...(item.threadId
+        ? { threadId: item.threadId, alsoInNebula: item.alsoInNebula === true }
+        : {})
     }
   )
   clearTimeout(slowTimer)

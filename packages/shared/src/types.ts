@@ -284,6 +284,8 @@ export type Message = {
   lanternFadeAt?: string | null
   /** 0.9.3: a forwarded message (older apps just show its text) */
   forwarded?: ForwardedFrom
+  /** Communities round 2: custom emoji its text or reactions use (`:name:`; older apps show the text) */
+  emojis?: import('./emoji').EmojiRef[]
   /** 0.9.3: a constellation's Live alert (older apps show the body, its link and preview) */
   liveCard?: import('./connections').LiveCard
   /** Communities round (Nov 2026): buttons under a bot's message (constellations only) */
@@ -603,6 +605,8 @@ export type ServerEvent =
   | { type: 'constellation:voice'; constellationId: string; voice: import('./constellations').VoiceNebulaState }
   /** It's gone for me (deleted, I was kicked or banned, or it was taken down) */
   | { type: 'constellation:removed'; constellationId: string; reason: 'kicked' | 'banned' | 'taken_down' | 'deleted'; banReason?: string | null }
+  /** Communities round 2: a constellation's emoji or stickers changed (refresh the picker) */
+  | { type: 'emoji:changed'; constellationId: string }
   /** Communities round 2: Night watch changed (moderators: refresh the dashboard and badge) */
   | { type: 'nightwatch:changed'; constellationId: string }
   /** Communities round 2: raid protection paused joins (moderators) */

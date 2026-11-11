@@ -24,6 +24,7 @@ import { broadcastsRouter, sweepBroadcasts } from "./broadcasts/routes";
 import { callsRouter } from "./calls/routes";
 import { constellationsRouter } from "./constellations/routes";
 import { nightWatchRouter, purgeOldModeration } from "./constellations/nightwatch";
+import { emojiRouter } from "./emoji/routes";
 import { invitePageRouter, sweepConstellationBirthdays } from "./constellations/community";
 // 0.8.0 community tools: search, events with RSVP, AutoMod lite, the Inbox.
 import { communityToolsRouter } from "./constellations/communityTools";
@@ -183,6 +184,8 @@ app.use("/constellations", communityToolsRouter);
 app.use("/constellations", liveAlertsRouter);
 // Communities round 2: Night watch (before the main router so /constellations/bans/mine isn't taken).
 app.use("/constellations", nightWatchRouter);
+// Communities round 2: custom emoji + stickers (/emoji/… and /constellations/:id/emoji).
+app.use(emojiRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
 // Communities round: the bot API (/api/v1, "Authorization: Bot gfk_…"), for game servers and bots.

@@ -53,6 +53,7 @@ import { isNebulaChat, nebulaOfChat } from "../constellations/chats";
 import { canModerateNebula, canPostInNebula, nebulaChatOpen, whyCantPostInNebula } from "../constellations/perms";
 import { logModeration, nebulaActivity } from "../constellations/activity";
 import { automodGate, automodWordInEdit, mentionCapGate } from "../constellations/automod";
+import { emojisForMessage, reactionEmoji } from "../emoji/routes";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
 import { groupMentionsFor, NO_GROUP_MENTIONS } from "../constellations/groupMentions";
@@ -76,7 +77,7 @@ import {
   publicGame,
   shortBody,
   attachmentSummary,
-  type GameState, type MessageButton, type ForwardedFrom, type LiveCard } from "@glofly/shared";
+  type GameState, type MessageButton, type ForwardedFrom, type LiveCard, type EmojiRef, isCustomReaction } from "@glofly/shared";
 import { toolHook } from "../toolHooks";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
@@ -131,6 +132,7 @@ export const messageFields = {
   alsoInNebula: messages.alsoInNebula,
   forwarded: messages.forwarded,
   liveCard: messages.liveCard,
+  emojis: messages.emojis,
 };
 export type MessageRow = {
   id: string;
@@ -152,6 +154,7 @@ export type MessageRow = {
   threadId?: string | null;
   forwarded?: ForwardedFrom | null;
   liveCard?: LiveCard | null;
+  emojis?: EmojiRef[] | null;
   alsoInNebula?: boolean;
   lantern: boolean;
   lanternFadeAt: Date | null;
@@ -280,6 +283,8 @@ export async function hydrate(rows: MessageRow[]) {
       ...(r.forwarded && !deleted ? { forwarded: r.forwarded } : {}),
       // 0.9.3: a constellation's Live alert (older apps show the text and link preview).
       ...(r.liveCard && !deleted ? { liveCard: r.liveCard } : {}),
+      // Communities round 2: custom emoji in its text or reactions (older apps show :name:).
+      ...(r.emojis?.length && !deleted ? { emojis: r.emojis } : {}),
     };
   });
 }
@@ -1562,6 +1567,8 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   // Communities round 4.2: @everyone, @here and @Role (nebulas; only if you may).
   const group = chat.kind === "nebula" && !gif ? await groupMentionsFor(text, id.data, chat.memberIds, myId) : NO_GROUP_MENTIONS;
   const mentioned = [...new Set([...mentions, ...group.groupMentions])];
+  // Communities round 2: custom emoji (the ids the app picked; only ones I may use here).
+  const emojis = gif ? null : await emojisForMessage(myId, id.data, text, req.body?.emojis);
   // Communities round 2: AutoMod's mention cap (Night watch → Safety).
   if (chat.kind === "nebula") {
     const capped = await mentionCapGate(id.data, myId, text, mentions, group.mentionRoles, !!group.mentionEveryone);
@@ -1576,7 +1583,7 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     inserted = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)
-        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, ...group, gif, lantern, threadId: thread?.id ?? null, alsoInNebula })
+        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, ...group, gif, lantern, threadId: thread?.id ?? null, alsoInNebula, emojis })
         .returning(messageFields);
       const inserted = row;
       // Attach your uploads, in the order given. Each must be yours, for this chat, and unsent.
@@ -2149,9 +2156,13 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
     // Mentions follow the new text (an edit doesn't notify anyone again).
     const mentions = chat.kind !== "dm" ? await mentionsIn(body.data, chat.memberIds, myId) : [];
     const group = chat.kind === "nebula" ? await groupMentionsFor(body.data, conversationId, chat.memberIds, myId) : NO_GROUP_MENTIONS;
+    // Communities round 2: custom emoji the edit adds (the ones it had stay: reactions use them too).
+    const added = await emojisForMessage(myId, conversationId, body.data, req.body?.emojis);
+    const had = message.emojis ?? [];
+    const emojis = [...had, ...(added ?? []).filter((a) => !had.some((h) => h.name === a.name))].slice(0, 30);
     await db
       .update(messages)
-      .set({ body: body.data, editedAt: new Date(), mentions, ...group })
+      .set({ body: body.data, editedAt: new Date(), mentions, ...group, ...(emojis.length !== had.length ? { emojis } : {}) })
       .where(eq(messages.id, message.id));
     // The link changed: a new preview (or none).
     if (firstLink(body.data) !== (message.linkPreview?.url ?? null)) {
@@ -2248,7 +2259,27 @@ conversationsRouter.put("/:id/messages/:messageId/reactions/:emoji", sendLimiter
     res.status(404).json({ error: "not_found" });
     return;
   }
-  if (!emoji.success) {
+  // Communities round 2: a custom emoji (":name:"). New apps say which one (?id=); pressing an
+  // existing ":name:" chip (any app) adds the same one again.
+  let customAdd: EmojiRef | null = null;
+  const key = String(req.params.emoji);
+  if (isCustomReaction(key)) {
+    const name = key.slice(1, -1);
+    const known = (found.message.emojis ?? []).find((e) => e.name === name);
+    if (!known) {
+      const id = idParam.safeParse(req.query.id);
+      const ref = id.success ? await reactionEmoji(myId, found.conversationId, id.data) : null;
+      if (!ref || ref.name !== name) {
+        res.status(400).json({ error: "invalid", message: "You can use that emoji only inside its constellation." });
+        return;
+      }
+      if ((found.message.emojis ?? []).length >= 30) {
+        res.status(400).json({ error: "invalid", message: "That's a lot of reactions on one message!" });
+        return;
+      }
+      customAdd = ref;
+    }
+  } else if (!emoji.success) {
     res.status(400).json({ error: "invalid", message: "That isn't an emoji." });
     return;
   }
@@ -2267,9 +2298,16 @@ conversationsRouter.put("/:id/messages/:messageId/reactions/:emoji", sendLimiter
     res.status(400).json({ error: "invalid", message: "That's a lot of reactions on one message!" });
     return;
   }
+  if (customAdd) {
+    // Append (one :name: per message; two people adding the same name at once keep the first).
+    await db
+      .update(messages)
+      .set({ emojis: sql`coalesce(${messages.emojis}, '[]'::jsonb) || ${JSON.stringify([customAdd])}::jsonb` })
+      .where(and(eq(messages.id, found.message.id), sql`not coalesce(${messages.emojis}, '[]'::jsonb) @> ${JSON.stringify([{ name: customAdd.name }])}::jsonb`));
+  }
   await db
     .insert(messageReactions)
-    .values({ messageId: found.message.id, userId: myId, emoji: emoji.data })
+    .values({ messageId: found.message.id, userId: myId, emoji: isCustomReaction(key) ? key : emoji.data! })
     .onConflictDoNothing();
   res.json({ message: await sendUpdated(found.message.id, found.conversationId) });
 });

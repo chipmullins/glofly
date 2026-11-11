@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { AppealsPage, ModLogPage, NightWatchPage, SafetyPage } from './NightWatch'
+import EmojiSettings from './EmojiSettings'
 import { OnboardingSetup } from './Onboarding'
 import {
   CloseDaysField,
@@ -172,12 +173,13 @@ export default function ConstellationSettings({
       name: 'AutoMod',
       show: can(c, 'manageConstellation') || can(c, 'deleteMessages')
     },
+    // Communities round 2 (board 2a): emoji + stickers (everyone sees them; managers change them).
+    { id: 'emoji', name: 'Emoji & stickers', show: true, group: 'Extras', isNew: true },
     // Communities round (Nov 2026): API keys, webhooks, bots (Owner / Edit constellation settings).
     {
       id: 'integrations',
       name: 'Integrations',
-      show: can(c, 'manageConstellation'),
-      group: 'Extras'
+      show: can(c, 'manageConstellation')
     },
     // 0.9.3: Twitch, Kick and YouTube alerts (board 4).
     { id: 'liveAlerts', name: 'Live alerts', show: can(c, 'manageConstellation') }
@@ -300,6 +302,7 @@ export default function ConstellationSettings({
           {page === 'modlog' && <ModLogPage c={c} meId={me.id} onProblem={onProblem} />}
           {page === 'appeals' && <AppealsPage c={c} onProblem={onProblem} />}
           {page === 'safety' && <SafetyPage c={c} onProblem={onProblem} />}
+          {page === 'emoji' && <EmojiSettings c={c} onProblem={onProblem} />}
           {page === 'integrations' && <IntegrationsPage c={c} onProblem={onProblem} />}
           {page === 'liveAlerts' && <LiveAlertsPage c={c} onProblem={onProblem} />}
           {page === 'onboarding' && (

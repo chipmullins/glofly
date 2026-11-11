@@ -8,6 +8,8 @@ import { addRecent, isJumbo } from '../lib/emoji'
 import EmojiPicker from './EmojiPicker'
 import EmojiText, { Emoji } from './EmojiText'
 import FormattedText from './FormattedText'
+import { CustomEmojiImg, WithCustomEmoji } from './CustomEmoji'
+import { isCustomReaction, onlyEmoji } from '@glofly/shared/emoji'
 import './Forward.css'
 import { GameCard, GifView, LanternTag, LinkPreviewCard, PollCard } from './ChatExtras'
 import LiveAlertCard from '../connections/LiveAlertCard'
@@ -365,7 +367,10 @@ export default function MessageItem({
       if (o === 'auto' || o === 'scroll') break
       box = box.parentElement
     }
-    const area = box && box !== document.body ? box.getBoundingClientRect() : { top: 0, bottom: window.innerHeight }
+    const area =
+      box && box !== document.body
+        ? box.getBoundingClientRect()
+        : { top: 0, bottom: window.innerHeight }
     const r = menu.getBoundingClientRect()
     const anchor = menu.parentElement?.getBoundingClientRect()
     if (!anchor) return
@@ -452,7 +457,8 @@ export default function MessageItem({
         ? 'message-body message-body--sending'
         : 'message-body'
     : 'message-body'
-  const jumbo = !item.pending && !m.deleted && isJumbo(m.body)
+  // Communities round 2: 1–3 custom emoji on their own are big too.
+  const jumbo = !item.pending && !m.deleted && (isJumbo(m.body) || onlyEmoji(m.body, m.emojis))
 
   return (
     <div
@@ -555,21 +561,29 @@ export default function MessageItem({
             >
               <FormattedText
                 text={m.liveCard ? liveAlertBody(m.body, m.liveCard) : m.body}
-                renderText={(text, key) =>
-                  people?.length ? (
-                    <MentionText
-                      key={key}
-                      text={text}
-                      people={people}
-                      meId={meId}
-                      onClick={onMentionClick}
-                      group={groupMentions}
-                      message={m}
-                    />
-                  ) : (
-                    <EmojiText key={key} text={text} />
-                  )
-                }
+                renderText={(outer, outerKey) => (
+                  <WithCustomEmoji
+                    key={outerKey}
+                    text={outer}
+                    refs={m.emojis}
+                    jumbo={jumbo}
+                    renderText={(text, key) =>
+                      people?.length ? (
+                        <MentionText
+                          key={key}
+                          text={text}
+                          people={people}
+                          meId={meId}
+                          onClick={onMentionClick}
+                          group={groupMentions}
+                          message={m}
+                        />
+                      ) : (
+                        <EmojiText key={key} text={text} />
+                      )
+                    }
+                  />
+                )}
               />
               {m.editedAt && (
                 <span
@@ -663,7 +677,11 @@ export default function MessageItem({
                   disabled={!canAct}
                   onClick={() => onReact(r.emoji)}
                 >
-                  <Emoji emoji={r.emoji} className="reaction-emoji" />
+                  {isCustomReaction(r.emoji) && m.emojis?.some((e) => `:${e.name}:` === r.emoji) ? (
+                    <CustomEmojiImg emoji={m.emojis.find((e) => `:${e.name}:` === r.emoji)!} />
+                  ) : (
+                    <Emoji emoji={r.emoji} className="reaction-emoji" />
+                  )}
                   <span className="reaction-count">{r.userIds.length}</span>
                 </button>
               )

@@ -13,6 +13,8 @@ import {
   type SkinTone
 } from '../lib/emoji'
 import { Emoji } from './EmojiText'
+import { CustomEmojiImg } from './CustomEmoji'
+import { customKey, usableSets, useEmojiPlace, useEmojiSets } from '../lib/customEmoji'
 import './EmojiPicker.css'
 
 type EmojiPickerProps = {
@@ -248,6 +250,7 @@ const Grid = memo(function Grid({
                 <button
                   key={info.emoji}
                   type="button"
+                  title={info.custom ? info.label : undefined}
                   className="ep-item"
                   data-index={index}
                   tabIndex={index === active ? 0 : -1}
@@ -257,7 +260,11 @@ const Grid = memo(function Grid({
                   onFocus={() => onFocusIndex(index)}
                   onKeyDown={(e) => onKeyDown(e, index)}
                 >
-                  <Emoji emoji={shown} className="ep-item-emoji" />
+                  {info.custom ? (
+                    <CustomEmojiImg emoji={info.custom} />
+                  ) : (
+                    <Emoji emoji={shown} className="ep-item-emoji" />
+                  )}
                 </button>
               )
             })}
@@ -291,6 +298,26 @@ export default function EmojiPicker({
   const [position, setPosition] = useState(() => placeNear(anchor))
   // "Recently used" as it was when the picker opened, so it doesn't reshuffle while picking.
   const [recent] = useState(() => getRecent(userId))
+  // Communities round 2: a section per constellation you're in (inside-only ones only there).
+  const place = useEmojiPlace()
+  const allSets = useEmojiSets()
+  const custom = useMemo<EmojiCategory[]>(
+    () =>
+      usableSets(allSets, place)
+        .filter((set) => set.emoji.length)
+        .map((set) => ({
+          id: `cx:${set.constellation.id}`,
+          label: set.constellation.name,
+          emoji: set.emoji.map((e) => ({
+            emoji: customKey(e),
+            label: `:${e.name}:`,
+            words: [e.name.toLowerCase(), ...e.name.toLowerCase().split('_')],
+            skins: null,
+            custom: { id: e.id, name: e.name }
+          }))
+        })),
+    [allSets, place]
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -329,14 +356,18 @@ export default function EmojiPicker({
     if (!data) return []
     if (query.trim()) {
       return [
-        { id: 'results', label: 'Search results', emoji: searchEmoji(data.categories, query) }
+        {
+          id: 'results',
+          label: 'Search results',
+          emoji: [...searchEmoji(custom, query), ...searchEmoji(data.categories, query)]
+        }
       ]
     }
     const recentInfo = recent.flatMap((e) => data.byEmoji.get(e) ?? [])
     return recentInfo.length > 0
-      ? [{ id: 'recent', label: 'Recently used', emoji: recentInfo }, ...data.categories]
-      : data.categories
-  }, [data, query, recent])
+      ? [{ id: 'recent', label: 'Recently used', emoji: recentInfo }, ...custom, ...data.categories]
+      : [...custom, ...data.categories]
+  }, [data, query, recent, custom])
 
   const { spots, starts } = useMemo(() => buildSpots(sections), [sections])
   const searching = query.trim().length > 0
@@ -351,8 +382,8 @@ export default function EmojiPicker({
 
   const pick = useCallback(
     (info: EmojiInfo, keepOpen: boolean) => {
-      addRecent(userId, info.emoji)
-      onPick(withTone(info, tone), allowMultiple && keepOpen)
+      if (!info.custom) addRecent(userId, info.emoji)
+      onPick(info.custom ? info.emoji : withTone(info, tone), allowMultiple && keepOpen)
     },
     [userId, tone, onPick, allowMultiple]
   )
@@ -427,6 +458,7 @@ export default function EmojiPicker({
   const preview = hovered ?? activeInfo ?? null
   const tabs = [
     ...(recent.length > 0 ? [{ id: 'recent', label: 'Recently used' }] : []),
+    ...custom.map(({ id, label }) => ({ id, label })),
     ...(data?.categories ?? []).map(({ id, label }) => ({ id, label }))
   ]
 
@@ -526,7 +558,13 @@ export default function EmojiPicker({
             title={t.label}
             onClick={() => jumpTo(t.id)}
           >
-            <TabIcon id={t.id} />
+            {t.id.startsWith('cx:') ? (
+              <span className="ep-tab-cx" aria-hidden="true">
+                {t.label.slice(0, 2).toUpperCase()}
+              </span>
+            ) : (
+              <TabIcon id={t.id} />
+            )}
           </button>
         ))}
       </nav>
@@ -561,8 +599,14 @@ export default function EmojiPicker({
       <div className="ep-footer" aria-hidden="true">
         {preview ? (
           <>
-            <Emoji emoji={withTone(preview, tone)} className="ep-footer-emoji" />
-            <span className="ep-footer-label">{preview.label}</span>
+            {preview.custom ? (
+              <CustomEmojiImg emoji={preview.custom} />
+            ) : (
+              <Emoji emoji={withTone(preview, tone)} className="ep-footer-emoji" />
+            )}
+            <span className={preview.custom ? 'ep-footer-label ep-footer-label--custom' : 'ep-footer-label'}>
+              {preview.label}
+            </span>
           </>
         ) : (
           <span className="ep-footer-hint">Pick an emoji</span>

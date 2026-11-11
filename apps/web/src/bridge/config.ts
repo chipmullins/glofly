@@ -9,7 +9,7 @@ export const APP_HEADERS: Record<string, string> = {
   'X-Glofly-Version': VERSION,
   'X-Glofly-Platform': 'web',
   // Communities round: this app knows threads and forum nebulas
-  'X-Glofly-Features': 'threads'
+  'X-Glofly-Features': 'threads, round2'
 }
 
 /** "Chrome", "Safari", "Edge"… for Settings → Account → Where you're signed in. */

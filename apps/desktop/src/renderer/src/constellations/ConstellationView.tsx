@@ -232,6 +232,7 @@ export type SettingsPageName =
   | 'modlog'
   | 'appeals'
   | 'safety'
+  | 'emoji'
   | 'automod'
   | 'integrations'
   | 'liveAlerts'
@@ -1884,6 +1885,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           },
           jumpRequest: jump,
           nebula: {
+            // Communities round 2: which constellation's emoji count as "inside"
+            constellationId: c.id,
             name: chatNebula.name,
             sharedWith: chatNebula.sharedWith,
             // 0.7.5: on its milestone cards

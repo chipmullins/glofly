@@ -227,6 +227,8 @@ export type ConstellationPermission =
   | 'manageConstellation'
   | 'events'
   | 'mentionEveryone'
+  | 'manageEmoji'
+  | 'manageStages'
 
 export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; what: string | null }[] = [
   { id: 'deleteMessages', name: 'Delete messages', what: "Anyone's, in every nebula" },
@@ -243,6 +245,9 @@ export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; 
   // Communities round 4.2 (approved board 24): off for Members by default. Without it, @everyone
   // is plain text (the server checks every mention).
   { id: 'mentionEveryone', name: 'Mention @everyone, @here and all roles', what: 'Without it, @everyone is plain text' },
+  // Communities round 2 (Nov 2026): Admins get both; Moderators get Manage stages.
+  { id: 'manageEmoji', name: 'Manage emoji & stickers', what: 'Add, rename and remove the constellation’s own' },
+  { id: 'manageStages', name: 'Manage stages', what: 'Start and end stages, invite people up to speak, move speakers to the audience' },
 ]
 export const ALL_PERMISSIONS: readonly ConstellationPermission[] = PERMISSIONS.map((p) => p.id)
 /** Any of these opens Settings from the constellation's main view (0.7.1: the gear by its name). */
@@ -265,7 +270,7 @@ export const DEFAULT_ROLES: readonly { kind: 'admin' | 'moderator' | 'member'; n
     kind: 'moderator',
     name: 'Moderator',
     color: 'violet',
-    permissions: ['deleteMessages', 'timeoutKick', 'muteVoice', 'invite', 'approveRequests', 'events', 'mentionEveryone'],
+    permissions: ['deleteMessages', 'timeoutKick', 'muteVoice', 'invite', 'approveRequests', 'events', 'mentionEveryone', 'manageStages'],
   },
   { kind: 'member', name: 'Member', color: 'gray', permissions: ['invite', 'events'] },
 ]
@@ -953,6 +958,7 @@ export const CONSTELLATION_EVENT_NAMES = [
   'nightwatch:changed',
   'constellation:raid',
   'constellation:appeal',
+  'emoji:changed',
 ] as const
 
 /** A thread summary from the server, checked (null if it doesn't look right). */
@@ -1030,6 +1036,8 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
         ...(reason === 'banned' && typeof p.banReason === 'string' ? { banReason: text(p.banReason, 200) } : {}),
       }
     }
+    case 'emoji:changed':
+      return str(p.constellationId) ? { type: 'emoji:changed', constellationId: p.constellationId } : null
     case 'nightwatch:changed':
       return str(p.constellationId) ? { type: 'nightwatch:changed', constellationId: p.constellationId } : null
     case 'constellation:raid':

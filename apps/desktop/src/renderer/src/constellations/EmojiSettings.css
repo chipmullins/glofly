@@ -1,0 +1,179 @@
+/* Communities round 2 (board 2a): Emoji & stickers settings. */
+.es {
+  gap: 12px;
+}
+.es-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.es-tabs {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.es-tab {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 17px;
+  border: 1px solid var(--glo-line-strong);
+  background: transparent;
+  color: var(--glo-icon);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.es-tab[aria-selected='true'] {
+  background: var(--glo-ink);
+  border-color: var(--glo-ink);
+  color: var(--glo-surface);
+}
+.es-upload {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 19px;
+  border: 0;
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.es-upload:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.es-meter {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--glo-panel);
+  overflow: hidden;
+}
+.es-meter span {
+  display: block;
+  height: 100%;
+  background: var(--glo-accent);
+}
+.es-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 132px));
+  gap: 8px;
+}
+.es-grid--stickers {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 170px));
+}
+.es-cell {
+  position: relative;
+  padding: 10px 6px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.es-img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+.es-img--big {
+  width: 64px;
+  height: 64px;
+}
+.es-img--sticker {
+  width: 96px;
+  height: 96px;
+}
+.es-name {
+  font-size: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.es-by {
+  font-size: 11px;
+  color: var(--glo-faint);
+  text-align: center;
+}
+.es-actions {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  justify-content: center;
+  background: var(--glo-surface);
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.es-cell:hover .es-actions,
+.es-cell:focus-within .es-actions {
+  opacity: 1;
+}
+.es-actions button {
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 13px;
+  border: 1px solid var(--glo-line-strong);
+  background: var(--glo-surface);
+  color: var(--glo-icon);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.es-actions .es-remove {
+  width: 26px;
+  padding: 0;
+  font-size: 14px;
+}
+.es-rename input,
+.es-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1.5px solid var(--glo-accent);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  font: inherit;
+  font-size: 13px;
+}
+.es-input {
+  min-height: 40px;
+  border-radius: 12px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+.es-empty {
+  margin: 0;
+  padding: 22px;
+  border: 1px dashed var(--glo-line-strong);
+  border-radius: 14px;
+  color: var(--glo-muted);
+  text-align: center;
+  font-size: 13.5px;
+}
+.es-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.es-preview-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 15px;
+}

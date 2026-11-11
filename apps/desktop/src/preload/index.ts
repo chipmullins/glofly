@@ -371,7 +371,14 @@ const glofly: GloflyApi = {
       data: ArrayBuffer,
       type: PhotoType,
       which?: 'icon' | 'banner'
-    ) => ipcRenderer.invoke('constellations:set-icon', constellationId, data, type, which ?? 'icon')
+    ) =>
+      ipcRenderer.invoke('constellations:set-icon', constellationId, data, type, which ?? 'icon'),
+    addEmoji: (
+      constellationId: string,
+      data: ArrayBuffer,
+      type: PhotoType,
+      options: { kind: 'emoji' | 'sticker'; name: string; outside: boolean; cutout: boolean }
+    ) => ipcRenderer.invoke('constellations:add-emoji', constellationId, data, type, options)
   },
   notices: {
     list: () => ipcRenderer.invoke('notices:list'),

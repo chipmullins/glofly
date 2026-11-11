@@ -35,3 +35,7 @@ export const constellationIconUrl = (constellationId: string, version: string): 
   server
     ? `${server}/constellations/${constellationId}/icon/${version}`
     : `glofly-media://constellation-icons/${constellationId}/${version}`
+
+/** Communities round 2: a constellation's custom emoji or sticker picture. */
+export const emojiUrl = (id: string): string =>
+  server ? `${server}/emoji/${id}/image` : `glofly-media://emoji/${id}`

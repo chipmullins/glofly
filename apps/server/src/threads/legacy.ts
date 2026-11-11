@@ -35,3 +35,6 @@ export function legacyForums(req: Request, res: Response, next: NextFunction): v
   res.json = ((body: unknown) => json(downgrade(body))) as Response["json"];
   next();
 }
+
+/** Communities round 2 (Nov 2026): apps that know custom emoji, stage and announcement nebulas and the newer permissions. */
+export const knowsRound2 = (req: Request) => /(^|[\s,])round2($|[\s,])/.test(String(req.headers["x-glofly-features"] ?? ""));

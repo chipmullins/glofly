@@ -97,7 +97,12 @@ export { upgradeEvents }
 export function isAppsRequest(method: unknown, path: unknown, body: unknown): boolean {
   if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(method as string)) return false
   if (typeof path !== 'string' || path.length > 200) return false
-  if (!/^\/(account\/connected-apps|account\/game-links|developer\/apps)(\/[A-Za-z0-9_-]+)*$/.test(path)) return false
+  if (
+    !/^\/(account\/connected-apps|account\/game-links|developer\/apps)(\/[A-Za-z0-9_-]+)*$/.test(
+      path
+    )
+  )
+    return false
   if (body === undefined || body === null) return true
   try {
     return typeof body === 'object' && JSON.stringify(body).length <= 10_000
@@ -120,7 +125,8 @@ export function isConstellationRequest(
   )
     return false
   if (typeof path !== 'string' || path.length > 300) return false
-  if (!/^\/(constellations|games)(\/[A-Za-z0-9_-]+)*\/?(\?[A-Za-z0-9=&%._+-]*)?$/.test(path))
+  // Communities round 2: /emoji/… (the picker, "From Night Raiders", sending a sticker) too.
+  if (!/^\/(constellations|games|emoji)(\/[A-Za-z0-9_-]+)*\/?(\?[A-Za-z0-9=&%._+-]*)?$/.test(path))
     return false
   if (body === undefined || body === null) return true
   try {

@@ -415,6 +415,8 @@ export const messages = pgTable(
     forwarded: jsonb("forwarded").$type<ForwardedFrom>(),
     // 0.9.3: a constellation's Live alert (the body + link preview are what older apps show)
     liveCard: jsonb("live_card").$type<LiveCard>(),
+    // Communities round 2: the custom emoji its text and reactions use (`:name:` → picture).
+    emojis: jsonb("emojis").$type<{ id: string; name: string; animated: boolean }[]>(),
     // Communities round (Nov 2026): a reply in a thread or forum post (nebulas only). Thread
     // replies stay out of the nebula's own timeline unless alsoInNebula ("Also send to #general").
     threadId: uuid("thread_id").references((): AnyPgColumn => nebulaThreads.id, { onDelete: "cascade" }),
@@ -1355,6 +1357,31 @@ export const constellationBans = pgTable(
     appeals: text("appeals").notNull().default("now"),
   },
   (t) => [primaryKey({ columns: [t.constellationId, t.userId] })],
+);
+
+// Communities round 2 (boards 2a–2c): a constellation's own emoji and stickers. Pictures are in
+// storage at emoji/<constellation>/<id>.webp, cleaned like every upload (re-saved, no metadata).
+export const constellationEmoji = pgTable(
+  "constellation_emoji",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // "emoji" | "sticker"
+    name: text("name").notNull(),
+    animated: boolean("animated").notNull().default(false),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    // Members can use it outside the constellation (DMs, groups, other constellations).
+    outside: boolean("outside").notNull().default(true),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("constellation_emoji_idx").on(t.constellationId, t.kind, t.createdAt),
+    uniqueIndex("constellation_emoji_name_idx").on(t.constellationId, sql`lower(${t.name})`).where(sql`${t.kind} = 'emoji'`),
+  ],
 );
 
 // Communities round 2 (board 1c): a banned person asking the moderators to reconsider. One per

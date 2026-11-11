@@ -44,7 +44,7 @@ function serverUrl(setting: string | undefined): string {
 export const VERSION_HEADER = {
   'X-Glofly-Version': app.getVersion(),
   // Communities round: this app knows threads and forum nebulas
-  'X-Glofly-Features': 'threads'
+  'X-Glofly-Features': 'threads, round2'
 }
 
 // Shown in Settings → Account → Where you're signed in, only to you: "Windows · DESKTOP-4KQ2".

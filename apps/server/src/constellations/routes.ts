@@ -79,6 +79,7 @@ import { can, OWNER_RANK, outranks, ranksOf, standingOf, type Standing , frozen,
 import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstellations } from "./members";
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
 import { afterJoinSafety } from "./raid";
+import { removeConstellationEmoji } from "../emoji/routes";
 import { closeReportsOnBan, deleteRecentMessages } from "./nightwatch";
 import { joinsPaused, JOINS_PAUSED_MESSAGE } from "./safety";
 import { cardsFor, detailFor, entriesFor, publicUsers, welcomeOf } from "./views";
@@ -88,7 +89,7 @@ import { announceVoice, setSharing, voiceStatesOf } from "./voice";
 import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula } from "./home";
 import { fireConstellationEvent } from "../integrations/events";
 import { seesNebulaChat, syncNebulaAccess } from "./access";
-import { knowsThreads } from "../threads/legacy";
+import { knowsRound2, knowsThreads } from "../threads/legacy";
 import { answerOnboarding, onboardingInput, saveOnboarding, setNebulaShown } from "./onboarding";
 
 // Constellations (Glofly 2.0): communities with nebulas, categories, members and roles.
@@ -1234,6 +1235,8 @@ export async function deleteConstellation(constellationId: string): Promise<void
     .select({ icon: constellations.iconVersion, banner: constellations.bannerVersion })
     .from(constellations)
     .where(eq(constellations.id, constellationId));
+  // Communities round 2: its emoji and stickers' pictures (their rows go with it).
+  await removeConstellationEmoji(constellationId).catch((err) => console.error("Emoji cleanup failed", err));
   await db.transaction(async (tx) => {
     if (chatIds.length) await tx.delete(conversations).where(inArray(conversations.id, chatIds));
     await tx.delete(constellations).where(eq(constellations.id, constellationId));
@@ -2097,6 +2100,11 @@ constellationsRouter.patch("/:id/roles/:rid", changeLimiter, async (req, res) =>
   if (parsed.data.permissions && !knowsThreads(req)) {
     const kept = r.permissions.includes("mentionEveryone");
     parsed.data.permissions = [...parsed.data.permissions.filter((p) => p !== "mentionEveryone"), ...(kept ? (["mentionEveryone"] as const) : [])];
+  }
+  // Communities round 2: the same for "Manage emoji & stickers" and "Manage stages".
+  if (parsed.data.permissions && !knowsRound2(req)) {
+    const newer = ["manageEmoji", "manageStages"] as const;
+    parsed.data.permissions = [...parsed.data.permissions.filter((p) => !(newer as readonly string[]).includes(p)), ...newer.filter((p) => r.permissions.includes(p))];
   }
   if (parsed.data.permissions) {
     // Only what I have myself can be added or taken away.

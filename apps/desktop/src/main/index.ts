@@ -688,10 +688,20 @@ function registerIpcHandlers(): void {
       keys.length > 0 &&
       keys.every((k) => PROFILE_KEYS.includes(k)) &&
       // 0.9.1: pronouns, board, privacy, header position (the server checks the details).
-      (c.pronouns === undefined || c.pronouns === null || (typeof c.pronouns === 'string' && c.pronouns.length <= 80)) &&
-      (c.board === undefined || (Array.isArray(c.board) && c.board.length <= 6 && JSON.stringify(c.board).length <= 8000)) &&
-      (c.privacy === undefined || (typeof c.privacy === 'object' && c.privacy !== null && !Array.isArray(c.privacy) && Object.keys(c.privacy).length <= 3)) &&
-      (c.headerFocus === undefined || (typeof c.headerFocus === 'number' && c.headerFocus >= 0 && c.headerFocus <= 100)) &&
+      (c.pronouns === undefined ||
+        c.pronouns === null ||
+        (typeof c.pronouns === 'string' && c.pronouns.length <= 80)) &&
+      (c.board === undefined ||
+        (Array.isArray(c.board) &&
+          c.board.length <= 6 &&
+          JSON.stringify(c.board).length <= 8000)) &&
+      (c.privacy === undefined ||
+        (typeof c.privacy === 'object' &&
+          c.privacy !== null &&
+          !Array.isArray(c.privacy) &&
+          Object.keys(c.privacy).length <= 3)) &&
+      (c.headerFocus === undefined ||
+        (typeof c.headerFocus === 'number' && c.headerFocus >= 0 && c.headerFocus <= 100)) &&
       (c.displayName === undefined ||
         (typeof c.displayName === 'string' && c.displayName.length <= 64)) &&
       (c.bio === undefined ||
@@ -733,7 +743,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle('profile:remove-photo', (event) => (fromApp(event) ? removePhoto() : invalid))
   // 0.9.1 profiles
   ipcMain.handle('profile:set-header', (event, data: unknown, type: unknown) => {
-    if (!fromApp(event) || !(data instanceof ArrayBuffer) || !PHOTO_TYPES.includes(type as PhotoType)) {
+    if (
+      !fromApp(event) ||
+      !(data instanceof ArrayBuffer) ||
+      !PHOTO_TYPES.includes(type as PhotoType)
+    ) {
       return invalid
     }
     if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) {
@@ -746,7 +760,9 @@ function registerIpcHandlers(): void {
     fromApp(event) && isUserId(userId) ? getMutuals(userId) : invalid
   )
   ipcMain.handle('profile:activity', (event, userId: unknown, as: unknown) =>
-    fromApp(event) && isUserId(userId) && isPreviewAs(as) ? getActivity(userId, as ?? undefined) : invalid
+    fromApp(event) && isUserId(userId) && isPreviewAs(as)
+      ? getActivity(userId, as ?? undefined)
+      : invalid
   )
 
   // Conversations and messages.
@@ -816,6 +832,46 @@ function registerIpcHandlers(): void {
       })
     }
   )
+  // Communities round 2: a constellation's new emoji or sticker (the server cleans the picture).
+  ipcMain.handle(
+    'constellations:add-emoji',
+    (event, id: unknown, data: unknown, type: unknown, options: unknown) => {
+      const o = (options ?? {}) as {
+        kind?: unknown
+        name?: unknown
+        outside?: unknown
+        cutout?: unknown
+      }
+      if (
+        !fromApp(event) ||
+        !isUserId(id) ||
+        !(data instanceof ArrayBuffer) ||
+        !PHOTO_TYPES.includes(type as PhotoType) ||
+        (o.kind !== 'emoji' && o.kind !== 'sticker') ||
+        typeof o.name !== 'string' ||
+        o.name.length > 60
+      ) {
+        return invalid
+      }
+      if (data.byteLength === 0 || data.byteLength > 2 * 1024 * 1024) {
+        return {
+          ok: false,
+          error: 'invalid',
+          message: 'Pictures can be up to 2 MB (emoji up to 512 KB).'
+        }
+      }
+      const q = new URLSearchParams({
+        kind: o.kind,
+        name: o.name,
+        outside: o.outside === false ? '0' : '1',
+        cutout: o.cutout === true ? '1' : '0'
+      })
+      return apiRequest('POST', `/constellations/${id}/emoji?${q}`, undefined, {
+        data: new Uint8Array(data),
+        type: type as PhotoType
+      })
+    }
+  )
   ipcMain.handle('conversations:remove-group-photo', (event, id: unknown) =>
     fromApp(event) && isUserId(id) ? removeGroupPhoto(id) : invalid
   )
@@ -828,13 +884,15 @@ function registerIpcHandlers(): void {
   ipcMain.handle('conversations:remove-member', (event, id: unknown, userId: unknown) =>
     fromApp(event) && isUserId(id) && isUserId(userId) ? removeMember(id, userId) : invalid
   )
-  ipcMain.handle('conversations:messages', (event, id: unknown, before: unknown, thread: unknown) =>
-    fromApp(event) &&
-    isUserId(id) &&
-    (before == null || isUserId(before)) &&
-    (thread == null || isUserId(thread))
-      ? loadMessages(id, before ?? undefined, thread ?? undefined)
-      : invalid
+  ipcMain.handle(
+    'conversations:messages',
+    (event, id: unknown, before: unknown, thread: unknown) =>
+      fromApp(event) &&
+      isUserId(id) &&
+      (before == null || isUserId(before)) &&
+      (thread == null || isUserId(thread))
+        ? loadMessages(id, before ?? undefined, thread ?? undefined)
+        : invalid
   )
   ipcMain.handle('conversations:search', (event, query: unknown, id: unknown, before: unknown) =>
     fromApp(event) &&
@@ -868,6 +926,12 @@ function registerIpcHandlers(): void {
         ? sendMessage(id, body, replyTo ?? undefined, attachmentIds ?? undefined, {
             lantern: (options as { lantern?: unknown } | null)?.lantern === true,
             clientId: clientIdOf((options as { clientId?: unknown } | null)?.clientId),
+            // Communities round 2: custom emoji ids (plain ids, at most 30)
+            ...(Array.isArray((options as { emojis?: unknown } | null)?.emojis) &&
+            (options as { emojis: unknown[] }).emojis.length <= 30 &&
+            (options as { emojis: unknown[] }).emojis.every(isUserId)
+              ? { emojis: (options as { emojis: string[] }).emojis }
+              : {}),
             // Communities round: a reply in a thread (maybe also shown in the nebula)
             ...(isUserId((options as { threadId?: unknown } | null)?.threadId)
               ? {
@@ -1025,7 +1089,8 @@ function registerIpcHandlers(): void {
       isUserId(messageId) &&
       typeof emoji === 'string' &&
       emoji.length > 0 &&
-      emoji.length <= 32 &&
+      // Communities round 2: ":name:" or ":name:#<emoji id>" (a custom emoji)
+      emoji.length <= 72 &&
       typeof on === 'boolean'
         ? reactToMessage(id, messageId, emoji, on)
         : invalid

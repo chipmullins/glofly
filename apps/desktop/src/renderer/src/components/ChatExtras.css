@@ -1257,3 +1257,16 @@ a.link-card-body:hover .link-card-title {
   font-size: 13px;
   color: var(--glo-faint);
 }
+
+/* Communities round 2: a constellation's stickers under yours. */
+.sticker-cx {
+  margin-top: 12px;
+}
+.sticker-cx-head {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--glo-muted);
+}
