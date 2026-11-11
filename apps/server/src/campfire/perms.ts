@@ -46,6 +46,7 @@ export const settingsOf = (raw: unknown): CampaignSettings => {
     ...(s.moveOnTurn === true ? { moveOnTurn: true } : {}),
     ...(s.leveling === "xp" ? { leveling: "xp" as const } : {}),
     ...(s.diagonal === "5-10" ? { diagonal: "5-10" as const } : {}),
+    ...(s.tokensLocked === true ? { tokensLocked: true } : {}),
   };
 };
 
@@ -105,7 +106,7 @@ export async function tableFor(campaignOrId: string | CampaignRow, userId: strin
   const campaign = typeof campaignOrId === "string" ? await campaignRow(campaignOrId) : campaignOrId;
   if (!campaign || campaign.deletedAt) return null;
   const [member] = await db
-    .select({ role: campfireMembers.role })
+    .select({ role: campfireMembers.role, removedAt: campfireMembers.removedAt })
     .from(campfireMembers)
     .where(and(eq(campfireMembers.campaignId, campaign.id), eq(campfireMembers.userId, userId)));
   let gm = member?.role === "gm" || campaign.createdBy === userId;
@@ -122,6 +123,8 @@ export async function tableFor(campaignOrId: string | CampaignRow, userId: strin
   } else if (campaign.conversationId) {
     if (!(await inChat(campaign.conversationId, userId))) return null;
   } else return null;
+  // Round B: the game master removed them from this table.
+  if (member?.removedAt && !gm) return null;
   if (!readOnly && (await deletionPending(userId))) readOnly = LEAVING;
   return { campaign, userId, role: gm ? "gm" : "player", gm, readOnly, admin };
 }

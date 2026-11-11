@@ -1,3 +1,4 @@
+import { liveOf } from "./liveState";
 import { createHash } from "node:crypto";
 import {
   builtForPlayer,
@@ -76,6 +77,7 @@ export function campaignOut(c: CampaignRow, viewer: { role: "gm" | "player" }): 
     updatedAt: iso(c.updatedAt),
     settings: settingsFor(c.settings, viewer.role),
     createdAt: iso(c.createdAt),
+    live: liveOf(c),
   };
 }
 
@@ -188,6 +190,9 @@ export function tokenOut(t: TokenRow, viewer: Viewer, chars: CharacterInfo, sett
     controlledBy: t.controlledBy,
     z: t.z,
     updatedAt: iso(t.updatedAt),
+    elevation: t.elevation,
+    locked: t.locked,
+    ...(viewer.gm || mine ? { conditionTimers: t.conditionTimers ?? {} } : {}),
   };
 }
 
@@ -290,7 +295,10 @@ export function combatOut(combat: CombatState | null, viewer: Viewer, visible: M
   if (!combat) return null;
   const current = combat.entries[combat.turn]?.tokenId ?? null;
   if (viewer.gm) return { ...combat, current };
-  const entries = combat.entries.filter((e) => !e.hidden && visible.has(e.tokenId)).map((e) => ({ ...e, name: visible.get(e.tokenId) ?? "" }));
+  const entries = combat.entries
+    .filter((e) => !e.hidden && visible.has(e.tokenId))
+    // Players get the turn's movement (for the ring), not the GM's bookkeeping.
+    .map((e) => ({ tokenId: e.tokenId, name: visible.get(e.tokenId) ?? "", init: e.init, dex: e.dex, hidden: e.hidden, ...(e.moved ? { moved: e.moved } : {}), ...(e.dashed ? { dashed: true } : {}), ...(e.lastMove ? { lastMove: { x: 0, y: 0, cost: e.lastMove.cost } } : {}) }));
   const turn = entries.findIndex((e) => e.tokenId === current);
   return { round: combat.round, turn, entries, current: turn >= 0 ? current : null };
 }

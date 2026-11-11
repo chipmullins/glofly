@@ -10,6 +10,7 @@ import {
   isColor,
   isMapTheme,
   normalizeBuilt,
+  normalizeTimers,
   normalizeFog,
   normalizeGrid,
   normalizeSheet,
@@ -41,6 +42,8 @@ import { campaignOut, controls, sceneOut, tokenOut, tokenVisible, type SceneRow,
 import { monsterBySlug, isSrdSlug } from "./srd";
 import { removeStored } from "./files";
 import { syncSheetFromToken } from "./sync";
+import { moveCheck, noteMove, PAUSED, pausedFor } from "./roundB";
+import { emitCombat } from "./state";
 
 // Campfire (phase 1): campaigns, members, the table being lit in a call, presence, pings, scenes,
 // fog and tokens. Attacks, rolls and combat are in play.ts; sheets, handouts, files and music in
@@ -165,6 +168,7 @@ const settingsInput = z
     placeHidden: z.boolean().optional(),
     rules: z.enum(["2014", "2024"]).optional(),
     moveOnTurn: z.boolean().optional(),
+    tokensLocked: z.boolean().optional(),
     leveling: z.enum(["milestone", "xp"]).optional(),
     diagonal: z.enum(["5", "5-10"]).optional(),
   })
@@ -515,6 +519,12 @@ const tokenInput = z.object({
   controlledBy: uuidList(20).optional(),
   z: z.number().int().min(-10_000).max(10_000).optional(),
   srdMonster: z.string().refine(isSrdSlug).optional(),
+  // Round B
+  elevation: z.number().int().min(-1000).max(10_000).optional(),
+  locked: z.boolean().optional(),
+  conditionTimers: z.record(z.string().max(40), z.number().int().min(1).max(100)).optional(),
+  /** The turns of a planned move (start and end are the token's), for movement on a turn */
+  path: z.array(z.tuple([coord, coord])).max(50).optional(),
 });
 
 const hpBar = (current: number, max: number): TokenBar => ({ value: current, max, color: "#e0193a", show: "all" });
@@ -615,13 +625,16 @@ coreRouter.patch("/tokens/:id", async (req, res) => {
   const { t, scene, token, chars } = found;
   const parsed = tokenInput.omit({ srdMonster: true }).strict().safeParse(req.body);
   if (!parsed.success) return bad(res, firstIssue(parsed.error));
-  const d = parsed.data;
+  const { path, ...d } = parsed.data;
+  const moving = d.x !== undefined || d.y !== undefined;
   if (!t.gm) {
-    // Players: only tokens they control, and only where it is, its bars and its conditions.
+    // Players: only tokens they control, and only where it is, its height, its bars and its conditions.
     if (!controls(token, t.userId, chars)) return bad(res, "That token isn't yours to move.", 403);
-    const allowed = new Set(["x", "y", "bars", "conditions"]);
+    const allowed = new Set(["x", "y", "bars", "conditions", "elevation"]);
     if (Object.keys(d).some((k) => !allowed.has(k))) return bad(res, "Only the game master can change that.", 403);
-    if ((d.x !== undefined || d.y !== undefined) && notMyTurn(t, token.id)) return bad(res, "Wait for your turn to move (the game master's table rule).", 403, "not_your_turn");
+    if (moving && pausedFor(t)) return bad(res, PAUSED, 423, "paused");
+    if (moving && (token.locked || settingsOf(t.campaign.settings).tokensLocked)) return bad(res, "The game master locked this token.", 403, "locked");
+    if (moving && notMyTurn(t, token.id)) return bad(res, "Wait for your turn to move (the game master's table rule).", 403, "not_your_turn");
     if (d.bars) {
       // Who sees each bar stays as the GM set it.
       d.bars = d.bars.map((b, i) => {
@@ -635,12 +648,27 @@ coreRouter.patch("/tokens/:id", async (req, res) => {
     if (d.characterId && !chars.has(d.characterId)) return bad(res, "That character isn't in this campaign.");
     if (d.controlledBy?.length && (await inHome(t.campaign, d.controlledBy)).length !== d.controlledBy.length) return bad(res, "Only people at this table can control tokens.");
   }
-  if ((d.x !== undefined || d.y !== undefined) && !(await moveSlot(t.userId))) return bad(res, MOVE_TOO_FAST, 429, "too_many_requests");
+  if (moving && !(await moveSlot(t.userId))) return bad(res, MOVE_TOO_FAST, 429, "too_many_requests");
+  // Round B: a move during its turn counts against its speed (refused past it for players when the
+  // table moves on turns). Live drags may already have moved it: the count starts from the turn's anchor.
+  const to = { x: d.x ?? token.x, y: d.y ?? token.y };
+  const check = moving ? await moveCheck(t, token, scene, to, path ?? []) : null;
+  if (check?.error) return bad(res, check.error, 403, "too_far");
+  // Timers only for conditions the token has.
+  if (d.conditionTimers || d.conditions) {
+    const conditions = d.conditions ?? token.conditions;
+    d.conditionTimers = normalizeTimers(d.conditionTimers ?? token.conditionTimers ?? {}, conditions);
+  }
   const [row] = await db
     .update(campfireTokens)
     .set({ ...d, updatedAt: new Date() })
     .where(eq(campfireTokens.id, token.id))
     .returning();
+  if (check && check.cost > 0) {
+    const anchor = (t.campaign.combat?.entries[t.campaign.combat.turn] as { anchor?: { x: number; y: number } | null } | undefined)?.anchor ?? { x: token.x, y: token.y };
+    const c = await noteMove(t.campaign.id, token.id, anchor, to, check.cost);
+    if (c) await emitCombat(c);
+  }
   if (d.bars && row.characterId) await syncSheetFromToken(t, row, !t.gm);
   await emitToken(t.campaign, scene, token, row);
   res.json(tokenOut(row, t, chars, settingsOf(t.campaign.settings)));
@@ -690,10 +718,16 @@ export async function socketMove(userId: string, payload: unknown): Promise<void
   if (!t || t.readOnly) return;
   const chars = await charactersInfo(t.campaign.id);
   if (!t.gm && (scene.id !== t.campaign.activeSceneId || !controls(token, userId, chars) || !tokenVisible(token, scene, t, chars))) return;
-  // The cached table can be 5 s old: the turn order is read fresh.
-  if (!t.gm && settingsOf(t.campaign.settings).moveOnTurn) {
+  // The cached table can be 5 s old: the turn order, pause and locks are read fresh.
+  if (!t.gm) {
+    if (token.locked) return;
     const fresh = await campaignRow(t.campaign.id);
-    if (!fresh || notMyTurn({ ...t, campaign: fresh }, token.id)) return;
+    if (!fresh) return;
+    const ft = { ...t, campaign: fresh };
+    if (pausedFor(ft) || settingsOf(fresh.settings).tokensLocked || notMyTurn(ft, token.id)) return;
+    // Past its movement for this turn: the drag stops at the edge (the drop then says why).
+    const check = await moveCheck(ft, token, scene, { x: parsed.data.x, y: parsed.data.y });
+    if (check?.error) return;
   }
   const [row]: TokenRow[] = await db
     .update(campfireTokens)

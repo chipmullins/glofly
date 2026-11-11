@@ -1327,3 +1327,48 @@ test('campfire Round A: importing a character sheet PDF (form fields)', () => {
   const empty = s.sheetFromPdfFields({}, '2024', null)
   assert.ok(empty.missing.includes('Name') && empty.missing.includes('Ability scores'))
 })
+
+test('campfire Round B: movement cost, speed, timers, legendary, encounters, terrain', () => {
+  const g = { type: 'square', size: 70, feet: 5, color: '#000000', opacity: 0.25, offsetX: 0, offsetY: 0 }
+  const c = (x, y) => [x * 70 + 35, y * 70 + 35]
+  // 3 straight squares = 15 ft; 3 diagonal = 15 (5e) or 20 (5-10-5)
+  assert.equal(s.pathCost([c(0, 0), c(3, 0)], g), 15)
+  assert.equal(s.pathCost([c(0, 0), c(3, 3)], g), 15)
+  assert.equal(s.pathCost([c(0, 0), c(3, 3)], g, [], '5-10'), 20)
+  // A turn in the path adds up both legs
+  assert.equal(s.pathCost([c(0, 0), c(2, 0), c(2, 2)], g), 20)
+  // Difficult terrain doubles the squares inside it
+  const mud = [{ id: 't', kind: 'difficult', points: [[140, 0], [280, 0], [280, 70], [140, 70]] }]
+  assert.equal(s.pathCost([c(0, 0), c(4, 0)], g, mud), 5 + 10 + 10 + 5)
+  assert.equal(s.speedFor({ speed: 35 }, []), 35)
+  assert.equal(s.speedFor({ speed: 35 }, ['Grappled']), 0)
+  assert.equal(s.speedFor(null), 30)
+  assert.equal(s.moveBudget(30, true), 60)
+  assert.equal(s.withHeight(10, 20), 20)
+  const tick = s.tickConditions(['prone', 'poisoned', 'blessed'], { poisoned: 1, blessed: 3 })
+  assert.deepEqual(tick.conditions, ['prone', 'blessed'])
+  assert.deepEqual(tick.timers, { blessed: 2 })
+  assert.deepEqual(tick.ended, ['poisoned'])
+  assert.deepEqual(s.normalizeTimers({ poisoned: 2, nope: 3, blessed: 0 }, ['poisoned', 'blessed']), { poisoned: 2 })
+  const leg = s.legendaryInfo({
+    traits: [],
+    legendary: [
+      { id: 'a', name: 'Detect', text: 'The dragon can take 3 legendary actions. It makes a Wisdom check.' },
+      { id: 'b', name: 'Wing Attack (Costs 2 Actions)', text: 'The dragon beats its wings.' }
+    ]
+  })
+  assert.equal(leg.perRound, 3)
+  assert.deepEqual(leg.options.map((o) => [o.name, o.cost]), [['Detect', 1], ['Wing Attack', 2]])
+  assert.equal(s.legendaryInfo({ traits: [], legendary: [] }), null)
+  const e = s.encounterDifficulty([4, 4, 4, 4], [50, 50, 50, 450])
+  assert.equal(e.xp, 600)
+  assert.deepEqual(e.thresholds.map((t) => t.xp), [1000, 1500, 2000])
+  assert.equal(e.label, 'Low')
+  assert.equal(s.encounterDifficulty([4, 4, 4, 4], [1800]).label, 'High')
+  assert.equal(s.reachOf({ attacks: [], monster: { actions: [{ id: 'x', name: 'Glaive', text: 'Melee Weapon Attack: +5 to hit, reach 10 ft.' }] } }), 10)
+  // Terrain survives cleaning, and only when there is some
+  const built = s.normalizeBuilt({ floors: [], walls: [], terrain: [{ kind: 'water', points: [[0, 0], [10, 0], [10, 10]] }, { kind: 'lava', points: [[0, 0], [1, 1], [2, 0]] }] })
+  assert.equal(built.terrain.length, 1)
+  assert.equal('terrain' in s.normalizeBuilt({ floors: [] }), false)
+  assert.ok(s.isBuiltinSound('bell') && !s.isBuiltinSound('../x'))
+})

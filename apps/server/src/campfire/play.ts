@@ -25,6 +25,7 @@ import {
   type RollVisibility,
   type SaveSpellResult,
   type Sheet5e,
+  legendaryInfo,
 } from "@glofly/shared";
 import { db } from "../db";
 import { campfireCampaigns, campfireCharacters, campfirePending } from "../db/schema";
@@ -33,6 +34,8 @@ import { bad, firstIssue, idParam, limiter, notFound, recordRoll, rollSlot, serv
 import { charactersInfo, emitCharacter, emitCombat, emitPending, rollsFor, tokensWithScenes, visibleTokenIdsFor } from "./state";
 import { applyHeal, applyHit, emitHit, hitForTable, syncTokensFromSheet } from "./sync";
 import { tokenTable } from "./routes";
+import { startTurn, turnMoveOp } from "./roundB";
+import { campaignRow } from "./perms";
 import { combatOut, controls, pendingOut, rollOut, tokenVisible, type CharacterRow, type TokenRow } from "./view";
 
 // Campfire play: rolls, the hit flow (attack → hit or miss → damage → GM approves → applied),
@@ -74,7 +77,7 @@ function serverRoll(expression: string, label?: string | null) {
 // ───────────── Rolls ─────────────
 
 playRouter.post("/campaigns/:id/rolls", async (req, res) => {
-  const t = await tableOr(res, req.params.id, { write: true });
+  const t = await tableOr(res, req.params.id, { write: true, play: true });
   if (!t) return;
   const parsed = z
     .object({
@@ -143,7 +146,7 @@ async function attackTokens(t: Table, attackerId: string, targetIds: string[]) {
   return { attacker: attacker.token, targets: targets.map((x) => x!.token) };
 }
 
-async function sheetOf(token: TokenRow): Promise<Sheet5e | null> {
+export async function sheetOf(token: TokenRow): Promise<Sheet5e | null> {
   if (!token.characterId) return null;
   const [ch] = await db.select({ sheet: campfireCharacters.sheet }).from(campfireCharacters).where(eq(campfireCharacters.id, token.characterId));
   return ch ? normalizeSheet(ch.sheet) : null;
@@ -167,7 +170,7 @@ async function damageOrPending(t: Table, hit: Parameters<typeof applyHit>[1]): P
 }
 
 playRouter.post("/campaigns/:id/attack", actLimiter, async (req, res) => {
-  const t = await tableOr(res, req.params.id, { write: true });
+  const t = await tableOr(res, req.params.id, { write: true, play: true });
   if (!t) return;
   const parsed = attackInput.safeParse(req.body);
   if (!parsed.success) return bad(res, firstIssue(parsed.error));
@@ -217,7 +220,7 @@ playRouter.post("/campaigns/:id/attack", actLimiter, async (req, res) => {
 });
 
 playRouter.post("/campaigns/:id/save-spell", actLimiter, async (req, res) => {
-  const t = await tableOr(res, req.params.id, { write: true });
+  const t = await tableOr(res, req.params.id, { write: true, play: true });
   if (!t) return;
   const parsed = z
     .object({
@@ -396,6 +399,10 @@ const combatInput = z.discriminatedUnion("op", [
   z.object({ op: z.literal("next") }),
   z.object({ op: z.literal("prev") }),
   z.object({ op: z.literal("end") }),
+  // Round B
+  z.object({ op: z.literal("dash") }),
+  z.object({ op: z.literal("undoMove") }),
+  z.object({ op: z.literal("legendary"), tokenId: z.uuid(), cost: z.number().int().min(1).max(3) }),
 ]);
 
 /** Highest initiative first; ties by Dexterity, then by the random tie-break rolled with it. */
@@ -413,13 +420,19 @@ async function entryFor(token: TokenRow): Promise<CombatEntry & { sheet: Sheet5e
 }
 
 playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
-  const t = await tableOr(res, req.params.id, { write: true });
+  const t = await tableOr(res, req.params.id, { write: true, play: true });
   if (!t) return;
   const parsed = combatInput.safeParse(req.body);
   if (!parsed.success) return bad(res, firstIssue(parsed.error));
   const d = parsed.data;
   // Players may only roll initiative for their own token, and end their own turn ("End my turn").
-  if (!t.gm && d.op !== "roll" && d.op !== "next") return bad(res, "Only the game master runs the turn order.", 403);
+  if (!t.gm && d.op !== "roll" && d.op !== "next" && d.op !== "dash" && d.op !== "undoMove") return bad(res, "Only the game master runs the turn order.", 403);
+  // Round B: Dash and Undo last move change the turn's movement, not the order.
+  if (d.op === "dash" || d.op === "undoMove") {
+    const out = await turnMoveOp(t, d.op);
+    if ("error" in out) return bad(res, out.error, out.status ?? 409);
+    return res.json({ combat: combatOut(out.combat, t, (await visibleTokenIdsFor((await campaignRow(t.campaign.id)) ?? t.campaign))(t)) });
+  }
   const current = t.campaign.combat;
   if (!current && d.op !== "start") return bad(res, "Start combat first.", 409);
   let combat: CombatState | null = current ? { ...current, entries: [...current.entries] } : null;
@@ -537,7 +550,21 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
     case "end":
       combat = null;
       break;
+    case "legendary": {
+      const i = combat!.entries.findIndex((e) => e.tokenId === d.tokenId);
+      if (i < 0) return notFound(res, "That token isn't in the turn order.");
+      const [tk] = await tokensIn([d.tokenId]);
+      const info = tk ? legendaryInfo((await sheetOf(tk))?.monster) : null;
+      if (!info) return bad(res, "That creature has no legendary actions.");
+      const used = combat!.entries[i].legendaryUsed ?? 0;
+      if (used + d.cost > info.perRound) return bad(res, `Only ${info.perRound - used} legendary action${info.perRound - used === 1 ? "" : "s"} left this round.`, 409);
+      combat!.entries[i] = { ...combat!.entries[i], legendaryUsed: used + d.cost };
+      break;
+    }
   }
+  // Round B: a new turn starts fresh (movement, legendary actions, timed conditions).
+  const turnMoved = combat && (d.op === "start" || d.op === "next" || d.op === "prev" || d.op === "rollAll" || ((d.op === "reorder" || d.op === "remove") && combat.entries[combat.turn]?.tokenId !== currentId));
+  if (combat && turnMoved && combat.entries.length) combat = await startTurn(t.campaign, combat);
   const [row] = await db.update(campfireCampaigns).set({ combat, updatedAt: new Date() }).where(eq(campfireCampaigns.id, t.campaign.id)).returning();
   await emitCombat(row);
   res.json({ combat: combatOut(row.combat, t, (await visibleTokenIdsFor(row))(t)) });

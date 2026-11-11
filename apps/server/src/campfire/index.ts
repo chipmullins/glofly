@@ -4,6 +4,7 @@ import { coreRouter } from "./routes";
 import { playRouter } from "./play";
 import { contentRouter } from "./content";
 import { hubRouter } from "./hub";
+import { roundBRouter } from "./roundB";
 import { sweepPresence } from "./live";
 import { campaignRow } from "./perms";
 import { broadcast, forgetAudience } from "./state";
@@ -15,7 +16,7 @@ import { presentAt } from "./live";
 export const campfireRouter = Router();
 campfireRouter.use(requireAuth);
 campfireRouter.use(express.json({ limit: "512kb" }));
-campfireRouter.use(coreRouter, playRouter, contentRouter, hubRouter);
+campfireRouter.use(coreRouter, playRouter, contentRouter, hubRouter, roundBRouter);
 campfireRouter.use((_req: Request, res: Response, _next: NextFunction) => {
   res.status(404).json({ error: "not_found" });
 });

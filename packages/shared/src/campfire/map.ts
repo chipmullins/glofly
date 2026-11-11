@@ -130,7 +130,8 @@ export function builtForPlayer(built: BuiltMap, fog: FogState, step = 35, budget
     floors: built.floors.filter((f) => pieceVisible(fog, f.points, true, step, work)),
     walls: built.walls.filter((w) => pieceVisible(fog, w.points, false, step, work)),
     objects: built.objects.filter((o) => pieceVisible(fog, rectPoints(o.x, o.y, o.w, o.h), true, step, work)),
-    notes: []
+    notes: [],
+    ...(built.terrain?.length ? { terrain: built.terrain.filter((t) => pieceVisible(fog, t.points, true, step, work)) } : {})
   }
 }
 
@@ -235,7 +236,17 @@ export function normalizeBuilt(raw: unknown): BuiltMap {
       const y = coord(v.y)
       const text = typeof v.text === 'string' ? v.text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').slice(0, CAMPFIRE_LIMITS.noteText) : ''
       return x === null || y === null || !text.trim() ? null : { id: id(v.id) ?? `n${i}`, x, y, text }
-    })
+    }),
+    // Round B: painted terrain (only sent when there is some, so older apps' maps don't change)
+    ...(Array.isArray(o.terrain) && o.terrain.length
+      ? {
+          terrain: take(o.terrain, (v, i) => {
+            const pts = points(v.points, 3, 200)
+            const kind = v.kind === 'water' ? 'water' : v.kind === 'difficult' ? 'difficult' : null
+            return pts && kind ? { id: id(v.id) ?? `t${i}`, kind, points: pts } : null
+          })
+        }
+      : {})
   }
 }
 

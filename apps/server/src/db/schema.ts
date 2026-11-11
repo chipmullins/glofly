@@ -17,6 +17,7 @@ import {
 import type {
   BuiltMap,
   CampaignProgress,
+  TableLive,
   HomebrewData,
   PartyLoot,
   SessionStats,
@@ -2206,6 +2207,8 @@ export const campfireCampaigns = pgTable(
     bannerFileId: uuid("banner_file_id").references((): AnyPgColumn => campfireFiles.id, { onDelete: "set null" }),
     loot: jsonb("loot").$type<PartyLoot>(),
     progress: jsonb("progress").$type<CampaignProgress>(),
+    // Round B (Nov 2026): pause and spotlight.
+    live: jsonb("live").$type<TableLive>(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -2229,6 +2232,8 @@ export const campfireMembers = pgTable(
     // "gm" | "player"
     role: text("role").notNull().default("player"),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    // Round B: the game master removed them from this table (they can't open it until let back in).
+    removedAt: timestamp("removed_at", { withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.campaignId, t.userId] }), index("campfire_members_user_idx").on(t.userId)],
 );
@@ -2301,6 +2306,10 @@ export const campfireTokens = pgTable(
     showName: boolean("show_name").notNull().default(true),
     controlledBy: uuid("controlled_by").array().notNull().default(sql`'{}'::uuid[]`),
     z: integer("z").notNull().default(0),
+    // Round B: height in feet, the game master's lock, and rounds left on timed conditions.
+    elevation: integer("elevation").notNull().default(0),
+    locked: boolean("locked").notNull().default(false),
+    conditionTimers: jsonb("condition_timers").$type<Record<string, number>>().notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -2508,4 +2517,21 @@ export const campfireTracks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("campfire_tracks_campaign_idx").on(t.campaignId)],
+);
+
+// Round B: the game master's own sound board clips (uploaded audio, 15 s at most).
+export const campfireSounds = pgTable(
+  "campfire_sounds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campfireCampaigns.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => campfireFiles.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("campfire_sounds_campaign_idx").on(t.campaignId)],
 );

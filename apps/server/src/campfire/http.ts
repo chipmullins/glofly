@@ -1,3 +1,4 @@
+import { liveOf } from "./liveState";
 import { noteSessionLater } from "./sessionHook";
 import { randomInt } from "node:crypto";
 import type { Response } from "express";
@@ -62,7 +63,7 @@ export const TOO_MANY_ROLLS = "That's a lot of rolling. Wait a moment and try ag
  * The table for this request's campaign, or null after answering (404 for anyone who can't be at
  * it, 403 for players doing GM things or anyone read-only changing things).
  */
-export async function tableOr(res: Response, campaignId: unknown, opts: { write?: boolean; gm?: boolean } = {}): Promise<Table | null> {
+export async function tableOr(res: Response, campaignId: unknown, opts: { write?: boolean; gm?: boolean; play?: boolean } = {}): Promise<Table | null> {
   const id = idParam.safeParse(campaignId);
   const t = id.success ? await tableFor(id.data, me(res).id) : null;
   if (!t) {
@@ -75,6 +76,11 @@ export async function tableOr(res: Response, campaignId: unknown, opts: { write?
   }
   if (opts.gm && !t.gm) {
     bad(res, "Only the game master can do that.", 403);
+    return null;
+  }
+  // Round B: while the game master has paused the table, players can't move, roll or act.
+  if (opts.play && !t.gm && liveOf(t.campaign).paused) {
+    bad(res, "The game master paused the table. It'll pick up again soon.", 423, "paused");
     return null;
   }
   return t;

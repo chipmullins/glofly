@@ -1,3 +1,4 @@
+import { isSoundFile } from "./roundB";
 import express, { Router } from "express";
 import { z } from "zod";
 import { and, asc, eq, sql } from "drizzle-orm";
@@ -266,7 +267,7 @@ async function playerMayHave(t: Table, f: FileRow): Promise<boolean> {
   if (f.kind === "map") {
     return !!active && (await db.select({ id: campfireScenes.id }).from(campfireScenes).where(and(eq(campfireScenes.id, active), eq(campfireScenes.backgroundFileId, f.id)))).length > 0;
   }
-  if (f.kind === "audio") return (await db.select({ id: campfireTracks.id }).from(campfireTracks).where(eq(campfireTracks.fileId, f.id))).length > 0;
+  if (f.kind === "audio") return (await db.select({ id: campfireTracks.id }).from(campfireTracks).where(eq(campfireTracks.fileId, f.id))).length > 0 || (await isSoundFile(t.campaign.id, f.id));
   if (f.kind === "handout") {
     const rows = await db.select().from(campfireHandouts).where(and(eq(campfireHandouts.campaignId, t.campaign.id), eq(campfireHandouts.imageFileId, f.id)));
     return rows.some((h) => handoutVisible(h, t));

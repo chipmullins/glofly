@@ -312,6 +312,8 @@ export type CampaignSettings = {
   leveling?: 'milestone' | 'xp'
   /** How the ruler and movement count diagonals on squares */
   diagonal?: '5' | '5-10'
+  /** Round B: every token stays where it is (players can't move any) */
+  tokensLocked?: boolean
 }
 export const DEFAULT_CAMPAIGN_SETTINGS: CampaignSettings = { gmApprovesDamage: true, showMonsterHp: 'bloodied', diceVisibility: 'all' }
 
@@ -334,7 +336,14 @@ export type CampaignSummary = {
 /** A player character in a few words (Start board). */
 export type CampaignCharacterCard = { id: string; name: string; portraitFileId: string | null; line: string }
 
-export type Campaign = CampaignSummary & { settings: CampaignSettings; createdAt: string }
+export type Campaign = CampaignSummary & { settings: CampaignSettings; createdAt: string; live?: TableLive }
+
+/** Round B: the table's live state (pause, spotlight). */
+export type TableLive = {
+  paused: { by: string; message: string; at: string } | null
+  spotlight: string | null
+}
+export const NO_LIVE: TableLive = { paused: null, spotlight: null }
 
 export type CampaignMember = { userId: string; role: CampaignRole; user: PublicUser | null }
 
@@ -360,8 +369,11 @@ export type DoorState = 'open' | 'closed' | 'locked'
 export type BuiltWall = { id: string; points: Point[]; door?: { state: DoorState } }
 export type BuiltObject = { id: string; kind: string; x: number; y: number; w: number; h: number; rotation: number }
 export type BuiltNote = { id: string; x: number; y: number; text: string }
+/** Round B: painted terrain (movement costs double in it) */
+export type TerrainKind = 'difficult' | 'water'
+export type BuiltTerrain = { id: string; kind: TerrainKind; points: Point[] }
 /** The map builder's data. Notes are GM-only (players get none). */
-export type BuiltMap = { floors: BuiltFloor[]; walls: BuiltWall[]; objects: BuiltObject[]; notes: BuiltNote[] }
+export type BuiltMap = { floors: BuiltFloor[]; walls: BuiltWall[]; objects: BuiltObject[]; notes: BuiltNote[]; terrain?: BuiltTerrain[] }
 
 /**
  * Fog of war. With it on, everything is fogged except what the shapes reveal; shapes are applied
@@ -422,6 +434,12 @@ export type Token = {
   controlledBy: string[]
   z: number
   updatedAt: string
+  /** Round B (optional for older servers): height in feet (flying, climbing) */
+  elevation?: number
+  /** Round B: the game master locked it (players can't move it) */
+  locked?: boolean
+  /** Round B: rounds left on timed conditions (condition → rounds) */
+  conditionTimers?: Record<string, number>
 }
 
 // ───────────── Dice and rolls ─────────────
@@ -551,7 +569,18 @@ export type SaveSpellResult = {
   targets: { tokenId: string; save: Roll; saved: boolean; amount: number; pending: PendingDamage | null; applied: HitEvent | null }[]
 }
 
-export type CombatEntry = { tokenId: string; name: string; init: number | null; dex: number; hidden: boolean }
+export type CombatEntry = {
+  tokenId: string
+  name: string
+  init: number | null
+  dex: number
+  hidden: boolean
+  /** Round B: feet moved this turn, Dash taken, the last move (for Undo), legendary actions used this round */
+  moved?: number
+  dashed?: boolean
+  lastMove?: { x: number; y: number; cost: number } | null
+  legendaryUsed?: number
+}
 export type CombatState = { round: number; turn: number; entries: CombatEntry[] }
 /** What a viewer gets: hidden entries left out for players; `current` null when it's hidden. */
 export type CombatView = CombatState & { current: string | null }
@@ -642,6 +671,18 @@ export type CampfireEvents = {
   'campfire:ping': CampfireEventBase & { userId: string; sceneId: string; x: number; y: number }
   'campfire:presence': CampfireEventBase & { present: string[] }
   'campfire:members': CampfireEventBase & { members: CampaignMember[] }
+  /** Round B: pause / spotlight changed */
+  'campfire:live': CampfireEventBase & { live: TableLive }
+  /** Round B: the game master moved everyone's view */
+  'campfire:view': CampfireEventBase & { sceneId: string; x: number; y: number; by: string }
+  /** Round B: a sound board sound (built-in id or an uploaded sound's file) */
+  'campfire:sound': CampfireEventBase & { builtin: string | null; fileId: string | null; volume: number }
+  /** Round B: the game master is (or stopped) whispering to you */
+  'campfire:whisper': CampfireEventBase & { from: string; to: string; on: boolean }
+  /** Round B: a short line for everyone ("Bless ended on Wren") */
+  'campfire:notice': CampfireEventBase & { text: string }
+  /** Round B: the game master removed you from this table */
+  'campfire:removed': CampfireEventBase & { userId: string }
 }
 
 // ───────────── Limits ─────────────
