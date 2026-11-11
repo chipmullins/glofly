@@ -42,6 +42,8 @@ import { seesAllNebulas, unlocksFor, visibleChats } from "./access";
 import { mentionsUserSql } from "./groupMentions";
 import { verificationBlock } from "./safety";
 import { watchSummaryFor } from "./watchSummary";
+import { liveStagesIn, stateOf } from "../stages/state";
+import { followerCounts } from "../stages/announcements";
 
 // What the apps get about constellations (2.0): dashboard cards, directory entries, and the whole
 // constellation when it's open.
@@ -234,7 +236,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
     .from(constellationCategories)
     .where(inArray(constellationCategories.constellationId, ids));
   const categoryPosition = new Map(categoryRows.map((c) => [c.id, c.position]));
-  const chatting = await chattingIn(allNebulas.filter((n) => n.kind === "text").map((n) => n.conversationId));
+  const chatting = await chattingIn(allNebulas.filter((n) => n.kind === "text" || n.kind === "announcement").map((n) => n.conversationId));
   for (const card of cards) {
     const states = (voiceByCard.get(card.id) ?? []).filter((s) => allNebulas.some((n) => n.id === s.nebulaId));
     const cardNotify = notifyLevel(mine.find((m) => m.c.id === card.id)?.notify) ?? "all";
@@ -252,7 +254,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
         const level = notifyLevel(settings.find((s) => s.conversationId === n.conversationId)?.level) ?? cardNotify;
         return {
           kind: n.kind,
-          news: n.kind === "text" && !!u && (u.mentions > 0 || (u.unread > 0 && level !== "none" && !cardMuted)),
+          news: (n.kind === "text" || n.kind === "announcement") && !!u && (u.mentions > 0 || (u.unread > 0 && level !== "none" && !cardMuted)),
           chatting: (chatting.get(n.conversationId) ?? 0) >= CHATTING_PEOPLE,
           voice: states.find((s) => s.nebulaId === n.id)?.userIds.length ?? 0,
         };
@@ -366,7 +368,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
   const nebulaRows = allNebulaRows.filter((n) => seen.has(n.conversationId));
   const manager = seesAllNebulas(me);
   const unread = await unreadFor(userId, nebulaRows.map((n) => n.conversationId));
-  const chatting = await chattingIn(nebulaRows.filter((n) => n.kind === "text").map((n) => n.conversationId));
+  const chatting = await chattingIn(nebulaRows.filter((n) => n.kind === "text" || n.kind === "announcement").map((n) => n.conversationId));
   const mySettings = nebulaRows.length
     ? await db
         .select({
@@ -433,6 +435,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
   const myRow = memberRows.find((m) => m.userId === userId);
   const sharedWith = await sharedWithByNebula(constellationId);
   // Communities round: my followed, still-open threads under each text nebula (the sidebar).
+  const followers = await followerCounts(nebulaRows.filter((n) => n.kind === "announcement").map((n) => n.id));
   const myThreads = await myOpenThreads(userId, nebulaRows.filter((n) => n.kind === "text").map((n) => n.id));
   const pendingRequests = can(me, "approveRequests")
     ? await db.$count(constellationJoinRequests, eq(constellationJoinRequests.constellationId, constellationId))
@@ -485,6 +488,9 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       // Threads + forums
       ...(n.kind === "text" ? { threadsStaffOnly: n.threadsStaffOnly, threadCloseDays: n.threadCloseDays, threads: myThreads.filter((t) => t.nebulaId === n.id).slice(0, 5) } : {}),
       ...(n.kind === "forum" ? { threadCloseDays: n.threadCloseDays, forum: forumSettingsOf(n) } : {}),
+      // Communities round 2: stages and announcement nebulas
+      ...(n.kind === "stage" ? { stageSpeakerLimit: n.stageSpeakerLimit } : {}),
+      ...(n.kind === "announcement" ? { followers: followers.get(n.id) ?? 0 } : {}),
     })),
     roles,
     members: memberRows
@@ -504,6 +510,10 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       })
       .filter((m) => !!m.user),
     voice: (await voiceStatesOf(constellationId)).filter((v) => nebulaRows.some((n) => n.id === v.nebulaId)),
+    // Communities round 2: live stages (hands only for people who can manage stages)
+    stages: (await liveStagesIn(constellationId))
+      .filter((st) => nebulaRows.some((n) => n.id === st.nebulaId))
+      .map((st) => stateOf(st, me.owner || me.permissions.has("manageStages"))),
     me: {
       owner: me.owner,
       permissions: me.owner ? [...ALL_PERMISSIONS] : [...me.permissions],

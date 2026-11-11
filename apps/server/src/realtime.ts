@@ -296,6 +296,18 @@ export function emitToUser(userId: string, event: string, payload: unknown, mode
 }
 
 /**
+ * Communities round 2: one event to many people in a single send (big constellations). Only for
+ * payloads with no one's name in them: nicknames aren't filled in per viewer here.
+ */
+export function emitToUsersPlain(userIds: string[], event: string, payload: unknown, modernOnly = false): void {
+  if (!io || !userIds.length) return;
+  for (let i = 0; i < userIds.length; i += 1000) {
+    const rooms = userIds.slice(i, i + 1000).map((id) => (modernOnly ? modernRoom(id) : userRoom(id)));
+    io.to(rooms).emit(event, payload);
+  }
+}
+
+/**
  * 0.7.1: one event, two versions: devices whose app knows `feature` get `withFeature`, the rest
  * get `without` (e.g. a Vimeo video for new apps, "nothing's on" for apps that only know YouTube).
  */

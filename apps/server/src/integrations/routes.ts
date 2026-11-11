@@ -491,7 +491,7 @@ integrationsRouter.post("/:id/integrations/hooks", changeLimiter, async (req, re
       return;
     }
     const [n] = await db.select({ kind: nebulas.kind }).from(nebulas).where(eq(nebulas.id, d.nebulaId));
-    if (n?.kind !== "text") {
+    if (n?.kind !== "text" && n?.kind !== "announcement") {
       bad(res, "Pick a text nebula.");
       return;
     }

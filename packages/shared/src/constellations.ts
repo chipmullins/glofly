@@ -432,10 +432,16 @@ export function canSeeNebula(
 /** A nebula's name as people type it: "#valorant" for text, "Campfire" for voice. */
 export const nebulaLabel = (n: { kind: NebulaKind; name: string }): string => (n.kind !== 'voice' ? `#${n.name}` : n.name)
 
+/** Kinds that hold people talking (a room), not a timeline of messages first. */
+export const isTalkKind = (kind: NebulaKind): boolean => kind === 'voice' || kind === 'stage'
+
 // ───────────── What the API sends ─────────────
 
-/** Communities round: 'forum' (posts with titles and tags). Older apps are sent forums as read-only text. */
-export type NebulaKind = 'text' | 'voice' | 'forum'
+/**
+ * Communities round: 'forum' (posts with titles and tags). Older apps are sent forums as read-only text.
+ * Communities round 2: 'stage' and 'announcement' (stages.ts); older apps get them as read-only text.
+ */
+export type NebulaKind = 'text' | 'voice' | 'forum' | 'stage' | 'announcement'
 
 /** Who's in a voice nebula right now. */
 export type VoiceNebulaState = {
@@ -595,6 +601,10 @@ export type Nebula = {
   forum?: import('./threads').ForumSettings
   /** Your followed threads here that are still open (the sidebar list under the nebula) */
   threads?: import('./threads').ThreadSummary[]
+  /** Communities round 2: an announcement nebula's follower count (constellations, not people) */
+  followers?: number
+  /** Communities round 2: a stage's speaker limit (stage nebulas) */
+  stageSpeakerLimit?: number
 }
 
 /** 0.7.5 living sky: one star per nebula, in sidebar order (dashboard cards). */
@@ -664,6 +674,8 @@ export type ConstellationDetail = {
   roles: ConstellationRole[]
   members: ConstellationMember[]
   voice: VoiceNebulaState[]
+  /** Communities round 2: live stages (missing from older servers) */
+  stages?: import('./stages').StageState[]
   /** What you can do here */
   me: {
     owner: boolean
@@ -959,7 +971,45 @@ export const CONSTELLATION_EVENT_NAMES = [
   'constellation:raid',
   'constellation:appeal',
   'emoji:changed',
+  // Communities round 2: stages
+  'stage:updated',
+  'stage:invited',
+  'stage:moved',
 ] as const
+
+/** A live stage from the server, checked (null if it doesn't look right). */
+export function cleanStage(x: unknown): import('./stages').StageState | null {
+  const t = (x ?? {}) as Record<string, unknown>
+  if (!str(t.id) || !str(t.nebulaId) || !str(t.startedBy)) return null
+  const n = (v: unknown, max: number) => (typeof v === 'number' && v >= 0 ? Math.min(Math.floor(v), max) : 0)
+  const speakers = (Array.isArray(t.speakers) ? t.speakers : [])
+    .map((v) => (v ?? {}) as Record<string, unknown>)
+    .filter((v) => str(v.userId))
+    .slice(0, 60)
+    .map((v) => ({ userId: v.userId as string, host: v.host === true, invited: v.invited === true }))
+  const hands = Array.isArray(t.hands)
+    ? t.hands
+        .map((v) => (v ?? {}) as Record<string, unknown>)
+        .filter((v) => str(v.userId))
+        .slice(0, 100)
+        .map((v) => ({ userId: v.userId as string, at: text(v.at, 40) }))
+    : undefined
+  return {
+    nebulaId: t.nebulaId,
+    id: t.id,
+    topic: text(t.topic, 80),
+    startedBy: t.startedBy,
+    startedAt: text(t.startedAt, 40),
+    handsOn: t.handsOn !== false,
+    listenerChat: t.listenerChat === true,
+    speakerLimit: n(t.speakerLimit, 50) || 25,
+    speakers,
+    listenerCount: n(t.listenerCount, 1_000_000),
+    listeners: strList(t.listeners).slice(0, 24),
+    ...(hands ? { hands } : {}),
+    handCount: n(t.handCount, 1_000_000),
+  }
+}
 
 /** A thread summary from the server, checked (null if it doesn't look right). */
 function cleanThread(x: unknown): import('./threads').ThreadSummary | null {
@@ -1036,6 +1086,18 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
         ...(reason === 'banned' && typeof p.banReason === 'string' ? { banReason: text(p.banReason, 200) } : {}),
       }
     }
+    case 'stage:updated': {
+      if (!str(p.constellationId) || !str(p.nebulaId)) return null
+      const stage = p.stage === null ? null : cleanStage(p.stage)
+      if (p.stage !== null && !stage) return null
+      return { type: 'stage:updated', constellationId: p.constellationId, nebulaId: p.nebulaId, stage }
+    }
+    case 'stage:invited':
+      return str(p.constellationId) && str(p.nebulaId)
+        ? { type: 'stage:invited', constellationId: p.constellationId, nebulaId: p.nebulaId, byName: text(p.byName, 64), invited: p.invited !== false }
+        : null
+    case 'stage:moved':
+      return str(p.constellationId) && str(p.nebulaId) ? { type: 'stage:moved', constellationId: p.constellationId, nebulaId: p.nebulaId } : null
     case 'emoji:changed':
       return str(p.constellationId) ? { type: 'emoji:changed', constellationId: p.constellationId } : null
     case 'nightwatch:changed':

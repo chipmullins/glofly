@@ -14,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { ForwardedFrom, LiveCard, OnboardingSettings } from "@glofly/shared";
+import type { Crosspost, ForwardedFrom, LiveCard, OnboardingSettings } from "@glofly/shared";
 
 export const userStatus = pgEnum("user_status", ["online", "away", "dnd", "invisible"]);
 // Who can send someone friend requests (Settings → General → Privacy).
@@ -417,6 +417,8 @@ export const messages = pgTable(
     liveCard: jsonb("live_card").$type<LiveCard>(),
     // Communities round 2: the custom emoji its text and reactions use (`:name:` → picture).
     emojis: jsonb("emojis").$type<{ id: string; name: string; animated: boolean }[]>(),
+    // Communities round 2: a copy of a followed announcement (forwarded is set too, for older apps).
+    crosspost: jsonb("crosspost").$type<Crosspost>(),
     // Communities round (Nov 2026): a reply in a thread or forum post (nebulas only). Thread
     // replies stay out of the nebula's own timeline unless alsoInNebula ("Also send to #general").
     threadId: uuid("thread_id").references((): AnyPgColumn => nebulaThreads.id, { onDelete: "cascade" }),
@@ -1065,7 +1067,7 @@ export const friendLinkUses = pgTable(
 
 export const constellationVisibility = pgEnum("constellation_visibility", ["invite", "public", "approval"]);
 // Communities round (Nov 2026): "forum" (posts with titles and tags; each post is a thread).
-export const nebulaKind = pgEnum("nebula_kind", ["text", "voice", "forum"]);
+export const nebulaKind = pgEnum("nebula_kind", ["text", "voice", "forum", "stage", "announcement"]);
 export const constellationRoleKind = pgEnum("constellation_role_kind", ["admin", "moderator", "member", "custom"]);
 
 export const constellations = pgTable(
@@ -1271,6 +1273,8 @@ export const nebulas = pgTable(
     forumGuidelines: text("forum_guidelines"),
     forumRequireTag: boolean("forum_require_tag").notNull().default(false),
     forumSort: text("forum_sort").notNull().default("activity"),
+    // Communities round 2: a stage nebula's speaker limit (each stage starts with it).
+    stageSpeakerLimit: integer("stage_speaker_limit").notNull().default(25),
     conversationId: uuid("conversation_id")
       .notNull()
       .unique()
@@ -2258,4 +2262,76 @@ export const constellationLiveAlerts = pgTable(
     uniqueIndex("live_alerts_channel_idx").on(t.constellationId, t.site, t.channelId),
     index("live_alerts_watch_idx").on(t.site, t.channelId),
   ],
+);
+
+// Communities round 2 (board 3a): a live stage in a stage nebula (one at a time). Its LiveKit room
+// is `stage-<id>`: speakers get passes that may send, listeners passes that only receive.
+export const stages = pgTable(
+  "stages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    startedBy: uuid("started_by").references(() => users.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    handsOn: boolean("hands_on").notNull().default(true),
+    listenerChat: boolean("listener_chat").notNull().default(false),
+    speakerLimit: integer("speaker_limit").notNull().default(25),
+  },
+  (t) => [uniqueIndex("stages_live_idx").on(t.nebulaId).where(sql`${t.endedAt} is null`)],
+);
+
+// Who's up on a stage, asked up, or has a hand raised (listeners themselves are kept in memory).
+export const stagePeople = pgTable(
+  "stage_people",
+  {
+    stageId: uuid("stage_id")
+      .notNull()
+      .references(() => stages.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    speaker: boolean("speaker").notNull().default(false),
+    // A manager asked them up (they become a speaker when they accept).
+    invited: boolean("invited").notNull().default(false),
+    handAt: timestamp("hand_at", { withTimezone: true }),
+    upAt: timestamp("up_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.stageId, t.userId] })],
+);
+
+// Communities round 2 (board 3b): a constellation following an announcement nebula. New posts are
+// copied into target_nebula_id (a text nebula in the follower's constellation).
+export const announcementFollows = pgTable(
+  "announcement_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceNebulaId: uuid("source_nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    targetNebulaId: uuid("target_nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("announcement_follows_pair_idx").on(t.sourceNebulaId, t.targetNebulaId), index("announcement_follows_target_idx").on(t.targetNebulaId)],
+);
+
+// Which message is a copy of which (edits and deletes follow the original).
+export const crosspostCopies = pgTable(
+  "crosspost_copies",
+  {
+    copyMessageId: uuid("copy_message_id")
+      .primaryKey()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    sourceMessageId: uuid("source_message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    followId: uuid("follow_id").references(() => announcementFollows.id, { onDelete: "set null" }),
+  },
+  (t) => [index("crosspost_copies_source_idx").on(t.sourceMessageId)],
 );

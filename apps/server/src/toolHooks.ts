@@ -11,15 +11,21 @@ type Hooks = {
   onNebulaMessage: (conversationId: string, messageId: string, change: "created" | "edited" | "deleted") => Promise<void>;
 };
 
-let hooks: Partial<Hooks> = {};
+const hooks: { [K in keyof Hooks]?: Hooks[K][] } = {};
 
-/** Each module registers the hooks it handles (tools/hooks.ts, integrations/readers.ts). */
+/**
+ * Each module registers the hooks it handles (tools/hooks.ts, integrations/readers.ts, and since
+ * communities round 2 stages/announcements.ts and bridge/discord.ts). Several modules may handle one.
+ */
 export function registerToolHooks(h: Partial<Hooks>): void {
-  hooks = { ...hooks, ...h };
+  for (const key of Object.keys(h) as (keyof Hooks)[]) {
+    const fn = h[key];
+    if (fn) (hooks[key] ??= [] as never[]).push(fn as never);
+  }
 }
 
 /** Runs a tool hook in the background (nothing happens before registration; never throws). */
 export function toolHook<K extends keyof Hooks>(name: K, ...args: Parameters<Hooks[K]>): void {
-  const fn = hooks[name] as ((...a: Parameters<Hooks[K]>) => Promise<void>) | undefined;
-  if (fn) void fn(...args).catch((err) => console.error(`Glofly tools (${name}) failed`, err));
+  for (const fn of (hooks[name] ?? []) as ((...a: Parameters<Hooks[K]>) => Promise<void>)[])
+    void fn(...args).catch((err) => console.error(`Glofly tools (${name}) failed`, err));
 }

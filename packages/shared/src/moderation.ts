@@ -288,7 +288,7 @@ export const MOD_LOG_FILTERS: readonly { id: ModLogFilter; name: string; actions
   { id: 'automod', name: 'AutoMod', actions: ['automod_hidden', 'automod_links', 'automod_wait', 'automod_mentions', 'automod_raid', 'automod_undo', 'automod_kept', 'automod_changed'] },
   { id: 'safety', name: 'Safety', actions: ['joins_locked', 'joins_unlocked', 'raid_cleared', 'raid_kicked', 'safety_changed', 'report_dismissed', 'report_actioned'] },
   { id: 'roles', name: 'Roles', actions: ['roles_changed', 'role_created', 'role_changed', 'role_deleted'] },
-  { id: 'settings', name: 'Settings', actions: ['settings_changed', 'visibility_changed', 'onboarding_changed', 'nebula_deleted', 'category_deleted', 'ownership_transferred'] },
+  { id: 'settings', name: 'Settings', actions: ['settings_changed', 'visibility_changed', 'onboarding_changed', 'nebula_deleted', 'category_deleted', 'ownership_transferred', 'stage_started', 'stage_ended', 'follow_added', 'follow_removed'] },
 ]
 export const MOD_LOG_DAYS: readonly { d: number; name: string }[] = [
   { d: 1, name: 'Today' },

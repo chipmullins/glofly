@@ -25,6 +25,9 @@ import { callsRouter } from "./calls/routes";
 import { constellationsRouter } from "./constellations/routes";
 import { nightWatchRouter, purgeOldModeration } from "./constellations/nightwatch";
 import { emojiRouter } from "./emoji/routes";
+import { stagesRouter } from "./stages/routes";
+import { announcementsRouter, startAnnouncements } from "./stages/announcements";
+import { ready as loadStages, sweepStages } from "./stages/state";
 import { invitePageRouter, sweepConstellationBirthdays } from "./constellations/community";
 // 0.8.0 community tools: search, events with RSVP, AutoMod lite, the Inbox.
 import { communityToolsRouter } from "./constellations/communityTools";
@@ -186,6 +189,9 @@ app.use("/constellations", liveAlertsRouter);
 app.use("/constellations", nightWatchRouter);
 // Communities round 2: custom emoji + stickers (/emoji/… and /constellations/:id/emoji).
 app.use(emojiRouter);
+// Communities round 2: stage nebulas and announcement nebulas you can follow.
+app.use("/constellations", stagesRouter);
+app.use("/constellations", announcementsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
 // Communities round: the bot API (/api/v1, "Authorization: Bot gfk_…"), for game servers and bots.
@@ -273,6 +279,7 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 startToolHooks();
 startReaderPushes();
 startLiveAlerts();
+startAnnouncements();
 
 connectRedis()
   .then(() => {
@@ -339,6 +346,9 @@ connectRedis()
     every(10 * 60_000, "Unfinished forum posts", sweepUnfinishedPosts);
     // Communities round 2: the mod log, finished reports and appeals keep 180 days.
     every(60 * 60_000, "Mod log cleanup", purgeOldModeration);
+    // Communities round 2: stages (who's still on them; quiet stages end by themselves).
+    void loadStages().catch((err) => console.error("Couldn't load live stages", err));
+    every(15_000, "Stages", sweepStages);
     // 0.9.3 Connections: Steam games (each account every 6 hours), what's playing on Steam, and
     // live notices Twitch or Kick stopped sending.
     every(5 * 60_000, "Steam games", sweepSteamSync);

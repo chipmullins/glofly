@@ -284,6 +284,8 @@ export type Message = {
   lanternFadeAt?: string | null
   /** 0.9.3: a forwarded message (older apps just show its text) */
   forwarded?: ForwardedFrom
+  /** Communities round 2: a copy of a followed announcement (older apps show it as a forward) */
+  crosspost?: import('./stages').Crosspost
   /** Communities round 2: custom emoji its text or reactions use (`:name:`; older apps show the text) */
   emojis?: import('./emoji').EmojiRef[]
   /** 0.9.3: a constellation's Live alert (older apps show the body, its link and preview) */
@@ -607,6 +609,12 @@ export type ServerEvent =
   | { type: 'constellation:removed'; constellationId: string; reason: 'kicked' | 'banned' | 'taken_down' | 'deleted'; banReason?: string | null }
   /** Communities round 2: a constellation's emoji or stickers changed (refresh the picker) */
   | { type: 'emoji:changed'; constellationId: string }
+  /** Communities round 2: a stage started, changed or ended (stage null) */
+  | { type: 'stage:updated'; constellationId: string; nebulaId: string; stage: import('./stages').StageState | null }
+  /** Communities round 2: a manager asked me up to speak (invited false: took it back) */
+  | { type: 'stage:invited'; constellationId: string; nebulaId: string; byName: string; invited: boolean }
+  /** Communities round 2: I was moved to the audience */
+  | { type: 'stage:moved'; constellationId: string; nebulaId: string }
   /** Communities round 2: Night watch changed (moderators: refresh the dashboard and badge) */
   | { type: 'nightwatch:changed'; constellationId: string }
   /** Communities round 2: raid protection paused joins (moderators) */

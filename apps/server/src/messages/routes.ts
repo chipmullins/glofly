@@ -77,7 +77,7 @@ import {
   publicGame,
   shortBody,
   attachmentSummary,
-  type GameState, type MessageButton, type ForwardedFrom, type LiveCard, type EmojiRef, isCustomReaction } from "@glofly/shared";
+  type GameState, type MessageButton, type ForwardedFrom, type LiveCard, type EmojiRef, type Crosspost, isCustomReaction } from "@glofly/shared";
 import { toolHook } from "../toolHooks";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
@@ -131,6 +131,7 @@ export const messageFields = {
   threadId: messages.threadId,
   alsoInNebula: messages.alsoInNebula,
   forwarded: messages.forwarded,
+  crosspost: messages.crosspost,
   liveCard: messages.liveCard,
   emojis: messages.emojis,
 };
@@ -153,6 +154,7 @@ export type MessageRow = {
   game: GameInfo | null;
   threadId?: string | null;
   forwarded?: ForwardedFrom | null;
+  crosspost?: Crosspost | null;
   liveCard?: LiveCard | null;
   emojis?: EmojiRef[] | null;
   alsoInNebula?: boolean;
@@ -281,6 +283,8 @@ export async function hydrate(rows: MessageRow[]) {
       ...(chips.has(r.id) ? { thread: chips.get(r.id) } : {}),
       // 0.9.3: forwarded (older apps just show the text).
       ...(r.forwarded && !deleted ? { forwarded: r.forwarded } : {}),
+      // Communities round 2: a copy of a followed announcement.
+      ...(r.crosspost && !deleted ? { crosspost: r.crosspost } : {}),
       // 0.9.3: a constellation's Live alert (older apps show the text and link preview).
       ...(r.liveCard && !deleted ? { liveCard: r.liveCard } : {}),
       // Communities round 2: custom emoji in its text or reactions (older apps show :name:).
@@ -1831,6 +1835,28 @@ async function postForward(
     const refused = await automodGate(targetId, myId, source.body, null);
     if (refused) return { ok: false, reason: refused.message };
   }
+  const made = await copyMessageInto(targetId, myId, source, { forwarded }, chat.memberIds, modernOnly(chat));
+  if (!made.ok) return made;
+  const { message, inserted } = made;
+  if (chat.partner) await shareReadPosition(targetId, myId, chat.partner, inserted.createdAt);
+  inBackground(notifyMessage({ ...message, groupMentions: [] }, chat));
+  if (chat.partner) inBackground(noteGlow(myId, chat.partner));
+  return { ok: true, message };
+}
+
+/**
+ * Copies a message (its text and files) into a chat as `myId`, with no checks: forwards check first;
+ * Communities round 2 announcement copies are posted by the follower constellation's Glofly member.
+ * Nobody is @mentioned or notified by the copy itself; `memberIds` are told about it.
+ */
+export async function copyMessageInto(
+  targetId: string,
+  myId: string,
+  source: MessageRow,
+  extra: { forwarded: ForwardedFrom; crosspost?: Crosspost },
+  memberIds: string[],
+  modern: boolean,
+): Promise<{ ok: true; message: Awaited<ReturnType<typeof hydrate>>[number]; inserted: MessageRow } | { ok: false; reason: string }> {
   const files = await db.select().from(attachments).where(eq(attachments.messageId, source.id)).orderBy(attachments.position);
   const copies = files.map((a) => ({ ...a, newId: randomUUID() }));
   const made: string[] = [];
@@ -1855,7 +1881,7 @@ async function postForward(
   const inserted = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(messages)
-      .values({ conversationId: targetId, senderId: myId, body: source.body, mentions: [], gif: source.gif, forwarded })
+      .values({ conversationId: targetId, senderId: myId, body: source.body, mentions: [], gif: source.gif, forwarded: extra.forwarded, crosspost: extra.crosspost ?? null, emojis: source.emojis ?? null })
       .returning(messageFields);
     for (const [position, c] of copies.entries()) {
       await tx.insert(attachments).values({
@@ -1885,16 +1911,12 @@ async function postForward(
     throw err;
   });
   const [message] = await hydrate([inserted]);
-  for (const userId of chat.memberIds)
-    emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
-  if (chat.kind === "nebula") {
+  for (const userId of memberIds) emitToUser(userId, "message:new", modern ? { message, nebula: true } : { message }, modern);
+  if (modern) {
     inBackground(nebulaActivity(targetId, myId, inserted.createdAt, [], nebulaPreview(message), []));
     toolHook("onNebulaMessage", targetId, inserted.id, "created");
   }
-  if (chat.partner) await shareReadPosition(targetId, myId, chat.partner, inserted.createdAt);
-  inBackground(notifyMessage({ ...message, groupMentions: [] }, chat));
-  if (chat.partner) inBackground(noteGlow(myId, chat.partner));
-  return { ok: true, message };
+  return { ok: true, message, inserted };
 }
 
 // POST /conversations/messages/:messageId/forward  { to: [conversationId…] (1–5), note? }
@@ -2000,7 +2022,7 @@ conversationsRouter.get("/forward-targets", async (_req, res) => {
       out.push({ conversationId: r.id, kind: "group", title: chat.name?.trim() || "Group", subtitle: `Group · ${chat.memberIds.length} people`, userId: null, avatarVersion: null, constellationId: null, iconVersion: null, color: null });
     } else {
       const nebula = await nebulaOfChat(r.id);
-      if (!nebula || nebula.kind !== "text") continue;
+      if (!nebula || (nebula.kind !== "text" && nebula.kind !== "announcement")) continue;
       const [c] = await db
         .select({ id: constellations.id, name: constellations.name, iconVersion: constellations.iconVersion, color: constellations.color })
         .from(constellations)

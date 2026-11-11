@@ -296,7 +296,7 @@ botApiRouter.post("/api/v1/nebulas/:nebulaId/messages", async (req, res) => {
     .select({ conversationId: nebulas.conversationId, name: nebulas.name, kind: nebulas.kind })
     .from(nebulas)
     .where(and(eq(nebulas.id, nebulaId.data), eq(nebulas.constellationId, k.constellationId)));
-  if (!n || n.kind !== "text") {
+  if (!n || (n.kind !== "text" && n.kind !== "announcement")) {
     fail(res, 404, "not_found", "That nebula isn't there (or isn't a text nebula).");
     return;
   }

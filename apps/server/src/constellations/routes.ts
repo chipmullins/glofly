@@ -3,7 +3,7 @@ import express, { Router, type NextFunction, type Request, type Response } from 
 import { rateLimit } from "../rateLimit";
 import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import { BAN_DELETE_WINDOWS, FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
+import { BAN_DELETE_WINDOWS, STAGE_SPEAKERS_MAX, FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
   ALL_PERMISSIONS,
   ONBOARDING_ANSWERS_MAX,
   ONBOARDING_QUESTIONS_MAX,
@@ -79,6 +79,7 @@ import { can, OWNER_RANK, outranks, ranksOf, standingOf, type Standing , frozen,
 import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstellations } from "./members";
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
 import { afterJoinSafety } from "./raid";
+import { forgetStage } from "../stages/state";
 import { removeConstellationEmoji } from "../emoji/routes";
 import { closeReportsOnBan, deleteRecentMessages } from "./nightwatch";
 import { joinsPaused, JOINS_PAUSED_MESSAGE } from "./safety";
@@ -378,13 +379,14 @@ export async function createNebula(
     roleIds?: string[];
     /** Communities round (tickets): people who see it whatever their roles */
     userIds?: string[];
-  } & Partial<Pick<typeof nebulas.$inferInsert, "threadsStaffOnly" | "threadCloseDays" | "forumTags" | "forumGuidelines" | "forumRequireTag" | "forumSort">>,
+  } & Partial<Pick<typeof nebulas.$inferInsert, "threadsStaffOnly" | "threadCloseDays" | "forumTags" | "forumGuidelines" | "forumRequireTag" | "forumSort" | "stageSpeakerLimit">>,
 ) {
   const [chat] = await tx.insert(conversations).values({ kind: "nebula", name: values.name }).returning({ id: conversations.id });
   rememberNebulaChat(chat.id);
   const [row] = await tx
     .insert(nebulas)
-    .values({ constellationId, conversationId: chat.id, ...values, readOnly: values.readOnly ?? false })
+    // Communities round 2: announcement nebulas are always staff-only.
+    .values({ constellationId, conversationId: chat.id, ...values, readOnly: values.kind === "announcement" ? true : (values.readOnly ?? false) })
     .returning();
   const members = await tx
     .select({ userId: constellationMembers.userId })
@@ -1682,8 +1684,10 @@ function forumColumns(f: z.infer<typeof threadFields.forum>): ForumColumns | str
 
 const nebulaBody = z.object({
   name: z.string().max(100),
-  kind: z.enum(["text", "voice", "forum"]),
+  kind: z.enum(["text", "voice", "forum", "stage", "announcement"]),
   ...threadFields,
+  // Communities round 2: a stage nebula's speaker limit
+  stageSpeakerLimit: z.number().int().min(1).max(STAGE_SPEAKERS_MAX).optional(),
   categoryId: idParam.nullable().optional(),
   topic: optionalText(NEBULA_TOPIC_MAX, "The topic").optional(),
   readOnly: z.boolean().optional(),
@@ -1731,6 +1735,7 @@ constellationsRouter.post("/:id/nebulas", changeLimiter, async (req, res) => {
     ...(parsed.data.kind === "forum" ? forum : {}),
     ...(parsed.data.threadsStaffOnly !== undefined ? { threadsStaffOnly: parsed.data.threadsStaffOnly } : {}),
     ...(parsed.data.threadCloseDays !== undefined ? { threadCloseDays: parsed.data.threadCloseDays } : {}),
+    ...(parsed.data.kind === "stage" && parsed.data.stageSpeakerLimit !== undefined ? { stageSpeakerLimit: parsed.data.stageSpeakerLimit } : {}),
   };
   const nebula = await db.transaction((tx) =>
     createNebula(tx, s.constellationId, {
@@ -1787,7 +1792,8 @@ constellationsRouter.patch("/:id/nebulas/:nid", changeLimiter, async (req, res) 
     }
     Object.assign(changes, forum);
   }
-  if (parsed.data.readOnly !== undefined) changes.readOnly = parsed.data.readOnly;
+  if (parsed.data.readOnly !== undefined && n.kind !== "announcement") changes.readOnly = parsed.data.readOnly;
+  if (parsed.data.stageSpeakerLimit !== undefined && n.kind === "stage") changes.stageSpeakerLimit = parsed.data.stageSpeakerLimit;
   // 0.8.0: who can see it. Left out = unchanged, so older apps editing a nebula keep it.
   if (parsed.data.visibility !== undefined) changes.visibility = parsed.data.visibility;
   // 4.3: a nebula limited to roles can't stay optional (onboarding only offers nebulas for everyone).
@@ -1827,6 +1833,7 @@ constellationsRouter.delete("/:id/nebulas/:nid", changeLimiter, async (req, res)
   if (!n) return;
   const room = await openVoiceRoom(n.conversationId);
   if (room) await closeCall(room.id, "hang_up");
+  if (n.kind === "stage") forgetStage(n.id);
   const files = await db
     .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
     .from(attachments)
