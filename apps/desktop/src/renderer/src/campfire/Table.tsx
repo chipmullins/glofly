@@ -24,6 +24,7 @@ import Builder from './Builder'
 import { Hub } from './Hub'
 import { SetupWizard } from './SetupWizard'
 import { HowCampfireWorks, Tour, tourSeen } from './Tour'
+import { PracticeTable } from './Practice'
 import { FlameIcon, Icon } from './icons'
 
 // The table (Main board for game masters, Player board for players): header with who's at the
@@ -97,6 +98,7 @@ function TableReady({
   const [wizard, setWizard] = useState<1 | 2 | null>(setup && isGm ? 1 : null)
   const [touring, setTouring] = useState(() => !setup && !tourSeen(isGm))
   const [help, setHelp] = useState(false)
+  const [practice, setPractice] = useState(false)
   const [tool, setTool] = useState<Tool>('select')
   const [fogMode, setFogMode] = useState<'reveal' | 'hide'>('reveal')
   const [fogBrush, setFogBrush] = useState<FogBrush>('box')
@@ -840,10 +842,24 @@ function TableReady({
               setHelp(false)
               setTouring(true)
             }}
+            onPractice={() => {
+              setHelp(false)
+              setPractice(true)
+            }}
           />
         )}
         {touring && !wizard && !hubOpen && !help && (
-          <Tour onDone={() => setTouring(false)} onHelp={() => setHelp(true)} />
+          <Tour
+            onDone={() => setTouring(false)}
+            onHelp={() => setHelp(true)}
+            onPractice={() => {
+              setTouring(false)
+              setPractice(true)
+            }}
+          />
+        )}
+        {practice && !help && (
+          <PracticeTable onClose={() => setPractice(false)} onHelp={() => setHelp(true)} />
         )}
         {statBlock && isGm && (
           <StatBlock

@@ -100,10 +100,12 @@ const markSeen = (gm: boolean): void => {
 
 export function Tour({
   onDone,
-  onHelp
+  onHelp,
+  onPractice
 }: {
   onDone: () => void
   onHelp: () => void
+  onPractice: () => void
 }): React.JSX.Element | null {
   const { isGm } = useCf()
   const marks = isGm ? GM : PLAYER
@@ -201,6 +203,19 @@ export function Tour({
           <button type="button" className="cf-link" onClick={onHelp} style={{ marginLeft: 12 }}>
             How Campfire works
           </button>
+          {!isGm && i === 0 && (
+            <button
+              type="button"
+              className="cf-link"
+              onClick={() => {
+                markSeen(isGm)
+                onPractice()
+              }}
+              style={{ marginLeft: 12 }}
+            >
+              Practice first
+            </button>
+          )}
           <span className="cfa-push" />
           <button type="button" className="cf-ghost" disabled={i === 0} onClick={() => setI(i - 1)}>
             Back
@@ -222,10 +237,12 @@ export function Tour({
 /** "How Campfire works": the whole thing on one page. */
 export function HowCampfireWorks({
   onClose,
-  onTour
+  onTour,
+  onPractice
 }: {
   onClose: () => void
   onTour: () => void
+  onPractice: () => void
 }): React.JSX.Element {
   const { t, isGm } = useCf()
   return (
@@ -283,6 +300,9 @@ export function HowCampfireWorks({
           <p>
             <button type="button" className="cf-ghost" onClick={onTour}>
               Take the tour again
+            </button>{' '}
+            <button type="button" className="cf-ghost" onClick={onPractice}>
+              Open the practice table
             </button>
           </p>
           <p className="cf-sub">{creditFor(campaignRules(t.campaign.settings))}</p>

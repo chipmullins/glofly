@@ -6,6 +6,7 @@ import {
   ABILITIES,
   ABILITY_NAMES,
   abilityMod,
+  asiFeats,
   averageHitDie,
   isFullCharacter,
   levelUpPreview,
@@ -280,9 +281,10 @@ function PhoneLevelUp({ campaignId, ch, data, onClose }: { campaignId: string; c
   const [rolled, setRolled] = useState<number | null>(null)
   const [subclass, setSubclass] = useState<string | null>(null)
   const [plus, setPlus] = useState<Partial<Record<(typeof ABILITIES)[number], number>>>({})
+  const [feat, setFeat] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const total = Object.values(plus).reduce((n: number, v) => n + (v ?? 0), 0)
-  const ready = (!p.level.asi || total === 2) && (!p.needsSubclass || !!subclass)
+  const ready = (!p.level.asi || total === 2 || !!feat) && (!p.needsSubclass || !!subclass)
   const con = abilityMod(ch.sheet.abilities.con)
 
   const roll = async () => {
@@ -292,7 +294,7 @@ function PhoneLevelUp({ campaignId, ch, data, onClose }: { campaignId: string; c
   }
   const save = async () => {
     setBusy(true)
-    const sheet = levelUpSheet(data, ch.sheet, { rolled, subclassId: subclass, ...(p.level.asi ? { asi: { kind: 'asi', plus } } : {}) })
+    const sheet = levelUpSheet(data, ch.sheet, { rolled, subclassId: subclass, ...(p.level.asi ? { asi: feat ? { kind: 'feat', featId: feat } : { kind: 'asi', plus } } : {}) })
     const r = await roundA.saveSheet(ch.id, sheet)
     setBusy(false)
     if (!r.ok) return void inform("Couldn't level up", r.message)
@@ -350,9 +352,18 @@ function PhoneLevelUp({ campaignId, ch, data, onClose }: { campaignId: string; c
                 )
               })}
             </View>
-            <Text size={12} style={{ color: fire.muted }}>
-              Want a feat instead? Level up from the sheet on a computer.
-            </Text>
+            {asiFeats(data).length ? (
+              <>
+                <Text size={12} weight="bold" style={{ color: fire.muted }}>
+                  Or take a feat instead
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {asiFeats(data).map((f) => (
+                    <FireButton key={f.id} label={f.name} kind={feat === f.id ? 'primary' : 'card'} onPress={() => setFeat(feat === f.id ? null : f.id)} />
+                  ))}
+                </View>
+              </>
+            ) : null}
           </View>
         ) : null}
         <View style={{ padding: 14, borderRadius: 16, backgroundColor: fire.card, gap: 6 }}>

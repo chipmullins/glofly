@@ -322,3 +322,7 @@ export function sheetSpellFrom(s: SrdSpell, prepared = true): SheetSpell {
     notes: (s.desc.split(/(?<=\.)\s/)[0] ?? '').slice(0, 120)
   }
 }
+
+/** Feats a character can take instead of an Ability Score Improvement (not origin feats, fighting styles or epic boons). */
+export const asiFeats = (data: BuilderRules): BuilderFeat[] =>
+  data.feats.filter((f) => f.type !== 'origin' && f.type !== 'epic-boon' && f.type !== 'fighting-style' && f.id !== 'ability-score-improvement')

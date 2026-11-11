@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Campfire: movement on your turn</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffb347}a:hover{color:#ffd08a}
+.b{box-sizing:border-box;position:relative;overflow:hidden;background:#140f0d;font-family:'DM Sans',system-ui,sans-serif;color:#f3e6da}
+.b *{box-sizing:border-box}
+.hd{height:64px;display:flex;align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid rgba(255,255,255,.10)}
+.mark{width:36px;height:36px;border-radius:11px;background:#3a2614;color:#ffb347;display:grid;place-items:center}
+.t1{font:800 18px/1.1 Outfit,sans-serif}
+.sub{font-size:12px;color:#c9b6a8}
+.btn{height:38px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#2a201b;color:#f3e6da;font:700 13px/1 'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn.p{background:#f47a1f;border:0;color:#2a1406}
+.btn.a{background:#3a2614;border-color:rgba(255,179,71,.45);color:#ffb347}
+.btn.r{background:#c0392b;border:0;color:#fff3ef}
+.btn.s{height:32px;padding:0 10px;font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:#3a2614;color:#ffb347;font:700 13px/1 'DM Sans',sans-serif;white-space:nowrap}
+.pill.g{background:#183a26;color:#9ce6bb}
+.pill.v{background:#2a1f33;color:#cfa8ff}
+.pill.q{background:#2a201b;color:#c9b6a8}
+.rail{position:absolute;left:0;top:64px;bottom:0;width:60px;border-right:1px solid rgba(255,255,255,.10);display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:14px}
+.ri{width:40px;height:40px;border-radius:10px;color:#c9b6a8;display:grid;place-items:center}
+.ri.on{background:#3a2614;color:#ffb347}
+.side{position:absolute;right:0;top:64px;bottom:0;width:360px;border-left:1px solid rgba(255,255,255,.10);display:flex;flex-direction:column}
+.tabs{display:flex;gap:4px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.10)}
+.tab{padding:8px 10px;border-radius:9px;font:700 13px/1 'DM Sans';color:#c9b6a8}
+.tab.on{background:#3a2614;color:#ffb347}
+.card{border-radius:16px;background:#2a201b;box-shadow:0 0 0 1px rgba(255,255,255,.08);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.card.hot{background:#2c1d12;box-shadow:inset 0 0 0 1px rgba(255,179,71,.5)}
+.h3{font:700 15px/1.2 Outfit,sans-serif;margin:0}
+.k{font:800 11px/1 'DM Sans';letter-spacing:.08em;text-transform:uppercase;color:#ffb347}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.muted{color:#c9b6a8}
+.small{font-size:12px}
+.sw{width:42px;height:24px;border-radius:12px;background:#f47a1f;position:relative;flex:none}
+.sw::after{content:'';position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff3df}
+.sw.off{background:#3a2a20}.sw.off::after{right:auto;left:3px;background:#8c7a6e}
+.seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:#1f1714;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+.seg span{flex:1;text-align:center;padding:8px 6px;border-radius:9px;font:700 12px/1 'DM Sans';color:#c9b6a8}
+.seg span.on{background:#3a2614;color:#ffd08a}
+.bar{height:8px;border-radius:4px;background:rgba(255,255,255,.10);overflow:hidden;display:flex}
+.note{position:absolute;padding:6px 10px;border-radius:8px;background:#fff3df;color:#2a1406;font:700 11px/1.3 'DM Sans';box-shadow:0 6px 16px rgba(0,0,0,.4);max-width:220px}
+</style>
+</helmet>
+<div class="b" style="width:1440px;height:900px">
+<header class="hd"><span class="mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-8z"/></svg></span><div style="display:flex;flex-direction:column;gap:3px"><b class="t1">The Sunken Crypt</b><span class="sub">Campfire · Friday Party · Playing as Lyra</span></div><span class="pill" style="margin-left:auto">Round 3 · Your turn</span><span style="display:flex;gap:6px"><span style="width:34px;height:34px;border-radius:50%;background:#c4536b;display:grid;place-items:center;font:700 12px/1 Outfit,sans-serif;color:#fff;flex:none;box-shadow:0 0 0 2px #57c27a,0 0 0 6px rgba(87,194,122,.35),0 0 18px rgba(87,194,122,.6);">C</span><span style="width:34px;height:34px;border-radius:50%;background:#5b7fa6;display:grid;place-items:center;font:700 12px/1 Outfit,sans-serif;color:#fff;flex:none;box-shadow:0 0 0 2px #1f1714;">J</span><span style="width:34px;height:34px;border-radius:50%;background:#6f8f5a;display:grid;place-items:center;font:700 12px/1 Outfit,sans-serif;color:#fff;flex:none;box-shadow:0 0 0 2px #1f1714;">A</span></span><button class="btn r">Leave table</button></header><nav class="rail" aria-label="Table tools"><span class="ri on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3l7 17 2.5-7.5L21 10z"/></svg></span><span class="ri"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg></span><span class="ri"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg></span><span class="ri"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/></svg></span><span class="ri"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span></nav><div style="position:absolute;left:60px;top:64px;width:1020px;height:836px;overflow:hidden"><svg width="1020" height="836" viewBox="0 0 1020 836" style="display:block">
+<defs>
+<pattern id="stone" width="112" height="112" patternUnits="userSpaceOnUse"><rect width="112" height="112" fill="#3b332d"/><rect width="56" height="56" fill="#2f2823"/><rect x="56" y="56" width="56" height="56" fill="#2f2823"/></pattern>
+<pattern id="mud" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="12" height="12" fill="rgba(110,74,47,.55)"/><path d="M0 0V12" stroke="rgba(255,208,138,.35)" stroke-width="3"/></pattern>
+<radialGradient id="glowg"><stop offset="0" stop-color="#57c27a" stop-opacity=".55"/><stop offset="1" stop-color="#57c27a" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="1020" height="836" fill="url(#stone)"/>
+<g stroke="rgba(0,0,0,.35)" stroke-width="1"><path d="M0 0V836" /><path d="M56 0V836" /><path d="M112 0V836" /><path d="M168 0V836" /><path d="M224 0V836" /><path d="M280 0V836" /><path d="M336 0V836" /><path d="M392 0V836" /><path d="M448 0V836" /><path d="M504 0V836" /><path d="M560 0V836" /><path d="M616 0V836" /><path d="M672 0V836" /><path d="M728 0V836" /><path d="M784 0V836" /><path d="M840 0V836" /><path d="M896 0V836" /><path d="M952 0V836" /><path d="M1008 0V836" /><path d="M0 0H1020" /><path d="M0 56H1020" /><path d="M0 112H1020" /><path d="M0 168H1020" /><path d="M0 224H1020" /><path d="M0 280H1020" /><path d="M0 336H1020" /><path d="M0 392H1020" /><path d="M0 448H1020" /><path d="M0 504H1020" /><path d="M0 560H1020" /><path d="M0 616H1020" /><path d="M0 672H1020" /><path d="M0 728H1020" /><path d="M0 784H1020" /></g>
+<g fill="#1a1411" stroke="#6b5a4d" stroke-width="2"><rect x="0" y="0" width="1020" height="56"/><rect x="0" y="0" width="56" height="836"/><rect x="616" y="56" width="56" height="168"/><rect x="616" y="336" width="56" height="112"/></g><rect x="392" y="336" width="168" height="168" fill="url(#mud)" stroke="rgba(255,179,71,.6)" stroke-width="2" stroke-dasharray="6 4"/><g transform="translate(400,344)"><rect width="118" height="22" rx="11" fill="rgba(20,15,13,.85)"/><text x="10" y="15" font-family="DM Sans" font-weight="700" font-size="11" fill="#ffd08a">Difficult terrain · ×2</text></g><circle cx="252.0" cy="476.0" r="392" fill="rgba(87,194,122,.06)" stroke="#57c27a" stroke-width="2" stroke-dasharray="8 6"/><circle cx="252.0" cy="476.0" r="784" fill="none" stroke="rgba(207,168,255,.55)" stroke-width="2" stroke-dasharray="3 7"/><rect x="616" y="224" width="168" height="168" fill="rgba(239,90,74,.08)" stroke="rgba(239,90,74,.55)" stroke-width="2" stroke-dasharray="5 4" rx="6"/><circle cx="532.0" cy="364.0" r="22" fill="rgba(87,194,122,.35)" stroke="#57c27a" stroke-width="2" stroke-dasharray="4 3"/><path d="M252.0 476.0 L420.0 476.0 L532.0 364.0" fill="none" stroke="#ffb347" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="420.0" cy="476.0" r="7" fill="#ffb347" stroke="#2a1406" stroke-width="2"/><circle cx="532.0" cy="364.0" r="7" fill="#ffb347" stroke="#2a1406" stroke-width="2"/><g transform="translate(382.0,284.0)"><rect width="128" height="44" rx="12" fill="#241712" stroke="rgba(255,179,71,.6)"/><text x="12" y="19" font-family="Outfit" font-weight="800" font-size="15" fill="#f3e6da">30 of 35 ft</text><text x="12" y="35" font-family="DM Sans" font-size="11" fill="#c9b6a8">15 + 15 through mud</text></g><g opacity="1"><circle cx="700.0" cy="308.0" r="22" fill="#6f7d3a" stroke="#ef5a4a" stroke-width="3"/><text x="700.0" y="314.0" text-anchor="middle" font-family="Outfit" font-weight="800" font-size="17" fill="#fff">G</text></g><g><rect x="656.0" y="336.0" width="88" height="20" rx="10" fill="rgba(20,15,13,.85)"/><text x="700.0" y="350.0" text-anchor="middle" font-family="DM Sans" font-weight="700" font-size="11" fill="#f3e6da">Goblin</text></g><rect x="678.0" y="274.0" width="44" height="6" rx="3" fill="rgba(0,0,0,.6)"/><rect x="678.0" y="274.0" width="44" height="6" rx="3" fill="#ef5a4a"/><g opacity="1"><circle cx="812.0" cy="532.0" r="22" fill="#6f7d3a" stroke="#ef5a4a" stroke-width="3"/><text x="812.0" y="538.0" text-anchor="middle" font-family="Outfit" font-weight="800" font-size="17" fill="#fff">G</text></g><g><rect x="768.0" y="560.0" width="88" height="20" rx="10" fill="rgba(20,15,13,.85)"/><text x="812.0" y="574.0" text-anchor="middle" font-family="DM Sans" font-weight="700" font-size="11" fill="#f3e6da">Goblin</text></g><rect x="790.0" y="498.0" width="44" height="6" rx="3" fill="rgba(0,0,0,.6)"/><rect x="790.0" y="498.0" width="17.6" height="6" rx="3" fill="#ef5a4a"/><g opacity="1"><circle cx="196.0" cy="644.0" r="22" fill="#5b7fa6" stroke="#57c27a" stroke-width="3"/><text x="196.0" y="650.0" text-anchor="middle" font-family="Outfit" font-weight="800" font-size="17" fill="#fff">W</text></g><g><rect x="152.0" y="672.0" width="88" height="20" rx="10" fill="rgba(20,15,13,.85)"/><text x="196.0" y="686.0" text-anchor="middle" font-family="DM Sans" font-weight="700" font-size="11" fill="#f3e6da">Wren · flying 20 ft</text></g><circle cx="252.0" cy="476.0" r="31" fill="none" stroke="#ffb347" stroke-width="3" stroke-dasharray="6 5"/><g opacity="1"><circle cx="252.0" cy="476.0" r="24" fill="#a35a8c" stroke="#57c27a" stroke-width="3"/><text x="252.0" y="482.0" text-anchor="middle" font-family="Outfit" font-weight="800" font-size="19" fill="#fff">L</text></g><g><rect x="208.0" y="506.0" width="88" height="20" rx="10" fill="rgba(20,15,13,.85)"/><text x="252.0" y="520.0" text-anchor="middle" font-family="DM Sans" font-weight="700" font-size="11" fill="#f3e6da">Lyra</text></g>
+</svg><div style="position:absolute;left:24px;right:24px;bottom:24px;display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:18px;background:rgba(36,23,18,.96);box-shadow:0 0 0 1px rgba(255,179,71,.45),0 14px 40px rgba(0,0,0,.5)">
+<div style="display:flex;flex-direction:column;gap:6px;min-width:250px"><div class="row"><b style="font:800 16px/1 Outfit">Movement</b><span class="muted small">35 ft speed</span></div>
+<div class="bar" style="height:10px"><span style="width:86%;background:#ffb347"></span></div><span class="small muted">30 of 35 ft planned · Dash adds 35 more</span></div>
+<span class="btn a"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 4a1.5 1.5 0 1 0 0-.01"/><path d="M7 21l3-6 3 2v4M10 15l1-5 4 3 3-1M6 11l3-2h3"/></svg>Dash</span><span class="btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13c4 0 7-3 9-8 1 5 5 8 9 8-4 2-6 4-9 6-3-2-5-4-9-6z"/></svg>Height: ground</span><span class="btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>Undo last move</span>
+<span class="grow"></span><span class="small muted" style="max-width:220px;text-align:right">Release to move · Esc cancels · the path avoids walls</span><span class="btn p">Move here</span></div></div><aside class="side"><div class="tabs"><span class="tab on">Sheet</span><span class="tab">Rolls</span><span class="tab">Handouts</span><span class="tab">Music</span></div>
+<div style="padding:14px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+<div class="card hot"><span class="k">This turn</span>
+<div class="row"><span class="grow">Movement</span><b>30 / 35 ft</b></div>
+<div class="row"><span class="grow">Action</span><span class="pill g">Ready</span></div>
+<div class="row"><span class="grow">Bonus action</span><span class="pill g">Ready</span></div>
+<div class="row"><span class="grow">Reaction</span><span class="pill g">Ready</span></div>
+<span class="small muted">Dash uses your action and adds your speed again. Leaving a goblin's red square lets it make an opportunity attack: Campfire asks first.</span></div>
+<div class="card"><b class="h3">Lyra · Wood elf Ranger 4</b><div class="row"><span class="pill q">AC 15</span><span class="pill q">HP 31 / 36</span><span class="pill q">Speed 35</span></div>
+<span class="small muted">Wood elves move 35 ft; the ring uses each character's own speed (slower in heavy armor, 0 when grappled or restrained).</span></div>
+<div class="card"><b class="h3">Reach</b><span class="small muted">Hover a creature to see its reach (red squares). Long weapons and whips show 10 ft.</span></div>
+</div></aside><div class="note" style="left:470px;top:250px">Speed ring (green) · Dash ring (violet)</div><div class="note" style="left:400px;top:640px">Path preview: drag to plan, click to add a turn</div><div class="note" style="left:820px;top:210px">Hover: goblin reach</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

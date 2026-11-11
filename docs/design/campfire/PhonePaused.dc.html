@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone: paused table, spotlight and a moved view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffb347}a:hover{color:#ffd08a}
+.b{box-sizing:border-box;position:relative;overflow:hidden;background:#140f0d;font-family:'DM Sans',system-ui,sans-serif;color:#f3e6da}
+.b *{box-sizing:border-box}
+.hd{height:64px;display:flex;align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid rgba(255,255,255,.10)}
+.mark{width:36px;height:36px;border-radius:11px;background:#3a2614;color:#ffb347;display:grid;place-items:center}
+.t1{font:800 18px/1.1 Outfit,sans-serif}
+.sub{font-size:12px;color:#c9b6a8}
+.btn{height:38px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#2a201b;color:#f3e6da;font:700 13px/1 'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn.p{background:#f47a1f;border:0;color:#2a1406}
+.btn.a{background:#3a2614;border-color:rgba(255,179,71,.45);color:#ffb347}
+.btn.r{background:#c0392b;border:0;color:#fff3ef}
+.btn.s{height:32px;padding:0 10px;font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:#3a2614;color:#ffb347;font:700 13px/1 'DM Sans',sans-serif;white-space:nowrap}
+.pill.g{background:#183a26;color:#9ce6bb}
+.pill.v{background:#2a1f33;color:#cfa8ff}
+.pill.q{background:#2a201b;color:#c9b6a8}
+.rail{position:absolute;left:0;top:64px;bottom:0;width:60px;border-right:1px solid rgba(255,255,255,.10);display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:14px}
+.ri{width:40px;height:40px;border-radius:10px;color:#c9b6a8;display:grid;place-items:center}
+.ri.on{background:#3a2614;color:#ffb347}
+.side{position:absolute;right:0;top:64px;bottom:0;width:360px;border-left:1px solid rgba(255,255,255,.10);display:flex;flex-direction:column}
+.tabs{display:flex;gap:4px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.10)}
+.tab{padding:8px 10px;border-radius:9px;font:700 13px/1 'DM Sans';color:#c9b6a8}
+.tab.on{background:#3a2614;color:#ffb347}
+.card{border-radius:16px;background:#2a201b;box-shadow:0 0 0 1px rgba(255,255,255,.08);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.card.hot{background:#2c1d12;box-shadow:inset 0 0 0 1px rgba(255,179,71,.5)}
+.h3{font:700 15px/1.2 Outfit,sans-serif;margin:0}
+.k{font:800 11px/1 'DM Sans';letter-spacing:.08em;text-transform:uppercase;color:#ffb347}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.muted{color:#c9b6a8}
+.small{font-size:12px}
+.sw{width:42px;height:24px;border-radius:12px;background:#f47a1f;position:relative;flex:none}
+.sw::after{content:'';position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff3df}
+.sw.off{background:#3a2a20}.sw.off::after{right:auto;left:3px;background:#8c7a6e}
+.seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:#1f1714;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+.seg span{flex:1;text-align:center;padding:8px 6px;border-radius:9px;font:700 12px/1 'DM Sans';color:#c9b6a8}
+.seg span.on{background:#3a2614;color:#ffd08a}
+.bar{height:8px;border-radius:4px;background:rgba(255,255,255,.10);overflow:hidden;display:flex}
+.note{position:absolute;padding:6px 10px;border-radius:8px;background:#fff3df;color:#2a1406;font:700 11px/1.3 'DM Sans';box-shadow:0 6px 16px rgba(0,0,0,.4);max-width:220px}
+</style>
+</helmet>
+<div class="b" style="width:390px;height:844px">
+<div style="padding:52px 16px 10px;display:flex;align-items:center;gap:10px"><span style="width:44px;height:44px;border-radius:22px;background:#2a201b;display:grid;place-items:center">‹</span><div class="grow"><b style="font:700 17px/1.2 Outfit">The Sunken Crypt</b><div class="small muted">Round 3 · Playing as Lyra</div></div></div>
+<div style="margin:0 12px;border-radius:20px;overflow:hidden;position:relative;height:520px"><svg width="366" height="520" viewBox="0 0 366 520" style="display:block">
+<defs>
+<pattern id="stone" width="92" height="92" patternUnits="userSpaceOnUse"><rect width="92" height="92" fill="#3b332d"/><rect width="46" height="46" fill="#2f2823"/><rect x="46" y="46" width="46" height="46" fill="#2f2823"/></pattern>
+<pattern id="mud" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="12" height="12" fill="rgba(110,74,47,.55)"/><path d="M0 0V12" stroke="rgba(255,208,138,.35)" stroke-width="3"/></pattern>
+<radialGradient id="glowg"><stop offset="0" stop-color="#57c27a" stop-opacity=".55"/><stop offset="1" stop-color="#57c27a" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="366" height="520" fill="url(#stone)"/>
+<g stroke="rgba(0,0,0,.35)" stroke-width="1"><path d="M0 0V520" /><path d="M46 0V520" /><path d="M92 0V520" /><path d="M138 0V520" /><path d="M184 0V520" /><path d="M230 0V520" /><path d="M276 0V520" /><path d="M322 0V520" /><path d="M0 0H366" /><path d="M0 46H366" /><path d="M0 92H366" /><path d="M0 138H366" /><path d="M0 184H366" /><path d="M0 230H366" /><path d="M0 276H366" /><path d="M0 322H366" /><path d="M0 368H366" /><path d="M0 414H366" /><path d="M0 460H366" /><path d="M0 506H366" /></g>
+<g opacity="1"><circle cx="161.0" cy="299.0" r="20" fill="#a35a8c" stroke="#57c27a" stroke-width="3"/><text x="161.0" y="305.0" text-anchor="middle" font-family="Outfit" font-weight="800" font-size="16" fill="#fff">L</text></g><g opacity="1"><circle cx="253.0" cy="207.0" r="18" fill="#6f7d3a" stroke="#ef5a4a" stroke-width="3"/><text x="253.0" y="213.0" text-anchor="middle" font-family="Outfit" font-weight="800" font-size="14" fill="#fff">G</text></g>
+</svg>
+<div style="position:absolute;inset:0;background:rgba(8,6,5,.72);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:30px;text-align:center">
+<span style="width:64px;height:64px;border-radius:32px;background:#3a2614;color:#ffb347;display:grid;place-items:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></span>
+<b style="font:800 22px/1.2 Outfit">The table is paused</b><span class="muted" style="font-size:15px;line-height:1.5">Chip paused the game: "Pizza's here, back in 10." Tokens and rolls wait until it starts again. You can still look at your sheet.</span></div></div>
+<div style="margin:12px;padding:14px;border-radius:16px;background:#2a1f33;box-shadow:inset 0 0 0 1px rgba(181,124,255,.5);display:flex;gap:12px;align-items:center"><span style="width:36px;height:36px;border-radius:50%;background:#8a6a4f;display:grid;place-items:center;font:700 13px/1 Outfit,sans-serif;color:#fff;flex:none;box-shadow:0 0 0 2px #57c27a,0 0 0 6px rgba(87,194,122,.35),0 0 18px rgba(87,194,122,.6);">J</span><div><b style="color:#e7d4ff">Spotlight on Jesse</b><div class="small" style="color:#cfa8ff">The game master is giving Bram the scene. Your view follows.</div></div></div>
+<div style="margin:0 12px;padding:14px;border-radius:16px;background:#2a201b;display:flex;gap:12px;align-items:center"><span style="color:#ffb347"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div><b>Chip moved everyone's view</b><div class="small muted">to the flooded vault · tap to look around again</div></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
