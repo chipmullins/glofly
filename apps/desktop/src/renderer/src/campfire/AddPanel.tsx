@@ -1,3 +1,4 @@
+import { rulesOf } from '@glofly/shared/campfire/rulesData'
 import { useEffect, useState } from 'react'
 import { SRD_CREDIT, type SrdMonsterSummary, type Token } from '@glofly/shared/campfire/types'
 import { crLabel } from '@glofly/shared/campfire/rules5e'
@@ -17,7 +18,7 @@ export function AddPanel(): React.JSX.Element {
   useEffect(() => {
     const timer = window.setTimeout(async () => {
       const r = await cf.get<{ monsters: SrdMonsterSummary[] }>(
-        `/campfire/srd/monsters?q=${encodeURIComponent(q.trim())}`
+        `/campfire/srd/monsters?q=${encodeURIComponent(q.trim())}&rules=${rulesOf(t.campaign.settings)}`
       )
       if (r.ok) setList(r.data.monsters.slice(0, 40))
     }, 200)

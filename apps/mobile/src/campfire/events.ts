@@ -22,6 +22,8 @@ export const CAMPFIRE_EVENTS: readonly CampfireEventName[] = [
   'campfire:ping',
   'campfire:presence',
   'campfire:members',
+  // Round A: the campaign hub changed
+  'campfire:hub',
 ]
 
 export const isCampfireEvent = (name: string): name is CampfireEventName => (CAMPFIRE_EVENTS as readonly string[]).includes(name)

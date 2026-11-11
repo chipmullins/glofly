@@ -1,3 +1,4 @@
+import { CharacterBuilder } from './CharacterBuilder'
 import { useState } from 'react'
 import {
   ABILITIES,
@@ -26,6 +27,7 @@ export function SheetPanel(): React.JSX.Element {
   const mine = t.characters.filter((c) => c.ownerId === me.id)
   const [pick, setPick] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
+  const [building, setBuilding] = useState(false)
   const fromToken = selectedToken?.characterId ?? null
   const choices = isGm
     ? t.characters
@@ -77,7 +79,19 @@ export function SheetPanel(): React.JSX.Element {
           <PublicShort ch={ch} />
         )
       ) : null}
-      {(!mine.length || isGm) && (
+      {!isGm && !mine.length && (
+        <div className="cf-new-char">
+          <h3 className="cf-h3">Make your character</h3>
+          <p className="cf-hint">
+            Build one step by step, import a character sheet PDF, or copy the numbers in from
+            another sheet.
+          </p>
+          <button type="button" className="cf-primary" onClick={() => setBuilding(true)}>
+            Bring or build your character
+          </button>
+        </div>
+      )}
+      {isGm && (
         <form
           className="cf-new-char"
           onSubmit={(e) => {
@@ -97,6 +111,9 @@ export function SheetPanel(): React.JSX.Element {
             <button type="submit" className="cf-primary">
               {isGm ? 'New player character' : 'Make my character'}
             </button>
+            <button type="button" className="cf-ghost" onClick={() => setBuilding(true)}>
+              Use the builder
+            </button>
             {isGm && (
               <button type="button" className="cf-ghost" onClick={() => void create('npc')}>
                 New NPC
@@ -104,6 +121,21 @@ export function SheetPanel(): React.JSX.Element {
             )}
           </div>
         </form>
+      )}
+      {building && (
+        <CharacterBuilder
+          onClose={() => setBuilding(false)}
+          onMade={(c) => {
+            setBuilding(false)
+            setPick(c.id)
+            ctl.update((s) =>
+              s.characters.some((x) => x.id === c.id)
+                ? s
+                : { ...s, characters: [...s.characters, c] }
+            )
+            openSheet(c.id)
+          }}
+        />
       )}
     </section>
   )

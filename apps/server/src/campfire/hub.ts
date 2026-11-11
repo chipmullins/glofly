@@ -7,6 +7,7 @@ import {
   EMPTY_STATS,
   HOMEBREW_KINDS,
   HUB_LIMITS,
+  homebrewSheetItem,
   normalizeHomebrew,
   normalizeLoot,
   normalizeProgress,
@@ -18,6 +19,7 @@ import {
   type CampaignHub,
   type CampfireSession,
   type Homebrew,
+  type HomebrewItem,
   type HomebrewKind,
   type JournalEntry,
   type PartyLoot,
@@ -566,17 +568,7 @@ hubRouter.post("/campaigns/:id/loot/give", changeLimiter, async (req, res) => {
 });
 
 /** A homebrew item as an inventory entry's extra fields. */
-export function itemFromHomebrew(data: { itemKind?: string; weight?: number; attunement?: boolean; rarity?: string; acBonus?: number; armor?: { base: number; dex: boolean; maxDex: number | null } }, id: string) {
-  return {
-    kind: data.itemKind === "armor" || data.itemKind === "shield" || data.itemKind === "weapon" || data.itemKind === "gear" ? data.itemKind : "magic",
-    weight: data.weight ?? 0,
-    ...(data.attunement ? { attunement: true } : {}),
-    ...(data.rarity ? { rarity: data.rarity } : {}),
-    ...(typeof data.acBonus === "number" ? { acBonus: data.acBonus } : {}),
-    ...(data.armor ? { armor: data.armor } : {}),
-    homebrewId: id,
-  } as const;
-}
+export const itemFromHomebrew = (data: Partial<HomebrewItem>, id: string) => homebrewSheetItem(data, id);
 
 // ───────────── Homebrew ─────────────
 

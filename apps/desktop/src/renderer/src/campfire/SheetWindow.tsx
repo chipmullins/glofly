@@ -53,6 +53,9 @@ import {
   type SheetEditor
 } from './sheetCore'
 import { CfWindow, Portrait, SvgIcon } from './sheetBits'
+import { InventoryTab } from './Inventory'
+import { rulesOf } from '@glofly/shared/campfire/rulesData'
+import { LevelUp } from './LevelUp'
 import './sheet.css'
 
 // The character sheet as a window over the table (approved boards SheetOverview / SheetActions):
@@ -181,6 +184,7 @@ function FullSheetWindow({
   const { t, isGm, nameOf, say, ctl, tokenOf, me } = useCf()
   const rollNow = useRollNow()
   const [tab, setTab] = useState<SheetTab>('overview')
+  const [leveling, setLeveling] = useState(false)
   const [rollWith, setRollWith] = useState<RollWith>('normal')
   const [amount, setAmount] = useState('')
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -276,6 +280,7 @@ function FullSheetWindow({
     tabRefs.current[j]?.focus()
   }
 
+  if (leveling) return <LevelUp ch={ch} onClose={() => setLeveling(false)} />
   return (
     <CfWindow label={`${ch.name}'s sheet`} onClose={onClose} className="cfs-window--sheet">
       <header className="cfs-head">
@@ -319,6 +324,18 @@ function FullSheetWindow({
           </div>
         </div>
         <div className="cfs-head-buttons">
+          {canEdit && ch.kind === 'pc' && (sheet.classes[0]?.level ?? 1) < 20 && (
+            <button
+              type="button"
+              className="cfs-button"
+              onClick={async () => {
+                await ed.flush()
+                setLeveling(true)
+              }}
+            >
+              Level up
+            </button>
+          )}
           {canEdit && (
             <>
               <button type="button" className="cfs-button" onClick={() => void rest('short')}>
@@ -1843,7 +1860,8 @@ function SpellPicker({
   onPick: (sp: SheetSpell) => void
   onClose: () => void
 }): React.JSX.Element {
-  const { say } = useCf()
+  const { say, t } = useCf()
+  const spellRules = sheet.rules ?? rulesOf(t.campaign.settings)
   const cls = sheet.classes[0]?.name ?? ''
   const [q, setQ] = useState('')
   const [level, setLevel] = useState<string>('')
@@ -1857,6 +1875,7 @@ function SpellPicker({
       if (q.trim()) params.set('q', q.trim())
       if (level) params.set('level', level)
       if (onlyClass && cls) params.set('class', cls)
+      params.set('rules', spellRules)
       const r = await cf.get<{ spells: SrdSpellSummary[] }>(`/campfire/srd/spells?${params}`)
       if (r.ok) setList(r.data.spells.slice(0, 60))
     }, 180)
@@ -1913,7 +1932,9 @@ function SpellPicker({
               disabled={have.has(s.slug)}
               aria-label={`Add ${s.name}${have.has(s.slug) ? ' (already on the sheet)' : ''}`}
               onClick={async () => {
-                const r = await cf.get<SrdSpell>(`/campfire/srd/spells/${s.slug}`)
+                const r = await cf.get<SrdSpell>(
+                  `/campfire/srd/spells/${s.slug}?rules=${spellRules}`
+                )
                 if (!r.ok) return say(r.message)
                 onPick(spellFromSrd(r.data, sheet))
               }}
@@ -2087,148 +2108,6 @@ function FeaturesTab({ ed }: { ed: SheetEditor }): React.JSX.Element {
         )}
       </Section>
     </div>
-  )
-}
-
-function InventoryTab({ ed }: { ed: SheetEditor }): React.JSX.Element {
-  const { sheet, set, canEdit } = ed
-  const [name, setName] = useState('')
-  const [qty, setQty] = useState('1')
-  const items = sheet.inventory
-  const change = (id: string, patch: Partial<(typeof items)[number]>): void =>
-    set(
-      'inventory',
-      items.map((x) => (x.id === id ? { ...x, ...patch } : x))
-    )
-  return (
-    <Section
-      title="Inventory"
-      aside={
-        <span className="cfs-muted cfs-small">{items.reduce((n, x) => n + x.qty, 0)} things</span>
-      }
-    >
-      <table className="cfs-table">
-        <thead>
-          <tr>
-            <th scope="col">Item</th>
-            <th scope="col" className="cfs-table-qty">
-              How many
-            </th>
-            <th scope="col">Notes</th>
-            {canEdit && (
-              <th scope="col">
-                <span className="cf-sr">Remove</span>
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((it) => (
-            <tr key={it.id}>
-              <td>
-                {canEdit ? (
-                  <TextBox
-                    className="cfs-inline-text cfs-inline-text--bold"
-                    label="Item name"
-                    value={it.name}
-                    maxLength={80}
-                    onChange={(v) => v.trim() && change(it.id, { name: v.trim() })}
-                  />
-                ) : (
-                  <b>{it.name}</b>
-                )}
-              </td>
-              <td className="cfs-table-qty">
-                {canEdit ? (
-                  <NumBox
-                    label={`How many ${it.name}`}
-                    className="cfs-qty"
-                    value={it.qty}
-                    min={0}
-                    max={99999}
-                    onChange={(n) => change(it.id, { qty: n })}
-                  />
-                ) : (
-                  it.qty
-                )}
-              </td>
-              <td>
-                {canEdit ? (
-                  <TextBox
-                    className="cfs-inline-text"
-                    label={`${it.name} notes`}
-                    placeholder="Notes"
-                    value={it.notes}
-                    maxLength={500}
-                    onChange={(v) => change(it.id, { notes: v })}
-                  />
-                ) : (
-                  <span className="cfs-muted">{it.notes}</span>
-                )}
-              </td>
-              {canEdit && (
-                <td>
-                  <button
-                    type="button"
-                    className="cfs-x"
-                    aria-label={`Remove ${it.name}`}
-                    onClick={() =>
-                      set(
-                        'inventory',
-                        items.filter((x) => x.id !== it.id)
-                      )
-                    }
-                  >
-                    ×
-                  </button>
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {items.length === 0 && <p className="cfs-hint">Nothing carried yet.</p>}
-      {canEdit && (
-        <form
-          className="cfs-inline-form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (!name.trim()) return
-            set('inventory', [
-              ...items,
-              {
-                id: pieceId('i'),
-                name: name.trim().slice(0, 80),
-                qty: Math.max(0, Math.min(99999, Math.floor(Number(qty)) || 1)),
-                notes: ''
-              }
-            ])
-            setName('')
-            setQty('1')
-          }}
-        >
-          <input
-            aria-label="New item"
-            placeholder="Add an item (Rope, 50 ft)"
-            value={name}
-            maxLength={80}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            aria-label="How many"
-            type="number"
-            min={0}
-            max={99999}
-            value={qty}
-            className="cfs-narrow"
-            onChange={(e) => setQty(e.target.value)}
-          />
-          <button type="submit" className="cfs-button cfs-button--small">
-            Add
-          </button>
-        </form>
-      )}
-    </Section>
   )
 }
 

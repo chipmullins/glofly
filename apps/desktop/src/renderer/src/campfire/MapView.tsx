@@ -1,3 +1,4 @@
+import type { DiagonalRule } from '@glofly/shared/campfire/map'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Point, Scene, Token, TokenBar } from '@glofly/shared/campfire/types'
 import { simplifyLasso, tokenCenter } from '@glofly/shared/campfire/map'
@@ -33,6 +34,8 @@ type Props = {
   /** Tokens drawn with party colors (PCs, or tokens someone controls) */
   isParty: (t: Token) => boolean
   canMove: (t: Token) => boolean
+  /** Pressing a token you control that can't move now ("Players move only on their turn") */
+  onLocked?: (t: Token) => void
   tool: Tool
   fogMode: 'reveal' | 'hide'
   fogBrush?: FogBrush
@@ -51,6 +54,8 @@ type Props = {
   prevBars: React.MutableRefObject<Map<string, (TokenBar | null)[]>>
   /** Template tool radius in feet */
   templateFt: number
+  /** How the ruler counts a diagonal square (campaign setting) */
+  diagonal?: DiagonalRule
   /** Things drawn over the map (approval box, roll card) */
   children?: React.ReactNode
   /** Gets "the middle of what's showing" (new tokens go there) */
@@ -553,6 +558,7 @@ function MapView(p: Props): React.JSX.Element {
       p.onSelect(tk.id)
       if (p.canMove(tk))
         setDrag({ id: tk.id, dx: at[0] - tk.x, dy: at[1] - tk.y, x: tk.x, y: tk.y, moved: false })
+      else p.onLocked?.(tk)
       return
     }
     p.onSelect(null)
@@ -870,6 +876,7 @@ function MapView(p: Props): React.JSX.Element {
               circle={ruler.circle}
               templateFt={p.templateFt}
               scene={scene}
+              diagonal={p.diagonal}
             />
           )}
           {(lasso || corners) && (
@@ -956,15 +963,17 @@ function Ruler({
   b,
   circle,
   templateFt,
-  scene
+  scene,
+  diagonal
 }: {
   a: Point
   b: Point
   circle: boolean
   templateFt: number
   scene: Scene
+  diagonal?: DiagonalRule
 }): React.JSX.Element {
-  const ft = feetBetween(a, b, scene.grid)
+  const ft = feetBetween(a, b, scene.grid, diagonal)
   if (circle) {
     const r = (templateFt / scene.grid.feet) * scene.grid.size
     return (

@@ -1,3 +1,4 @@
+import { rulesOf } from '@glofly/shared/campfire/rulesData'
 import { useEffect, useState } from 'react'
 import {
   ABILITIES,
@@ -53,11 +54,13 @@ export function StatBlock({
   useEffect(() => {
     if (!('slug' in what)) return
     let live = true
-    void cf.get<SrdMonster>(`/campfire/srd/monsters/${what.slug}`).then((r) => {
-      if (!live) return
-      if (r.ok) setSrd(r.data)
-      else say(r.message)
-    })
+    void cf
+      .get<SrdMonster>(`/campfire/srd/monsters/${what.slug}?rules=${rulesOf(t.campaign.settings)}`)
+      .then((r) => {
+        if (!live) return
+        if (r.ok) setSrd(r.data)
+        else say(r.message)
+      })
     return () => {
       live = false
     }

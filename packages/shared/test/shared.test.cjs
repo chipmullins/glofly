@@ -1221,3 +1221,102 @@ test('campfire: grid distances (squares, 5-10-5 diagonals, hexes) and fog lassos
   assert.equal(s.simplifyLasso([[0, 0], [100, 0], [200, 0], [300, 0]]), null)
   assert.ok(s.cleanFogShape({ kind: 'poly', points: l }, 'x'))
 })
+
+test('campfire Round A: building a 2024 wood elf ranger and leveling her up', () => {
+  const fs = require('fs')
+  const path = require('path')
+  const data = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../apps/server/src/campfire/srd/2024/builder.json'), 'utf8'))
+  data.credit = ''
+  const items = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../apps/server/src/campfire/srd/2024/items.json'), 'utf8'))
+  const item = (id) => items.find((i) => i.id === id)
+  const choices = {
+    rules: '2024', name: 'Lyra', speciesId: 'elf', subId: 'elven-lineage-wood-elf', classId: 'ranger', subclassId: 'hunter', level: 1,
+    backgroundId: 'soldier', base: { str: 10, dex: 15, con: 13, int: 8, wis: 14, cha: 12 }, bonus: { dex: 2, con: 1 },
+    skills: ['perception', 'stealth', 'survival', 'insight'], asi: [], hp: 'average', spells: [],
+    equipment: [item('studded-leather-armor'), item('scimitar'), item('longbow')]
+  }
+  assert.ok(s.backgroundBonusOk(data.backgrounds.find((b) => b.id === 'soldier'), { dex: 2, con: 1 }))
+  assert.ok(!s.backgroundBonusOk(data.backgrounds.find((b) => b.id === 'soldier'), { wis: 2, con: 1 }))
+  const sheet = s.buildSheet(data, choices)
+  assert.equal(sheet.abilities.dex, 17)
+  assert.equal(sheet.hp.max, 12, 'd10 + 2')
+  assert.equal(sheet.speed, 35, 'wood elf')
+  assert.equal(sheet.senses, 'Darkvision 60 ft')
+  assert.equal(sheet.ac, 15, 'studded leather 12 + 3')
+  assert.equal(sheet.attacks.length, 2)
+  assert.equal(sheet.attacks.find((a) => a.name === 'Scimitar').ability, 'dex', 'finesse picks Dexterity')
+  assert.equal(sheet.saves.str && sheet.saves.dex, true)
+  assert.equal(sheet.skills.athletics, 1, 'from the Soldier background')
+  assert.equal(sheet.spellcasting.slots[0].max, 2)
+  assert.equal(sheet.coins.gp, 50)
+  assert.ok(sheet.features.some((f) => f.name.startsWith('Savage Attacker')), 'origin feat')
+  assert.equal(sheet.classes[0].subclass, undefined, 'Hunter comes at level 3')
+  // Joining at level 4 with the improvement: Dex +2.
+  const l4 = s.buildSheet(data, { ...choices, level: 4, asi: [{ kind: 'asi', plus: { dex: 1, wis: 1 } }] })
+  assert.equal(l4.hp.max, 12 + 3 * 8)
+  assert.equal(l4.classes[0].subclass, 'Hunter')
+  assert.equal(l4.abilities.dex, 18)
+  assert.equal(l4.ac, 16)
+  assert.deepEqual(s.asiLevels(data.classes.find((c) => c.id === 'ranger'), 8), [4, 8])
+  // Level up 3 → 4 one step at a time.
+  const l3 = s.buildSheet(data, { ...choices, level: 3 })
+  const p = s.levelUpPreview(data, l3)
+  assert.equal(p.next, 4)
+  assert.equal(p.level.asi, true)
+  const up = s.levelUpSheet(data, l3, { rolled: null, asi: { kind: 'asi', plus: { con: 2 } } })
+  assert.equal(up.classes[0].level, 4)
+  assert.equal(up.abilities.con, 16)
+  // 28 before; +6 average +3 Con, and +1 for each of the 3 earlier levels (Con 14 → 16).
+  assert.equal(up.hp.max, 28 + 9 + 3)
+  assert.equal(up.hitDice[0].max, 4)
+  // 2014 rules: species give the bonuses; a cleric prepares level + Wisdom.
+  const d14 = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../apps/server/src/campfire/srd/2014/builder.json'), 'utf8'))
+  const dwarf = s.buildSheet(d14, { ...choices, rules: '2014', speciesId: 'dwarf', subId: 'hill-dwarf', classId: 'cleric', subclassId: 'life', backgroundId: 'acolyte', bonus: {}, base: { str: 14, dex: 10, con: 14, int: 8, wis: 15, cha: 12 }, level: 6, equipment: [], skills: ['medicine', 'history'] })
+  assert.equal(dwarf.abilities.con, 16)
+  assert.equal(dwarf.abilities.wis, 16)
+  assert.equal(dwarf.hp.max, 8 + 3 + 1 + 5 * (5 + 3 + 1), 'hill dwarf toughness +1 a level')
+  assert.deepEqual(dwarf.spellcasting.slots.slice(0, 3).map((x) => x.max), [4, 3, 3])
+  assert.deepEqual(s.spellCounts(d14.classes.find((c) => c.id === 'cleric'), 6, 3), { cantrips: 4, spells: 9 })
+  // Inventory math
+  const inv = { ...sheet, inventory: [...sheet.inventory, { id: 'sh', name: 'Shield', qty: 1, notes: '', equipped: true, acBonus: 2, kind: 'shield', weight: 6 }] }
+  assert.equal(s.armorClassFromItems(inv), 17)
+  assert.equal(s.carriedWeight({ inventory: inv.inventory, coins: { cp: 0, sp: 0, ep: 0, gp: 50, pp: 0 } }), 13 + 3 + 2 + 6 + 1)
+  assert.deepEqual(s.splitCoins({ cp: 0, sp: 36, ep: 0, gp: 143, pp: 0 }, 4).each.gp, 35)
+  assert.equal(s.recapDraft({ ...s.EMPTY_STATS, fights: 2, defeated: { Goblin: 4 }, biggest: { name: 'Lyra', amount: 19 } }), 'The party fought 2 times. Defeated: 4 × Goblin. Biggest hit: Lyra, 19 damage.')
+})
+
+test('campfire Round A: importing a character sheet PDF (form fields)', () => {
+  const fields = {
+    CharacterName: 'Bram Ashford', 'ClassLevel': 'Cleric 6 (Life Domain)', 'Race ': 'Hill Dwarf', Background: 'Acolyte', Alignment: 'Lawful Good',
+    STR: '14', DEX: '10', CON: '16', INT: '8', WIS: '18', CHA: '12', ProfBonus: '+3', AC: '18', HPMax: '57', HPCurrent: '40', Speed: '25',
+    'ST Wisdom': '+7', 'ST Charisma': '+4', 'ST Strength': '+2', Medicine: '+7', Insight: '+10', Religion: '-1', History: '+2',
+    'Wpn Name': 'Warhammer', 'Wpn1 AtkBonus': '+5', 'Wpn1 Damage': '1d8+2 Bludgeoning', 'Wpn Name 2': 'Light Crossbow', 'Wpn2 AtkBonus ': '+3', 'Wpn2 Damage ': '1d8 piercing',
+    'Spells 1014': 'Sacred Flame', 'Spells 1015': 'Guidance', 'Spells 1016': 'Cure Wounds', GP: '76', Equipment: '2 Potion of healing, Chain mail, Shield',
+    'Features and Traits': 'Darkvision. Dwarven Resilience.', 'SpellcastingAbility 2': 'WIS', Unrelated: true
+  }
+  const r = s.sheetFromPdfFields(fields, '2014', null)
+  assert.equal(r.name, 'Bram Ashford')
+  assert.deepEqual(r.sheet.classes.map((c) => [c.name, c.level, c.hitDie, c.caster, c.subclass]), [['Cleric', 6, 8, 'full', 'Life Domain']])
+  assert.equal(r.sheet.abilities.wis, 18)
+  assert.equal(r.sheet.ac, 18)
+  assert.deepEqual(r.sheet.hp, { max: 57, current: 40, temp: 0 })
+  assert.equal(r.sheet.speed, 25)
+  assert.deepEqual(Object.keys(r.sheet.saves).sort(), ['cha', 'wis'], 'Strength +2 is just the modifier')
+  assert.equal(r.sheet.skills.medicine, 1)
+  assert.equal(r.sheet.skills.insight, 2, 'expertise')
+  assert.equal(r.sheet.skills.religion, undefined)
+  assert.equal(r.sheet.skills.history, 1)
+  assert.equal(r.sheet.attacks.length, 2)
+  assert.equal(r.sheet.attacks[0].fixedToHit, 5)
+  assert.equal(r.sheet.attacks[1].kind, 'ranged')
+  assert.deepEqual(r.sheet.spellcasting.slots.slice(0, 3).map((x) => x.max), [4, 3, 3])
+  assert.equal(r.sheet.spellcasting.ability, 'wis')
+  assert.deepEqual(r.spellNames.sort(), ['Cure Wounds', 'Guidance', 'Sacred Flame'])
+  assert.equal(r.sheet.coins.gp, 76)
+  assert.equal(r.sheet.inventory[0].qty, 2)
+  assert.deepEqual(r.sheet.hitDice, [{ die: 8, max: 6, used: 0 }])
+  assert.equal(r.missing.length, 0)
+  assert.deepEqual(s.parseClassLevel('Fighter 5 / Wizard 2').map((c) => c.level), [5, 2])
+  const empty = s.sheetFromPdfFields({}, '2024', null)
+  assert.ok(empty.missing.includes('Name') && empty.missing.includes('Ability scores'))
+})

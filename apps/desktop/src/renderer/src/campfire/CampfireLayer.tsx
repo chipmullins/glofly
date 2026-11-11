@@ -19,6 +19,7 @@ import './campfire.css'
 export default function CampfireLayer({ me }: { me: SignedInUser }): React.JSX.Element | null {
   const open = useCampfireOpen()
   const [campaignId, setCampaignId] = useState<string | null>(null)
+  const [fresh, setFresh] = useState<string | null>(null)
   // Opened again (from a call, a header or the banner): start where that asks.
   const [openedFor, setOpenedFor] = useState(open)
   if (openedFor !== open) {
@@ -44,19 +45,29 @@ export default function CampfireLayer({ me }: { me: SignedInUser }): React.JSX.E
           me={me}
           callId={open.callId}
           placeName={open.placeName}
+          setup={fresh === campaignId}
           onLeave={() => {
             if (open.campaignId) closeCampfire()
             else setCampaignId(null)
           }}
         />
       ) : open.home ? (
-        <StartBoard onPick={setCampaignId} />
+        <StartBoard
+          onPick={(id, made) => {
+            if (made) setFresh(id)
+            setCampaignId(id)
+          }}
+        />
       ) : null}
     </div>
   )
 }
 
-function StartBoard({ onPick }: { onPick: (id: string) => void }): React.JSX.Element {
+function StartBoard({
+  onPick
+}: {
+  onPick: (id: string, made?: boolean) => void
+}): React.JSX.Element {
   const open = useCampfireOpen()!
   const [list, setList] = useState<CampaignSummary[] | null>(null)
   const [canCreate, setCanCreate] = useState(false)
@@ -86,7 +97,7 @@ function StartBoard({ onPick }: { onPick: (id: string) => void }): React.JSX.Ele
     const r = await cf.post<Campaign>('/campfire/campaigns', { home, name: name.trim() })
     setBusy(false)
     if (!r.ok) return setError(r.message)
-    onPick(r.data.id)
+    onPick(r.data.id, true)
   }
 
   return (

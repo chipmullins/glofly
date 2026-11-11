@@ -2,7 +2,7 @@
 // loot), the campaign's own homebrew, and switching over from another tool mid-campaign. The
 // server cleans everything apps send with the normalize* helpers here.
 
-import type { Ability, CreatureSize, DamageType, SkillId } from './types'
+import type { Ability, CreatureSize, DamageType, SheetItem, SkillId } from './types'
 import { ABILITIES, DAMAGE_TYPES } from './types'
 import { NO_COINS, type Coins, type RulesText } from './rulesData'
 
@@ -312,4 +312,18 @@ export function statChips(stats: SessionStats): string[] {
   if (stats.crits) out.push(plural(stats.crits, 'natural 20'))
   if (stats.biggest) out.push(`Biggest hit: ${stats.biggest.name}, ${stats.biggest.amount}`)
   return out
+}
+
+/** A homebrew item as an inventory entry's extra fields (the server's loot "give" and the sheet's
+ *  "Add from homebrew" both use it). */
+export function homebrewSheetItem(data: Partial<HomebrewItem>, id: string): Partial<SheetItem> {
+  return {
+    kind: data.itemKind === 'armor' || data.itemKind === 'shield' || data.itemKind === 'weapon' || data.itemKind === 'gear' ? data.itemKind : 'magic',
+    weight: data.weight ?? 0,
+    ...(data.attunement ? { attunement: true } : {}),
+    ...(data.rarity ? { rarity: data.rarity } : {}),
+    ...(typeof data.acBonus === 'number' && data.acBonus ? { acBonus: data.acBonus } : {}),
+    ...(data.armor ? { armor: data.armor } : {}),
+    homebrewId: id
+  }
 }

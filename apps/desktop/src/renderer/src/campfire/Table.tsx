@@ -21,6 +21,9 @@ import { useMusicPlayer } from './music'
 import { AddPanel } from './AddPanel'
 import { ApprovalBox, DyingCard, RollCardOverlay, TokenCard } from './Overlays'
 import Builder from './Builder'
+import { Hub } from './Hub'
+import { SetupWizard } from './SetupWizard'
+import { HowCampfireWorks, Tour, tourSeen } from './Tour'
 import { FlameIcon, Icon } from './icons'
 
 // The table (Main board for game masters, Player board for players): header with who's at the
@@ -32,12 +35,15 @@ export default function Table({
   me,
   callId,
   placeName,
+  setup,
   onLeave
 }: {
   campaignId: string
   me: SignedInUser
   callId: string | null
   placeName?: string
+  /** Just made: open the game master's setup */
+  setup?: boolean
   onLeave: () => void
 }): React.JSX.Element {
   const ctl = useTable(campaignId)
@@ -58,7 +64,16 @@ export default function Table({
         <p>Lighting the campfire…</p>
       </div>
     )
-  return <TableReady ctl={ctl} me={me} callId={callId} placeName={placeName} onLeave={onLeave} />
+  return (
+    <TableReady
+      ctl={ctl}
+      me={me}
+      callId={callId}
+      placeName={placeName}
+      setup={setup}
+      onLeave={onLeave}
+    />
+  )
 }
 
 function TableReady({
@@ -66,16 +81,22 @@ function TableReady({
   me,
   callId,
   placeName,
+  setup,
   onLeave
 }: {
   ctl: ReturnType<typeof useTable>
   me: SignedInUser
   callId: string | null
   placeName?: string
+  setup?: boolean
   onLeave: () => void
 }): React.JSX.Element {
   const t = ctl.t!
   const isGm = t.myRole === 'gm'
+  const [hubOpen, setHubOpen] = useState(false)
+  const [wizard, setWizard] = useState<1 | 2 | null>(setup && isGm ? 1 : null)
+  const [touring, setTouring] = useState(() => !setup && !tourSeen(isGm))
+  const [help, setHelp] = useState(false)
   const [tool, setTool] = useState<Tool>('select')
   const [fogMode, setFogMode] = useState<'reveal' | 'hide'>('reveal')
   const [fogBrush, setFogBrush] = useState<FogBrush>('box')
@@ -220,6 +241,14 @@ function TableReady({
   const combat = t.combat
   const currentToken = combat?.current ? t.tokens.find((x) => x.id === combat.current) : null
   const myTurn = !!currentToken && !isGm && controls(currentToken)
+  // "Players move only on their turn": a player's token in the fight waits for its turn
+  // (the server refuses the move too).
+  const turnLocked = (tk: Token): boolean =>
+    !isGm &&
+    !!t.campaign.settings.moveOnTurn &&
+    !!combat?.entries.length &&
+    combat.entries.some((e) => e.tokenId === tk.id) &&
+    combat.current !== tk.id
   const myPc = t.characters.find((c) => c.ownerId === me.id && c.kind === 'pc')
   const selected = selectedId ? t.tokens.find((x) => x.id === selectedId) : null
   const currentTrack = t.music ? t.tracks.find((x) => x.id === t.music!.trackId) : null
@@ -400,6 +429,23 @@ function TableReady({
               Put out the campfire
             </button>
           )}
+          <button
+            type="button"
+            className="cf-ghost"
+            data-tour="hub"
+            onClick={() => setHubOpen(true)}
+          >
+            Campaign hub
+          </button>
+          <button
+            type="button"
+            className="cf-round"
+            aria-label="How Campfire works"
+            title="How Campfire works"
+            onClick={() => setHelp(true)}
+          >
+            ?
+          </button>
           <button type="button" className="cf-leave" onClick={onLeave}>
             <Icon name="leave" size={16} />
             Leave table
@@ -418,6 +464,7 @@ function TableReady({
                     type="button"
                     className={on ? 'cf-rail-button cf-rail-button--on' : 'cf-rail-button'}
                     aria-label={r.label}
+                    data-tour={r.id === 'fog' || r.id === 'draw' ? r.id : undefined}
                     aria-pressed={on}
                     title={r.label}
                     onClick={() => {
@@ -434,12 +481,12 @@ function TableReady({
           </nav>
 
           {!isGm && (
-            <aside className="cf-left" aria-label="Turn order">
+            <aside className="cf-left" aria-label="Turn order" data-tour="turn">
               <TurnOrder />
             </aside>
           )}
 
-          <main className="cf-main">
+          <main className="cf-main" data-tour="map">
             <div className="cf-topbar">
               {combat && (
                 <span className="cf-turn-pill">
@@ -642,7 +689,15 @@ function TableReady({
                 isParty={(tk) =>
                   tk.controlledBy.length > 0 || (!!tk.characterId && pcIds.has(tk.characterId))
                 }
-                canMove={(tk) => controls(tk) && (tool === 'select' || tool === 'fog')}
+                canMove={(tk) =>
+                  controls(tk) && !turnLocked(tk) && (tool === 'select' || tool === 'fog')
+                }
+                onLocked={(tk) =>
+                  controls(tk) &&
+                  turnLocked(tk) &&
+                  say(`Not your turn yet: ${tk.name} moves on its turn.`)
+                }
+                diagonal={t.campaign.settings.diagonal}
                 tool={tool}
                 fogMode={fogMode}
                 fogBrush={fogBrush}
@@ -730,12 +785,13 @@ function TableReady({
           </main>
 
           <aside className="cf-side" aria-label="Table panels">
-            <div className="cf-tabs" role="tablist" aria-label="Panels">
+            <div className="cf-tabs" role="tablist" aria-label="Panels" data-tour="tabs">
               {tabs.map((x) => (
                 <button
                   key={x.id}
                   type="button"
                   role="tab"
+                  data-tour={x.id === 'sheet' ? 'sheet' : x.id === 'turn' ? 'turn' : undefined}
                   aria-selected={tab === x.id}
                   className={tab === x.id ? 'cf-tab cf-tab--on' : 'cf-tab'}
                   onClick={() => setTab(x.id)}
@@ -750,11 +806,44 @@ function TableReady({
             <div className="cf-side-body" role="tabpanel">
               {panel}
             </div>
-            <DiceTray />
+            <div data-tour="dice">
+              <DiceTray />
+            </div>
           </aside>
         </div>
         {sheetId && t.characters.some((c) => c.id === sheetId) && (
           <SheetWindow key={sheetId} characterId={sheetId} onClose={() => setSheetId(null)} />
+        )}
+        {hubOpen && (
+          <Hub
+            onClose={() => setHubOpen(false)}
+            onSettings={() => {
+              setHubOpen(false)
+              setWizard(2)
+            }}
+          />
+        )}
+        {wizard && isGm && (
+          <SetupWizard
+            start={wizard}
+            onClose={() => {
+              setWizard(null)
+              if (!tourSeen(true)) setTouring(true)
+            }}
+            onScene={(kind) => newScene(kind)}
+          />
+        )}
+        {help && (
+          <HowCampfireWorks
+            onClose={() => setHelp(false)}
+            onTour={() => {
+              setHelp(false)
+              setTouring(true)
+            }}
+          />
+        )}
+        {touring && !wizard && !hubOpen && !help && (
+          <Tour onDone={() => setTouring(false)} onHelp={() => setHelp(true)} />
         )}
         {statBlock && isGm && (
           <StatBlock

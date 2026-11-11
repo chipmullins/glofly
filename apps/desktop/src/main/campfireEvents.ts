@@ -21,7 +21,9 @@ export const CAMPFIRE_EVENT_NAMES = [
   'campfire:music',
   'campfire:ping',
   'campfire:presence',
-  'campfire:members'
+  'campfire:members',
+  // Round A: the campaign hub changed
+  'campfire:hub'
 ] as const
 
 export type CampfireEventName = (typeof CAMPFIRE_EVENT_NAMES)[number]
