@@ -2,6 +2,7 @@ import type { DiagonalRule } from '@glofly/shared/campfire/map'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Point, Scene, Token, TokenBar } from '@glofly/shared/campfire/types'
 import { simplifyLasso, tokenCenter } from '@glofly/shared/campfire/map'
+import { pathCost } from '@glofly/shared/campfire/roundB'
 import BuiltLayer, { BuiltDefs } from './BuiltLayer'
 import {
   feetBetween,
@@ -45,7 +46,7 @@ type Props = {
   onTarget: (id: string | null) => void
   activeTokenId: string | null
   onDragLive: (id: string, x: number, y: number) => void
-  onDrop: (id: string, x: number, y: number) => void
+  onDrop: (id: string, x: number, y: number, path?: Point[]) => void
   onPing: (x: number, y: number) => void
   onFogShape: (shape: { kind: 'rect' | 'poly'; points: Point[] }, mode: 'reveal' | 'hide') => void
   hits: HitFx[]
@@ -60,9 +61,30 @@ type Props = {
   children?: React.ReactNode
   /** Gets "the middle of what's showing" (new tokens go there) */
   centerRef?: React.MutableRefObject<(() => Point) | null>
+  /** Round B: the token taking its turn, how far it may still go (ft) and what Dash would add */
+  movement?: { tokenId: string; left: number; dashExtra: number } | null
+  /** Round B: tokens whose player is talking right now */
+  speaking?: ReadonlySet<string>
+  /** Round B: a creature's reach in feet, shown while hovering it (null: don't show) */
+  reachOf?: (t: Token) => number | null
+  /** Round B (game masters): tokens picked together (Shift-click or Shift-drag a box) */
+  multi?: ReadonlySet<string>
+  onMulti?: (ids: string[]) => void
+  /** Round B: the game master moved everyone's view here */
+  focus?: { x: number; y: number; key: number } | null
 }
 
-type Drag = { id: string; dx: number; dy: number; x: number; y: number; moved: boolean }
+type Drag = {
+  id: string
+  dx: number
+  dy: number
+  x: number
+  y: number
+  moved: boolean
+  x0: number
+  y0: number
+  path: Point[]
+}
 type Pop = { id: number; x: number; y: number; text: string; color: string; big?: boolean }
 type Shot = { id: number; kind: 'arrow' | 'flame'; from: Point; to: Point }
 
@@ -91,7 +113,9 @@ function TokenGlyph({
   dragging,
   canMove,
   fxRef,
-  onKey
+  onKey,
+  picked,
+  speaking
 }: {
   t: Token
   size: number
@@ -107,6 +131,8 @@ function TokenGlyph({
   /** Stable (by token id): keeps memo working with 200+ tokens */
   fxRef: (id: string, el: SVGGElement | null) => void
   onKey: (id: string, e: React.KeyboardEvent) => void
+  picked?: boolean
+  speaking?: boolean
 }): React.JSX.Element {
   const w = t.w * size
   const h = t.h * size
@@ -148,6 +174,18 @@ function TokenGlyph({
             strokeOpacity={0.8}
             strokeWidth={2}
             strokeDasharray="7 5"
+            pointerEvents="none"
+          />
+        )}
+        {speaking && (
+          <circle
+            cx={w / 2}
+            cy={h / 2}
+            r={r + 5}
+            fill="none"
+            stroke="#57c27a"
+            strokeWidth={4}
+            className="cf-speaking"
             pointerEvents="none"
           />
         )}
@@ -220,6 +258,9 @@ function TokenGlyph({
             strokeDasharray="5 4"
           />
         )}
+        {picked && (
+          <circle cx={w / 2} cy={h / 2} r={r + 7} fill="none" stroke="#6f9cff" strokeWidth={3} />
+        )}
         {target && (
           <g stroke="#ff6b5a" strokeWidth={2.5} fill="none">
             <circle cx={w / 2} cy={h / 2} r={r + 6} />
@@ -255,7 +296,20 @@ function TokenGlyph({
                 <text y={3.5} textAnchor="middle" fontSize={9} fontWeight={800} fill="#ffd08a">
                   {c.slice(0, 2).toUpperCase()}
                 </text>
-                <title>{c}</title>
+                {t.conditionTimers?.[c] ? (
+                  <g transform="translate(-14 0)">
+                    <circle r={6} fill="#2a1f33" stroke="#cfa8ff" strokeWidth={1.2} />
+                    <text y={3} textAnchor="middle" fontSize={8} fontWeight={800} fill="#e7d4ff">
+                      {t.conditionTimers[c]}
+                    </text>
+                  </g>
+                ) : null}
+                <title>
+                  {c}
+                  {t.conditionTimers?.[c]
+                    ? ` · ${t.conditionTimers[c]} round${t.conditionTimers[c] === 1 ? '' : 's'} left`
+                    : ''}
+                </title>
               </g>
             ))}
           </g>
@@ -283,6 +337,34 @@ function TokenGlyph({
             Hidden
           </text>
         )}
+        {!mapLayer && !!t.elevation && (
+          <g transform={`translate(${w - 4} ${-8})`}>
+            <rect
+              x={-2}
+              y={-10}
+              width={50}
+              height={16}
+              rx={8}
+              fill="#1a2333"
+              stroke="rgba(111,156,255,0.6)"
+            />
+            <text x={23} y={2} textAnchor="middle" fontSize={10} fontWeight={800} fill="#9cc0ff">
+              {t.elevation > 0 ? '↑' : '↓'} {Math.abs(t.elevation)} ft
+            </text>
+          </g>
+        )}
+        {!mapLayer && t.locked && isGm && (
+          <g transform="translate(2 2)" pointerEvents="none">
+            <rect width={14} height={14} rx={4} fill="rgba(20,15,13,0.85)" />
+            <path
+              d="M4 7V5.5a3 3 0 0 1 6 0V7M3.5 7h7v5h-7z"
+              fill="none"
+              stroke="#ffd08a"
+              strokeWidth={1.4}
+            />
+            <title>Locked</title>
+          </g>
+        )}
       </g>
     </g>
   )
@@ -295,7 +377,16 @@ function MapView(p: Props): React.JSX.Element {
   const g = scene.grid
   const W = scene.widthPx
   const H = scene.heightPx
-  const { box, center, fit, panBy, toWorld, view, zoomAt } = usePanZoom(W, H, scene.id)
+  const {
+    box,
+    center,
+    fit,
+    panBy,
+    toWorld,
+    view,
+    zoomAt,
+    setView: setViewPZ
+  } = usePanZoom(W, H, scene.id)
   const { centerRef } = p
   useEffect(() => {
     if (centerRef) centerRef.current = center
@@ -309,6 +400,21 @@ function MapView(p: Props): React.JSX.Element {
   const [lasso, setLasso] = useState<Point[] | null>(null)
   const [corners, setCorners] = useState<Point[] | null>(null)
   const [hover, setHover] = useState<Point | null>(null)
+  const [hoverTok, setHoverTok] = useState<string | null>(null)
+  const [selBox, setSelBox] = useState<{ a: Point; b: Point } | null>(null)
+  // The game master moved everyone's view: center it there.
+  useEffect(() => {
+    if (!p.focus) return
+    const el = box.current
+    const r = el?.getBoundingClientRect()
+    if (!r) return
+    setViewPZ((v) => ({
+      ...v,
+      x: r.width / 2 - p.focus!.x * v.z,
+      y: r.height / 2 - p.focus!.y * v.z
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.focus?.key])
   const brush: FogBrush = p.fogBrush ?? 'box'
   const fogOn = p.tool === 'fog' && isGm
   // Leaving the fog tool (or switching brush) drops a half-drawn shape.
@@ -514,6 +620,21 @@ function MapView(p: Props): React.JSX.Element {
       clearLongPress()
       return
     }
+    // Round B: game masters pick several tokens with Shift (click to add or drop one, drag a box).
+    if (e.button === 0 && e.shiftKey && p.tool === 'select' && isGm && p.onMulti) {
+      const at0 = worldOf(e)
+      const tk0 = tokenAt(e.target)
+      if (tk0) {
+        const next = new Set(p.multi ?? [])
+        if (next.has(tk0.id)) next.delete(tk0.id)
+        else next.add(tk0.id)
+        p.onMulti([...next])
+      } else {
+        ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+        setSelBox({ a: at0, b: at0 })
+      }
+      return
+    }
     if (e.button === 1 || (e.button === 0 && e.shiftKey && p.tool === 'select')) {
       ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
       setPan({ x: e.clientX, y: e.clientY })
@@ -557,8 +678,19 @@ function MapView(p: Props): React.JSX.Element {
     if (tk) {
       p.onSelect(tk.id)
       if (p.canMove(tk))
-        setDrag({ id: tk.id, dx: at[0] - tk.x, dy: at[1] - tk.y, x: tk.x, y: tk.y, moved: false })
+        setDrag({
+          id: tk.id,
+          dx: at[0] - tk.x,
+          dy: at[1] - tk.y,
+          x: tk.x,
+          y: tk.y,
+          moved: false,
+          x0: tk.x,
+          y0: tk.y,
+          path: []
+        })
       else p.onLocked?.(tk)
+      if (p.multi?.size && !p.multi.has(tk.id)) p.onMulti?.([])
       return
     }
     p.onSelect(null)
@@ -582,6 +714,15 @@ function MapView(p: Props): React.JSX.Element {
     }
     const at = worldOf(e)
     if (corners) setHover(at)
+    if (selBox) {
+      setSelBox({ ...selBox, b: at })
+      return
+    }
+    if (!drag && p.reachOf) {
+      const tk = tokenAt(e.target)
+      const id = tk && !p.isParty(tk) ? tk.id : null
+      if (id !== hoverTok) setHoverTok(id)
+    }
     if (lasso) {
       const last = lasso[lasso.length - 1]
       if (Math.hypot(last[0] - at[0], last[1] - at[1]) * view.z >= 4) setLasso([...lasso, at])
@@ -612,6 +753,22 @@ function MapView(p: Props): React.JSX.Element {
     clearLongPress()
     if (pan) setPan(null)
     if (ruler) setRuler(null)
+    if (selBox) {
+      const { a, b } = selBox
+      setSelBox(null)
+      const x0 = Math.min(a[0], b[0])
+      const x1 = Math.max(a[0], b[0])
+      const y0 = Math.min(a[1], b[1])
+      const y1 = Math.max(a[1], b[1])
+      const inside = p.tokens
+        .filter((t) => t.layer !== 'map' && !(p.asPlayer && t.layer === 'gm'))
+        .filter((t) => {
+          const c = tokenCenter(t, g)
+          return c[0] >= x0 && c[0] <= x1 && c[1] >= y0 && c[1] <= y1
+        })
+        .map((t) => t.id)
+      p.onMulti?.([...new Set([...(p.multi ?? []), ...inside])])
+    }
     if (fogBox) {
       const { a, b } = fogBox
       setFogBox(null)
@@ -641,7 +798,7 @@ function MapView(p: Props): React.JSX.Element {
       const tk = byId.get(drag.id)
       if (tk && drag.moved) {
         const [x, y] = snapToken(drag.x, drag.y, tk.w, tk.h, g)
-        p.onDrop(tk.id, x, y)
+        p.onDrop(tk.id, x, y, drag.path.length ? drag.path : undefined)
         // Shown where it was dropped until the server's answer arrives.
         setDrag({ ...drag, x, y, moved: false })
         window.setTimeout(() => setDrag((d) => (d && d.id === tk.id && !d.moved ? null : d)), 600)
@@ -682,6 +839,22 @@ function MapView(p: Props): React.JSX.Element {
       p.onTarget(p.targetId === t.id ? null : t.id)
     }
   }
+
+  // Round B: while dragging, Space (or W) adds a turn to the path at the square under the token.
+  useEffect(() => {
+    if (!drag || !drag.moved) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== ' ' && e.key.toLowerCase() !== 'w') return
+      e.preventDefault()
+      const tk = byId.get(drag.id)
+      if (!tk) return
+      const [x, y] = snapToken(drag.x, drag.y, tk.w, tk.h, g)
+      const c = tokenCenter({ ...tk, x, y }, g)
+      setDrag((d) => (d ? { ...d, path: [...d.path, c].slice(-20) } : d))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drag, byId, g])
 
   // Stable callbacks for the (memoized) tokens; they read the latest props through a ref.
   const keyRef = useRef<(id: string, e: React.KeyboardEvent) => void>(() => undefined)
@@ -755,6 +928,16 @@ function MapView(p: Props): React.JSX.Element {
             </pattern>
           )}
           <pattern
+            id="cf-mud"
+            width={12}
+            height={12}
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <rect width={12} height={12} fill="rgba(110,74,47,0.45)" />
+            <line x1={0} y1={0} x2={0} y2={12} stroke="rgba(255,208,138,0.35)" strokeWidth={3} />
+          </pattern>
+          <pattern
             id="cf-hatch"
             width={14}
             height={14}
@@ -806,6 +989,78 @@ function MapView(p: Props): React.JSX.Element {
             />
           ) : null}
           <BuiltLayer built={scene.built} grid={g} theme={scene.theme} showNotes={!asPlayer} />
+          {scene.built.terrain?.map((tr) => (
+            <polygon
+              key={tr.id}
+              points={tr.points.map((q) => q.join(',')).join(' ')}
+              fill={tr.kind === 'water' ? 'rgba(70,130,190,0.42)' : 'url(#cf-mud)'}
+              stroke={tr.kind === 'water' ? 'rgba(111,156,255,0.7)' : 'rgba(255,179,71,0.6)'}
+              strokeWidth={2}
+              strokeDasharray={tr.kind === 'water' ? undefined : '6 4'}
+              pointerEvents="none"
+            >
+              <title>
+                {tr.kind === 'water'
+                  ? 'Deep water: costs double'
+                  : 'Difficult terrain: costs double'}
+              </title>
+            </polygon>
+          ))}
+          {(() => {
+            const mv = p.movement
+            const tk = mv ? byId.get(mv.tokenId) : undefined
+            if (!mv || !tk || (drag && drag.id !== tk.id)) return null
+            const base = drag && drag.id === tk.id ? { ...tk, x: drag.x0, y: drag.y0 } : tk
+            const c = tokenCenter(base, g)
+            const rad = (ft: number): number => (ft / (g.feet || 5)) * g.size + (tk.w * g.size) / 2
+            return (
+              <g pointerEvents="none">
+                {mv.left > 0 && (
+                  <circle
+                    cx={c[0]}
+                    cy={c[1]}
+                    r={rad(mv.left)}
+                    fill="rgba(87,194,122,0.06)"
+                    stroke="#57c27a"
+                    strokeWidth={2 / view.z}
+                    strokeDasharray="10 7"
+                  />
+                )}
+                {mv.dashExtra > 0 && (
+                  <circle
+                    cx={c[0]}
+                    cy={c[1]}
+                    r={rad(mv.left + mv.dashExtra)}
+                    fill="none"
+                    stroke="rgba(207,168,255,0.6)"
+                    strokeWidth={2 / view.z}
+                    strokeDasharray="3 8"
+                  />
+                )}
+              </g>
+            )
+          })()}
+          {hoverTok &&
+            (() => {
+              const tk = byId.get(hoverTok)
+              const ft = tk ? p.reachOf?.(tk) : null
+              if (!tk || !ft) return null
+              const cells = Math.round(ft / (g.feet || 5))
+              return (
+                <rect
+                  x={tk.x - cells * g.size}
+                  y={tk.y - cells * g.size}
+                  width={(tk.w + cells * 2) * g.size}
+                  height={(tk.h + cells * 2) * g.size}
+                  rx={6}
+                  fill="rgba(239,90,74,0.08)"
+                  stroke="rgba(239,90,74,0.55)"
+                  strokeWidth={2 / view.z}
+                  strokeDasharray="5 4"
+                  pointerEvents="none"
+                />
+              )
+            })()}
           {g.opacity > 0 && <rect width={W} height={H} fill="url(#cf-grid)" pointerEvents="none" />}
           {sorted.map((t0) => {
             const t = tokenShown(t0)
@@ -825,6 +1080,8 @@ function MapView(p: Props): React.JSX.Element {
                 canMove={p.canMove(t)}
                 fxRef={registerFx}
                 onKey={tokenKey}
+                picked={!!p.multi?.has(t.id)}
+                speaking={!!p.speaking?.has(t.id)}
               />
             )
           })}
@@ -877,6 +1134,76 @@ function MapView(p: Props): React.JSX.Element {
               templateFt={p.templateFt}
               scene={scene}
               diagonal={p.diagonal}
+            />
+          )}
+          {drag &&
+            drag.moved &&
+            p.movement?.tokenId === drag.id &&
+            (() => {
+              const tk = byId.get(drag.id)
+              if (!tk) return null
+              const [sx, sy] = snapToken(drag.x, drag.y, tk.w, tk.h, g)
+              const start = tokenCenter({ ...tk, x: drag.x0, y: drag.y0 }, g)
+              const end = tokenCenter({ ...tk, x: sx, y: sy }, g)
+              const pts = [start, ...drag.path, end]
+              const cost = pathCost(pts, g, scene.built.terrain ?? [], p.diagonal ?? '5')
+              const left = p.movement!.left
+              const over = cost > left
+              const color = over ? '#ff6b5a' : '#ffb347'
+              return (
+                <g pointerEvents="none">
+                  <polyline
+                    points={pts.map((q) => q.join(',')).join(' ')}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={5 / view.z}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {pts.slice(1).map((q, i) => (
+                    <circle key={i} cx={q[0]} cy={q[1]} r={6 / view.z} fill={color} />
+                  ))}
+                  <g
+                    transform={`translate(${end[0] + 26 / view.z} ${end[1] - 40 / view.z}) scale(${1 / view.z})`}
+                  >
+                    <rect
+                      width={150}
+                      height={44}
+                      rx={12}
+                      fill="#241712"
+                      stroke={over ? 'rgba(255,107,90,0.7)' : 'rgba(255,179,71,0.6)'}
+                    />
+                    <text
+                      x={12}
+                      y={19}
+                      fontFamily="Outfit, sans-serif"
+                      fontWeight={800}
+                      fontSize={15}
+                      fill="#f3e6da"
+                    >
+                      {cost} of {left} ft
+                    </text>
+                    <text x={12} y={35} fontSize={11} fill={over ? '#ffb0a8' : '#c9b6a8'}>
+                      {over
+                        ? p.movement!.dashExtra
+                          ? 'Too far: Dash first'
+                          : 'Too far this turn'
+                        : 'Space adds a turn'}
+                    </text>
+                  </g>
+                </g>
+              )
+            })()}
+          {selBox && (
+            <rect
+              x={Math.min(selBox.a[0], selBox.b[0])}
+              y={Math.min(selBox.a[1], selBox.b[1])}
+              width={Math.abs(selBox.b[0] - selBox.a[0])}
+              height={Math.abs(selBox.b[1] - selBox.a[1])}
+              fill="rgba(111,156,255,0.1)"
+              stroke="#6f9cff"
+              strokeWidth={2 / view.z}
+              strokeDasharray="6 4"
             />
           )}
           {(lasso || corners) && (

@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { BuilderRules, RulesItem, RulesSet } from '@glofly/shared/campfire/rulesData'
 import { rulesOf } from '@glofly/shared/campfire/rulesData'
-import type {
-  CampaignSettings,
-  SrdSpell,
-  SrdSpellSummary
-} from '@glofly/shared/campfire/types'
+import type { CampaignSettings, SrdSpell, SrdSpellSummary } from '@glofly/shared/campfire/types'
 import type { CampaignHub, Homebrew } from '@glofly/shared/campfire/hub'
 import { cf } from './api'
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
+  TableLive,
   CampaignMember,
   CharacterView,
   CombatView,
@@ -39,7 +40,17 @@ export type TableCtl = {
   /** Local changes (answers to my own requests) */
   update: (fn: (t: TableState) => TableState) => void
   upsertToken: (token: Token) => void
+  /** Round B: one-off things from the game master (view moved, a sound, a whisper, a notice) */
+  live: LiveFx
 }
+
+export type LiveFx = {
+  focus: { sceneId: string; x: number; y: number; key: number; by: string } | null
+  sound: { key: number; builtin: string | null; fileId: string | null; volume: number } | null
+  whisper: { from: string; to: string; on: boolean } | null
+  notice: { key: number; text: string } | null
+}
+const NO_FX: LiveFx = { focus: null, sound: null, whisper: null, notice: null }
 
 const ROLLS_KEPT = 200
 
@@ -51,6 +62,7 @@ export function useTable(campaignId: string): TableCtl {
   const [serverOffset, setServerOffset] = useState(0)
   const [hits, setHits] = useState<HitFx[]>([])
   const [pings, setPings] = useState<PingFx[]>([])
+  const [live, setLive] = useState<LiveFx>(NO_FX)
   const prevBars = useRef(new Map<string, (TokenBar | null)[]>())
   const seq = useRef(0)
   const loading = useRef(false)
@@ -98,6 +110,31 @@ export function useTable(campaignId: string): TableCtl {
           { id, userId: p.userId, sceneId: p.sceneId, x: p.x, y: p.y }
         ])
         setTimeout(() => setPings((list) => list.filter((x) => x.id !== id)), 4000)
+        return
+      }
+      // Round B: one-off events (not table state).
+      if (name === 'campfire:view') {
+        const v = d as { sceneId: string; x: number; y: number; by: string }
+        setLive((l) => ({ ...l, focus: { ...v, key: fxId++ } }))
+        return
+      }
+      if (name === 'campfire:sound') {
+        const v = d as { builtin: string | null; fileId: string | null; volume: number }
+        setLive((l) => ({ ...l, sound: { ...v, key: fxId++ } }))
+        return
+      }
+      if (name === 'campfire:whisper') {
+        const v = d as { from: string; to: string; on: boolean }
+        setLive((l) => ({ ...l, whisper: v.on ? v : null }))
+        return
+      }
+      if (name === 'campfire:notice') {
+        setLive((l) => ({ ...l, notice: { key: fxId++, text: String(d.text ?? '') } }))
+        return
+      }
+      if (name === 'campfire:removed') {
+        setError('The game master removed you from this table.')
+        setT(null)
         return
       }
       if (name === 'campfire:state') {
@@ -209,6 +246,8 @@ export function useTable(campaignId: string): TableCtl {
             return { ...cur, campaign: { ...cur.campaign, openInCallId: d.callId as string } }
           case 'campfire:closed':
             return { ...cur, campaign: { ...cur.campaign, openInCallId: null } }
+          case 'campfire:live':
+            return { ...cur, campaign: { ...cur.campaign, live: d.live as TableLive } }
           default:
             return cur
         }
@@ -288,6 +327,7 @@ export function useTable(campaignId: string): TableCtl {
     prevBars,
     reload: () => reloadRef.current(),
     update,
-    upsertToken
+    upsertToken,
+    live
   }
 }

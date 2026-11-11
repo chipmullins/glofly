@@ -394,7 +394,7 @@ export function SetupWizard({
                     on={!!settings.moveOnTurn}
                     set={(v) => set('moveOnTurn', v)}
                     b="Players move only on their turn"
-                    s="During a fight, tokens lock until it’s that player’s turn. Outside fights everyone moves freely."
+                    s="During a fight, tokens lock until it’s that player’s turn, and each moves as far as its speed (Dash doubles it). Outside fights everyone moves freely."
                   />
                   <Seg
                     b="Monster health players see"

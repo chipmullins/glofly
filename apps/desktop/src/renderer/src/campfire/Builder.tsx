@@ -21,8 +21,8 @@ import { usePlaceHidden } from './place'
 // shape) with floor materials, walls with doors, objects dragged from the palette, GM notes,
 // layers, undo/redo, grid settings, preview as a player, scenes, start fogged, a map picture.
 
-type BTool = 'select' | 'room' | 'wall' | 'paint' | 'note' | 'erase'
-type Sel = { kind: 'floors' | 'walls' | 'objects' | 'notes'; id: string } | null
+type BTool = 'select' | 'room' | 'wall' | 'paint' | 'terrain' | 'note' | 'erase'
+type Sel = { kind: 'floors' | 'walls' | 'objects' | 'notes' | 'terrain'; id: string } | null
 
 type Draft = {
   name: string
@@ -66,6 +66,7 @@ export default function Builder({
   const [tool, setTool] = useState<BTool>('room')
   const [material, setMaterial] = useState('stone')
   const [wallKind, setWallKind] = useState<'wall' | DoorState>('wall')
+  const [terrainKind, setTerrainKind] = useState<'difficult' | 'water'>('difficult')
   const [layers, setLayers] = useState<BuiltLayers & { tokens: boolean }>({
     floor: true,
     walls: true,
@@ -208,6 +209,7 @@ export default function Builder({
     { id: 'room', label: 'Draw a room', icon: 'room' },
     { id: 'wall', label: 'Draw walls', icon: 'wall' },
     { id: 'paint', label: 'Paint floor', icon: 'pen' },
+    { id: 'terrain', label: 'Difficult terrain and water', icon: 'fog' },
     { id: 'note', label: 'GM note', icon: 'note' },
     { id: 'erase', label: 'Erase', icon: 'erase' }
   ]
@@ -216,6 +218,7 @@ export default function Builder({
     room: 'Drawing a room: drag from corner to corner',
     wall: 'Drawing walls: drag along a wall (pick Door to draw a door)',
     paint: 'Painting floors: click a room to give it the material',
+    terrain: 'Terrain: drag a box. Moving through it costs double (players see a soft hatch)',
     note: 'GM notes: click to pin a note only game masters see',
     erase: 'Erasing: click a piece to remove it'
   }
@@ -313,6 +316,32 @@ export default function Builder({
               <Icon name="redo" size={20} />
             </button>
           </div>
+          {tool === 'terrain' && (
+            <div className="cf-seg" role="radiogroup" aria-label="Kind of terrain">
+              {(
+                [
+                  ['difficult', 'Difficult terrain'],
+                  ['water', 'Water']
+                ] as const
+              ).map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="radio"
+                  aria-checked={terrainKind === v}
+                  className={terrainKind === v ? 'cf-chip cf-chip--on' : 'cf-chip'}
+                  onClick={() => setTerrainKind(v)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {tool === 'terrain' && (
+            <p className="cf-hint">
+              Moving through it costs 2 ft for every foot; tokens’ paths and rings count it.
+            </p>
+          )}
           {tool === 'wall' && (
             <div className="cf-seg" role="radiogroup" aria-label="Wall or door">
               {(
@@ -414,6 +443,7 @@ export default function Builder({
               tool={preview ? 'select' : tool}
               material={material}
               wallKind={wallKind}
+              terrainKind={terrainKind}
               sel={sel}
               setSel={setSel}
               change={change}
@@ -831,6 +861,7 @@ function BuilderMap({
   tool,
   material,
   wallKind,
+  terrainKind,
   sel,
   setSel,
   change,
@@ -844,6 +875,7 @@ function BuilderMap({
   tool: BTool
   material: string
   wallKind: 'wall' | DoorState
+  terrainKind: 'difficult' | 'water'
   sel: Sel
   setSel: (s: Sel) => void
   change: (b: BuiltMap) => void
@@ -915,7 +947,7 @@ function BuilderMap({
       }
       ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
       setDrawing({ a: at, b: at })
-    } else if (tool === 'wall') {
+    } else if (tool === 'wall' || tool === 'terrain') {
       ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
       setDrawing({ a: at, b: at })
     } else if (tool === 'paint') {
@@ -928,7 +960,9 @@ function BuilderMap({
       if (piece)
         change({
           ...built,
-          [piece.kind]: (built[piece.kind] as { id: string }[]).filter((x) => x.id !== piece.id)
+          [piece.kind]: ((built[piece.kind] ?? []) as { id: string }[]).filter(
+            (x) => x.id !== piece.id
+          )
         } as BuiltMap)
     } else if (tool === 'note') {
       const n = { id: pieceId('n'), x: Math.round(raw[0]), y: Math.round(raw[1]), text: 'Note' }
@@ -1024,6 +1058,26 @@ function BuilderMap({
           }
         ]
       })
+    } else if (tool === 'terrain') {
+      if (Math.abs(a[0] - b[0]) < 4 || Math.abs(a[1] - b[1]) < 4) return
+      const [x1, x2] = [Math.min(a[0], b[0]), Math.max(a[0], b[0])]
+      const [y1, y2] = [Math.min(a[1], b[1]), Math.max(a[1], b[1])]
+      change({
+        ...built,
+        terrain: [
+          ...(built.terrain ?? []),
+          {
+            id: pieceId('t'),
+            kind: terrainKind,
+            points: [
+              [x1, y1],
+              [x2, y1],
+              [x2, y2],
+              [x1, y2]
+            ]
+          }
+        ]
+      })
     } else if (tool === 'wall') {
       if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 4) return
       change({
@@ -1073,6 +1127,16 @@ function BuilderMap({
             <circle cx={0.5} cy={0.5} r={0.5} />
           </clipPath>
           <BuiltDefs grid={g} />
+          <pattern
+            id="cf-bmud"
+            width={12}
+            height={12}
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <rect width={12} height={12} fill="rgba(110,74,47,0.45)" />
+            <line x1={0} y1={0} x2={0} y2={12} stroke="rgba(255,208,138,0.35)" strokeWidth={3} />
+          </pattern>
           {hex ? (
             <pattern
               id="cf-bgrid"
@@ -1138,6 +1202,24 @@ function BuilderMap({
             layers={layers}
             showNotes={!preview}
           />
+          {layers.floor &&
+            shown.terrain?.map((tr) => (
+              <polygon
+                key={tr.id}
+                data-piece={`terrain:${tr.id}`}
+                points={tr.points.map((q) => q.join(',')).join(' ')}
+                fill={tr.kind === 'water' ? 'rgba(70,130,190,0.42)' : 'url(#cf-bmud)'}
+                stroke={
+                  sel?.kind === 'terrain' && sel.id === tr.id
+                    ? '#ffb347'
+                    : tr.kind === 'water'
+                      ? 'rgba(111,156,255,0.7)'
+                      : 'rgba(255,179,71,0.6)'
+                }
+                strokeWidth={2}
+                strokeDasharray={tr.kind === 'water' ? undefined : '6 4'}
+              />
+            ))}
           <rect
             width={draft.widthPx}
             height={draft.heightPx}
@@ -1192,6 +1274,18 @@ function BuilderMap({
             />
           )}
           {selPiece && !preview && <SelectionBox piece={selPiece as never} kind={sel!.kind} />}
+          {drawing && tool === 'terrain' && (
+            <rect
+              x={Math.min(drawing.a[0], drawing.b[0])}
+              y={Math.min(drawing.a[1], drawing.b[1])}
+              width={Math.abs(drawing.b[0] - drawing.a[0])}
+              height={Math.abs(drawing.b[1] - drawing.a[1])}
+              fill={terrainKind === 'water' ? 'rgba(70,130,190,0.42)' : 'url(#cf-bmud)'}
+              stroke="#ffb347"
+              strokeWidth={2}
+              strokeDasharray="8 6"
+            />
+          )}
           {drawing && tool === 'room' && (
             <rect
               x={Math.min(drawing.a[0], drawing.b[0])}

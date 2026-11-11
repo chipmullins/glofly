@@ -25,6 +25,19 @@ import { Hub } from './Hub'
 import { SetupWizard } from './SetupWizard'
 import { HowCampfireWorks, Tour, tourSeen } from './Tour'
 import { PracticeTable } from './Practice'
+import {
+  GmScreenPanel,
+  GroupBar,
+  MovementBar,
+  SoundsPanel,
+  TableBanners,
+  speakingGlowOn,
+  useMovement,
+  reachFor,
+  useSoundPlayer,
+  useSpeakingTokens,
+  useWhisperKey
+} from './TableB'
 import { FlameIcon, Icon } from './icons'
 
 // The table (Main board for game masters, Player board for players): header with who's at the
@@ -99,6 +112,9 @@ function TableReady({
   const [touring, setTouring] = useState(() => !setup && !tourSeen(isGm))
   const [help, setHelp] = useState(false)
   const [practice, setPractice] = useState(false)
+  // Round B
+  const [multi, setMulti] = useState<string[]>([])
+  const [whisperTo, setWhisperTo] = useState<string | null>(null)
   const [tool, setTool] = useState<Tool>('select')
   const [fogMode, setFogMode] = useState<'reveal' | 'hide'>('reveal')
   const [fogBrush, setFogBrush] = useState<FogBrush>('box')
@@ -116,12 +132,18 @@ function TableReady({
   const msgTimer = useRef<number | null>(null)
   const calls = useCalls()
   const music = useMusicPlayer(t.music, t.tracks, ctl.serverOffset)
+  // Round B
+  const movement = useMovement(t, me.id, isGm)
+  const speaking = useSpeakingTokens(t, calls.room, calls.tick, speakingGlowOn())
+  useSoundPlayer(ctl.live.sound)
+  const multiSet = useMemo(() => new Set(multi), [multi])
 
   const say = useCallback((m: string) => {
     setMessage(m)
     if (msgTimer.current) window.clearTimeout(msgTimer.current)
     msgTimer.current = window.setTimeout(() => setMessage(null), 4500)
   }, [])
+  const whispering = useWhisperKey(t.campaign.id, isGm ? calls.room : null, whisperTo, say)
   const { op: combatOp } = useCombat2(ctl, t.campaign.id, say)
 
   const names = useMemo(
@@ -332,10 +354,12 @@ function TableReady({
   const tabs: { id: Tab; label: string }[] = isGm
     ? [
         { id: 'turn', label: 'Turn order' },
+        { id: 'gm', label: 'GM screen' },
         { id: 'rolls', label: 'Rolls' },
         { id: 'sheet', label: 'Sheet' },
         { id: 'handouts', label: 'Handouts' },
         { id: 'music', label: 'Music' },
+        { id: 'sounds', label: 'Sounds' },
         { id: 'add', label: 'Add' }
       ]
     : [
@@ -356,11 +380,22 @@ function TableReady({
       <HandoutsPanel />
     ) : tab === 'music' ? (
       <MusicPanel />
+    ) : tab === 'gm' ? (
+      <GmScreenPanel
+        onWhere={() => {
+          const c = centerRef.current?.() ?? [0, 0]
+          return { x: Math.round(c[0]), y: Math.round(c[1]) }
+        }}
+      />
+    ) : tab === 'sounds' ? (
+      <SoundsPanel room={calls.room} whisperTo={whisperTo} setWhisperTo={setWhisperTo} />
     ) : (
       <AddPanel />
     )
 
   const inCall = !!calls.current && !!calls.room
+  const live = t.campaign.live
+  const frozenForMe = !isGm && (!!live?.paused || !!t.campaign.settings.tokensLocked)
   const micOn = calls.room?.localParticipant.isMicrophoneEnabled ?? false
 
   return (
@@ -692,7 +727,26 @@ function TableReady({
                   tk.controlledBy.length > 0 || (!!tk.characterId && pcIds.has(tk.characterId))
                 }
                 canMove={(tk) =>
-                  controls(tk) && !turnLocked(tk) && (tool === 'select' || tool === 'fog')
+                  controls(tk) &&
+                  !turnLocked(tk) &&
+                  !(!isGm && (frozenForMe || tk.locked)) &&
+                  (tool === 'select' || tool === 'fog')
+                }
+                movement={
+                  movement
+                    ? {
+                        tokenId: movement.tokenId,
+                        left: movement.left,
+                        dashExtra: movement.dashExtra
+                      }
+                    : null
+                }
+                speaking={speaking}
+                reachOf={reachFor(t)}
+                multi={isGm ? multiSet : undefined}
+                onMulti={isGm ? setMulti : undefined}
+                focus={
+                  ctl.live.focus && ctl.live.focus.sceneId === scene.id ? ctl.live.focus : null
                 }
                 onLocked={(tk) =>
                   controls(tk) &&
@@ -709,11 +763,17 @@ function TableReady({
                 onTarget={setTargetId}
                 activeTokenId={combat?.current ?? null}
                 onDragLive={(id, x, y) => window.glofly.campfire.move(id, x, y)}
-                onDrop={async (id, x, y) => {
+                onDrop={async (id, x, y, path) => {
                   const tk = t.tokens.find((k) => k.id === id)
                   if (!tk || (tk.x === x && tk.y === y)) return
                   ctl.upsertToken({ ...tk, x, y })
-                  const r = await cf.patch<Token>(`/campfire/tokens/${id}`, { x, y })
+                  const r = await cf.patch<Token>(`/campfire/tokens/${id}`, {
+                    x,
+                    y,
+                    ...(path?.length
+                      ? { path: path.map(([px, py]) => [Math.round(px), Math.round(py)]) }
+                      : {})
+                  })
                   if (!r.ok) {
                     say(r.message)
                     ctl.upsertToken(tk)
@@ -733,6 +793,22 @@ function TableReady({
                 centerRef={centerRef}
               >
                 <RollCardOverlay />
+                {movement && tool === 'select' && <MovementBar />}
+                {isGm && multi.length > 1 && <GroupBar ids={multi} onClear={() => setMulti([])} />}
+                <TableBanners
+                  fx={ctl.live}
+                  onResume={() =>
+                    void cf
+                      .post(`/campfire/campaigns/${t.campaign.id}/pause`, { on: false })
+                      .then((r) => !r.ok && say(r.message))
+                  }
+                />
+                {whispering && whisperTo && (
+                  <div className="cfb-banner cfb-banner--violet cfb-whisper" role="status">
+                    <b>Whispering to {nameOf(whisperTo)}</b>
+                    <span>Only they hear you while you hold V</span>
+                  </div>
+                )}
                 {isGm && !asPlayer && <ApprovalBox />}
                 {!isGm && <DyingCard />}
                 {selected && tool === 'select' && (isGm || controls(selected)) && (

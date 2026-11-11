@@ -2198,3 +2198,35 @@ button.cf-stat:hover {
     animation: none;
   }
 }
+
+/* Round B */
+.cf-cond-timers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cf-cond-timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  text-transform: capitalize;
+}
+.cf-cond-timer span {
+  flex: 1;
+}
+.cf-speaking {
+  filter: drop-shadow(0 0 8px rgba(87, 194, 122, 0.85));
+  animation: cf-speak 1.2s ease-in-out infinite;
+}
+@keyframes cf-speak {
+  50% {
+    stroke-opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-speaking {
+    animation: none;
+  }
+}

@@ -1,3 +1,4 @@
+import { CONDITION_ROUNDS } from '@glofly/shared/campfire/roundB'
 import { useEffect, useState } from 'react'
 import type { Character, PendingDamage, Token, TokenBar } from '@glofly/shared/campfire/types'
 import { isFullCharacter } from '@glofly/shared/campfire/types'
@@ -296,7 +297,72 @@ export function TokenCard({
             </button>
           ))}
         </div>
+        {isGm && token.conditions.length > 0 && (
+          <div className="cf-cond-timers" role="group" aria-label="How long conditions last">
+            {token.conditions.map((c) => (
+              <label key={c} className="cf-cond-timer">
+                <span>{c}</span>
+                <select
+                  aria-label={`How long ${c} lasts`}
+                  value={token.conditionTimers?.[c] ?? 0}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    const timers = { ...(token.conditionTimers ?? {}) }
+                    if (n > 0) timers[c] = n
+                    else delete timers[c]
+                    void patch({ conditionTimers: timers })
+                  }}
+                >
+                  <option value={0}>Until removed</option>
+                  {CONDITION_ROUNDS.map((n) => (
+                    <option key={n} value={n}>
+                      {n === 100 ? '10 minutes (100 rounds)' : `${n} round${n === 1 ? '' : 's'}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            <span className="cf-sub">
+              Rounds count down at the start of its turn, then the condition comes off.
+            </span>
+          </div>
+        )}
       </details>
+      {token.layer !== 'map' && (
+        <div className="cf-barrow" role="group" aria-label="Height">
+          <span className="cf-sub">Height</span>
+          <div className="cf-seg">
+            {[0, 10, 20, 30].map((ft) => (
+              <button
+                key={ft}
+                type="button"
+                aria-pressed={(token.elevation ?? 0) === ft}
+                className={(token.elevation ?? 0) === ft ? 'cf-chip cf-chip--on' : 'cf-chip'}
+                onClick={() => void patch({ elevation: ft })}
+              >
+                {ft ? `${ft} ft` : 'Ground'}
+              </button>
+            ))}
+            <NumBox
+              label="Height in feet"
+              value={token.elevation ?? 0}
+              min={-1000}
+              max={10000}
+              onChange={(n) => void patch({ elevation: n })}
+            />
+          </div>
+        </div>
+      )}
+      {isGm && token.layer !== 'map' && (
+        <label className="cf-check">
+          <input
+            type="checkbox"
+            checked={!!token.locked}
+            onChange={(e) => void patch({ locked: e.target.checked })}
+          />{' '}
+          Locked (players can’t move it)
+        </label>
+      )}
       {isGm && (
         <details className="cf-more">
           <summary>Token settings</summary>

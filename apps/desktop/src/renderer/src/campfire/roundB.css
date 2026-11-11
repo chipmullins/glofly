@@ -1,0 +1,300 @@
+/* Campfire Round B: movement bar, group actions, banners, game master screen, sound board.
+   Same tokens as the table (campfire.css). */
+
+.cfb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cfb-wrap {
+  flex-wrap: wrap;
+}
+.cfb-grow {
+  flex: 1;
+  min-width: 0;
+}
+.cfb-move {
+  position: absolute;
+  left: 20px;
+  right: 76px;
+  bottom: 20px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: rgba(36, 23, 18, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(255, 179, 71, 0.45),
+    0 14px 40px rgba(0, 0, 0, 0.5);
+}
+.cfb-move-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 220px;
+}
+.cfb-move-meter b {
+  font: 800 15px/1 var(--glo-font-display);
+}
+.cfb-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.cfb-bar--big {
+  height: 12px;
+}
+.cfb-bar span {
+  display: block;
+  height: 100%;
+  background: var(--cf-amber);
+}
+.cfb-amber {
+  color: var(--cf-amber) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 179, 71, 0.45);
+}
+.cfb-tip {
+  max-width: 220px;
+  text-align: right;
+}
+.cfb-pop-wrap {
+  position: relative;
+}
+.cfb-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--cf-panel);
+  box-shadow:
+    0 0 0 1px var(--cf-line-strong),
+    0 12px 30px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+.cfb-group {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 100px);
+  padding: 8px 10px 8px 14px;
+  border-radius: 14px;
+  background: rgba(26, 32, 51, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(111, 156, 255, 0.5),
+    0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.cfb-group b {
+  color: #9cc0ff;
+  font-size: 13px;
+  margin-right: 4px;
+}
+.cfb-group select,
+.cfb-inline input {
+  height: 30px;
+  border-radius: 8px;
+}
+.cfb-inline input {
+  width: 64px;
+}
+.cfb-paused {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  text-align: center;
+  background: rgba(8, 6, 5, 0.72);
+}
+.cfb-paused b {
+  font: 800 24px/1.2 var(--glo-font-display);
+}
+.cfb-paused > span:last-child {
+  max-width: 460px;
+  color: var(--cf-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.cfb-paused-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 32px;
+  display: grid;
+  place-items: center;
+  background: var(--cf-active);
+  color: var(--cf-amber);
+  font-size: 22px;
+}
+.cfb-banners {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
+.cfb-banner {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(36, 23, 18, 0.96);
+  box-shadow:
+    0 0 0 1px var(--cf-line-strong),
+    0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+}
+.cfb-banner--violet {
+  background: #2a1f33;
+  box-shadow: 0 0 0 1px rgba(181, 124, 255, 0.55);
+  color: #e7d4ff;
+}
+.cfb-banner--violet span {
+  color: #cfa8ff;
+}
+.cfb-banner--amber {
+  background: var(--cf-active);
+  box-shadow: 0 0 0 1px rgba(255, 179, 71, 0.55);
+}
+.cfb-gm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cfb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--cf-surface);
+  box-shadow: 0 0 0 1px var(--cf-line);
+}
+.cfb-card--hot {
+  background: var(--cf-active);
+  box-shadow: inset 0 0 0 1px rgba(255, 179, 71, 0.5);
+}
+.cfb-card .cf-h3 {
+  margin: 0;
+}
+.cfb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.cfb-pill {
+  display: inline-flex;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--cf-active);
+  color: var(--cf-amber);
+  font: 800 12px/1 var(--glo-font-body);
+  white-space: nowrap;
+}
+.cfb-good {
+  background: #57c27a !important;
+}
+.cfb-pill.cfb-good {
+  background: #183a26 !important;
+  color: #9ce6bb;
+}
+.cfb-warn {
+  background: #f0b429 !important;
+}
+.cfb-pill.cfb-warn {
+  background: #3a2e10 !important;
+  color: #f0b429;
+}
+.cfb-bad {
+  background: #ef5a4a !important;
+}
+.cfb-pill.cfb-bad {
+  background: #4a1d18 !important;
+  color: #ffb0a8;
+}
+.cfb-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cfb-pads {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.cfb-pad {
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 0;
+  background: var(--cf-raised);
+  box-shadow: inset 0 0 0 1px var(--cf-line);
+  color: var(--cf-ink);
+  text-align: left;
+  position: relative;
+}
+.cfb-pad b {
+  font-size: 13px;
+}
+.cfb-pad span {
+  font-size: 11.5px;
+  color: var(--cf-muted);
+}
+.cfb-pad--own {
+  background: #183a26;
+}
+.cfb-pad--own .cf-x {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+}
+.cfb-pad--on {
+  background: #2a1f33;
+  box-shadow: inset 0 0 0 2px #cfa8ff;
+}
+:root[data-contrast='high'] .cfb-move,
+:root[data-contrast='high'] .cfb-banner,
+:root[data-contrast='high'] .cfb-group {
+  box-shadow: 0 0 0 2px var(--cf-ink);
+}
+.cfb-whisper {
+  position: absolute;
+  left: 20px;
+  bottom: 96px;
+  z-index: 7;
+}
+.cfb-whisper {
+  position: absolute;
+  left: 20px;
+  bottom: 96px;
+  z-index: 7;
+}

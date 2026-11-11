@@ -42,7 +42,7 @@ export type Cf = {
 
 export type StatBlockFor = { characterId: string } | { slug: string }
 
-export type Tab = 'turn' | 'rolls' | 'sheet' | 'handouts' | 'music' | 'add'
+export type Tab = 'turn' | 'rolls' | 'sheet' | 'handouts' | 'music' | 'add' | 'gm' | 'sounds'
 
 export const CfContext = createContext<Cf | null>(null)
 
