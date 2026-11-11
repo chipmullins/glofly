@@ -292,3 +292,32 @@ Where the spec was silent, the server does the simplest secure thing:
   they save a role (like `mentionEveryone`). Campfire apps should send that header on requests too.
 - **Bodies.** `/campfire` reads its own JSON (512 KB; sheets ≤ 128 KB) after the sign-in check; the global
   10 KB parser skips it. Uploads are read only up to their kind's limit.
+
+## Round A (Nov 10, 2026): rules choice, builder, switching over, hub, homebrew
+
+Approved boards (copied into `docs/design/campfire/`): GmSetup, SwitchOver, CharBuilder, BuilderPhone,
+LevelUp, Inventory, Hub, HubPhone, Homebrew, Tour. Keep screens matching them.
+
+- **Rules per campaign.** `settings.rules` = `'2014'` (SRD 5.1) or `'2024'` (SRD 5.2); default 2014 for
+  older campaigns. Every rules lookup sends `?rules=` (`/srd/monsters|spells|builder|items`). Show
+  `creditFor(rules)` wherever rules text or the builder shows. Data: `tools/campfire-srd/build.mjs`
+  (5e-database repo) writes `apps/server/src/campfire/srd/{2014,2024}/`.
+- **Table settings.** `moveOnTurn` (server refuses a player's move off-turn: 403 `not_your_turn`; apps
+  lock the drag and say so), `leveling` (`milestone` | `xp`), `diagonal` (`5` | `5-10`, ruler + reach).
+- **Builder / level up.** Pure shared code (`builder.ts`): `buildSheet`, `levelUpPreview`/`levelUpSheet`,
+  `finalScores`, `spellCounts`, `withHomebrew`, `sheetSpellFrom`. Class-table "X Subclass" rows are
+  replaced by the subclass's own features. Desktop/web: 8 steps with ASIs/feats; phones: 8 steps with
+  standard array and +2 ASIs (feats on a computer).
+- **Switching over mid-campaign.** GM: setup step 1 "Continuing a campaign" → `POST /campaigns/:id/continue`
+  (sessions before, party level, story so far = session 0 "Before Campfire", open quests). Players:
+  import a character sheet PDF (desktop/web only: `importSheet.ts` reads the form fields with pdf-lib in
+  the app; the PDF is never uploaded; spells and items matched to the rules), copy-in page (all apps),
+  or build at the party's level. D&D Beyond is named only as a PDF source.
+- **Hub** (`campfire/hub.ts`, migration 0059): sessions + RSVPs (+ reminders a day and 30 min before,
+  `sweepSessionReminders`), recap drafts from what the server counted, quests, journal (hidden entries
+  and GM notes never reach players), party loot (split/give), homebrew (shared or GM-only).
+  Live event `campfire:hub` (allow-listed in desktop main and phones).
+- **Inventory.** Optional `SheetItem` fields; equip → AC via `armorClassFromItems` (locked sheets keep
+  AC), weapons from the rules add an attack, coins, attunement (3), carrying weight.
+- **Tour.** First time per device (desktop/web localStorage, phones prefs); "?" on the table opens
+  "How Campfire works". Coach marks point at real buttons (`data-tour`); no practice table yet.

@@ -4,7 +4,7 @@
 
 import type { Ability, CreatureSize, DamageType, SheetItem, SkillId } from './types'
 import { ABILITIES, DAMAGE_TYPES } from './types'
-import { NO_COINS, type Coins, type RulesText } from './rulesData'
+import { NO_COINS, type BuilderBackground, type BuilderRules, type BuilderSpecies, type Coins, type RulesText } from './rulesData'
 
 export type SessionRsvp = 'yes' | 'maybe' | 'no'
 export const SESSION_RSVPS: readonly SessionRsvp[] = ['yes', 'maybe', 'no']
@@ -327,3 +327,46 @@ export function homebrewSheetItem(data: Partial<HomebrewItem>, id: string): Part
     homebrewId: id
   }
 }
+
+/** The campaign's shared homebrew species and backgrounds, as builder entries. */
+export function withHomebrew(data: BuilderRules, brew: Homebrew[]): BuilderRules {
+  const species: BuilderSpecies[] = brew
+    .filter((h) => h.kind === 'species')
+    .map((h) => {
+      const d = h.data as HomebrewSpecies
+      return {
+        id: `hb-${h.id}`,
+        name: h.name,
+        size: d.size,
+        speed: d.speed,
+        darkvision: d.darkvision,
+        traits: d.traits,
+        bonuses: d.bonuses,
+        skills: d.skills,
+        resist: d.resist,
+        subs: [],
+        homebrew: true
+      }
+    })
+  const backgrounds: BuilderBackground[] = brew
+    .filter((h) => h.kind === 'background')
+    .map((h) => {
+      const d = h.data as HomebrewBackground
+      return {
+        id: `hb-${h.id}`,
+        name: h.name,
+        skills: d.skills,
+        abilities: d.abilities,
+        tools: d.tools,
+        feature: d.text ? { name: h.name, text: d.text } : undefined,
+        gold: 0,
+        homebrew: true
+      }
+    })
+  return {
+    ...data,
+    species: [...data.species, ...species],
+    backgrounds: [...data.backgrounds, ...backgrounds]
+  }
+}
+

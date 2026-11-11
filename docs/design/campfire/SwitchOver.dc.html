@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Campfire: bringing a campaign over mid-story</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffb347}a:hover{color:#ffd08a}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; overflow: hidden; background: #0b0807; font-family: 'DM Sans', system-ui, sans-serif; color: #f3e6da; padding: 32px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px">
+
+  <section aria-labelledby="sw-gm" style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 20px; background: #140f0d; box-shadow: 0 0 0 1px rgba(255,255,255,0.10)">
+    <span style="font: 700 12px/1 'DM Sans', sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: #ffb347">Game master setup · step 1</span>
+    <h2 id="sw-gm" style="margin: 0; font: 800 24px/1.1 Outfit, sans-serif">New story or one you're in the middle of?</h2>
+    <div role="radiogroup" aria-labelledby="sw-gm" style="display: flex; flex-direction: column; gap: 8px">
+      <label style="display: flex; gap: 12px; padding: 14px; border-radius: 14px; background: #1f1714; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12)"><input type="radio" name="sw" style="width: 20px; height: 20px; margin: 0; accent-color: #f47a1f"><span style="display: flex; flex-direction: column; gap: 3px"><b style="font-size: 15px">Starting fresh</b><span style="font-size: 12px; color: #c9b6a8">Session 1, characters at level 1 (or the level you pick)</span></span></label>
+      <label style="display: flex; gap: 12px; padding: 14px; border-radius: 14px; background: #3a2614; box-shadow: inset 0 0 0 2px #ffb347"><input type="radio" name="sw" checked style="width: 20px; height: 20px; margin: 0; accent-color: #f47a1f"><span style="display: flex; flex-direction: column; gap: 3px"><b style="font-size: 15px">Continuing a campaign</b><span style="font-size: 12px; color: #ffd08a">Coming from Roll20, D&amp;D Beyond, Discord or the kitchen table</span></span></label>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+      <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #c9b6a8">Sessions played so far<input value="12" style="height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #120d0b; color: #f3e6da; font: 700 15px/1 'DM Sans', sans-serif"></label>
+      <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #c9b6a8">Party level<input value="6" style="height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #120d0b; color: #f3e6da; font: 700 15px/1 'DM Sans', sans-serif"></label>
+    </div>
+    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #c9b6a8">The story so far (becomes the first recap in the hub)<textarea rows="4" style="padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #120d0b; color: #f3e6da; font: 500 13px/1.5 'DM Sans', sans-serif; resize: none">The party cleared the Greywater docks, made an enemy of the Bell Abbot and swore to find the drowned temple before the next tide…</textarea></label>
+    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #c9b6a8">Open quests (one per line)<textarea rows="2" style="padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #120d0b; color: #f3e6da; font: 500 13px/1.5 'DM Sans', sans-serif; resize: none">Silence the drowned bell
+Who collared the wolf?</textarea></label>
+    <span style="margin-top: auto; font-size: 12px; line-height: 1.5; color: #c9b6a8">Your map pictures upload as scenes (PNG, JPG, WebP). Everyone gets an invite to bring their character at level 6.</span>
+  </section>
+
+  <section aria-labelledby="sw-pl" style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 20px; background: #140f0d; box-shadow: 0 0 0 1px rgba(255,255,255,0.10)">
+    <span style="font: 700 12px/1 'DM Sans', sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: #ffb347">A player joins · The Sunken Crypt</span>
+    <h2 id="sw-pl" style="margin: 0; font: 800 24px/1.1 Outfit, sans-serif">Bring your character</h2>
+    <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #c9b6a8">The party is level 6. Pick how you'd like to bring your hero to the table.</p>
+    <button type="button" style="display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: 16px; border: 0; background: #3a2614; box-shadow: inset 0 0 0 2px #ffb347; color: #f3e6da; text-align: left">
+      <span style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #ffb347; color: #2a1406; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 18v-6M9 15l3 3 3-3"/></svg></span>
+      <span style="display: flex; flex-direction: column; gap: 4px"><b style="font: 700 16px/1.2 Outfit, sans-serif">Import a character sheet PDF</b><span style="font-size: 13px; line-height: 1.45; color: #e5d6ca">From D&amp;D Beyond (Export to PDF) or any filled-in 5e character sheet PDF. You check everything before it's saved.</span></span>
+    </button>
+    <button type="button" style="display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: 16px; border: 0; background: #1f1714; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); color: #f3e6da; text-align: left">
+      <span style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #2a201b; color: #ffb347; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span>
+      <span style="display: flex; flex-direction: column; gap: 4px"><b style="font: 700 16px/1.2 Outfit, sans-serif">Copy it in from another sheet</b><span style="font-size: 13px; line-height: 1.45; color: #c9b6a8">For Roll20 or paper: one page with the numbers that matter (class levels, scores, HP, AC, attacks, spells). About five minutes.</span></span>
+    </button>
+    <button type="button" style="display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: 16px; border: 0; background: #1f1714; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); color: #f3e6da; text-align: left">
+      <span style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #2a201b; color: #ffb347; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+      <span style="display: flex; flex-direction: column; gap: 4px"><b style="font: 700 16px/1.2 Outfit, sans-serif">Build one at level 6</b><span style="font-size: 13px; line-height: 1.45; color: #c9b6a8">The builder walks you through every level's choices.</span></span>
+    </button>
+    <span style="margin-top: auto; font-size: 12px; line-height: 1.5; color: #c9b6a8">Roll20 doesn't let players export characters, so the copy page is the quick way over. D&amp;D Beyond is named only to say where a PDF comes from.</span>
+  </section>
+
+  <section aria-labelledby="sw-rev" style="display: flex; flex-direction: column; gap: 12px; padding: 22px; border-radius: 20px; background: #140f0d; box-shadow: 0 0 0 1px rgba(255,255,255,0.10)">
+    <span style="font: 700 12px/1 'DM Sans', sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: #ffb347">Check what we found</span>
+    <div style="display: flex; align-items: center; gap: 12px">
+      <span style="flex: none; width: 56px; height: 56px; border-radius: 50%; background: radial-gradient(circle at 50% 36%, #d9b48f 0 22%, #6b4b2e 23% 100%); box-shadow: 0 0 0 3px #57c27a"></span>
+      <div style="display: flex; flex-direction: column; gap: 2px"><h2 id="sw-rev" style="margin: 0; font: 800 22px/1.1 Outfit, sans-serif">Bram Ashford</h2><span style="font-size: 13px; color: #c9b6a8">Dwarf · Cleric 6 · from Bram.pdf</span></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; text-align: center">
+      <div style="padding: 8px 4px; border-radius: 10px; background: #1f1714"><span style="display: block; font-size: 11px; color: #c9b6a8">STR</span><b style="font: 800 18px/1.2 Outfit, sans-serif">14</b></div>
+      <div style="padding: 8px 4px; border-radius: 10px; background: #1f1714"><span style="display: block; font-size: 11px; color: #c9b6a8">DEX</span><b style="font: 800 18px/1.2 Outfit, sans-serif">10</b></div>
+      <div style="padding: 8px 4px; border-radius: 10px; background: #1f1714"><span style="display: block; font-size: 11px; color: #c9b6a8">CON</span><b style="font: 800 18px/1.2 Outfit, sans-serif">16</b></div>
+      <div style="padding: 8px 4px; border-radius: 10px; background: #1f1714"><span style="display: block; font-size: 11px; color: #c9b6a8">INT</span><b style="font: 800 18px/1.2 Outfit, sans-serif">8</b></div>
+      <div style="padding: 8px 4px; border-radius: 10px; background: #1f1714"><span style="display: block; font-size: 11px; color: #c9b6a8">WIS</span><b style="font: 800 18px/1.2 Outfit, sans-serif">18</b></div>
+      <div style="padding: 8px 4px; border-radius: 10px; background: #1f1714"><span style="display: block; font-size: 11px; color: #c9b6a8">CHA</span><b style="font: 800 18px/1.2 Outfit, sans-serif">12</b></div>
+    </div>
+    <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+      <li style="display: flex; gap: 8px; padding: 9px 12px; border-radius: 10px; background: #1f1714"><span style="color: #57c27a">✓</span><span style="flex: 1">AC 18 · HP 57 · Speed 30 ft</span></li>
+      <li style="display: flex; gap: 8px; padding: 9px 12px; border-radius: 10px; background: #1f1714"><span style="color: #57c27a">✓</span><span style="flex: 1">Saves, 4 skills, proficiency +3</span></li>
+      <li style="display: flex; gap: 8px; padding: 9px 12px; border-radius: 10px; background: #1f1714"><span style="color: #57c27a">✓</span><span style="flex: 1">3 attacks (Warhammer, Light crossbow, Spiritual Weapon)</span></li>
+      <li style="display: flex; gap: 8px; padding: 9px 12px; border-radius: 10px; background: #1f1714"><span style="color: #57c27a">✓</span><span style="flex: 1">14 spells · slots 4 / 3 / 3 · matched to the rules</span></li>
+      <li style="display: flex; gap: 8px; padding: 9px 12px; border-radius: 10px; background: #3a2614; box-shadow: inset 0 0 0 1px rgba(255,179,71,0.5)"><span style="color: #ffb347">!</span><span style="flex: 1">2 items we couldn't read: <a href="#">fill them in</a></span></li>
+    </ul>
+    <span style="font-size: 12px; line-height: 1.5; color: #c9b6a8">The PDF is read once and not kept. Features and notes come over as text on the sheet.</span>
+    <div style="margin-top: auto; display: flex; gap: 8px">
+      <button type="button" style="height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.14); background: #2a201b; color: #f3e6da; font: 700 14px/1 'DM Sans', sans-serif">Change things</button>
+      <button type="button" style="flex: 1; height: 44px; border-radius: 12px; border: 0; background: #f47a1f; color: #2a1406; font: 800 14px/1 'DM Sans', sans-serif">Bring Bram to the table</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -110,8 +110,19 @@ export function noteLit(lit: Lit) {
 
 const later = (ms: number, fn: () => void) => setTimeout(fn, ms)
 
+const hubListeners = new Set<(campaignId: string) => void>()
+/** The campaign hub changed (sessions, RSVPs, recaps, quests, loot, journal): the hub screen reloads. */
+export function onHubChange(fn: (campaignId: string) => void): () => void {
+  hubListeners.add(fn)
+  return () => void hubListeners.delete(fn)
+}
+
 function apply<K extends CampfireEventName>(name: K, p: CampfireEvents[K]) {
   const id = p.campaignId
+  if (name === 'campfire:hub') {
+    for (const fn of hubListeners) fn(id)
+    return
+  }
   switch (name) {
     case 'campfire:opened': {
       const e = p as CampfireEvents['campfire:opened']

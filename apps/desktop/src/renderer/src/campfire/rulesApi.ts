@@ -3,7 +3,6 @@ import type { BuilderRules, RulesItem, RulesSet } from '@glofly/shared/campfire/
 import { rulesOf } from '@glofly/shared/campfire/rulesData'
 import type {
   CampaignSettings,
-  SheetSpell,
   SrdSpell,
   SrdSpellSummary
 } from '@glofly/shared/campfire/types'
@@ -78,20 +77,4 @@ export async function loadHomebrew(campaignId: string, kind?: string): Promise<H
   return r.ok ? r.data.homebrew : []
 }
 
-/** A spell from the rules as a sheet spell (details filled in, roll from its damage). */
-export function sheetSpellFrom(s: SrdSpell, prepared = true): SheetSpell {
-  const dmg =
-    s.damage?.bySlot?.[String(Math.max(s.level, 0))] ?? s.damage?.byCharacterLevel?.['1'] ?? null
-  return {
-    slug: s.slug,
-    name: s.name,
-    level: s.level,
-    prepared,
-    castingTime: s.castingTime.slice(0, 60),
-    range: s.range.slice(0, 60),
-    duration: s.duration.slice(0, 60),
-    ...(s.concentration ? { concentration: true } : {}),
-    ...(dmg && /^\d+d\d+([+-]\d+)?$/.test(dmg) ? { roll: dmg } : {}),
-    notes: (s.desc.split(/(?<=\.)\s/)[0] ?? '').slice(0, 120)
-  }
-}
+export { sheetSpellFrom } from '@glofly/shared/campfire/builder'

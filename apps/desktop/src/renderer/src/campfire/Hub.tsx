@@ -648,7 +648,7 @@ function LootSummary({
           </span>
         )}
         <span>
-          <b>{loot.items.length}</b> items
+          <b>{loot.items.length}</b> {loot.items.length === 1 ? 'item' : 'items'}
         </span>
       </div>
       {loot.items.length > 0 && (

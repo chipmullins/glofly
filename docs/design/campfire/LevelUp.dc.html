@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Campfire: level up</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffb347}a:hover{color:#ffd08a}
+</style>
+</helmet>
+<div style="width: 1280px; height: 900px; box-sizing: border-box; position: relative; overflow: hidden; background: #0b0807; font-family: 'DM Sans', system-ui, sans-serif; color: #f3e6da">
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: radial-gradient(circle at 50% 18%, rgba(255,179,71,0.28), transparent 45%)"></div>
+  <div role="dialog" aria-label="Level up" style="position: absolute; left: 50%; top: 36px; transform: translateX(-50%); width: 1080px; height: 828px; box-sizing: border-box; border-radius: 22px; background: #140f0d; box-shadow: 0 0 0 1px rgba(255,179,71,0.4), 0 30px 80px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden">
+    <header style="display: flex; align-items: center; gap: 18px; padding: 22px 26px; border-bottom: 1px solid rgba(255,255,255,0.10)">
+      <span style="position: relative; flex: none; width: 76px; height: 76px; border-radius: 50%; background: radial-gradient(circle at 50% 36%, #e7c9a8 0 22%, #3d6b3f 23% 100%); box-shadow: 0 0 0 3px #ffb347, 0 0 30px rgba(255,179,71,0.45)"></span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+        <span style="font: 700 12px/1 'DM Sans', sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: #ffb347">The party reached a milestone</span>
+        <h1 style="margin: 0; font: 800 30px/1.05 Outfit, sans-serif">Lyra reaches level 4</h1>
+        <span style="font-size: 14px; color: #c9b6a8">Ranger 3 (Hunter) → Ranger 4 · three choices, the rest is automatic</span>
+      </div>
+      <button type="button" aria-label="Finish later" style="height: 40px; padding: 0 14px; border-radius: 12px; border: 0; background: #2a201b; color: #f3e6da; font: 700 13px/1 'DM Sans', sans-serif">Finish later</button>
+    </header>
+
+    <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px 26px">
+      <div style="display: flex; flex-direction: column; gap: 14px">
+        <section aria-labelledby="lu-hp" style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: #1f1714; box-shadow: 0 0 0 1px rgba(255,255,255,0.10)">
+          <div style="display: flex; align-items: center; gap: 8px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #57c27a; color: #0b1f12; display: grid; place-items: center; font: 800 12px/1 Outfit, sans-serif">1</span><h2 id="lu-hp" style="margin: 0; font: 700 16px/1.2 Outfit, sans-serif">Hit points</h2><span style="margin-left: auto; font-size: 13px; color: #c9b6a8">28 → <b style="color: #9be0b2">36</b></span></div>
+          <div role="radiogroup" aria-label="Hit points" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+            <button type="button" role="radio" aria-checked="true" style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; border-radius: 12px; border: 0; background: #3a2614; box-shadow: inset 0 0 0 2px #ffb347; color: #f3e6da; text-align: left"><b style="font: 800 20px/1 Outfit, sans-serif">+8</b><span style="font-size: 12px; color: #ffd08a">Take the average: 6 + 2 (Constitution)</span></button>
+            <button type="button" role="radio" aria-checked="false" style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; border-radius: 12px; border: 0; background: #2a201b; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); color: #f3e6da; text-align: left"><b style="font: 800 20px/1 Outfit, sans-serif">Roll 1d10 + 2</b><span style="font-size: 12px; color: #c9b6a8">Rolled on the server, everyone sees it</span></button>
+          </div>
+        </section>
+
+        <section aria-labelledby="lu-asi" style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: #1f1714; box-shadow: inset 0 0 0 2px rgba(255,179,71,0.6)">
+          <div style="display: flex; align-items: center; gap: 8px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #ffb347; color: #2a1406; display: grid; place-items: center; font: 800 12px/1 Outfit, sans-serif">2</span><h2 id="lu-asi" style="margin: 0; font: 700 16px/1.2 Outfit, sans-serif">Ability Score Improvement</h2><span style="margin-left: auto; padding: 3px 8px; border-radius: 999px; background: #3a2614; color: #ffd08a; font: 700 11px/1 'DM Sans', sans-serif">Choose</span></div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #c9b6a8">+2 to one ability or +1 to two (up to 20), or take another feat instead.</p>
+          <div role="radiogroup" aria-label="Improvement" style="display: flex; gap: 6px">
+            <button type="button" role="radio" aria-checked="true" style="flex: 1; height: 38px; border-radius: 10px; border: 1px solid #ffb347; background: #3a2614; color: #ffd08a; font: 700 13px/1 'DM Sans', sans-serif">Raise scores</button>
+            <button type="button" role="radio" aria-checked="false" style="flex: 1; height: 38px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #2a201b; color: #f3e6da; font: 700 13px/1 'DM Sans', sans-serif">Pick a feat</button>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 12px; background: #3a2614; box-shadow: inset 0 0 0 1px rgba(255,179,71,0.5)"><b style="font-size: 13px; flex: 1">DEX</b><span style="font-size: 13px; color: #c9b6a8">17 →</span><b style="font: 800 18px/1 Outfit, sans-serif; color: #ffd08a">18</b></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 12px; background: #3a2614; box-shadow: inset 0 0 0 1px rgba(255,179,71,0.5)"><b style="font-size: 13px; flex: 1">WIS</b><span style="font-size: 13px; color: #c9b6a8">14 →</span><b style="font: 800 18px/1 Outfit, sans-serif; color: #ffd08a">15</b></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 12px; background: #2a201b"><b style="font-size: 13px; flex: 1">CON</b><b style="font: 800 18px/1 Outfit, sans-serif">14</b></div>
+          </div>
+          <span style="font-size: 12px; color: #9be0b2">Dexterity 18 gives +4: attacks, AC and initiative go up by 1.</span>
+        </section>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px">
+        <section aria-labelledby="lu-spells" style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: #1f1714; box-shadow: 0 0 0 1px rgba(255,255,255,0.10)">
+          <div style="display: flex; align-items: center; gap: 8px"><span style="width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.2); display: grid; place-items: center; font: 800 12px/1 Outfit, sans-serif">3</span><h2 id="lu-spells" style="margin: 0; font: 700 16px/1.2 Outfit, sans-serif">One more prepared spell</h2><span style="margin-left: auto; font-size: 12px; color: #c9b6a8">4 → 5</span></div>
+          <label style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; background: #2a201b"><span style="color: #c9b6a8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg></span><input type="search" placeholder="Ranger spells, level 1" aria-label="Search ranger spells" style="flex: 1; border: 0; background: transparent; color: #f3e6da; font: 500 14px/1 'DM Sans', sans-serif; outline: none"></label>
+          <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+            <li style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #2a201b"><span style="display: flex; flex-direction: column; gap: 2px; flex: 1"><b style="font-size: 14px">Cure Wounds</b><span style="font-size: 12px; color: #c9b6a8">Action · touch · heals 2d8 + your Wisdom</span></span><button type="button" style="height: 34px; padding: 0 12px; border-radius: 10px; border: 0; background: #f47a1f; color: #2a1406; font: 800 12px/1 'DM Sans', sans-serif">Prepare</button></li>
+            <li style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #2a201b"><span style="display: flex; flex-direction: column; gap: 2px; flex: 1"><b style="font-size: 14px">Ensnaring Strike</b><span style="font-size: 12px; color: #c9b6a8">Bonus action · concentration · restrains on a hit</span></span><button type="button" style="height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.16); background: transparent; color: #f3e6da; font: 700 12px/1 'DM Sans', sans-serif">Prepare</button></li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="lu-auto" style="display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 16px; background: #1f1714; box-shadow: 0 0 0 1px rgba(255,255,255,0.10)">
+          <h2 id="lu-auto" style="margin: 0; font: 700 16px/1.2 Outfit, sans-serif">Done for you</h2>
+          <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+            <li style="display: flex; gap: 8px"><span style="color: #57c27a">✓</span><span>Hit dice 3 → 4 (d10)</span></li>
+            <li style="display: flex; gap: 8px"><span style="color: #57c27a">✓</span><span>Spell slots updated from the ranger table</span></li>
+            <li style="display: flex; gap: 8px"><span style="color: #57c27a">✓</span><span>Attacks, saves and skills recalculated</span></li>
+            <li style="display: flex; gap: 8px"><span style="color: #c9b6a8">·</span><span style="color: #c9b6a8">Subclass: Hunter (chosen at level 3)</span></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+
+    <footer style="display: flex; align-items: center; gap: 12px; padding: 16px 26px; border-top: 1px solid rgba(255,255,255,0.10)">
+      <span style="font-size: 12px; color: #c9b6a8">Your game master sees this level-up in the table's history. Ranger features: System Reference Document 5.2, CC BY 4.0.</span>
+      <button type="button" style="margin-left: auto; height: 46px; padding: 0 22px; border-radius: 12px; border: 0; background: #f47a1f; color: #2a1406; font: 800 15px/1 'DM Sans', sans-serif">Finish level 4</button>
+    </footer>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

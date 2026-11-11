@@ -1321,7 +1321,7 @@
   gap: 6px;
   width: 100%;
 }
-.cfa-brew-item > span:first-child > :last-child {
+.cfa-brew-item > span:first-child > span:last-child {
   margin-left: auto;
 }
 .cfa-brew-item > span:last-child {

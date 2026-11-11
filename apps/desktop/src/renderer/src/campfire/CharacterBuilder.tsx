@@ -17,7 +17,6 @@ import {
   pointBuySpent,
   roll4d6,
   type BuilderRules,
-  type BuilderSpecies,
   type RulesItem,
   type RulesSet
 } from '@glofly/shared/campfire/rulesData'
@@ -31,7 +30,7 @@ import {
   type AsiChoice,
   type BuildChoices
 } from '@glofly/shared/campfire/builder'
-import type { Homebrew, HomebrewBackground, HomebrewSpecies } from '@glofly/shared/campfire/hub'
+import { withHomebrew, type Homebrew } from '@glofly/shared/campfire/hub'
 import { cf, IMAGE_ACCEPT, pickFile, uploadFile } from './api'
 import { signed, useCf } from './ctx'
 import { CfWindow } from './sheetBits'
@@ -64,48 +63,6 @@ const STEPS = [
   'Name and portrait'
 ] as const
 type Method = 'array' | 'points' | 'roll'
-
-/** The campaign's shared homebrew species and backgrounds, as builder entries. */
-function withHomebrew(data: BuilderRules, brew: Homebrew[]): BuilderRules {
-  const species: BuilderSpecies[] = brew
-    .filter((h) => h.kind === 'species')
-    .map((h) => {
-      const d = h.data as HomebrewSpecies
-      return {
-        id: `hb-${h.id}`,
-        name: h.name,
-        size: d.size,
-        speed: d.speed,
-        darkvision: d.darkvision,
-        traits: d.traits,
-        bonuses: d.bonuses,
-        skills: d.skills,
-        resist: d.resist,
-        subs: [],
-        homebrew: true
-      }
-    })
-  const backgrounds = brew
-    .filter((h) => h.kind === 'background')
-    .map((h) => {
-      const d = h.data as HomebrewBackground
-      return {
-        id: `hb-${h.id}`,
-        name: h.name,
-        skills: d.skills,
-        abilities: d.abilities,
-        tools: d.tools,
-        feature: d.text ? { name: h.name, text: d.text } : undefined,
-        gold: 0,
-        homebrew: true
-      }
-    })
-  return {
-    ...data,
-    species: [...data.species, ...species],
-    backgrounds: [...data.backgrounds, ...backgrounds]
-  }
-}
 
 export function CharacterBuilder({
   onClose,

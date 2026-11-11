@@ -3,7 +3,7 @@
 // make exactly the same character. Both rule sets: 2014 (species give ability bonuses) and 2024
 // (backgrounds give them, plus an origin feat).
 
-import { ABILITIES, type Ability, type CreatureSize, type DamageType, type Sheet5e, type SheetAttack, type SheetFeature, type SheetItem, type SheetSpell, type SkillId } from './types'
+import { ABILITIES, type Ability, type CreatureSize, type DamageType, type Sheet5e, type SheetAttack, type SheetFeature, type SheetItem, type SheetSpell, type SkillId, type SrdSpell } from './types'
 import { abilityMod, armorClassFromItems, blankSheet, normalizeSheet } from './rules5e'
 import {
   averageHitDie,
@@ -303,4 +303,22 @@ export function spellCounts(cls: BuilderClass, level: number, mod: number): { ca
   if (!row) return { cantrips: 0, spells: 0 }
   const spells = row.spells ?? (cls.prepared ? Math.max(1, (cls.prepared === 'half' ? Math.floor(level / 2) : level) + mod) : 0)
   return { cantrips: row.cantrips ?? 0, spells }
+}
+
+/** A spell from the rules as a sheet spell (details filled in, roll from its damage). */
+export function sheetSpellFrom(s: SrdSpell, prepared = true): SheetSpell {
+  const dmg =
+    s.damage?.bySlot?.[String(Math.max(s.level, 0))] ?? s.damage?.byCharacterLevel?.['1'] ?? null
+  return {
+    slug: s.slug,
+    name: s.name,
+    level: s.level,
+    prepared,
+    castingTime: s.castingTime.slice(0, 60),
+    range: s.range.slice(0, 60),
+    duration: s.duration.slice(0, 60),
+    ...(s.concentration ? { concentration: true } : {}),
+    ...(dmg && /^\d+d\d+([+-]\d+)?$/.test(dmg) ? { roll: dmg } : {}),
+    notes: (s.desc.split(/(?<=\.)\s/)[0] ?? '').slice(0, 120)
+  }
 }

@@ -17,6 +17,7 @@ import { HandoutsPanel, MusicPanel, PendingBox, RollsPanel, TurnOrderPanel, type
 import { FireButton, MapButton, RollToast } from '@/campfire/ui'
 import { useTableMusic } from '@/campfire/music'
 import { myCharacter, myToken, useFire } from '@/campfire/lib'
+import { PhoneTour, useTourOnce } from '@/campfire/PhoneTour'
 
 // Campfire's table on a phone (the approved Phone board): the map on top, your turn, HP,
 // actions and dice in the sheet below it. Turn order, rolls, handouts and music are behind the
@@ -45,6 +46,7 @@ function Table({ id }: { id: string }) {
   const [sheetH, setSheetH] = useState(0)
   const [seenHandouts, setSeenHandouts] = useState<number | null>(null)
   const music = useTableMusic(id, table)
+  const [touring, setTouring] = useTourOnce(table?.myRole === 'gm')
 
   useEffect(() => {
     void loadTable(id)
@@ -176,6 +178,7 @@ function Table({ id }: { id: string }) {
               }}
             />
             <MapButton icon="music" label={music.track ? `Music: ${music.track.title}` : 'Music'} lit={music.playing} onPress={() => setPanel('music')} />
+            <MapButton icon="campfire" label="Campaign hub" onPress={() => router.push({ pathname: '/campfire/hub', params: { campaign: id } })} />
           </View>
         </View>
         {wide ? (
@@ -193,6 +196,7 @@ function Table({ id }: { id: string }) {
       {panel === 'order' ? <TurnOrderPanel table={table} meId={meId} onClose={() => setPanel(null)} /> : null}
       {panel === 'rolls' ? <RollsPanel campaignId={id} table={table} meId={meId} onClose={() => setPanel(null)} /> : null}
       {panel === 'handouts' ? <HandoutsPanel campaignId={id} table={table} onClose={() => setPanel(null)} /> : null}
+      {touring && !panel ? <PhoneTour gm={gm} onDone={() => setTouring(false)} /> : null}
       {panel === 'music' ? <MusicPanel music={{ title: music.track?.title ?? null, playing: music.playing, loading: music.loading }} onClose={() => setPanel(null)} /> : null}
     </View>
   )

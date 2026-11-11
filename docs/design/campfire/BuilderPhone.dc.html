@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Campfire: character builder on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffb347}a:hover{color:#ffd08a}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; background: #140f0d; color: #f3e6da; font-family: 'DM Sans', system-ui, sans-serif; display: flex; flex-direction: column">
+  <header style="display: flex; align-items: center; gap: 12px; padding: 54px 16px 10px">
+    <button type="button" aria-label="Close the builder (saved)" style="width: 44px; height: 44px; border-radius: 22px; border: 0; background: #2a201b; color: #f3e6da; font: 700 20px/1 Outfit, sans-serif">×</button>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><h1 style="margin: 0; font: 800 19px/1.1 Outfit, sans-serif">Make your character</h1><span style="font-size: 12px; color: #c9b6a8">Step 1 of 8 · Species</span></div>
+  </header>
+  <div role="progressbar" aria-label="Step 1 of 8" aria-valuemin="1" aria-valuemax="8" aria-valuenow="1" style="margin: 0 16px 12px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden"><div style="width: 12.5%; height: 100%; background: #ffb347"></div></div>
+
+  <div style="flex: 1; overflow: hidden; padding: 0 16px; display: flex; flex-direction: column; gap: 10px">
+    <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #c9b6a8">Your species gives you traits like darkvision and how fast you move.</p>
+    <label style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: 12px; background: #1f1714; box-shadow: 0 0 0 1px rgba(255,255,255,0.10)"><span style="color: #c9b6a8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg></span><input type="search" placeholder="Search species" aria-label="Search species" style="flex: 1; border: 0; background: transparent; color: #f3e6da; font: 500 15px/1 'DM Sans', sans-serif; outline: none"></label>
+
+    <button type="button" aria-pressed="true" style="display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 16px; border: 0; background: #3a2614; box-shadow: inset 0 0 0 2px #ffb347; color: #f3e6da; text-align: left">
+      <span style="display: flex; align-items: center; gap: 8px; width: 100%"><b style="font: 800 17px/1 Outfit, sans-serif">Elf</b><span style="font-size: 12px; color: #ffd08a">Speed 30 ft</span><span style="margin-left: auto; width: 24px; height: 24px; border-radius: 50%; background: #ffb347; color: #2a1406; display: grid; place-items: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span></span>
+      <span style="font-size: 13px; line-height: 1.45; color: #e5d6ca">Darkvision, keen senses, trance instead of sleep.</span>
+      <span style="display: flex; gap: 6px; flex-wrap: wrap">
+        <span style="padding: 7px 10px; border-radius: 999px; background: #2a201b; color: #e5d6ca; font: 700 12px/1 'DM Sans', sans-serif">Drow</span>
+        <span style="padding: 7px 10px; border-radius: 999px; background: #2a201b; color: #e5d6ca; font: 700 12px/1 'DM Sans', sans-serif">High elf</span>
+        <span style="padding: 7px 10px; border-radius: 999px; background: #ffb347; color: #2a1406; font: 800 12px/1 'DM Sans', sans-serif">Wood elf · 35 ft</span>
+      </span>
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 16px; border: 0; background: #1f1714; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10); color: #f3e6da; text-align: left">
+      <span style="display: flex; align-items: center; gap: 8px"><b style="font: 800 17px/1 Outfit, sans-serif">Dwarf</b><span style="font-size: 12px; color: #c9b6a8">Speed 30 ft</span></span>
+      <span style="font-size: 13px; line-height: 1.45; color: #c9b6a8">Tough, poison resistance, tremorsense on stone.</span>
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 16px; border: 0; background: #1f1714; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10); color: #f3e6da; text-align: left">
+      <span style="display: flex; align-items: center; gap: 8px"><b style="font: 800 17px/1 Outfit, sans-serif">Halfling</b><span style="font-size: 12px; color: #c9b6a8">Speed 30 ft</span></span>
+      <span style="font-size: 13px; line-height: 1.45; color: #c9b6a8">Lucky, brave, slips past bigger creatures.</span>
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 16px; border: 0; background: #1f1714; box-shadow: inset 0 0 0 1px rgba(87,194,122,0.45); color: #f3e6da; text-align: left">
+      <span style="display: flex; align-items: center; gap: 8px"><b style="font: 800 17px/1 Outfit, sans-serif">Mossfolk</b><span style="padding: 3px 7px; border-radius: 999px; background: #1f2a1f; color: #9be0b2; font: 700 11px/1 'DM Sans', sans-serif">Your game master's</span></span>
+      <span style="font-size: 13px; line-height: 1.45; color: #c9b6a8">Homebrew from Chip: plant folk of the Sunken Crypt.</span>
+    </button>
+    <span style="font-size: 12px; color: #c9b6a8; text-align: center">+ 6 more · Dragonborn, Gnome, Goliath, Human, Orc, Tiefling</span>
+  </div>
+
+  <footer style="padding: 12px 16px 30px; display: flex; flex-direction: column; gap: 8px; background: linear-gradient(transparent, #140f0d 30%)">
+    <button type="button" style="height: 50px; border-radius: 14px; border: 0; background: #f47a1f; color: #2a1406; font: 800 16px/1 'DM Sans', sans-serif">Next: class</button>
+    <span style="font-size: 11px; color: #c9b6a8; text-align: center">5e, 2024 rules · SRD 5.2, CC BY 4.0</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

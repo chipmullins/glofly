@@ -113,9 +113,11 @@ export function HomebrewLibrary(): React.JSX.Element {
             <span>{all.filter((h) => h.kind === k.id).length}</span>
           </button>
         ))}
-        <p className="cf-sub" style={{ marginTop: 'auto' }}>
-          Only your own writing: no text from books you don’t have the rights to share.
-        </p>
+        {isGm && (
+          <p className="cf-sub" style={{ marginTop: 'auto' }}>
+            Only your own writing: no text from books you don’t have the rights to share.
+          </p>
+        )}
       </nav>
       <div className="cfa-brew-list">
         {isGm && (

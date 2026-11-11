@@ -13,8 +13,9 @@ import { CharacterSheetView } from '@/campfire/CharacterSheet'
 import { MonsterBlockView } from '@/campfire/MonsterBlock'
 import { FireButton } from '@/campfire/ui'
 import { useFire } from '@/campfire/lib'
+import { BringCharacter } from '@/campfire/PhoneBuilder'
 
-// Your Campfire character's sheet (id "new" makes one first: just a name, the rest later), or,
+// Your Campfire character's sheet (id "new": bring one to the table, built or copied in), or,
 // for game masters, a monster's stat block.
 
 export default function CharacterScreen() {
@@ -28,7 +29,8 @@ export default function CharacterScreen() {
 
 function Sheet({ id, campaignId }: { id: string; campaignId: string }) {
   const fire = useFire()
-  const fromTable = useCampfire((s) => s.tables[campaignId]?.characters.find((c) => c.id === id))
+  const table = useCampfire((s) => s.tables[campaignId])
+  const fromTable = table?.characters.find((c) => c.id === id)
   const [loaded, setLoaded] = useState<Character | null>(null)
   const [error, setError] = useState<string | null>(null)
   const live = fromTable && isFullCharacter(fromTable) ? fromTable : null
@@ -42,7 +44,7 @@ function Sheet({ id, campaignId }: { id: string; campaignId: string }) {
     })
   }, [id, live])
 
-  if (id === 'new') return <NewCharacter campaignId={campaignId} />
+  if (id === 'new') return <BringCharacter campaignId={campaignId} table={table} />
   const ch = live ?? loaded
   if (!ch) {
     return (
@@ -57,48 +59,4 @@ function Sheet({ id, campaignId }: { id: string; campaignId: string }) {
   // NPCs (game masters only: the server sends their sheets to nobody else) show as a stat block.
   if (ch.kind === 'npc') return <MonsterBlockView campaignId={ch.campaignId} initial={ch} />
   return <CharacterSheetView campaignId={ch.campaignId} initial={ch} />
-}
-
-function NewCharacter({ campaignId }: { campaignId: string }) {
-  const fire = useFire()
-  const insets = useSafeAreaInsets()
-  const [name, setName] = useState('')
-  const [busy, setBusy] = useState(false)
-  const make = async () => {
-    if (!name.trim()) return
-    setBusy(true)
-    const r = await campfireApi.createCharacter(campaignId, name.trim())
-    setBusy(false)
-    if (!r.ok) return void inform("Couldn't make your character", r.message)
-    upsertCharacter(campaignId, r.data)
-    router.replace({ pathname: '/campfire/character/[id]', params: { id: r.data.id, campaign: campaignId } })
-  }
-  return (
-    <View style={{ flex: 1, backgroundColor: fire.bg, paddingTop: insets.top + 8, paddingHorizontal: 16, gap: 18 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back to the table" onPress={() => router.back()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: fire.card, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="chevronLeft" size={20} color={fire.ink} />
-        </Pressable>
-        <Text accessibilityRole="header" style={{ fontFamily: 'Outfit_700Bold', fontSize: 17, color: fire.ink }}>
-          Your character
-        </Text>
-      </View>
-      <Text size={15} style={{ color: fire.muted }}>
-        Give them a name. You can fill in the class, abilities and actions next (Edit on the sheet).
-      </Text>
-      <TextInput
-        value={name}
-        onChangeText={setName}
-        placeholder="Lyra"
-        placeholderTextColor={fire.muted}
-        accessibilityLabel="Character name"
-        autoFocus
-        maxLength={60}
-        returnKeyType="done"
-        onSubmitEditing={() => void make()}
-        style={[{ height: 52, paddingHorizontal: 14, borderRadius: 14, backgroundColor: fire.card, borderWidth: 1, borderColor: fire.line, color: fire.ink, fontSize: 17, fontFamily: 'DMSans_500Medium' }, webNoOutline]}
-      />
-      <FireButton label="Make my character" kind="primary" busy={busy} disabled={!name.trim()} onPress={() => void make()} />
-    </View>
-  )
 }
