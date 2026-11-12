@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { MusicState, Track } from '@glofly/shared/campfire/types'
 import { AUDIO_ACCEPT, cf, pickFile, uploadFile } from './api'
-import { useMyAudio } from './music'
+import { useMyAudio } from './musicPlayer'
 import { useCf } from './ctx'
 
 // The jukebox: the GM uploads music and plays, pauses, loops one track for the table. Playback

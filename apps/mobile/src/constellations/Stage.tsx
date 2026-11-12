@@ -12,7 +12,7 @@ import { can } from './roles'
 import { haptic } from './motion'
 import { Face, N, NightButton, NightField } from './ui'
 import { NightModal } from './sheet'
-import { joinStage, leaveStage, setStageMic, stageApi, startStage, useStage } from './stage'
+import { joinStage, leaveStage, setStageMic, stageApi, startStage, useStage } from './stageState'
 
 // Communities round 2, board 3c (approved): a stage on a phone. Speakers in a grid of three, the
 // listening faces, Raise hand + a leave button; moderators get the raised hands as a sheet over the
