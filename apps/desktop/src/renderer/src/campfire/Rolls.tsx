@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Roll } from '@glofly/shared/campfire/types'
 import { parseDice } from '@glofly/shared/campfire/dice'
 import { colorsFor } from '../lib/avatarColors'
+import { cf } from './api'
 import { useCf } from './ctx'
 
 // Roll history rows, the Rolls tab, and the dice tray with its /roll box (Main/Player boards).
@@ -45,8 +46,31 @@ export function RollRow({ roll }: { roll: Roll }): React.JSX.Element {
   )
 }
 
+// 0.11.2: the table opens with the newest 100 rolls; older ones load 100 at a time (the server
+// keeps a campaign's newest 2,000).
+const ROLL_PAGE = 100
+
 export function RollsPanel(): React.JSX.Element {
-  const { t } = useCf()
+  const { t, ctl, say } = useCf()
+  const [loading, setLoading] = useState(false)
+  // Unknown until the first page: more if the table opened with a full page.
+  const [more, setMore] = useState<boolean | null>(null)
+  const canMore = more ?? t.rolls.length >= ROLL_PAGE
+  const older = async (): Promise<void> => {
+    const oldest = t.rolls[t.rolls.length - 1]
+    if (!oldest || loading) return
+    setLoading(true)
+    const r = await cf.get<{ rolls: Roll[] }>(
+      `/campfire/campaigns/${t.campaign.id}/rolls?before=${encodeURIComponent(oldest.createdAt)}`
+    )
+    setLoading(false)
+    if (!r.ok) return say(r.message)
+    setMore(r.data.rolls.length >= ROLL_PAGE)
+    ctl.update((s) => {
+      const have = new Set(s.rolls.map((x) => x.id))
+      return { ...s, rolls: [...s.rolls, ...r.data.rolls.filter((x) => !have.has(x.id))] }
+    })
+  }
   return (
     <section className="cf-panel" aria-label="Roll history">
       <h2 className="cf-h2">Roll history</h2>
@@ -58,6 +82,16 @@ export function RollsPanel(): React.JSX.Element {
             <RollRow key={r.id} roll={r} />
           ))}
         </ol>
+      )}
+      {t.rolls.length > 0 && canMore && (
+        <button
+          type="button"
+          className="cf-ghost cf-small cf-rolls-more"
+          disabled={loading}
+          onClick={() => void older()}
+        >
+          {loading ? 'Loading…' : 'Show older rolls'}
+        </button>
       )}
     </section>
   )

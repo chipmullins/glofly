@@ -15,6 +15,7 @@ import {
 import { levelUpPreview } from '@glofly/shared/campfire/builder'
 import { cf, fileUrl, IMAGE_ACCEPT, pickFile, uploadFile } from './api'
 import { useCf } from './ctx'
+import { closeCampfire } from './store'
 import { campaignRules, loadHub, useBuilder } from './rulesApi'
 import { HomebrewLibrary } from './Homebrew'
 import { LevelUp } from './LevelUp'
@@ -304,6 +305,7 @@ export function Hub({
             </div>
           </div>
         )}
+        {tab === 'overview' && t.campaign.canDelete && <DeleteCampaign />}
         {tab === 'sessions' && (
           <SessionsTab
             hub={hub}
@@ -1225,5 +1227,74 @@ function JournalTab({
           )
         ))}
     </div>
+  )
+}
+
+/**
+ * 0.11.2: deleting a campaign (whoever made it, or a constellation admin). It can't be undone:
+ * scenes, maps, characters, rolls, uploads and the hub all go, so it asks for the name first.
+ */
+function DeleteCampaign(): React.JSX.Element {
+  const { t, say } = useCf()
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const name = t.campaign.name
+  const ok = typed.trim().toLowerCase() === name.trim().toLowerCase()
+  return (
+    <section className="cfa-card cfa-danger" aria-label="Delete this campaign">
+      <h2 className="cf-h3">Delete this campaign</h2>
+      {!open ? (
+        <>
+          <p className="cf-hint">
+            Removes it for everyone: scenes and maps, characters, rolls, sessions, quests, the
+            journal, homebrew and every upload. This can’t be undone.
+          </p>
+          <button type="button" className="cf-danger-ghost cf-small" onClick={() => setOpen(true)}>
+            Delete campaign…
+          </button>
+        </>
+      ) : (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault()
+            if (!ok || busy) return
+            setBusy(true)
+            const r = await cf.del(`/campfire/campaigns/${t.campaign.id}`)
+            setBusy(false)
+            if (!r.ok) return say(r.message)
+            closeCampfire()
+          }}
+        >
+          <label className="cf-field">
+            <span>
+              Type <strong>{name}</strong> to delete it for everyone
+            </span>
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              autoFocus
+              aria-label="Campaign name"
+              maxLength={120}
+            />
+          </label>
+          <div className="cf-row-buttons">
+            <button type="submit" className="cf-danger cf-small" disabled={!ok || busy}>
+              {busy ? 'Deleting…' : 'Delete it forever'}
+            </button>
+            <button
+              type="button"
+              className="cf-ghost cf-small"
+              onClick={() => {
+                setOpen(false)
+                setTyped('')
+              }}
+            >
+              Keep it
+            </button>
+          </div>
+        </form>
+      )}
+    </section>
   )
 }

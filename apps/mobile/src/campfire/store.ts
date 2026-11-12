@@ -149,6 +149,12 @@ function apply<K extends CampfireEventName>(name: K, p: CampfireEvents[K]) {
       return
     }
     case 'campfire:state':
+      // 0.11.2: a deleted campaign says so (instead of a "not available" error from loading it)
+      if ((p as { reason?: string }).reason === 'deleted') {
+        forgetTable(id)
+        useCampfire.setState((s) => ({ errors: { ...s.errors, [id]: 'The game master deleted this campaign.' } }))
+        return
+      }
       void loadTable(id)
       return
     case 'campfire:token': {
@@ -180,7 +186,7 @@ function apply<K extends CampfireEventName>(name: K, p: CampfireEvents[K]) {
     }
     case 'campfire:roll': {
       const e = p as CampfireEvents['campfire:roll']
-      patchTable(id, (t) => ({ rolls: [e.roll, ...t.rolls.filter((r) => r.id !== e.roll.id)].slice(0, 100) }))
+      patchTable(id, (t) => ({ rolls: [e.roll, ...t.rolls.filter((r) => r.id !== e.roll.id)].slice(0, 2000) }))
       useCampfire.setState((s) => ({ toast: { ...s.toast, [id]: e.roll } }))
       return
     }

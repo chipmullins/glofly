@@ -33,6 +33,8 @@ export const campfireApi = {
   table: (id: string) => request<TableState>('GET', `/campfire/campaigns/${enc(id)}`),
   open: (id: string, callId: string) => request<{ ok: true; openInCallId: string }>('POST', `/campfire/campaigns/${enc(id)}/open`, { callId }),
   close: (id: string) => request<{ ok: true }>('POST', `/campfire/campaigns/${enc(id)}/close`, {}),
+  /** 0.11.2: whoever made it (or a constellation admin) */
+  deleteCampaign: (id: string) => request<{ ok: true }>('DELETE', `/campfire/campaigns/${enc(id)}`),
   presence: (id: string, away = false) => request<{ present: string[] }>('POST', `/campfire/campaigns/${enc(id)}/presence`, away ? { away: true } : {}),
   ping: (id: string, sceneId: string, x: number, y: number) => request<{ ok: true }>('POST', `/campfire/campaigns/${enc(id)}/ping`, { sceneId, x: Math.round(x), y: Math.round(y) }),
   moveToken: (tokenId: string, x: number, y: number, path?: [number, number][]) =>

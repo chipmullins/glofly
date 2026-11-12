@@ -52,7 +52,7 @@ export type LiveFx = {
 }
 const NO_FX: LiveFx = { focus: null, sound: null, whisper: null, notice: null }
 
-const ROLLS_KEPT = 200
+const ROLLS_KEPT = 2000
 
 let fxId = 1
 
@@ -138,8 +138,11 @@ export function useTable(campaignId: string): TableCtl {
         return
       }
       if (name === 'campfire:state') {
-        if (d.reason === 'deleted') setError('The game master deleted this campaign.')
-        else void load()
+        if (d.reason === 'deleted') {
+          // 0.11.2: the message only shows without a table under it (it stayed hidden before)
+          setError('The game master deleted this campaign.')
+          setT(null)
+        } else void load()
         return
       }
       // Moved to a scene without its tokens, or a scene went: load the table.

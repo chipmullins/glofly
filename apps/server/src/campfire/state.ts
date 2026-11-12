@@ -218,8 +218,11 @@ export async function membersOf(campaign: CampaignRow): Promise<CampaignMember[]
     }));
 }
 
+export const ROLL_PAGE = 100;
+
 /** The newest rolls this viewer may see (before a time, for history pages). */
-export async function rollsFor(campaignId: string, v: Viewer, before: Date | null = null, limit = 50) {
+/** 0.11.2: 100 at a time (the table opens with the newest 100; "Show older rolls" pages back). */
+export async function rollsFor(campaignId: string, v: Viewer, before: Date | null = null, limit = ROLL_PAGE) {
   return db
     .select()
     .from(campfireRolls)
@@ -255,7 +258,7 @@ export async function tableState(t: Table): Promise<TableState> {
   const pending = t.gm ? await db.select().from(campfirePending).where(eq(campfirePending.campaignId, c.id)).orderBy(asc(campfirePending.createdAt)) : [];
   const scenes = await sceneList(c);
   return {
-    campaign: campaignOut(c, t),
+    campaign: { ...campaignOut(c, t), canDelete: c.createdBy === t.userId || t.admin },
     myRole: t.role,
     seq: currentSeq(c.id, t.userId),
     members: await membersOf(c),

@@ -336,7 +336,13 @@ export type CampaignSummary = {
 /** A player character in a few words (Start board). */
 export type CampaignCharacterCard = { id: string; name: string; portraitFileId: string | null; line: string }
 
-export type Campaign = CampaignSummary & { settings: CampaignSettings; createdAt: string; live?: TableLive }
+export type Campaign = CampaignSummary & {
+  settings: CampaignSettings
+  createdAt: string
+  live?: TableLive
+  /** 0.11.2: whoever made it, or a constellation admin, may delete it (only in the table's own answer) */
+  canDelete?: boolean
+}
 
 /** Round B: the table's live state (pause, spotlight). */
 export type TableLive = {

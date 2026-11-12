@@ -2446,3 +2446,9 @@ input.cf-ml-name {
     animation: none;
   }
 }
+
+/* 0.11.2: Roll history → Show older rolls */
+.cf-rolls-more {
+  width: 100%;
+  margin-top: 8px;
+}

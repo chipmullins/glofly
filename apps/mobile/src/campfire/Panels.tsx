@@ -8,6 +8,7 @@ import { Icon } from '@/ui/icons'
 import { inform } from '@/ui/dialogs'
 import { campfireApi, fileSource } from './api'
 import { rollAtTable } from './actions'
+import { patchTable } from './store'
 import { setMusicPrefs, useMusicPrefs } from './music'
 import { Bar, DieFace, FireButton, rollerName } from './ui'
 import { barFraction, hpColor, initialOf, tokenColors, tokenName, useFire } from './lib'
@@ -106,7 +107,26 @@ export function TurnOrderPanel({ table, meId, onClose }: { table: TableState; me
   )
 }
 
+// 0.11.2: the table opens with the newest 100 rolls; older ones load 100 at a time.
+const ROLL_PAGE = 100
+
 export function RollsPanel({ campaignId, table, meId, onClose }: { campaignId: string; table: TableState; meId: string; onClose: () => void }) {
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [more, setMore] = useState<boolean | null>(null)
+  const canMore = more ?? table.rolls.length >= ROLL_PAGE
+  const older = async () => {
+    const oldest = table.rolls[table.rolls.length - 1]
+    if (!oldest || loadingOlder) return
+    setLoadingOlder(true)
+    const r = await campfireApi.rolls(campaignId, oldest.createdAt)
+    setLoadingOlder(false)
+    if (!r.ok) return inform('Couldn’t load older rolls', r.message)
+    setMore(r.data.rolls.length >= ROLL_PAGE)
+    patchTable(campaignId, (t) => {
+      const have = new Set(t.rolls.map((x) => x.id))
+      return { rolls: [...t.rolls, ...r.data.rolls.filter((x) => !have.has(x.id))] }
+    })
+  }
   const fire = useFire()
   const [text, setText] = useState('')
   const [secret, setSecret] = useState(false)
@@ -175,6 +195,9 @@ export function RollsPanel({ campaignId, table, meId, onClose }: { campaignId: s
             </View>
           ))
         )}
+        {table.rolls.length > 0 && canMore ? (
+          <FireButton label={loadingOlder ? 'Loading…' : 'Show older rolls'} busy={loadingOlder} onPress={() => void older()} />
+        ) : null}
       </ScrollView>
     </Panel>
   )

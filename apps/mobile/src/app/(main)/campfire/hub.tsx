@@ -21,10 +21,11 @@ import { useSession } from '@/state/session'
 import { ThemeOverride } from '@/ui/theme'
 import { Text } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
-import { inform } from '@/ui/dialogs'
+import { confirm, inform } from '@/ui/dialogs'
 import { onHubChange, upsertCharacter, useCampfire } from '@/campfire/store'
 import { FireButton } from '@/campfire/ui'
 import { useFire } from '@/campfire/lib'
+import { campfireApi } from '@/campfire/api'
 import { builderFor, roundA } from '@/campfire/roundA'
 
 // The campaign hub on a phone (approved board "HubPhone"): the next session and "are you
@@ -252,6 +253,33 @@ function Hub({ campaignId }: { campaignId: string }) {
         ) : (
           <Text style={{ color: fire.muted }}>Nothing written yet.</Text>
         )}
+        {tab === 'hub' && table?.campaign.canDelete ? (
+          <View style={{ marginTop: 18, padding: 14, gap: 8, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(192,57,43,0.45)' }}>
+            <Text size={15} weight="bold" style={{ color: fire.ink }}>
+              Delete this campaign
+            </Text>
+            <Text size={13} style={{ color: fire.muted }}>
+              Removes it for everyone: scenes and maps, characters, rolls, sessions, the journal, homebrew and every upload. This can’t be undone.
+            </Text>
+            <FireButton
+              label="Delete campaign…"
+              kind="quiet"
+              onPress={async () => {
+                const name = table.campaign.name
+                const sure = await confirm({
+                  title: `Delete “${name}”?`,
+                  message: 'Everyone loses it: maps, characters, rolls and uploads. This can’t be undone.',
+                  confirmLabel: 'Delete it forever',
+                  danger: true
+                })
+                if (!sure) return
+                const r = await campfireApi.deleteCampaign(campaignId)
+                if (!r.ok) return inform('Couldn’t delete it', r.message)
+                router.back()
+              }}
+            />
+          </View>
+        ) : null}
       </ScrollView>
       <View style={{ flexDirection: 'row', paddingBottom: insets.bottom + 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: fire.line, backgroundColor: fire.panel }} accessibilityRole="tablist">
         {(
