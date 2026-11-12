@@ -34,7 +34,7 @@ const STEPS = [
   },
   {
     title: 'The turn order',
-    text: 'In a fight everyone rolls initiative and takes turns. On your turn the top bar says so; press “End my turn” when you’re done.',
+    text: 'In a fight you roll your own initiative when the game master asks, then everyone takes turns. On your turn the top bar says so; press “End my turn” when you’re done.',
     try: null
   },
   {

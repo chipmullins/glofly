@@ -108,7 +108,7 @@ export function attackFromItem(item: RulesItem, scores: Record<Ability, number>,
     damageAbility: true,
     damageType: w.type,
     range: w.range,
-    notes: [w.mastery ? `Mastery: ${w.mastery}` : '', w.versatile ? `Two hands: ${w.versatile}` : ''].filter(Boolean).join(' · ')
+    notes: [w.mastery ? `Mastery: ${w.mastery}` : '', w.versatile ? `Two hands: ${w.versatile}` : '', w.properties.some((x) => /two-handed/i.test(x)) ? 'Two-handed' : ''].filter(Boolean).join(' · ')
   }
 }
 
@@ -226,6 +226,7 @@ export function buildSheet(data: BuilderRules, c: BuildChoices, feats: BuilderFe
   sheet.features = features.slice(0, 100)
   // Equipment: armor and weapons are equipped; weapons become attacks; AC from what's worn.
   sheet.inventory = c.equipment.slice(0, 60).map((item, i) => inventoryFromItem(item, `i${i}`))
+  wearBestArmor(sheet.inventory, abilityMod(scores.dex))
   sheet.attacks = c.equipment.slice(0, 60).flatMap((item, i) => {
     const atks = attacksFromItem(item, scores, `a${i}`)
     if (atks[0]) sheet.inventory[i].attackId = atks[0].id
@@ -362,3 +363,45 @@ export function sheetSpellFrom(s: SrdSpell, prepared = true): SheetSpell {
 /** Feats a character can take instead of an Ability Score Improvement (not origin feats, fighting styles or epic boons). */
 export const asiFeats = (data: BuilderRules): BuilderFeat[] =>
   data.feats.filter((f) => f.type !== 'origin' && f.type !== 'epic-boon' && f.type !== 'fighting-style' && f.id !== 'ability-score-improvement')
+
+/**
+ * 0.11.3: a new character wears only their best armor and one shield (bought two armors in the
+ * shop: the other one goes in the pack).
+ */
+export function wearBestArmor(inventory: SheetItem[], dexMod: number): void {
+  const ac = (i: SheetItem): number =>
+    i.armor ? i.armor.base + (i.armor.dex ? (i.armor.maxDex === null ? dexMod : Math.min(dexMod, i.armor.maxDex)) : 0) : 0
+  const armors = inventory.filter((i) => i.equipped && i.armor)
+  const best = armors.reduce<SheetItem | null>((b, i) => (!b || ac(i) > ac(b) ? i : b), null)
+  for (const i of armors) if (i !== best) i.equipped = false
+  let shield = false
+  for (const i of inventory)
+    if (i.equipped && i.kind === 'shield') {
+      if (shield) i.equipped = false
+      shield = true
+    }
+}
+
+/** Weapons that need both hands: two-handed ones, and a versatile one swung with two hands. */
+const TWO_HANDED = /\b(greatsword|greataxe|maul|glaive|halberd|pike|longbow|shortbow|heavy crossbow|crossbow, heavy|light crossbow|crossbow, light|musket)\b/i
+export const needsBothHands = (a: Pick<SheetAttack, 'name' | 'notes'>): boolean =>
+  / \(two hands\)$/.test(a.name) || /(^|· )Two-handed\b/.test(a.notes ?? '') || TWO_HANDED.test(a.name)
+
+/** The ammunition a ranged weapon uses, as a test on inventory item names (null: none). */
+export function ammoTest(a: Pick<SheetAttack, 'name' | 'kind'>): RegExp | null {
+  if (a.kind !== 'ranged') return null
+  const n = a.name.toLowerCase()
+  if (/crossbow/.test(n)) return /^(crossbow )?bolts?\b|\bcrossbow bolts?\b/i
+  if (/\bbow\b|longbow|shortbow/.test(n)) return /\barrows?\b/i
+  if (/sling/.test(n)) return /sling bullets?|bullets?,? \(?sling/i
+  if (/blowgun/.test(n)) return /needles?/i
+  if (/musket|pistol/.test(n)) return /bullets?,? \(?firearm|firearm bullets?/i
+  return null
+}
+/** The stack a shot takes ammunition from (an empty stack when they're out), or null: not tracked. */
+export function ammoStack(inventory: readonly SheetItem[], a: Pick<SheetAttack, 'name' | 'kind'>): SheetItem | null {
+  const test = ammoTest(a)
+  if (!test) return null
+  const stacks = inventory.filter((i) => test.test(i.name) && !/^case/i.test(i.name) && !i.armor)
+  return stacks.find((i) => i.qty > 0) ?? stacks[0] ?? null
+}

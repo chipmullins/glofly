@@ -26,8 +26,8 @@ const PLAYER: Mark[] = [
   },
   {
     at: 'map',
-    title: 'Target something',
-    text: 'Double-click a creature to target it. Attacks you roll from the sheet go at your target, and the game master applies the damage.'
+    title: 'Attack something',
+    text: 'Click a weapon on your sheet, then the creature to attack. It rolls if they’re in range (the box around you shows how far you reach), and the game master applies the damage. Ctrl+Z puts back a move you didn’t mean.'
   },
   {
     at: 'turn',
@@ -249,9 +249,10 @@ export function HowCampfireWorks({
           </p>
           <h2>The map</h2>
           <p>
-            Drag your token to move; the ruler counts feet. Double-click a creature to target it.
-            Ping a spot so others see where you mean. The fog of war hides what your character
-            hasn’t seen yet: the server never sends it to you.
+            Drag your token to move; the ruler counts feet, and Ctrl+Z undoes a move. To attack,
+            click a weapon on your sheet, then the creature: it rolls if they’re in range. Ping a
+            spot so others see where you mean. The fog of war hides what your character hasn’t seen
+            yet: the server never sends it to you.
           </p>
           <h2>Rolling</h2>
           <p>

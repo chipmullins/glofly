@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SignedInUser } from '../../../preload/api-types'
-import type { MapTheme, MusicState, Point, Roll, Scene, Token } from '@glofly/shared/campfire/types'
+import type {
+  Character,
+  MapTheme,
+  MusicState,
+  Point,
+  Roll,
+  Scene,
+  Token
+} from '@glofly/shared/campfire/types'
 import { isFullCharacter, MAP_THEMES } from '@glofly/shared/campfire/types'
+import { ammoStack, needsBothHands } from '@glofly/shared/campfire/builder'
 import { useCalls } from '../calls/callState'
 import { AvatarFace } from '../components/Avatar'
 import { colorsFor } from '../lib/avatarColors'
@@ -176,12 +185,18 @@ function TableReady({
   const line = message ?? pingLine
 
   const hideRef = useRef<((id: string, hidden: boolean) => Promise<void>) | null>(null)
+  // 0.11.3: Ctrl+Z puts back your last token moves (newest first).
+  const undoMoves = useRef<{ id: string; x: number; y: number }[]>([])
+  const undoRef = useRef<(() => void) | null>(null)
   // Escape lets go of the selected token, its card and the target; T targets the selected token
   // (unless typing).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable]')) return
-      if (e.key === 'Escape') {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !builder) {
+        e.preventDefault()
+        undoRef.current?.()
+      } else if (e.key === 'Escape') {
         setArmed(null)
         setSelectedId(null)
         setCardId(null)
@@ -209,7 +224,7 @@ function TableReady({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, isGm, t.tokens])
+  }, [selectedId, isGm, t.tokens, builder])
 
   const roll = useCallback(
     async (
@@ -272,19 +287,48 @@ function TableReady({
     targetId,
     setTargetId,
     attackWith: async (attacker, a, fire, fallback) => {
-      // 0.11.3: a two-handed swing needs both hands (no shield held).
+      // 0.11.3: a two-handed weapon needs both hands (no shield held).
       const ch = attacker?.characterId
         ? t.characters.find((c) => c.id === attacker.characterId)
         : null
+      const sheet = ch && isFullCharacter(ch) && ch.kind !== 'npc' ? ch.sheet : null
       if (
-        / \(two hands\)$/.test(a.name) &&
-        ch &&
-        isFullCharacter(ch) &&
-        ch.sheet.inventory.some((i) => i.equipped && i.kind === 'shield')
+        sheet &&
+        needsBothHands(a) &&
+        sheet.inventory.some((i) => i.equipped && i.kind === 'shield')
       )
         return say(
-          `${ch.name} has a shield equipped. Unequip it (Equipment) to swing ${a.name.replace(/ \(two hands\)$/, '')} with two hands.`
+          `${ch!.name} has a shield equipped. Unequip it (Equipment) to use ${a.name.replace(/ \(two hands\)$/, '')} with both hands.`
         )
+      // 0.11.3: each shot takes one arrow / bolt / bullet from the inventory (when it's tracked).
+      const ammo = sheet ? ammoStack(sheet.inventory, a) : null
+      if (ammo && ammo.qty <= 0) return say(`${ch!.name} is out of ${ammo.name.toLowerCase()}.`)
+      if (ammo && ch) {
+        const shoot = fire
+        fire = async (target, dis) => {
+          await shoot(target, dis)
+          const now = t.characters.find((c) => c.id === ch.id)
+          if (!now || !isFullCharacter(now)) return
+          const inventory = now.sheet.inventory.map((i) =>
+            i.id === ammo.id ? { ...i, qty: Math.max(0, i.qty - 1) } : i
+          )
+          const left = inventory.find((i) => i.id === ammo.id)?.qty ?? 0
+          const r = await cf.patch<Character>(`/campfire/characters/${ch.id}`, {
+            sheet: { ...now.sheet, inventory }
+          })
+          if (r.ok)
+            ctl.update((st) => ({
+              ...st,
+              characters: st.characters.map((c) => (c.id === r.data.id ? r.data : c))
+            }))
+          if (left <= 3)
+            say(
+              left
+                ? `${ammo.name}: ${left} left.`
+                : `That was the last of the ${ammo.name.toLowerCase()}.`
+            )
+        }
+      }
       if (!attacker) return fallback()
       const reach = reachOfAttack(a)
       const target = targetId ? t.tokens.find((x) => x.id === targetId) : null
@@ -350,6 +394,22 @@ function TableReady({
   }
   useEffect(() => {
     hideRef.current = setTokenHidden
+    undoRef.current = () => {
+      const last = undoMoves.current.pop()
+      if (!last) return say('Nothing to undo.')
+      const tk = t.tokens.find((k) => k.id === last.id)
+      if (!tk) return
+      ctl.upsertToken({ ...tk, x: last.x, y: last.y })
+      void cf.patch<Token>(`/campfire/tokens/${tk.id}`, { x: last.x, y: last.y }).then((r) => {
+        if (!r.ok) {
+          say(r.message)
+          ctl.upsertToken(tk)
+        } else {
+          ctl.upsertToken(r.data)
+          say(`${tk.name || 'Token'} is back where it was.`)
+        }
+      })
+    }
   })
   const patchScene = async (body: Record<string, unknown>): Promise<void> => {
     if (!scene) return
@@ -892,7 +952,10 @@ function TableReady({
                   if (!r.ok) {
                     say(r.message)
                     ctl.upsertToken(tk)
-                  } else ctl.upsertToken(r.data)
+                  } else {
+                    ctl.upsertToken(r.data)
+                    undoMoves.current = [...undoMoves.current.slice(-19), { id, x: tk.x, y: tk.y }]
+                  }
                 }}
                 onPing={(x, y) =>
                   void cf

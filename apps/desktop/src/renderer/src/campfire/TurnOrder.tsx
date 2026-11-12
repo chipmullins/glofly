@@ -119,7 +119,21 @@ export function TurnOrder({ withRolls }: { withRolls?: boolean }): React.JSX.Ele
   const characters = t.characters
   const { combat, op } = useCombat()
   const [dragId, setDragId] = useState<string | null>(null)
+  const [askHidden, setAskHidden] = useState(false)
   const tokens = new Map(t.tokens.map((x) => [x.id, x]))
+  // 0.11.3: hidden creatures on this map when a fight starts (they'd be left out of the order).
+  const hiddenHere = t.tokens.filter((x) => x.sceneId === t.scene?.id && x.layer === 'gm')
+  const rollInitiative = async (reveal: boolean): Promise<void> => {
+    setAskHidden(false)
+    if (reveal)
+      await Promise.all(
+        hiddenHere.map((x) => cf.patch(`/campfire/tokens/${x.id}`, { layer: 'tokens' }))
+      )
+    if (!combat) await op({ op: 'start' })
+    else if (reveal && hiddenHere.length)
+      await op({ op: 'add', tokenIds: hiddenHere.map((x) => x.id) })
+    await op({ op: 'rollAll' })
+  }
   const mine = (e: CombatEntry): boolean => {
     const tk = tokens.get(e.tokenId)
     if (!tk) return false
@@ -144,9 +158,9 @@ export function TurnOrder({ withRolls }: { withRolls?: boolean }): React.JSX.Ele
           <button
             type="button"
             className="cf-soft"
-            onClick={async () => {
-              if (!combat) await op({ op: 'start' })
-              await op({ op: 'rollAll' })
+            onClick={() => {
+              if (hiddenHere.length) setAskHidden(true)
+              else void rollInitiative(false)
             }}
           >
             <svg
@@ -167,6 +181,39 @@ export function TurnOrder({ withRolls }: { withRolls?: boolean }): React.JSX.Ele
           </button>
         )}
       </div>
+      {isGm && askHidden && (
+        <div className="cf-box cf-ask-hidden" role="alertdialog" aria-label="Hidden creatures">
+          <b>
+            {hiddenHere.length === 1
+              ? `${hiddenHere[0].name || 'A creature'} is hidden.`
+              : `${hiddenHere.length} creatures are hidden.`}
+          </b>
+          <span className="cf-sub">
+            Reveal {hiddenHere.length === 1 ? 'it' : 'them'} and add{' '}
+            {hiddenHere.length === 1 ? 'it' : 'them'} to the fight, or keep{' '}
+            {hiddenHere.length === 1 ? 'it' : 'them'} hidden and out of the turn order?
+          </span>
+          <div className="cf-row-buttons">
+            <button
+              type="button"
+              className="cf-primary cf-small"
+              onClick={() => void rollInitiative(true)}
+            >
+              Reveal and roll
+            </button>
+            <button
+              type="button"
+              className="cf-ghost cf-small"
+              onClick={() => void rollInitiative(false)}
+            >
+              Keep hidden
+            </button>
+            <button type="button" className="cf-ghost cf-small" onClick={() => setAskHidden(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {isGm && (
         <p className="cf-hint">
           {combat?.rolling
