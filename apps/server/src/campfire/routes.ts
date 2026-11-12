@@ -634,6 +634,8 @@ coreRouter.patch("/tokens/:id", async (req, res) => {
   if (!parsed.success) return bad(res, firstIssue(parsed.error));
   const { path, ...d } = parsed.data;
   const moving = d.x !== undefined || d.y !== undefined;
+  // The drop: any drag step still being checked is now out of date.
+  if (moving) noteDrop(token.id);
   if (!t.gm) {
     // Players: only tokens they control, and only where it is, its height, its bars and its conditions.
     if (!controls(token, t.userId, chars)) return bad(res, "That token isn't yours to move.", 403);
@@ -716,9 +718,28 @@ function notMyTurn(t: Table, tokenId: string): boolean {
 // Dragging: moves over the live connection (30 a second at most), checked like PATCH.
 
 const moveInput = z.object({ tokenId: z.uuid(), x: coord, y: coord });
+
+// 0.11.2: a drag's in-between positions are only shown to the others at the table, never saved
+// (the drop's PATCH saves it). They're checked in the background, so one can finish after a newer
+// one or after the drop: then it's dropped instead of pulling the token back. Per token: the
+// newest drag step that started, and the last drop (one clock for both).
+let moveClock = 0;
+const liveMoves = new Map<string, { started: number; dropped: number }>();
+const noteDrop = (tokenId: string): void => {
+  const st = liveMoves.get(tokenId);
+  liveMoves.set(tokenId, { started: st?.started ?? 0, dropped: ++moveClock });
+  if (liveMoves.size > 5000) liveMoves.delete(liveMoves.keys().next().value!);
+};
 export async function socketMove(userId: string, payload: unknown): Promise<void> {
   const parsed = moveInput.safeParse(payload);
   if (!parsed.success || !(await moveSlot(userId))) return;
+  const step = ++moveClock;
+  const stTok = liveMoves.get(parsed.data.tokenId);
+  liveMoves.set(parsed.data.tokenId, { started: step, dropped: stTok?.dropped ?? 0 });
+  const stale = (): boolean => {
+    const st = liveMoves.get(parsed.data.tokenId);
+    return !!st && (st.started !== step || st.dropped > step);
+  };
   const [token] = await db.select().from(campfireTokens).where(eq(campfireTokens.id, parsed.data.tokenId));
   const scene: SceneRow | null = token ? await sceneRow(token.sceneId) : null;
   if (!token || !scene) return;
@@ -737,12 +758,8 @@ export async function socketMove(userId: string, payload: unknown): Promise<void
     const check = await moveCheck(ft, token, scene, { x: parsed.data.x, y: parsed.data.y });
     if (check?.error) return;
   }
-  const [row]: TokenRow[] = await db
-    .update(campfireTokens)
-    .set({ x: parsed.data.x, y: parsed.data.y, updatedAt: new Date() })
-    .where(eq(campfireTokens.id, token.id))
-    .returning();
-  if (row) await emitToken(t.campaign, scene, token, row);
+  if (stale()) return;
+  await emitToken(t.campaign, scene, token, { ...token, x: parsed.data.x, y: parsed.data.y }, userId);
 }
 
 onSocketEvent(

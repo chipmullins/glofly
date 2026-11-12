@@ -49,6 +49,9 @@ type Props = {
   onSelect: (id: string | null) => void
   targetId: string | null
   onTarget: (id: string | null) => void
+  /** 0.11.2: a double-click on a token you can manage opens its card (others: targets it) */
+  canOpen?: (t: Token) => boolean
+  onOpen?: (id: string) => void
   activeTokenId: string | null
   onDragLive: (id: string, x: number, y: number) => void
   onDrop: (id: string, x: number, y: number, path?: Point[]) => void
@@ -709,6 +712,35 @@ function MapView(p: Props): React.JSX.Element {
     setPan({ x: e.clientX, y: e.clientY })
   }
 
+  // 0.11.2: drags and panning draw at most once a frame. A gaming mouse sends hundreds of moves a
+  // second; redrawing the whole map for each made dragging lag, and the drop landed late.
+  const frame = useRef<number | null>(null)
+  const nextDrag = useRef<{ x: number; y: number } | null>(null)
+  const panLast = useRef<{ x: number; y: number } | null>(null)
+  const panAcc = useRef<[number, number]>([0, 0])
+  const flushFrame = (): void => {
+    frame.current = null
+    const [ax, ay] = panAcc.current
+    if (ax || ay) {
+      panAcc.current = [0, 0]
+      panBy(ax, ay)
+    }
+    const nd = nextDrag.current
+    if (nd) {
+      nextDrag.current = null
+      setDrag((d) => (d ? { ...d, x: nd.x, y: nd.y, moved: true } : d))
+    }
+  }
+  const scheduleFrame = (): void => {
+    if (frame.current === null) frame.current = requestAnimationFrame(flushFrame)
+  }
+  useEffect(
+    () => () => {
+      if (frame.current !== null) cancelAnimationFrame(frame.current)
+    },
+    []
+  )
+
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>): void => {
     const pm = pinch.current.move(e)
     if (pm) {
@@ -720,8 +752,13 @@ function MapView(p: Props): React.JSX.Element {
     if (longPress.current && (Math.abs(e.movementX) > 3 || Math.abs(e.movementY) > 3))
       clearLongPress()
     if (pan) {
-      panBy(e.clientX - pan.x, e.clientY - pan.y)
-      setPan({ x: e.clientX, y: e.clientY })
+      const last = panLast.current ?? pan
+      panAcc.current = [
+        panAcc.current[0] + e.clientX - last.x,
+        panAcc.current[1] + e.clientY - last.y
+      ]
+      panLast.current = { x: e.clientX, y: e.clientY }
+      scheduleFrame()
       return
     }
     const at = worldOf(e)
@@ -751,7 +788,8 @@ function MapView(p: Props): React.JSX.Element {
     if (drag) {
       const x = Math.round(at[0] - drag.dx)
       const y = Math.round(at[1] - drag.dy)
-      setDrag({ ...drag, x, y, moved: true })
+      nextDrag.current = { x, y }
+      scheduleFrame()
       const now = performance.now()
       if (now - lastSent.current > 50) {
         lastSent.current = now
@@ -764,6 +802,17 @@ function MapView(p: Props): React.JSX.Element {
     lastUpAt.current = e.timeStamp
     pinch.current.up(e)
     clearLongPress()
+    // Anything still waiting for the next frame is done now (a drop never waits for a redraw).
+    if (frame.current !== null) {
+      cancelAnimationFrame(frame.current)
+      frame.current = null
+    }
+    const [pax, pay] = panAcc.current
+    if (pax || pay) panBy(pax, pay)
+    panAcc.current = [0, 0]
+    panLast.current = null
+    const lateDrag = nextDrag.current
+    nextDrag.current = null
     if (pan) setPan(null)
     if (ruler) setRuler(null)
     if (selBox) {
@@ -809,8 +858,12 @@ function MapView(p: Props): React.JSX.Element {
     }
     if (drag) {
       const tk = byId.get(drag.id)
-      if (tk && drag.moved) {
-        const [x, y] = snapToken(drag.x, drag.y, tk.w, tk.h, g)
+      if (tk && (drag.moved || lateDrag)) {
+        // Where the pointer let go (not where the last drawn frame was).
+        const at = worldOf(e)
+        const rx = Number.isFinite(at[0]) ? Math.round(at[0] - drag.dx) : (lateDrag?.x ?? drag.x)
+        const ry = Number.isFinite(at[1]) ? Math.round(at[1] - drag.dy) : (lateDrag?.y ?? drag.y)
+        const [x, y] = snapToken(rx, ry, tk.w, tk.h, g)
         p.onDrop(tk.id, x, y, drag.path.length ? drag.path : undefined)
         // Shown where it was dropped until the server's answer arrives.
         setDrag({ ...drag, x, y, moved: false })
@@ -825,7 +878,7 @@ function MapView(p: Props): React.JSX.Element {
     if (
       e.pointerType !== 'touch' &&
       e.buttons === 0 &&
-      (drag?.moved || pan || selBox || ruler || fogBox || lasso)
+      (drag?.moved || nextDrag.current || pan || selBox || ruler || fogBox || lasso)
     )
       onPointerUp(e)
     else onPointerMove(e)
@@ -847,7 +900,9 @@ function MapView(p: Props): React.JSX.Element {
       .elementsFromPoint(e.clientX, e.clientY)
       .find((el) => el.closest('[data-token]'))
     const tk = tokenAt(under ?? null)
-    if (tk) p.onTarget(p.targetId === tk.id ? null : tk.id)
+    if (!tk) return
+    if (p.onOpen && p.canOpen?.(tk)) p.onOpen(tk.id)
+    else p.onTarget(p.targetId === tk.id ? null : tk.id)
   }
 
   const onTokenKey = (t: Token) => (e: React.KeyboardEvent) => {

@@ -2409,3 +2409,40 @@ input.cf-ml-name {
 .cf-hidden-foot {
   margin: 10px 0 0;
 }
+
+/* 0.11.2: the die tumbles in as a roll card pops up (everyone sees sheet rolls land). */
+.cf-rollcard .cf-die {
+  animation: cf-die-tumble 620ms cubic-bezier(0.2, 0.8, 0.25, 1.15);
+}
+.cf-rollcard--crit .cf-die {
+  animation:
+    cf-die-tumble 620ms cubic-bezier(0.2, 0.8, 0.25, 1.15),
+    cf-die-glow 1.6s ease-in-out 620ms 2;
+}
+@keyframes cf-die-tumble {
+  0% {
+    transform: rotate(-260deg) scale(0.35);
+    opacity: 0;
+  }
+  55% {
+    transform: rotate(18deg) scale(1.12);
+    opacity: 1;
+  }
+  80% {
+    transform: rotate(-6deg) scale(0.97);
+  }
+  100% {
+    transform: rotate(0) scale(1);
+  }
+}
+@keyframes cf-die-glow {
+  50% {
+    box-shadow: 0 0 22px 6px rgba(255, 179, 71, 0.65);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-rollcard .cf-die,
+  .cf-rollcard--crit .cf-die {
+    animation: none;
+  }
+}

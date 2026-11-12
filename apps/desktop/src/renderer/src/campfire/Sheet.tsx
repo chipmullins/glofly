@@ -373,7 +373,7 @@ function ShortSheet({ ch }: { ch: Character }): React.JSX.Element {
       <p className="cf-hint">
         {target && myToken
           ? `Attacking ${target.name || 'the target'} (double-click another token to change).`
-          : 'Double-click a token on the map (or Tab to it and press T) to target it; then an attack rolls against it.'}
+          : 'Double-click someone else’s token (or click it and press T) to target it; then an attack rolls against it. Double-click your own token for its card.'}
       </p>
       <ul className="cf-actions">
         {sheet.attacks.map((a) => {

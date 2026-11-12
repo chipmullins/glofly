@@ -333,13 +333,31 @@ test("live events are filtered per person, only to apps that know Campfire", { s
   // Sequences have no gaps for each person.
   const seqs = a.events.map((e) => e.data.seq);
   for (let i = 1; i < seqs.length; i++) assert.equal(seqs[i], seqs[i - 1] + 1);
-  // Dragging over the live connection: only your own tokens.
+  // Dragging over the live connection: only your own tokens. 0.11.2: the steps are shown to the
+  // others at the table, not sent back to whoever drags, and not saved (the drop saves).
+  const thorinX = (await pool.query("select x from campfire_tokens where id = $1", [tok.thorin])).rows[0].x;
+  const gTokens = g.of("campfire:token").length;
+  const aTokens = a.of("campfire:token").length;
   a.socket.emit("campfire:move", { tokenId: tok.thorin, x: 420, y: 70 });
   a.socket.emit("campfire:move", { tokenId: tok.goblin, x: 0, y: 0 });
   await wait(500);
+  const seen = g.of("campfire:token").slice(gTokens);
+  assert.ok(seen.some((e) => e.token?.id === tok.thorin && e.token.x === 420), "the game master sees the drag");
+  assert.ok(!seen.some((e) => e.token?.id === tok.goblin), "someone else's token never moves");
+  assert.equal(a.of("campfire:token").length, aTokens, "the dragger isn't sent their own drag back");
   const { rows } = await pool.query("select id, x, y from campfire_tokens where id = any($1)", [[tok.thorin, tok.goblin]]);
-  assert.equal(rows.find((r) => r.id === tok.thorin).x, 420);
+  assert.equal(rows.find((r) => r.id === tok.thorin).x, thorinX, "drag steps aren't saved");
   assert.equal(rows.find((r) => r.id === tok.goblin).x, 140);
+  // A drag step still being checked when the drop arrives never pulls the token back.
+  const gBefore = g.of("campfire:token").length;
+  for (let i = 0; i < 5; i++) a.socket.emit("campfire:move", { tokenId: tok.thorin, x: 210 + i * 10, y: 70 });
+  const dropped = await call(`/campfire/tokens/${tok.thorin}`, { method: "PATCH", token: p1.token, body: { x: 280, y: 70 } });
+  assert.equal(dropped.status, 200, JSON.stringify(dropped.json));
+  await wait(800);
+  const after = g.of("campfire:token").slice(gBefore).filter((e) => e.token?.id === tok.thorin);
+  assert.equal(after.at(-1)?.token.x, 280, "the drop is the last word");
+  assert.equal((await pool.query("select x from campfire_tokens where id = $1", [tok.thorin])).rows[0].x, 280);
+  await call(`/campfire/tokens/${tok.thorin}`, { method: "PATCH", token: p1.token, body: { x: thorinX, y: 70 } });
   for (const s of [a, old, g]) s.socket.close();
 });
 

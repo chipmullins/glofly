@@ -95,7 +95,11 @@ export function ApprovalBox(): React.JSX.Element | null {
   )
 }
 
-/** My newest roll, big over the map for a few seconds (Player board's "Natural 20!"). */
+/**
+ * The newest roll, big over the map for a few seconds (Player board's "Natural 20!"): my own rolls,
+ * anyone's natural 20, and (0.11.2) anyone's roll from a character sheet (an attack, a save, a hit
+ * die…) so the whole table sees it land. Only rolls this person may see ever arrive here.
+ */
 export function RollCardOverlay(): React.JSX.Element | null {
   const { t, me, nameOf, ctl } = useCf()
   const [doneId, setDoneId] = useState<string | null>(null)
@@ -105,7 +109,7 @@ export function RollCardOverlay(): React.JSX.Element | null {
   const fresh =
     !!newest &&
     Date.parse(newest.createdAt) - ctl.serverOffset >= openedAt - 2000 &&
-    (newest.userId === me.id || newest.result.natural === 20) &&
+    (newest.userId === me.id || newest.result.natural === 20 || !!newest.characterId) &&
     newest.id !== doneId
   const shown = fresh ? newest : null
   useEffect(() => {
@@ -144,9 +148,14 @@ const BAR_COLORS = ['#e0193a', '#4f8cff', '#f0b429']
 
 export function TokenCard({
   token,
+  targeted,
+  onTarget,
   onClose
 }: {
   token: Token
+  /** 0.11.2: target it from its card (game masters' double-click opens the card instead) */
+  targeted?: boolean
+  onTarget?: () => void
   onClose: () => void
 }): React.JSX.Element {
   const { isGm, say, ctl, t, me } = useCf()
@@ -185,6 +194,17 @@ export function TokenCard({
           />
         ) : (
           <h3 className="cf-h3">{token.name || 'Token'}</h3>
+        )}
+        {onTarget && (
+          <button
+            type="button"
+            className={targeted ? 'cf-ghost cf-small cf-ghost--on' : 'cf-ghost cf-small'}
+            aria-pressed={!!targeted}
+            title="Attacks and spells roll against the target (T)"
+            onClick={onTarget}
+          >
+            {targeted ? 'Targeted' : 'Target'}
+          </button>
         )}
         <button type="button" className="cf-x" aria-label="Close" onClick={onClose}>
           ×

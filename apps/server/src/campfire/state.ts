@@ -102,10 +102,18 @@ const seesScene = (campaign: CampaignRow, sceneId: string, viewer: Viewer) => vi
  * upsert if they can see it now, a delete if they could before and can't now (moved into fog,
  * hidden, deleted), and nothing otherwise.
  */
-export async function emitToken(campaign: CampaignRow, scene: SceneRow, before: TokenRow | null, after: TokenRow | null): Promise<void> {
+export async function emitToken(
+  campaign: CampaignRow,
+  scene: SceneRow,
+  before: TokenRow | null,
+  after: TokenRow | null,
+  /** 0.11.2: not to this person (a live drag isn't sent back to whoever is dragging) */
+  exceptUserId?: string,
+): Promise<void> {
   const chars = await charactersInfo(campaign.id);
   const settings = settingsOf(campaign.settings);
   await broadcast(campaign, "campfire:token", (v) => {
+    if (v.userId === exceptUserId) return null;
     if (!seesScene(campaign, scene.id, v)) return null;
     const was = !!before && tokenVisible(before, scene, v, chars);
     const is = !!after && tokenVisible(after, scene, v, chars);

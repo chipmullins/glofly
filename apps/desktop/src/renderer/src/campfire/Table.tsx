@@ -117,6 +117,8 @@ function TableReady({
   const [fogMode, setFogMode] = useState<'reveal' | 'hide'>('reveal')
   const [fogBrush, setFogBrush] = useState<FogBrush>('box')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // 0.11.2: a single click only selects a token; a double-click opens its card (menu)
+  const [cardId, setCardId] = useState<string | null>(null)
   const [targetId, setTargetId] = useState<string | null>(null)
   const [share, setShare] = useState<RollShare>({ mode: 'all', to: [] })
   const [tab, setTab] = useState<Tab>(isGm ? 'turn' : 'sheet')
@@ -169,17 +171,28 @@ function TableReady({
     lastPing && lastPing.userId !== me.id ? `${nameOf(lastPing.userId)} pinged a spot` : null
   const line = message ?? pingLine
 
-  // Escape lets go of the selected token and the target (unless typing).
+  // Escape lets go of the selected token, its card and the target; T targets the selected token
+  // (unless typing).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape' || (e.target as HTMLElement)?.closest?.('input, textarea, select'))
-        return
-      setSelectedId(null)
-      setTargetId(null)
+      if ((e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable]')) return
+      if (e.key === 'Escape') {
+        setSelectedId(null)
+        setCardId(null)
+        setTargetId(null)
+      } else if (
+        e.key.toLowerCase() === 't' &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        selectedId
+      ) {
+        setTargetId((cur) => (cur === selectedId ? null : selectedId))
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [selectedId])
 
   const roll = useCallback(
     async (
@@ -272,7 +285,7 @@ function TableReady({
     combat.entries.some((e) => e.tokenId === tk.id) &&
     combat.current !== tk.id
   const myPc = t.characters.find((c) => c.ownerId === me.id && c.kind === 'pc')
-  const selected = selectedId ? t.tokens.find((x) => x.id === selectedId) : null
+  const carded = cardId ? t.tokens.find((x) => x.id === cardId) : null
   const currentTrack = t.music ? t.tracks.find((x) => x.id === t.music!.trackId) : null
 
   const musicOp = async (body: Record<string, unknown>): Promise<void> => {
@@ -768,7 +781,16 @@ function TableReady({
                 fogMode={fogMode}
                 fogBrush={fogBrush}
                 selectedId={selectedId}
-                onSelect={setSelectedId}
+                onSelect={(id) => {
+                  setSelectedId(id)
+                  // Another token (or the empty map) closes an open card.
+                  setCardId((c) => (c && c === id ? c : null))
+                }}
+                canOpen={(tk) => isGm || controls(tk)}
+                onOpen={(id) => {
+                  setSelectedId(id)
+                  setCardId(id)
+                }}
                 targetId={targetId}
                 onTarget={setTargetId}
                 activeTokenId={combat?.current ?? null}
@@ -821,11 +843,13 @@ function TableReady({
                 )}
                 {isGm && !asPlayer && <ApprovalBox />}
                 {!isGm && <DyingCard />}
-                {selected && tool === 'select' && (isGm || controls(selected)) && (
+                {carded && tool === 'select' && (isGm || controls(carded)) && (
                   <TokenCard
-                    key={selected.id}
-                    token={selected}
-                    onClose={() => setSelectedId(null)}
+                    key={carded.id}
+                    token={carded}
+                    targeted={targetId === carded.id}
+                    onTarget={() => setTargetId((cur) => (cur === carded.id ? null : carded.id))}
+                    onClose={() => setCardId(null)}
                   />
                 )}
                 {line && (

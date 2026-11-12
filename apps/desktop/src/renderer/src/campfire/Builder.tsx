@@ -1229,36 +1229,70 @@ function BuilderMap({
       const dy = raw[1] - moving.from[1]
       // A click that hardly moves is a click, not a nudge.
       if (!moving.moved && Math.hypot(dx, dy) * view.z < 3) return
-      const notesOnly = moving.refs.every((r) => r.kind === 'notes')
-      const [mx, my] = moveDelta(moving.start, moving.refs, dx, dy, g, free || notesOnly)
       // Moved live without an undo step each time; one step is kept on release.
-      draftLive(mapPieces(moving.start, moving.refs, (p) => translate(p, mx, my)))
+      draftLive(liveFrom(raw, free))
       if (!moving.moved) setMoving({ ...moving, moved: true })
     }
     if (sizing) {
-      const box = resizedBox(sizing.box, sizing.handle, raw, g, free)
-      draftLive(mapPieces(sizing.start, [sizing.ref], (p) => resizePiece(p, sizing.box, box)))
+      draftLive(liveFrom(raw, free))
       if (!sizing.moved) setSizing({ ...sizing, moved: true })
     }
   }
 
-  // A drag's in-between positions: shown without adding to undo history.
+  /** The pieces being moved or resized, with the pointer at `raw`. */
+  const liveFrom = (raw: Point, free: boolean): BuiltMap | null => {
+    if (moving) {
+      const notesOnly = moving.refs.every((r) => r.kind === 'notes')
+      const [mx, my] = moveDelta(
+        moving.start,
+        moving.refs,
+        raw[0] - moving.from[0],
+        raw[1] - moving.from[1],
+        g,
+        free || notesOnly
+      )
+      return mapPieces(moving.start, moving.refs, (p) => translate(p, mx, my))
+    }
+    if (sizing) {
+      const box = resizedBox(sizing.box, sizing.handle, raw, g, free)
+      return mapPieces(sizing.start, [sizing.ref], (p) => resizePiece(p, sizing.box, box))
+    }
+    return null
+  }
+
+  // A drag's in-between positions: shown without adding to undo history, drawn at most once a
+  // frame (0.11.2: a fast mouse made it lag).
   const [live, setLive] = useState<BuiltMap | null>(null)
-  const draftLive = (b: BuiltMap): void => setLive(b)
+  const liveFrame = useRef<number | null>(null)
+  const liveNext = useRef<BuiltMap | null>(null)
+  const draftLive = (b: BuiltMap | null): void => {
+    liveNext.current = b
+    if (liveFrame.current === null)
+      liveFrame.current = requestAnimationFrame(() => {
+        liveFrame.current = null
+        setLive(liveNext.current)
+      })
+  }
+  const stopLive = (): void => {
+    if (liveFrame.current !== null) cancelAnimationFrame(liveFrame.current)
+    liveFrame.current = null
+    liveNext.current = null
+    setLive(null)
+  }
 
   const lastUp = useRef(0)
   const up = (e: React.PointerEvent<SVGSVGElement>): void => {
     lastUp.current = performance.now()
     pinch.current.up(e)
     if (pan) setPan(null)
-    if (moving) {
-      if (moving.moved && live) change(live)
-      setLive(null)
+    // Where the pointer let go decides it (not the last drawn frame).
+    if (moving || sizing) {
+      const raw = toWorld(e.clientX, e.clientY)
+      const okRaw = Number.isFinite(raw[0]) && Number.isFinite(raw[1])
+      const done = okRaw ? liveFrom(raw, e.altKey || e.shiftKey) : (liveNext.current ?? live)
+      if ((moving?.moved || sizing?.moved) && done) change(done)
+      stopLive()
       setMoving(null)
-    }
-    if (sizing) {
-      if (sizing.moved && live) change(live)
-      setLive(null)
       setSizing(null)
     }
     if (selBox) {
