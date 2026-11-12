@@ -364,16 +364,31 @@ export type MapTheme = 'stone' | 'wood' | 'grass' | 'cave' | 'snow' | 'sand' | '
 export const MAP_THEMES: readonly MapTheme[] = ['stone', 'wood', 'grass', 'cave', 'snow', 'sand', 'night']
 
 export type Point = [number, number]
-export type BuiltFloor = { id: string; points: Point[]; material: string }
+/**
+ * 0.11.2: what every built piece may carry. `hidden`: the game master hid it from players until
+ * they reveal it. `layer`: the map layer (BuiltMap.layers) it's on; a hidden layer hides all of
+ * its pieces. Players never receive hidden pieces, layer names or these two fields.
+ */
+export type PieceShown = { hidden?: true; layer?: string }
+export type BuiltFloor = { id: string; points: Point[]; material: string } & PieceShown
 export type DoorState = 'open' | 'closed' | 'locked'
-export type BuiltWall = { id: string; points: Point[]; door?: { state: DoorState } }
-export type BuiltObject = { id: string; kind: string; x: number; y: number; w: number; h: number; rotation: number }
-export type BuiltNote = { id: string; x: number; y: number; text: string }
+export type BuiltWall = { id: string; points: Point[]; door?: { state: DoorState } } & PieceShown
+export type BuiltObject = { id: string; kind: string; x: number; y: number; w: number; h: number; rotation: number } & PieceShown
+export type BuiltNote = { id: string; x: number; y: number; text: string } & PieceShown
 /** Round B: painted terrain (movement costs double in it) */
 export type TerrainKind = 'difficult' | 'water'
-export type BuiltTerrain = { id: string; kind: TerrainKind; points: Point[] }
-/** The map builder's data. Notes are GM-only (players get none). */
-export type BuiltMap = { floors: BuiltFloor[]; walls: BuiltWall[]; objects: BuiltObject[]; notes: BuiltNote[]; terrain?: BuiltTerrain[] }
+export type BuiltTerrain = { id: string; kind: TerrainKind; points: Point[] } & PieceShown
+/** 0.11.2: a named map layer ("Upstairs", "Secret vault"). Hidden layers aren't sent to players. */
+export type MapLayer = { id: string; name: string; hidden?: true }
+export type BuiltMap = {
+  floors: BuiltFloor[]
+  walls: BuiltWall[]
+  objects: BuiltObject[]
+  notes: BuiltNote[]
+  terrain?: BuiltTerrain[]
+  /** 0.11.2: GM-only (players get none) */
+  layers?: MapLayer[]
+}
 
 /**
  * Fog of war. With it on, everything is fogged except what the shapes reveal; shapes are applied
@@ -649,6 +664,8 @@ export type SrdSpell = SrdSpellSummary & {
 
 /** The live-connection feature apps send to get Campfire events. */
 export const CAMPFIRE_FEATURE = 'campfire'
+/** 0.11.2: apps that keep built pieces' hidden marks and map layers when they save a map. */
+export const CAMPFIRE_HIDE_FEATURE = 'campfire2'
 
 /** Every event carries these; a gap in `seq` means "load the table again". */
 export type CampfireEventBase = { campaignId: string; seq: number }
@@ -710,6 +727,9 @@ export const CAMPFIRE_LIMITS = {
   /** Corners of every fog shape together (keeps fog checks cheap) */
   fogPoints: 5000,
   builtPieces: 2000,
+  /** 0.11.2 */
+  mapLayers: 20,
+  mapLayerName: 40,
   noteText: 1000,
   rollsKept: 2000,
   rollsPerMinute: 60,

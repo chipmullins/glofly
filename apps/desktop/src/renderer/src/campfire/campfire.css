@@ -654,6 +654,22 @@
   /* The window's title bar area (Windows/Mac): buttons stay clickable. */
   -webkit-app-region: no-drag;
 }
+/* 0.11.2: Windows draws minimize / maximize / close over the top-right corner; Leave table stays
+   clear of them, and the empty part of the bar drags the window like every other top bar. */
+.has-titlebar .cf-head {
+  padding-right: 162px;
+  -webkit-app-region: drag;
+}
+.has-titlebar .cf-head :is(button, a, input, select, label, [role='button'], li) {
+  -webkit-app-region: no-drag;
+}
+.mac-titlebar .cf-head {
+  padding-left: 84px; /* the Mac's traffic lights */
+  -webkit-app-region: drag;
+}
+.mac-titlebar .cf-head :is(button, a, input, select, label, [role='button'], li) {
+  -webkit-app-region: no-drag;
+}
 .cf-head-mark {
   width: 36px;
   height: 36px;
@@ -693,6 +709,8 @@
   gap: 6px;
 }
 .cf-person {
+  position: relative; /* the photo (.avatar-photo) stays inside this circle */
+  flex: none;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -1934,6 +1952,12 @@ button.cf-stat:hover {
   padding-top: 12px;
   border-top: 1px solid var(--cf-line);
 }
+/* 0.11.2: first in the panel (no sheet above it), it starts at the top with no divider. */
+.cf-new-char:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
 .cf-monster p {
   margin: 0 0 6px;
   font-size: 12px;
@@ -2235,4 +2259,153 @@ button.cf-stat:hover {
   .cf-speaking {
     animation: none;
   }
+}
+
+/* ───── 0.11.2: map builder: resize handles, map layers, hidden pieces ───── */
+.cf-map--b-select .cf-handle {
+  cursor: nwse-resize;
+}
+.cf-map--b-select .cf-handle--ne,
+.cf-map--b-select .cf-handle--sw {
+  cursor: nesw-resize;
+}
+.cf-map--b-select [data-piece] {
+  cursor: move;
+}
+.cf-hide-check {
+  margin: 4px 0;
+}
+.cf-maplayers-hint {
+  margin: -2px 0 8px;
+}
+.cf-maplayers {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cf-ml {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+.cf-ml--on {
+  background: var(--cf-active);
+}
+.cf-ml input[type='radio'] {
+  flex: none;
+  margin: 0;
+}
+.cf-ml-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+input.cf-ml-name {
+  padding: 4px 8px;
+  height: 30px;
+}
+.cf-ml-name--base {
+  padding: 0 8px;
+}
+.cf-ml-count {
+  flex: none;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--cf-line);
+  background: transparent;
+  color: var(--cf-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.cf-ml-eye,
+.cf-ml-del {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--cf-ink);
+}
+.cf-ml-eye--off {
+  color: var(--cf-amber);
+  background: rgba(255, 179, 71, 0.12);
+}
+.cf-ml-eye--fixed {
+  color: var(--cf-muted);
+  opacity: 0.6;
+}
+.cf-ml-del {
+  color: var(--cf-muted);
+  font-size: 18px;
+}
+.cf-ml-eye:hover,
+.cf-ml-del:hover,
+.cf-ml-count:hover {
+  background: var(--cf-surface);
+}
+
+/* 0.11.2: the GM's "Hidden" menu at the table */
+.cf-hidden-menu {
+  position: relative;
+}
+.cf-ghost--warn {
+  border-color: rgba(255, 179, 71, 0.55) !important;
+  color: var(--cf-amber) !important;
+}
+.cf-hidden-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 320px;
+  max-height: min(70vh, 520px);
+  overflow: auto;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-line-strong);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+.cf-hidden-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cf-hidden-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--cf-surface);
+}
+.cf-hidden-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cf-hidden-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-hidden-all {
+  width: 100%;
+}
+.cf-hidden-foot {
+  margin: 10px 0 0;
 }

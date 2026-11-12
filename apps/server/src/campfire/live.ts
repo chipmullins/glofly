@@ -1,5 +1,5 @@
 import type { Request } from "express";
-import { CAMPFIRE_FEATURE, type CampaignRole } from "@glofly/shared";
+import { CAMPFIRE_FEATURE, CAMPFIRE_HIDE_FEATURE, type CampaignRole } from "@glofly/shared";
 import { emitToCampfire } from "../realtime";
 
 // Campfire's live side: who is at each table, which call a table is lit in, and the per-person
@@ -14,6 +14,10 @@ import { emitToCampfire } from "../realtime";
 /** Apps that know Campfire send it in X-Glofly-Features (requests) as well as on the live connection. */
 export const knowsCampfire = (req: Request): boolean =>
   new RegExp(`(^|[\\s,])${CAMPFIRE_FEATURE}($|[\\s,])`).test(String(req.headers["x-glofly-features"] ?? ""));
+
+/** 0.11.2: apps that know hidden map pieces and layers (older ones save maps without them). */
+export const knowsHiding = (req: Request): boolean =>
+  new RegExp(`(^|[\\s,])${CAMPFIRE_HIDE_FEATURE}($|[\\s,])`).test(String(req.headers["x-glofly-features"] ?? ""));
 
 const seqs = new Map<string, number>();
 const seqKey = (campaignId: string, userId: string) => `${campaignId}:${userId}`;

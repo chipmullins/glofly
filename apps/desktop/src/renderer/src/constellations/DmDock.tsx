@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import EmptyScene from '../components/EmptyScene'
 import { attachmentSummary } from '@glofly/shared/attachments'
-import { VoiceBubble } from '../components/Attachments'
+import { PhotoViewer, VoiceBubble } from '../components/Attachments'
+import { photoUrl } from '../lib/attachments'
 import { shortBody } from '@glofly/shared/gifs'
 import type {
+  Attachment,
   ConversationSummary,
   Message,
   Presence,
@@ -27,6 +30,17 @@ import './Dock.css'
 // move the mouse to the very bottom and the dock rises (Home, your DMs, your groups, All chats).
 // Click a face and their chat pops up right above it. When a message arrives while the dock is
 // hidden, their face peeks up with a preview and a quick reply.
+
+// 0.11.2: pictures in the dock's chats (attach, paste, or drop; up to 4 per message)
+const MAX_PHOTOS = 4
+const PHOTO_MAX_BYTES = 25 * 1024 * 1024
+type Pending = {
+  localId: string
+  name: string
+  preview: string
+  id: string | null
+  failed: boolean
+}
 
 const MAX_DMS = 6
 const MAX_GROUPS = 3
@@ -95,9 +109,74 @@ function MiniChat({
   const [sending, setSending] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null)
+  const [pending, setPending] = useState<Pending[]>([])
+  const [viewing, setViewing] = useState<{ photos: Attachment[]; index: number } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const pendingRef = useRef<Pending[]>([])
+  useEffect(() => {
+    pendingRef.current = pending
+  }, [pending])
   const title = chatTitle(c)
+
+  // Pictures picked but never sent are removed from the server when the chat closes.
+  useEffect(
+    () => () => {
+      for (const p of pendingRef.current) {
+        URL.revokeObjectURL(p.preview)
+        if (p.id) void window.glofly.conversations.removeUpload(c.id, p.id)
+      }
+    },
+    [c.id]
+  )
+
+  async function addPhotos(files: File[]): Promise<void> {
+    const images = files.filter((f) => f.type.startsWith('image/'))
+    if (!images.length) return
+    const room = MAX_PHOTOS - pendingRef.current.length
+    if (room <= 0) return setProblem(`Up to ${MAX_PHOTOS} pictures at a time.`)
+    setProblem(images.length > room ? `Up to ${MAX_PHOTOS} pictures at a time.` : null)
+    for (const file of images.slice(0, room)) {
+      if (file.size > PHOTO_MAX_BYTES) {
+        setProblem(`${file.name} is bigger than 25 MB.`)
+        continue
+      }
+      const localId = Math.random().toString(36).slice(2)
+      pendingRef.current = [
+        ...pendingRef.current,
+        { localId, name: '', preview: '', id: null, failed: false }
+      ]
+      const item: Pending = {
+        localId,
+        name: file.name || 'Picture',
+        preview: URL.createObjectURL(file),
+        id: null,
+        failed: false
+      }
+      setPending((list) => [...list, item])
+      const r = await window.glofly.conversations.upload(
+        c.id,
+        await file.arrayBuffer(),
+        file.name || 'picture.png'
+      )
+      setPending((list) =>
+        list.map((x) =>
+          x.localId === localId ? { ...x, id: r.ok ? r.data.id : null, failed: !r.ok } : x
+        )
+      )
+      if (!r.ok) setProblem(r.message)
+    }
+    inputRef.current?.focus()
+  }
+
+  function dropPending(localId: string): void {
+    const p = pendingRef.current.find((x) => x.localId === localId)
+    if (!p) return
+    URL.revokeObjectURL(p.preview)
+    if (p.id) void window.glofly.conversations.removeUpload(c.id, p.id)
+    setPending((list) => list.filter((x) => x.localId !== localId))
+  }
 
   useEffect(() => {
     let stale = false
@@ -147,18 +226,27 @@ function MiniChat({
     if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
+  const uploading = pending.some((p) => !p.id && !p.failed)
   async function send(): Promise<void> {
     const body = draft.trim()
-    if (!body || sending || !c.canMessage) return
+    const ids = pending.filter((p) => p.id).map((p) => p.id!)
+    if ((!body && !ids.length) || sending || uploading || !c.canMessage) return
     setSending(true)
     setProblem(null)
-    const r = await window.glofly.conversations.send(c.id, body)
+    const r = await window.glofly.conversations.send(
+      c.id,
+      body,
+      undefined,
+      ids.length ? ids : undefined
+    )
     setSending(false)
     if (!r.ok) {
       setProblem(r.message)
       return
     }
     setDraft('')
+    for (const p of pendingRef.current) URL.revokeObjectURL(p.preview)
+    setPending([])
     setMessages((list) =>
       list && !list.some((m) => m.id === r.data.id) ? [...list, r.data] : list
     )
@@ -276,7 +364,9 @@ function MiniChat({
           const showName = c.kind === 'group' && !mine && previous?.senderId !== m.senderId
           // 0.7.1: voice messages play right here (they used to show only "Voice message").
           const voices = m.deleted ? [] : m.attachments.filter((a) => a.kind === 'file' && a.voice)
-          const others = m.attachments.filter((a) => !voices.includes(a))
+          // 0.11.2: pictures show in the dock too (tap to see them big)
+          const photos = m.deleted ? [] : m.attachments.filter((a) => a.kind === 'image')
+          const others = m.attachments.filter((a) => !voices.includes(a) && !photos.includes(a))
           const text = m.deleted
             ? 'This message was deleted.'
             : m.gif || m.poll || m.game
@@ -288,6 +378,43 @@ function MiniChat({
               {voices.map((a) => (
                 <VoiceBubble key={a.id} conversationId={m.conversationId} attachment={a} />
               ))}
+              {photos.length > 0 && (
+                <span
+                  className={photos.length === 1 ? 'mini-photos mini-photos--one' : 'mini-photos'}
+                >
+                  {photos.map((a, n) =>
+                    a.sticker ? (
+                      <img
+                        key={a.id}
+                        className="mini-sticker"
+                        src={photoUrl(m.conversationId, a.id, 'full')}
+                        alt="Sticker"
+                        draggable={false}
+                      />
+                    ) : (
+                      <button
+                        key={a.id}
+                        type="button"
+                        className="mini-photo"
+                        aria-label={`Open picture ${a.name}`}
+                        onClick={() =>
+                          setViewing({
+                            photos: photos.filter((x) => !x.sticker),
+                            index: n - photos.slice(0, n).filter((x) => x.sticker).length
+                          })
+                        }
+                      >
+                        <img
+                          src={photoUrl(m.conversationId, a.id, 'preview')}
+                          alt={a.name}
+                          loading="lazy"
+                          draggable={false}
+                        />
+                      </button>
+                    )
+                  )}
+                </span>
+              )}
               {(text || m.deleted) && (
                 <span className={m.deleted ? 'mini-bubble mini-bubble--deleted' : 'mini-bubble'}>
                   <EmojiText text={text} />
@@ -302,21 +429,90 @@ function MiniChat({
         {seen && <span className="mini-seen">Seen</span>}
       </div>
       {problem && <p className="mini-chat-problem">{problem}</p>}
+      {pending.length > 0 && (
+        <ul className="mini-pending" aria-label="Pictures to send">
+          {pending.map((p) => (
+            <li
+              key={p.localId}
+              className={
+                p.failed ? 'mini-pending-item mini-pending-item--failed' : 'mini-pending-item'
+              }
+            >
+              <img src={p.preview} alt={p.name} />
+              {!p.id && !p.failed && <span className="mini-pending-busy" aria-label="Uploading" />}
+              <button
+                type="button"
+                className="mini-pending-x"
+                aria-label={`Remove ${p.name}`}
+                onClick={() => dropPending(p.localId)}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <form
         className="mini-chat-compose"
         onSubmit={(e) => {
           e.preventDefault()
           void send()
         }}
+        onDragOver={(e) => {
+          if (c.canMessage && e.dataTransfer.types.includes('Files')) e.preventDefault()
+        }}
+        onDrop={(e) => {
+          if (!c.canMessage || !e.dataTransfer.files.length) return
+          e.preventDefault()
+          void addPhotos([...e.dataTransfer.files])
+        }}
       >
+        <button
+          type="button"
+          className="mini-chat-attach"
+          aria-label="Add a picture"
+          title="Add a picture (or paste one)"
+          disabled={!c.canMessage || pending.length >= MAX_PHOTOS}
+          onClick={() => fileRef.current?.click()}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="3" />
+            <circle cx="9" cy="10" r="1.6" />
+            <path d="m21 16-5-5-8 8" />
+          </svg>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const files = [...(e.target.files ?? [])]
+            e.target.value = ''
+            void addPhotos(files)
+          }}
+        />
         <label className="mini-chat-input">
           <input
             ref={inputRef}
             type="text"
             placeholder={
-              c.canMessage
-                ? `Message ${c.kind === 'dm' ? firstName(c.partner) : title}`
-                : "You can't message here right now"
+              !c.canMessage
+                ? "You can't message here right now"
+                : pending.length
+                  ? 'Add a message, or press Enter to send'
+                  : `Message ${c.kind === 'dm' ? firstName(c.partner) : title}`
             }
             aria-label={`Message ${title}`}
             value={draft}
@@ -325,6 +521,12 @@ function MiniChat({
             onChange={(e) => {
               setDraft(e.target.value)
               window.glofly.conversations.typing(c.id)
+            }}
+            onPaste={(e) => {
+              const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'))
+              if (!files.length) return
+              e.preventDefault()
+              void addPhotos(files)
             }}
           />
           <button
@@ -363,6 +565,21 @@ function MiniChat({
           onClose={() => setEmojiAnchor(null)}
         />
       )}
+      {viewing &&
+        // The chat window moves (it rises with the dock), which would trap a fixed viewer inside
+        // it: the viewer goes on the page itself, over everything (Campfire too).
+        createPortal(
+          <div className="mini-photo-viewer">
+            <PhotoViewer
+              conversationId={c.id}
+              photos={viewing.photos}
+              startIndex={viewing.index}
+              onClose={() => setViewing(null)}
+              onFailure={(_e, message) => setProblem(message)}
+            />
+          </div>,
+          document.body
+        )}
       <span className="mini-chat-tail" aria-hidden="true" />
     </section>
   )
@@ -942,6 +1159,16 @@ export default function DmDock({
     }, 700)
   }
   useEffect(() => stayUp, [])
+  // 0.11.2: Campfire's "Chats" button raises the dock (it hides again when the mouse leaves it).
+  useEffect(() => {
+    const show = (): void => {
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+      hideTimer.current = null
+      setShown(true)
+    }
+    window.addEventListener('glofly:dock-show', show)
+    return () => window.removeEventListener('glofly:dock-show', show)
+  }, [])
   const dockRef = useRef<HTMLElement>(null)
   const itemRefs = useRef(new Map<string, HTMLButtonElement>())
   const [anchorX, setAnchorX] = useState<number | null>(null)

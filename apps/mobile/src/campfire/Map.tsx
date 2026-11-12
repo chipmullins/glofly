@@ -4,8 +4,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing, runOnJS } from 'react-native-reanimated'
 import Svg, { Circle, Defs, G, Line, Mask, Path, Pattern, Polygon, Polyline, Rect, Text as SvgText } from 'react-native-svg'
 import { Image } from 'expo-image'
-import type { BuiltMap, BuiltTerrain, CharacterView, FogState, GridSettings, MapTheme, Point, Scene, TableState, Token } from '@glofly/shared'
-import { gridFeet, nearestHexCenter } from '@glofly/shared'
+import type { BuiltMap, BuiltTerrain, PieceShown, CharacterView, FogState, GridSettings, MapTheme, Point, Scene, TableState, Token } from '@glofly/shared'
+import { gridFeet, nearestHexCenter, pieceHidden } from '@glofly/shared'
 import { sendLive } from '@/api/realtime'
 import { Text } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
@@ -536,11 +536,13 @@ const SceneArt = memo(function SceneArt({ scene }: { scene: Scene }) {
   )
 })
 
+// 0.11.2: pieces the game master hid show faded (only game masters ever receive them).
 function Built({ built }: { built: BuiltMap }) {
+  const fade = (x: PieceShown): number => (pieceHidden(x, built.layers) ? 0.38 : 1)
   return (
     <G>
       {built.floors.map((f) => (
-        <Polygon key={f.id} points={f.points.map((p) => p.join(',')).join(' ')} fill={MATERIAL[f.material] ?? MATERIAL.stone} stroke="#2B221D" strokeWidth={6} strokeLinejoin="round" />
+        <Polygon key={f.id} opacity={fade(f)} points={f.points.map((p) => p.join(',')).join(' ')} fill={MATERIAL[f.material] ?? MATERIAL.stone} stroke={fade(f) < 1 ? '#FFB347' : '#2B221D'} strokeDasharray={fade(f) < 1 ? '10 7' : undefined} strokeWidth={6} strokeLinejoin="round" />
       ))}
       {built.objects.map((o) => {
         const color = OBJECT[o.kind] ?? '#7A5A3A'
@@ -548,7 +550,7 @@ function Built({ built }: { built: BuiltMap }) {
         const cy = o.y + o.h / 2
         const round = o.kind === 'pillar' || o.kind === 'tree' || o.kind === 'campfire'
         return (
-          <G key={o.id} rotation={o.rotation} origin={`${cx}, ${cy}`}>
+          <G key={o.id} rotation={o.rotation} origin={`${cx}, ${cy}`} opacity={fade(o)}>
             {round ? (
               <Circle cx={cx} cy={cy} r={Math.min(o.w, o.h) / 2} fill={color} stroke="rgba(0,0,0,0.35)" strokeWidth={3} />
             ) : (
@@ -564,6 +566,7 @@ function Built({ built }: { built: BuiltMap }) {
         w.door ? (
           <Polyline
             key={w.id}
+            opacity={fade(w)}
             points={w.points.map((p) => p.join(',')).join(' ')}
             fill="none"
             stroke={w.door.state === 'locked' ? '#B4472F' : '#8B5A2B'}
@@ -572,7 +575,7 @@ function Built({ built }: { built: BuiltMap }) {
             strokeLinecap="round"
           />
         ) : (
-          <Polyline key={w.id} points={w.points.map((p) => p.join(',')).join(' ')} fill="none" stroke="#2B221D" strokeWidth={9} strokeLinecap="round" strokeLinejoin="round" />
+          <Polyline key={w.id} opacity={fade(w)} points={w.points.map((p) => p.join(',')).join(' ')} fill="none" stroke="#2B221D" strokeWidth={9} strokeLinecap="round" strokeLinejoin="round" />
         ),
       )}
     </G>

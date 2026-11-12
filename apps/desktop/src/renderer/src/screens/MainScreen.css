@@ -113,6 +113,13 @@
   object-fit: cover;
   user-select: none;
 }
+/* 0.11.2: a photo is placed against the nearest positioned box. A face circle that forgot
+   `position: relative` let it fill the whole window (Campfire's top bar, Nov 11). Any element
+   that holds an AvatarFace contains it now, wherever it's used (zero specificity: a box that sets
+   its own position keeps it). */
+:where(:has(> .avatar-photo)) {
+  position: relative;
+}
 .avatar--me {
   background: var(--glo-orange);
   color: var(--glo-on-accent);

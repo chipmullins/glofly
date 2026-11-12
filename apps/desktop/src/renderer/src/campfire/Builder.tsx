@@ -4,12 +4,32 @@ import type {
   BuiltObject,
   DoorState,
   GridSettings,
+  MapLayer,
   MapTheme,
   Point,
   Scene,
   Token
 } from '@glofly/shared/campfire/types'
-import { MAP_THEMES } from '@glofly/shared/campfire/types'
+import { CAMPFIRE_LIMITS, MAP_THEMES } from '@glofly/shared/campfire/types'
+import { pieceHidden, shownToPlayers } from '@glofly/shared/campfire/map'
+import {
+  boxOf,
+  copyPieces,
+  existing,
+  findPiece,
+  hasRef,
+  mapPieces,
+  moveDelta,
+  omit,
+  pastePieces,
+  piecesIn,
+  resizedBox,
+  resizePiece,
+  translate,
+  type Box,
+  type Handle,
+  type PieceRef
+} from './pieces'
 import BuiltLayer, { BuiltDefs, ObjectShape, type BuiltLayers } from './BuiltLayer'
 import { cf, fileUrl, IMAGE_ACCEPT, pickFile, pieceId, uploadFile } from './api'
 import { useCf } from './ctx'
@@ -22,7 +42,7 @@ import { usePlaceHidden } from './place'
 // layers, undo/redo, grid settings, preview as a player, scenes, start fogged, a map picture.
 
 type BTool = 'select' | 'room' | 'wall' | 'paint' | 'terrain' | 'note' | 'erase'
-type Sel = { kind: 'floors' | 'walls' | 'objects' | 'notes' | 'terrain'; id: string } | null
+type Sel = PieceRef | null
 
 type Draft = {
   name: string
@@ -74,7 +94,12 @@ export default function Builder({
     notes: true,
     tokens: true
   })
-  const [sel, setSel] = useState<Sel>(null)
+  // 0.11.2: several pieces can be selected (Shift-click, or Shift-drag a box)
+  const [sels, setSels] = useState<PieceRef[]>([])
+  const sel: Sel = sels.length === 1 ? sels[0] : null
+  const setSel = (s: Sel): void => setSels(s ? [s] : [])
+  // 0.11.2: the map layer new pieces go on ('' = the base map)
+  const [drawLayer, setDrawLayer] = useState('')
   const [preview, setPreview] = useState(false)
   const [startFogged, setStartFogged] = useState(false)
   const [hiddenMonsters, setHiddenMonsters] = usePlaceHidden()
@@ -91,7 +116,8 @@ export default function Builder({
       setPast([])
       setFuture([])
       setDirty(false)
-      setSel(null)
+      setSels([])
+      setDrawLayer('')
     },
     [say]
   )
@@ -141,13 +167,54 @@ export default function Builder({
     setDirty(true)
   }
   const removeSel = (): void => {
-    if (!draft || !sel) return
-    const b = draft.built
-    change({
-      ...b,
-      [sel.kind]: (b[sel.kind] as { id: string }[]).filter((x) => x.id !== sel.id)
-    } as BuiltMap)
-    setSel(null)
+    if (!draft || !sels.length) return
+    change(mapPieces(draft.built, sels, () => null))
+    setSels([])
+  }
+  // 0.11.2: copy, cut, paste and duplicate (Ctrl+C / X / V / D)
+  const copySel = (): void => {
+    if (!draft || !sels.length) return
+    const n = copyPieces(draft.built, sels)
+    say(n === 1 ? 'Copied. Ctrl+V pastes it.' : `Copied ${n} pieces. Ctrl+V pastes them.`)
+  }
+  const paste = (): void => {
+    if (!draft) return
+    const r = pastePieces(draft.built, draft.grid)
+    if (!r) return say('Copy something first (select it, then Ctrl+C).')
+    change(r.built)
+    setSels(r.added)
+  }
+  // 0.11.2: hide from players / show to players (H)
+  const setHidden = (hide: boolean): void => {
+    if (!draft || !sels.length) return
+    change(
+      mapPieces(draft.built, sels, (p) => {
+        const rest = omit(p, 'hidden')
+        return hide ? { ...rest, hidden: true } : rest
+      })
+    )
+  }
+  const allHidden =
+    !!draft && sels.length > 0 && sels.every((r) => !!findPiece(draft.built, r)?.hidden)
+  const setLayerOf = (layer: string): void => {
+    if (!draft || !sels.length) return
+    change(
+      mapPieces(draft.built, sels, (p) => {
+        const rest = omit(p, 'layer')
+        return layer ? { ...rest, layer } : rest
+      })
+    )
+  }
+  const mapLayers: MapLayer[] = draft?.built.layers ?? []
+  const commonLayer = (() => {
+    if (!draft || !sels.length) return ''
+    const ls = new Set(sels.map((r) => findPiece(draft.built, r)?.layer ?? ''))
+    return ls.size === 1 ? [...ls][0] : null
+  })()
+  const setMapLayers = (next: MapLayer[], built = draft?.built): void => {
+    if (!built) return
+    const rest = omit(built, 'layers')
+    change(next.length ? { ...rest, layers: next } : (rest as BuiltMap))
   }
 
   useEffect(() => {
@@ -164,11 +231,32 @@ export default function Builder({
       ) {
         e.preventDefault()
         redo()
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && sels.length) {
         e.preventDefault()
         removeSel()
+      } else if (mod && e.key.toLowerCase() === 'c' && sels.length) {
+        e.preventDefault()
+        copySel()
+      } else if (mod && e.key.toLowerCase() === 'x' && sels.length) {
+        e.preventDefault()
+        copySel()
+        removeSel()
+      } else if (mod && e.key.toLowerCase() === 'v') {
+        e.preventDefault()
+        paste()
+      } else if (mod && e.key.toLowerCase() === 'd' && sels.length) {
+        e.preventDefault()
+        copySel()
+        paste()
+      } else if (mod && e.key.toLowerCase() === 'a' && draft) {
+        e.preventDefault()
+        setTool('select')
+        setSels(piecesIn(draft.built, [-1e6, -1e6], [1e6, 1e6], layers.notes))
+      } else if (!mod && e.key.toLowerCase() === 'h' && sels.length) {
+        e.preventDefault()
+        setHidden(!allHidden)
       } else if (e.key === 'Escape') {
-        setSel(null)
+        setSels([])
       }
     }
     window.addEventListener('keydown', onKey)
@@ -214,7 +302,8 @@ export default function Builder({
     { id: 'erase', label: 'Erase', icon: 'erase' }
   ]
   const hint: Record<BTool, string> = {
-    select: 'Selecting: click a piece, drag objects and notes, Delete removes it',
+    select:
+      'Selecting: click a piece and drag it; corner handles resize. Shift-click or Shift-drag picks several',
     room: 'Drawing a room: drag from corner to corner',
     wall: 'Drawing walls: drag along a wall (pick Door to draw a door)',
     paint: 'Painting floors: click a room to give it the material',
@@ -427,7 +516,8 @@ export default function Builder({
           <div className="cf-topbar">
             <span className="cf-turn-pill">{hint[tool]}</span>
             <span className="cf-sub">
-              Snaps to the grid · Shift for a free shape · Ctrl+Z to undo
+              Snaps to the grid (hold Shift or Alt to place freely) · Ctrl+C / Ctrl+V copy · Ctrl+Z
+              undo
             </span>
           </div>
           {message && (
@@ -444,8 +534,9 @@ export default function Builder({
               material={material}
               wallKind={wallKind}
               terrainKind={terrainKind}
-              sel={sel}
-              setSel={setSel}
+              sels={sels}
+              setSels={setSels}
+              drawLayer={drawLayer}
               change={change}
               preview={preview}
               fogged={startFogged}
@@ -476,6 +567,26 @@ export default function Builder({
                     onChange={(e) => setD({ name: e.target.value })}
                   />
                 </label>
+                {sels.length > 1 && (
+                  <div className="cf-inspector">
+                    <h3 className="cf-h3">{sels.length} pieces selected</h3>
+                    <PieceActions
+                      hidden={allHidden}
+                      layer={commonLayer}
+                      layers={mapLayers}
+                      onHidden={setHidden}
+                      onLayer={setLayerOf}
+                      onCopy={copySel}
+                      onDuplicate={() => {
+                        copySel()
+                        paste()
+                      }}
+                    />
+                    <button type="button" className="cf-danger-ghost cf-small" onClick={removeSel}>
+                      Remove {sels.length} pieces
+                    </button>
+                  </div>
+                )}
                 {sel && selObj && (
                   <div className="cf-inspector">
                     <h3 className="cf-h3">
@@ -486,8 +597,22 @@ export default function Builder({
                           ? 'wall'
                           : sel.kind === 'notes'
                             ? 'note'
-                            : 'object'}
+                            : sel.kind === 'terrain'
+                              ? 'terrain'
+                              : 'object'}
                     </h3>
+                    <PieceActions
+                      hidden={allHidden}
+                      layer={commonLayer}
+                      layers={mapLayers}
+                      onHidden={setHidden}
+                      onLayer={setLayerOf}
+                      onCopy={copySel}
+                      onDuplicate={() => {
+                        copySel()
+                        paste()
+                      }}
+                    />
                     {sel.kind === 'walls' && (
                       <label className="cf-field">
                         <span>Door</span>
@@ -578,7 +703,44 @@ export default function Builder({
                     </button>
                   </div>
                 )}
-                <h3 className="cf-h3">Layers</h3>
+                <MapLayers
+                  layers={mapLayers}
+                  built={draft.built}
+                  drawLayer={drawLayer}
+                  onDraw={setDrawLayer}
+                  onChange={(next) => setMapLayers(next)}
+                  onDelete={(id) => {
+                    // Its pieces go back on the base map (they keep their own hidden marks).
+                    const moved = mapPieces(
+                      draft.built,
+                      (['floors', 'walls', 'objects', 'notes', 'terrain'] as const).flatMap((k) =>
+                        ((draft.built[k] ?? []) as { id: string; layer?: string }[])
+                          .filter((x) => x.layer === id)
+                          .map((x) => ({ kind: k, id: x.id }))
+                      ),
+                      (p) => {
+                        const rest = omit(p, 'layer')
+                        return rest
+                      }
+                    )
+                    setMapLayers(
+                      mapLayers.filter((l) => l.id !== id),
+                      moved
+                    )
+                    if (drawLayer === id) setDrawLayer('')
+                  }}
+                  onPick={(id) => {
+                    setTool('select')
+                    setSels(
+                      (['floors', 'walls', 'objects', 'notes', 'terrain'] as const).flatMap((k) =>
+                        ((draft.built[k] ?? []) as { id: string; layer?: string }[])
+                          .filter((x) => (x.layer ?? '') === id)
+                          .map((x) => ({ kind: k, id: x.id }))
+                      )
+                    )
+                  }}
+                />
+                <h3 className="cf-h3">Show while building</h3>
                 <ul className="cf-layers">
                   {(
                     [
@@ -862,8 +1024,9 @@ function BuilderMap({
   material,
   wallKind,
   terrainKind,
-  sel,
-  setSel,
+  sels,
+  setSels,
+  drawLayer,
   change,
   preview,
   fogged,
@@ -876,8 +1039,9 @@ function BuilderMap({
   material: string
   wallKind: 'wall' | DoorState
   terrainKind: 'difficult' | 'water'
-  sel: Sel
-  setSel: (s: Sel) => void
+  sels: PieceRef[]
+  setSels: (s: PieceRef[]) => void
+  drawLayer: string
   change: (b: BuiltMap) => void
   preview: boolean
   fogged: boolean
@@ -893,16 +1057,28 @@ function BuilderMap({
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null)
   const [poly, setPoly] = useState<Point[] | null>(null)
   const [hover, setHover] = useState<Point | null>(null)
+  // 0.11.2: any selected pieces move together (floors, walls and terrain too)
   const [moving, setMoving] = useState<{
-    kind: 'objects' | 'notes'
-    id: string
-    dx: number
-    dy: number
+    refs: PieceRef[]
+    from: Point
     moved: boolean
     start: BuiltMap
   } | null>(null)
+  // 0.11.2: a corner handle being dragged
+  const [sizing, setSizing] = useState<{
+    ref: PieceRef
+    handle: Handle
+    box: Box
+    start: BuiltMap
+    moved: boolean
+  } | null>(null)
+  const [selBox, setSelBox] = useState<{ a: Point; b: Point } | null>(null)
   const [pan, setPan] = useState<{ x: number; y: number } | null>(null)
   const built = draft.built
+  // New pieces go on the layer being drawn on.
+  const onLayer = drawLayer ? { layer: drawLayer } : {}
+  const sel: Sel = sels.length === 1 ? sels[0] : null
+  const setSel = (r: Sel): void => setSels(r ? [r] : [])
 
   const pieceAt = (target: EventTarget | null): Sel => {
     const el = (target as Element | null)?.closest?.('[data-piece]')
@@ -914,7 +1090,10 @@ function BuilderMap({
 
   const finishPoly = (): void => {
     if (poly && poly.length >= 3)
-      change({ ...built, floors: [...built.floors, { id: pieceId('f'), points: poly, material }] })
+      change({
+        ...built,
+        floors: [...built.floors, { id: pieceId('f'), points: poly, material, ...onLayer }]
+      })
     setPoly(null)
   }
 
@@ -938,7 +1117,9 @@ function BuilderMap({
     }
     if (e.button !== 0) return
     const raw = toWorld(e.clientX, e.clientY)
-    const at = snapCorner(raw[0], raw[1], g, e.altKey)
+    // 0.11.2: Shift or Alt places freely (off the grid)
+    const free = e.altKey || e.shiftKey
+    const at = snapCorner(raw[0], raw[1], g, free)
     const piece = pieceAt(e.target)
     if (tool === 'room') {
       if (e.shiftKey || poly) {
@@ -965,27 +1146,50 @@ function BuilderMap({
           )
         } as BuiltMap)
     } else if (tool === 'note') {
-      const n = { id: pieceId('n'), x: Math.round(raw[0]), y: Math.round(raw[1]), text: 'Note' }
+      const n = {
+        id: pieceId('n'),
+        x: Math.round(raw[0]),
+        y: Math.round(raw[1]),
+        text: 'Note',
+        ...onLayer
+      }
       change({ ...built, notes: [...built.notes, n] })
       setSel({ kind: 'notes', id: n.id })
     } else {
-      setSel(piece)
-      if (piece && (piece.kind === 'objects' || piece.kind === 'notes')) {
-        const p = (built[piece.kind] as { id: string; x: number; y: number }[]).find(
-          (x) => x.id === piece.id
-        )
+      // Select. A corner handle resizes the one selected piece.
+      const handle = (e.target as Element | null)
+        ?.closest?.('[data-handle]')
+        ?.getAttribute('data-handle') as Handle | null
+      if (handle && sel) {
+        const p = findPiece(built, sel)
         if (p) {
           ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-          setMoving({
-            kind: piece.kind,
-            id: piece.id,
-            dx: raw[0] - p.x,
-            dy: raw[1] - p.y,
-            moved: false,
-            start: built
-          })
+          setSizing({ ref: sel, handle, box: boxOf(p, sel.kind), start: built, moved: false })
         }
-      } else if (!piece) {
+        return
+      }
+      // Shift (or Ctrl) and a piece: add it to the selection or take it out.
+      if (piece && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+        setSels(
+          hasRef(sels, piece)
+            ? sels.filter((r) => !(r.kind === piece.kind && r.id === piece.id))
+            : [...sels, piece]
+        )
+        return
+      }
+      // Shift on empty map: drag a box around pieces.
+      if (!piece && e.shiftKey) {
+        ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+        setSelBox({ a: raw, b: raw })
+        return
+      }
+      if (piece) {
+        const refs = hasRef(sels, piece) ? sels : [piece]
+        if (!hasRef(sels, piece)) setSels([piece])
+        ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+        setMoving({ refs, from: raw, moved: false, start: built })
+      } else {
+        setSels([])
         ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
         setPan({ x: e.clientX, y: e.clientY })
       }
@@ -993,6 +1197,15 @@ function BuilderMap({
   }
 
   const move = (e: React.PointerEvent<SVGSVGElement>): void => {
+    // 0.11.2: the button is up but the release never arrived: let go instead of staying held.
+    if (
+      e.pointerType !== 'touch' &&
+      e.buttons === 0 &&
+      (moving || sizing || selBox || drawing || pan)
+    ) {
+      up(e)
+      return
+    }
     const pm = pinch.current.move(e)
     if (pm) {
       const r = box.current?.getBoundingClientRect()
@@ -1006,20 +1219,26 @@ function BuilderMap({
       return
     }
     const raw = toWorld(e.clientX, e.clientY)
-    const at = snapCorner(raw[0], raw[1], g, e.altKey)
+    const free = e.altKey || e.shiftKey
+    const at = snapCorner(raw[0], raw[1], g, free)
     if (poly) setHover(at)
     if (drawing) setDrawing({ ...drawing, b: at })
+    if (selBox) setSelBox({ ...selBox, b: raw })
     if (moving) {
-      const [x, y] =
-        moving.kind === 'objects'
-          ? snapCorner(raw[0] - moving.dx, raw[1] - moving.dy, g, e.altKey)
-          : [Math.round(raw[0] - moving.dx), Math.round(raw[1] - moving.dy)]
-      const list = (built[moving.kind] as { id: string; x: number; y: number }[]).map((p) =>
-        p.id === moving.id ? { ...p, x, y } : p
-      )
+      const dx = raw[0] - moving.from[0]
+      const dy = raw[1] - moving.from[1]
+      // A click that hardly moves is a click, not a nudge.
+      if (!moving.moved && Math.hypot(dx, dy) * view.z < 3) return
+      const notesOnly = moving.refs.every((r) => r.kind === 'notes')
+      const [mx, my] = moveDelta(moving.start, moving.refs, dx, dy, g, free || notesOnly)
       // Moved live without an undo step each time; one step is kept on release.
-      draftLive({ ...built, [moving.kind]: list } as BuiltMap)
+      draftLive(mapPieces(moving.start, moving.refs, (p) => translate(p, mx, my)))
       if (!moving.moved) setMoving({ ...moving, moved: true })
+    }
+    if (sizing) {
+      const box = resizedBox(sizing.box, sizing.handle, raw, g, free)
+      draftLive(mapPieces(sizing.start, [sizing.ref], (p) => resizePiece(p, sizing.box, box)))
+      if (!sizing.moved) setSizing({ ...sizing, moved: true })
     }
   }
 
@@ -1027,13 +1246,25 @@ function BuilderMap({
   const [live, setLive] = useState<BuiltMap | null>(null)
   const draftLive = (b: BuiltMap): void => setLive(b)
 
+  const lastUp = useRef(0)
   const up = (e: React.PointerEvent<SVGSVGElement>): void => {
+    lastUp.current = performance.now()
     pinch.current.up(e)
     if (pan) setPan(null)
     if (moving) {
       if (moving.moved && live) change(live)
       setLive(null)
       setMoving(null)
+    }
+    if (sizing) {
+      if (sizing.moved && live) change(live)
+      setLive(null)
+      setSizing(null)
+    }
+    if (selBox) {
+      const picked = piecesIn(built, selBox.a, selBox.b, layers.notes)
+      setSels([...sels, ...picked.filter((r) => !hasRef(sels, r))])
+      setSelBox(null)
     }
     if (!drawing) return
     const { a, b } = drawing
@@ -1054,7 +1285,8 @@ function BuilderMap({
               [x2, y2],
               [x1, y2]
             ],
-            material
+            material,
+            ...onLayer
           }
         ]
       })
@@ -1074,7 +1306,8 @@ function BuilderMap({
               [x2, y1],
               [x2, y2],
               [x1, y2]
-            ]
+            ],
+            ...onLayer
           }
         ]
       })
@@ -1087,16 +1320,19 @@ function BuilderMap({
           {
             id: pieceId('w'),
             points: [a, b],
-            ...(wallKind !== 'wall' ? { door: { state: wallKind } } : {})
+            ...(wallKind !== 'wall' ? { door: { state: wallKind } } : {}),
+            ...onLayer
           }
         ]
       })
     }
   }
 
-  const shown = live ?? built
+  const live0 = live ?? built
+  // Preview as a player: nothing the game master hid.
+  const shown = preview ? shownToPlayers(live0) : live0
   const hex = g.type === 'hex' ? hexPattern(g.size) : null
-  const selPiece = sel ? (shown[sel.kind] as { id: string }[]).find((x) => x.id === sel.id) : null
+  const selPieces = preview ? [] : existing(live0, sels)
 
   return (
     <div
@@ -1120,6 +1356,11 @@ function BuilderMap({
         onPointerMove={move}
         onPointerUp={up}
         onPointerCancel={up}
+        onLostPointerCapture={(e) => {
+          // Losing capture right after a release is normal; only a lost release finishes here.
+          if (performance.now() - lastUp.current < 250) return
+          if (moving || sizing || selBox || drawing || pan) up(e)
+        }}
         onDoubleClick={() => poly && finishPoly()}
       >
         <defs>
@@ -1201,16 +1442,19 @@ function BuilderMap({
             theme={draft.theme}
             layers={layers}
             showNotes={!preview}
+            gmMarks={!preview}
+            only={drawLayer || (built.layers?.length ? '' : null)}
           />
           {layers.floor &&
             shown.terrain?.map((tr) => (
               <polygon
                 key={tr.id}
                 data-piece={`terrain:${tr.id}`}
+                opacity={!preview && pieceHidden(tr, shown.layers) ? 0.38 : undefined}
                 points={tr.points.map((q) => q.join(',')).join(' ')}
                 fill={tr.kind === 'water' ? 'rgba(70,130,190,0.42)' : 'url(#cf-bmud)'}
                 stroke={
-                  sel?.kind === 'terrain' && sel.id === tr.id
+                  hasRef(sels, { kind: 'terrain', id: tr.id })
                     ? '#ffb347'
                     : tr.kind === 'water'
                       ? 'rgba(111,156,255,0.7)'
@@ -1273,7 +1517,30 @@ function BuilderMap({
               pointerEvents="none"
             />
           )}
-          {selPiece && !preview && <SelectionBox piece={selPiece as never} kind={sel!.kind} />}
+          {selPieces.map((r) => {
+            const p = findPiece(live0, r)
+            return p ? (
+              <SelectionBox
+                key={`${r.kind}:${r.id}`}
+                box={boxOf(p, r.kind)}
+                handles={selPieces.length === 1 && r.kind !== 'notes'}
+                z={view.z}
+              />
+            ) : null
+          })}
+          {selBox && (
+            <rect
+              x={Math.min(selBox.a[0], selBox.b[0])}
+              y={Math.min(selBox.a[1], selBox.b[1])}
+              width={Math.abs(selBox.b[0] - selBox.a[0])}
+              height={Math.abs(selBox.b[1] - selBox.a[1])}
+              fill="rgba(255,179,71,0.08)"
+              stroke="#ffb347"
+              strokeWidth={1.5 / view.z}
+              strokeDasharray={`${6 / view.z} ${4 / view.z}`}
+              pointerEvents="none"
+            />
+          )}
           {drawing && tool === 'terrain' && (
             <rect
               x={Math.min(drawing.a[0], drawing.b[0])}
@@ -1348,38 +1615,242 @@ function BuilderMap({
 }
 
 function SelectionBox({
-  piece,
-  kind
+  box,
+  handles,
+  z
 }: {
-  piece: { points?: Point[]; x?: number; y?: number; w?: number; h?: number }
-  kind: string
-}): React.JSX.Element | null {
-  let box: { x: number; y: number; w: number; h: number } | null = null
-  if (piece.points?.length) {
-    const xs = piece.points.map((p) => p[0])
-    const ys = piece.points.map((p) => p[1])
-    box = {
-      x: Math.min(...xs),
-      y: Math.min(...ys),
-      w: Math.max(...xs) - Math.min(...xs),
-      h: Math.max(...ys) - Math.min(...ys)
-    }
-  } else if (kind === 'notes')
-    box = { x: (piece.x ?? 0) - 14, y: (piece.y ?? 0) - 14, w: 28, h: 28 }
-  else if (piece.x !== undefined)
-    box = { x: piece.x, y: piece.y ?? 0, w: piece.w ?? 0, h: piece.h ?? 0 }
-  if (!box) return null
+  box: Box
+  handles: boolean
+  z: number
+}): React.JSX.Element {
+  const pad = 6
+  const r = 7 / z
+  const corners: [Handle, number, number][] = [
+    ['nw', box.x, box.y],
+    ['ne', box.x + box.w, box.y],
+    ['se', box.x + box.w, box.y + box.h],
+    ['sw', box.x, box.y + box.h]
+  ]
   return (
-    <rect
-      x={box.x - 6}
-      y={box.y - 6}
-      width={box.w + 12}
-      height={box.h + 12}
-      fill="none"
-      stroke="#ffb347"
-      strokeWidth={2}
-      strokeDasharray="6 4"
-      pointerEvents="none"
-    />
+    <g>
+      <rect
+        x={box.x - pad}
+        y={box.y - pad}
+        width={box.w + pad * 2}
+        height={box.h + pad * 2}
+        fill="none"
+        stroke="#ffb347"
+        strokeWidth={2}
+        strokeDasharray="6 4"
+        pointerEvents="none"
+      />
+      {handles &&
+        corners.map(([h, x, y]) => (
+          <rect
+            key={h}
+            data-handle={h}
+            className={`cf-handle cf-handle--${h}`}
+            x={x - r}
+            y={y - r}
+            width={r * 2}
+            height={r * 2}
+            rx={2 / z}
+            fill="#ffb347"
+            stroke="#2a1406"
+            strokeWidth={1.5 / z}
+          >
+            <title>Drag to resize</title>
+          </rect>
+        ))}
+    </g>
+  )
+}
+
+/** 0.11.2: hide from players, the layer, copy and duplicate (one piece or several). */
+function PieceActions({
+  hidden,
+  layer,
+  layers,
+  onHidden,
+  onLayer,
+  onCopy,
+  onDuplicate
+}: {
+  hidden: boolean
+  /** null: the pieces are on different layers */
+  layer: string | null
+  layers: MapLayer[]
+  onHidden: (hide: boolean) => void
+  onLayer: (id: string) => void
+  onCopy: () => void
+  onDuplicate: () => void
+}): React.JSX.Element {
+  return (
+    <>
+      <label className="cf-check cf-hide-check">
+        <input type="checkbox" checked={hidden} onChange={(e) => onHidden(e.target.checked)} />
+        Hidden from players <span className="cf-sub">(H)</span>
+      </label>
+      {layers.length > 0 && (
+        <label className="cf-field">
+          <span>Layer</span>
+          <select value={layer ?? '*'} onChange={(e) => onLayer(e.target.value)}>
+            {layer === null && (
+              <option value="*" disabled>
+                Several layers
+              </option>
+            )}
+            <option value="">Base map</option>
+            {layers.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+                {l.hidden ? ' (hidden)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <div className="cf-row-buttons">
+        <button type="button" className="cf-ghost cf-small" onClick={onCopy} title="Ctrl+C">
+          Copy
+        </button>
+        <button type="button" className="cf-ghost cf-small" onClick={onDuplicate} title="Ctrl+D">
+          Duplicate
+        </button>
+      </div>
+    </>
+  )
+}
+
+/**
+ * 0.11.2: map layers. Build a part of the map on its own layer ("Upstairs", "Secret vault"), hide
+ * the layer from players, and show it when they find it. New pieces go on the layer you draw on.
+ */
+function MapLayers({
+  layers,
+  built,
+  drawLayer,
+  onDraw,
+  onChange,
+  onDelete,
+  onPick
+}: {
+  layers: MapLayer[]
+  built: BuiltMap
+  drawLayer: string
+  onDraw: (id: string) => void
+  onChange: (next: MapLayer[]) => void
+  onDelete: (id: string) => void
+  onPick: (id: string) => void
+}): React.JSX.Element {
+  const count = (id: string): number =>
+    (['floors', 'walls', 'objects', 'notes', 'terrain'] as const).reduce(
+      (n, k) =>
+        n + ((built[k] ?? []) as { layer?: string }[]).filter((x) => (x.layer ?? '') === id).length,
+      0
+    )
+  const rows: { id: string; name: string; hidden?: true }[] = [
+    { id: '', name: 'Base map' },
+    ...layers
+  ]
+  return (
+    <>
+      <h3 className="cf-h3">Layers</h3>
+      <p className="cf-hint cf-maplayers-hint">
+        Build parts of the map on their own layer, hide the layer, and show it when the party finds
+        it. New pieces go on the layer you’re drawing on.
+      </p>
+      <ul className="cf-maplayers" aria-label="Map layers">
+        {rows.map((l) => (
+          <li key={l.id || 'base'} className={drawLayer === l.id ? 'cf-ml cf-ml--on' : 'cf-ml'}>
+            <input
+              type="radio"
+              name="cf-draw-layer"
+              aria-label={`Draw on ${l.name}`}
+              title="Draw on this layer"
+              checked={drawLayer === l.id}
+              onChange={() => onDraw(l.id)}
+            />
+            {l.id ? (
+              <input
+                className="cf-ml-name"
+                aria-label="Layer name"
+                value={l.name}
+                maxLength={CAMPFIRE_LIMITS.mapLayerName}
+                onChange={(e) =>
+                  onChange(layers.map((x) => (x.id === l.id ? { ...x, name: e.target.value } : x)))
+                }
+                onBlur={(e) => {
+                  if (!e.target.value.trim())
+                    onChange(layers.map((x) => (x.id === l.id ? { ...x, name: 'Layer' } : x)))
+                }}
+              />
+            ) : (
+              <span className="cf-ml-name cf-ml-name--base">Base map</span>
+            )}
+            <button
+              type="button"
+              className="cf-ml-count"
+              title="Select everything on this layer"
+              onClick={() => onPick(l.id)}
+            >
+              {count(l.id)}
+            </button>
+            {l.id ? (
+              <>
+                <button
+                  type="button"
+                  className={l.hidden ? 'cf-ml-eye cf-ml-eye--off' : 'cf-ml-eye'}
+                  aria-pressed={!l.hidden}
+                  aria-label={
+                    l.hidden
+                      ? `${l.name}: hidden from players. Show it`
+                      : `${l.name}: players see it. Hide it`
+                  }
+                  title={l.hidden ? 'Hidden from players' : 'Players see it'}
+                  onClick={() =>
+                    onChange(
+                      layers.map((x) => {
+                        if (x.id !== l.id) return x
+                        const rest = omit(x, 'hidden')
+                        return x.hidden ? rest : { ...rest, hidden: true }
+                      })
+                    )
+                  }
+                >
+                  <Icon name={l.hidden ? 'eyeOff' : 'eye'} size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="cf-ml-del"
+                  aria-label={`Delete the layer ${l.name} (its pieces move to the base map)`}
+                  title="Delete the layer (its pieces stay, on the base map)"
+                  onClick={() => onDelete(l.id)}
+                >
+                  ×
+                </button>
+              </>
+            ) : (
+              <span className="cf-ml-eye cf-ml-eye--fixed" title="Players see the base map">
+                <Icon name="eye" size={16} />
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {layers.length < CAMPFIRE_LIMITS.mapLayers && (
+        <button
+          type="button"
+          className="cf-dashed"
+          onClick={() => {
+            const id = pieceId('l')
+            onChange([...layers, { id, name: `Layer ${layers.length + 1}`, hidden: true }])
+            onDraw(id)
+          }}
+        >
+          + New layer (starts hidden)
+        </button>
+      )}
+    </>
   )
 }

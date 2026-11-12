@@ -1,7 +1,12 @@
 import type { DiagonalRule } from '@glofly/shared/campfire/map'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Point, Scene, Token, TokenBar } from '@glofly/shared/campfire/types'
-import { simplifyLasso, tokenCenter } from '@glofly/shared/campfire/map'
+import {
+  pieceHidden,
+  shownToPlayers,
+  simplifyLasso,
+  tokenCenter
+} from '@glofly/shared/campfire/map'
 import { pathCost } from '@glofly/shared/campfire/roundB'
 import BuiltLayer, { BuiltDefs } from './BuiltLayer'
 import {
@@ -465,6 +470,8 @@ function MapView(p: Props): React.JSX.Element {
   const lastSent = useRef(0)
   const longPress = useRef<number | null>(null)
   const asPlayer = !isGm || !!p.asPlayer
+  // 0.11.2: "See as a player" leaves out what the game master hid (players never receive it).
+  const playerBuilt = useMemo(() => shownToPlayers(scene.built), [scene.built])
   const theme = THEMES[scene.theme] ?? THEMES.stone
 
   const byId = useMemo(() => new Map(p.tokens.map((t) => [t.id, t])), [p.tokens])
@@ -612,6 +619,8 @@ function MapView(p: Props): React.JSX.Element {
     longPress.current = null
   }
 
+  // When the last release was handled: losing capture right after it is normal, not a lost release.
+  const lastUpAt = useRef(0)
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>): void => {
     pinch.current.down(e)
     if (pinch.current.active) {
@@ -752,6 +761,7 @@ function MapView(p: Props): React.JSX.Element {
   }
 
   const onPointerUp = (e: React.PointerEvent<SVGSVGElement>): void => {
+    lastUpAt.current = e.timeStamp
     pinch.current.up(e)
     clearLongPress()
     if (pan) setPan(null)
@@ -807,6 +817,24 @@ function MapView(p: Props): React.JSX.Element {
         window.setTimeout(() => setDrag((d) => (d && d.id === tk.id && !d.moved ? null : d)), 600)
       } else setDrag(null)
     }
+  }
+
+  // 0.11.2: the mouse button is already up but the release never arrived (the window lost focus,
+  // another window opened…): let go now instead of carrying the token around.
+  const onMove = (e: React.PointerEvent<SVGSVGElement>): void => {
+    if (
+      e.pointerType !== 'touch' &&
+      e.buttons === 0 &&
+      (drag?.moved || pan || selBox || ruler || fogBox || lasso)
+    )
+      onPointerUp(e)
+    else onPointerMove(e)
+  }
+  // Capture gone without a release (Alt+Tab, a dialog): finish what was being dragged. Losing
+  // capture right after a handled release is normal.
+  const onLostCapture = (e: React.PointerEvent<SVGSVGElement>): void => {
+    if (e.timeStamp - lastUpAt.current < 250) return
+    if (drag?.moved || pan || selBox || ruler || fogBox || lasso) onPointerUp(e)
   }
 
   const onDoubleClick = (e: React.MouseEvent): void => {
@@ -884,9 +912,10 @@ function MapView(p: Props): React.JSX.Element {
         role="application"
         aria-label={`Map: ${scene.name}. Tab to a token; arrow keys move it, T targets it.`}
         onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
+        onPointerMove={onMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onLostPointerCapture={onLostCapture}
         onDoubleClick={onDoubleClick}
         onContextMenu={(e) => e.preventDefault()}
       >
@@ -991,10 +1020,17 @@ function MapView(p: Props): React.JSX.Element {
               preserveAspectRatio="none"
             />
           ) : null}
-          <BuiltLayer built={scene.built} grid={g} theme={scene.theme} showNotes={!asPlayer} />
-          {scene.built.terrain?.map((tr) => (
+          <BuiltLayer
+            built={asPlayer && isGm ? playerBuilt : scene.built}
+            grid={g}
+            theme={scene.theme}
+            showNotes={!asPlayer}
+            gmMarks={isGm && !asPlayer}
+          />
+          {(asPlayer && isGm ? playerBuilt : scene.built).terrain?.map((tr) => (
             <polygon
               key={tr.id}
+              opacity={isGm && !asPlayer && pieceHidden(tr, scene.built.layers) ? 0.38 : undefined}
               points={tr.points.map((q) => q.join(',')).join(' ')}
               fill={tr.kind === 'water' ? 'rgba(70,130,190,0.42)' : 'url(#cf-mud)'}
               stroke={tr.kind === 'water' ? 'rgba(111,156,255,0.7)' : 'rgba(255,179,71,0.6)'}

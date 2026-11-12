@@ -1372,3 +1372,39 @@ test('campfire Round B: movement cost, speed, timers, legendary, encounters, ter
   assert.equal('terrain' in s.normalizeBuilt({ floors: [] }), false)
   assert.ok(s.isBuiltinSound('bell') && !s.isBuiltinSound('../x'))
 })
+
+test('campfire 0.11.2: hidden pieces and map layers never reach players', () => {
+  const sq = (x, y, w = 70) => [[x, y], [x + w, y], [x + w, y + w], [x, y + w]]
+  const gm = s.normalizeBuilt({
+    layers: [{ id: 'up', name: ' Upstairs ' }, { id: 'vault', name: 'Secret vault', hidden: true }, { id: 'up', name: 'dupe' }, { id: 'x', name: '' }],
+    floors: [
+      { id: 'hall', points: sq(0, 0) },
+      { id: 'vaultfloor', points: sq(100, 0), layer: 'vault' },
+      { id: 'closet', points: sq(200, 0), hidden: true },
+      { id: 'stairs', points: sq(300, 0), layer: 'up' },
+      { id: 'ghost', points: sq(400, 0), layer: 'nope' }
+    ],
+    walls: [{ id: 'w1', points: [[0, 0], [70, 0]], hidden: true }],
+    objects: [{ id: 'chest', kind: 'chest', x: 110, y: 10, w: 40, h: 40, rotation: 0, layer: 'vault' }, { id: 'tbl', kind: 'table', x: 10, y: 10, w: 40, h: 40, rotation: 0, hidden: 'yes' }],
+    notes: [{ id: 'n1', x: 5, y: 5, text: 'Trap!' }]
+  })
+  assert.deepEqual(gm.layers, [{ id: 'up', name: 'Upstairs' }, { id: 'vault', name: 'Secret vault', hidden: true }])
+  assert.equal(gm.floors.find((f) => f.id === 'ghost').layer, undefined, 'unknown layers are dropped')
+  assert.equal(gm.objects.find((o) => o.id === 'tbl').hidden, undefined, 'only true hides')
+  assert.equal(s.pieceHidden(gm.floors[1], gm.layers), true)
+  const fogOff = { enabled: false, revealed: [] }
+  const p = s.builtForPlayer(gm, fogOff)
+  assert.deepEqual(p.floors.map((f) => f.id), ['hall', 'stairs', 'ghost'])
+  assert.equal(p.walls.length, 0)
+  assert.deepEqual(p.objects.map((o) => o.id), ['tbl'])
+  assert.equal(p.notes.length, 0)
+  assert.equal('layers' in p, false, 'players never get layer names')
+  assert.ok(p.floors.every((f) => !('layer' in f) && !('hidden' in f)), 'nor the marks')
+  // An older app saves without the marks: the game master's hidden pieces stay hidden.
+  const old = s.normalizeBuilt({ floors: gm.floors.map(({ hidden, layer, ...f }) => f), walls: [{ id: 'w1', points: [[0, 0], [70, 0]] }], objects: [], notes: [] })
+  const kept = s.carryHidden(gm, old)
+  assert.equal(kept.floors.find((f) => f.id === 'closet').hidden, true)
+  assert.equal(kept.walls[0].hidden, true)
+  assert.equal(kept.layers.length, 2)
+  assert.deepEqual(s.builtForPlayer(kept, fogOff).floors.map((f) => f.id), ['hall', 'stairs', 'ghost'])
+})

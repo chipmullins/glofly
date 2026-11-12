@@ -42,6 +42,9 @@ export function useCampfireOpen(): CampfireOpen | null {
 
 export type LitTable = { campaignId: string; callId: string; name: string; by: string }
 let lit: LitTable[] = []
+// 0.11.2: "Not now" sticks for that table in that call: the server announces it again whenever
+// someone opens it, and it kept coming back.
+const dismissed = new Set<string>()
 const litListeners = new Set<() => void>()
 let listening = false
 
@@ -52,6 +55,7 @@ function startListening(): void {
     if (event.type !== 'campfire') return
     const d = event.data
     if (event.name === 'campfire:opened' && typeof d.callId === 'string') {
+      if (dismissed.has(`${d.campaignId}:${d.callId}`)) return
       lit = [
         ...lit.filter((l) => l.campaignId !== d.campaignId),
         {
@@ -73,6 +77,7 @@ function startListening(): void {
 }
 
 export function dismissLit(campaignId: string): void {
+  for (const l of lit) if (l.campaignId === campaignId) dismissed.add(`${l.campaignId}:${l.callId}`)
   lit = lit.filter((l) => l.campaignId !== campaignId)
   litListeners.forEach((l) => l())
 }

@@ -1,7 +1,7 @@
 // Campfire maps: fog of war geometry and cleaning up scene data (grid, built map, fog). The server
 // uses this to decide what players may receive; the apps use it to draw the same fog.
 
-import { CAMPFIRE_LIMITS, MAP_THEMES, type BuiltMap, type FogShape, type FogState, type GridSettings, type MapTheme, type Point } from './types'
+import { CAMPFIRE_LIMITS, MAP_THEMES, type BuiltMap, type FogShape, type FogState, type GridSettings, type MapLayer, type MapTheme, type PieceShown, type Point } from './types'
 
 export const DEFAULT_GRID: GridSettings = { type: 'square', size: 70, feet: 5, color: '#000000', opacity: 0.25, offsetX: 0, offsetY: 0 }
 export const EMPTY_BUILT: BuiltMap = { floors: [], walls: [], objects: [], notes: [] }
@@ -124,14 +124,65 @@ export const BUILT_FOG_WORK = 10_000_000
  * capped (a huge map under a huge fog could otherwise keep the server busy for minutes): pieces
  * left when it runs out count as fogged.
  */
-export function builtForPlayer(built: BuiltMap, fog: FogState, step = 35, budget = BUILT_FOG_WORK): BuiltMap {
+export function builtForPlayer(raw: BuiltMap, fog: FogState, step = 35, budget = BUILT_FOG_WORK): BuiltMap {
   const work: Work = { left: budget }
+  const built = shownToPlayers(raw)
   return {
     floors: built.floors.filter((f) => pieceVisible(fog, f.points, true, step, work)),
     walls: built.walls.filter((w) => pieceVisible(fog, w.points, false, step, work)),
     objects: built.objects.filter((o) => pieceVisible(fog, rectPoints(o.x, o.y, o.w, o.h), true, step, work)),
     notes: [],
     ...(built.terrain?.length ? { terrain: built.terrain.filter((t) => pieceVisible(fog, t.points, true, step, work)) } : {})
+  }
+}
+
+/** 0.11.2: is this piece hidden from players (by itself, or by being on a hidden layer)? */
+export function pieceHidden(piece: PieceShown, layers: readonly MapLayer[] | undefined): boolean {
+  if (piece.hidden) return true
+  if (!piece.layer || !layers?.length) return false
+  return layers.some((l) => l.id === piece.layer && l.hidden)
+}
+
+/**
+ * 0.11.2: the built map without anything the game master hid (pieces, or pieces on hidden layers),
+ * without the layer list and without the hidden/layer marks. What a player may know of it, before fog.
+ */
+export function shownToPlayers(built: BuiltMap): BuiltMap {
+  const keep = <T extends PieceShown>(list: T[]): T[] =>
+    list
+      .filter((x) => !pieceHidden(x, built.layers))
+      .map((x) => {
+        if (!('hidden' in x) && !('layer' in x)) return x
+        const { hidden: _h, layer: _l, ...rest } = x
+        return rest as T
+      })
+  return {
+    floors: keep(built.floors),
+    walls: keep(built.walls),
+    objects: keep(built.objects),
+    notes: [],
+    ...(built.terrain?.length ? { terrain: keep(built.terrain) } : {})
+  }
+}
+
+/**
+ * 0.11.2: an app from before hidden pieces and layers saves a map without them. Keep what the game
+ * master had: each piece (by id) keeps its hidden mark and layer, and the layer list stays.
+ */
+export function carryHidden(before: BuiltMap, after: BuiltMap): BuiltMap {
+  const marks = new Map<string, PieceShown>()
+  for (const list of [before.floors, before.walls, before.objects, before.notes, before.terrain ?? []] as PieceShown[][])
+    for (const x of list as (PieceShown & { id: string })[]) if (x.hidden || x.layer) marks.set(x.id, { ...(x.hidden ? { hidden: true } : {}), ...(x.layer ? { layer: x.layer } : {}) })
+  if (!marks.size && !before.layers?.length) return after
+  const put = <T extends { id: string } & PieceShown>(list: T[]): T[] => list.map((x) => (marks.has(x.id) ? { ...x, ...marks.get(x.id) } : x))
+  return {
+    ...after,
+    floors: put(after.floors),
+    walls: put(after.walls),
+    objects: put(after.objects),
+    notes: put(after.notes),
+    ...(after.terrain ? { terrain: put(after.terrain) } : {}),
+    ...(before.layers?.length ? { layers: before.layers } : {})
   }
 }
 
@@ -198,6 +249,20 @@ export function normalizeGrid(raw: unknown): GridSettings {
 export function normalizeBuilt(raw: unknown): BuiltMap {
   const o = obj(raw)
   let room: number = CAMPFIRE_LIMITS.builtPieces
+  // 0.11.2: named map layers (at most 20) and each piece's hidden mark and layer
+  const layers: MapLayer[] = []
+  if (Array.isArray(o.layers))
+    for (const v of o.layers.map(obj)) {
+      const lid = id(v.id)
+      const name = typeof v.name === 'string' ? v.name.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, CAMPFIRE_LIMITS.mapLayerName) : ''
+      if (!lid || !name || layers.some((l) => l.id === lid)) continue
+      layers.push({ id: lid, name, ...(v.hidden === true ? { hidden: true as const } : {}) })
+      if (layers.length >= CAMPFIRE_LIMITS.mapLayers) break
+    }
+  const shown = (v: Record<string, unknown>): PieceShown => {
+    const layer = id(v.layer)
+    return { ...(v.hidden === true ? { hidden: true as const } : {}), ...(layer && layers.some((l) => l.id === layer) ? { layer } : {}) }
+  }
   const take = <T>(x: unknown, each: (v: Record<string, unknown>, i: number) => T | null): T[] => {
     if (!Array.isArray(x)) return []
     const out: T[] = []
@@ -214,14 +279,14 @@ export function normalizeBuilt(raw: unknown): BuiltMap {
   return {
     floors: take(o.floors, (v, i) => {
       const pts = points(v.points, 3, 200)
-      return pts ? { id: id(v.id) ?? `fl${i}`, points: pts, material: word(v.material) ?? 'stone' } : null
+      return pts ? { id: id(v.id) ?? `fl${i}`, points: pts, material: word(v.material) ?? 'stone', ...shown(v) } : null
     }),
     walls: take(o.walls, (v, i) => {
       const pts = points(v.points, 2, 200)
       if (!pts) return null
       const door = obj(v.door)
       const state = door.state === 'open' || door.state === 'closed' || door.state === 'locked' ? door.state : null
-      return { id: id(v.id) ?? `w${i}`, points: pts, ...(v.door && state ? { door: { state } } : {}) }
+      return { id: id(v.id) ?? `w${i}`, points: pts, ...(v.door && state ? { door: { state } } : {}), ...shown(v) }
     }),
     objects: take(o.objects, (v, i) => {
       const x = coord(v.x)
@@ -229,13 +294,13 @@ export function normalizeBuilt(raw: unknown): BuiltMap {
       const w = coord(v.w)
       const h = coord(v.h)
       if (x === null || y === null || w === null || h === null || w <= 0 || h <= 0) return null
-      return { id: id(v.id) ?? `o${i}`, kind: word(v.kind) ?? 'crate', x, y, w, h, rotation: ((Math.round(coord(v.rotation) ?? 0) % 360) + 360) % 360 }
+      return { id: id(v.id) ?? `o${i}`, kind: word(v.kind) ?? 'crate', x, y, w, h, rotation: ((Math.round(coord(v.rotation) ?? 0) % 360) + 360) % 360, ...shown(v) }
     }),
     notes: take(o.notes, (v, i) => {
       const x = coord(v.x)
       const y = coord(v.y)
       const text = typeof v.text === 'string' ? v.text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').slice(0, CAMPFIRE_LIMITS.noteText) : ''
-      return x === null || y === null || !text.trim() ? null : { id: id(v.id) ?? `n${i}`, x, y, text }
+      return x === null || y === null || !text.trim() ? null : { id: id(v.id) ?? `n${i}`, x, y, text, ...shown(v) }
     }),
     // Round B: painted terrain (only sent when there is some, so older apps' maps don't change)
     ...(Array.isArray(o.terrain) && o.terrain.length
@@ -243,10 +308,11 @@ export function normalizeBuilt(raw: unknown): BuiltMap {
           terrain: take(o.terrain, (v, i) => {
             const pts = points(v.points, 3, 200)
             const kind = v.kind === 'water' ? 'water' : v.kind === 'difficult' ? 'difficult' : null
-            return pts && kind ? { id: id(v.id) ?? `t${i}`, kind, points: pts } : null
+            return pts && kind ? { id: id(v.id) ?? `t${i}`, kind, points: pts, ...shown(v) } : null
           })
         }
-      : {})
+      : {}),
+    ...(layers.length ? { layers } : {})
   }
 }
 

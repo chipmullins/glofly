@@ -26,6 +26,7 @@ import { SetupWizard } from './SetupWizard'
 import { HowCampfireWorks, Tour } from './Tour'
 import { tourSeen } from './tourState'
 import { PracticeTable } from './Practice'
+import HiddenMenu from './HiddenMenu'
 import { GmScreenPanel, GroupBar, MovementBar, SoundsPanel, TableBanners } from './TableB'
 import {
   speakingGlowOn,
@@ -465,6 +466,15 @@ function TableReady({
           )}
           <button
             type="button"
+            className="cf-ghost cf-chats"
+            title="Your Glofly chats (or move the mouse to the bottom edge)"
+            onClick={() => window.dispatchEvent(new Event('glofly:dock-show'))}
+          >
+            <Icon name="chat" size={16} />
+            Chats
+          </button>
+          <button
+            type="button"
             className="cf-ghost"
             data-tour="hub"
             onClick={() => setHubOpen(true)}
@@ -617,6 +627,9 @@ function TableReady({
                   <Icon name="eye" size={16} />
                   {tool === 'fog' ? 'Done with fog' : 'Reveal area'}
                 </button>
+              )}
+              {isGm && scene && (
+                <HiddenMenu built={scene.built} onSave={(built) => void patchScene({ built })} />
               )}
               {isGm && scene && (
                 <button

@@ -100,6 +100,8 @@ import { BroadcastViewer, GoLiveDialog, LivePanel } from '../components/Broadcas
 import { stopLive, useMyBroadcast } from '../lib/broadcast'
 import ConstellationsScreen from '../constellations/ConstellationsScreen'
 import CampfireLayer, { LitBanner } from '../campfire/CampfireLayer'
+import { closeCampfire } from '../campfire/store'
+import DmDock from '../constellations/DmDock'
 import InvitePopup from '../constellations/InvitePopup'
 import EventToasts from '../constellations/EventToasts'
 import { InviteJoinDialog } from '../constellations/InviteJoinDialog'
@@ -1477,6 +1479,20 @@ export default function MainScreen({
   }, [])
 
   /** From the night side: the swarm carries you home, then this happens. */
+  // Opens (or finds) a DM from the docks (Constellations and Campfire).
+  const startDm = async (person: PublicUser): Promise<string | null> => {
+    const existing = conversations.find((c) => c.kind === 'dm' && c.partner.id === person.id)
+    if (existing) return existing.id
+    const result = await window.glofly.conversations.openDm(person.id)
+    if (!result.ok) {
+      if (result.error === 'unauthorized') onSessionExpired()
+      else setToast(result.message)
+      return null
+    }
+    const opened = result.data
+    setConversations((list) => (list.some((c) => c.id === opened.id) ? list : [opened, ...list]))
+    return opened.id
+  }
   const homeThen = (then?: () => void): void => {
     cx.leave()
     then?.()
@@ -2362,21 +2378,7 @@ export default function MainScreen({
         }
         onMessage={(person) => homeThen(() => void openChatWith(person.id))}
         onRead={markedRead}
-        onStartDm={async (person) => {
-          const existing = conversations.find((c) => c.kind === 'dm' && c.partner.id === person.id)
-          if (existing) return existing.id
-          const result = await window.glofly.conversations.openDm(person.id)
-          if (!result.ok) {
-            if (result.error === 'unauthorized') onSessionExpired()
-            else setToast(result.message)
-            return null
-          }
-          const opened = result.data
-          setConversations((list) =>
-            list.some((c) => c.id === opened.id) ? list : [opened, ...list]
-          )
-          return opened.id
-        }}
+        onStartDm={startDm}
         onViewProfile={viewPerson}
         onReport={(m, sender) =>
           setReporting({
@@ -2394,8 +2396,35 @@ export default function MainScreen({
       />
       {/* Campfire (Nov 2026): the tabletop's own layer (above the night side), and its
           "Campfire is lit · Join" banner when a game master lights it in a call I'm in. */}
-      <CampfireLayer me={user} />
-      <LitBanner />
+      <CampfireLayer
+        me={user}
+        dock={
+          !restricted && (
+            <DmDock
+              me={user}
+              conversations={conversations}
+              presence={presence}
+              night
+              friends={lists?.friends ?? []}
+              onStartDm={startDm}
+              onRead={markedRead}
+              onHome={() => closeCampfire()}
+              onOpenFull={(id) => {
+                closeCampfire()
+                homeThen(() => setOpenChatId(id))
+              }}
+              onCall={(c) => {
+                closeCampfire()
+                homeThen(() => {
+                  setOpenChatId(c.id)
+                  callControls.current?.start(c, false)
+                })
+              }}
+            />
+          )
+        }
+      />
+      <LitBanner meId={user.id} />
 
       {!restricted && joinCode && (
         <InviteJoinDialog code={joinCode} onClose={() => setJoinCode(null)} onProblem={setToast} />

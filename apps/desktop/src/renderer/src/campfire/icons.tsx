@@ -1,6 +1,10 @@
 // The Campfire boards' line icons (24 × 24, 2 px strokes).
 
 const PATHS: Record<string, React.ReactNode> = {
+  // 0.11.2: Chats (raises the Glofly dock)
+  chat: (
+    <path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
+  ),
   select: <path d="M4 3l7 17 2.5-7.5L21 10z" />,
   measure: (
     <>

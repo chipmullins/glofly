@@ -16,7 +16,14 @@ import './campfire.css'
 // Campfire's own full layer over Glofly (above Constellations' night side): the Start board
 // (pick a campaign or start one) and then the table. Plus the "Campfire is lit · Join" banner.
 
-export default function CampfireLayer({ me }: { me: SignedInUser }): React.JSX.Element | null {
+export default function CampfireLayer({
+  me,
+  dock
+}: {
+  me: SignedInUser
+  /** 0.11.2: the Glofly dock (DMs and groups), so people can still chat at the table */
+  dock?: React.ReactNode
+}): React.JSX.Element | null {
   const open = useCampfireOpen()
   const [campaignId, setCampaignId] = useState<string | null>(null)
   const [fresh, setFresh] = useState<string | null>(null)
@@ -47,6 +54,9 @@ export default function CampfireLayer({ me }: { me: SignedInUser }): React.JSX.E
           placeName={open.placeName}
           setup={fresh === campaignId}
           onLeave={() => {
+            // 0.11.2: the setup steps are for a campaign just made, once. Coming back to the
+            // table later (from the call, the banner or the Start board) never starts them again.
+            setFresh(null)
             if (open.campaignId) closeCampfire()
             else setCampaignId(null)
           }}
@@ -59,6 +69,7 @@ export default function CampfireLayer({ me }: { me: SignedInUser }): React.JSX.E
           }}
         />
       ) : null}
+      {campaignId && dock}
     </div>
   )
 }
@@ -316,10 +327,12 @@ function BookIcon(): React.JSX.Element {
 }
 
 /** "Campfire is lit · Join" (Start board): a table was lit in a call I'm in. */
-export function LitBanner(): React.JSX.Element | null {
+export function LitBanner({ meId }: { meId?: string }): React.JSX.Element | null {
   const lit = useLitTables()
   const open = useCampfireOpen()
-  const shown = lit.filter((l) => open?.campaignId !== l.campaignId)
+  // 0.11.2: never to whoever lit it (the game master knows; the call bar's Campfire button takes
+  // them back).
+  const shown = lit.filter((l) => open?.campaignId !== l.campaignId && (!meId || l.by !== meId))
   if (!shown.length || open) return null
   const l = shown[shown.length - 1]
   return (

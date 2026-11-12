@@ -268,3 +268,14 @@
   `renderer/src/campfire/`, phones `src/campfire/`. Migrations 0063–0065 (renumbered from the branch's 0058–0060 at the
   merge); Round C's is 0066. Apps send feature `campfire` (with `threads, round2`). Never "D&D" in the product (say 5e);
   SRD content only with the CC BY 4.0 credit. The `campfire` branch is no longer needed (Round C goes on `dev`).
+- **0.11.2 (Nov 11, 2026): Campfire fixes after the first play test** (project doc `glofly-release-0.11.2.md`). Built
+  pieces can carry `hidden: true` and `layer` (named `BuiltMap.layers`, hidden layers hide their pieces): shared
+  `shownToPlayers` / `builtForPlayer` drop them, the layer list and both marks for players (`sceneOut` is the only
+  way a scene leaves the server; keep it that way). Apps that keep the marks send feature `campfire2`; for older apps
+  the scene PATCH runs `carryHidden` so saving never unhides. No migration (it's all in `campfire_scenes.built`).
+  Builder: multi-select (Shift-click / Shift-drag), move any piece, corner handles resize, Ctrl+C/X/V/D/A, H hides
+  (`campfire/pieces.ts`); GM table: `HiddenMenu.tsx`. Shift or Alt places freely (no snapping). Drags let go when the
+  button is up but the release was lost (`buttons === 0`, lost capture). The Glofly dock (DmDock) is on the table
+  (`CampfireLayer dock`, "Chats" raises it with `glofly:dock-show`) and its chats send and show pictures.
+  `.avatar-photo` is absolutely placed: any box holding one needs `position: relative` (a global `:where()` rule
+  now does it; Campfire's top bar showed a profile photo across the whole window).

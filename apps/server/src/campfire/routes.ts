@@ -10,6 +10,7 @@ import {
   isColor,
   isMapTheme,
   normalizeBuilt,
+  carryHidden,
   normalizeTimers,
   normalizeFog,
   normalizeGrid,
@@ -35,7 +36,7 @@ import {
 } from "../db/schema";
 import { isInCall, peopleInCall, reload as callRow } from "../calls/service";
 import { onSocketEvent } from "../realtime";
-import { forgetCampaign, leaveTable, notePresence, openCallOf, presentAt, sendCampfire, setOpenCall } from "./live";
+import { forgetCampaign, knowsHiding, leaveTable, notePresence, openCallOf, presentAt, sendCampfire, setOpenCall } from "./live";
 import { campaignRow, ensureMember, homeFor, inHome, rolesAt, settingsOf, tableFor, type CampaignRow, type Table } from "./perms";
 import { bad, cleanText, firstIssue, idParam, limiter, me, notFound, slot, tableOr, uuidList } from "./http";
 import { broadcast, charactersInfo, emitFog, emitScene, emitToken, forgetAudience, membersOf, sceneRow, tableState, tokensOf } from "./state";
@@ -419,7 +420,10 @@ coreRouter.patch("/scenes/:id", changeLimiter, (req, res, next) => (req.body?.bu
       ...(d.heightPx !== undefined ? { heightPx: d.heightPx } : {}),
       ...(d.grid !== undefined ? { grid: normalizeGrid(d.grid) } : {}),
       ...(d.theme !== undefined ? { theme: d.theme } : {}),
-      ...(d.built !== undefined ? { built: normalizeBuilt(d.built) } : {}),
+      // 0.11.2: an app from before hidden pieces would unhide them by saving; keep the GM's marks.
+      ...(d.built !== undefined
+        ? { built: knowsHiding(req) ? normalizeBuilt(d.built) : carryHidden(normalizeBuilt(scene.built), normalizeBuilt(d.built)) }
+        : {}),
       ...(d.fog !== undefined ? { fog: normalizeFog(d.fog) } : {}),
       ...(d.backgroundFileId !== undefined ? { backgroundFileId: d.backgroundFileId } : {}),
       ...(d.musicTrackId !== undefined ? { musicTrackId: d.musicTrackId } : {}),

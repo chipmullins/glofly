@@ -4,8 +4,10 @@ import type {
   BuiltObject,
   BuiltWall,
   GridSettings,
-  MapTheme
+  MapTheme,
+  PieceShown
 } from '@glofly/shared/campfire/types'
+import { pieceHidden } from '@glofly/shared/campfire/map'
 import { ALL_LAYERS, MATERIALS, materialOf, THEMES, type BuiltLayers } from './geometry'
 export type { BuiltLayers }
 
@@ -273,36 +275,120 @@ export function ObjectShape({
   )
 }
 
+/** 0.11.2: a piece the game master hid from players: faded, with a dashed amber outline (GM only). */
+function Hidden({
+  on,
+  children,
+  outline
+}: {
+  on: boolean
+  children: React.ReactNode
+  outline?: React.ReactNode
+}): React.JSX.Element {
+  if (!on) return <>{children}</>
+  return (
+    <g className="cf-piece-hidden">
+      <g opacity={0.38}>{children}</g>
+      {outline}
+    </g>
+  )
+}
+
 function BuiltLayer({
   built,
   grid,
   theme,
   layers = ALL_LAYERS,
-  showNotes
+  showNotes,
+  gmMarks = false,
+  only
 }: {
   built: BuiltMap
   grid: GridSettings
   theme: MapTheme
   layers?: BuiltLayers
   showNotes: boolean
+  /** Game masters: show pieces hidden from players faded and outlined */
+  gmMarks?: boolean
+  /** Builder: only this map layer's pieces at full strength (others dimmed); '' = no layer */
+  only?: string | null
 }): React.JSX.Element {
   const wall = THEMES[theme]?.wall ?? THEMES.stone.wall
+  const hid = (x: PieceShown): boolean => gmMarks && pieceHidden(x, built.layers)
+  const dim = (x: PieceShown): number | undefined =>
+    only === undefined || only === null || (x.layer ?? '') === only ? undefined : 0.45
   return (
     <g className="cf-built">
       {layers.floor &&
         built.floors.map((f) => (
-          <polygon
-            key={f.id}
-            data-piece={`floors:${f.id}`}
-            points={pts(f.points)}
-            fill={`url(#cf-mat-${materialOf(f.material).id})`}
-            stroke={wall}
-            strokeWidth={6}
-            strokeLinejoin="round"
-          />
+          <g key={f.id} opacity={dim(f)}>
+            <Hidden
+              on={hid(f)}
+              outline={
+                <polygon
+                  points={pts(f.points)}
+                  fill="none"
+                  stroke="#ffb347"
+                  strokeWidth={3}
+                  strokeDasharray="10 7"
+                  pointerEvents="none"
+                />
+              }
+            >
+              <polygon
+                data-piece={`floors:${f.id}`}
+                points={pts(f.points)}
+                fill={`url(#cf-mat-${materialOf(f.material).id})`}
+                stroke={wall}
+                strokeWidth={6}
+                strokeLinejoin="round"
+              />
+            </Hidden>
+          </g>
         ))}
-      {layers.objects && built.objects.map((o) => <ObjectShape key={o.id} o={o} grid={grid} />)}
-      {layers.walls && built.walls.map((w) => <Wall key={w.id} wall={w} color={wall} />)}
+      {layers.objects &&
+        built.objects.map((o) => (
+          <g key={o.id} opacity={dim(o)}>
+            <Hidden
+              on={hid(o)}
+              outline={
+                <rect
+                  x={o.x - 3}
+                  y={o.y - 3}
+                  width={o.w + 6}
+                  height={o.h + 6}
+                  fill="none"
+                  stroke="#ffb347"
+                  strokeWidth={2}
+                  strokeDasharray="6 5"
+                  pointerEvents="none"
+                />
+              }
+            >
+              <ObjectShape o={o} grid={grid} />
+            </Hidden>
+          </g>
+        ))}
+      {layers.walls &&
+        built.walls.map((w) => (
+          <g key={w.id} opacity={dim(w)}>
+            <Hidden
+              on={hid(w)}
+              outline={
+                <polyline
+                  points={pts(w.points)}
+                  fill="none"
+                  stroke="#ffb347"
+                  strokeWidth={2}
+                  strokeDasharray="6 5"
+                  pointerEvents="none"
+                />
+              }
+            >
+              <Wall wall={w} color={wall} />
+            </Hidden>
+          </g>
+        ))}
       {showNotes &&
         layers.notes &&
         built.notes.map((n) => (
