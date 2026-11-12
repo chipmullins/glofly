@@ -279,3 +279,7 @@
   (`CampfireLayer dock`, "Chats" raises it with `glofly:dock-show`) and its chats send and show pictures.
   `.avatar-photo` is absolutely placed: any box holding one needs `position: relative` (a global `:where()` rule
   now does it; Campfire's top bar showed a profile photo across the whole window).
+- **What's new (0.11.3):** every release adds an entry at the TOP of `WHATS_NEW` in `packages/shared/src/whatsNew.ts`
+  (plain words, what people can do now; `on: [...]` limits an item to desktop/web/phone). Every app shows newer notes
+  once after an update (desktop/web `lib/whatsNew.ts` + `components/WhatsNew.tsx`, phones `lib/whatsNew.ts` +
+  `ui/WhatsNew.tsx`), never to brand-new accounts; Settings → About → What's new shows them again.

@@ -1408,3 +1408,19 @@ test('campfire 0.11.2: hidden pieces and map layers never reach players', () => 
   assert.equal(kept.layers.length, 2)
   assert.deepEqual(s.builtForPlayer(kept, fogOff).floors.map((f) => f.id), ['hall', 'stairs', 'ghost'])
 })
+
+test("what's new: newer notes once, per app", () => {
+  const notes = [
+    { version: '0.12.0', date: '', headline: 'b', items: [{ title: 'x', text: '' }, { title: 'd', text: '', on: ['desktop'] }] },
+    { version: '0.11.10', date: '', headline: 'a', items: [{ title: 'p', text: '', on: ['phone'] }] },
+    { version: '0.11.3', date: '', headline: 'old', items: [{ title: 'o', text: '' }] }
+  ]
+  assert.equal(s.compareVersions('0.11.10', '0.11.3'), 1)
+  assert.equal(s.compareVersions('0.11.3', '0.11.3'), 0)
+  assert.deepEqual(s.whatsNewFor('desktop', '0.11.3', notes).map((n) => n.version), ['0.12.0'])
+  assert.deepEqual(s.whatsNewFor('phone', '0.11.3', notes).map((n) => n.version), ['0.12.0', '0.11.10'])
+  assert.deepEqual(s.whatsNewFor('web', '0.11.3', notes)[0].items.map((i) => i.title), ['x'])
+  assert.equal(s.whatsNewFor('desktop', '0.12.0', notes).length, 0)
+  assert.deepEqual(s.whatsNewFor('desktop', null, notes).map((n) => n.version), ['0.12.0'])
+  assert.equal(s.latestWhatsNew(), s.WHATS_NEW[0].version)
+})

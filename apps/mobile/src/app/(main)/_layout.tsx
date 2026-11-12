@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { WhatsNewHost } from '@/ui/WhatsNew'
 import { View } from 'react-native'
 import { Stack, usePathname } from 'expo-router'
 import { useTheme } from '@/ui/theme'
@@ -88,6 +89,8 @@ export default function MainLayout() {
       <CampfireLitBanner />
       {/* 0.7.5: a brand-new account's three welcome steps, over everything but calls */}
       <WelcomeFlowHost />
+      {/* 0.11.3: what's new after an update */}
+      <WhatsNewHost />
       <TeamNotice />
       {/* 0.8.0: keyboard shortcuts (iPad, tablets) and the shortcut sheet */}
       <KeyShortcuts />

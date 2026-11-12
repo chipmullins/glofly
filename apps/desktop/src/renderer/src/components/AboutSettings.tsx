@@ -1,4 +1,8 @@
 import wordmarkImg from '../assets/glofly-wordmark.png'
+import { useState } from 'react'
+import type { WhatsNewEntry } from '@glofly/shared/whatsNew'
+import WhatsNew from './WhatsNew'
+import { allWhatsNew } from '../lib/whatsNew'
 import { PRIVACY_URL, SITE_URL, SUPPORT_EMAIL, TERMS_URL } from '../lib/links'
 
 // Settings → About: version, the legal pages, how to reach us, and the credits the app's
@@ -84,13 +88,23 @@ function ExternalIcon(): React.JSX.Element {
 }
 
 export default function AboutSettings({ version }: { version: string | null }): React.JSX.Element {
+  // 0.11.3: the newest "What's new" notes, again.
+  const [notes, setNotes] = useState<WhatsNewEntry[]>([])
   return (
     <>
       <div className="about-hero">
         <img src={wordmarkImg} alt="Glofly" className="about-wordmark" draggable={false} />
         <span className="about-version">Version {version ?? '…'}</span>
         <span className="settings-row-desc">A brighter kind of together.</span>
+        <button
+          type="button"
+          className="small-button small-button--quiet"
+          onClick={() => setNotes(allWhatsNew())}
+        >
+          What’s new
+        </button>
       </div>
+      {notes.length > 0 && <WhatsNew notes={notes} onClose={() => setNotes([])} />}
 
       <section className="settings-section">
         <h2>Help and legal</h2>

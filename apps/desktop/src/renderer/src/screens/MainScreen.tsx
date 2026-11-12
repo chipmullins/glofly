@@ -29,6 +29,8 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import SidebarPins from '../constellations/SidebarPins'
 import EmptyScene from '../components/EmptyScene'
 import WelcomeFlow from '../components/WelcomeFlow'
+import WhatsNew from '../components/WhatsNew'
+import { markWhatsNewSeen, pendingWhatsNew } from '../lib/whatsNew'
 import OAuthConsent, { pendingOAuth } from '../oauth/OAuthConsent'
 import { noteInvited, welcomeFlowPending, finishWelcomeFlow } from '../lib/welcome'
 import ProfileCard from '../components/ProfileCard'
@@ -561,6 +563,13 @@ export default function MainScreen({
   const [addQuery, setAddQuery] = useState('')
   /** 0.7.5: the welcome flow, once, for an account made on this device (lib/welcome.ts) */
   const [welcoming, setWelcoming] = useState(() => welcomeFlowPending(user.id))
+  // 0.11.3: "What's new" once after an update (a brand-new account gets the welcome flow instead).
+  const [whatsNew, setWhatsNew] = useState(() =>
+    welcomeFlowPending(user.id) ? [] : pendingWhatsNew()
+  )
+  useEffect(() => {
+    if (welcomeFlowPending(user.id)) markWhatsNewSeen()
+  }, [user.id])
   // Communities round: Sign in with Glofly (chat.glofly.app/oauth/authorize).
   const [oauthQuery, setOauthQuery] = useState(() => pendingOAuth())
   const endWelcome = useCallback(() => {
@@ -2495,6 +2504,15 @@ export default function MainScreen({
         {/* Communities round: a Sign in with Glofly request waiting in this tab (browser only). */}
         {oauthQuery && (
           <OAuthConsent me={user} query={oauthQuery} onClose={() => setOauthQuery(null)} />
+        )}
+        {!welcoming && whatsNew.length > 0 && (
+          <WhatsNew
+            notes={whatsNew}
+            onClose={() => {
+              markWhatsNewSeen()
+              setWhatsNew([])
+            }}
+          />
         )}
         {welcoming && !restricted && (
           <WelcomeFlow

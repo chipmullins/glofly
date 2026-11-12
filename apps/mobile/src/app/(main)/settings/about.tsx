@@ -2,6 +2,7 @@ import { Linking, View } from 'react-native'
 import { Image } from 'expo-image'
 import { PRIVACY_URL, SITE_URL, SUPPORT_EMAIL, TERMS_URL } from '@glofly/shared'
 import { APP_VERSION } from '@/lib/config'
+import { showAllWhatsNew } from '@/lib/whatsNew'
 import { Text } from '@/ui/kit'
 import { Screen } from '@/ui/Screen'
 import { SettingsRow } from '@/ui/SettingsRow'
@@ -16,6 +17,7 @@ export default function About() {
         </Text>
         <Text tone="muted">Version {APP_VERSION}</Text>
       </View>
+      <SettingsRow icon="info" label="What’s new" onPress={showAllWhatsNew} />
       <SettingsRow icon="file" label="Terms of Service" onPress={() => void Linking.openURL(TERMS_URL)} />
       <SettingsRow icon="shield" label="Privacy Policy" onPress={() => void Linking.openURL(PRIVACY_URL)} />
       <SettingsRow icon="mail" label="Contact support" detail={SUPPORT_EMAIL} onPress={() => void Linking.openURL(`mailto:${SUPPORT_EMAIL}`)} />
