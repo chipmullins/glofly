@@ -235,6 +235,73 @@
   .after-last footer { background: var(--night-deep); color: var(--sky-muted); border-top: 1px solid var(--night-line); }
   .after-last footer a { color: var(--glow-pale); }
   .after-last footer .foot-brand { color: var(--sky-ink); }
+
+  /* ---------- Campfire (0.11) ---------- */
+  .pill .pill-soft { color: var(--sky-muted); font-weight: 500; white-space: nowrap; }
+  .tag-testing { display: inline-block; vertical-align: middle; margin-left: 6px; font: 700 10.5px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: #2a1406; background: #ffd08a; padding: 5px 8px; border-radius: 999px; }
+  .new-card { grid-template-columns: auto 2fr 1fr 1fr; }
+  .new-cf { text-decoration: none; color: #f3e6da; background: radial-gradient(ellipse 70% 90% at 15% 100%, rgba(255, 138, 31, 0.35), transparent 70%), #1f1714; }
+  .new-cf .new-ic { background: rgba(255, 179, 71, 0.18); color: var(--glow); }
+  .new-cf h3 { color: #fff; }
+  .new-cf p { color: #e5d6ca; }
+  .new-more { display: inline-block; margin-top: 6px; font: 700 14px/1 var(--font-display); color: var(--glow); }
+  .new-cf:hover .new-more { text-decoration: underline; }
+  .cf-band { color: #f3e6da; background: radial-gradient(ellipse 55% 60% at 72% 50%, rgba(255, 138, 31, 0.22), transparent 70%), linear-gradient(180deg, #1f1410 0%, #140f0d 100%); }
+  .cf-grid { display: grid; grid-template-columns: 1fr 1.05fr; gap: 56px; align-items: center; }
+  .cf-kick { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .cf-band .kicker { color: var(--glow); }
+  .cf-band h2 { color: #fff; }
+  .cf-band h2 em { font-style: normal; color: var(--glow); }
+  .cf-band .lede-2 { color: #e5d6ca; }
+  .cf-points { list-style: none; margin: 24px 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
+  .cf-points li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; line-height: 1.5; color: #c9b6a8; }
+  .cf-points b { display: block; font: 700 16px/1.3 var(--font-display); color: #fff; }
+  .cf-ic { flex: none; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: rgba(255, 179, 71, 0.14); color: var(--glow); }
+  .cf-ic svg, .cf-note svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .cf-note { display: flex; gap: 10px; align-items: flex-start; margin: 22px 0 0; padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); font-size: 14px; line-height: 1.5; color: #c9b6a8; }
+  .cf-note svg { flex: none; margin-top: 1px; color: #ffd08a; }
+  .cf-note b { color: #ffd08a; }
+  .cf-note a { color: var(--glow); }
+  .cf-table { margin: 0; }
+  .cf-map { position: relative; height: 520px; border-radius: 24px; overflow: hidden; background: #0b0807; border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 40px 80px -40px rgba(255, 138, 31, 0.45), 0 30px 60px -30px rgba(0, 0, 0, 0.8);
+    background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px); background-size: 44px 44px; }
+  .cf-map i { position: absolute; font-style: normal; }
+  .cf-room { background: #3a2a20; border: 6px solid #5b4332; border-radius: 4px; }
+  .cf-room.r1 { left: 44px; top: 88px; width: 264px; height: 220px; }
+  .cf-room.r2 { left: 302px; top: 176px; width: 132px; height: 44px; border-left: 0; border-right: 0; border-radius: 0; }
+  .cf-room.r3 { left: 428px; top: 44px; width: 176px; height: 308px; }
+  .cf-fog { left: 428px; top: 352px; width: 176px; height: 132px; background: repeating-linear-gradient(135deg, rgba(20, 15, 13, 0.95) 0 8px, rgba(30, 22, 18, 0.95) 8px 16px); border-radius: 4px; }
+  .cf-reach { left: 154px; top: 132px; width: 176px; height: 176px; border: 2px solid rgba(255, 179, 71, 0.85); background: rgba(255, 179, 71, 0.07); border-radius: 8px; }
+  .cf-tok { width: 44px; height: 44px; box-sizing: border-box; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; font: 800 16px/1 var(--font-display); }
+  .cf-tok.t-l { left: 198px; top: 176px; background: #b57cff; color: #1b1036; box-shadow: 0 0 0 4px rgba(181, 124, 255, 0.35); }
+  .cf-tok.t-t { left: 110px; top: 220px; background: #57c27a; color: #0f2a18; }
+  .cf-tok.t-g { left: 242px; top: 220px; background: #c0392b; color: #fff; border-color: var(--glow); }
+  .cf-dmg { left: 276px; top: 202px; font: 800 18px/1 var(--font-display); color: #ffd08a; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8); }
+  .cf-turns { position: absolute; right: 18px; top: 70px; width: 196px; padding: 14px; border-radius: 16px; background: rgba(31, 23, 20, 0.95); border: 1px solid rgba(255, 255, 255, 0.12); display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: #e5d6ca; }
+  .cf-turns b { font: 700 13px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: #c9b6a8; }
+  .cf-turns > span { display: flex; justify-content: space-between; padding: 0 10px; }
+  .cf-turns > span.now { padding: 8px 10px; border-radius: 10px; background: rgba(255, 179, 71, 0.16); color: #fff; font-weight: 700; }
+  .cf-turns > span.now span:last-child { color: var(--glow); }
+  .cf-roll { position: absolute; left: 18px; bottom: 18px; display: flex; gap: 12px; align-items: center; padding: 12px 16px 12px 12px; border-radius: 16px; background: rgba(31, 23, 20, 0.95); border: 1px solid rgba(255, 255, 255, 0.12); }
+  .cf-roll b { display: block; font: 700 15px/1.2 var(--font-display); color: #fff; }
+  .cf-roll small { font-size: 13px; color: #c9b6a8; }
+  .cf-die { flex: none; width: 46px; height: 46px; display: grid; place-items: center; background: var(--glow); color: #2a1406; font: 800 20px/1 var(--font-display); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+  .cf-credit { margin-top: 40px; font-size: 12px; line-height: 1.6; color: #9c897c; }
+  @media (max-width: 1060px) {
+    .new-card { grid-template-columns: repeat(2, 1fr); }
+    .new-cf { grid-column: 1 / -1; }
+    .new-item.new-cf + .new-item { border-left: 0; border-top: 1px solid var(--line); }
+    .new-item:nth-of-type(3) { border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
+    .cf-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .new-card { grid-template-columns: 1fr; }
+    .new-item:nth-of-type(3) { border-left: 0; }
+    .cf-points { grid-template-columns: 1fr; }
+    .cf-map { height: 420px; transform-origin: top left; }
+    .cf-turns { width: 160px; top: 14px; right: 12px; }
+    .cf-room.r3, .cf-fog { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -251,6 +318,7 @@
       <nav class="nav" aria-label="Site">
         <a href="#why">Why Glofly</a>
         <a href="#constellations">Constellations</a>
+        <a href="#campfire">Campfire</a>
         <a href="/features">Screenshots</a>
         <a href="#download">Download</a>
         <a href="#about">About</a>
@@ -313,9 +381,9 @@
 
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <a class="pill" href="https://apps.apple.com/us/app/glofly/id6822127148"><b>New</b> Glofly is now on the App Store for iPhone and iPad</a>
+        <a class="pill" href="#campfire"><b>Introducing</b> <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-5 1-7.5z"/><path d="M5 21h14"/></svg> Campfire, a 5e tabletop inside your calls <span class="pill-soft">· In testing</span></a>
         <h1><span>Glow on.</span><span>Say hi.</span><span class="glofly">Glofly.</span></h1>
-        <p class="lede">The messenger for <b>you and your friends</b>, nobody else. Chat one-on-one or in groups, jump on a voice or video call with one click, watch videos together, and give your crew its own Constellation. No ads, no feeds, just your people.</p>
+        <p class="lede">The messenger for <b>you and your friends</b>, nobody else. Chat one-on-one or in groups, jump on a voice or video call with one click, watch videos together, give your crew its own Constellation, and now pull up a chair at Campfire. No ads, no feeds, just your people.</p>
         <div class="btns">
           <a class="btn glow" href="/download">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.3H3zm0 13.6 7.4 1.2v-7.2H3zm8.4 1.4L21 21.6v-8.8h-9.6zm0-16.4v7.5H21V2.4z"/></svg>
@@ -463,22 +531,18 @@
   <section class="new" aria-labelledby="new-title">
     <div class="wrap">
       <div class="new-card">
-        <div class="new-label"><b id="new-title">New in 0.9</b><span>Out now</span></div>
+        <div class="new-label"><b id="new-title">What's new</b><span>Out now</span></div>
+        <a class="new-item new-cf" href="#campfire">
+          <span class="new-ic"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-5 1-7.5z"/><path d="M5 21h14"/></svg></span>
+          <div><h3>Introducing Campfire <span class="tag-testing">In testing</span></h3><p>A virtual tabletop for 5e inside your Glofly calls: maps, tokens, dice everyone sees, and fights that keep their own turn order.</p><span class="new-more">See how it works →</span></div>
+        </a>
         <div class="new-item">
-          <span class="new-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span>
-          <div><h3>Profiles that feel like you</h3><p>A header picture, your favorite games on a board, and what you've been up to.</p></div>
+          <span class="new-ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M15 15c3 0 6 2 6 5"/></svg></span>
+          <div><h3>Bigger Constellations</h3><p>Stages, announcements, custom emoji and room for up to 25,000 people.</p></div>
         </div>
         <div class="new-item">
-          <span class="new-ic"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg></span>
-          <div><h3>Steam, Twitch and Kick</h3><p>Link your accounts and get a heads-up when a friend goes live.</p></div>
-        </div>
-        <div class="new-item">
-          <span class="new-ic"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span>
-          <div><h3>Threads and forums</h3><p>Keep side conversations tidy in your Constellations.</p></div>
-        </div>
-        <div class="new-item">
-          <span class="new-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"/></svg></span>
-          <div><h3>Easier to see</h3><p>A high-contrast option on every device, and friends' faces hop when they message you.</p></div>
+          <span class="new-ic"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+          <div><h3>Night watch</h3><p>Reports, raid protection and a mod log to keep your community kind.</p></div>
         </div>
       </div>
     </div>
@@ -562,6 +626,37 @@
       </div>
     </div>
   </section>
+  <section class="section cf-band" id="campfire" aria-labelledby="cf-title">
+    <div class="wrap cf-grid">
+      <div class="cf-copy">
+        <div class="cf-kick"><span class="kicker">Introducing Campfire</span><span class="tag-testing">In testing</span></div>
+        <h2 class="big" id="cf-title">Your 5e table, <em>right inside the call.</em></h2>
+        <p class="lede-2">Campfire is a virtual tabletop built into Glofly. Start a call, light the campfire, and your group is at the table: a map, everyone's tokens, dice the whole party sees and fights that keep their own turn order. No second app, no extra tab, no screen sharing a map.</p>
+        <ul class="cf-points">
+          <li><span class="cf-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg></span><span><b>Maps with fog</b>Build a dungeon from pieces and only reveal what the party has found.</span></li>
+          <li><span class="cf-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M5 21v-1a7 7 0 0 1 14 0v1"/></svg></span><span><b>Characters in minutes</b>A step-by-step character builder for 2014 and 2024 rules, and sheets that roll for you.</span></li>
+          <li><span class="cf-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="m13 19 6-6M16 16l4 4M19 21l2-2"/></svg></span><span><b>Fights that run smoothly</b>Initiative and turn order, conditions, and attacks rolled against your target's armor.</span></li>
+          <li><span class="cf-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 2v20M3 7l9 5 9-5"/></svg></span><span><b>Dice everyone sees</b>Rolls tumble onto the table for the whole party, or just for the game master.</span></li>
+        </ul>
+        <div class="btns">
+          <a class="btn glow" href="#download">Get Glofly and try it</a>
+        </div>
+        <p class="cf-note"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01"/></svg><span><b>Campfire is in testing.</b> It's free and in every Glofly app now, with rough edges we're still sanding down. Run into one? Tell us at <a href="mailto:support@glofly.app">support@glofly.app</a>.</span></p>
+      </div>
+      <figure class="cf-table" role="img" aria-label="A Campfire table: a dungeon map with the party's tokens, a goblin taking a hit, the turn order and a dice roll">
+        <div class="cf-map" aria-hidden="true">
+          <i class="cf-room r1"></i><i class="cf-room r2"></i><i class="cf-room r3"></i><i class="cf-fog"></i>
+          <i class="cf-reach"></i>
+          <i class="cf-tok t-l">L</i><i class="cf-tok t-t">T</i><i class="cf-tok t-g">G</i>
+          <i class="cf-dmg">−7</i>
+          <div class="cf-turns"><b>Round 2</b><span class="now"><span>Lyra</span><span>18</span></span><span><span>Goblin</span><span>14</span></span><span><span>Thorin</span><span>9</span></span></div>
+          <div class="cf-roll"><span class="cf-die">17</span><span><b>Lyra hits the goblin!</b><small>Longsword · d20 + 5 = 17 vs AC 15</small></span></div>
+        </div>
+      </figure>
+    </div>
+    <p class="wrap cf-credit">Campfire's compendium includes material from the System Reference Document 5.1 and 5.2 by Wizards of the Coast LLC, licensed under CC BY 4.0. Campfire isn't made, endorsed or sponsored by Wizards of the Coast.</p>
+  </section>
+
   <section class="section peek on-page" aria-labelledby="peek-title">
     <div class="wrap">
       <div class="peek-head">
