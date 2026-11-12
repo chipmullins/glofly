@@ -171,7 +171,8 @@
   made a cycle that crashed the server at start; the time zone is in `src/timeZone.ts`). Desktop Control's main
   process only allows listed routes (`main/api.ts ALLOWED`): add new Control routes there too. Control for iPhone:
   Face ID sign-in for 14 days (`POST /admin/auth/resume`, `admin_devices.remember_*`, test `test/faceid.e2e.ts`).
-- **Next (Nov 11, 2026):** communities round 2 is built on `dev` (project doc `glofly-communities-round-2.md`), waiting for Chip to test and ship. Before that: the project doc `glofly-status-nov8.md` (0.9.2 = profile follow-ups + the bulk round, waiting to ship; setup steps and what's untested), then `glofly-release-0.9.2.md`.
+- **Next (Nov 11, 2026):** 0.10.0 (communities round 2) is released. Campfire is merged into `dev` and ships as 0.11.0
+  (project doc `glofly-release-0.11.0.md`); then Campfire Round C (`glofly-campfire-next.md`).
 - **0.8.6 (Oct 28, 2026): update on every launch, Windows + Mac** (project doc `glofly-release-0.8.6.md`).
   `src/main/launchUpdate.ts` runs before Glofly's window opens (`openGlofly` in index.ts starts everything
   else, once); the window is its own page `src/renderer/updater.html` + `src/renderer/src/updater/` (no
@@ -256,8 +257,10 @@
   token overrides in `main.css` (set by `lib/appearance.ts`, follows `prefers-contrast: more`); phones `useHighContrast()`
   overlays in `ui/theme.ts` (follows iOS Increase Contrast / Android high text contrast). New colors: use the tokens so
   they follow it. The night sky's own approved colors are unchanged.
-- **Campfire (branch `campfire` only, Nov 9–10, 2026):** a 5e virtual tabletop inside calls (project docs
-  `glofly-campfire.md` = what's built, `glofly-campfire-next.md` = next rounds). Spec `docs/campfire/SPEC.md`, approved
-  boards `docs/design/campfire/`. Server `src/campfire/` (all fog/GM-only filtering is server-side; players never receive
-  hidden things), shared `packages/shared/src/campfire/`, desktop `renderer/src/campfire/`, phones `src/campfire/`.
-  Never "D&D" in the product (say 5e); SRD content only with the CC BY 4.0 credit. Never merge into `dev` without Chip.
+- **Campfire (Nov 9–11, 2026; merged into `dev` Nov 11, ships as 0.11.0):** a 5e virtual tabletop inside calls (project
+  docs `glofly-campfire.md` = what's built, `glofly-campfire-next.md` = next rounds, `glofly-release-0.11.0.md`). Spec
+  `docs/campfire/SPEC.md`, approved boards `docs/design/campfire/`. Server `src/campfire/` (all fog/GM-only filtering is
+  server-side; players never receive hidden things), shared `packages/shared/src/campfire/`, desktop
+  `renderer/src/campfire/`, phones `src/campfire/`. Migrations 0063–0065 (renumbered from the branch's 0058–0060 at the
+  merge); Round C's is 0066. Apps send feature `campfire` (with `threads, round2`). Never "D&D" in the product (say 5e);
+  SRD content only with the CC BY 4.0 credit. The `campfire` branch is no longer needed (Round C goes on `dev`).
