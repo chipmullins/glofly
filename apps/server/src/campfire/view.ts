@@ -293,7 +293,7 @@ export const trackOut = (t: TrackRow): Track => ({
  */
 export function combatOut(combat: CombatState | null, viewer: Viewer, visible: Map<string, string>): CombatView | null {
   if (!combat) return null;
-  // While players roll initiative (0.11.4), it's nobody's turn yet.
+  // While players roll initiative (0.11.3), it's nobody's turn yet.
   const current = combat.rolling ? null : (combat.entries[combat.turn]?.tokenId ?? null);
   if (viewer.gm) return { ...combat, current };
   const entries = combat.entries

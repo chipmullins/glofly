@@ -116,7 +116,7 @@ export function attackFromItem(item: RulesItem, scores: Record<Ability, number>,
 export const twoHandedId = (attackId: string): string => `${attackId}-2h`
 
 /**
- * Sheets made before 0.11.4 have one attack for a versatile weapon ("Two hands: 1d10" in its
+ * Sheets made before 0.11.3 have one attack for a versatile weapon ("Two hands: 1d10" in its
  * notes): the sheets show its two-handed attack next to it (`virtual`: not saved on the sheet).
  */
 export function withTwoHanded(attacks: readonly SheetAttack[]): (SheetAttack & { virtual?: true })[] {
@@ -129,7 +129,7 @@ export function withTwoHanded(attacks: readonly SheetAttack[]): (SheetAttack & {
 }
 
 /**
- * 0.11.4 (Chip: "longsword should allow two hands"): a weapon's attacks, a versatile one gets a
+ * 0.11.3 (Chip: "longsword should allow two hands"): a weapon's attacks, a versatile one gets a
  * second, two-handed attack (its versatile damage) right after the one-handed one.
  */
 export function attacksFromItem(item: RulesItem, scores: Record<Ability, number>, id: string, proficient = true): SheetAttack[] {

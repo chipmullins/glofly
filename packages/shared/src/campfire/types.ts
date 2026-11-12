@@ -601,10 +601,10 @@ export type CombatEntry = {
   dashed?: boolean
   lastMove?: { x: number; y: number; cost: number } | null
   legendaryUsed?: number
-  /** 0.11.4: a player's token (they roll their own initiative) */
+  /** 0.11.3: a player's token (they roll their own initiative) */
   player?: boolean
 }
-/** rolling (0.11.4): players are still rolling initiative; the first turn starts once they all have. */
+/** rolling (0.11.3): players are still rolling initiative; the first turn starts once they all have. */
 export type CombatState = { round: number; turn: number; entries: CombatEntry[]; rolling?: boolean }
 /** What a viewer gets: hidden entries left out for players; `current` null when it's hidden. */
 export type CombatView = CombatState & { current: string | null }

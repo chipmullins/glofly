@@ -581,7 +581,7 @@ test("the turn order", { skip }, async () => {
   assert.equal(start.status, 200, JSON.stringify(start.json));
   assert.equal(start.json.combat.round, 1);
   assert.equal(start.json.combat.entries.find((e: any) => e.tokenId === tok.trap).hidden, true, "GM-layer tokens start hidden");
-  // 0.11.4: monsters roll at once; Thorin's player rolls his own.
+  // 0.11.3: monsters roll at once; Thorin's player rolls his own.
   const rolled = await c({ op: "rollAll" });
   assert.equal(rolled.json.combat.rolling, true);
   assert.equal(rolled.json.combat.entries.find((e: any) => e.tokenId === tok.thorin).init, null);

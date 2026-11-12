@@ -194,7 +194,7 @@ function TableReady({
         !e.altKey &&
         selectedId
       ) {
-        // 0.11.4: H hides the selected creature from players (or shows it again).
+        // 0.11.3: H hides the selected creature from players (or shows it again).
         const tk = t.tokens.find((x) => x.id === selectedId)
         if (tk && tk.layer !== 'map') void hideRef.current?.(tk.id, tk.layer !== 'gm')
       } else if (
@@ -324,7 +324,7 @@ function TableReady({
     if (!r.ok) say(r.message)
     else ctl.update((s) => ({ ...s, music: r.data.music }))
   }
-  // 0.11.4: hide a creature from players (the GM layer) or show it again.
+  // 0.11.3: hide a creature from players (the GM layer) or show it again.
   const setTokenHidden = async (id: string, hidden: boolean): Promise<void> => {
     const r = await cf.patch<Token>(`/campfire/tokens/${id}`, { layer: hidden ? 'gm' : 'tokens' })
     if (!r.ok) say(r.message)
@@ -832,7 +832,7 @@ function TableReady({
                 fogBrush={fogBrush}
                 selectedId={selectedId}
                 onSelect={(id) => {
-                  // An attack waiting for its target (0.11.4): this click picks it.
+                  // An attack waiting for its target (0.11.3): this click picks it.
                   if (armed && id && id !== armed.attackerId) {
                     const attacker = t.tokens.find((x) => x.id === armed.attackerId)
                     const target = t.tokens.find((x) => x.id === id)

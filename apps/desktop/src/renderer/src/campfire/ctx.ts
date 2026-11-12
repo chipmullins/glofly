@@ -28,7 +28,7 @@ export type Cf = {
   targetId: string | null
   setTargetId: (id: string | null) => void
   /**
-   * 0.11.4: attack with a weapon. With a target picked it rolls (if in range); otherwise the
+   * 0.11.3: attack with a weapon. With a target picked it rolls (if in range); otherwise the
    * attack waits for a click on the token to attack. No token of yours on the map: plain rolls.
    */
   attackWith: (

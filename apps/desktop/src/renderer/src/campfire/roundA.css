@@ -1547,7 +1547,7 @@ button.cf-link {
   text-transform: none;
 }
 
-/* 0.11.2: Campaign hub → Delete this campaign */
+/* 0.11.3: Campaign hub → Delete this campaign */
 .cfa-danger {
   margin: 18px 24px 24px;
   border-color: rgba(192, 57, 43, 0.45);
@@ -1572,7 +1572,7 @@ button.cf-link {
   cursor: default;
 }
 
-/* 0.11.2: what's still open on this builder step (Next waits for it) */
+/* 0.11.3: what's still open on this builder step (Next waits for it) */
 .cfa-still-open {
   font-size: 13px;
   color: var(--cf-amber);
@@ -1583,7 +1583,7 @@ button.cf-link {
   cursor: not-allowed;
 }
 
-/* 0.11.4: starting gear. Picked items say so in green; "Your gear" sums it up at the top. */
+/* 0.11.3: starting gear. Picked items say so in green; "Your gear" sums it up at the top. */
 .cfa-gear-sum {
   position: sticky;
   top: 0;

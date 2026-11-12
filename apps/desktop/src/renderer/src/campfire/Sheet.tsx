@@ -246,7 +246,7 @@ function ShortSheet({ ch }: { ch: Character }): React.JSX.Element {
       gmOnly: npcRolls
     })
 
-  // 0.11.4: pick the weapon, then click the token to attack (rolls only if it's in range).
+  // 0.11.3: pick the weapon, then click the token to attack (rolls only if it's in range).
   const attack = async (a: SheetAttack): Promise<void> => {
     const ex = attackExpressions(sheet, a)
     await attackWith(

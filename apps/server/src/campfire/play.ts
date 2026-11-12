@@ -392,7 +392,7 @@ const combatInput = z.discriminatedUnion("op", [
   z.object({ op: z.literal("start"), tokenIds: uuidList(100).optional() }),
   z.object({ op: z.literal("add"), tokenIds: uuidList(100) }),
   z.object({ op: z.literal("remove"), tokenId: z.uuid() }),
-  // 0.11.4: monsters roll at once, players get a prompt to roll their own; `rest` rolls whoever
+  // 0.11.3: monsters roll at once, players get a prompt to roll their own; `rest` rolls whoever
   // still hasn't (the game master's "Roll for the rest").
   z.object({ op: z.literal("rollAll"), rest: z.boolean().optional() }),
   z.object({ op: z.literal("roll"), tokenId: z.uuid() }),
@@ -576,7 +576,7 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
       break;
     }
   }
-  // 0.11.4: the last player's initiative is in: the order is set, the first turn starts.
+  // 0.11.3: the last player's initiative is in: the order is set, the first turn starts.
   let rollingDone = false;
   if (combat?.rolling && d.op !== "rollAll" && !combat.entries.some((e) => e.player && e.init === null)) {
     delete combat.rolling;

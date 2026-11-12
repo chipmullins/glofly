@@ -38,7 +38,7 @@ export const roundA = {
   saveSheet: (characterId: string, sheet: Sheet5e) => request<Character>('PATCH', `/campfire/characters/${enc(characterId)}`, { sheet }),
   roll: (campaignId: string, expression: string, label: string, characterId: string) =>
     request<{ total: number }>('POST', `/campfire/campaigns/${enc(campaignId)}/rolls`, { expression, label, characterId, visibility: 'all' }),
-  /** 0.11.4: every non-magic item (class starting gear and its shop) */
+  /** 0.11.3: every non-magic item (class starting gear and its shop) */
   mundaneItems: async (rules: RulesSet): Promise<RulesItem[]> => {
     const r = await request<{ items: RulesItem[] }>('GET', `/campfire/srd/items/mundane?rules=${rules}`)
     return r.ok ? r.data.items : []

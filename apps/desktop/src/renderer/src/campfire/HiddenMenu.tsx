@@ -21,7 +21,7 @@ export default function HiddenMenu({
 }: {
   built: BuiltMap
   onSave: (built: BuiltMap) => void
-  /** 0.11.4: tokens on this scene (hidden ones are listed; "Hide" for the selected one) */
+  /** 0.11.3: tokens on this scene (hidden ones are listed; "Hide" for the selected one) */
   tokens?: Token[]
   onShowTokens?: (ids: string[]) => void
   onHideToken?: (id: string) => void
@@ -57,7 +57,7 @@ export default function HiddenMenu({
     (n, k) => n + listOf(built, k).filter((p) => pieceHidden(p, layers)).length,
     0
   )
-  // 0.11.4 (Chip: "hiding and unhiding monsters… easier to find"): creatures on the GM layer.
+  // 0.11.3 (Chip: "hiding and unhiding monsters… easier to find"): creatures on the GM layer.
   const hiddenTokens = tokens.filter((x) => x.layer === 'gm')
   const shownTokens = tokens.filter((x) => x.layer === 'tokens')
   const count = total + hiddenTokens.length

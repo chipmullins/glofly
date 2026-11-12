@@ -725,7 +725,7 @@ function MapView(p: Props): React.JSX.Element {
       panBy(ax, ay)
     }
     const nd = nextDrag.current
-    // 0.11.4 (Chip: "moving tokens needs to be smoothed further"): the dragged token itself is
+    // 0.11.3 (Chip: "moving tokens needs to be smoothed further"): the dragged token itself is
     // moved straight in the page every frame (placeLive); the map redraws (path, distance) only
     // about 12 times a second, so a big map never holds the token back.
     if (nd && (!dragStateAt.current || ts - dragStateAt.current > 80)) {

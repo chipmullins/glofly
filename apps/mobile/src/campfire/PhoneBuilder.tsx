@@ -330,7 +330,7 @@ type Draft = {
   skills: SkillId[]
   /** Only for classes without starting-gear data (homebrew) */
   equipment: RulesItem[]
-  /** 0.11.4: the class's starting gear choices */
+  /** 0.11.3: the class's starting gear choices */
   gear: GearSelection
   spells: SheetSpell[]
   name: string
@@ -387,7 +387,7 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
     const feat = d.asiFeat[i]
     return feat ? { kind: 'feat', featId: feat } : { kind: 'asi', plus: d.asi[i] ?? {} }
   })
-  // 0.11.4 (Chip): each class starts with its own gear (SRD), not the whole armory.
+  // 0.11.3 (Chip): each class starts with its own gear (SRD), not the whole armory.
   const classGear = pick.cls && items?.length !== 0 ? gearFor(rules, pick.cls.id) : null
   const gearOut = classGear && items ? resolveGear(classGear, d.gear, items) : null
   const choices: BuildChoices = {
@@ -424,7 +424,7 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
       })(),
     !!d.name.trim(),
   ]
-  // 0.11.4 (Chip: "choose everything before Next"): what's still open on this step.
+  // 0.11.3 (Chip: "choose everything before Next"): what's still open on this step.
   const openText = [
     'Pick a species (and its subspecies or skill).',
     'Pick a class (and subclass at this level).',

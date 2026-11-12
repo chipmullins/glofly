@@ -938,7 +938,7 @@ function ActionsSection({
   const target = targetId ? t.tokens.find((x) => x.id === targetId) : null
   const advWord = rollWith === 'adv' ? ' (advantage)' : rollWith === 'dis' ? ' (disadvantage)' : ''
 
-  // 0.11.4: pick the weapon, then click the token to attack (rolls only if it's in range;
+  // 0.11.3: pick the weapon, then click the token to attack (rolls only if it's in range;
   // past normal range it's at disadvantage).
   const toHit = async (a: SheetAttack): Promise<void> => {
     const ex = attackExpressions(sheet, a)

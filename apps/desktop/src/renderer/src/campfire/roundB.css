@@ -347,7 +347,7 @@
   background: rgba(8, 6, 5, 0.94);
 }
 
-/* 0.11.4: players roll their own initiative */
+/* 0.11.3: players roll their own initiative */
 .cf-init-prompt {
   position: absolute;
   left: 50%;
@@ -394,7 +394,7 @@
   }
 }
 
-/* 0.11.4: an attack waiting for its target */
+/* 0.11.3: an attack waiting for its target */
 .cf-armed {
   position: absolute;
   left: 50%;
@@ -403,7 +403,7 @@
   z-index: 8;
 }
 
-/* 0.11.4: token card: hide/show in one press, and the creature's attacks */
+/* 0.11.3: token card: hide/show in one press, and the creature's attacks */
 .cf-vis {
   display: flex;
   align-items: center;

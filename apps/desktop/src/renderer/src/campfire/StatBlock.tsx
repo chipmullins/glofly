@@ -187,7 +187,7 @@ export function StatBlock({
         ? (t.tokens.find((x) => x.id === selectedId && x.characterId === ch.id) ?? null)
         : null))
     : null
-  // 0.11.4: pick the attack, then click the token it attacks (rolls only if it's in range).
+  // 0.11.3: pick the attack, then click the token it attacks (rolls only if it's in range).
   const toHit = async (a: SheetAttack): Promise<void> => {
     const ex = attackExpressions(sheet, a)
     await attackWith(

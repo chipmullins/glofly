@@ -1,4 +1,4 @@
-// 0.11.2 (Chip: "each class has its own set of starting gear, not access to all of the gear"):
+// 0.11.3 (Chip: "each class has its own set of starting gear, not access to all of the gear"):
 // what a new character of each class starts with, from the SRD (5.1 for the 2014 rules, 5.2 for
 // 2024). 2014 classes choose between (a) and (b) for each line, some lines say "any simple weapon";
 // 2024 classes take package A, or the gold instead and buy their own gear (the shop).
