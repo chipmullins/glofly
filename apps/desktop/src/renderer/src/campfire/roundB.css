@@ -464,3 +464,6 @@
   color: var(--cf-muted);
   margin: 6px 0;
 }
+.cf-armed span {
+  white-space: nowrap;
+}

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { playSound } from '../lib/sounds'
 import type { CombatEntry, CombatView, Token } from '@glofly/shared/campfire/types'
 import { cf, fileUrl } from './api'
 import { useCf } from './ctx'
@@ -60,9 +61,13 @@ export function InitiativePrompt(): React.JSX.Element | null {
   const { combat, op } = useCombat()
   const mine = useMine()
   const [busy, setBusy] = useState(false)
-  if (!combat?.rolling) return null
-  const waiting = combat.entries.filter((e) => e.init === null && mine(e))
-  if (!waiting.length) return null
+  const waiting = combat?.rolling ? combat.entries.filter((e) => e.init === null && mine(e)) : []
+  // A short chime when the prompt appears (follows Glofly's sound settings and Do not disturb).
+  const asking = waiting.length > 0
+  useEffect(() => {
+    if (asking) playSound('friendRequest')
+  }, [asking])
+  if (!asking) return null
   return (
     <div className="cf-init-prompt" role="alertdialog" aria-label="Roll for initiative">
       <b>Roll for initiative!</b>

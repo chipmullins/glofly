@@ -36,6 +36,7 @@ import { applyHeal, applyHit, emitHit, hitForTable, syncTokensFromSheet } from "
 import { tokenTable } from "./routes";
 import { startTurn, turnMoveOp } from "./roundB";
 import { campaignRow } from "./perms";
+import { presentAt } from "./live";
 import { combatOut, controls, pendingOut, rollOut, tokenVisible, type CharacterRow, type TokenRow } from "./view";
 
 // Campfire play: rolls, the hit flow (attack → hit or miss → damage → GM approves → applied),
@@ -454,6 +455,11 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
   const chars = await charactersInfo(t.campaign.id);
   const playerToken = (tk: TokenRow) =>
     tk.controlledBy.some((u) => u !== t.userId) || (!!tk.characterId && !!chars.get(tk.characterId)?.ownerId && chars.get(tk.characterId)?.ownerId !== t.userId);
+  // 0.11.3: a player who isn't at the table right now gets rolled for, so the fight doesn't wait.
+  const atTable = new Set(presentAt(t.campaign.id));
+  const playerHere = (tk: TokenRow) =>
+    tk.controlledBy.some((u) => u !== t.userId && atTable.has(u)) ||
+    (!!tk.characterId && (chars.get(tk.characterId)?.ownerId ?? t.userId) !== t.userId && atTable.has(chars.get(tk.characterId)!.ownerId!));
   const rollInit = async (entry: CombatEntry, sheet: Sheet5e | null) => {
     const named = !hiddenNames.has(entry.tokenId);
     const rolled = serverRoll(withBonus("1d20", sheet ? initiativeBonus(sheet) : 0), named ? `${entry.name}: initiative` : "Initiative");
@@ -501,8 +507,8 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
         const entry: CombatEntry = { ...e, dex: sheet?.abilities.dex ?? e.dex, ...(player ? { player: true } : {}) };
         if (!player) delete entry.player;
         if (d.rest) next.push(entry.init === null ? await rollInit(entry, sheet) : entry);
-        // Players roll their own (a fresh fight clears last fight's numbers).
-        else if (player) next.push({ ...entry, init: null });
+        // Players at the table roll their own (a fresh fight clears last fight's numbers).
+        else if (player && tk && playerHere(tk)) next.push({ ...entry, init: null });
         else next.push(await rollInit(entry, sheet));
       }
       combat!.entries = sortEntries(next);

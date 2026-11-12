@@ -36,6 +36,7 @@ import {
   gearFor,
   pickChoices,
   pickKeys,
+  coinText,
   resolveGear,
   type ClassGear,
   type GearPick,
@@ -1466,7 +1467,7 @@ function StartingGear({
           <span className="cf-sub">Nothing yet. Choose below.</span>
         )}
         <span className="cf-sub">
-          Gold: {out.gold + bgGold} gp
+          Gold: {coinText(out.gold + bgGold)}
           {bgGold ? ` (${bgGold} from your background)` : ''}
           {out.shopping ? ` · ${costText(out.budget)} left to spend` : ''}
         </span>

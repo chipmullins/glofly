@@ -165,8 +165,14 @@ test("legendary actions: the creature's budget per round, GM only", { skip }, as
 });
 
 test("initiative: monsters roll at once, players roll their own, then the order starts", { skip }, async () => {
+  // A player who isn't at the table gets rolled for.
+  await call(`/campfire/campaigns/${cid}/presence`, { method: "POST", token: p1.token, body: { away: true } });
   await combatOp(gm, { op: "start", tokenIds: [gob, tok1] });
   let c = (await combatOp(gm, { op: "rollAll" })).json.combat;
+  assert.equal(c.rolling, undefined, "Lyra's player is away: rolled for");
+  assert.ok(c.entries.every((e: any) => e.init !== null));
+  await call(`/campfire/campaigns/${cid}/presence`, { method: "POST", token: p1.token, body: {} });
+  c = (await combatOp(gm, { op: "rollAll" })).json.combat;
   assert.equal(c.rolling, true, "waiting for the player");
   assert.ok(c.entries.find((e: any) => e.tokenId === gob).init !== null, "the goblin rolled");
   assert.equal(c.entries.find((e: any) => e.tokenId === tok1).init, null, "Lyra rolls her own");

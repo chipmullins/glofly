@@ -2466,3 +2466,24 @@ input.cf-ml-name {
     transition: none;
   }
 }
+
+/* 0.11.3: aiming an attack: reach and range around the attacker, out-of-range tokens dimmed */
+.cf-map--aim .cf-map-svg,
+.cf-map--aim .cf-token {
+  cursor: crosshair !important;
+}
+.cf-aim {
+  fill: rgba(255, 179, 71, 0.06);
+  stroke: rgba(255, 179, 71, 0.85);
+}
+.cf-aim--normal {
+  fill: rgba(255, 179, 71, 0.04);
+  stroke: rgba(255, 179, 71, 0.7);
+}
+.cf-aim--long {
+  fill: none;
+  stroke: rgba(255, 179, 71, 0.4);
+}
+.cf-token--far {
+  opacity: 0.35;
+}

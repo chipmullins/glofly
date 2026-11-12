@@ -212,6 +212,7 @@ export const pickKeys = (prefix: string, picks: readonly GearPick[] = []): { key
 
 export type ResolvedGear = {
   equipment: (RulesItem & { qty?: number })[]
+  /** In gp; what the shop leaves over keeps its silver and copper (0.5 = 5 sp) */
   gold: number
   /** The gold left to spend in the shop (a gold option) */
   budget: number
@@ -263,5 +264,15 @@ export function resolveGear(gear: ClassGear | null, sel: GearSelection, items: r
       budget = Math.round((budget - item.cost) * 100) / 100
       add(id)
     }
-  return { equipment: [...out.values()], gold: goldGp + Math.floor(budget), budget, shopping: shopGold > 0, open }
+  return { equipment: [...out.values()], gold: Math.round((goldGp + budget) * 100) / 100, budget, shopping: shopGold > 0, open }
+}
+
+/** Gold in gp as coins: 15.37 → "15 gp, 3 sp, 7 cp". */
+export function coinsOf(gp: number): { gp: number; sp: number; cp: number } {
+  const cp = Math.max(0, Math.round(gp * 100))
+  return { gp: Math.floor(cp / 100), sp: Math.floor((cp % 100) / 10), cp: cp % 10 }
+}
+export const coinText = (gp: number): string => {
+  const c = coinsOf(gp)
+  return [c.gp || (!c.sp && !c.cp) ? `${c.gp} gp` : '', c.sp ? `${c.sp} sp` : '', c.cp ? `${c.cp} cp` : ''].filter(Boolean).join(', ')
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SignedInUser } from '../../../preload/api-types'
 import type { MapTheme, MusicState, Point, Roll, Scene, Token } from '@glofly/shared/campfire/types'
-import { MAP_THEMES } from '@glofly/shared/campfire/types'
+import { isFullCharacter, MAP_THEMES } from '@glofly/shared/campfire/types'
 import { useCalls } from '../calls/callState'
 import { AvatarFace } from '../components/Avatar'
 import { colorsFor } from '../lib/avatarColors'
@@ -272,6 +272,19 @@ function TableReady({
     targetId,
     setTargetId,
     attackWith: async (attacker, a, fire, fallback) => {
+      // 0.11.3: a two-handed swing needs both hands (no shield held).
+      const ch = attacker?.characterId
+        ? t.characters.find((c) => c.id === attacker.characterId)
+        : null
+      if (
+        / \(two hands\)$/.test(a.name) &&
+        ch &&
+        isFullCharacter(ch) &&
+        ch.sheet.inventory.some((i) => i.equipped && i.kind === 'shield')
+      )
+        return say(
+          `${ch.name} has a shield equipped. Unequip it (Equipment) to swing ${a.name.replace(/ \(two hands\)$/, '')} with two hands.`
+        )
       if (!attacker) return fallback()
       const reach = reachOfAttack(a)
       const target = targetId ? t.tokens.find((x) => x.id === targetId) : null
@@ -692,6 +705,9 @@ function TableReady({
                   tokens={t.tokens.filter((x) => x.sceneId === scene.id)}
                   onShowTokens={(ids) => ids.forEach((id) => void setTokenHidden(id, false))}
                   onHideToken={(id) => void setTokenHidden(id, true)}
+                  isParty={(tk) =>
+                    tk.controlledBy.length > 0 || (!!tk.characterId && pcIds.has(tk.characterId))
+                  }
                 />
               )}
               {isGm && scene && (
@@ -816,6 +832,11 @@ function TableReady({
                 }
                 speaking={speaking}
                 reachOf={reachFor(t)}
+                aim={
+                  armed
+                    ? { attackerId: armed.attackerId, reach: armed.reach, name: armed.name }
+                    : null
+                }
                 multi={isGm ? multiSet : undefined}
                 onMulti={isGm ? setMulti : undefined}
                 focus={

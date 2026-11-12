@@ -8,6 +8,7 @@ import {
   tokenCenter
 } from '@glofly/shared/campfire/map'
 import { pathCost } from '@glofly/shared/campfire/roundB'
+import { checkRange, type AttackReach } from './attackFlow'
 import BuiltLayer, { BuiltDefs } from './BuiltLayer'
 import {
   feetBetween,
@@ -75,6 +76,8 @@ type Props = {
   speaking?: ReadonlySet<string>
   /** Round B: a creature's reach in feet, shown while hovering it (null: don't show) */
   reachOf?: (t: Token) => number | null
+  /** 0.11.3: an attack waiting for its target: its reach/range around the attacker, others dimmed */
+  aim?: { attackerId: string; reach: AttackReach; name: string } | null
   /** Round B (game masters): tokens picked together (Shift-click or Shift-drag a box) */
   multi?: ReadonlySet<string>
   onMulti?: (ids: string[]) => void
@@ -123,7 +126,8 @@ function TokenGlyph({
   fxRef,
   onKey,
   picked,
-  speaking
+  speaking,
+  far
 }: {
   t: Token
   size: number
@@ -141,6 +145,8 @@ function TokenGlyph({
   onKey: (id: string, e: React.KeyboardEvent) => void
   picked?: boolean
   speaking?: boolean
+  /** Out of the waiting attack's range */
+  far?: boolean
 }): React.JSX.Element {
   const w = t.w * size
   const h = t.h * size
@@ -153,7 +159,7 @@ function TokenGlyph({
   const label = `${t.name || 'Token'}${hp && hp.value !== null && hp.max ? `, ${hp.value} of ${hp.max} hit points` : hp?.state ? `, ${hp.state}` : ''}${hidden ? ', hidden from players' : ''}`
   return (
     <g
-      className={`cf-token${dragging ? ' cf-token--drag' : ''}${hidden ? ' cf-token--hidden' : ''}`}
+      className={`cf-token${dragging ? ' cf-token--drag' : ''}${hidden ? ' cf-token--hidden' : ''}${far ? ' cf-token--far' : ''}`}
       data-token={t.id}
       style={{ transform: `translate(${t.x}px, ${t.y}px)`, cursor: canMove ? 'grab' : 'pointer' }}
       role="button"
@@ -978,11 +984,12 @@ function MapView(p: Props): React.JSX.Element {
   }, [])
 
   const hex = g.type === 'hex' ? hexPattern(g.size) : null
+  const aimer = p.aim ? (byId.get(p.aim.attackerId) ?? null) : null
   const tokenShown = (t: Token): Token =>
     drag && drag.id === t.id ? { ...t, x: drag.x, y: drag.y } : t
 
   return (
-    <div className={`cf-map cf-map--${p.tool}`} ref={box}>
+    <div className={`cf-map cf-map--${p.tool}${aimer ? ' cf-map--aim' : ''}`} ref={box}>
       <svg
         className="cf-map-svg"
         role="application"
@@ -1155,6 +1162,37 @@ function MapView(p: Props): React.JSX.Element {
               </g>
             )
           })()}
+          {aimer &&
+            (() => {
+              // Reach (solid), normal range (dashed) and long range (faint) around the attacker.
+              const r = p.aim!.reach
+              const rings = [
+                r.melee !== null ? { ft: r.melee, kind: 'reach' } : null,
+                r.normal !== null && Number.isFinite(r.normal) && r.normal !== r.melee
+                  ? { ft: r.normal, kind: 'normal' }
+                  : null,
+                r.long !== null && Number.isFinite(r.long) && r.long !== r.normal
+                  ? { ft: r.long, kind: 'long' }
+                  : null
+              ].filter((x): x is { ft: number; kind: string } => !!x)
+              return rings.map(({ ft, kind }) => {
+                const cells = Math.round(ft / (g.feet || 5))
+                return (
+                  <rect
+                    key={kind}
+                    className={`cf-aim cf-aim--${kind}`}
+                    x={aimer.x - cells * g.size}
+                    y={aimer.y - cells * g.size}
+                    width={(aimer.w + cells * 2) * g.size}
+                    height={(aimer.h + cells * 2) * g.size}
+                    rx={8}
+                    strokeWidth={2 / view.z}
+                    strokeDasharray={kind === 'reach' ? undefined : `${8 / view.z} ${6 / view.z}`}
+                    pointerEvents="none"
+                  />
+                )
+              })
+            })()}
           {hoverTok &&
             (() => {
               const tk = byId.get(hoverTok)
@@ -1197,6 +1235,12 @@ function MapView(p: Props): React.JSX.Element {
                 onKey={tokenKey}
                 picked={!!p.multi?.has(t.id)}
                 speaking={!!p.speaking?.has(t.id)}
+                far={
+                  !!aimer &&
+                  t.id !== aimer.id &&
+                  t.layer !== 'map' &&
+                  !checkRange(p.aim!.reach, aimer, t, g, p.aim!.name).ok
+                }
               />
             )
           })}

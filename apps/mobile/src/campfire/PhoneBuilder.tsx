@@ -35,6 +35,7 @@ import {
   gearFor,
   pickChoices,
   pickKeys,
+  coinText,
   resolveGear,
   type ClassGear,
   type GearPick,
@@ -924,7 +925,7 @@ function StartingGear({
           {out.equipment.length ? out.equipment.map((it) => `✓ ${name(it.id, it.qty)}`).join('   ') : 'Nothing yet. Choose below.'}
         </Text>
         <Text size={12} style={{ color: fire.muted }}>
-          Gold: {out.gold + bgGold} gp
+          Gold: {coinText(out.gold + bgGold)}
           {bgGold ? ` (${bgGold} from your background)` : ''}
           {out.shopping ? ` · ${costText(out.budget)} left to spend` : ''}
         </Text>

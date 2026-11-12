@@ -17,7 +17,8 @@ export default function HiddenMenu({
   onSave,
   tokens = [],
   onShowTokens,
-  onHideToken
+  onHideToken,
+  isParty
 }: {
   built: BuiltMap
   onSave: (built: BuiltMap) => void
@@ -25,6 +26,8 @@ export default function HiddenMenu({
   tokens?: Token[]
   onShowTokens?: (ids: string[]) => void
   onHideToken?: (id: string) => void
+  /** Player characters aren't offered under "Hide a creature" */
+  isParty?: (t: Token) => boolean
 }): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement | null>(null)
@@ -59,7 +62,7 @@ export default function HiddenMenu({
   )
   // 0.11.3 (Chip: "hiding and unhiding monsters… easier to find"): creatures on the GM layer.
   const hiddenTokens = tokens.filter((x) => x.layer === 'gm')
-  const shownTokens = tokens.filter((x) => x.layer === 'tokens')
+  const shownTokens = tokens.filter((x) => x.layer === 'tokens' && !isParty?.(x))
   const count = total + hiddenTokens.length
 
   const setLayer = (id: string, hidden: boolean): void =>
@@ -141,23 +144,20 @@ export default function HiddenMenu({
             <details className="cf-hidden-more">
               <summary>Hide a creature</summary>
               <ul className="cf-hidden-list">
-                {shownTokens
-                  .filter((x) => !x.characterId || x.name)
-                  .slice(0, 60)
-                  .map((x) => (
-                    <li key={x.id}>
-                      <span className="cf-hidden-name">
-                        <strong>{x.name || 'Token'}</strong>
-                      </span>
-                      <button
-                        type="button"
-                        className="cf-ghost cf-small"
-                        onClick={() => onHideToken(x.id)}
-                      >
-                        Hide
-                      </button>
-                    </li>
-                  ))}
+                {shownTokens.slice(0, 60).map((x) => (
+                  <li key={x.id}>
+                    <span className="cf-hidden-name">
+                      <strong>{x.name || 'Token'}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      className="cf-ghost cf-small"
+                      onClick={() => onHideToken(x.id)}
+                    >
+                      Hide
+                    </button>
+                  </li>
+                ))}
               </ul>
             </details>
           )}

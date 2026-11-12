@@ -234,7 +234,9 @@ export function buildSheet(data: BuilderRules, c: BuildChoices, feats: BuilderFe
   sheet.ac = armorClassFromItems(sheet) ?? 10 + abilityMod(scores.dex)
   const armor = sheet.inventory.find((i) => i.equipped && i.armor)
   if (armor) sheet.acNote = armor.name
-  sheet.coins = { cp: 0, sp: 0, ep: 0, gp: (bg?.gold ?? 0) + Math.max(0, Math.floor(c.gold ?? 0)), pp: 0 }
+  // Class gold (0.11.3) can carry silver and copper left from the starting-gear shop.
+  const left = Math.max(0, Math.round((c.gold ?? 0) * 100))
+  sheet.coins = { cp: left % 10, sp: Math.floor((left % 100) / 10), ep: 0, gp: (bg?.gold ?? 0) + Math.floor(left / 100), pp: 0 }
   sheet.build = {
     species: c.speciesId,
     ...(c.subId ? { sub: c.subId } : {}),
