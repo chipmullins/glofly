@@ -104,6 +104,8 @@
   font-weight: 700;
 }
 .st-face {
+  /* The photo (.avatar-photo, absolutely placed) stays inside this circle. */
+  position: relative;
   flex: none;
   border-radius: 50%;
   display: inline-flex;

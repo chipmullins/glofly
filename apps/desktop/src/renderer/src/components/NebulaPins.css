@@ -98,6 +98,8 @@
   border: 1px solid var(--glo-line, #eaddd1);
 }
 .cx-pins-pop-face {
+  /* The photo (.avatar-photo, absolutely placed) stays inside this circle. */
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 50%;
