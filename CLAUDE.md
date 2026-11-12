@@ -7,6 +7,10 @@
   app, v1 + v2), `glofly-mac.md`, `glofly-release-0.2.0.md`, `glofly-release-0.2.1.md` and
   `glofly-release-0.2.2.md`, `glofly-release-0.3.0.md`, `glofly-release-0.4.0.md` and `glofly-web.md` (what each release added and how to ship it;
   they win over the older docs until folded in), `glofly-android.md` (the phone app; plan and costs in `glofly-android-plan.md`).
+- Chip builds on Windows (case-insensitive): never two code files whose names differ only in capitals
+  (`Music.tsx` + `music.ts` broke the 0.11.0 Windows build). Check: `git ls-files | grep -E '\.(ts|tsx|js)$' |
+  sed -E 's/\.[a-z]+$//' | sort -f | uniq -di` prints nothing. The web/server Dockerfiles copy only some folders:
+  anything the renderer imports from outside `src/renderer` / `src/preload` needs a COPY line in `deploy/web.Dockerfile`.
 - Server changes must keep working with the previous desktop app version (testers update at
   different times); database migrations only add.
 - Event lines: 0.2.0's chat view breaks on event types it doesn't know. A new event type must get a
