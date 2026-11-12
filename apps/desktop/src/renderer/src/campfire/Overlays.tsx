@@ -1,11 +1,19 @@
 import { CONDITION_ROUNDS } from '@glofly/shared/campfire/roundB'
 import { useEffect, useState } from 'react'
-import type { Character, PendingDamage, Token, TokenBar } from '@glofly/shared/campfire/types'
+import type {
+  AttackResult,
+  Character,
+  PendingDamage,
+  Token,
+  TokenBar
+} from '@glofly/shared/campfire/types'
 import { isFullCharacter } from '@glofly/shared/campfire/types'
-import { CONDITIONS, TOKEN_MARKERS } from '@glofly/shared/campfire/rules5e'
+import { attackExpressions, CONDITIONS, TOKEN_MARKERS } from '@glofly/shared/campfire/rules5e'
+import { withTwoHanded } from '@glofly/shared/campfire/builder'
 import { cf } from './api'
 import { useCf } from './ctx'
 import { DieFace, NumBox, TextBox } from './ui'
+import { Icon } from './icons'
 
 // Things over the map: the GM's approval box for pending damage (apply / change / skip), the big
 // roll card for my rolls ("Natural 20!"), and the selected token's card (bars, conditions, and
@@ -146,6 +154,83 @@ export function RollCardOverlay(): React.JSX.Element | null {
 const BAR_NAMES = ['Hit points', 'Bar 2', 'Bar 3']
 const BAR_COLORS = ['#e0193a', '#4f8cff', '#f0b429']
 
+/**
+ * 0.11.4 (Chip: "click the weapon you want to use, then the token you want to attack"): the
+ * creature's attacks on its card; pick one, then click who it attacks.
+ */
+function TokenAttacks({ token }: { token: Token }): React.JSX.Element | null {
+  const { t, say, isGm, attackWith, roll } = useCf()
+  const ch = token.characterId ? t.characters.find((c) => c.id === token.characterId) : null
+  if (!ch || !isFullCharacter(ch)) return null
+  const sheet = ch.sheet
+  const attacks = withTwoHanded(sheet.attacks)
+  if (!attacks.length) return null
+  const gmOnly = ch.kind === 'npc'
+  return (
+    <div className="cf-card-attacks" role="group" aria-label="Attacks">
+      {attacks.slice(0, 8).map((a) => {
+        const ex = attackExpressions(sheet, a)
+        return (
+          <button
+            key={a.id}
+            type="button"
+            className="cf-card-attack"
+            title={`${a.name}: pick it, then click the token to attack`}
+            onClick={() =>
+              void attackWith(
+                token,
+                a,
+                async (target, dis) => {
+                  const r = await cf.post<AttackResult>(
+                    `/campfire/campaigns/${t.campaign.id}/attack`,
+                    {
+                      attackerTokenId: token.id,
+                      targetTokenId: target.id,
+                      attack: {
+                        id: a.id,
+                        name: a.name,
+                        toHit: ex.toHit,
+                        damage: ex.damage,
+                        damageType: a.damageType,
+                        kind: a.kind
+                      },
+                      ...(dis ? { advantage: 'dis' } : {}),
+                      ...(gmOnly ? { visibility: 'gm' } : {})
+                    }
+                  )
+                  if (!r.ok) say(r.message)
+                  else if (!r.data.hit)
+                    say(
+                      `${a.name} misses ${target.name || 'the target'}${dis ? ' (long range)' : ''}.`
+                    )
+                  else if (r.data.pending === null && r.data.applied === null && !isGm)
+                    say(
+                      `${r.data.crit ? 'Critical hit! ' : 'Hit! '}The game master applies the damage.`
+                    )
+                  else if (isGm)
+                    say(
+                      `${a.name} hits ${target.name || 'the target'}${r.data.crit ? ' (critical)' : ''}.`
+                    )
+                },
+                async () => {
+                  await roll(ex.toHit, {
+                    label: `${token.name}: ${a.name} to hit`,
+                    characterId: ch.id
+                  })
+                }
+              )
+            }
+          >
+            <b>{a.name}</b>
+            <span>{ex.toHit.replace(/^1d20/, '') || '+0'}</span>
+            <span className="cf-mono">{ex.damage}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export function TokenCard({
   token,
   targeted,
@@ -210,6 +295,20 @@ export function TokenCard({
           ×
         </button>
       </div>
+      {isGm && token.layer !== 'map' && (
+        // 0.11.4 (Chip: hiding monsters should be easy to find): one press, right on the card.
+        <button
+          type="button"
+          className={token.layer === 'gm' ? 'cf-vis cf-vis--hidden' : 'cf-vis'}
+          aria-pressed={token.layer === 'gm'}
+          title="Hide from players or show again (H)"
+          onClick={() => void patch({ layer: token.layer === 'gm' ? 'tokens' : 'gm' })}
+        >
+          <Icon name={token.layer === 'gm' ? 'eyeOff' : 'eye'} size={16} />
+          {token.layer === 'gm' ? 'Hidden from players · Show' : 'Players can see it · Hide'}
+        </button>
+      )}
+      <TokenAttacks token={token} />
       {[0, 1, 2].map((i) => {
         const b = token.bars[i]
         if (!b && !isGm) return null

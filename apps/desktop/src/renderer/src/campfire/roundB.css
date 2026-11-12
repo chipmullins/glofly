@@ -393,3 +393,74 @@
     animation: none;
   }
 }
+
+/* 0.11.4: an attack waiting for its target */
+.cf-armed {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  z-index: 8;
+}
+
+/* 0.11.4: token card: hide/show in one press, and the creature's attacks */
+.cf-vis {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--cf-surface);
+  box-shadow: inset 0 0 0 1px var(--cf-line);
+  color: var(--cf-ink);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.cf-vis--hidden {
+  background: rgba(181, 124, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(181, 124, 255, 0.6);
+  color: #e7d4ff;
+}
+.cf-card-attacks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cf-card-attack {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--cf-surface);
+  box-shadow: inset 0 0 0 1px var(--cf-line);
+  color: var(--cf-ink);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.cf-card-attack:hover {
+  box-shadow: inset 0 0 0 1px var(--cf-amber);
+}
+.cf-card-attack span {
+  color: var(--cf-amber);
+  font-weight: 700;
+}
+.cf-hidden-sub {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cf-muted);
+}
+.cf-hidden-more summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--cf-muted);
+  margin: 6px 0;
+}

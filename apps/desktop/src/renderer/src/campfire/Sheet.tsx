@@ -229,7 +229,8 @@ function ShortHp({
 }
 
 function ShortSheet({ ch }: { ch: Character }): React.JSX.Element {
-  const { t, isGm, say, targetId, tokenOf, selectedId, openSheet, openStatBlock } = useCf()
+  const { t, isGm, say, targetId, tokenOf, selectedId, openSheet, openStatBlock, attackWith } =
+    useCf()
   const ed = useSheetEditor(ch)
   const { sheet, canEdit } = ed
   const rollNow = useRollNow()
@@ -245,38 +246,46 @@ function ShortSheet({ ch }: { ch: Character }): React.JSX.Element {
       gmOnly: npcRolls
     })
 
+  // 0.11.4: pick the weapon, then click the token to attack (rolls only if it's in range).
   const attack = async (a: SheetAttack): Promise<void> => {
     const ex = attackExpressions(sheet, a)
-    if (myToken && target && target.id !== myToken.id) {
-      const r = await cf.post<AttackResult>(`/campfire/campaigns/${t.campaign.id}/attack`, {
-        attackerTokenId: myToken.id,
-        targetTokenId: target.id,
-        attack: {
-          id: a.id,
-          name: a.name,
-          toHit: ex.toHit,
-          damage: ex.damage,
-          damageType: a.damageType,
-          kind: a.kind
-        },
-        ...(npcRolls ? { visibility: 'gm' } : {})
-      })
-      if (!r.ok) say(r.message)
-      else if (!r.data.hit) say(`${a.name} misses ${target.name || 'the target'}.`)
-      else if (r.data.pending === null && r.data.applied === null && !isGm)
-        say(`${r.data.crit ? 'Critical hit! ' : 'Hit! '}The game master applies the damage.`)
-      return
-    }
-    await rollNow(ex.toHit, {
-      label: `${ch.name}: ${a.name} to hit`,
-      characterId: ch.id,
-      gmOnly: npcRolls
-    })
-    await rollNow(ex.damage, {
-      label: `${ch.name}: ${a.name} damage`,
-      characterId: ch.id,
-      gmOnly: npcRolls
-    })
+    await attackWith(
+      myToken,
+      a,
+      async (target, dis) => {
+        const r = await cf.post<AttackResult>(`/campfire/campaigns/${t.campaign.id}/attack`, {
+          attackerTokenId: myToken!.id,
+          targetTokenId: target.id,
+          attack: {
+            id: a.id,
+            name: a.name,
+            toHit: ex.toHit,
+            damage: ex.damage,
+            damageType: a.damageType,
+            kind: a.kind
+          },
+          ...(dis ? { advantage: 'dis' } : {}),
+          ...(npcRolls ? { visibility: 'gm' } : {})
+        })
+        if (!r.ok) say(r.message)
+        else if (!r.data.hit)
+          say(`${a.name} misses ${target.name || 'the target'}${dis ? ' (long range)' : ''}.`)
+        else if (r.data.pending === null && r.data.applied === null && !isGm)
+          say(`${r.data.crit ? 'Critical hit! ' : 'Hit! '}The game master applies the damage.`)
+      },
+      async () => {
+        await rollNow(ex.toHit, {
+          label: `${ch.name}: ${a.name} to hit`,
+          characterId: ch.id,
+          gmOnly: npcRolls
+        })
+        await rollNow(ex.damage, {
+          label: `${ch.name}: ${a.name} damage`,
+          characterId: ch.id,
+          gmOnly: npcRolls
+        })
+      }
+    )
   }
 
   const line =
@@ -374,7 +383,7 @@ function ShortSheet({ ch }: { ch: Character }): React.JSX.Element {
       <p className="cf-hint">
         {target && myToken
           ? `Attacking ${target.name || 'the target'} (double-click another token to change).`
-          : 'Double-click someone else’s token (or click it and press T) to target it; then an attack rolls against it. Double-click your own token for its card.'}
+          : 'Click a weapon, then the token to attack: it rolls if they’re in range. Double-click your own token for its card.'}
       </p>
       <ul className="cf-actions">
         {withTwoHanded(sheet.attacks).map((a) => {

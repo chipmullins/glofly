@@ -929,7 +929,7 @@ function ActionsSection({
   rollWith: RollWith
 }): React.JSX.Element {
   const { sheet, set, canEdit } = ed
-  const { t, isGm, say, targetId, tokenOf, selectedId } = useCf()
+  const { t, isGm, say, targetId, tokenOf, selectedId, attackWith } = useCf()
   const rollNow = useRollNow()
   const [adding, setAdding] = useState(false)
   const myToken =
@@ -938,32 +938,48 @@ function ActionsSection({
   const target = targetId ? t.tokens.find((x) => x.id === targetId) : null
   const advWord = rollWith === 'adv' ? ' (advantage)' : rollWith === 'dis' ? ' (disadvantage)' : ''
 
+  // 0.11.4: pick the weapon, then click the token to attack (rolls only if it's in range;
+  // past normal range it's at disadvantage).
   const toHit = async (a: SheetAttack): Promise<void> => {
     const ex = attackExpressions(sheet, a)
-    if (myToken && target && target.id !== myToken.id) {
-      const r = await cf.post<AttackResult>(`/campfire/campaigns/${t.campaign.id}/attack`, {
-        attackerTokenId: myToken.id,
-        targetTokenId: target.id,
-        attack: {
-          id: a.id,
-          name: a.name,
-          toHit: ex.toHit,
-          damage: ex.damage,
-          damageType: a.damageType,
-          kind: a.kind
-        },
-        ...(rollWith !== 'normal' ? { advantage: rollWith } : {})
-      })
-      if (!r.ok) say(r.message)
-      else if (!r.data.hit) say(`${a.name} misses ${target.name || 'the target'}.`)
-      else if (r.data.pending === null && r.data.applied === null && !isGm)
-        say(`${r.data.crit ? 'Critical hit! ' : 'Hit! '}The game master applies the damage.`)
-      return
-    }
-    await rollNow(withD20(ex.toHit, rollWith), {
-      label: `${ch.name}: ${a.name} to hit${advWord}`,
-      characterId: ch.id
-    })
+    await attackWith(
+      myToken,
+      a,
+      async (target, dis) => {
+        // Long range and advantage cancel out.
+        const adv = dis
+          ? rollWith === 'adv'
+            ? null
+            : 'dis'
+          : rollWith !== 'normal'
+            ? rollWith
+            : null
+        const r = await cf.post<AttackResult>(`/campfire/campaigns/${t.campaign.id}/attack`, {
+          attackerTokenId: myToken!.id,
+          targetTokenId: target.id,
+          attack: {
+            id: a.id,
+            name: a.name,
+            toHit: ex.toHit,
+            damage: ex.damage,
+            damageType: a.damageType,
+            kind: a.kind
+          },
+          ...(adv ? { advantage: adv } : {})
+        })
+        if (!r.ok) say(r.message)
+        else if (!r.data.hit)
+          say(`${a.name} misses ${target.name || 'the target'}${dis ? ' (long range)' : ''}.`)
+        else if (r.data.pending === null && r.data.applied === null && !isGm)
+          say(`${r.data.crit ? 'Critical hit! ' : 'Hit! '}The game master applies the damage.`)
+      },
+      async () => {
+        await rollNow(withD20(ex.toHit, rollWith), {
+          label: `${ch.name}: ${a.name} to hit${advWord}`,
+          characterId: ch.id
+        })
+      }
+    )
   }
   const damage = (a: SheetAttack): void =>
     void rollNow(attackExpressions(sheet, a).damage, {
@@ -994,7 +1010,7 @@ function ActionsSection({
       <p className="cfs-hint">
         {target && myToken
           ? `Attacking ${target.name || 'the target'}. Tap to hit: a hit rolls damage and sends it to the game master.`
-          : 'Pick a target on the map first (double-click or T), then tap to hit. A hit rolls damage and sends it to the game master.'}
+          : 'Tap a weapon’s to-hit, then click the token to attack. It rolls if they’re in range; a hit rolls damage and sends it to the game master.'}
       </p>
       {adding && (
         <AddAttack

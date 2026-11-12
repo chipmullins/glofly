@@ -27,6 +27,8 @@ import { HowCampfireWorks, Tour } from './Tour'
 import { tourSeen } from './tourState'
 import { PracticeTable } from './Practice'
 import HiddenMenu from './HiddenMenu'
+import { normalizeGrid } from '@glofly/shared/campfire/map'
+import { checkRange, reachOfAttack, reachText, type ArmedAttack } from './attackFlow'
 import { GmScreenPanel, GroupBar, MovementBar, SoundsPanel, TableBanners } from './TableB'
 import {
   speakingGlowOn,
@@ -120,6 +122,8 @@ function TableReady({
   // 0.11.2: a single click only selects a token; a double-click opens its card (menu)
   const [cardId, setCardId] = useState<string | null>(null)
   const [targetId, setTargetId] = useState<string | null>(null)
+  const [armed, setArmed] = useState<ArmedAttack | null>(null)
+  const gridNow = normalizeGrid(t.scene?.grid)
   const [share, setShare] = useState<RollShare>({ mode: 'all', to: [] })
   const [tab, setTab] = useState<Tab>(isGm ? 'turn' : 'sheet')
   const [message, setMessage] = useState<string | null>(null)
@@ -171,15 +175,28 @@ function TableReady({
     lastPing && lastPing.userId !== me.id ? `${nameOf(lastPing.userId)} pinged a spot` : null
   const line = message ?? pingLine
 
+  const hideRef = useRef<((id: string, hidden: boolean) => Promise<void>) | null>(null)
   // Escape lets go of the selected token, its card and the target; T targets the selected token
   // (unless typing).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable]')) return
       if (e.key === 'Escape') {
+        setArmed(null)
         setSelectedId(null)
         setCardId(null)
         setTargetId(null)
+      } else if (
+        e.key.toLowerCase() === 'h' &&
+        isGm &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        selectedId
+      ) {
+        // 0.11.4: H hides the selected creature from players (or shows it again).
+        const tk = t.tokens.find((x) => x.id === selectedId)
+        if (tk && tk.layer !== 'map') void hideRef.current?.(tk.id, tk.layer !== 'gm')
       } else if (
         e.key.toLowerCase() === 't' &&
         !e.ctrlKey &&
@@ -192,7 +209,7 @@ function TableReady({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId])
+  }, [selectedId, isGm, t.tokens])
 
   const roll = useCallback(
     async (
@@ -254,6 +271,17 @@ function TableReady({
     setSelectedId,
     targetId,
     setTargetId,
+    attackWith: async (attacker, a, fire, fallback) => {
+      if (!attacker) return fallback()
+      const reach = reachOfAttack(a)
+      const target = targetId ? t.tokens.find((x) => x.id === targetId) : null
+      if (target && target.id !== attacker.id) {
+        const c = checkRange(reach, attacker, target, gridNow, a.name)
+        if (!c.ok) return say(c.why)
+        return fire(target, c.dis)
+      }
+      setArmed({ attackerId: attacker.id, name: a.name, reach, fire })
+    },
     share,
     setShare,
     roll,
@@ -296,6 +324,20 @@ function TableReady({
     if (!r.ok) say(r.message)
     else ctl.update((s) => ({ ...s, music: r.data.music }))
   }
+  // 0.11.4: hide a creature from players (the GM layer) or show it again.
+  const setTokenHidden = async (id: string, hidden: boolean): Promise<void> => {
+    const r = await cf.patch<Token>(`/campfire/tokens/${id}`, { layer: hidden ? 'gm' : 'tokens' })
+    if (!r.ok) say(r.message)
+    else {
+      ctl.upsertToken(r.data)
+      say(
+        `${r.data.name || 'Token'} ${hidden ? 'is hidden from players' : 'is showing to players'}.`
+      )
+    }
+  }
+  useEffect(() => {
+    hideRef.current = setTokenHidden
+  })
   const patchScene = async (body: Record<string, unknown>): Promise<void> => {
     if (!scene) return
     const r = await cf.patch<Scene>(`/campfire/scenes/${scene.id}`, body)
@@ -644,7 +686,13 @@ function TableReady({
                 </button>
               )}
               {isGm && scene && (
-                <HiddenMenu built={scene.built} onSave={(built) => void patchScene({ built })} />
+                <HiddenMenu
+                  built={scene.built}
+                  onSave={(built) => void patchScene({ built })}
+                  tokens={t.tokens.filter((x) => x.sceneId === scene.id)}
+                  onShowTokens={(ids) => ids.forEach((id) => void setTokenHidden(id, false))}
+                  onHideToken={(id) => void setTokenHidden(id, true)}
+                />
               )}
               {isGm && scene && (
                 <button
@@ -784,6 +832,18 @@ function TableReady({
                 fogBrush={fogBrush}
                 selectedId={selectedId}
                 onSelect={(id) => {
+                  // An attack waiting for its target (0.11.4): this click picks it.
+                  if (armed && id && id !== armed.attackerId) {
+                    const attacker = t.tokens.find((x) => x.id === armed.attackerId)
+                    const target = t.tokens.find((x) => x.id === id)
+                    if (!attacker || !target) return setArmed(null)
+                    const c = checkRange(armed.reach, attacker, target, gridNow, armed.name)
+                    if (!c.ok) return say(c.why)
+                    setArmed(null)
+                    setTargetId(id)
+                    void armed.fire(target, c.dis)
+                    return
+                  }
                   setSelectedId(id)
                   // Another token (or the empty map) closes an open card.
                   setCardId((c) => (c && c === id ? c : null))
@@ -846,6 +906,19 @@ function TableReady({
                 {isGm && !asPlayer && <ApprovalBox />}
                 {!isGm && <DyingCard />}
                 {!isGm && <InitiativePrompt />}
+                {armed && (
+                  <div className="cfb-banner cfb-banner--amber cf-armed" role="status">
+                    <b>{armed.name}: click the token to attack</b>
+                    <span>{reachText(armed.reach)}</span>
+                    <button
+                      type="button"
+                      className="cf-ghost cf-small"
+                      onClick={() => setArmed(null)}
+                    >
+                      Cancel (Esc)
+                    </button>
+                  </div>
+                )}
                 {isGm && !asPlayer && <InitiativeWaiting />}
                 {carded && tool === 'select' && (isGm || controls(carded)) && (
                   <TokenCard

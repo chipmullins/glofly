@@ -1,6 +1,12 @@
 import { createContext, useContext } from 'react'
 import type { SignedInUser } from '../../../preload/api-types'
-import type { Point, RollVisibility, TableState, Token } from '@glofly/shared/campfire/types'
+import type {
+  Point,
+  RollVisibility,
+  SheetAttack,
+  TableState,
+  Token
+} from '@glofly/shared/campfire/types'
 import type { TableCtl } from './useTable'
 
 // What every part of the table needs: the state, who I am, and the shared bits of the screen
@@ -21,6 +27,16 @@ export type Cf = {
   setSelectedId: (id: string | null) => void
   targetId: string | null
   setTargetId: (id: string | null) => void
+  /**
+   * 0.11.4: attack with a weapon. With a target picked it rolls (if in range); otherwise the
+   * attack waits for a click on the token to attack. No token of yours on the map: plain rolls.
+   */
+  attackWith: (
+    attacker: Token | null,
+    attack: SheetAttack,
+    fire: (target: Token, dis: boolean) => Promise<void>,
+    fallback: () => Promise<void>
+  ) => Promise<void>
   share: RollShare
   setShare: (s: RollShare) => void
   /** Rolls an expression at the table (shared as the dice tray says) */

@@ -38,7 +38,7 @@ export function StatBlock({
   what: StatBlockFor
   onClose: () => void
 }): React.JSX.Element {
-  const { t, say, ctl, openSheet, tokenOf, targetId, selectedId } = useCf()
+  const { t, say, ctl, openSheet, tokenOf, selectedId, attackWith } = useCf()
   const rollNow = useRollNow()
   const place = usePlace()
   const [srd, setSrd] = useState<SrdMonster | null>(null)
@@ -187,37 +187,43 @@ export function StatBlock({
         ? (t.tokens.find((x) => x.id === selectedId && x.characterId === ch.id) ?? null)
         : null))
     : null
-  const target = targetId ? t.tokens.find((x) => x.id === targetId) : null
+  // 0.11.4: pick the attack, then click the token it attacks (rolls only if it's in range).
   const toHit = async (a: SheetAttack): Promise<void> => {
     const ex = attackExpressions(sheet, a)
-    if (ch && myToken && target && target.id !== myToken.id) {
-      const r = await cf.post<AttackResult>(`/campfire/campaigns/${t.campaign.id}/attack`, {
-        attackerTokenId: myToken.id,
-        targetTokenId: target.id,
-        attack: {
-          id: a.id,
-          name: a.name,
-          toHit: ex.toHit,
-          damage: ex.damage,
-          damageType: a.damageType,
-          kind: a.kind
-        },
-        visibility: 'gm'
-      })
-      if (!r.ok) say(r.message)
-      else
-        say(
-          r.data.hit
-            ? `${a.name} hits ${target.name || 'the target'}${r.data.crit ? ' (critical)' : ''}.`
-            : `${a.name} misses.`
-        )
-      return
-    }
-    await rollNow(ex.toHit, {
-      label: `${name}: ${a.name} to hit`,
-      characterId: ch?.id ?? null,
-      gmOnly: true
-    })
+    await attackWith(
+      ch ? myToken : null,
+      a,
+      async (target, dis) => {
+        const r = await cf.post<AttackResult>(`/campfire/campaigns/${t.campaign.id}/attack`, {
+          attackerTokenId: myToken!.id,
+          targetTokenId: target.id,
+          attack: {
+            id: a.id,
+            name: a.name,
+            toHit: ex.toHit,
+            damage: ex.damage,
+            damageType: a.damageType,
+            kind: a.kind
+          },
+          ...(dis ? { advantage: 'dis' } : {}),
+          visibility: 'gm'
+        })
+        if (!r.ok) say(r.message)
+        else
+          say(
+            r.data.hit
+              ? `${a.name} hits ${target.name || 'the target'}${r.data.crit ? ' (critical)' : ''}.`
+              : `${a.name} misses${dis ? ' (long range)' : ''}.`
+          )
+      },
+      async () => {
+        await rollNow(ex.toHit, {
+          label: `${name}: ${a.name} to hit`,
+          characterId: ch?.id ?? null,
+          gmOnly: true
+        })
+      }
+    )
   }
   const damage = (a: SheetAttack): void =>
     void rollNow(attackExpressions(sheet, a).damage, {
