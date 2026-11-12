@@ -23,6 +23,8 @@ RUN npm ci -w @glofly/web -w @glofly/shared --ignore-scripts --no-audit --no-fun
 COPY packages/shared/ packages/shared/
 COPY apps/desktop/src/renderer/ apps/desktop/src/renderer/
 COPY apps/desktop/src/preload/ apps/desktop/src/preload/
+# Campfire (0.11.0): the live event list the renderer and the web bridge share.
+COPY apps/desktop/src/main/campfireEvents.ts apps/desktop/src/main/
 COPY apps/desktop/vite-twemoji.ts apps/desktop/
 COPY apps/web/ apps/web/
 # The Glofly server the page talks to (docker-compose.yml passes https://<API_DOMAIN>).
