@@ -41,7 +41,10 @@ export type BuildChoices = {
   /** Hit points after level 1: 'average', or the rolled values (one per level after the first) */
   hp: 'average' | number[]
   spells: SheetSpell[]
-  equipment: RulesItem[]
+  /** qty: how many (starting gear: "4 handaxes", "20 arrows") */
+  equipment: (RulesItem & { qty?: number })[]
+  /** Gold from the class's starting equipment (on top of the background's) */
+  gold?: number
   alignment?: string
 }
 
@@ -109,9 +112,42 @@ export function attackFromItem(item: RulesItem, scores: Record<Ability, number>,
   }
 }
 
+/** The id of a versatile weapon's two-handed attack (it goes with the one-handed one). */
+export const twoHandedId = (attackId: string): string => `${attackId}-2h`
+
+/**
+ * Sheets made before 0.11.4 have one attack for a versatile weapon ("Two hands: 1d10" in its
+ * notes): the sheets show its two-handed attack next to it (`virtual`: not saved on the sheet).
+ */
+export function withTwoHanded(attacks: readonly SheetAttack[]): (SheetAttack & { virtual?: true })[] {
+  const ids = new Set(attacks.map((a) => a.id))
+  return attacks.flatMap((a) => {
+    const two = /Two hands: (\d+d\d+(?:\s*[+-]\s*\d+)?)/.exec(a.notes ?? '')
+    if (!two || a.kind !== 'melee' || ids.has(twoHandedId(a.id))) return [a]
+    return [a, { ...a, id: twoHandedId(a.id), name: `${a.name} (two hands)`.slice(0, 100), damage: two[1], notes: 'Versatile, no shield', virtual: true as const }]
+  })
+}
+
+/**
+ * 0.11.4 (Chip: "longsword should allow two hands"): a weapon's attacks, a versatile one gets a
+ * second, two-handed attack (its versatile damage) right after the one-handed one.
+ */
+export function attacksFromItem(item: RulesItem, scores: Record<Ability, number>, id: string, proficient = true): SheetAttack[] {
+  const one = attackFromItem(item, scores, id, proficient)
+  if (!one) return []
+  const v = item.weapon?.versatile
+  if (!v || one.kind !== 'melee') return [one]
+  const mastery = item.weapon?.mastery ? `Mastery: ${item.weapon.mastery}` : ''
+  return [
+    { ...one, name: `${item.name} (one hand)`.slice(0, 100), notes: [mastery, 'Versatile'].filter(Boolean).join(' · ') },
+    { ...one, id: twoHandedId(id), name: `${item.name} (two hands)`.slice(0, 100), damage: v, notes: [mastery, 'Versatile, no shield'].filter(Boolean).join(' · ') }
+  ]
+}
+
 /** A rules item as an inventory entry (equipped for armor, shields and weapons). */
-export function inventoryFromItem(item: RulesItem, id: string, equip = true): SheetItem {
-  const out: SheetItem = { id, name: item.name, qty: item.kind === 'ammo' ? 20 : 1, notes: '', weight: item.weight, kind: item.kind }
+export function inventoryFromItem(item: RulesItem & { qty?: number }, id: string, equip = true): SheetItem {
+  const qty = item.qty && item.qty > 0 ? Math.min(999, Math.floor(item.qty)) : item.kind === 'ammo' ? 20 : 1
+  const out: SheetItem = { id, name: item.name, qty, notes: '', weight: item.weight, kind: item.kind }
   if (item.armor) out.armor = { base: item.armor.base, dex: item.armor.dex, maxDex: item.armor.maxDex }
   if (item.kind === 'shield') out.acBonus = 2
   if (item.magic) {
@@ -190,17 +226,15 @@ export function buildSheet(data: BuilderRules, c: BuildChoices, feats: BuilderFe
   sheet.features = features.slice(0, 100)
   // Equipment: armor and weapons are equipped; weapons become attacks; AC from what's worn.
   sheet.inventory = c.equipment.slice(0, 60).map((item, i) => inventoryFromItem(item, `i${i}`))
-  sheet.attacks = c.equipment
-    .map((item, i) => {
-      const atk = attackFromItem(item, scores, `a${i}`)
-      if (atk) sheet.inventory[i].attackId = atk.id
-      return atk
-    })
-    .filter((a): a is SheetAttack => !!a)
+  sheet.attacks = c.equipment.slice(0, 60).flatMap((item, i) => {
+    const atks = attacksFromItem(item, scores, `a${i}`)
+    if (atks[0]) sheet.inventory[i].attackId = atks[0].id
+    return atks
+  })
   sheet.ac = armorClassFromItems(sheet) ?? 10 + abilityMod(scores.dex)
   const armor = sheet.inventory.find((i) => i.equipped && i.armor)
   if (armor) sheet.acNote = armor.name
-  sheet.coins = { cp: 0, sp: 0, ep: 0, gp: bg?.gold ?? 0, pp: 0 }
+  sheet.coins = { cp: 0, sp: 0, ep: 0, gp: (bg?.gold ?? 0) + Math.max(0, Math.floor(c.gold ?? 0)), pp: 0 }
   sheet.build = {
     species: c.speciesId,
     ...(c.subId ? { sub: c.subId } : {}),

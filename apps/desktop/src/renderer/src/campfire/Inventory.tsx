@@ -13,7 +13,7 @@ import {
   type Coins,
   type RulesItem
 } from '@glofly/shared/campfire/rulesData'
-import { attackFromItem, inventoryFromItem } from '@glofly/shared/campfire/builder'
+import { attacksFromItem, inventoryFromItem, twoHandedId } from '@glofly/shared/campfire/builder'
 import { homebrewSheetItem, type Homebrew, type HomebrewItem } from '@glofly/shared/campfire/hub'
 import { pieceId } from './api'
 import { useCf } from './ctx'
@@ -64,15 +64,27 @@ export function InventoryTab({ ed }: { ed: SheetEditor }): React.JSX.Element {
   const remove = (it: SheetItem): void =>
     commit(
       items.filter((x) => x.id !== it.id),
-      it.attackId ? { attacks: sheet.attacks.filter((a) => a.id !== it.attackId) } : {}
+      it.attackId
+        ? {
+            attacks: sheet.attacks.filter(
+              (a) => a.id !== it.attackId && a.id !== twoHandedId(it.attackId!)
+            )
+          }
+        : {}
     )
   const addRulesItem = (r: RulesItem): void => {
     const id = pieceId('i')
     const item = inventoryFromItem(r, id, false)
-    const attack = attackFromItem(r, sheet.abilities, pieceId('a'))
-    if (attack) item.attackId = attack.id
-    commit([...items, item], attack ? { attacks: [...sheet.attacks, attack] } : {})
-    say(attack ? `${r.name} added. Its attack is in Actions.` : `${r.name} added.`)
+    const atks = attacksFromItem(r, sheet.abilities, pieceId('a'))
+    if (atks[0]) item.attackId = atks[0].id
+    commit([...items, item], atks.length ? { attacks: [...sheet.attacks, ...atks] } : {})
+    say(
+      atks.length > 1
+        ? `${r.name} added. Its one- and two-handed attacks are in Actions.`
+        : atks.length
+          ? `${r.name} added. Its attack is in Actions.`
+          : `${r.name} added.`
+    )
   }
   const addHomebrew = (h: Homebrew): void => {
     commit([

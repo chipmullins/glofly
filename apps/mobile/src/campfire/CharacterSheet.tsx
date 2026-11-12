@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { withTwoHanded } from '@glofly/shared/campfire/builder'
 import { ActivityIndicator, Linking, Pressable, ScrollView, TextInput, View } from 'react-native'
 import { Image } from 'expo-image'
 import { router } from 'expo-router'
@@ -523,7 +524,7 @@ function Actions({ s, editing, mode, roll, onEdit, extras }: { s: Sheet5e; editi
           No attacks yet. Add your weapons and attack spells with Edit.
         </Text>
       ) : null}
-      {s.attacks.map((a) => {
+      {withTwoHanded(s.attacks).map((a) => {
         const ex = attackExpressions(s, a)
         const toHit = attackToHit(s, a)
         return (
@@ -558,7 +559,7 @@ function Actions({ s, editing, mode, roll, onEdit, extras }: { s: Sheet5e; editi
                   {a.damageType}
                 </Text>
               </Pressable>
-              {editing ? (
+              {editing && !a.virtual ? (
                 <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${a.name}`} onPress={() => onEdit((x) => ({ ...x, attacks: x.attacks.filter((y) => y.id !== a.id) }))} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                   <Icon name="trash" size={18} color={fire.redText} />
                 </Pressable>

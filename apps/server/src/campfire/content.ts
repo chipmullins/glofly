@@ -555,6 +555,12 @@ contentRouter.get("/srd/builder", srdLimiter, (req, res) => {
   res.json(builderData(rulesParam(req)));
 });
 
+// 0.11.4: every item that isn't magic (starting gear and its shop), cached by the builders.
+contentRouter.get("/srd/items/mundane", srdLimiter, (req, res) => {
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.json({ items: searchItems(rulesParam(req), "", null, 10_000).filter((i) => i.kind !== "magic"), credit: creditFor(rulesParam(req)) });
+});
+
 contentRouter.get("/srd/items", srdLimiter, (req, res) => {
   const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
   const kind = typeof req.query.kind === "string" && /^(armor|shield|weapon|gear|magic|ammo)$/.test(req.query.kind) ? req.query.kind : null;

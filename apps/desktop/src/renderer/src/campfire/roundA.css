@@ -1571,3 +1571,61 @@ button.cf-link {
   opacity: 0.45;
   cursor: default;
 }
+
+/* 0.11.2: what's still open on this builder step (Next waits for it) */
+.cfa-still-open {
+  font-size: 13px;
+  color: var(--cf-amber);
+  text-align: center;
+}
+.cfa-step:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 0.11.4: starting gear. Picked items say so in green; "Your gear" sums it up at the top. */
+.cfa-gear-sum {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--cf-raised);
+}
+.cfa-gear-line h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--cf-muted);
+}
+.cfa-mini--open select {
+  box-shadow: 0 0 0 2px var(--cf-amber);
+}
+.cfa-added {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cf-good) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--cf-good);
+}
+.cfa-added-label {
+  padding: 0 6px;
+  color: var(--cf-good);
+  font: 700 12px/28px var(--glo-font-body);
+  white-space: nowrap;
+}
+.cfa-added button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cf-good);
+  font-weight: 800;
+  cursor: pointer;
+}
+.cfa-added button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.cfa-list li.cfa-li--added {
+  box-shadow: inset 3px 0 0 var(--cf-good);
+}

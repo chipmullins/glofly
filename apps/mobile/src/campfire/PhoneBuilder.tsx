@@ -31,6 +31,15 @@ import {
   type SkillId,
   type SrdSpellSummary,
   type TableState,
+  emptyGear,
+  gearFor,
+  pickChoices,
+  pickKeys,
+  resolveGear,
+  type ClassGear,
+  type GearPick,
+  type GearSelection,
+  type ResolvedGear,
 } from '@glofly/shared'
 import { Text, webNoOutline } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
@@ -319,7 +328,10 @@ type Draft = {
   /** A feat instead of the ASI at that index */
   asiFeat: (string | null)[]
   skills: SkillId[]
+  /** Only for classes without starting-gear data (homebrew) */
   equipment: RulesItem[]
+  /** 0.11.4: the class's starting gear choices */
+  gear: GearSelection
   spells: SheetSpell[]
   name: string
 }
@@ -343,9 +355,18 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
     asiFeat: [],
     skills: [],
     equipment: [],
+    gear: emptyGear(),
     spells: [],
     name: '',
   })
+  const [items, setItems] = useState<RulesItem[] | null>(null)
+  useEffect(() => {
+    let on = true
+    void roundA.mundaneItems(rules).then((x) => on && setItems(x))
+    return () => {
+      on = false
+    }
+  }, [rules])
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }))
   useEffect(() => {
     void builderFor(campaignId, rules).then(setData)
@@ -366,6 +387,9 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
     const feat = d.asiFeat[i]
     return feat ? { kind: 'feat', featId: feat } : { kind: 'asi', plus: d.asi[i] ?? {} }
   })
+  // 0.11.4 (Chip): each class starts with its own gear (SRD), not the whole armory.
+  const classGear = pick.cls && items?.length !== 0 ? gearFor(rules, pick.cls.id) : null
+  const gearOut = classGear && items ? resolveGear(classGear, d.gear, items) : null
   const choices: BuildChoices = {
     rules,
     name: d.name,
@@ -381,7 +405,8 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
     asi,
     hp: 'average',
     spells: d.spells,
-    equipment: d.equipment,
+    equipment: classGear ? (gearOut?.equipment ?? []) : d.equipment,
+    gold: gearOut?.gold ?? 0,
   }
   const scores = finalScores(data, choices)
   const sum = (p: Partial<Record<Ability, number>>) => Object.values(p).reduce((n: number, v) => n + (v ?? 0), 0)
@@ -391,9 +416,24 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
     !!pick.bg && backgroundBonusOk(pick.bg, d.bonus),
     ABILITIES.every((a) => d.assign[a] !== undefined) && asi.every((a) => (a.kind === 'feat' ? !!a.featId : sum(a.plus) === 2)),
     !!pick.cls && d.skills.length === pick.cls.skillChoice.count,
-    true,
-    true,
+    !!pick.cls && (!classGear || (!!gearOut && !gearOut.open)),
+    !pick.cls?.spellAbility ||
+      (() => {
+        const need = spellCounts(pick.cls, d.level, abilityMod(scores[pick.cls.spellAbility]))
+        return d.spells.filter((x) => x.level === 0).length >= need.cantrips && d.spells.filter((x) => x.level > 0).length >= need.spells
+      })(),
     !!d.name.trim(),
+  ]
+  // 0.11.4 (Chip: "choose everything before Next"): what's still open on this step.
+  const openText = [
+    'Pick a species (and its subspecies or skill).',
+    'Pick a class (and subclass at this level).',
+    'Pick a background and place its bonuses.',
+    'Set all six ability scores.',
+    'Pick the rest of your skills.',
+    !pick.cls ? 'Pick a class first.' : classGear && !gearOut ? 'Loading your class’s gear…' : (gearOut?.open ?? ''),
+    'Pick the rest of your spells.',
+    'Give them a name.',
   ]
   const ready = done.every(Boolean)
 
@@ -418,7 +458,10 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
           <Pressable
             key={s}
             accessibilityLabel={`Go to ${s}`}
-            onPress={() => setStep(i)}
+            onPress={() => {
+              // Steps further on open once the ones before them are done.
+              if (i <= step || done.slice(0, i).every(Boolean)) setStep(i)
+            }}
             style={{
               flex: 1,
               height: 6,
@@ -431,11 +474,16 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {step > 0 ? <FireButton label="Back" onPress={() => setStep(step - 1)} style={{ flex: 1 }} /> : null}
         {step < STEPS.length - 1 ? (
-          <FireButton label={`Next: ${STEPS[step + 1].toLowerCase()}`} kind="primary" style={{ flex: 2 }} onPress={() => setStep(step + 1)} />
+          <FireButton label={`Next: ${STEPS[step + 1].toLowerCase()}`} kind="primary" disabled={!done[step]} style={{ flex: 2 }} onPress={() => setStep(step + 1)} />
         ) : (
           <FireButton label={ready ? 'Bring them to the table' : 'Finish the steps marked open'} kind="primary" busy={busy} disabled={!ready} style={{ flex: 2 }} onPress={() => void make()} />
         )}
       </View>
+      {step < STEPS.length - 1 && !done[step] && openText[step] ? (
+        <Text size={13} accessibilityRole="alert" style={{ color: fire.amber, textAlign: 'center' }}>
+          {openText[step]}
+        </Text>
+      ) : null}
       <Text size={11} style={{ color: fire.muted, textAlign: 'center' }}>
         {data.credit}
       </Text>
@@ -515,6 +563,7 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
                   spells: [],
                   asi: [],
                   asiFeat: [],
+                  ...(c.id === d.classId ? {} : { gear: emptyGear() }),
                 })
               }
             >
@@ -698,7 +747,9 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
                   </Chips>
                   {d.asiFeat[i] ? (
                     <Text size={12} style={{ color: fire.muted }}>
-                      {asiFeats(data).find((f) => f.id === d.asiFeat[i])?.text.slice(0, 220)}
+                      {asiFeats(data)
+                        .find((f) => f.id === d.asiFeat[i])
+                        ?.text.slice(0, 220)}
                     </Text>
                   ) : null}
                 </>
@@ -736,7 +787,11 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
           <Text style={{ color: fire.muted }}>Pick a class first.</Text>
         )
       ) : step === 5 ? (
-        <Equipment rules={rules} chosen={d.equipment} onChange={(equipment) => set({ equipment })} />
+        classGear && items && gearOut ? (
+          <StartingGear gear={classGear} className={pick.cls?.name ?? ''} bgGold={pick.bg?.gold ?? 0} items={items} sel={d.gear} out={gearOut} onChange={(gear) => set({ gear })} />
+        ) : (
+          <Equipment rules={rules} chosen={d.equipment} onChange={(equipment) => set({ equipment })} />
+        )
       ) : step === 6 ? (
         pick.cls?.spellAbility ? (
           <Spells
@@ -773,6 +828,204 @@ function Builder({ campaignId, rules, startLevel, onBack }: { campaignId: string
         </>
       )}
     </Frame>
+  )
+}
+
+const PICK_LABEL: Record<GearPick['from'], string> = {
+  simple: 'a simple weapon',
+  martial: 'a martial weapon',
+  'simple-melee': 'a simple melee weapon',
+  'martial-melee': 'a martial melee weapon',
+  'holy-symbol': 'a holy symbol',
+  'arcane-focus': 'an arcane focus',
+  'druidic-focus': 'a druidic focus',
+}
+const costText = (gp: number) => (gp >= 1 ? `${Math.round(gp * 100) / 100} gp` : gp >= 0.1 ? `${Math.round(gp * 10)} sp` : `${Math.round(gp * 100)} cp`)
+
+function GearPicks({ prefix, picks, items, sel, onChange }: { prefix: string; picks?: GearPick[]; items: RulesItem[]; sel: GearSelection; onChange: (g: GearSelection) => void }) {
+  const fire = useFire()
+  return (
+    <>
+      {pickKeys(prefix, picks).map(({ key, pick }) => (
+        <View key={key} style={{ gap: 6 }}>
+          <Text size={12} weight="bold" style={{ color: sel.picks[key] ? fire.muted : fire.amber }}>
+            Choose {PICK_LABEL[pick.from]}
+          </Text>
+          <Chips>
+            {pickChoices(pick, items).map((it) => (
+              <Chip key={it.id} label={it.name} on={sel.picks[key] === it.id} onPress={() => onChange({ ...sel, picks: { ...sel.picks, [key]: it.id } })} />
+            ))}
+          </Chips>
+        </View>
+      ))}
+    </>
+  )
+}
+
+function StartingGear({
+  gear,
+  className,
+  bgGold,
+  items,
+  sel,
+  out,
+  onChange,
+}: {
+  gear: ClassGear
+  className: string
+  bgGold: number
+  items: RulesItem[]
+  sel: GearSelection
+  out: ResolvedGear
+  onChange: (g: GearSelection) => void
+}) {
+  const fire = useFire()
+  const [q, setQ] = useState('')
+  const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items])
+  const name = (id: string, qty?: number) => {
+    const n = byId.get(id)?.name ?? id
+    return qty && qty > 1 ? `${qty} ${/s$/i.test(n) ? n : `${n}s`}` : n
+  }
+  const choose = (line: number, o: number) => {
+    const options = [...sel.options]
+    options[line] = o
+    const picks = Object.fromEntries(Object.entries(sel.picks).filter(([k]) => !k.startsWith(`c${line}.`)))
+    onChange({
+      options,
+      picks,
+      bought: gear.choices[line].options[o]?.shop ? sel.bought : [],
+    })
+  }
+  const needle = q.trim().toLowerCase()
+  const shop = out.shopping
+    ? items
+        .filter((it) => (needle ? it.name.toLowerCase().includes(needle) : it.kind !== 'gear'))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, 40)
+    : []
+  return (
+    <>
+      <Text size={14} style={{ color: fire.muted }}>
+        What a new {className.toLowerCase() || 'adventurer'} starts with. {gear.choices.length > 1 ? 'Choose one option on each line.' : 'Take the gear, or the gold to buy your own.'}
+      </Text>
+      <View
+        style={{
+          padding: 12,
+          borderRadius: 14,
+          backgroundColor: fire.card,
+          gap: 6,
+        }}
+        accessibilityLiveRegion="polite"
+      >
+        <Text weight="bold" style={{ color: fire.ink }}>
+          Your gear
+        </Text>
+        <Text size={13} style={{ color: out.equipment.length ? fire.green : fire.muted }}>
+          {out.equipment.length ? out.equipment.map((it) => `✓ ${name(it.id, it.qty)}`).join('   ') : 'Nothing yet. Choose below.'}
+        </Text>
+        <Text size={12} style={{ color: fire.muted }}>
+          Gold: {out.gold + bgGold} gp
+          {bgGold ? ` (${bgGold} from your background)` : ''}
+          {out.shopping ? ` · ${costText(out.budget)} left to spend` : ''}
+        </Text>
+      </View>
+      {gear.choices.map((c, ci) => (
+        <View key={ci} style={{ gap: 8 }}>
+          {gear.choices.length > 1 ? (
+            <Text size={13} weight="bold" style={{ color: fire.muted }}>
+              Choose one ({ci + 1} of {gear.choices.length})
+            </Text>
+          ) : null}
+          {c.options.map((o, oi) => (
+            <Card
+              key={oi}
+              title={o.label}
+              tag={sel.options[ci] === oi ? '✓ Chosen' : undefined}
+              text={[o.items.map((x) => name(x.id, x.qty)).join(', '), o.gold && !o.shop ? `${o.gold} GP` : ''].filter(Boolean).join(' · ')}
+              on={sel.options[ci] === oi}
+              onPress={() => choose(ci, oi)}
+            >
+              {o.picks?.length ? <GearPicks prefix={`c${ci}`} picks={o.picks} items={items} sel={sel} onChange={onChange} /> : null}
+            </Card>
+          ))}
+        </View>
+      ))}
+      {gear.always.length || gear.alwaysPicks?.length ? (
+        <View
+          style={{
+            padding: 12,
+            borderRadius: 14,
+            backgroundColor: fire.card,
+            gap: 8,
+          }}
+        >
+          <Text weight="bold" style={{ color: fire.ink }}>
+            Every {className.toLowerCase()} also gets
+          </Text>
+          {gear.always.length ? (
+            <Text size={13} style={{ color: fire.muted }}>
+              {gear.always.map((x) => name(x.id, x.qty)).join(', ')}
+            </Text>
+          ) : null}
+          <GearPicks prefix="a" picks={gear.alwaysPicks} items={items} sel={sel} onChange={onChange} />
+        </View>
+      ) : null}
+      {out.shopping ? (
+        <>
+          <Text weight="bold" style={{ color: fire.ink }}>
+            Shop · {costText(out.budget)} left
+          </Text>
+          <Field label="Search the shop" value={q} onChange={setQ} placeholder="Rope, longsword…" />
+          {shop.map((it) => {
+            const count = sel.bought.filter((id) => id === it.id).length
+            return (
+              <View
+                key={it.id}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: 12,
+                  borderRadius: 12,
+                  backgroundColor: fire.card,
+                  borderLeftWidth: count ? 3 : 0,
+                  borderLeftColor: fire.green,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text weight="bold" style={{ color: fire.ink }}>
+                    {it.name}
+                  </Text>
+                  <Text size={12} style={{ color: fire.muted }}>
+                    {costText(it.cost)} · {it.weight} lb
+                  </Text>
+                </View>
+                {count ? (
+                  <>
+                    <FireButton
+                      label="−"
+                      kind="quiet"
+                      height={40}
+                      onPress={() => {
+                        const at = sel.bought.lastIndexOf(it.id)
+                        onChange({
+                          ...sel,
+                          bought: sel.bought.filter((_, j) => j !== at),
+                        })
+                      }}
+                    />
+                    <Text weight="bold" style={{ color: fire.green }}>
+                      ✓ Added{count > 1 ? ` ×${count}` : ''}
+                    </Text>
+                  </>
+                ) : null}
+                <FireButton label={count ? '+' : '+ Add'} height={40} disabled={it.cost > out.budget + 1e-9} onPress={() => onChange({ ...sel, bought: [...sel.bought, it.id] })} />
+              </View>
+            )
+          })}
+        </>
+      ) : null}
+    </>
   )
 }
 
@@ -828,7 +1081,12 @@ function Equipment({ rules, chosen, onChange }: { rules: RulesSet; chosen: Rules
               {it.weapon ? `${it.weapon.damage} ${it.weapon.type}` : it.armor ? `AC ${it.armor.base}${it.armor.dex ? ' + Dex' : ''}` : it.kind} · {it.weight} lb
             </Text>
           </View>
-          <FireButton label="Add" height={40} onPress={() => onChange([...chosen, it])} />
+          {chosen.some((x) => x.id === it.id) ? (
+            <Text weight="bold" style={{ color: fire.green }}>
+              ✓ Added
+            </Text>
+          ) : null}
+          <FireButton label={chosen.some((x) => x.id === it.id) ? '+' : '+ Add'} height={40} onPress={() => onChange([...chosen, it])} />
         </View>
       ))}
     </>

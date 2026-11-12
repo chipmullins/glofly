@@ -61,6 +61,20 @@ export async function searchItems(rules: RulesSet, q: string, kind?: string): Pr
   return r.ok ? r.data.items : []
 }
 
+// 0.11.4: every non-magic item, for class starting gear and its shop (kept per rule set).
+const mundane = new Map<RulesSet, Promise<RulesItem[]>>()
+export function loadMundaneItems(rules: RulesSet): Promise<RulesItem[]> {
+  let p = mundane.get(rules)
+  if (!p) {
+    p = cf.get<{ items: RulesItem[] }>(`/campfire/srd/items/mundane?rules=${rules}`).then((r) => {
+      if (!r.ok) mundane.delete(rules)
+      return r.ok ? r.data.items : []
+    })
+    mundane.set(rules, p)
+  }
+  return p
+}
+
 export async function loadHub(campaignId: string): Promise<CampaignHub | null> {
   const r = await cf.get<CampaignHub>(`/campfire/campaigns/${campaignId}/hub`)
   return r.ok ? r.data : null

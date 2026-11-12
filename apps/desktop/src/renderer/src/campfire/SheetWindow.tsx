@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { withTwoHanded } from '@glofly/shared/campfire/builder'
 import {
   ABILITIES,
   ABILITY_NAMES,
@@ -1005,7 +1006,7 @@ function ActionsSection({
         />
       )}
       <ul className="cfs-attacks">
-        {sheet.attacks.map((a) => {
+        {withTwoHanded(sheet.attacks).map((a) => {
           const ex = attackExpressions(sheet, a)
           const hit = signed(Number(ex.toHit.replace(/^1d20/, '') || 0))
           return (
@@ -1039,7 +1040,7 @@ function ActionsSection({
               </button>
               <AttackNotes
                 a={a}
-                canEdit={canEdit}
+                canEdit={canEdit && !a.virtual}
                 onChange={(notes) =>
                   set(
                     'attacks',
@@ -1047,7 +1048,7 @@ function ActionsSection({
                   )
                 }
               />
-              {canEdit && (
+              {canEdit && !a.virtual && (
                 <button
                   type="button"
                   className="cfs-x"

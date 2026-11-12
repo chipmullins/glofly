@@ -1,5 +1,5 @@
 import type { DiagonalRule } from '@glofly/shared/campfire/map'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Point, Scene, Token, TokenBar } from '@glofly/shared/campfire/types'
 import {
   pieceHidden,
@@ -155,13 +155,12 @@ function TokenGlyph({
     <g
       className={`cf-token${dragging ? ' cf-token--drag' : ''}${hidden ? ' cf-token--hidden' : ''}`}
       data-token={t.id}
-      transform={`translate(${t.x} ${t.y})`}
+      style={{ transform: `translate(${t.x}px, ${t.y}px)`, cursor: canMove ? 'grab' : 'pointer' }}
       role="button"
       tabIndex={0}
       aria-label={label}
       aria-pressed={selected}
       onKeyDown={(e) => onKey(t.id, e)}
-      style={{ cursor: canMove ? 'grab' : 'pointer' }}
     >
       <g
         ref={(el) => fxRef(t.id, el)}
@@ -718,7 +717,7 @@ function MapView(p: Props): React.JSX.Element {
   const nextDrag = useRef<{ x: number; y: number } | null>(null)
   const panLast = useRef<{ x: number; y: number } | null>(null)
   const panAcc = useRef<[number, number]>([0, 0])
-  const flushFrame = (): void => {
+  const flushFrame = (ts: number): void => {
     frame.current = null
     const [ax, ay] = panAcc.current
     if (ax || ay) {
@@ -726,11 +725,26 @@ function MapView(p: Props): React.JSX.Element {
       panBy(ax, ay)
     }
     const nd = nextDrag.current
-    if (nd) {
+    // 0.11.4 (Chip: "moving tokens needs to be smoothed further"): the dragged token itself is
+    // moved straight in the page every frame (placeLive); the map redraws (path, distance) only
+    // about 12 times a second, so a big map never holds the token back.
+    if (nd && (!dragStateAt.current || ts - dragStateAt.current > 80)) {
       nextDrag.current = null
+      dragStateAt.current = ts
       setDrag((d) => (d ? { ...d, x: nd.x, y: nd.y, moved: true } : d))
-    }
+    } else if (nd) scheduleFrame()
+    placeLive()
   }
+  const dragStateAt = useRef(0)
+  const livePos = useRef<{ id: string; x: number; y: number } | null>(null)
+  const placeLive = (): void => {
+    const lp = livePos.current
+    if (!lp) return
+    const el = box.current?.querySelector<SVGGElement>(`[data-token="${CSS.escape(lp.id)}"]`)
+    if (el) el.style.transform = `translate(${lp.x}px, ${lp.y}px)`
+  }
+  // A redraw while dragging would put the token back where the last drawn state had it.
+  useLayoutEffect(placeLive)
   const scheduleFrame = (): void => {
     if (frame.current === null) frame.current = requestAnimationFrame(flushFrame)
   }
@@ -789,6 +803,7 @@ function MapView(p: Props): React.JSX.Element {
       const x = Math.round(at[0] - drag.dx)
       const y = Math.round(at[1] - drag.dy)
       nextDrag.current = { x, y }
+      livePos.current = { id: drag.id, x, y }
       scheduleFrame()
       const now = performance.now()
       if (now - lastSent.current > 50) {
@@ -864,11 +879,17 @@ function MapView(p: Props): React.JSX.Element {
         const rx = Number.isFinite(at[0]) ? Math.round(at[0] - drag.dx) : (lateDrag?.x ?? drag.x)
         const ry = Number.isFinite(at[1]) ? Math.round(at[1] - drag.dy) : (lateDrag?.y ?? drag.y)
         const [x, y] = snapToken(rx, ry, tk.w, tk.h, g)
+        livePos.current = null
+        nextDrag.current = null
+        dragStateAt.current = 0
         p.onDrop(tk.id, x, y, drag.path.length ? drag.path : undefined)
         // Shown where it was dropped until the server's answer arrives.
         setDrag({ ...drag, x, y, moved: false })
         window.setTimeout(() => setDrag((d) => (d && d.id === tk.id && !d.moved ? null : d)), 600)
-      } else setDrag(null)
+      } else {
+        livePos.current = null
+        setDrag(null)
+      }
     }
   }
 
@@ -1170,7 +1191,7 @@ function MapView(p: Props): React.JSX.Element {
                 target={p.targetId === t.id}
                 active={p.activeTokenId === t.id}
                 bars={barHold.get(t.id) ?? t.bars}
-                dragging={drag?.id === t.id}
+                dragging={!!drag?.moved && drag.id === t.id}
                 canMove={p.canMove(t)}
                 fxRef={registerFx}
                 onKey={tokenKey}

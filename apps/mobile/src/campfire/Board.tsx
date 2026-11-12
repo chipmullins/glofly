@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { withTwoHanded } from '@glofly/shared/campfire/builder'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
 import { router } from 'expo-router'
@@ -88,7 +89,7 @@ export function TableSheet({
   }
 
   const portrait = character?.portraitFileId ?? token?.imageFileId ?? null
-  const attacks = sheet?.attacks ?? []
+  const attacks = withTwoHanded(sheet?.attacks ?? [])
   return (
     <Animated.View
       layout={still ? undefined : LinearTransition.duration(220)}

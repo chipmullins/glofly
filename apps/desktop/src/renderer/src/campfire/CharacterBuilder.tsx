@@ -31,12 +31,24 @@ import {
   type BuildChoices
 } from '@glofly/shared/campfire/builder'
 import { withHomebrew, type Homebrew } from '@glofly/shared/campfire/hub'
+import {
+  emptyGear,
+  gearFor,
+  pickChoices,
+  pickKeys,
+  resolveGear,
+  type ClassGear,
+  type GearPick,
+  type GearSelection,
+  type ResolvedGear
+} from '@glofly/shared/campfire/startingGear'
 import { cf, IMAGE_ACCEPT, pickFile, uploadFile } from './api'
 import { signed, useCf } from './ctx'
 import { CfWindow } from './sheetBits'
 import {
   campaignRules,
   loadHomebrew,
+  loadMundaneItems,
   searchItems,
   searchSpells,
   sheetSpellFrom,
@@ -218,7 +230,10 @@ type Draft = {
   asi: AsiChoice[]
   skills: SkillId[]
   speciesSkill: SkillId | null
+  /** Only for classes without starting-gear data (homebrew): free picks */
   equipment: RulesItem[]
+  /** The class's starting gear choices (reset when the class changes) */
+  gear: GearSelection
   spells: SheetSpell[]
   name: string
   alignment: string
@@ -256,6 +271,7 @@ function Build({
     skills: [],
     speciesSkill: null,
     equipment: [],
+    gear: emptyGear(),
     spells: [],
     name: '',
     alignment: '',
@@ -273,6 +289,18 @@ function Build({
           ABILITIES.map((a) => [a, d.assign[a] !== undefined ? (pool[d.assign[a]!] ?? 8) : 8])
         ) as Record<Ability, number>)
   const asiCount = pick.cls ? asiLevels(pick.cls, d.level).length : 0
+  // 0.11.4 (Chip: "each class has its own set of starting gear"): the SRD starting equipment.
+  // Classes without it (homebrew), or if the item list can't load, keep the free picker.
+  const [items, setItems] = useState<RulesItem[] | null>(null)
+  useEffect(() => {
+    let on = true
+    void loadMundaneItems(rules).then((x) => on && setItems(x))
+    return () => {
+      on = false
+    }
+  }, [rules])
+  const classGear = pick.cls && items?.length !== 0 ? gearFor(rules, pick.cls.id) : null
+  const gearOut = classGear && items ? resolveGear(classGear, d.gear, items) : null
   const choices: BuildChoices = {
     rules,
     name: d.name,
@@ -288,10 +316,16 @@ function Build({
     asi: d.asi.slice(0, asiCount),
     hp: d.hp,
     spells: d.spells,
-    equipment: d.equipment,
+    equipment: classGear ? (gearOut?.equipment ?? []) : d.equipment,
+    gold: gearOut?.gold ?? 0,
     alignment: d.alignment
   }
   const scores = finalScores(data, choices)
+  const spellNeed = pick.cls?.spellAbility
+    ? spellCounts(pick.cls, d.level, abilityMod(scores[pick.cls.spellAbility]))
+    : { cantrips: 0, spells: 0 }
+  const cantripsHave = d.spells.filter((s) => s.level === 0).length
+  const spellsHave = d.spells.filter((s) => s.level > 0).length
   const sheet = pick.cls ? buildSheet(data, choices) : null
 
   const stepDone = [
@@ -311,11 +345,53 @@ function Build({
           : !!a && Object.values(a.plus).reduce((n: number, v) => n + (v ?? 0), 0) === 2
       ),
     !!pick.cls && d.skills.length === pick.cls.skillChoice.count,
-    true,
-    true,
+    !!pick.cls && (!classGear || (!!gearOut && !gearOut.open)),
+    !pick.cls?.spellAbility ||
+      (cantripsHave >= spellNeed.cantrips && spellsHave >= spellNeed.spells),
     !!d.name.trim()
   ]
   const ready = stepDone.every(Boolean)
+  // 0.11.2 (Chip: "it's confusing"): Next only moves on once everything on this step is chosen,
+  // and says what's still open. Steps further on open once the ones before them are done.
+  const plural = (n: number, one: string, many: string): string =>
+    `${n} more ${n === 1 ? one : many}`
+  const stillOpen: (string | null)[] = [
+    !pick.species
+      ? 'Pick a species.'
+      : pick.species.subs.length && !pick.sub
+        ? 'Pick a subspecies or lineage.'
+        : pick.species.skillChoice && !d.speciesSkill
+          ? 'Pick the skill your species gives.'
+          : null,
+    !pick.cls
+      ? 'Pick a class.'
+      : d.level >= (pick.cls.subclassLevel ?? 99) && !d.subclassId
+        ? 'Pick a subclass.'
+        : null,
+    !pick.bg
+      ? 'Pick a background.'
+      : !backgroundBonusOk(pick.bg, d.bonus)
+        ? 'Place the background’s ability score bonuses.'
+        : null,
+    stepDone[3] ? null : 'Set all six ability scores (and any ability score improvements).',
+    !pick.cls
+      ? 'Pick a class first.'
+      : d.skills.length < pick.cls.skillChoice.count
+        ? `Pick ${plural(pick.cls.skillChoice.count - d.skills.length, 'skill', 'skills')}.`
+        : null,
+    !pick.cls
+      ? 'Pick a class first.'
+      : classGear && !gearOut
+        ? 'Loading your class’s gear…'
+        : (gearOut?.open ?? null),
+    stepDone[6]
+      ? null
+      : cantripsHave < spellNeed.cantrips
+        ? `Pick ${plural(spellNeed.cantrips - cantripsHave, 'cantrip', 'cantrips')}.`
+        : `Pick ${plural(spellNeed.spells - spellsHave, 'spell', 'spells')}.`,
+    d.name.trim() ? null : 'Give them a name.'
+  ]
+  const firstOpen = stepDone.findIndex((x) => !x)
 
   const create = async (): Promise<void> => {
     if (!sheet || !ready) return
@@ -342,6 +418,12 @@ function Build({
                   type="button"
                   aria-current={step === i ? 'step' : undefined}
                   className={`cfa-step${step === i ? ' cfa-step--on' : stepDone[i] ? ' cfa-step--done' : ''}`}
+                  disabled={firstOpen !== -1 && i > firstOpen && i !== step}
+                  title={
+                    firstOpen !== -1 && i > firstOpen
+                      ? `Finish ${STEPS[firstOpen]} first`
+                      : undefined
+                  }
                   onClick={() => setStep(i)}
                 >
                   {s}
@@ -365,7 +447,20 @@ function Build({
             />
           )}
           {step === 4 && <SkillStep data={data} d={d} set={set} />}
-          {step === 5 && <EquipmentStep rules={rules} d={d} set={set} />}
+          {step === 5 &&
+            (classGear && items ? (
+              <StartingGear
+                gear={classGear}
+                className={pick.cls?.name ?? ''}
+                bgGold={pick.bg?.gold ?? 0}
+                items={items}
+                sel={d.gear}
+                out={gearOut!}
+                set={(gear) => set({ gear })}
+              />
+            ) : (
+              <EquipmentStep rules={rules} d={d} set={set} />
+            ))}
           {step === 6 && <SpellStep data={data} rules={rules} d={d} set={set} scores={scores} />}
           {step === 7 && (
             <NameStep
@@ -457,9 +552,21 @@ function Build({
         </ul>
         <div className="cfa-aside-foot">
           {step < STEPS.length - 1 ? (
-            <button type="button" className="cf-primary cfa-big" onClick={() => setStep(step + 1)}>
-              Next: {STEPS[step + 1].toLowerCase()}
-            </button>
+            <>
+              <button
+                type="button"
+                className="cf-primary cfa-big"
+                disabled={!stepDone[step]}
+                onClick={() => setStep(step + 1)}
+              >
+                Next: {STEPS[step + 1].toLowerCase()}
+              </button>
+              {stillOpen[step] && (
+                <span className="cfa-still-open" role="status">
+                  {stillOpen[step]}
+                </span>
+              )}
+            </>
           ) : (
             <button
               type="button"
@@ -614,7 +721,14 @@ function ClassStep({ data, d, set }: StepProps): React.JSX.Element {
             key={c.id}
             on={d.classId === c.id}
             onClick={() =>
-              set({ classId: c.id, subclassId: null, skills: [], spells: [], asi: [] })
+              set({
+                classId: c.id,
+                subclassId: null,
+                skills: [],
+                spells: [],
+                asi: [],
+                ...(c.id === d.classId ? {} : { gear: emptyGear() })
+              })
             }
             title={c.name}
             meta={`d${c.hitDie} · ${c.primary.map((a) => ABILITY_NAMES[a]).join(c.id === 'fighter' ? ' or ' : ' and ') || 'Any'}`}
@@ -1150,13 +1264,14 @@ function EquipmentStep({
                 · {it.weight} lb
               </span>
             </span>
-            <button
-              type="button"
-              className="cf-ghost cf-small"
-              onClick={() => set({ equipment: [...d.equipment, it] })}
-            >
-              Add
-            </button>
+            <AddButton
+              count={d.equipment.filter((x) => x.id === it.id).length}
+              onAdd={() => set({ equipment: [...d.equipment, it] })}
+              onRemove={() => {
+                const at = d.equipment.map((x) => x.id).lastIndexOf(it.id)
+                set({ equipment: d.equipment.filter((_, j) => j !== at) })
+              }}
+            />
           </li>
         ))}
       </ul>
@@ -1179,6 +1294,316 @@ function EquipmentStep({
         </div>
       )}
     </section>
+  )
+}
+
+const itemNote = (it: RulesItem): string =>
+  it.armor
+    ? `AC ${it.armor.base}${it.armor.dex ? (it.armor.maxDex === null ? ' + Dex' : ` + Dex (max ${it.armor.maxDex})`) : ''}`
+    : it.weapon
+      ? `${it.weapon.damage} ${it.weapon.type}${it.weapon.mastery ? ` · ${it.weapon.mastery}` : ''}`
+      : it.kind === 'shield'
+        ? '+2 AC'
+        : ''
+/** Item cost in gp (0.1 = 1 sp, 0.01 = 1 cp) as "15 gp", "5 sp", "2 cp". */
+const costText = (gp: number): string =>
+  gp >= 1
+    ? `${Math.round(gp * 100) / 100} gp`
+    : gp >= 0.1
+      ? `${Math.round(gp * 10)} sp`
+      : `${Math.round(gp * 100)} cp`
+
+/** 0.11.4 (Chip: show what's picked): "+ Add", then a green "Added" (with − / + for more). */
+function AddButton({
+  count,
+  onAdd,
+  onRemove,
+  disabled
+}: {
+  count: number
+  onAdd: () => void
+  onRemove: () => void
+  disabled?: boolean
+}): React.JSX.Element {
+  if (!count)
+    return (
+      <button type="button" className="cf-ghost cf-small" disabled={disabled} onClick={onAdd}>
+        + Add
+      </button>
+    )
+  return (
+    <span className="cfa-added">
+      <button
+        type="button"
+        className="cfa-added-less"
+        aria-label="Take one less"
+        onClick={onRemove}
+      >
+        −
+      </button>
+      <span className="cfa-added-label" role="status">
+        ✓ Added{count > 1 ? ` ×${count}` : ''}
+      </span>
+      <button
+        type="button"
+        className="cfa-added-more"
+        aria-label="Take one more"
+        disabled={disabled}
+        onClick={onAdd}
+      >
+        +
+      </button>
+    </span>
+  )
+}
+
+const PICK_LABEL: Record<GearPick['from'], string> = {
+  simple: 'a simple weapon',
+  martial: 'a martial weapon',
+  'simple-melee': 'a simple melee weapon',
+  'martial-melee': 'a martial melee weapon',
+  'holy-symbol': 'a holy symbol',
+  'arcane-focus': 'an arcane focus',
+  'druidic-focus': 'a druidic focus'
+}
+
+/** The "Choose a martial weapon" dropdowns of an option (or the class's own picks). */
+function GearPicks({
+  prefix,
+  picks,
+  items,
+  sel,
+  set
+}: {
+  prefix: string
+  picks?: GearPick[]
+  items: RulesItem[]
+  sel: GearSelection
+  set: (g: GearSelection) => void
+}): React.JSX.Element | null {
+  const keys = pickKeys(prefix, picks)
+  if (!keys.length) return null
+  return (
+    <div className="cfa-inline-row">
+      {keys.map(({ key, pick }) => (
+        <label key={key} className={`cfa-mini${sel.picks[key] ? '' : ' cfa-mini--open'}`}>
+          <span>Choose {PICK_LABEL[pick.from]}</span>
+          <select
+            value={sel.picks[key] ?? ''}
+            onChange={(e) => set({ ...sel, picks: { ...sel.picks, [key]: e.target.value } })}
+          >
+            <option value="" disabled>
+              Choose…
+            </option>
+            {pickChoices(pick, items).map((it) => (
+              <option key={it.id} value={it.id}>
+                {it.name}
+                {it.weapon ? ` (${it.weapon.damage} ${it.weapon.type})` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      ))}
+    </div>
+  )
+}
+
+function StartingGear({
+  gear,
+  className,
+  bgGold,
+  items,
+  sel,
+  out,
+  set
+}: {
+  gear: ClassGear
+  className: string
+  bgGold: number
+  items: RulesItem[]
+  sel: GearSelection
+  out: ResolvedGear
+  set: (g: GearSelection) => void
+}): React.JSX.Element {
+  const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items])
+  const name = (id: string, qty?: number): string => {
+    const it = byId.get(id)
+    const n = it?.name ?? id
+    return qty && qty > 1 ? `${qty} ${/s$/i.test(n) ? n : `${n}s`}` : n
+  }
+  const choose = (line: number, o: number): void => {
+    const options = [...sel.options]
+    options[line] = o
+    // Picks of the other options on this line don't count any more.
+    const picks = Object.fromEntries(
+      Object.entries(sel.picks).filter(([k]) => !k.startsWith(`c${line}.`))
+    )
+    const shop = gear.choices[line].options[o]?.shop
+    set({ options, picks, bought: shop ? sel.bought : [] })
+  }
+  const always = gear.always.length > 0 || (gear.alwaysPicks?.length ?? 0) > 0
+  return (
+    <section className="cfa-section">
+      <h2>Starting equipment</h2>
+      <p className="cfa-lead">
+        What a new {className.toLowerCase() || 'adventurer'} starts with.
+        {gear.choices.length > 1
+          ? ' Choose one option on each line.'
+          : ' Take the gear, or the gold to buy your own.'}{' '}
+        Armor sets your armor class; weapons show up in Actions with their numbers worked out.
+      </p>
+      <div className="cfa-box cfa-gear-sum" aria-live="polite">
+        <b>Your gear</b>
+        {out.equipment.length ? (
+          <div className="cfa-chips">
+            {out.equipment.map((it) => (
+              <span key={it.id} className="cf-chip cf-chip--on">
+                {name(it.id, it.qty)}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="cf-sub">Nothing yet. Choose below.</span>
+        )}
+        <span className="cf-sub">
+          Gold: {out.gold + bgGold} gp
+          {bgGold ? ` (${bgGold} from your background)` : ''}
+          {out.shopping ? ` · ${costText(out.budget)} left to spend` : ''}
+        </span>
+      </div>
+      {gear.choices.map((c, ci) => (
+        <div key={ci} className="cfa-gear-line">
+          {gear.choices.length > 1 && (
+            <h3>
+              Choose one ({ci + 1} of {gear.choices.length})
+            </h3>
+          )}
+          <div className="cfa-grid">
+            {c.options.map((o, oi) => {
+              const on = sel.options[ci] === oi
+              return (
+                <Card
+                  key={oi}
+                  on={on}
+                  onClick={() => choose(ci, oi)}
+                  title={o.label}
+                  tag={on ? '✓ Chosen' : undefined}
+                  text={[
+                    o.items.map((x) => name(x.id, x.qty)).join(', '),
+                    o.gold && !o.shop ? `${o.gold} GP` : ''
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                >
+                  {on && (
+                    <GearPicks
+                      prefix={`c${ci}`}
+                      picks={o.picks}
+                      items={items}
+                      sel={sel}
+                      set={set}
+                    />
+                  )}
+                </Card>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+      {always && (
+        <div className="cfa-box">
+          <b>Every {className.toLowerCase()} also gets</b>
+          {gear.always.length > 0 && (
+            <span className="cf-sub">{gear.always.map((x) => name(x.id, x.qty)).join(', ')}</span>
+          )}
+          <GearPicks prefix="a" picks={gear.alwaysPicks} items={items} sel={sel} set={set} />
+        </div>
+      )}
+      {out.shopping && <GearShop items={items} sel={sel} budget={out.budget} set={set} />}
+    </section>
+  )
+}
+
+/** 2024's gold option: buy your own gear, never past the gold you have. */
+function GearShop({
+  items,
+  sel,
+  budget,
+  set
+}: {
+  items: RulesItem[]
+  sel: GearSelection
+  budget: number
+  set: (g: GearSelection) => void
+}): React.JSX.Element {
+  const [q, setQ] = useState('')
+  const [kind, setKind] = useState<'armor' | 'weapon' | 'shield' | 'gear'>('armor')
+  const needle = q.trim().toLowerCase()
+  const list = items
+    .filter((it) =>
+      needle
+        ? it.name.toLowerCase().includes(needle)
+        : kind === 'gear'
+          ? it.kind === 'gear' || it.kind === 'ammo'
+          : it.kind === kind
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 80)
+  return (
+    <div className="cfa-box">
+      <b>Shop · {costText(budget)} left</b>
+      <div className="cfa-row">
+        <div className="cfa-seg" role="radiogroup" aria-label="What kind">
+          {(['armor', 'shield', 'weapon', 'gear'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={kind === k && !needle}
+              className={kind === k && !needle ? 'cfa-seg-on' : ''}
+              onClick={() => {
+                setKind(k)
+                setQ('')
+              }}
+            >
+              {k === 'gear' ? 'Gear' : `${k[0].toUpperCase()}${k.slice(1)}s`}
+            </button>
+          ))}
+        </div>
+        <input
+          className="cfa-search"
+          type="search"
+          placeholder="Search"
+          aria-label="Search the shop"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
+      <ul className="cfa-list">
+        {list.map((it) => {
+          const count = sel.bought.filter((id) => id === it.id).length
+          return (
+            <li key={it.id} className={count ? 'cfa-li--added' : ''}>
+              <span>
+                <b>{it.name}</b>
+                <span className="cf-sub">
+                  {[costText(it.cost), itemNote(it), `${it.weight} lb`].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              <AddButton
+                count={count}
+                disabled={it.cost > budget + 1e-9}
+                onAdd={() => set({ ...sel, bought: [...sel.bought, it.id] })}
+                onRemove={() => {
+                  const at = sel.bought.lastIndexOf(it.id)
+                  set({ ...sel, bought: sel.bought.filter((_, j) => j !== at) })
+                }}
+              />
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 

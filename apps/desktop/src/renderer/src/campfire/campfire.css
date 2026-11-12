@@ -2452,3 +2452,17 @@ input.cf-ml-name {
   width: 100%;
   margin-top: 8px;
 }
+
+/* 0.11.4: tokens glide into place (the snap after a drop, and other people's moves arriving a few
+   times a second); the token being dragged follows the pointer exactly. */
+.cf-token {
+  transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.cf-token--drag {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-token {
+    transition: none;
+  }
+}

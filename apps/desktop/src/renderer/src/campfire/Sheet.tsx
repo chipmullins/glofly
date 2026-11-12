@@ -1,4 +1,5 @@
 import { CharacterBuilder } from './CharacterBuilder'
+import { withTwoHanded } from '@glofly/shared/campfire/builder'
 import { useState } from 'react'
 import {
   ABILITIES,
@@ -376,7 +377,7 @@ function ShortSheet({ ch }: { ch: Character }): React.JSX.Element {
           : 'Double-click someone else’s token (or click it and press T) to target it; then an attack rolls against it. Double-click your own token for its card.'}
       </p>
       <ul className="cf-actions">
-        {sheet.attacks.map((a) => {
+        {withTwoHanded(sheet.attacks).map((a) => {
           const ex = attackExpressions(sheet, a)
           return (
             <li key={a.id} className="cf-action">
