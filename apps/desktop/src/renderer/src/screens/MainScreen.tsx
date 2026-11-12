@@ -336,7 +336,10 @@ function FriendRow({
           )}
         </div>
         {stream ? (
-          <span className="friend-sub" title={`Live on ${siteName(stream.source)}${stream.title ? `: ${stream.title}` : ''}`}>
+          <span
+            className="friend-sub"
+            title={`Live on ${siteName(stream.source)}${stream.title ? `: ${stream.title}` : ''}`}
+          >
             <EmojiText text={stream.title || `Live on ${siteName(stream.source)}`} />
           </span>
         ) : game ? (
@@ -420,7 +423,9 @@ function FriendRow({
                 }}
               >
                 <BellOffIcon />
-                {mutedLive ? `Unmute ${person.displayName}'s live alerts` : `Mute ${person.displayName}'s live alerts`}
+                {mutedLive
+                  ? `Unmute ${person.displayName}'s live alerts`
+                  : `Mute ${person.displayName}'s live alerts`}
               </button>
             )}
             <div className="menu-divider" role="separator" />
@@ -531,6 +536,8 @@ export default function MainScreen({
   const [reporting, setReporting] = useState<{
     person: PublicUser
     message: { id: string; conversationId: string; preview: string } | null
+    /** Communities round 2: a nebula message also goes to its constellation's moderators */
+    nebula?: boolean
   } | null>(null)
   /** Messages from the Glofly team waiting for "I understand", and the banner */
   const [teamNotices, setTeamNotices] = useState<TeamNotice[]>([])
@@ -1176,12 +1183,15 @@ export default function MainScreen({
   // as "already live", never as news.
   const seenBroadcasts = useRef<Set<string> | null>(null)
   useEffect(() => {
-    const now = new Set(social.broadcasts.filter((b) => b.userId !== user.id).map((b) => `${b.userId}:${b.startedAt}`))
+    const now = new Set(
+      social.broadcasts.filter((b) => b.userId !== user.id).map((b) => `${b.userId}:${b.startedAt}`)
+    )
     const before = seenBroadcasts.current
     seenBroadcasts.current = now
     if (!before) return
     for (const b of social.broadcasts) {
-      if (b.userId === user.id || b.notified === false || before.has(`${b.userId}:${b.startedAt}`)) continue
+      if (b.userId === user.id || b.notified === false || before.has(`${b.userId}:${b.startedAt}`))
+        continue
       const who = friendsById.get(b.userId)
       if (!who || !shouldNotify()) continue
       void notify(
@@ -1474,12 +1484,19 @@ export default function MainScreen({
   // 0.7.5 Constellations polish: an invite card's Join / Open shows that constellation, the
   // member card's Call calls them, and Glofly in a browser opened from an invite page's "use it
   // in your browser" (?join=<code>) shows that invite.
-  const cxEventsRef = useRef<{ cxOpen: (id: string) => void; call: (id: string) => void } | null>(
-    null
-  )
+  const cxEventsRef = useRef<{
+    cxOpen: (id: string, code?: string | null) => void
+    call: (id: string) => void
+  } | null>(null)
   useEffect(() => {
     cxEventsRef.current = {
-      cxOpen: (id) => {
+      cxOpen: (id, code) => {
+        // Communities round 2: "Open Night Raiders" on a followed announcement. Not a member yet:
+        // its invite (public constellations), or nothing.
+        if (code && !cxCards.cards.some((c) => c.id === id)) {
+          setJoinCode(code)
+          return
+        }
         cxCards.reload()
         cx.enter(cxNavRef.current, { constellationId: id, nebulaId: null })
       },
@@ -1488,8 +1505,10 @@ export default function MainScreen({
   })
   useEffect(() => {
     const open = (e: Event): void => {
-      const id = (e as CustomEvent<{ constellationId?: unknown }>).detail?.constellationId
-      if (typeof id === 'string') cxEventsRef.current?.cxOpen(id)
+      const d = (e as CustomEvent<{ constellationId?: unknown; code?: unknown }>).detail
+      const code = typeof d?.code === 'string' && /^[A-Za-z0-9]{4,32}$/.test(d.code) ? d.code : null
+      if (typeof d?.constellationId === 'string')
+        cxEventsRef.current?.cxOpen(d.constellationId, code)
     }
     const call = (e: Event): void => {
       const id = (e as CustomEvent<{ userId?: unknown }>).detail?.userId
@@ -2076,7 +2095,10 @@ export default function MainScreen({
                 cards={cxCards.cards}
                 onOpen={(card, from) =>
                   // 0.9.3: the quick hop straight into it (at the nebula you were last in there).
-                  cx.enter(from, lastPlaceIn(user.id, [card.id]) ?? { constellationId: card.id, nebulaId: null })
+                  cx.enter(
+                    from,
+                    lastPlaceIn(user.id, [card.id]) ?? { constellationId: card.id, nebulaId: null }
+                  )
                 }
                 onProblem={setNotice}
               />
@@ -2359,6 +2381,7 @@ export default function MainScreen({
         onReport={(m, sender) =>
           setReporting({
             person: sender,
+            nebula: true,
             message: {
               id: m.id,
               conversationId: m.conversationId,
@@ -2564,7 +2587,9 @@ export default function MainScreen({
             onLogout={onLogout}
             onAccountDeleted={onAccountDeleted}
             onSessionExpired={onSessionExpired}
-            onUserChange={(c) => onUserChange({ displayName: c.displayName, avatarVersion: c.avatarVersion })}
+            onUserChange={(c) =>
+              onUserChange({ displayName: c.displayName, avatarVersion: c.avatarVersion })
+            }
             status={myStatus}
             onStatusChange={setMyStatus}
           />
@@ -2573,7 +2598,12 @@ export default function MainScreen({
           <ProfileCard
             preview
             isMe
-            person={{ id: user.id, username: user.username, displayName: user.displayName, avatarVersion: user.avatarVersion }}
+            person={{
+              id: user.id,
+              username: user.username,
+              displayName: user.displayName,
+              avatarVersion: user.avatarVersion
+            }}
             isFriend={false}
             presence={presence[user.id]}
             onMessage={() => undefined}
@@ -2671,6 +2701,7 @@ export default function MainScreen({
           <ReportDialog
             person={reporting.person}
             message={reporting.message}
+            toModerators={!!reporting.nebula}
             canBlock={!(lists?.blocked ?? []).some((b) => b.id === reporting.person.id)}
             onClose={() => setReporting(null)}
             onSessionExpired={onSessionExpired}

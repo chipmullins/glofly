@@ -17,7 +17,7 @@ export function isJumbo(text: string): boolean {
 
 export const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '🔥', '👍']
 
-export type PickerEmoji = { emoji: string; label: string; words: string }
+export type PickerEmoji = { emoji: string; label: string; words: string; /** Communities round 2: a constellation's custom emoji (emoji = ":name:#id") */ custom?: { id: string; name: string } }
 export type PickerGroup = { id: string; label: string; emoji: PickerEmoji[] }
 
 const GROUPS: { group: number; id: string; label: string }[] = [

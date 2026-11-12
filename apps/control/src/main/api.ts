@@ -235,6 +235,8 @@ const ALLOWED: [string, RegExp][] = [
   ['GET', new RegExp(`^/admin/usage$`)],
   ['PUT', new RegExp(`^/admin/usage/budget$`)],
   ['GET', new RegExp(`^/admin/insights${QUERY}$`)],
+  // Communities round 2 (Nov 2026): Insights → Big constellations
+  ['GET', new RegExp(`^/admin/insights/big$`)],
   ['GET', new RegExp(`^/admin/(live|deletions)$`)],
   ['GET', new RegExp(`^/admin/accounts/${ID}/support$`)],
   ['POST', new RegExp(`^/admin/accounts/${ID}/export$`)],

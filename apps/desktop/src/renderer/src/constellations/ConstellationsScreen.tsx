@@ -212,7 +212,12 @@ function Space(props: Props): React.JSX.Element {
     const stop = window.glofly.onEvent((event) => {
       const here = placeRef.current?.constellationId
       if (event.type === 'constellation:updated' && event.constellationId === here) load(here)
-      else if (event.type === 'constellation:activity' && event.constellationId === here)
+      else if (
+        (event.type === 'constellation:activity' ||
+          event.type === 'nightwatch:changed' ||
+          event.type === 'constellation:raid') &&
+        event.constellationId === here
+      )
         later(here)
       else if (event.type === 'constellation:voice' && event.constellationId === here) {
         setDetail((d) => {
@@ -220,12 +225,22 @@ function Space(props: Props): React.JSX.Element {
           const others = d.voice.filter((v) => v.nebulaId !== event.voice.nebulaId)
           return { ...d, voice: event.voice.userIds.length > 0 ? [...others, event.voice] : others }
         })
+      } else if (event.type === 'stage:updated' && event.constellationId === here) {
+        // Communities round 2: a stage started, changed or ended.
+        setDetail((d) => {
+          if (!d || d.id !== event.constellationId) return d
+          const others = (d.stages ?? []).filter((s) => s.nebulaId !== event.nebulaId)
+          return { ...d, stages: event.stage ? [...others, event.stage] : others }
+        })
       } else if (event.type === 'constellation:removed') {
         if (event.constellationId === here) {
           setPlace(null)
           setDetail(null)
           setDialog(null)
-          say(REMOVED_TEXT[event.reason] ?? 'That constellation is gone.')
+          say(
+            (REMOVED_TEXT[event.reason] ?? 'That constellation is gone.') +
+              (event.reason === 'banned' && event.banReason ? ` Reason: “${event.banReason}”` : '')
+          )
         }
       } else if (event.type === 'connection' && event.connected && here) load(here)
     })

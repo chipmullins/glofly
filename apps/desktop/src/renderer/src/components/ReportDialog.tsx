@@ -32,6 +32,8 @@ type ReportDialogProps = {
   message: { id: string; conversationId: string; preview: string } | null
   /** Already blocked: no "Also block" box */
   canBlock: boolean
+  /** Communities round 2: a nebula message (its constellation's moderators see it too) */
+  toModerators?: boolean
   onClose: () => void
   onSessionExpired: () => void
   /** After sending (blocked: they also blocked the person) */
@@ -42,6 +44,7 @@ export default function ReportDialog({
   person,
   message,
   canBlock,
+  toModerators = false,
   onClose,
   onSessionExpired,
   onDone
@@ -108,7 +111,9 @@ export default function ReportDialog({
               {sent
                 ? 'Thanks for telling us.'
                 : message
-                  ? `From ${person.displayName}. The Glofly team will see this message and a few around it.`
+                  ? toModerators
+                    ? `From ${person.displayName}. The moderators of this constellation and the Glofly team will see it.`
+                    : `From ${person.displayName}. The Glofly team will see this message and a few around it.`
                   : `The Glofly team will see your recent messages with ${person.displayName}.`}
             </p>
           </div>

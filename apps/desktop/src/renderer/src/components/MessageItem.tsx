@@ -8,6 +8,8 @@ import { addRecent, isJumbo } from '../lib/emoji'
 import EmojiPicker from './EmojiPicker'
 import EmojiText, { Emoji } from './EmojiText'
 import FormattedText from './FormattedText'
+import { CustomEmojiImg, WithCustomEmoji } from './CustomEmoji'
+import { isCustomReaction, onlyEmoji } from '@glofly/shared/emoji'
 import './Forward.css'
 import { GameCard, GifView, LanternTag, LinkPreviewCard, PollCard } from './ChatExtras'
 import LiveAlertCard from '../connections/LiveAlertCard'
@@ -173,11 +175,55 @@ function MentionText({
 /** 0.9.3: a forwarded message sits in a card that says whose words they are and where from. */
 function ForwardWrap({
   forwarded,
+  crosspost,
   children
 }: {
   forwarded?: Message['forwarded']
+  /** Communities round 2 (board 3b): a copy of a followed announcement */
+  crosspost?: Message['crosspost']
   children: React.ReactNode
 }): React.JSX.Element {
+  if (crosspost) {
+    return (
+      <div className="message-forward message-crosspost">
+        <span className="message-forward-label">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 10v4h4l7 4V6L7 10z" />
+            <path d="M17 9a4 4 0 0 1 0 6" />
+          </svg>
+          <b>{crosspost.constellationName}</b>
+          <span className="message-crosspost-tag">#{crosspost.nebulaName}</span>
+        </span>
+        {children}
+        <span className="message-crosspost-foot">
+          Posted by {crosspost.authorName} ·{' '}
+          <button
+            type="button"
+            className="message-crosspost-open"
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent('glofly:cx-open', {
+                  detail: { constellationId: crosspost.constellationId, code: crosspost.inviteCode }
+                })
+              )
+            }
+          >
+            Open {crosspost.constellationName}
+          </button>
+        </span>
+      </div>
+    )
+  }
   if (!forwarded) return <>{children}</>
   const when = new Date(forwarded.at)
   const at = Number.isNaN(when.getTime())
@@ -367,7 +413,10 @@ export default function MessageItem({
       if (o === 'auto' || o === 'scroll') break
       box = box.parentElement
     }
-    const area = box && box !== document.body ? box.getBoundingClientRect() : { top: 0, bottom: window.innerHeight }
+    const area =
+      box && box !== document.body
+        ? box.getBoundingClientRect()
+        : { top: 0, bottom: window.innerHeight }
     const r = menu.getBoundingClientRect()
     const anchor = menu.parentElement?.getBoundingClientRect()
     if (!anchor) return
@@ -455,7 +504,8 @@ export default function MessageItem({
         ? 'message-body message-body--sending'
         : 'message-body'
     : 'message-body'
-  const jumbo = !item.pending && !m.deleted && isJumbo(m.body)
+  // Communities round 2: 1–3 custom emoji on their own are big too.
+  const jumbo = !item.pending && !m.deleted && (isJumbo(m.body) || onlyEmoji(m.body, m.emojis))
 
   return (
     <div
@@ -530,8 +580,9 @@ export default function MessageItem({
               className={mine ? 'message-author message-author--mine' : 'message-author'}
               style={authorRole ? { color: authorRole.light } : undefined}
             >
-              {authorName}
+              {!m.deleted && m.crosspost ? m.crosspost.constellationName : authorName}
             </span>
+            {m.bridged && <span className="message-via">via Discord</span>}
             {authorRole && (
               <span
                 className="cx-role-badge"
@@ -544,7 +595,10 @@ export default function MessageItem({
           </div>
         )}
 
-        <ForwardWrap forwarded={!m.deleted && !editing ? m.forwarded : undefined}>
+        <ForwardWrap
+          forwarded={!m.deleted && !editing ? m.forwarded : undefined}
+          crosspost={!m.deleted && !editing ? m.crosspost : undefined}
+        >
           {editing ? (
             <EditBox initial={m.body} onSave={onSaveEdit} onCancel={onCancelEdit} />
           ) : m.deleted ? (
@@ -558,21 +612,29 @@ export default function MessageItem({
             >
               <FormattedText
                 text={m.liveCard ? liveAlertBody(m.body, m.liveCard) : m.body}
-                renderText={(text, key) =>
-                  people?.length ? (
-                    <MentionText
-                      key={key}
-                      text={text}
-                      people={people}
-                      meId={meId}
-                      onClick={onMentionClick}
-                      group={groupMentions}
-                      message={m}
-                    />
-                  ) : (
-                    <EmojiText key={key} text={text} />
-                  )
-                }
+                renderText={(outer, outerKey) => (
+                  <WithCustomEmoji
+                    key={outerKey}
+                    text={outer}
+                    refs={m.emojis}
+                    jumbo={jumbo}
+                    renderText={(text, key) =>
+                      people?.length ? (
+                        <MentionText
+                          key={key}
+                          text={text}
+                          people={people}
+                          meId={meId}
+                          onClick={onMentionClick}
+                          group={groupMentions}
+                          message={m}
+                        />
+                      ) : (
+                        <EmojiText key={key} text={text} />
+                      )
+                    }
+                  />
+                )}
               />
               {m.editedAt && (
                 <span
@@ -667,7 +729,11 @@ export default function MessageItem({
                   disabled={!canAct}
                   onClick={() => onReact(r.emoji)}
                 >
-                  <Emoji emoji={r.emoji} className="reaction-emoji" />
+                  {isCustomReaction(r.emoji) && m.emojis?.some((e) => `:${e.name}:` === r.emoji) ? (
+                    <CustomEmojiImg emoji={m.emojis.find((e) => `:${e.name}:` === r.emoji)!} />
+                  ) : (
+                    <Emoji emoji={r.emoji} className="reaction-emoji" />
+                  )}
                   <span className="reaction-count">{r.userIds.length}</span>
                 </button>
               )

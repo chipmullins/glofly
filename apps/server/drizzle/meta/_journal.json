@@ -411,22 +411,57 @@
     {
       "idx": 58,
       "version": "7",
-      "when": 1794282993264,
-      "tag": "0058_campfire",
+      "when": 1794428188095,
+      "tag": "0058_moderation",
       "breakpoints": true
     },
     {
       "idx": 59,
       "version": "7",
-      "when": 1794361012596,
-      "tag": "0059_campfire_round_a",
+      "when": 1794429611148,
+      "tag": "0059_emoji",
       "breakpoints": true
     },
     {
       "idx": 60,
       "version": "7",
-      "when": 1794366748640,
-      "tag": "0060_campfire_round_b",
+      "when": 1794430826793,
+      "tag": "0060_stages",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1794433641197,
+      "tag": "0061_big_constellations",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1794434254473,
+      "tag": "0062_discord_bridge",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1794434314473,
+      "tag": "0063_campfire",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1794434374473,
+      "tag": "0064_campfire_round_a",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1794434434473,
+      "tag": "0065_campfire_round_b",
       "breakpoints": true
     }
   ]

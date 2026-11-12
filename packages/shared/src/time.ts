@@ -29,10 +29,12 @@ export function isSameDay(a: string, b: string): boolean {
 
 /** Messages from the same person within 5 minutes are shown together under one name. */
 export function continuesGroup(
-  previous: { senderId: string; createdAt: string } | undefined,
-  next: { senderId: string; createdAt: string }
+  previous: { senderId: string; createdAt: string; bridged?: { name: string } | null } | undefined,
+  next: { senderId: string; createdAt: string; bridged?: { name: string } | null }
 ): boolean {
   if (!previous || previous.senderId !== next.senderId) return false
+  // Communities round 2: Discord people all arrive through one bridge bot: group by their name.
+  if ((previous.bridged?.name ?? null) !== (next.bridged?.name ?? null)) return false
   if (!isSameDay(previous.createdAt, next.createdAt)) return false
   return new Date(next.createdAt).getTime() - new Date(previous.createdAt).getTime() < 5 * 60 * 1000
 }

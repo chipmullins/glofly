@@ -1,5 +1,7 @@
 // 0.5.0 chat extras: GIFs, link previews, polls, mini games, lantern messages and firefly swarms.
 // The server checks every vote and move; these only show the state it sends back.
+import { usableSets, useEmojiPlace, useEmojiSets } from '../lib/customEmoji'
+import { emojiUrl } from '../lib/media'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { gifSize, gifUrl } from '@glofly/shared/gifs'
 import { triviaScores, WORD_LENGTH } from '@glofly/shared/games'
@@ -130,12 +132,15 @@ export function GifPicker({
   anchor,
   onPick,
   onPickSticker,
+  onPickCxSticker,
   onClose
 }: {
   anchor: HTMLElement
   onPick: (gif: GifInfo) => void
   /** 0.5.0 custom stickers: the Stickers tab */
   onPickSticker: (sticker: Sticker) => void
+  /** Communities round 2: one of a constellation's stickers */
+  onPickCxSticker?: (stickerId: string) => void
   onClose: () => void
 }): React.JSX.Element {
   const WIDTH = 380
@@ -240,11 +245,11 @@ export function GifPicker({
           className={tab === 'stickers' ? 'gif-tab gif-tab--on' : 'gif-tab'}
           onClick={() => setTab('stickers')}
         >
-          My stickers
+          Stickers
         </button>
       </div>
       {tab === 'stickers' ? (
-        <StickerTray onPick={onPickSticker} />
+        <StickerTray onPick={onPickSticker} onPickCx={onPickCxSticker} />
       ) : (
         <>
           <div className="gif-picker-head">
@@ -321,8 +326,17 @@ export function GifPicker({
 }
 
 /** Your stickers, and "Make a sticker" from a photo (the server cuts out the background). */
-function StickerTray({ onPick }: { onPick: (sticker: Sticker) => void }): React.JSX.Element {
+function StickerTray({
+  onPick,
+  onPickCx
+}: {
+  onPick: (sticker: Sticker) => void
+  onPickCx?: (stickerId: string) => void
+}): React.JSX.Element {
   const [stickers, setStickers] = useState<Sticker[] | null>(null)
+  // Communities round 2: each constellation's stickers (inside-only ones only there).
+  const place = useEmojiPlace()
+  const cxSets = usableSets(useEmojiSets(), place).filter((s) => s.stickers.length)
   const [making, setMaking] = useState(false)
   const [problem, setProblem] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -411,6 +425,30 @@ function StickerTray({ onPick }: { onPick: (sticker: Sticker) => void }): React.
       {stickers?.length === 0 && !making && (
         <p className="sticker-empty">Your stickers show up here.</p>
       )}
+      {onPickCx &&
+        cxSets.map((set) => (
+          <section
+            key={set.constellation.id}
+            className="sticker-cx"
+            aria-label={set.constellation.name}
+          >
+            <h3 className="sticker-cx-head">{set.constellation.name}</h3>
+            <div className="sticker-grid">
+              {set.stickers.map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  className="sticker-option"
+                  aria-label={`Send sticker: ${st.name}`}
+                  title={st.name}
+                  onClick={() => onPickCx(st.id)}
+                >
+                  <img src={emojiUrl(st.id)} alt="" draggable={false} loading="lazy" />
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
       <input
         ref={fileRef}
         type="file"

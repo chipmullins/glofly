@@ -175,7 +175,7 @@ async function problemWith(
           ),
         )
     : [];
-  if (v.nebulaId && found.find((n) => n.id === v.nebulaId)?.kind !== "text")
+  if (v.nebulaId && !["text", "announcement"].includes(found.find((n) => n.id === v.nebulaId)?.kind ?? ""))
     return "Pick a text nebula from this constellation to post in.";
   if (
     v.watchNebulaId &&
@@ -625,7 +625,7 @@ async function post(
         eq(nebulas.constellationId, alert.constellationId),
       ),
     );
-  if (!n || n.kind !== "text") return;
+  if (!n || (n.kind !== "text" && n.kind !== "announcement")) return;
   const text = liveAlertText(
     alert.message,
     card,

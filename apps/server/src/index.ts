@@ -23,6 +23,13 @@ import { stickersRouter } from "./stickers/routes";
 import { broadcastsRouter, sweepBroadcasts } from "./broadcasts/routes";
 import { callsRouter } from "./calls/routes";
 import { constellationsRouter } from "./constellations/routes";
+import { nightWatchRouter, purgeOldModeration } from "./constellations/nightwatch";
+import { emojiRouter } from "./emoji/routes";
+import { stagesRouter } from "./stages/routes";
+import { memberPagesRouter } from "./constellations/memberPages";
+import { discordRouter, startDiscordBridge, stopDiscordBridge } from "./bridge/discord";
+import { announcementsRouter, startAnnouncements } from "./stages/announcements";
+import { ready as loadStages, sweepStages } from "./stages/state";
 import { invitePageRouter, sweepConstellationBirthdays } from "./constellations/community";
 // 0.8.0 community tools: search, events with RSVP, AutoMod lite, the Inbox.
 import { communityToolsRouter } from "./constellations/communityTools";
@@ -181,6 +188,17 @@ app.use("/constellations", threadsRouter);
 app.use("/constellations", communityToolsRouter);
 // 0.9.3: Constellation settings → Live alerts (Twitch, Kick, YouTube).
 app.use("/constellations", liveAlertsRouter);
+// Communities round 2: Night watch (before the main router so /constellations/bans/mine isn't taken).
+app.use("/constellations", nightWatchRouter);
+// Communities round 2: custom emoji + stickers (/emoji/… and /constellations/:id/emoji).
+app.use(emojiRouter);
+// Communities round 2: stage nebulas and announcement nebulas you can follow.
+app.use("/constellations", stagesRouter);
+// Communities round 2: the member list page by page (big constellations).
+app.use("/constellations", memberPagesRouter);
+// Communities round 2: the Discord bridge (/constellations/:id/discord…, /bridge/…).
+app.use(discordRouter);
+app.use("/constellations", announcementsRouter);
 app.use("/constellations", constellationsRouter);
 app.use("/games", myGamesRouter);
 // Campfire (phase 1, Nov 2026): the tabletop for fifth edition games in calls.
@@ -250,6 +268,7 @@ async function shutdown(signal: string): Promise<void> {
   setTimeout(() => process.exit(0), 10_000).unref();
   // 0.8.2: Control's uptime history counts this as an update, not an outage.
   await noteStopping("update");
+  stopDiscordBridge();
   try {
     // Closing the live connections also closes the HTTP server, once its requests are done.
     await stopRealtime();
@@ -270,6 +289,8 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 startToolHooks();
 startReaderPushes();
 startLiveAlerts();
+startAnnouncements();
+startDiscordBridge();
 
 connectRedis()
   .then(() => {
@@ -334,6 +355,11 @@ connectRedis()
     every(60 * 60 * 1000, "Sign in with Glofly cleanup", sweepOAuth);
     every(60_000, "Giveaways", sweepGiveaways);
     every(10 * 60_000, "Unfinished forum posts", sweepUnfinishedPosts);
+    // Communities round 2: the mod log, finished reports and appeals keep 180 days.
+    every(60 * 60_000, "Mod log cleanup", purgeOldModeration);
+    // Communities round 2: stages (who's still on them; quiet stages end by themselves).
+    void loadStages().catch((err) => console.error("Couldn't load live stages", err));
+    every(15_000, "Stages", sweepStages);
     // 0.9.3 Connections: Steam games (each account every 6 hours), what's playing on Steam, and
     // live notices Twitch or Kick stopped sending.
     every(5 * 60_000, "Steam games", sweepSteamSync);

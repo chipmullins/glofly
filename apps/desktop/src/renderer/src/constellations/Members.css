@@ -266,3 +266,48 @@
 .cx-mcard-more-list .cx-menu-check {
   color: #b8430a;
 }
+
+/* Communities round 2 (board 4a): big constellations' member search and note. */
+.cx-big-search {
+  height: 36px;
+  border-radius: 10px;
+  background: #2a1f1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: #c9b8ab;
+  margin: 0 0 8px;
+}
+.cx-big-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #f5ede6;
+  font: 13px var(--glo-font-body);
+  outline: none;
+}
+.cx-big-search input::placeholder {
+  color: #c9b8ab;
+}
+.cx-big-note {
+  margin: 10px 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: #2a1f1a;
+  font-size: 12.5px;
+  color: #c9b8ab;
+  line-height: 1.4;
+}
+.cx-big-more {
+  width: 100%;
+  height: 34px;
+  margin-top: 6px;
+  border-radius: 10px;
+  border: 1px solid #3a2a22;
+  background: transparent;
+  color: #f5ede6;
+  font: 600 13px var(--glo-font-body);
+  cursor: pointer;
+}

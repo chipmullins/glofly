@@ -105,7 +105,7 @@ function isToolsPath(method: unknown, path: unknown, body: unknown): boolean {
 function isConstellationPath(method: unknown, path: unknown, body: unknown): boolean {
   if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method as string)) return false
   if (typeof path !== 'string' || path.length > 300) return false
-  if (!/^\/(constellations|games)(\/[A-Za-z0-9_-]+)*\/?(\?[A-Za-z0-9=&%._+-]*)?$/.test(path))
+  if (!/^\/(constellations|games|emoji)(\/[A-Za-z0-9_-]+)*\/?(\?[A-Za-z0-9=&%._+-]*)?$/.test(path))
     return false
   if (body === undefined || body === null) return true
   try {
@@ -447,6 +447,9 @@ export function createBridge(): GloflyApi {
             ...(attachmentIds?.length ? { attachmentIds } : {}),
             ...(options?.lantern ? { lantern: true } : {}),
             ...(options?.clientId ? { clientId: options.clientId } : {}),
+            ...(options?.emojis?.length && options.emojis.length <= 30 && options.emojis.every(isId)
+              ? { emojis: options.emojis }
+              : {}),
             ...(options?.threadId && isId(options.threadId)
               ? { threadId: options.threadId, ...(options.alsoInNebula ? { alsoInNebula: true } : {}) }
               : {})
@@ -497,15 +500,21 @@ export function createBridge(): GloflyApi {
           request<{ message: Message }>('DELETE', `/conversations/${id}/messages/${messageId}`),
           'message'
         ),
-      react: (id, messageId, emoji, on) =>
-        badId(id, messageId) ??
-        unwrap(
-          request<{ message: Message }>(
-            on ? 'PUT' : 'DELETE',
-            `/conversations/${id}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`
-          ),
-          'message'
-        ),
+      react: (id, messageId, emoji, on) => {
+        // Communities round 2: a custom emoji comes as ":name:#<id>".
+        const custom = /^(:[A-Za-z0-9_]{2,32}:)#([0-9a-f-]{36})$/i.exec(emoji)
+        const key = custom ? custom[1] : emoji
+        return (
+          badId(id, messageId) ??
+          unwrap(
+            request<{ message: Message }>(
+              on ? 'PUT' : 'DELETE',
+              `/conversations/${id}/messages/${messageId}/reactions/${encodeURIComponent(key)}${custom && on ? `?id=${custom[2]}` : ''}`
+            ),
+            'message'
+          )
+        )
+      },
       markRead: (id) => badId(id) ?? nothing(request('POST', `/conversations/${id}/read`)),
       forward: (id, to, note) =>
         badId(id) ??
@@ -795,7 +804,17 @@ export function createBridge(): GloflyApi {
             data,
             type
           }
-        )
+        ),
+      // Communities round 2: a new emoji or sticker
+      addEmoji: (id, data, type, options) => {
+        const q = new URLSearchParams({
+          kind: options.kind === 'sticker' ? 'sticker' : 'emoji',
+          name: String(options.name).slice(0, 60),
+          outside: options.outside === false ? '0' : '1',
+          cutout: options.cutout ? '1' : '0'
+        })
+        return badId(id) ?? request('POST', `/constellations/${id}/emoji?${q}`, undefined, { data, type })
+      }
     },
     notices: {
       list: async () => {

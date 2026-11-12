@@ -610,41 +610,36 @@ communityToolsRouter.post("/:id/automod/held/:hid/release", changeLimiter, async
   const s = await standingFor(req, res, "deleteMessages");
   if (!s) return;
   const hid = idParam.safeParse(req.params.hid);
-  const [held] = hid.success
-    ? await db.select().from(automodHeld).where(and(eq(automodHeld.id, hid.data), eq(automodHeld.constellationId, s.constellationId)))
-    : [];
-  if (!held) {
-    notFound(res, "That held message isn't there any more.");
+  const problem = hid.success ? await releaseHeld(s, hid.data) : { status: 404, message: "That held message isn't there any more." };
+  if (problem) {
+    res.status(problem.status).json({ error: problem.status === 404 ? "not_found" : problem.status === 403 ? "forbidden" : "invalid", message: problem.message });
     return;
   }
-  if (!(await seesNebulaChat(s.userId, held.conversationId))) {
-    notFound(res, "That held message isn't there any more.");
-    return;
-  }
-  if (held.releasedAt) {
-    bad(res, "Someone already let that message through.");
-    return;
-  }
+  res.json(await automodPage(s));
+});
+
+/**
+ * Lets a held message through (AutoMod's Undo; Night watch "Let it through"): posted as its sender
+ * would have. Null when done, otherwise why not. Needs "Delete messages" (checked by the caller)
+ * and to outrank the sender.
+ */
+export async function releaseHeld(s: Standing, heldId: string): Promise<{ status: number; message: string } | null> {
+  const gone = { status: 404, message: "That held message isn't there any more." };
+  const [held] = await db.select().from(automodHeld).where(and(eq(automodHeld.id, heldId), eq(automodHeld.constellationId, s.constellationId)));
+  if (!held || !(await seesNebulaChat(s.userId, held.conversationId))) return gone;
+  if (held.releasedAt) return { status: 400, message: "Someone already let that message through." };
+  if (held.dismissedAt) return { status: 400, message: "A moderator already kept that message hidden." };
   const sender = await standingOf(s.constellationId, held.senderId);
-  if (sender && !outranks(s, sender)) {
-    bad(res, "You can only do that for people with a lower role than yours.", 403);
-    return;
-  }
+  if (sender && !outranks(s, sender)) return { status: 403, message: "You can only do that for people with a lower role than yours." };
   const chat = sender ? await access(held.conversationId, held.senderId) : null;
-  if (!chat) {
-    bad(res, "They're not in this constellation any more, so it can't be posted.");
-    return;
-  }
+  if (!chat) return { status: 400, message: "They're not in this constellation any more, so it can't be posted." };
   // Claim it first (two moderators pressing Undo at once post it once).
   const [claimed] = await db
     .update(automodHeld)
     .set({ releasedAt: new Date(), releasedBy: s.userId })
-    .where(and(eq(automodHeld.id, held.id), isNull(automodHeld.releasedAt)))
+    .where(and(eq(automodHeld.id, held.id), isNull(automodHeld.releasedAt), isNull(automodHeld.dismissedAt)))
     .returning({ id: automodHeld.id });
-  if (!claimed) {
-    bad(res, "Someone already let that message through.");
-    return;
-  }
+  if (!claimed) return { status: 400, message: "Someone already decided about that message." };
   const message = await postSpecial(chat, held.conversationId, held.senderId, { body: held.body, replyToId: held.replyToId });
   await db.update(automodHeld).set({ releasedMessageId: message.id }).where(eq(automodHeld.id, held.id));
   const [entry] = await db
@@ -653,8 +648,8 @@ communityToolsRouter.post("/:id/automod/held/:hid/release", changeLimiter, async
     .where(sql`constellation_id = ${s.constellationId} and details->>'heldId' = ${held.id}`)
     .limit(1);
   await logModeration(s.constellationId, s.userId, "automod_undo", held.senderId, { undid: entry?.id ?? null, heldId: held.id });
-  res.json(await automodPage(s));
-});
+  return null;
+}
 
 communityToolsRouter.post("/:id/automod/wait/:uid/waive", changeLimiter, async (req, res) => {
   const s = await standingFor(req, res, ["timeoutKick", "deleteMessages"]);

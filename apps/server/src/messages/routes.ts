@@ -48,11 +48,12 @@ import {
 } from "./attachments";
 import { requireAuth } from "../auth/sessions";
 import { blockedEitherWay, canMessage, deletionPending, groupBreaksRestriction, isRestricted, messageableAmong, pair } from "../friends/rules";
-import { emitToUser } from "../realtime";
+import { emitToUser, emitToUsers } from "../realtime";
 import { isNebulaChat, nebulaOfChat } from "../constellations/chats";
 import { canModerateNebula, canPostInNebula, nebulaChatOpen, whyCantPostInNebula } from "../constellations/perms";
 import { logModeration, nebulaActivity } from "../constellations/activity";
-import { automodGate, automodWordInEdit } from "../constellations/automod";
+import { automodGate, automodWordInEdit, mentionCapGate } from "../constellations/automod";
+import { emojisForMessage, reactionEmoji } from "../emoji/routes";
 import { removeFromChatCall } from "../calls/service";
 import { mentionsIn } from "./mentions";
 import { groupMentionsFor, NO_GROUP_MENTIONS } from "../constellations/groupMentions";
@@ -76,9 +77,10 @@ import {
   publicGame,
   shortBody,
   attachmentSummary,
-  type GameState, type MessageButton, type ForwardedFrom, type LiveCard, type ChatRoll } from "@glofly/shared";
+  type GameState, type MessageButton, type ForwardedFrom, type LiveCard, type EmojiRef, type Crosspost, type BridgedFrom, type ChatRoll, isCustomReaction } from "@glofly/shared";
 import { chatRollFor } from "../campfire/chatRoll";
 import { toolHook } from "../toolHooks";
+import { nebulaBusy } from "../constellations/busy";
 import { groupPhotoKey, PHOTO_UPLOAD_MAX, squarePhoto } from "../profile/photo";
 
 export const conversationsRouter = Router();
@@ -131,7 +133,10 @@ export const messageFields = {
   threadId: messages.threadId,
   alsoInNebula: messages.alsoInNebula,
   forwarded: messages.forwarded,
+  crosspost: messages.crosspost,
+  bridged: messages.bridged,
   liveCard: messages.liveCard,
+  emojis: messages.emojis,
   roll: messages.roll,
 };
 export type MessageRow = {
@@ -153,7 +158,10 @@ export type MessageRow = {
   game: GameInfo | null;
   threadId?: string | null;
   forwarded?: ForwardedFrom | null;
+  crosspost?: Crosspost | null;
+  bridged?: BridgedFrom | null;
   liveCard?: LiveCard | null;
+  emojis?: EmojiRef[] | null;
   /** Campfire: a `/roll` (older apps show the body) */
   roll?: ChatRoll | null;
   alsoInNebula?: boolean;
@@ -282,8 +290,14 @@ export async function hydrate(rows: MessageRow[]) {
       ...(chips.has(r.id) ? { thread: chips.get(r.id) } : {}),
       // 0.9.3: forwarded (older apps just show the text).
       ...(r.forwarded && !deleted ? { forwarded: r.forwarded } : {}),
+      // Communities round 2: a copy of a followed announcement.
+      ...(r.crosspost && !deleted ? { crosspost: r.crosspost } : {}),
+      // Communities round 2: copied from Discord (deleted ones keep the name: who it was).
+      ...(r.bridged ? { bridged: r.bridged } : {}),
       // 0.9.3: a constellation's Live alert (older apps show the text and link preview).
       ...(r.liveCard && !deleted ? { liveCard: r.liveCard } : {}),
+      // Communities round 2: custom emoji in its text or reactions (older apps show :name:).
+      ...(r.emojis?.length && !deleted ? { emojis: r.emojis } : {}),
       // Campfire: a /roll (older apps show the text, "🎲 Chip rolled 1d20+3: 17 (14 + 3)").
       ...(r.roll && !deleted ? { roll: r.roll } : {}),
     };
@@ -312,7 +326,7 @@ async function broadcast(conversationId: string, event: string, payload: unknown
     .from(conversationMembers)
     .where(eq(conversationMembers.conversationId, conversationId));
   const modern = await isNebulaChat(conversationId);
-  for (const m of members) emitToUser(m.userId, event, payload, modern);
+  emitToUsers(members.map((m) => m.userId), event, payload, modern);
 }
 
 /** Loads one message of a conversation (only if you're in that conversation). */
@@ -1524,6 +1538,14 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     res.status(400).json({ error: "star_chart", message: FORUM_NEEDS_SIGNAL });
     return;
   }
+  // Communities round 2: per-nebula and per-constellation limits (big constellations).
+  if (chat.kind === "nebula") {
+    const busy = await nebulaBusy(id.data);
+    if (busy) {
+      res.status(429).json({ error: "too_many_requests", message: busy });
+      return;
+    }
+  }
   const alsoInNebula = !!thread && wantsAlsoInNebula && thread.nebulaKind === "text";
   // A reply must point at a message in this same chat (and the same thread) that still exists.
   const replyToId = replyTo.success ? (replyTo.data ?? null) : null;
@@ -1574,13 +1596,23 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
   // Communities round 4.2: @everyone, @here and @Role (nebulas; only if you may).
   const group = chat.kind === "nebula" && !gif ? await groupMentionsFor(text, id.data, chat.memberIds, myId) : NO_GROUP_MENTIONS;
   const mentioned = [...new Set([...mentions, ...group.groupMentions])];
+  // Communities round 2: custom emoji (the ids the app picked; only ones I may use here).
+  const emojis = gif ? null : await emojisForMessage(myId, id.data, text, req.body?.emojis);
+  // Communities round 2: AutoMod's mention cap (Night watch → Safety).
+  if (chat.kind === "nebula") {
+    const capped = await mentionCapGate(id.data, myId, text, mentions, group.mentionRoles, !!group.mentionEveryone);
+    if (capped) {
+      res.status(capped.status).json({ error: capped.error, message: capped.message });
+      return;
+    }
+  }
 
   let inserted: MessageRow;
   try {
     inserted = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)
-        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, ...group, gif, lantern, threadId: thread?.id ?? null, alsoInNebula, roll: rolled?.roll ?? null })
+        .values({ conversationId: id.data, senderId: myId, body: text, replyToId, mentions, ...group, gif, lantern, threadId: thread?.id ?? null, alsoInNebula, emojis, roll: rolled?.roll ?? null })
         .returning(messageFields);
       const inserted = row;
       // Attach your uploads, in the order given. Each must be yours, for this chat, and unsent.
@@ -1636,8 +1668,9 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
     // notified, by their own nebula settings.
     await noteReply(thread, inserted.id, myId, inserted.createdAt);
     const [summary] = await threadSummaries([(await threadRowOf(thread.id)) ?? thread], null, new Map([[thread.nebulaId, thread.closeDays]]));
-    for (const userId of chat.memberIds) {
-      const m = userId === myId ? mineCopy : message;
+    emitToUsers(chat.memberIds.filter((id) => id !== myId), "thread:message", { constellationId: thread.constellationId, thread: summary, message }, true);
+    for (const userId of chat.memberIds.filter((id) => id === myId)) {
+      const m = mineCopy;
       emitToUser(userId, "thread:message", { constellationId: thread.constellationId, thread: summary, message: m }, true);
     }
     toolHook("onNebulaMessage", id.data, inserted.id, "created");
@@ -1650,8 +1683,10 @@ conversationsRouter.post("/:id/messages", sendLimiter, async (req, res) => {
       return;
     }
   }
-  for (const userId of chat.memberIds) {
-    const m = userId === myId ? mineCopy : message;
+  // Communities round 2: one send to everyone but me (big constellations), my own copy to me.
+  emitToUsers(chat.memberIds.filter((id) => id !== myId), "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  for (const userId of chat.memberIds.filter((id) => id === myId)) {
+    const m = mineCopy;
     emitToUser(userId, "message:new", modernOnly(chat) ? { message: m, nebula: true } : { message: m }, modernOnly(chat));
   }
   if (chat.kind === "nebula") {
@@ -1715,7 +1750,12 @@ export async function postScheduledText(
   // Communities round: a bot's buttons (the bot API only).
   buttons: MessageButton[] | null = null,
   // 0.9.3 Live alerts: the card, and the role ping an admin set up (checked when they chose it).
-  extra: { liveCard?: LiveCard; approvedPing?: { everyone: "everyone" | "here" | null; roleIds: string[] } } = {},
+  extra: {
+    liveCard?: LiveCard;
+    approvedPing?: { everyone: "everyone" | "here" | null; roleIds: string[] };
+    // Communities round 2: a message the Discord bridge copied in (its author's Discord name).
+    bridged?: BridgedFrom;
+  } = {},
 ): Promise<{ ok: true; messageId: string } | { ok: false; reason: string }> {
   const chat = await access(conversationId, myId);
   if (!chat) return { ok: false, reason: "You're no longer in this chat." };
@@ -1725,6 +1765,9 @@ export async function postScheduledText(
   if (chat.kind === "nebula") {
     const refused = await automodGate(conversationId, myId, text, replyToId);
     if (refused) return { ok: false, reason: refused.message };
+    // Communities round 2: bots and scheduled messages count toward a busy nebula's limits too.
+    const busy = await nebulaBusy(conversationId);
+    if (busy) return { ok: false, reason: busy };
   }
   let reply = replyToId;
   if (reply) {
@@ -1737,6 +1780,10 @@ export async function postScheduledText(
     chat.kind === "nebula"
       ? await groupMentionsFor(text, conversationId, chat.memberIds, myId, extra.liveCard ? (extra.approvedPing ?? { everyone: null, roleIds: [] }) : null)
       : NO_GROUP_MENTIONS;
+  if (chat.kind === "nebula" && !extra.liveCard) {
+    const capped = await mentionCapGate(conversationId, myId, text, mentions, group.mentionRoles, !!group.mentionEveryone);
+    if (capped) return { ok: false, reason: capped.message };
+  }
   const inserted = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(messages)
@@ -1749,6 +1796,7 @@ export async function postScheduledText(
         ...group,
         buttons: buttons?.length ? buttons : null,
         liveCard: chat.kind === "nebula" ? (extra.liveCard ?? null) : null,
+        bridged: chat.kind === "nebula" ? (extra.bridged ?? null) : null,
       })
       .returning(messageFields);
     await tx.update(conversations).set({ lastMessageAt: row.createdAt }).where(eq(conversations.id, conversationId));
@@ -1759,8 +1807,7 @@ export async function postScheduledText(
     return row;
   });
   const [message] = await hydrate([inserted]);
-  for (const userId of chat.memberIds)
-    emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  emitToUsers(chat.memberIds, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
   if (chat.kind === "nebula") {
     inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, mentions, nebulaPreview(message), group.groupMentions));
     toolHook("onNebulaMessage", conversationId, inserted.id, "created");
@@ -1823,7 +1870,31 @@ async function postForward(
   if (chat.kind === "nebula") {
     const refused = await automodGate(targetId, myId, source.body, null);
     if (refused) return { ok: false, reason: refused.message };
+    const busy = await nebulaBusy(targetId);
+    if (busy) return { ok: false, reason: busy };
   }
+  const made = await copyMessageInto(targetId, myId, source, { forwarded }, chat.memberIds, modernOnly(chat));
+  if (!made.ok) return made;
+  const { message, inserted } = made;
+  if (chat.partner) await shareReadPosition(targetId, myId, chat.partner, inserted.createdAt);
+  inBackground(notifyMessage({ ...message, groupMentions: [] }, chat));
+  if (chat.partner) inBackground(noteGlow(myId, chat.partner));
+  return { ok: true, message };
+}
+
+/**
+ * Copies a message (its text and files) into a chat as `myId`, with no checks: forwards check first;
+ * Communities round 2 announcement copies are posted by the follower constellation's Glofly member.
+ * Nobody is @mentioned or notified by the copy itself; `memberIds` are told about it.
+ */
+export async function copyMessageInto(
+  targetId: string,
+  myId: string,
+  source: MessageRow,
+  extra: { forwarded: ForwardedFrom; crosspost?: Crosspost },
+  memberIds: string[],
+  modern: boolean,
+): Promise<{ ok: true; message: Awaited<ReturnType<typeof hydrate>>[number]; inserted: MessageRow } | { ok: false; reason: string }> {
   const files = await db.select().from(attachments).where(eq(attachments.messageId, source.id)).orderBy(attachments.position);
   const copies = files.map((a) => ({ ...a, newId: randomUUID() }));
   const made: string[] = [];
@@ -1848,7 +1919,7 @@ async function postForward(
   const inserted = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(messages)
-      .values({ conversationId: targetId, senderId: myId, body: source.body, mentions: [], gif: source.gif, forwarded })
+      .values({ conversationId: targetId, senderId: myId, body: source.body, mentions: [], gif: source.gif, forwarded: extra.forwarded, crosspost: extra.crosspost ?? null, emojis: source.emojis ?? null })
       .returning(messageFields);
     for (const [position, c] of copies.entries()) {
       await tx.insert(attachments).values({
@@ -1878,16 +1949,12 @@ async function postForward(
     throw err;
   });
   const [message] = await hydrate([inserted]);
-  for (const userId of chat.memberIds)
-    emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
-  if (chat.kind === "nebula") {
+  emitToUsers(memberIds, "message:new", modern ? { message, nebula: true } : { message }, modern);
+  if (modern) {
     inBackground(nebulaActivity(targetId, myId, inserted.createdAt, [], nebulaPreview(message), []));
     toolHook("onNebulaMessage", targetId, inserted.id, "created");
   }
-  if (chat.partner) await shareReadPosition(targetId, myId, chat.partner, inserted.createdAt);
-  inBackground(notifyMessage({ ...message, groupMentions: [] }, chat));
-  if (chat.partner) inBackground(noteGlow(myId, chat.partner));
-  return { ok: true, message };
+  return { ok: true, message, inserted };
 }
 
 // POST /conversations/messages/:messageId/forward  { to: [conversationId…] (1–5), note? }
@@ -1993,7 +2060,7 @@ conversationsRouter.get("/forward-targets", async (_req, res) => {
       out.push({ conversationId: r.id, kind: "group", title: chat.name?.trim() || "Group", subtitle: `Group · ${chat.memberIds.length} people`, userId: null, avatarVersion: null, constellationId: null, iconVersion: null, color: null });
     } else {
       const nebula = await nebulaOfChat(r.id);
-      if (!nebula || nebula.kind !== "text") continue;
+      if (!nebula || (nebula.kind !== "text" && nebula.kind !== "announcement")) continue;
       const [c] = await db
         .select({ id: constellations.id, name: constellations.name, iconVersion: constellations.iconVersion, color: constellations.color })
         .from(constellations)
@@ -2063,7 +2130,7 @@ export async function postSpecial(
     return row;
   });
   const [message] = await hydrate([inserted]);
-  for (const userId of chat.memberIds) emitToUser(userId, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
+  emitToUsers(chat.memberIds, "message:new", modernOnly(chat) ? { message, nebula: true } : { message }, modernOnly(chat));
   if (chat.kind === "nebula") {
     inBackground(nebulaActivity(conversationId, myId, inserted.createdAt, [], nebulaPreview(message)));
     toolHook("onNebulaMessage", conversationId, inserted.id, "created");
@@ -2149,9 +2216,13 @@ conversationsRouter.patch("/:id/messages/:messageId", sendLimiter, async (req, r
     // Mentions follow the new text (an edit doesn't notify anyone again).
     const mentions = chat.kind !== "dm" ? await mentionsIn(body.data, chat.memberIds, myId) : [];
     const group = chat.kind === "nebula" ? await groupMentionsFor(body.data, conversationId, chat.memberIds, myId) : NO_GROUP_MENTIONS;
+    // Communities round 2: custom emoji the edit adds (the ones it had stay: reactions use them too).
+    const added = await emojisForMessage(myId, conversationId, body.data, req.body?.emojis);
+    const had = message.emojis ?? [];
+    const emojis = [...had, ...(added ?? []).filter((a) => !had.some((h) => h.name === a.name))].slice(0, 30);
     await db
       .update(messages)
-      .set({ body: body.data, editedAt: new Date(), mentions, ...group })
+      .set({ body: body.data, editedAt: new Date(), mentions, ...group, ...(emojis.length !== had.length ? { emojis } : {}) })
       .where(eq(messages.id, message.id));
     // The link changed: a new preview (or none).
     if (firstLink(body.data) !== (message.linkPreview?.url ?? null)) {
@@ -2248,7 +2319,27 @@ conversationsRouter.put("/:id/messages/:messageId/reactions/:emoji", sendLimiter
     res.status(404).json({ error: "not_found" });
     return;
   }
-  if (!emoji.success) {
+  // Communities round 2: a custom emoji (":name:"). New apps say which one (?id=); pressing an
+  // existing ":name:" chip (any app) adds the same one again.
+  let customAdd: EmojiRef | null = null;
+  const key = String(req.params.emoji);
+  if (isCustomReaction(key)) {
+    const name = key.slice(1, -1);
+    const known = (found.message.emojis ?? []).find((e) => e.name === name);
+    if (!known) {
+      const id = idParam.safeParse(req.query.id);
+      const ref = id.success ? await reactionEmoji(myId, found.conversationId, id.data) : null;
+      if (!ref || ref.name !== name) {
+        res.status(400).json({ error: "invalid", message: "You can use that emoji only inside its constellation." });
+        return;
+      }
+      if ((found.message.emojis ?? []).length >= 30) {
+        res.status(400).json({ error: "invalid", message: "That's a lot of reactions on one message!" });
+        return;
+      }
+      customAdd = ref;
+    }
+  } else if (!emoji.success) {
     res.status(400).json({ error: "invalid", message: "That isn't an emoji." });
     return;
   }
@@ -2267,9 +2358,16 @@ conversationsRouter.put("/:id/messages/:messageId/reactions/:emoji", sendLimiter
     res.status(400).json({ error: "invalid", message: "That's a lot of reactions on one message!" });
     return;
   }
+  if (customAdd) {
+    // Append (one :name: per message; two people adding the same name at once keep the first).
+    await db
+      .update(messages)
+      .set({ emojis: sql`coalesce(${messages.emojis}, '[]'::jsonb) || ${JSON.stringify([customAdd])}::jsonb` })
+      .where(and(eq(messages.id, found.message.id), sql`not coalesce(${messages.emojis}, '[]'::jsonb) @> ${JSON.stringify([{ name: customAdd.name }])}::jsonb`));
+  }
   await db
     .insert(messageReactions)
-    .values({ messageId: found.message.id, userId: myId, emoji: emoji.data })
+    .values({ messageId: found.message.id, userId: myId, emoji: isCustomReaction(key) ? key : emoji.data! })
     .onConflictDoNothing();
   res.json({ message: await sendUpdated(found.message.id, found.conversationId) });
 });

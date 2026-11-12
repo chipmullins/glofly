@@ -5,6 +5,7 @@ import { sharedWithByNebula } from "../integrations/readers";
 import { browseFor } from "./onboarding";
 import {
   ALL_PERMISSIONS,
+  BIG_CONSTELLATION_MEMBERS,
   CHATTING_PEOPLE,
   CHATTING_WINDOW_MS,
   DEFAULT_WELCOME,
@@ -35,11 +36,15 @@ import {
   users,
 } from "../db/schema";
 import { friendIdsOf, presenceOf } from "../presence";
-import { connectedUserIds } from "../realtime";
+import { connectedUserIds, onlineNow } from "../realtime";
 import { can, OWNER_RANK, standingOf, type Standing } from "./perms";
 import { voiceStatesFor, voiceStatesOf } from "./voice";
 import { seesAllNebulas, unlocksFor, visibleChats } from "./access";
 import { mentionsUserSql } from "./groupMentions";
+import { verificationBlock } from "./safety";
+import { watchSummaryFor } from "./watchSummary";
+import { liveStagesIn, stateOf } from "../stages/state";
+import { followerCounts } from "../stages/announcements";
 
 // What the apps get about constellations (2.0): dashboard cards, directory entries, and the whole
 // constellation when it's open.
@@ -72,32 +77,26 @@ export function welcomeOf(raw: unknown): WelcomeSettings {
 }
 
 /** Unread and @mention counts per nebula conversation for one person. */
+/**
+ * Unread messages and @mentions of me per conversation. Communities round 2 (big constellations):
+ * each count stops at UNREAD_COUNT_CAP (apps show "99+" long before), so someone away for a week
+ * from a busy nebula doesn't make every page load count thousands of messages: at most CAP rows
+ * per nebula are read, through the (conversation, created_at) index.
+ */
+export const UNREAD_COUNT_CAP = 1000;
 export async function unreadFor(userId: string, conversationIds: string[]) {
   const out = new Map<string, { unread: number; mentions: number }>();
   if (!conversationIds.length) return out;
-  const rows = await db
-    .select({
-      conversationId: messages.conversationId,
-      count: sql<number>`count(*)::int`,
-      mentions: sql<number>`count(*) filter (where ${mentionsUserSql(userId)})::int`,
-    })
-    .from(messages)
-    .innerJoin(
-      conversationMembers,
-      and(eq(conversationMembers.conversationId, messages.conversationId), eq(conversationMembers.userId, userId)),
-    )
-    .where(
-      and(
-        inArray(messages.conversationId, conversationIds),
-        ne(messages.senderId, userId),
-        isNull(messages.event),
-        isNull(messages.deletedAt),
-        inNebulaTimeline(),
-        gt(messages.createdAt, conversationMembers.lastReadAt),
-      ),
-    )
-    .groupBy(messages.conversationId);
-  for (const r of rows) out.set(r.conversationId, { unread: r.count, mentions: r.mentions });
+  const unreadWhere = sql`m.conversation_id = cm.conversation_id and m.created_at > cm.last_read_at and m.sender_id <> ${userId}::uuid
+    and m.event is null and m.deleted_at is null and (m.thread_id is null or m.also_in_nebula = true)`;
+  const rows = await db.execute<{ conversation_id: string; unread: number; mentions: number }>(sql`
+    select cm.conversation_id,
+      (select count(*)::int from (select 1 from messages m where ${unreadWhere} order by m.created_at limit ${UNREAD_COUNT_CAP}) u) as unread,
+      (select count(*)::int from (select 1 from messages m where ${unreadWhere}
+         and (m.mentions @> array[${userId}::uuid] or m.group_mentions @> array[${userId}::uuid]) limit ${UNREAD_COUNT_CAP}) x) as mentions
+    from conversation_members cm
+    where cm.user_id = ${userId}::uuid and cm.conversation_id in (${sql.join(conversationIds.map((id) => sql`${id}::uuid`), sql`, `)})`);
+  for (const r of rows.rows) if (r.unread > 0 || r.mentions > 0) out.set(r.conversation_id, { unread: r.unread, mentions: r.mentions });
   return out;
 }
 
@@ -232,7 +231,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
     .from(constellationCategories)
     .where(inArray(constellationCategories.constellationId, ids));
   const categoryPosition = new Map(categoryRows.map((c) => [c.id, c.position]));
-  const chatting = await chattingIn(allNebulas.filter((n) => n.kind === "text").map((n) => n.conversationId));
+  const chatting = await chattingIn(allNebulas.filter((n) => n.kind === "text" || n.kind === "announcement").map((n) => n.conversationId));
   for (const card of cards) {
     const states = (voiceByCard.get(card.id) ?? []).filter((s) => allNebulas.some((n) => n.id === s.nebulaId));
     const cardNotify = notifyLevel(mine.find((m) => m.c.id === card.id)?.notify) ?? "all";
@@ -250,7 +249,7 @@ export async function cardsFor(userId: string): Promise<ConstellationCard[]> {
         const level = notifyLevel(settings.find((s) => s.conversationId === n.conversationId)?.level) ?? cardNotify;
         return {
           kind: n.kind,
-          news: n.kind === "text" && !!u && (u.mentions > 0 || (u.unread > 0 && level !== "none" && !cardMuted)),
+          news: (n.kind === "text" || n.kind === "announcement") && !!u && (u.mentions > 0 || (u.unread > 0 && level !== "none" && !cardMuted)),
           chatting: (chatting.get(n.conversationId) ?? 0) >= CHATTING_PEOPLE,
           voice: states.find((s) => s.nebulaId === n.id)?.userIds.length ?? 0,
         };
@@ -335,6 +334,52 @@ export async function entriesFor(viewerId: string, ids: string[]): Promise<Direc
   return ids.map((id) => out.find((e) => e.id === id)).filter((e): e is DirectoryEntry => !!e);
 }
 
+/** Staff: the owner and anyone with a role that isn't a self-picked label. */
+function listedStaff(
+  userId: string,
+  ownerId: string,
+  assignments: { userId: string; roleId: string }[],
+  roleRows: { id: string; kind: string; selfAssign: boolean }[],
+): boolean {
+  if (userId === ownerId) return true;
+  return assignments.some((a) => a.userId === userId && roleRows.some((r) => r.id === a.roleId && r.kind !== "member" && !r.selfAssign));
+}
+
+/**
+ * Communities round 2: who a big constellation's detail lists before presence is checked: staff
+ * (up to 300), me, and members who have Glofly open or were here in the last 2 hours (up to 1,500,
+ * most recently seen first). Presence then leaves out whoever is offline or invisible.
+ */
+async function bigListIds(
+  constellationId: string,
+  userId: string,
+  ownerId: string,
+  memberIds: string[],
+  assignments: { userId: string; roleId: string }[],
+  roleRows: { id: string; kind: string; selfAssign: boolean }[],
+): Promise<string[]> {
+  const out = new Set<string>([userId, ownerId]);
+  for (const a of assignments) {
+    if (out.size >= 300) break;
+    if (listedStaff(a.userId, ownerId, assignments, roleRows)) out.add(a.userId);
+  }
+  for (const id of onlineNow(memberIds)) {
+    if (out.size >= 1500) break;
+    out.add(id);
+  }
+  if (out.size < 1500) {
+    const recent = await db
+      .select({ id: users.id })
+      .from(constellationMembers)
+      .innerJoin(users, eq(users.id, constellationMembers.userId))
+      .where(and(eq(constellationMembers.constellationId, constellationId), gt(users.lastSeenAt, new Date(Date.now() - 2 * 60 * 60_000))))
+      .orderBy(desc(users.lastSeenAt))
+      .limit(1500 - out.size);
+    for (const r of recent) out.add(r.id);
+  }
+  return [...out];
+}
+
 /** Everything about a constellation I'm in (null when I'm not). */
 export async function detailFor(constellationId: string, userId: string): Promise<ConstellationDetail | null> {
   const standing = await standingOf(constellationId, userId);
@@ -364,7 +409,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
   const nebulaRows = allNebulaRows.filter((n) => seen.has(n.conversationId));
   const manager = seesAllNebulas(me);
   const unread = await unreadFor(userId, nebulaRows.map((n) => n.conversationId));
-  const chatting = await chattingIn(nebulaRows.filter((n) => n.kind === "text").map((n) => n.conversationId));
+  const chatting = await chattingIn(nebulaRows.filter((n) => n.kind === "text" || n.kind === "announcement").map((n) => n.conversationId));
   const mySettings = nebulaRows.length
     ? await db
         .select({
@@ -392,6 +437,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       onboardingAnswers: constellationMembers.onboardingAnswers,
       onboardedAt: constellationMembers.onboardedAt,
       sidebarPin: constellationMembers.sidebarPin,
+      raidHold: constellationMembers.raidHold,
     })
     .from(constellationMembers)
     .where(eq(constellationMembers.constellationId, constellationId));
@@ -399,8 +445,14 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
     .select({ userId: constellationMemberRoles.userId, roleId: constellationMemberRoles.roleId })
     .from(constellationMemberRoles)
     .where(eq(constellationMemberRoles.constellationId, constellationId));
-  const people = await publicUsers(memberRows.map((m) => m.userId));
-  const presence = await presenceOf(memberRows.map((m) => m.userId));
+  // Communities round 2: big constellations list only staff, me and people around right now (the
+  // rest load page by page from GET …/members). Presence is only looked up for likely candidates.
+  const memberCount = memberRows.length;
+  const big = memberCount > BIG_CONSTELLATION_MEMBERS;
+  const listedIds = big ? await bigListIds(constellationId, userId, c.ownerId, memberRows.map((m) => m.userId), assignments, roleRows) : memberRows.map((m) => m.userId);
+  const listedSet = new Set(listedIds);
+  const people = await publicUsers(listedIds);
+  const presence = await presenceOf(listedIds);
   const now = Date.now();
 
   const roles: ConstellationRole[] = [
@@ -430,6 +482,7 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
   const myRow = memberRows.find((m) => m.userId === userId);
   const sharedWith = await sharedWithByNebula(constellationId);
   // Communities round: my followed, still-open threads under each text nebula (the sidebar).
+  const followers = await followerCounts(nebulaRows.filter((n) => n.kind === "announcement").map((n) => n.id));
   const myThreads = await myOpenThreads(userId, nebulaRows.filter((n) => n.kind === "text").map((n) => n.id));
   const pendingRequests = can(me, "approveRequests")
     ? await db.$count(constellationJoinRequests, eq(constellationJoinRequests.constellationId, constellationId))
@@ -482,9 +535,15 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       // Threads + forums
       ...(n.kind === "text" ? { threadsStaffOnly: n.threadsStaffOnly, threadCloseDays: n.threadCloseDays, threads: myThreads.filter((t) => t.nebulaId === n.id).slice(0, 5) } : {}),
       ...(n.kind === "forum" ? { threadCloseDays: n.threadCloseDays, forum: forumSettingsOf(n) } : {}),
+      // Communities round 2: stages and announcement nebulas
+      ...(n.kind === "stage" ? { stageSpeakerLimit: n.stageSpeakerLimit } : {}),
+      ...(n.kind === "announcement" ? { followers: followers.get(n.id) ?? 0 } : {}),
     })),
     roles,
+    memberCount,
+    ...(big ? { membersPartial: true } : {}),
     members: memberRows
+      .filter((m) => listedSet.has(m.userId) && (!big || m.userId === userId || listedStaff(m.userId, c.ownerId, assignments, roleRows) || (presence.get(m.userId)?.status ?? "offline") !== "offline"))
       .map((m) => {
         const p = presence.get(m.userId);
         return {
@@ -501,6 +560,10 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       })
       .filter((m) => !!m.user),
     voice: (await voiceStatesOf(constellationId)).filter((v) => nebulaRows.some((n) => n.id === v.nebulaId)),
+    // Communities round 2: live stages (hands only for people who can manage stages)
+    stages: (await liveStagesIn(constellationId))
+      .filter((st) => nebulaRows.some((n) => n.id === st.nebulaId))
+      .map((st) => stateOf(st, me.owner || me.permissions.has("manageStages"))),
     me: {
       owner: me.owner,
       permissions: me.owner ? [...ALL_PERMISSIONS] : [...me.permissions],
@@ -517,7 +580,13 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
       },
       // 4.3: my answers (boards 26–27)
       onboarding: { answers: myRow?.onboardingAnswers ?? {}, onboardedAt: myRow?.onboardedAt?.toISOString() ?? null },
+      // Communities round 2 (Night watch → Safety): why I can't chat yet (verification), and
+      // whether my messages wait for a moderator (joined during a raid).
+      verification: await verificationBlock(me),
+      raidHold: myRow?.raidHold ?? false,
     },
+    // Communities round 2: the "Night watch · 5" badge and the joins-paused banner (moderators only)
+    watch: await watchSummaryFor(me),
     // 4.3: the questions, and the optional nebulas I could still pick (Browse nebulas)
     onboarding: c.onboarding ?? null,
     browse: await browseFor(constellationId, new Set(nebulaRows.map((n) => n.id)), c.onboarding ?? null),
@@ -530,4 +599,42 @@ async function buildDetail(constellationId: string, userId: string, me: Standing
     rulesAgreedAt: myRow?.rulesAgreedAt?.toISOString() ?? null,
     unlocks: roleRows.some((r) => r.selfAssign && r.kind === "custom") ? Object.fromEntries(await unlocksFor(constellationId, userId)) : {},
   };
+}
+
+/**
+ * Communities round 2: member-list entries for some members of a constellation (the paged member
+ * list of big constellations), in the given order. Same shape as the detail's `members`.
+ */
+export async function memberEntries(constellationId: string, userIds: string[]): Promise<ConstellationDetail["members"]> {
+  if (!userIds.length) return [];
+  const rows = await db
+    .select({ userId: constellationMembers.userId, joinedAt: constellationMembers.joinedAt, timedOutUntil: constellationMembers.timedOutUntil })
+    .from(constellationMembers)
+    .where(and(eq(constellationMembers.constellationId, constellationId), inArray(constellationMembers.userId, userIds)));
+  const assignments = await db
+    .select({ userId: constellationMemberRoles.userId, roleId: constellationMemberRoles.roleId })
+    .from(constellationMemberRoles)
+    .where(and(eq(constellationMemberRoles.constellationId, constellationId), inArray(constellationMemberRoles.userId, userIds)));
+  const people = await publicUsers(userIds);
+  const presence = await presenceOf(userIds);
+  const now = Date.now();
+  const byId = new Map(rows.map((r) => [r.userId, r]));
+  return userIds.flatMap((id) => {
+    const m = byId.get(id);
+    const user = people.get(id);
+    if (!m || !user) return [];
+    const p = presence.get(id);
+    return [
+      {
+        user,
+        roleIds: assignments.filter((a) => a.userId === id).map((a) => a.roleId),
+        joinedAt: m.joinedAt.toISOString(),
+        timedOutUntil: m.timedOutUntil && m.timedOutUntil.getTime() > now ? m.timedOutUntil.toISOString() : null,
+        status: p?.status ?? "offline",
+        activity: p?.activity ? `Playing ${p.activity.name}` : null,
+        playing: p?.activity ? { name: p.activity.name, since: p.activity.since } : null,
+        lastSeenAt: p?.lastSeenAt ?? null,
+      },
+    ];
+  });
 }

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Pressable, ScrollView, View, type View as RNView } from 'react-native'
 import { useCall } from '@/calls/controller'
 import { InVoiceCount, StackedFaces, TalkingFace, useTalking, VOICE_LIST_MAX } from './feel'
-import { CONSTELLATION_THEME, voiceLine, type ConstellationCard, type ConstellationDetail, type Nebula, type PublicUser, type VoiceNebulaState } from '@glofly/shared'
+import { CONSTELLATION_THEME, stageLine, voiceLine, type ConstellationCard, type ConstellationDetail, type Nebula, type PublicUser, type VoiceNebulaState } from '@glofly/shared'
 import { useStore } from '@/state/store'
 import { useCx } from '@/state/constellations'
 import { firstName } from '@/lib/format'
@@ -14,6 +14,7 @@ import { haptic } from './motion'
 import { nebulaMenu } from './nebulaActions'
 import { gateLabel, isQuiet, sectionsOf } from './roles'
 import { BannerStars, ConstellationIcon, CountBadge, HomeGlyph, GalaxyIcon, Live, N, SpeakerGlyph, StarGlyph } from './ui'
+import { Megaphone } from './Stage'
 
 // Inside a constellation (canvas board 4, and the iPad board): the icon strip to switch
 // constellations, the banner, and the categories with their nebulas.
@@ -123,7 +124,7 @@ export function ConstellationBanner({ c, width, onInvite, onSettings }: { c: Con
             {c.name}
           </Text>
           <Text size={12} style={{ color: N.ink2 }}>
-            {c.members.length} {c.members.length === 1 ? 'member' : 'members'} · <Text size={12} style={{ color: N.greenText }}>{online} online</Text>
+            {(c.memberCount ?? c.members.length).toLocaleString('en-US')} {(c.memberCount ?? c.members.length) === 1 ? 'member' : 'members'} · <Text size={12} style={{ color: N.greenText }}>{online} online</Text>
           </Text>
         </View>
       </View>
@@ -156,7 +157,7 @@ export function SideBanner({ c }: { c: ConstellationDetail }) {
         {c.name}
       </Text>
       <Text size={12} style={{ position: 'absolute', right: 14, bottom: 15, color: N.ink2 }}>
-        {c.members.length} · <Text size={12} style={{ color: N.greenText }}>{online} on</Text>
+        {(c.memberCount ?? c.members.length).toLocaleString('en-US')} · <Text size={12} style={{ color: N.greenText }}>{online} on</Text>
       </Text>
     </View>
   )
@@ -285,7 +286,9 @@ function TextRow({ c, n, onOpen, selected, dense }: { c: ConstellationDetail; n:
   const unread = n.unreadCount > 0 || n.mentionCount > 0
   const quiet = isQuiet(n)
   const bright = unread && !quiet
-  const label = `${n.name}${n.mentionCount ? `, ${n.mentionCount} ${n.mentionCount === 1 ? 'mention' : 'mentions'} of you` : n.unreadCount ? `, ${n.unreadCount} new` : ''}${n.readOnly ? ', read only' : ''}${quiet ? ', muted' : ''}${n.visibility === 'roles' ? `, only ${gateLabel(c, n.roleIds)}` : ''}`
+  // Communities round 2: a live stage (board 3c)
+  const live = n.kind === 'stage' ? (c.stages?.find((x) => x.nebulaId === n.id) ?? null) : null
+  const label = `${n.name}${n.kind === 'stage' ? `, stage${live ? `, live, ${stageLine(live)}` : ''}` : ''}${n.mentionCount ? `, ${n.mentionCount} ${n.mentionCount === 1 ? 'mention' : 'mentions'} of you` : n.unreadCount ? `, ${n.unreadCount} new` : ''}${n.readOnly ? ', read only' : ''}${quiet ? ', muted' : ''}${n.visibility === 'roles' ? `, only ${gateLabel(c, n.roleIds)}` : ''}`
   return (
     <Pressable
       ref={ref}
@@ -297,7 +300,7 @@ function TextRow({ c, n, onOpen, selected, dense }: { c: ConstellationDetail; n:
       onLongPress={() => void hold()}
       delayLongPress={350}
       style={({ pressed }) => ({
-        height: dense ? 40 : 44,
+        height: live ? (dense ? 48 : 52) : dense ? 40 : 44,
         paddingHorizontal: dense ? 10 : 12,
         borderRadius: dense ? 10 : 12,
         flexDirection: 'row',
@@ -310,12 +313,28 @@ function TextRow({ c, n, onOpen, selected, dense }: { c: ConstellationDetail; n:
         <Text size={dense ? 13 : 15} style={{ color: bright || selected ? N.amber : N.faint }}>
           💬
         </Text>
+      ) : n.kind === 'stage' || n.kind === 'announcement' ? (
+        <Megaphone size={dense ? 14 : 16} color={bright || selected || live ? N.amber : N.faint} />
       ) : (
         <StarGlyph size={dense ? 14 : 16} color={bright || selected ? N.amber : N.faint} />
       )}
-      <Text size={dense ? 14 : 15} weight={bright || selected ? 'bold' : 'regular'} numberOfLines={1} style={{ flex: 1, color: bright || selected ? N.ink : quiet ? N.faint : N.ink2 }}>
-        {n.name}
-      </Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text size={dense ? 14 : 15} weight={bright || selected ? 'bold' : 'regular'} numberOfLines={1} style={{ color: bright || selected ? N.ink : quiet ? N.faint : N.ink2 }}>
+          {n.name}
+        </Text>
+        {live ? (
+          <Text size={11} numberOfLines={1} style={{ color: '#c9b8ab' }}>
+            {stageLine(live)}
+          </Text>
+        ) : null}
+      </View>
+      {live ? (
+        <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, backgroundColor: '#c7372f' }}>
+          <Text size={11} weight="bold" style={{ color: '#fff' }}>
+            LIVE
+          </Text>
+        </View>
+      ) : null}
       {n.mentionCount ? (
         <Text size={11} weight="bold" style={{ color: N.violetText }}>
           @{n.mentionCount}

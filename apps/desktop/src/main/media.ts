@@ -58,6 +58,20 @@ function serverPathFor(
   if (url.host === 'avatars' && parts.length === 2 && parts.every(isUserId)) {
     return { path: `/avatars/${parts[0]}/${parts[1]}`, maxBytes: 2 * MB }
   }
+  // Communities round 2: a constellation's emoji or sticker (glofly-media://emoji/<id>)
+  if (url.host === 'emoji' && parts.length === 1 && isUserId(parts[0])) {
+    return { path: `/emoji/${parts[0]}/image`, maxBytes: 1 * MB }
+  }
+  // Communities round 2: a Discord person's picture, copied by the bridge
+  // (glofly-media://bridge-avatars/<discordUserId>/<hash>)
+  if (
+    url.host === 'bridge-avatars' &&
+    parts.length === 2 &&
+    /^\d{5,25}$/.test(parts[0]) &&
+    /^(a_)?[0-9a-f]{32}$/.test(parts[1])
+  ) {
+    return { path: `/bridge/avatars/${parts[0]}/${parts[1]}`, maxBytes: 1 * MB }
+  }
   // 0.9.1: a game's box art (glofly-media://game-covers/<IGDB image id>)
   if (url.host === 'game-covers' && parts.length === 1 && /^[a-z0-9]{2,40}$/.test(parts[0])) {
     return { path: `/games/cover/${parts[0]}`, maxBytes: 1 * MB }

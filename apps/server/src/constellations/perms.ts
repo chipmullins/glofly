@@ -4,6 +4,8 @@ import { db } from "../db";
 import { constellationMemberRoles, constellationMembers, constellationRoles, constellations, conversationMembers } from "../db/schema";
 import { nebulaOfChat } from "./chats";
 import { lockedDown, LOCKDOWN_MESSAGE } from "../admin/lockdown";
+import { stageChatClosedFor } from "../stages/state";
+import { verificationBlock } from "./safety";
 
 // Who may do what in a constellation (2.0). Every action is checked here on the server:
 // the Owner can do everything; everyone else gets everything their roles allow (the Member role
@@ -116,6 +118,10 @@ export async function canPostInNebula(conversationId: string, userId: string): P
   // 0.8.2, Glofly Control: a frozen constellation, or a new account during Lockdown.
   if ((await frozen(nebula.constellationId)) || (await lockedDown(userId))) return false;
   if (nebula.readOnly && !can(s, "manageNebulas") && !can(s, "deleteMessages")) return false;
+  // Communities round 2: a live stage with listener chat off (only speakers and managers post).
+  if (nebula.kind === "stage" && !can(s, "manageStages") && stageChatClosedFor(nebula.id, userId)) return false;
+  // Communities round 2 (Night watch → Safety): the verification level.
+  if (await verificationBlock(s)) return false;
   return true;
 }
 
@@ -129,7 +135,8 @@ export async function whyCantPostInNebula(conversationId: string, userId: string
   if (await frozen(nebula.constellationId)) return FROZEN_MESSAGE;
   if (await lockedDown(userId)) return LOCKDOWN_MESSAGE.message;
   if (nebula.readOnly && !can(s, "manageNebulas") && !can(s, "deleteMessages")) return "Only moderators can post here.";
-  return null;
+  if (nebula.kind === "stage" && !can(s, "manageStages") && stageChatClosedFor(nebula.id, userId)) return "Only speakers can chat here while the stage is live.";
+  return await verificationBlock(s);
 }
 
 /**

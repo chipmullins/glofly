@@ -1,5 +1,10 @@
 import { useEffect, useState, type JSX } from 'react'
-import { api, type Insights as InsightsData, type PeopleInsights } from '../lib/api'
+import {
+  api,
+  type BigConstellations,
+  type Insights as InsightsData,
+  type PeopleInsights
+} from '../lib/api'
 import { Chip } from '../components/common'
 import { ago, plural } from '../lib/format'
 
@@ -56,6 +61,8 @@ function duration(seconds: number): string {
 }
 
 export function Insights(): JSX.Element {
+  // Communities round 2 (board 4b): the Big constellations view
+  const [view, setView] = useState<'overview' | 'big'>('overview')
   const [days, setDays] = useState<Range>(30)
   const [data, setData] = useState<InsightsData | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -79,30 +86,51 @@ export function Insights(): JSX.Element {
           <h1>Insights</h1>
           <p className="sub">How people use Glofly. Counts only, never what anyone wrote.</p>
         </div>
-        <div className="tools filters" role="group" aria-label="Time range">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              className="filter"
-              aria-pressed={days === r}
-              onClick={() => {
-                setError(null)
-                setDays(r)
-              }}
-            >
-              Last {r} days
-            </button>
-          ))}
+        <div className="tools filters" role="group" aria-label="What to show">
+          <button
+            type="button"
+            className="filter"
+            aria-pressed={view === 'overview'}
+            onClick={() => setView('overview')}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            className="filter"
+            aria-pressed={view === 'big'}
+            onClick={() => setView('big')}
+          >
+            Big constellations
+          </button>
         </div>
+        {view === 'overview' && (
+          <div className="tools filters" role="group" aria-label="Time range">
+            {RANGES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                className="filter"
+                aria-pressed={days === r}
+                onClick={() => {
+                  setError(null)
+                  setDays(r)
+                }}
+              >
+                Last {r} days
+              </button>
+            ))}
+          </div>
+        )}
       </header>
-      {error && (
+      {view === 'big' && <BigView />}
+      {view === 'overview' && error && (
         <div className="error-box" role="alert">
           {error}
         </div>
       )}
-      {!data && !error && <p className="loading">Loading…</p>}
-      {data && (
+      {view === 'overview' && !data && !error && <p className="loading">Loading…</p>}
+      {view === 'overview' && data && (
         <>
           <People people={data.people} />
           <div className="grid-2">
@@ -427,5 +455,166 @@ function Features({ data }: { data: InsightsData }): JSX.Element {
         (nothing about them is stored).
       </p>
     </section>
+  )
+}
+
+/** Communities round 2 (board 4b): which constellations are big and how hard they push the server. */
+function BigView(): JSX.Element {
+  const [data, setData] = useState<BigConstellations | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [pick, setPick] = useState(0)
+  useEffect(() => {
+    let live = true
+    void api.bigConstellations().then((r) => {
+      if (!live) return
+      if (r.ok) setData(r.data)
+      else setError(r.message)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+  if (error)
+    return (
+      <div className="error-box" role="alert">
+        {error}
+      </div>
+    )
+  if (!data) return <p className="loading">Loading…</p>
+  const c = data.constellations[pick] ?? null
+  const max = Math.max(1, ...(c?.weekly ?? [1]))
+  return (
+    <>
+      <section aria-label="Big constellations" className="stats">
+        <div className="card stat">
+          <span className="label">Over {num(data.threshold)} members</span>
+          <span className="value">{num(data.bigCount)}</span>
+          <span className="note note--quiet">
+            {data.newThisWeek ? `+${data.newThisWeek} this week` : 'none new this week'}
+          </span>
+        </div>
+        <div className="card stat">
+          <span className="label">Biggest</span>
+          <span className="value">{data.biggest ? num(data.biggest.members) : '—'}</span>
+          <span className="note note--quiet">{data.biggest?.name ?? 'no constellations yet'}</span>
+        </div>
+        <div className="card stat">
+          <span className="label">Live events / min</span>
+          <span className="value">
+            {num(Math.max(data.fanOut.lastMinute, data.fanOut.thisMinute))}
+          </span>
+          <span className="note note--quiet">comfortable up to {num(data.fanOut.comfort)}</span>
+        </div>
+        <div className="card stat">
+          <span className="label">Voice + stage, 30 days</span>
+          <span className="value">${data.minutes.estimate.toFixed(2)} est.</span>
+          <span className="note note--quiet">
+            {num(data.minutes.voice + data.minutes.stage)} LiveKit minutes × $
+            {data.minutes.pricePerMinute}
+          </span>
+        </div>
+      </section>
+      {!data.bigCount && (
+        <p className="sub">
+          No constellation is over {num(data.threshold)} members yet. These are the biggest ones.
+        </p>
+      )}
+      {data.constellations.length > 1 && (
+        <div className="tools filters" role="group" aria-label="Constellation">
+          {data.constellations.map((x, i) => (
+            <button
+              key={x.id}
+              type="button"
+              className="filter"
+              aria-pressed={pick === i}
+              onClick={() => setPick(i)}
+            >
+              {x.name} · {num(x.members)}
+            </button>
+          ))}
+        </div>
+      )}
+      {c && (
+        <div className="grid-2">
+          <section className="card card-pad" aria-labelledby="big-table-title">
+            <div className="card-title">
+              <h2 id="big-table-title">{c.name}</h2>
+            </div>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th />
+                  <th>Today</th>
+                  <th>7-day avg</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Messages</td>
+                  <td>{num(c.messagesToday)}</td>
+                  <td>{num(c.messagesWeekAvg)}</td>
+                </tr>
+                <tr>
+                  <td>People who posted</td>
+                  <td>{num(c.activeToday)}</td>
+                  <td>{num(c.activeWeekAvg)}</td>
+                </tr>
+                <tr>
+                  <td>Online now</td>
+                  <td>{num(c.onlineNow)}</td>
+                  <td />
+                </tr>
+                <tr>
+                  <td>Biggest voice nebula / stage</td>
+                  <td>
+                    {num(c.biggestVoiceToday)} / {num(c.biggestStageToday)}
+                  </td>
+                  <td>
+                    {num(c.biggestVoiceWeek)} / {num(c.biggestStageWeek)} (week max)
+                  </td>
+                </tr>
+                <tr>
+                  <td>Sends refused (busy)</td>
+                  <td>{num(c.busyToday)}</td>
+                  <td>{num(c.busyWeekAvg)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section className="card card-pad" aria-labelledby="big-members-title">
+            <div className="card-title">
+              <h2 id="big-members-title">Members, last 12 weeks</h2>
+            </div>
+            <div
+              className="activity"
+              role="img"
+              aria-label={`Members each week, now ${num(c.members)}`}
+            >
+              {c.weekly.map((n, i) => (
+                <div key={i} className="day" title={`${num(n)} members`}>
+                  <div
+                    className="bars"
+                    style={{ flexDirection: 'column', justifyContent: 'flex-end' }}
+                  >
+                    <span
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        height: `${(n / max) * 100}%`,
+                        background: i === c.weekly.length - 1 ? '#f47a1f' : '#3b82f6'
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="sub">
+              LiveKit bills every connected minute, speakers and stage listeners alike (listeners
+              send nothing): 300 listeners for an hour ≈ 18,000 participant-minutes.
+            </p>
+          </section>
+        </div>
+      )}
+    </>
   )
 }

@@ -130,7 +130,7 @@ interactionsRouter.post("/:id/commands/run", runLimiter, async (req, res) => {
     .select({ conversationId: nebulas.conversationId, kind: nebulas.kind })
     .from(nebulas)
     .where(and(eq(nebulas.id, body.data.nebulaId), eq(nebulas.constellationId, s.constellationId)));
-  if (!n || n.kind !== "text") {
+  if (!n || (n.kind !== "text" && n.kind !== "announcement")) {
     bad(res, "That nebula isn't available.", 404);
     return;
   }

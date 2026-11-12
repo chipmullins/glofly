@@ -13,9 +13,9 @@ export const APP_VERSION: string =
 export const PLATFORM: 'android' | 'ios' = Platform.OS === 'ios' ? 'ios' : 'android'
 
 /** Sent with every request: the server checks it against the minimum version for this platform. */
-// Communities round: this app knows threads and forum nebulas (X-Glofly-Features); Campfire (the
-// tabletop, Nov 2026) too, so the server keeps Campfire's own answers for it.
-export const VERSION_HEADERS = { 'X-Glofly-Version': APP_VERSION, 'X-Glofly-Platform': PLATFORM, 'X-Glofly-Features': 'threads,campfire' }
+// Communities round: this app knows threads and forum nebulas (X-Glofly-Features); round 2 (stages,
+// announcements); Campfire (the tabletop, Nov 2026) too, so the server keeps Campfire's own answers for it.
+export const VERSION_HEADERS = { 'X-Glofly-Version': APP_VERSION, 'X-Glofly-Platform': PLATFORM, 'X-Glofly-Features': 'threads, round2, campfire' }
 
 export const SITE_URL = 'https://glofly.app'
 export const SUPPORT_EMAIL = 'support@glofly.app'

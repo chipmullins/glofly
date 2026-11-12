@@ -1,0 +1,489 @@
+/* Communities round 2, board 3a (approved): a stage nebula. Dark in every theme, like the mockup and
+   voice nebulas. Colors, sizes and radii are the approved ones. */
+
+.st-wrap {
+  flex: 999 1 560px;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  background: #120c0a;
+  color: #f5ede6;
+  font-family: var(--glo-font-body);
+}
+.st-stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 30px;
+  gap: 18px;
+  position: relative;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background: #120c0a;
+  color: #f5ede6;
+}
+.st-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.st-head h2 {
+  margin: 0;
+  font: 600 24px var(--glo-font-display, Outfit, sans-serif);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.st-sub {
+  font-size: 13.5px;
+  color: #c9b8ab;
+  margin: 0;
+}
+.st-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  background: #2a1c17;
+  color: #f5ede6;
+  border: 1px solid #3a2a22;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.st-pill--quiet {
+  color: #c9b8ab;
+}
+.st-pill--button {
+  cursor: pointer;
+  font-family: inherit;
+}
+.st-pill--button:hover {
+  background: #3a2a22;
+}
+.st-speakers {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 26px;
+  padding: 20px 0;
+  border-radius: 24px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 179, 71, 0.14), transparent 70%),
+    #170f0c;
+  border: 1px solid #2c201a;
+}
+.st-speaker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 120px;
+  text-align: center;
+}
+.st-speaker b {
+  font-size: 14px;
+}
+.st-role {
+  font-size: 12px;
+  color: #c9b8ab;
+}
+.st-host {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  background: #3a2a22;
+  color: #ffb347;
+  border: 1px solid #5b4434;
+  font-size: 12px;
+  font-weight: 700;
+}
+.st-face {
+  /* The photo (.avatar-photo, absolutely placed) stays inside this circle. */
+  position: relative;
+  flex: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  overflow: hidden;
+  transition: box-shadow 160ms ease;
+}
+.st-face .avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.st-face--talking {
+  box-shadow:
+    0 0 0 3px #ffb347,
+    0 0 22px rgba(255, 179, 71, 0.55);
+}
+.st-muted {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
+  background: #3a1512;
+  color: #ff9b8f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #120c0a;
+}
+.st-label {
+  font-size: 12px;
+  color: #c9b8ab;
+  letter-spacing: 0.07em;
+}
+.st-listeners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.st-more {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 17px;
+  background: #2a1c17;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+.st-actions {
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.st-button {
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 23px;
+  border: 1px solid #4a372b;
+  background: transparent;
+  color: #f5ede6;
+  font: 700 14px var(--glo-font-body);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.st-button:hover:not(:disabled) {
+  background: #2a1c17;
+}
+.st-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.st-button--primary {
+  border: 0;
+  background: #ffb347;
+  color: #2a1406;
+}
+.st-button--primary:hover:not(:disabled) {
+  background: #ffc06a;
+}
+.st-button--danger {
+  border: 0;
+  background: #c7372f;
+  color: #fff;
+}
+.st-button--danger:hover:not(:disabled) {
+  background: #d9443b;
+}
+.st-button--small {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 18px;
+  font-size: 13.5px;
+}
+.st-note {
+  text-align: center;
+  font-size: 12.5px;
+  color: #c9b8ab;
+}
+.st-invite {
+  position: absolute;
+  left: 50%;
+  bottom: 110px;
+  transform: translateX(-50%);
+  width: 340px;
+  padding: 16px;
+  border-radius: 18px;
+  background: #2a1c17;
+  color: #f5ede6;
+  border: 1px solid #5b4434;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 2;
+}
+.st-invite b {
+  font-size: 15px;
+}
+.st-invite > span {
+  font-size: 13px;
+  color: #c9b8ab;
+}
+.st-side {
+  width: 300px;
+  flex: none;
+  background: #1c1512;
+  border-left: 1px solid #2c201a;
+  padding: 18px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.st-side > b,
+.st-side-head b {
+  font-size: 15px;
+}
+.st-side-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.st-side-head b {
+  flex: 1;
+}
+.st-hand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.st-hand .st-sub {
+  font-size: 12px;
+}
+.st-rule {
+  height: 1px;
+  background: #2c201a;
+  margin: 6px 0;
+}
+.st-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  color: #f5ede6;
+}
+.st-row select {
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1px solid #4a372b;
+  background: #1c1512;
+  color: #f5ede6;
+  font: 600 13px var(--glo-font-body);
+}
+.st-toggle {
+  cursor: pointer;
+  position: relative;
+}
+.st-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 40px;
+  height: 24px;
+  margin: 0;
+  cursor: pointer;
+}
+.st-switch {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  flex: none;
+  border-radius: 12px;
+  background: #3a2d26;
+  transition: background 140ms ease;
+}
+.st-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #fff;
+  transition: left 140ms ease;
+}
+.st-toggle input:checked + .st-switch {
+  background: #ffb347;
+}
+.st-toggle input:checked + .st-switch::after {
+  left: 19px;
+}
+.st-toggle input:focus-visible + .st-switch {
+  outline: 2px solid #ffb347;
+  outline-offset: 2px;
+}
+.st-side-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.st-stage--quiet {
+  align-items: center;
+  justify-content: center;
+}
+.st-quiet {
+  max-width: 460px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.st-quiet h2 {
+  margin: 0;
+  font: 600 22px var(--glo-font-display, Outfit, sans-serif);
+}
+.st-quiet p {
+  margin: 0;
+  color: #c9b8ab;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.st-quiet-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 32px;
+  background: #2a1c17;
+  color: #ffb347;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.st-quiet-small {
+  font-size: 12.5px !important;
+}
+.st-start {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.st-start input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  border-radius: 23px;
+  border: 1px solid #4a372b;
+  background: #1c1512;
+  color: #f5ede6;
+  padding: 0 18px;
+  font: 14px var(--glo-font-body);
+}
+.st-start input::placeholder {
+  color: #8f7868;
+}
+.st-link {
+  border: 0;
+  background: transparent;
+  color: #ffb347;
+  font: 600 13.5px var(--glo-font-body);
+  cursor: pointer;
+  text-decoration: underline;
+}
+@media (max-width: 760px) {
+  .st-side {
+    display: none;
+  }
+}
+
+/* The sidebar (board 3a): a live stage's LIVE tag and its "4 speaking · 312 listening" line; an
+   announcement nebula's follower count. */
+.cx-neb-live {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #c7372f;
+  color: #fff;
+}
+.cx-neb-follow {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: #2a1c17;
+  color: #c9b8ab;
+  border: 1px solid #3a2a22;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cx-neb-stage-line {
+  padding: 0 0 6px 34px;
+  font-size: 12.5px;
+  color: #c9b8ab;
+}
+
+/* Board 3b: Follow (an announcement nebula's header) and the follow lists in settings. */
+.cx-follow-button {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 18px;
+  border: 0;
+  background: #f47a1f;
+  color: #2a1406;
+  font: 700 14px var(--glo-font-body);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.cx-follow-button:hover {
+  background: #ff8a33;
+}
+.cx-follow-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cx-follow-pick select {
+  flex: 1;
+}
+.cx-follow-icon {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+}
+.cx-follow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+}
+.cx-follow-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}

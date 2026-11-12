@@ -8,8 +8,8 @@ export const BUILD = __GLOFLY_BUILD__
 export const APP_HEADERS: Record<string, string> = {
   'X-Glofly-Version': VERSION,
   'X-Glofly-Platform': 'web',
-  // Communities round: this app knows threads and forum nebulas; Nov 2026: Campfire
-  'X-Glofly-Features': 'threads,campfire'
+  // Communities round: this app knows threads and forum nebulas; round 2 (stages, announcements); Campfire (Nov 2026)
+  'X-Glofly-Features': 'threads, round2, campfire'
 }
 
 /** "Chrome", "Safari", "Edge"… for Settings → Account → Where you're signed in. */

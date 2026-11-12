@@ -3,7 +3,7 @@ import express, { Router, type NextFunction, type Request, type Response } from 
 import { rateLimit } from "../rateLimit";
 import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import { FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
+import { BAN_DELETE_WINDOWS, STAGE_SPEAKERS_MAX, FORUM_GUIDELINES_MAX, FORUM_TAG_NAME_MAX, FORUM_TAGS_MAX,
   ALL_PERMISSIONS,
   ONBOARDING_ANSWERS_MAX,
   ONBOARDING_QUESTIONS_MAX,
@@ -78,6 +78,11 @@ import { nebulaOfChat, rememberNebulaChat } from "./chats";
 import { can, OWNER_RANK, outranks, ranksOf, standingOf, type Standing , frozen, FROZEN_MESSAGE } from "./perms";
 import { addMember, afterJoin, ConstellationFull, removeMember, TooManyConstellations } from "./members";
 import { constellationChanged, logModeration, memberIdsOf, tellMembers } from "./activity";
+import { afterJoinSafety } from "./raid";
+import { dropFromStages, forgetStage } from "../stages/state";
+import { removeConstellationEmoji } from "../emoji/routes";
+import { closeReportsOnBan, deleteRecentMessages } from "./nightwatch";
+import { joinsPaused, JOINS_PAUSED_MESSAGE } from "./safety";
 import { cardsFor, detailFor, entriesFor, publicUsers, welcomeOf } from "./views";
 import { bannerKey, memberCard } from "./community";
 import { bannerPhoto } from "../profile/photo";
@@ -85,7 +90,7 @@ import { announceVoice, setSharing, voiceStatesOf } from "./voice";
 import { mentionsFor, newsFor, pinCount, pinNebula, pinsFor, readAllMentions, unpinNebula } from "./home";
 import { fireConstellationEvent } from "../integrations/events";
 import { seesNebulaChat, syncNebulaAccess } from "./access";
-import { knowsThreads } from "../threads/legacy";
+import { knowsRound2, knowsThreads } from "../threads/legacy";
 import { knowsCampfire } from "../campfire/live";
 import { answerOnboarding, onboardingInput, saveOnboarding, setNebulaShown } from "./onboarding";
 
@@ -375,13 +380,14 @@ export async function createNebula(
     roleIds?: string[];
     /** Communities round (tickets): people who see it whatever their roles */
     userIds?: string[];
-  } & Partial<Pick<typeof nebulas.$inferInsert, "threadsStaffOnly" | "threadCloseDays" | "forumTags" | "forumGuidelines" | "forumRequireTag" | "forumSort">>,
+  } & Partial<Pick<typeof nebulas.$inferInsert, "threadsStaffOnly" | "threadCloseDays" | "forumTags" | "forumGuidelines" | "forumRequireTag" | "forumSort" | "stageSpeakerLimit">>,
 ) {
   const [chat] = await tx.insert(conversations).values({ kind: "nebula", name: values.name }).returning({ id: conversations.id });
   rememberNebulaChat(chat.id);
   const [row] = await tx
     .insert(nebulas)
-    .values({ constellationId, conversationId: chat.id, ...values, readOnly: values.readOnly ?? false })
+    // Communities round 2: announcement nebulas are always staff-only.
+    .values({ constellationId, conversationId: chat.id, ...values, readOnly: values.kind === "announcement" ? true : (values.readOnly ?? false) })
     .returning();
   const members = await tx
     .select({ userId: constellationMembers.userId })
@@ -728,6 +734,11 @@ async function joinNow(res: Response, constellationId: string, userId: string, a
     bad(res, "You can't join this constellation.", 403);
     return;
   }
+  // Communities round 2: raid protection (or a moderator) paused joins.
+  if (await joinsPaused(constellationId)) {
+    res.status(403).json({ error: "joins_paused", message: JOINS_PAUSED_MESSAGE });
+    return;
+  }
   if (await deletionPending(userId)) {
     bad(res, "Your account is set to be deleted.", 403);
     return;
@@ -742,6 +753,7 @@ async function joinNow(res: Response, constellationId: string, userId: string, a
     if (added) {
       await afterJoin(constellationId, userId);
       await logModeration(constellationId, userId, "joined", userId);
+      await afterJoinSafety(constellationId, userId).catch((err) => console.error("Raid check failed", err));
     }
     res.json({ constellation: await detailFor(constellationId, userId) });
   } catch (err) {
@@ -1226,6 +1238,8 @@ export async function deleteConstellation(constellationId: string): Promise<void
     .select({ icon: constellations.iconVersion, banner: constellations.bannerVersion })
     .from(constellations)
     .where(eq(constellations.id, constellationId));
+  // Communities round 2: its emoji and stickers' pictures (their rows go with it).
+  await removeConstellationEmoji(constellationId).catch((err) => console.error("Emoji cleanup failed", err));
   await db.transaction(async (tx) => {
     if (chatIds.length) await tx.delete(conversations).where(inArray(conversations.id, chatIds));
     await tx.delete(constellations).where(eq(constellations.id, constellationId));
@@ -1671,8 +1685,10 @@ function forumColumns(f: z.infer<typeof threadFields.forum>): ForumColumns | str
 
 const nebulaBody = z.object({
   name: z.string().max(100),
-  kind: z.enum(["text", "voice", "forum"]),
+  kind: z.enum(["text", "voice", "forum", "stage", "announcement"]),
   ...threadFields,
+  // Communities round 2: a stage nebula's speaker limit
+  stageSpeakerLimit: z.number().int().min(1).max(STAGE_SPEAKERS_MAX).optional(),
   categoryId: idParam.nullable().optional(),
   topic: optionalText(NEBULA_TOPIC_MAX, "The topic").optional(),
   readOnly: z.boolean().optional(),
@@ -1720,6 +1736,7 @@ constellationsRouter.post("/:id/nebulas", changeLimiter, async (req, res) => {
     ...(parsed.data.kind === "forum" ? forum : {}),
     ...(parsed.data.threadsStaffOnly !== undefined ? { threadsStaffOnly: parsed.data.threadsStaffOnly } : {}),
     ...(parsed.data.threadCloseDays !== undefined ? { threadCloseDays: parsed.data.threadCloseDays } : {}),
+    ...(parsed.data.kind === "stage" && parsed.data.stageSpeakerLimit !== undefined ? { stageSpeakerLimit: parsed.data.stageSpeakerLimit } : {}),
   };
   const nebula = await db.transaction((tx) =>
     createNebula(tx, s.constellationId, {
@@ -1776,7 +1793,8 @@ constellationsRouter.patch("/:id/nebulas/:nid", changeLimiter, async (req, res) 
     }
     Object.assign(changes, forum);
   }
-  if (parsed.data.readOnly !== undefined) changes.readOnly = parsed.data.readOnly;
+  if (parsed.data.readOnly !== undefined && n.kind !== "announcement") changes.readOnly = parsed.data.readOnly;
+  if (parsed.data.stageSpeakerLimit !== undefined && n.kind === "stage") changes.stageSpeakerLimit = parsed.data.stageSpeakerLimit;
   // 0.8.0: who can see it. Left out = unchanged, so older apps editing a nebula keep it.
   if (parsed.data.visibility !== undefined) changes.visibility = parsed.data.visibility;
   // 4.3: a nebula limited to roles can't stay optional (onboarding only offers nebulas for everyone).
@@ -1816,6 +1834,7 @@ constellationsRouter.delete("/:id/nebulas/:nid", changeLimiter, async (req, res)
   if (!n) return;
   const room = await openVoiceRoom(n.conversationId);
   if (room) await closeCall(room.id, "hang_up");
+  if (n.kind === "stage") forgetStage(n.id);
   const files = await db
     .select({ id: attachments.id, conversationId: attachments.conversationId, kind: attachments.kind })
     .from(attachments)
@@ -2090,6 +2109,11 @@ constellationsRouter.patch("/:id/roles/:rid", changeLimiter, async (req, res) =>
     const kept = r.permissions.includes("mentionEveryone");
     parsed.data.permissions = [...parsed.data.permissions.filter((p) => p !== "mentionEveryone"), ...(kept ? (["mentionEveryone"] as const) : [])];
   }
+  // Communities round 2: the same for "Manage emoji & stickers" and "Manage stages".
+  if (parsed.data.permissions && !knowsRound2(req)) {
+    const newer = ["manageEmoji", "manageStages"] as const;
+    parsed.data.permissions = [...parsed.data.permissions.filter((p) => !(newer as readonly string[]).includes(p)), ...newer.filter((p) => r.permissions.includes(p))];
+  }
   // Campfire: apps that don't know it don't show "Run Campfire games"; saving keeps it as it was.
   if (parsed.data.permissions && !knowsCampfire(req)) {
     const kept = r.permissions.includes("runGames");
@@ -2270,6 +2294,8 @@ constellationsRouter.post("/:id/members/:uid/timeout", changeLimiter, async (req
       void removeFromRoom(room.id, t.userId);
     }
   }
+  // …and stops speaking on any live stage (they may still listen).
+  await dropFromStages(s.constellationId, t.userId, false);
   await logModeration(s.constellationId, s.userId, "timed_out", t.userId, { length: length.name, reason: reasonField.parse(req.body?.reason ?? null) });
   await constellationChanged(s.constellationId);
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
@@ -2318,14 +2344,23 @@ constellationsRouter.post("/:id/members/:uid/ban", changeLimiter, async (req, re
     return;
   }
   const reason = reasonField.parse(req.body?.reason ?? null);
+  // Communities round 2 (board 1c): appeals ("now" for older apps, like before) and deleting their
+  // recent messages.
+  const appeals = z.enum(["now", "later", "never"]).catch("now").parse(req.body?.appeals);
+  const window = BAN_DELETE_WINDOWS.find((w) => w.id === req.body?.deleteWindow) ?? BAN_DELETE_WINDOWS[0];
   await db
     .insert(constellationBans)
-    .values({ constellationId: s.constellationId, userId: t.userId, bannedBy: s.userId, reason })
+    .values({ constellationId: s.constellationId, userId: t.userId, bannedBy: s.userId, reason, appeals })
     .onConflictDoNothing();
   await db.delete(constellationInvites).where(and(eq(constellationInvites.constellationId, s.constellationId), eq(constellationInvites.inviteeId, t.userId)));
   await removeMember(s.constellationId, t.userId);
-  emitToUser(t.userId, "constellation:removed", { constellationId: s.constellationId, reason: "banned" }, true);
-  await logModeration(s.constellationId, s.userId, "banned", t.userId, { reason });
+  emitToUser(t.userId, "constellation:removed", { constellationId: s.constellationId, reason: "banned", banReason: reason }, true);
+  await logModeration(s.constellationId, s.userId, "banned", t.userId, { reason, appeals, ...(window.ms ? { deleted: window.id } : {}) });
+  await closeReportsOnBan(s.constellationId, t.userId, s.userId);
+  if (window.ms) {
+    const n = await deleteRecentMessages(s.constellationId, t.userId, window.ms);
+    if (n) await logModeration(s.constellationId, s.userId, "messages_deleted", t.userId, { count: n, window: window.id });
+  }
   res.json({ constellation: await detailFor(s.constellationId, s.userId) });
 });
 

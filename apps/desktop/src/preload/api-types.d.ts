@@ -811,6 +811,13 @@ export type GloflyApi = {
       type: PhotoType,
       which?: 'icon' | 'banner'
     ) => Promise<ApiResult<{ iconVersion?: string; bannerVersion?: string }>>
+    /** Communities round 2: a new emoji or sticker (the picture is cleaned on the server) */
+    addEmoji: (
+      constellationId: string,
+      data: ArrayBuffer,
+      type: PhotoType,
+      options: { kind: 'emoji' | 'sticker'; name: string; outside: boolean; cutout: boolean }
+    ) => Promise<ApiResult<unknown>>
   }
   social: {
     get: () => Promise<ApiResult<SocialToday>>
@@ -1060,6 +1067,8 @@ export type SendOptions = {
   /** Communities round: a reply in a thread / forum post; alsoInNebula shows it in the nebula too */
   threadId?: string
   alsoInNebula?: boolean
+  /** Communities round 2: the custom emoji the text uses (their ids) */
+  emojis?: string[]
 }
 export type GifPage = { gifs: GifInfo[]; next: number | null }
 export type ChatGameKind = 'tictactoe' | 'wordguess' | 'trivia'

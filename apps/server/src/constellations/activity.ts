@@ -1,7 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { constellationAuditLog, constellationMembers, constellations, conversationMembers, users } from "../db/schema";
-import { emitToUser } from "../realtime";
+import { emitToUser, emitToUsers, onlineNow } from "../realtime";
 import { toolHook } from "../toolHooks";
 import { nebulaOfChat } from "./chats";
 
@@ -70,30 +70,46 @@ export async function nebulaActivity(
   const base = { constellationId: nebula.constellationId, nebulaId: nebula.id, conversationId, senderId, mentions };
   if (preview === undefined) {
     // 0.8.0: only people who can see it (role-only nebulas): its conversation's members.
-    for (const userId of await viewersOf(conversationId)) emitToUser(userId, "constellation:activity", base, true);
+    emitToUsers(onlineNow(await viewersOf(conversationId)), "constellation:activity", base, true);
     return;
   }
-  const settings = await db
-    .select({
-      userId: constellationMembers.userId,
-      defaultLevel: constellationMembers.notify,
-      level: conversationMembers.notifyLevel,
-      mutedUntil: conversationMembers.mutedUntil,
-      constellationMute: constellationMembers.mutedUntil,
-    })
-    .from(constellationMembers)
-    .innerJoin(
-      conversationMembers,
-      and(eq(conversationMembers.userId, constellationMembers.userId), eq(conversationMembers.conversationId, conversationId)),
-    )
-    .where(eq(constellationMembers.constellationId, nebula.constellationId));
+  // Communities round 2 (big constellations): only people with Glofly open hear about it live, and
+  // people getting the same thing share one send.
+  const online = onlineNow(await viewersOf(conversationId));
+  if (!online.length) return;
+  const settings: { userId: string; defaultLevel: string | null; level: string | null; mutedUntil: Date | null; constellationMute: Date | null }[] = [];
+  for (let i = 0; i < online.length; i += 2000) {
+    settings.push(
+      ...(await db
+        .select({
+          userId: constellationMembers.userId,
+          defaultLevel: constellationMembers.notify,
+          level: conversationMembers.notifyLevel,
+          mutedUntil: conversationMembers.mutedUntil,
+          constellationMute: constellationMembers.mutedUntil,
+        })
+        .from(constellationMembers)
+        .innerJoin(
+          conversationMembers,
+          and(eq(conversationMembers.userId, constellationMembers.userId), eq(conversationMembers.conversationId, conversationId)),
+        )
+        .where(and(eq(constellationMembers.constellationId, nebula.constellationId), inArray(constellationMembers.userId, online.slice(i, i + 2000))))),
+    );
+  }
   const [sender] = await db.select({ name: users.displayName, avatarVersion: users.avatarVersion }).from(users).where(eq(users.id, senderId));
   const now = Date.now();
+  const byAlert = new Map<string, string[]>();
   for (const s of settings) {
     const mentioned = mentions.includes(s.userId) || groupMentions.includes(s.userId);
-    const alert = s.userId === senderId ? null : alertFor(s.level ?? s.defaultLevel, laterMute(s.mutedUntil, s.constellationMute), mentioned, now);
-    emitToUser(
-      s.userId,
+    const alert = s.userId === senderId ? null : alertFor(s.level ?? s.defaultLevel ?? "all", laterMute(s.mutedUntil, s.constellationMute), mentioned, now);
+    const key = alert ?? "";
+    const list = byAlert.get(key) ?? [];
+    list.push(s.userId);
+    byAlert.set(key, list);
+  }
+  for (const [alert, userIds] of byAlert) {
+    emitToUsers(
+      userIds,
       "constellation:activity",
       alert
         ? { ...base, alert, nebulaName: nebula.name, constellationName: c?.name ?? "", senderName: sender?.name ?? "Someone", senderAvatarVersion: sender?.avatarVersion ?? null, preview }

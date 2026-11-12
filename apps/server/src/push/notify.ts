@@ -528,6 +528,53 @@ export async function notifyEventReminder(
 }
 
 /**
+ * Communities round 2 (Night watch): an alert to a constellation's moderators (a raid, an appeal).
+ * Sent like a constellation invite (type friend_joined) so every phone build shows it; newer
+ * builds open Night watch from `?watch=<constellation>`, older ones the Owner's profile. Phones
+ * whose Glofly knows Constellations only; not the phone in use, not on Do not disturb.
+ */
+export async function notifyModerators(
+  userIds: string[],
+  constellation: { id: string; name: string; ownerId: string },
+  text: string,
+): Promise<void> {
+  if (!pushConfigured || !userIds.length) return;
+  const devices = await db
+    .select({
+      userId: pushDevices.userId,
+      token: pushDevices.token,
+      sessionId: pushDevices.sessionId,
+      preview: pushDevices.preview,
+      platform: pushDevices.platform,
+      messageSound: pushDevices.messageSound,
+      status: users.statusPreference,
+      quiet: users.quietHours,
+    })
+    .from(pushDevices)
+    .innerJoin(users, eq(users.id, pushDevices.userId))
+    .where(and(inArray(pushDevices.userId, userIds), sql`'constellations' = any(${pushDevices.features})`));
+  if (!devices.length) return;
+  const live = await liveSessions([...new Set(devices.map((d) => d.userId))]);
+  const title = `${constellation.name.slice(0, 60)} · Night watch`;
+  await deliver(
+    devices
+      .filter((d) => !quietOrDnd(d) && !live.get(d.userId)?.has(d.sessionId))
+      .map((device) => ({
+        device,
+        ttl: 2 * 60 * 60,
+        data: {
+          type: "friend_joined",
+          userId: `${constellation.ownerId}?watch=${constellation.id}`,
+          senderName: title,
+          senderAvatar: "",
+          title,
+          text: text.slice(0, 160),
+        },
+      })),
+  );
+}
+
+/**
  * Campfire (Round A): a game session starts soon (the day before, then 30 minutes ahead). Sent as
  * a message notification from the campaign's chat (the group, or the voice nebula on phones that
  * know Constellations), so every phone build shows it and a tap opens that chat. Not the phone in

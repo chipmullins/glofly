@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { dropFromStages } from "../stages/state";
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import {
   AUTOMOD_ACTIONS,
@@ -15,6 +16,15 @@ import {
 } from "@glofly/shared";
 import { db } from "../db";
 import { automodHeld, constellationAuditLog, constellationAutomod, constellationMembers, nebulas } from "../db/schema";
+import { mentionCount } from "@glofly/shared";
+import { raidHeld, safetyOf, skipsSafety } from "./safety";
+import { pokeNightWatch } from "./raid";
+import { users } from "../db/schema";
+
+async function isBot(userId: string): Promise<boolean> {
+  const [u] = await db.select({ bot: users.bot }).from(users).where(eq(users.id, userId));
+  return !!u?.bot;
+}
 import { redis } from "../redis";
 import { nebulaOfChat } from "./chats";
 import { can, standingOf, type Standing } from "./perms";
@@ -85,6 +95,18 @@ export async function automodGate(
 ): Promise<Refusal | null> {
   const nebula = await nebulaOfChat(conversationId);
   if (!nebula) return null;
+  // Communities round 2: people who joined during a raid wait for a moderator (Night watch).
+  if (await raidHeld(nebula.constellationId, userId)) {
+    const rs = await standingOf(nebula.constellationId, userId);
+    if (rs && !skipsSafety(rs)) {
+      await hold(nebula.constellationId, nebula, conversationId, userId, text, replyToId, "raid", null, now);
+      return {
+        status: 403,
+        error: "forbidden",
+        message: "You joined during a busy moment, so your message is waiting for a moderator. It'll show once they've had a look.",
+      };
+    }
+  }
   const row = await automodRow(nebula.constellationId);
   if (!row) return null;
   const set = settingsOf(row);
@@ -190,10 +212,10 @@ async function hold(
   senderId: string,
   body: string,
   replyToId: string | null,
-  reason: "word" | "links",
-  detail: string,
+  reason: "word" | "links" | "mentions" | "raid",
+  detail: string | null,
   now: number,
-): Promise<void> {
+): Promise<string | null> {
   // The same message tried again within a minute (a retry) is held once.
   const [same] = await db
     .select({ id: automodHeld.id })
@@ -207,18 +229,61 @@ async function hold(
       ),
     )
     .limit(1);
-  if (same) return;
+  if (same) return null;
   const [held] = await db
     .insert(automodHeld)
     .values({ constellationId, conversationId, senderId, body, replyToId, reason, detail })
     .returning({ id: automodHeld.id });
-  await logModeration(constellationId, null, reason === "word" ? "automod_hidden" : "automod_links", senderId, {
+  pokeNightWatch(constellationId);
+  const action = { word: "automod_hidden", links: "automod_links", mentions: "automod_mentions", raid: "automod_raid" }[reason];
+  await logModeration(constellationId, null, action, senderId, {
     heldId: held.id,
     nebulaId: nebula.id,
     nebulaName: nebula.name,
-    ...(reason === "word" ? { word: detail } : { rule: detail }),
+    ...(reason === "word" ? { word: detail } : reason === "links" ? { rule: detail } : reason === "mentions" ? { count: Number(detail) } : {}),
     preview: body.replace(/\s+/g, " ").slice(0, 140),
   });
+  return held.id;
+}
+
+/**
+ * Communities round 2 (board 1d): the mention cap. A message that pings more people and roles
+ * than the constellation allows is held (nobody sees it) and, if chosen, the sender is timed out.
+ * Moderators and up are never capped. Null = send it.
+ */
+export async function mentionCapGate(
+  conversationId: string,
+  userId: string,
+  text: string,
+  people: readonly string[],
+  roles: readonly string[],
+  everyoneOrHere: boolean,
+  now = Date.now(),
+): Promise<Refusal | null> {
+  const count = mentionCount(people.filter((p) => p !== userId), roles, everyoneOrHere);
+  if (count < 2) return null;
+  const nebula = await nebulaOfChat(conversationId);
+  if (!nebula) return null;
+  const safety = await safetyOf(nebula.constellationId);
+  if (!safety.mentionCapOn || count <= safety.mentionCap) return null;
+  const s = await standingOf(nebula.constellationId, userId);
+  if (!s || skipsSafety(s) || (await isBot(userId))) return null;
+  await hold(nebula.constellationId, nebula, conversationId, userId, text, null, "mentions", String(count), now);
+  const minutes = safety.mentionCapAction === "timeout10" ? 10 : safety.mentionCapAction === "timeout60" ? 60 : 0;
+  if (minutes) {
+    const until = new Date(now + minutes * 60_000);
+    await db
+      .update(constellationMembers)
+      .set({ timedOutUntil: until })
+      .where(and(eq(constellationMembers.constellationId, nebula.constellationId), eq(constellationMembers.userId, userId)));
+    await logModeration(nebula.constellationId, null, "timed_out", userId, { length: minutes === 10 ? "10 minutes" : "1 hour", reason: `Mentioned ${count} people or roles in one message`, by: "automod" });
+    await dropFromStages(nebula.constellationId, userId, false);
+  }
+  return {
+    status: 403,
+    error: "forbidden",
+    message: `AutoMod held your message: it mentions ${count} people or roles, and this constellation allows ${safety.mentionCap}.${minutes ? ` You're timed out for ${minutes === 10 ? "10 minutes" : "an hour"}.` : ""}`,
+  };
 }
 
 /** "Let them post now" (Undo on a new-member wait). */

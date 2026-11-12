@@ -573,6 +573,33 @@ export type FunnelInsights = {
   joinedConstellation: number
   medianMinutesToFirstMessage: number | null
 }
+/** Communities round 2: Insights → Big constellations (GET /admin/insights/big). */
+export type BigConstellations = {
+  threshold: number
+  bigCount: number
+  newThisWeek: number
+  biggest: { name: string; members: number } | null
+  fanOut: { lastMinute: number; thisMinute: number; comfort: number }
+  minutes: { voice: number; stage: number; pricePerMinute: number; estimate: number }
+  constellations: {
+    id: string
+    name: string
+    members: number
+    weekly: number[]
+    messagesToday: number
+    messagesWeekAvg: number
+    activeToday: number
+    activeWeekAvg: number
+    onlineNow: number
+    biggestVoiceToday: number
+    biggestVoiceWeek: number
+    biggestStageToday: number
+    biggestStageWeek: number
+    busyToday: number
+    busyWeekAvg: number
+  }[]
+}
+
 export type Insights = {
   days: number
   calls: CallInsights
@@ -719,6 +746,7 @@ export const api = {
     call<UsageReport>('PUT', '/admin/usage/budget', { monthly }),
   insights: (days: 7 | 30 | 90) =>
     call<Insights>('GET', `/admin/insights${q({ days: String(days) })}`),
+  bigConstellations: () => call<BigConstellations>('GET', '/admin/insights/big'),
   live: () => call<LiveWhere>('GET', '/admin/live'),
   deletions: () => call<PendingDeletions>('GET', '/admin/deletions'),
   support: (id: string) => call<AccountSupport>('GET', `/admin/accounts/${id}/support`),

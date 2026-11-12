@@ -194,3 +194,70 @@
   background: var(--glo-good-bg);
   color: var(--glo-good-text);
 }
+
+/* Communities round 2 (board 3b): a copy of a followed announcement. */
+.message-crosspost .message-forward-label b {
+  color: var(--glo-text);
+}
+.message-crosspost-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 1px solid #ddd6fe;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.message-crosspost-foot {
+  display: block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--glo-muted);
+}
+.message-crosspost-open {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--glo-link, #b4530e);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Communities round 2 (board 5b): a message from Discord through the bridge. */
+.message-via {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: #eef0fb;
+  color: #3b3f9e;
+  border: 1px solid #d6d9f6;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.message-bridged-face {
+  /* The photo (.avatar-photo, absolutely placed) stays inside this circle. */
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #5865f2;
+  color: #fff;
+  font: 700 14px var(--glo-font-body);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: none;
+}
+.message-bridged-face .avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

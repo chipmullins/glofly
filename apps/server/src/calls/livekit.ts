@@ -200,3 +200,44 @@ export async function previewToken(room: string, identity: string, name: string)
   return token.toJwt();
 }
 
+
+/**
+ * Communities round 2: a pass for a stage's room. Speakers (identity = their user id) may send their
+ * microphone, camera and screen; listeners only receive: their pass can't send anything, they're
+ * hidden from the room, and their identity is `listen:<userId>:<random>` (never their user id), so a
+ * listener never shows up as a speaker. The room fits STAGE_LISTENERS_MAX listeners + speakers.
+ */
+export async function stageToken(
+  room: string,
+  user: { id: string; displayName: string },
+  role: "speaker" | "listener",
+  roomSize: number,
+): Promise<{ token: string; identity: string }> {
+  const identity = role === "speaker" ? user.id : `listen:${user.id}:${Math.random().toString(36).slice(2, 10)}`;
+  const token = new AccessToken(apiKey, apiSecret, { identity, name: user.displayName, ttl: "15m" });
+  token.addGrant({
+    room,
+    roomJoin: true,
+    canSubscribe: true,
+    canPublish: role === "speaker",
+    canPublishSources: role === "speaker" ? callSources(true) : [],
+    canPublishData: false,
+    canUpdateOwnMetadata: false,
+    hidden: role === "listener",
+  });
+  token.roomConfig = new RoomConfiguration({ maxParticipants: roomSize, emptyTimeout: 300, departureTimeout: 20 });
+  return { token: await token.toJwt(), identity };
+}
+
+/** Disconnects every participant whose identity starts with `prefix` (a stage listener's passes). */
+export async function removeByPrefix(room: string, prefix: string): Promise<void> {
+  const service = roomService();
+  if (!service) return;
+  try {
+    const people = await service.listParticipants(room);
+    await Promise.all(people.filter((p) => p.identity.startsWith(prefix)).map((p) => service.removeParticipant(room, p.identity).catch(() => undefined)));
+  } catch (err) {
+    if (err instanceof ServerError && (err.status === 404 || err.code === "not_found")) return;
+    console.error("Couldn't remove someone from a stage:", err instanceof Error ? err.message : err);
+  }
+}

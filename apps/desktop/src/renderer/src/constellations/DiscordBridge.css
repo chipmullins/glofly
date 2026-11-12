@@ -1,0 +1,215 @@
+/* Communities round 2, board 5a (approved): Settings → Discord bridge. Light settings look. */
+.dc-bridge {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.dc-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 400px;
+  max-width: 100%;
+  flex: none;
+}
+.dc-step {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff7ef;
+  border: 1px solid #f6c79c;
+}
+.dc-step--done {
+  background: #eef8f2;
+  border-color: #bfe3cd;
+}
+.dc-step-n {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 13px;
+  background: #f47a1f;
+  color: #2a1406;
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dc-step--done .dc-step-n {
+  background: #1d6b45;
+  color: #fff;
+}
+.dc-step-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.dc-step-body b {
+  font-size: 14px;
+  color: var(--glo-text);
+}
+.dc-step-body > span {
+  font-size: 12.5px;
+  color: var(--glo-muted);
+}
+.dc-wait {
+  font-weight: 600;
+}
+.dc-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 320px;
+}
+.dc-server {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dc-server b {
+  font-size: 15px;
+}
+.dc-sub {
+  font-size: 12.5px;
+  color: var(--glo-muted);
+}
+.dc-server-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 12px;
+  background: #5865f2;
+  color: #fff;
+  font: 700 14px var(--glo-font-body);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dc-lost {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fdecea;
+  color: #8a2a1f;
+  font-size: 13px;
+}
+.dc-pair,
+.dc-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid #eaddd1;
+  background: var(--glo-surface, #fff);
+  flex-wrap: wrap;
+}
+.dc-add select {
+  flex: 1;
+  min-width: 140px;
+}
+.dc-chip {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+}
+.dc-chip--discord {
+  background: #eef0fb;
+  color: #3b3f9e;
+}
+.dc-chip--glofly {
+  background: #fff4e5;
+  color: #a8480a;
+}
+.dc-state {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  background: #eef8f2;
+  color: #1d6b45;
+  border: 1px solid #bfe3cd;
+  font-size: 12px;
+  font-weight: 700;
+}
+.dc-state--paused {
+  background: #f4ede7;
+  color: #6b5547;
+  border-color: #eaddd1;
+}
+.dc-add-link {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: 700 13.5px var(--glo-font-body);
+  color: #b4530e;
+  cursor: pointer;
+}
+.dc-label {
+  font-size: 12px;
+  color: var(--glo-muted);
+  letter-spacing: 0.07em;
+  margin-top: 4px;
+}
+.dc-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  position: relative;
+  cursor: pointer;
+}
+.dc-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 40px;
+  height: 24px;
+  margin: 0;
+  cursor: pointer;
+}
+.dc-switch {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  flex: none;
+  border-radius: 12px;
+  background: #d9c7b8;
+  transition: background 140ms ease;
+}
+.dc-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #fff;
+  transition: left 140ms ease;
+}
+.dc-toggle input:checked + .dc-switch {
+  background: #f47a1f;
+}
+.dc-toggle input:checked + .dc-switch::after {
+  left: 19px;
+}
+.dc-toggle input:disabled + .dc-switch {
+  opacity: 0.7;
+}
+.dc-toggle input:focus-visible + .dc-switch {
+  outline: 2px solid #f47a1f;
+  outline-offset: 2px;
+}

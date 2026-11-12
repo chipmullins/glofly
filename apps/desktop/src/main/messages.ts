@@ -110,7 +110,13 @@ export async function sendMessage(
   body: string,
   replyToId?: string,
   attachmentIds?: string[],
-  options?: { lantern?: boolean; clientId?: string; threadId?: string; alsoInNebula?: boolean }
+  options?: {
+    lantern?: boolean
+    clientId?: string
+    threadId?: string
+    alsoInNebula?: boolean
+    emojis?: string[]
+  }
 ): Promise<ApiResult<Message>> {
   return unwrap(
     await request('POST', `/conversations/${conversationId}/messages`, {
@@ -119,7 +125,10 @@ export async function sendMessage(
       ...(attachmentIds?.length ? { attachmentIds } : {}),
       ...(options?.lantern ? { lantern: true } : {}),
       ...(options?.clientId ? { clientId: options.clientId } : {}),
-      ...(options?.threadId ? { threadId: options.threadId, ...(options.alsoInNebula ? { alsoInNebula: true } : {}) } : {})
+      ...(options?.emojis?.length ? { emojis: options.emojis } : {}),
+      ...(options?.threadId
+        ? { threadId: options.threadId, ...(options.alsoInNebula ? { alsoInNebula: true } : {}) }
+        : {})
     })
   )
 }
@@ -178,7 +187,12 @@ export async function reactToMessage(
   emoji: string,
   on: boolean
 ): Promise<ApiResult<Message>> {
-  const path = `/conversations/${conversationId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`
+  // Communities round 2: a custom emoji comes as ":name:#<id>" (the id says which picture).
+  const custom = /^(:[A-Za-z0-9_]{2,32}:)#([0-9a-f-]{36})$/i.exec(emoji)
+  const key = custom ? custom[1] : emoji
+  if (!custom && emoji.length > 32)
+    return { ok: false, error: 'invalid', message: "That isn't an emoji." }
+  const path = `/conversations/${conversationId}/messages/${messageId}/reactions/${encodeURIComponent(key)}${custom && on ? `?id=${custom[2]}` : ''}`
   return unwrap(await request(on ? 'PUT' : 'DELETE', path))
 }
 
@@ -240,7 +254,10 @@ export const forwardMessage = (
   })
 
 export async function forwardTargets(): Promise<ApiResult<ForwardTarget[]>> {
-  const result = await request<{ targets: ForwardTarget[] }>('GET', '/conversations/forward-targets')
+  const result = await request<{ targets: ForwardTarget[] }>(
+    'GET',
+    '/conversations/forward-targets'
+  )
   return result.ok ? { ok: true, data: result.data.targets } : result
 }
 

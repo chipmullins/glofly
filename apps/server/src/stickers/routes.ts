@@ -1,4 +1,5 @@
 import express, { Router, type Response } from "express";
+import { nebulaBusy } from "../constellations/busy";
 import { rateLimit } from "../rateLimit";
 import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -137,6 +138,14 @@ stickersRouter.post("/:id/send", sendLimiter, async (req, res) => {
   }
   const chunks: Buffer[] = [];
   for await (const c of file.stream) chunks.push(c as Buffer);
+  // Communities round 2: a busy nebula's limits count stickers, polls and games too.
+  if (chat.kind === "nebula") {
+    const busy = await nebulaBusy(chat.conversationId);
+    if (busy) {
+      res.status(429).json({ error: "too_many_requests", message: busy });
+      return;
+    }
+  }
   const message = await postSpecial(
     chat,
     parsed.data.conversationId,

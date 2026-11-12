@@ -284,6 +284,12 @@ export type Message = {
   lanternFadeAt?: string | null
   /** 0.9.3: a forwarded message (older apps just show its text) */
   forwarded?: ForwardedFrom
+  /** Communities round 2: a copy of a followed announcement (older apps show it as a forward) */
+  crosspost?: import('./stages').Crosspost
+  /** Communities round 2: copied from Discord by the bridge (show `bridged.name` + "via Discord") */
+  bridged?: import('./discord').BridgedFrom
+  /** Communities round 2: custom emoji its text or reactions use (`:name:`; older apps show the text) */
+  emojis?: import('./emoji').EmojiRef[]
   /** 0.9.3: a constellation's Live alert (older apps show the body, its link and preview) */
   liveCard?: import('./connections').LiveCard
   /** Communities round (Nov 2026): buttons under a bot's message (constellations only) */
@@ -602,7 +608,21 @@ export type ServerEvent =
   /** Who's in one of its voice nebulas changed */
   | { type: 'constellation:voice'; constellationId: string; voice: import('./constellations').VoiceNebulaState }
   /** It's gone for me (deleted, I was kicked or banned, or it was taken down) */
-  | { type: 'constellation:removed'; constellationId: string; reason: 'kicked' | 'banned' | 'taken_down' | 'deleted' }
+  | { type: 'constellation:removed'; constellationId: string; reason: 'kicked' | 'banned' | 'taken_down' | 'deleted'; banReason?: string | null }
+  /** Communities round 2: a constellation's emoji or stickers changed (refresh the picker) */
+  | { type: 'emoji:changed'; constellationId: string }
+  /** Communities round 2: a stage started, changed or ended (stage null) */
+  | { type: 'stage:updated'; constellationId: string; nebulaId: string; stage: import('./stages').StageState | null }
+  /** Communities round 2: a manager asked me up to speak (invited false: took it back) */
+  | { type: 'stage:invited'; constellationId: string; nebulaId: string; byName: string; invited: boolean }
+  /** Communities round 2: I was moved to the audience */
+  | { type: 'stage:moved'; constellationId: string; nebulaId: string }
+  /** Communities round 2: Night watch changed (moderators: refresh the dashboard and badge) */
+  | { type: 'nightwatch:changed'; constellationId: string }
+  /** Communities round 2: raid protection paused joins (moderators) */
+  | { type: 'constellation:raid'; constellationId: string; pausedUntil: string; joins: number; newAccounts: number; seconds: number }
+  /** Communities round 2: moderators decided about my ban appeal */
+  | { type: 'constellation:appeal'; constellationId: string; decision: 'accept' | 'deny' }
   /** 0.7.1: someone invited you to a constellation (a pop-up with Join / Not now) */
   | { type: 'constellation:invited'; invite: import('./constellations').InvitePopup }
   /** My games changed (on another device) */

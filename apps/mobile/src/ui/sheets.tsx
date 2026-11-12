@@ -1,3 +1,5 @@
+import { isNebulaChat, useCx } from '@/state/constellations'
+import { InlineEmoji, loadEmojiSets, usableSets, useEmojiSets } from '@/chat/customEmoji'
 import { useEffect, useMemo, useState } from 'react'
 import { FlatList, Pressable, ScrollView, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -73,16 +75,39 @@ function EmojiPicker({ onPick }: { onPick: (e: string | null) => void }) {
       if (!r.length) setGroup('smileys')
     })
   }, [])
-  const list: PickerEmoji[] = query.trim()
-    ? searchEmoji(query, 120)
+  // Communities round 2: a tab per constellation you're in (inside-only emoji only there).
+  const allSets = useEmojiSets((s) => s.sets)
+  const viewing = useCx((s) => s.viewing)
+  const place = useCx((s) => (viewing ? (s.chats[viewing]?.constellationId ?? null) : null))
+  useEffect(() => {
+    void loadEmojiSets()
+  }, [])
+  const customGroups = useMemo(
+    () =>
+      usableSets(allSets, place)
+        .filter((s) => s.emoji.length)
+        .map((s) => ({
+          id: `cx:${s.constellation.id}`,
+          label: s.constellation.name,
+          emoji: s.emoji.map((e): PickerEmoji => ({ emoji: `:${e.name}:#${e.id}`, label: `:${e.name}:`, words: e.name.toLowerCase(), custom: { id: e.id, name: e.name } })),
+        })),
+    [allSets, place],
+  )
+  const q = query.trim().toLowerCase()
+  const list: PickerEmoji[] = q
+    ? [...customGroups.flatMap((g) => g.emoji).filter((e) => e.words.includes(q)), ...searchEmoji(query, 120)]
     : group === 'recent'
       ? recent.map((e) => ({ emoji: e, label: e, words: '' }))
-      : (groups.find((g) => g.id === group)?.emoji ?? [])
-  const pick = (e: string) => {
-    noteEmojiUsed(e)
-    onPick(e)
+      : (customGroups.find((g) => g.id === group)?.emoji ?? groups.find((g) => g.id === group)?.emoji ?? [])
+  const pick = (e: PickerEmoji) => {
+    if (!e.custom) noteEmojiUsed(e.emoji)
+    onPick(e.emoji)
   }
-  const tabs = [{ id: 'recent', label: 'Recently used', icon: '🕘' }, ...groups.map((g) => ({ id: g.id, label: g.label, icon: g.emoji[0]?.emoji ?? '' }))]
+  const tabs = [
+    { id: 'recent', label: 'Recently used', icon: '🕘' },
+    ...customGroups.map((g) => ({ id: g.id, label: g.label, icon: g.label.slice(0, 2).toUpperCase() })),
+    ...groups.map((g) => ({ id: g.id, label: g.label, icon: g.emoji[0]?.emoji ?? '' })),
+  ]
   return (
     <BottomSheet onClose={() => onPick(null)}>
       <View style={{ height: 460, paddingBottom: insets.bottom }}>
@@ -108,7 +133,15 @@ function EmojiPicker({ onPick }: { onPick: (e: string | null) => void }) {
                 onPress={() => setGroup(t.id)}
                 style={{ width: 44, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: group === t.id ? c.accentSoft : 'transparent' }}
               >
-                <Text size={22}>{t.icon}</Text>
+                {t.id.startsWith('cx:') ? (
+                  <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: '#1c1210', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text size={11} weight="bold" style={{ color: '#ffb347' }}>
+                      {t.icon}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text size={22}>{t.icon}</Text>
+                )}
               </Pressable>
             ))}
           </ScrollView>
@@ -126,8 +159,8 @@ function EmojiPicker({ onPick }: { onPick: (e: string | null) => void }) {
             </Text>
           }
           renderItem={({ item }) => (
-            <Pressable accessibilityRole="button" accessibilityLabel={item.label} onPress={() => pick(item.emoji)} style={{ flex: 1 / 8, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
-              <Text size={28}>{item.emoji}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={item.label} onPress={() => pick(item)} style={{ flex: 1 / 8, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+              {item.custom ? <InlineEmoji emoji={item.custom} size={32} /> : <Text size={28}>{item.emoji}</Text>}
             </Pressable>
           )}
         />
@@ -156,6 +189,8 @@ function ReportSheet({ target, onDone }: { target: ReportTarget; onDone: (sent: 
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<ReportReason | null>(null)
   const first = target.name.split(/\s+/)[0]
+  // Communities round 2: a nebula message also goes to that constellation's moderators.
+  const nebula = !!target.conversationId && isNebulaChat(target.conversationId)
 
   async function send() {
     if (!reason) return setError('Pick what’s wrong.')
@@ -183,7 +218,7 @@ function ReportSheet({ target, onDone }: { target: ReportTarget; onDone: (sent: 
             Thanks for telling us
           </Text>
           <Text size={15} tone="ink2" style={{ lineHeight: 22 }}>
-            The Glofly team will look at it. {first} won't know you reported them.
+            {nebula ? 'The moderators of this constellation and the Glofly team will look at it.' : 'The Glofly team will look at it.'} {first} won't know you reported them.
             {block ? ` You've also blocked ${first}.` : ' If you feel unsafe, you can also block them from their profile.'}
           </Text>
           {sent === 'self_harm' ? (
@@ -202,7 +237,7 @@ function ReportSheet({ target, onDone }: { target: ReportTarget; onDone: (sent: 
           {target.messageId ? 'Report message' : `Report ${target.name}`}
         </Text>
         <Text size={14} tone="muted" style={{ lineHeight: 20 }}>
-          What's wrong with it? Only the Glofly team sees reports. {first} isn't told.
+          What's wrong with it? {nebula ? 'The moderators here and the Glofly team see reports.' : 'Only the Glofly team sees reports.'} {first} isn't told.
         </Text>
         {error ? <Notice>{error}</Notice> : null}
         <View accessibilityRole="radiogroup" accessibilityLabel="Reason">

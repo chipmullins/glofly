@@ -49,6 +49,9 @@ import { hexA } from './colors'
 import { LockIcon, gateLabel } from './RoleVisibility'
 import { FireflyMark, GalaxyIcon } from './sky'
 import VoiceStage from './VoiceStage'
+import StageView, { MegaphoneIcon } from './StageView'
+import { FollowButton } from './Follow'
+import { stageLine, type StageState } from '@glofly/shared/stages'
 import { BannerArt } from './identity'
 import { accentStyle, hasAccent, needsWelcome } from './communityLib'
 import { MemberCardTop, MembersPanel } from './Members'
@@ -75,6 +78,7 @@ import { threads as threadApi } from '../lib/threads'
 import { usePresence } from '../lib/usePresence'
 import type { ThreadSummary } from '@glofly/shared/threads'
 import { integrations } from '../lib/integrations'
+import { BanDialog, RaidBanner } from './NightWatch'
 import type { ConstellationCommand } from '@glofly/shared/integrations'
 
 /** Communities round: a bot's badge in chats (approved board 4). */
@@ -227,8 +231,14 @@ export type SettingsPageName =
   | 'members'
   | 'invites'
   | 'moderation'
+  | 'watch'
+  | 'modlog'
+  | 'appeals'
+  | 'safety'
+  | 'emoji'
   | 'automod'
   | 'integrations'
+  | 'discord'
   | 'liveAlerts'
   | 'onboarding'
   | 'delete'
@@ -278,6 +288,16 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   }
 
   const people = useMemo(() => new Map(c.members.map((m) => [m.user.id, m.user])), [c.members])
+  // Communities round 2: live stages by nebula
+  const stageOf = (nebulaId: string): StageState | undefined =>
+    c.stages?.find((s) => s.nebulaId === nebulaId)
+  /** A live stage with listener chat off: only speakers and stage managers post (the server checks too). */
+  const stageChatClosed = (n: { id: string; kind: string } | null): string | null => {
+    const st = n?.kind === 'stage' ? stageOf(n.id) : undefined
+    if (!st || st.listenerChat || can(c, 'manageStages') || st.speakers.some((x) => x.userId === me.id))
+      return null
+    return 'Only speakers can chat here while the stage is live.'
+  }
   // Communities round: this constellation's slash commands (reloaded whenever it changes).
   const [commands, setCommands] = useState<ConstellationCommand[]>([])
   useEffect(() => {
@@ -636,7 +656,10 @@ export default function ConstellationView(props: ConstellationViewProps): React.
   }, [calls.current?.phase, calls.current?.call?.id, startWatchIn])
 
   // The chat of the open nebula, as the chat screen expects it.
-  const chatNebula = nebula && (nebula.kind !== 'voice' || voiceChatOpen) ? nebula : null
+  const chatNebula =
+    nebula && ((nebula.kind !== 'voice' && nebula.kind !== 'stage') || voiceChatOpen)
+      ? nebula
+      : null
   // Communities round: the open thread (text nebulas, on the right) and forum post (in the middle).
   const [openThread, setOpenThread] = useState<{
     thread: ThreadSummary
@@ -689,7 +712,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       ? "You're timed out for now, so you can read but not post."
       : chatNebula.readOnly && !can(c, 'manageNebulas') && !can(c, 'deleteMessages')
         ? 'Only moderators can post here.'
-        : null
+        : // Communities round 2: the verification level (Night watch → Safety)
+          (c.me.verification ?? stageChatClosed(chatNebula))
     return {
       id: chatNebula.conversationId,
       kind: 'group',
@@ -698,7 +722,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
       createdBy: null,
       partnerReadAt: null,
       members: c.members.map((m) => m.user).filter((u) => u.id !== me.id),
-      memberCount: c.members.length,
+      memberCount: c.memberCount ?? c.members.length,
       canMessage: !cantPost,
       lastMessage: null,
       unreadCount: chatNebula.unreadCount,
@@ -711,7 +735,11 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     summary && !summary.canMessage
       ? c.me.timedOutUntil
         ? "You're timed out for now, so you can read but not post."
-        : 'Only moderators can post here.'
+        : chatNebula?.readOnly && !can(c, 'manageNebulas') && !can(c, 'deleteMessages')
+          ? 'Only moderators can post here.'
+          : (c.me.verification ??
+            stageChatClosed(chatNebula) ??
+            'Only moderators can post here.')
       : null
 
   const voiceCards = c.nebulas
@@ -1052,7 +1080,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           </button>
         </div>
         <div className="cx-side-count">
-          {c.members.length} {c.members.length === 1 ? 'member' : 'members'} · {onlineCount} online
+          {(c.memberCount ?? c.members.length).toLocaleString('en-US')}{' '}
+          {(c.memberCount ?? c.members.length) === 1 ? 'member' : 'members'} · {onlineCount} online
         </div>
         {headMenu && (
           <div role="menu" className="cx-menu cx-head-menu">
@@ -1080,6 +1109,19 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             >
               Constellation settings
             </button>
+            {c.watch && (
+              <button
+                type="button"
+                role="menuitem"
+                className="cx-menu-item"
+                onClick={() => {
+                  setHeadMenu(false)
+                  props.onSettings('watch')
+                }}
+              >
+                Night watch{c.watch.open > 0 ? ` · ${c.watch.open}` : ''}
+              </button>
+            )}
             {c.pendingRequests > 0 && (
               <button
                 type="button"
@@ -1258,7 +1300,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               {section.nebulas.map((n) => {
                 const current = nebula?.id === n.id
                 const unread =
-                  n.kind === 'text' &&
+                  (n.kind === 'text' || n.kind === 'announcement') &&
                   !current &&
                   n.unreadCount > 0 &&
                   (n.notify ?? c.me.notify) !== 'none'
@@ -1310,6 +1352,15 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                       {canArrange && <GripDots />}
                       {n.kind === 'text' ? (
                         <StarIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
+                      ) : n.kind === 'stage' || n.kind === 'announcement' ? (
+                        <span
+                          style={{
+                            color: current || stageOf(n.id) ? '#ffb347' : undefined,
+                            display: 'inline-flex'
+                          }}
+                        >
+                          <MegaphoneIcon size={16} />
+                        </span>
                       ) : n.kind === 'forum' ? (
                         <ForumIcon size={16} color={current ? '#ffb347' : 'currentColor'} />
                       ) : (
@@ -1346,8 +1397,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                         </span>
                       ) : n.kind === 'voice' && inIt.length > 0 ? (
                         <InVoiceCount count={inIt.length} />
+                      ) : n.kind === 'stage' && stageOf(n.id) ? (
+                        <span className="cx-neb-live">LIVE</span>
+                      ) : n.kind === 'announcement' &&
+                        (n.followers ?? 0) > 0 &&
+                        can(c, 'manageNebulas') ? (
+                        <span className="cx-neb-follow">{n.followers} follow</span>
                       ) : null}
                     </button>
+                    {n.kind === 'stage' && stageOf(n.id) && (
+                      <div className="cx-neb-stage-line">{stageLine(stageOf(n.id)!)}</div>
+                    )}
                     <VoiceFaces
                       people={inIt}
                       state={v}
@@ -1442,7 +1502,13 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     >
       {/* Oct 17: invite right from here, for anyone who can invite (no trip into Settings). */}
       <div className="cx-members-head">
-        <span>Members · {c.members.filter((m) => !m.user.bot).length}</span>
+        <span>
+          Members ·{' '}
+          {(c.membersPartial && c.memberCount
+            ? c.memberCount
+            : c.members.filter((m) => !m.user.bot).length
+          ).toLocaleString('en-US')}
+        </span>
         {can(c, 'invite') && (
           <button
             type="button"
@@ -1863,6 +1929,8 @@ export default function ConstellationView(props: ConstellationViewProps): React.
           },
           jumpRequest: jump,
           nebula: {
+            // Communities round 2: which constellation's emoji count as "inside"
+            constellationId: c.id,
             name: chatNebula.name,
             sharedWith: chatNebula.sharedWith,
             // 0.7.5: on its milestone cards
@@ -1946,8 +2014,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 />
               )
             },
+            icon:
+              chatNebula.kind === 'announcement' || chatNebula.kind === 'stage' ? (
+                <span style={{ color: '#f47a1f', display: 'inline-flex' }}>
+                  <MegaphoneIcon size={20} />
+                </span>
+              ) : undefined,
             headerExtra: (
               <>
+                {chatNebula.kind === 'announcement' && (
+                  <FollowButton c={c} nebula={chatNebula} onProblem={props.onProblem} />
+                )}
                 {chatNebula.kind === 'text' && (
                   <ThreadsButton
                     constellationId={c.id}
@@ -1994,6 +2071,18 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         campfireHome={nebula.conversationId}
       />
     )
+  } else if (nebula.kind === 'stage' && !voiceChatOpen) {
+    // Communities round 2 (board 3a): a stage nebula.
+    main = (
+      <StageView
+        c={c}
+        nebula={nebula}
+        me={me}
+        people={people}
+        onOpenChat={() => setVoiceChatOpen(true)}
+        onProblem={props.onProblem}
+      />
+    )
   } else if (nebula.kind === 'forum' && chatProps) {
     // Communities round: a forum's posts, or one post (boards 17–18).
     main = openPost ? (
@@ -2031,9 +2120,19 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             className="cx-back-to-voice"
             onClick={() => setVoiceChatOpen(false)}
           >
-            <SpeakerIcon size={16} color="currentColor" />
-            Back to {chatNebula.name}
+            {chatNebula.kind === 'stage' ? (
+              <MegaphoneIcon size={16} />
+            ) : (
+              <SpeakerIcon size={16} color="currentColor" />
+            )}
+            Back to {chatNebula.kind === 'stage' ? 'the stage' : chatNebula.name}
           </button>
+        )}
+        <RaidBanner c={c} onOpen={() => props.onSettings('watch')} />
+        {c.me.raidHold && (
+          <p className="nw-composer-note" role="status">
+            You joined during a busy moment, so your messages wait for a moderator before they show.
+          </p>
         )}
         <ChatView key={summary.id} {...chatProps!} />
         {newSince.info?.nebulaId === chatNebula.id && !voiceChatOpen && (
@@ -2151,7 +2250,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         />
       ) : (
         nebula &&
-        (nebula.kind === 'text' || voiceChatOpen) &&
+        (nebula.kind === 'text' || nebula.kind === 'announcement' || voiceChatOpen) &&
         (openThread && chatProps && nebula.kind === 'text' ? (
           <ThreadPanel
             c={c}
@@ -2229,6 +2328,17 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             busy={busy}
             onConfirm={() => void confirmAction()}
             onCancel={() => setConfirm(null)}
+          />
+        ) : confirm.kind === 'ban' ? (
+          <BanDialog
+            c={c}
+            person={confirm.member!.user}
+            onClose={() => setConfirm(null)}
+            onDone={(d) => {
+              setConfirm(null)
+              props.onChanged(d)
+            }}
+            onProblem={props.onProblem}
           />
         ) : (
           <div

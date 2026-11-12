@@ -1,3 +1,5 @@
+import { emojiIdsFor } from './customEmoji'
+import { useCx } from '@/state/constellations'
 import { create } from 'zustand'
 import type { Attachment, Message, ReplyPreview } from '@glofly/shared'
 import * as api from '@/api/glofly'
@@ -27,6 +29,8 @@ type Outgoing = {
   slow?: boolean
   /** Failed because the connection was down: retried once on reconnect */
   offline?: boolean
+  /** Communities round 2: the custom emoji the text uses */
+  emojis?: string[]
 }
 
 /** How long before a message still on its way says "Sending…". */
@@ -85,7 +89,9 @@ export function sendText(conversationId: string, body: string, reply: Message | 
   // 0.7.5: a light tap as it goes (follows the phone's own vibration setting).
   tap.light()
   putMessage(local)
-  const item: Outgoing = { conversationId, body, replyToId: reply?.id, attachmentIds: attachments.map((a) => a.id), lantern, status: 'sending', clientId: newClientId() }
+  // Communities round 2: which custom emoji its :names: mean (this constellation's first).
+  const emojis = emojiIdsFor(body, useCx.getState().chats[conversationId]?.constellationId ?? null)
+  const item: Outgoing = { conversationId, body, replyToId: reply?.id, attachmentIds: attachments.map((a) => a.id), lantern, status: 'sending', clientId: newClientId(), ...(emojis.length ? { emojis } : {}) }
   setItem(localId, item)
   void deliver(localId, item)
 }
@@ -95,7 +101,7 @@ async function deliver(localId: string, item: Outgoing, attempt = 0) {
     const now = useOutbox.getState().items[localId]
     if (now && now.status === 'sending') setItem(localId, { ...now, slow: true })
   }, SLOW_AFTER_MS)
-  const r = await api.sendMessage(item.conversationId, item.body, item.replyToId, item.attachmentIds, item.lantern, item.clientId)
+  const r = await api.sendMessage(item.conversationId, item.body, item.replyToId, item.attachmentIds, item.lantern, item.clientId, item.emojis)
   clearTimeout(slow)
   const current = useOutbox.getState().items[localId]
   if (!current) return // deleted meanwhile

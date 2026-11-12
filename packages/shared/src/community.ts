@@ -51,8 +51,8 @@ export const DEFAULT_AUTOMOD: AutoModSettings = {
 }
 
 /** What AutoMod did, as the moderation log names it. */
-export type AutoModAction = 'automod_hidden' | 'automod_links' | 'automod_wait'
-export const AUTOMOD_ACTIONS: readonly AutoModAction[] = ['automod_hidden', 'automod_links', 'automod_wait']
+export type AutoModAction = 'automod_hidden' | 'automod_links' | 'automod_wait' | 'automod_mentions' | 'automod_raid'
+export const AUTOMOD_ACTIONS: readonly AutoModAction[] = ['automod_hidden', 'automod_links', 'automod_wait', 'automod_mentions', 'automod_raid']
 
 /** Look-alike characters people use to sneak words past a filter ("fr33 n1tro"). */
 const LEET: Record<string, string> = {

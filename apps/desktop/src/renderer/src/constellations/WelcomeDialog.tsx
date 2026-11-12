@@ -172,7 +172,8 @@ export default function WelcomeDialog({
                   Welcome to {c.name}, {firstName(me)}!
                 </h2>
                 <div className="cx-welcome-line">
-                  {c.members.length} {c.members.length === 1 ? 'member' : 'members'} ·{' '}
+                  {(c.memberCount ?? c.members.length).toLocaleString('en-US')}{' '}
+                  {(c.memberCount ?? c.members.length) === 1 ? 'member' : 'members'} ·{' '}
                   <span className="cx-welcome-online">{online} online now</span>
                   {owner ? ` · made by ${firstName(owner)}` : ''}
                 </div>
@@ -194,7 +195,7 @@ export default function WelcomeDialog({
                     ))}
                   </span>
                   {friends.length === 0
-                    ? `${c.members.length - 1} ${c.members.length - 1 === 1 ? 'person is' : 'people are'} here`
+                    ? `${((c.memberCount ?? c.members.length) - 1).toLocaleString('en-US')} ${(c.memberCount ?? c.members.length) - 1 === 1 ? 'person is' : 'people are'} here`
                     : friends.length === 1
                       ? `${firstName(friends[0])} (your friend) is here`
                       : friends.length === 2

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Linking, Pressable, ScrollView, View } from 'react-native'
-import { router, useLocalSearchParams } from 'expo-router'
+import { router, useLocalSearchParams, type Href } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { LinearTransition, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import { NICKNAME_MAX, STATUS_LABEL, activityLine, mobileLabel, onMobile, playing, siteName, type Profile } from '@glofly/shared'
@@ -29,7 +29,7 @@ import { ActivityFeed, BoardTiles, MutualsList, ProfileHeaderImage } from '@/pro
 // Message / Voice / Video, About me, when they joined, and Remove friend / Block / Report.
 
 export default function ProfileCard() {
-  const { id, invite } = useLocalSearchParams<{ id: string; invite?: string }>()
+  const { id, invite, watch } = useLocalSearchParams<{ id: string; invite?: string; watch?: string }>()
   // 0.7.1: a constellation invite's notification (glofly://profile/<inviter>?invite=<id>, so every
   // phone build can open it) goes to your Constellations dashboard, where the invite waits.
   useEffect(() => {
@@ -38,6 +38,13 @@ export default function ProfileCard() {
     else router.replace('/chats')
     setTimeout(() => flyIn(null), 80)
   }, [invite])
+  // Communities round 2: a Night watch alert (raid, appeal) opens that constellation's Night watch.
+  useEffect(() => {
+    if (!watch || !/^[0-9a-f-]{36}$/i.test(watch) || !cxAvailable()) return
+    if (router.canGoBack()) router.back()
+    else router.replace('/chats')
+    setTimeout(() => flyIn(null, [`/constellations/${watch}`, `/constellations/${watch}/settings/watch`] as Href[]), 80)
+  }, [watch])
   const { c } = useTheme()
   // A restricted (family-managed) account: their family removes friends.
   const meRestricted = useSession((s) => s.user?.restricted === true)

@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { dropFromStages } from "../stages/state";
 import { CONSTELLATION_MEMBERS_MAX, CONSTELLATIONS_JOINED_MAX } from "@glofly/shared";
 import { db } from "../db";
 import type { Tx } from "../messages/routes";
@@ -99,6 +100,8 @@ export async function removeMember(constellationId: string, userId: string): Pro
   if (removed === null) return false;
   await removeFiles(removed);
   for (const id of chatIds) await removeFromChatCall(id, userId);
+  // Communities round 2: off any live stage too.
+  await dropFromStages(constellationId, userId);
   fireConstellationEvent(constellationId, "member.left", userId);
   toolHook("onLeave", constellationId, userId);
   await constellationChanged(constellationId, [userId]);

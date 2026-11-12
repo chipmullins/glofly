@@ -73,6 +73,8 @@ export type EmojiInfo = {
   words: string[]
   /** The five skin-tone versions, if it has them */
   skins: string[] | null
+  /** Communities round 2: a constellation's custom emoji (`emoji` is ":name:#id") */
+  custom?: { id: string; name: string }
 }
 
 export type EmojiCategory = {

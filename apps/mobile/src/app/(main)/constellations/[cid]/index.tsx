@@ -22,6 +22,7 @@ import { NebulaChat } from '@/constellations/NebulaChat'
 import { WelcomeSheet } from '@/constellations/community'
 import { OnboardingSheet } from '@/constellations/Onboarding'
 import { MemberList, openMemberSheet } from '@/constellations/Members'
+import { StageLobby } from '@/constellations/Stage'
 import { VoiceLobby, VoiceStage } from '@/constellations/Voice'
 import { openDmDock } from '@/constellations/dock'
 import { flyHome } from '@/constellations/transition'
@@ -249,6 +250,8 @@ function WideLayout({ c, nebulaParam, onAdd, sheet, closeSheet }: { c: Constella
             ) : (
               <VoiceLobby key={n.id} c={c} n={n} />
             )
+          ) : n.kind === 'stage' ? (
+            <StageLobby key={n.id} c={c} n={n} />
           ) : (
             <NebulaChat key={n.id} c={c} n={n} wide={{ membersShown, toggleMembers: () => setMembersShown((v) => !v) }} />
           )

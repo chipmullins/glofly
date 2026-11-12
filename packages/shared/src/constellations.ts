@@ -15,8 +15,16 @@ export const NEBULA_NAME_MAX = 32
 export const NEBULA_TOPIC_MAX = 120
 export const CATEGORY_NAME_MAX = 32
 export const ROLE_NAME_MAX = 24
-/** People in one constellation */
-export const CONSTELLATION_MEMBERS_MAX = 250
+/** People in one constellation (communities round 2: 25,000, was 250) */
+export const CONSTELLATION_MEMBERS_MAX = 25_000
+/**
+ * Communities round 2: above this many members a constellation is "big": its detail lists only staff
+ * and people online (members load page by page, search finds anyone), and presence changes only go
+ * to people looking at the member list.
+ */
+export const BIG_CONSTELLATION_MEMBERS = 1000
+/** Communities round 2: one page of the member list */
+export const MEMBERS_PAGE = 100
 /** Nebulas (text + voice) in one constellation */
 export const NEBULAS_MAX = 50
 export const CATEGORIES_MAX = 20
@@ -227,6 +235,8 @@ export type ConstellationPermission =
   | 'manageConstellation'
   | 'events'
   | 'mentionEveryone'
+  | 'manageEmoji'
+  | 'manageStages'
   | 'runGames'
 
 export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; what: string | null }[] = [
@@ -244,6 +254,9 @@ export const PERMISSIONS: readonly { id: ConstellationPermission; name: string; 
   // Communities round 4.2 (approved board 24): off for Members by default. Without it, @everyone
   // is plain text (the server checks every mention).
   { id: 'mentionEveryone', name: 'Mention @everyone, @here and all roles', what: 'Without it, @everyone is plain text' },
+  // Communities round 2 (Nov 2026): Admins get both; Moderators get Manage stages.
+  { id: 'manageEmoji', name: 'Manage emoji & stickers', what: 'Add, rename and remove the constellation’s own' },
+  { id: 'manageStages', name: 'Manage stages', what: 'Start and end stages, invite people up to speak, move speakers to the audience' },
   // Campfire (Nov 2026): create tabletop campaigns and be a game master in any of them. Owner and
   // Admins have it (Admin gets every permission); apps that don't know Campfire leave it as it was.
   { id: 'runGames', name: 'Run Campfire games', what: 'Create tabletop campaigns and be a game master in any' },
@@ -269,7 +282,7 @@ export const DEFAULT_ROLES: readonly { kind: 'admin' | 'moderator' | 'member'; n
     kind: 'moderator',
     name: 'Moderator',
     color: 'violet',
-    permissions: ['deleteMessages', 'timeoutKick', 'muteVoice', 'invite', 'approveRequests', 'events', 'mentionEveryone'],
+    permissions: ['deleteMessages', 'timeoutKick', 'muteVoice', 'invite', 'approveRequests', 'events', 'mentionEveryone', 'manageStages'],
   },
   { kind: 'member', name: 'Member', color: 'gray', permissions: ['invite', 'events'] },
 ]
@@ -431,10 +444,16 @@ export function canSeeNebula(
 /** A nebula's name as people type it: "#valorant" for text, "Campfire" for voice. */
 export const nebulaLabel = (n: { kind: NebulaKind; name: string }): string => (n.kind !== 'voice' ? `#${n.name}` : n.name)
 
+/** Kinds that hold people talking (a room), not a timeline of messages first. */
+export const isTalkKind = (kind: NebulaKind): boolean => kind === 'voice' || kind === 'stage'
+
 // ───────────── What the API sends ─────────────
 
-/** Communities round: 'forum' (posts with titles and tags). Older apps are sent forums as read-only text. */
-export type NebulaKind = 'text' | 'voice' | 'forum'
+/**
+ * Communities round: 'forum' (posts with titles and tags). Older apps are sent forums as read-only text.
+ * Communities round 2: 'stage' and 'announcement' (stages.ts); older apps get them as read-only text.
+ */
+export type NebulaKind = 'text' | 'voice' | 'forum' | 'stage' | 'announcement'
 
 /** Who's in a voice nebula right now. */
 export type VoiceNebulaState = {
@@ -594,6 +613,10 @@ export type Nebula = {
   forum?: import('./threads').ForumSettings
   /** Your followed threads here that are still open (the sidebar list under the nebula) */
   threads?: import('./threads').ThreadSummary[]
+  /** Communities round 2: an announcement nebula's follower count (constellations, not people) */
+  followers?: number
+  /** Communities round 2: a stage's speaker limit (stage nebulas) */
+  stageSpeakerLimit?: number
 }
 
 /** 0.7.5 living sky: one star per nebula, in sidebar order (dashboard cards). */
@@ -663,6 +686,12 @@ export type ConstellationDetail = {
   roles: ConstellationRole[]
   members: ConstellationMember[]
   voice: VoiceNebulaState[]
+  /** Communities round 2: live stages (missing from older servers) */
+  stages?: import('./stages').StageState[]
+  /** Communities round 2: everyone in it (members may be only staff + online in big ones) */
+  memberCount?: number
+  /** Communities round 2: true when `members` isn't everyone (big constellations): load the rest page by page */
+  membersPartial?: boolean
   /** What you can do here */
   me: {
     owner: boolean
@@ -677,7 +706,13 @@ export type ConstellationDetail = {
     onboarding?: MyOnboarding
     /** 0.9.3: pinned to my desktop sidebar */
     sidebarPinned?: boolean
+    /** Communities round 2: why I can't chat yet (the verification level), null = I can */
+    verification?: string | null
+    /** Communities round 2: I joined during a raid; my messages wait for a moderator */
+    raidHold?: boolean
   }
+  /** Communities round 2: Night watch for moderators (null for everyone else) */
+  watch?: { open: number; pausedUntil: string | null } | null
   /** Communities round 4.3: the questions (null/missing = none) */
   onboarding?: OnboardingSettings | null
   /** Communities round 4.3: optional nebulas I don't see yet (Browse nebulas) */
@@ -947,7 +982,50 @@ export const CONSTELLATION_EVENT_NAMES = [
   // 0.9.3 Connections: Steam/Twitch/Kick linked or changed; a friend live on Twitch or Kick
   'connections:changed',
   'friend:live',
+  // Communities round 2: Night watch
+  'nightwatch:changed',
+  'constellation:raid',
+  'constellation:appeal',
+  'emoji:changed',
+  // Communities round 2: stages
+  'stage:updated',
+  'stage:invited',
+  'stage:moved',
 ] as const
+
+/** A live stage from the server, checked (null if it doesn't look right). */
+export function cleanStage(x: unknown): import('./stages').StageState | null {
+  const t = (x ?? {}) as Record<string, unknown>
+  if (!str(t.id) || !str(t.nebulaId) || !str(t.startedBy)) return null
+  const n = (v: unknown, max: number) => (typeof v === 'number' && v >= 0 ? Math.min(Math.floor(v), max) : 0)
+  const speakers = (Array.isArray(t.speakers) ? t.speakers : [])
+    .map((v) => (v ?? {}) as Record<string, unknown>)
+    .filter((v) => str(v.userId))
+    .slice(0, 60)
+    .map((v) => ({ userId: v.userId as string, host: v.host === true, invited: v.invited === true }))
+  const hands = Array.isArray(t.hands)
+    ? t.hands
+        .map((v) => (v ?? {}) as Record<string, unknown>)
+        .filter((v) => str(v.userId))
+        .slice(0, 100)
+        .map((v) => ({ userId: v.userId as string, at: text(v.at, 40) }))
+    : undefined
+  return {
+    nebulaId: t.nebulaId,
+    id: t.id,
+    topic: text(t.topic, 80),
+    startedBy: t.startedBy,
+    startedAt: text(t.startedAt, 40),
+    handsOn: t.handsOn !== false,
+    listenerChat: t.listenerChat === true,
+    speakerLimit: n(t.speakerLimit, 50) || 25,
+    speakers,
+    listenerCount: n(t.listenerCount, 1_000_000),
+    listeners: strList(t.listeners).slice(0, 24),
+    ...(hands ? { hands } : {}),
+    handCount: n(t.handCount, 1_000_000),
+  }
+}
 
 /** A thread summary from the server, checked (null if it doesn't look right). */
 function cleanThread(x: unknown): import('./threads').ThreadSummary | null {
@@ -1017,8 +1095,44 @@ export function cleanConstellationEvent(name: string, payload: unknown): ServerE
     case 'constellation:removed': {
       if (!str(p.constellationId)) return null
       const reason = p.reason === 'kicked' || p.reason === 'banned' || p.reason === 'taken_down' ? p.reason : 'deleted'
-      return { type: 'constellation:removed', constellationId: p.constellationId, reason }
+      return {
+        type: 'constellation:removed',
+        constellationId: p.constellationId,
+        reason,
+        ...(reason === 'banned' && typeof p.banReason === 'string' ? { banReason: text(p.banReason, 200) } : {}),
+      }
     }
+    case 'stage:updated': {
+      if (!str(p.constellationId) || !str(p.nebulaId)) return null
+      const stage = p.stage === null ? null : cleanStage(p.stage)
+      if (p.stage !== null && !stage) return null
+      return { type: 'stage:updated', constellationId: p.constellationId, nebulaId: p.nebulaId, stage }
+    }
+    case 'stage:invited':
+      return str(p.constellationId) && str(p.nebulaId)
+        ? { type: 'stage:invited', constellationId: p.constellationId, nebulaId: p.nebulaId, byName: text(p.byName, 64), invited: p.invited !== false }
+        : null
+    case 'stage:moved':
+      return str(p.constellationId) && str(p.nebulaId) ? { type: 'stage:moved', constellationId: p.constellationId, nebulaId: p.nebulaId } : null
+    case 'emoji:changed':
+      return str(p.constellationId) ? { type: 'emoji:changed', constellationId: p.constellationId } : null
+    case 'nightwatch:changed':
+      return str(p.constellationId) ? { type: 'nightwatch:changed', constellationId: p.constellationId } : null
+    case 'constellation:raid':
+      return str(p.constellationId) && typeof p.pausedUntil === 'string'
+        ? {
+            type: 'constellation:raid',
+            constellationId: p.constellationId,
+            pausedUntil: text(p.pausedUntil, 40),
+            joins: typeof p.joins === 'number' ? p.joins : 0,
+            newAccounts: typeof p.newAccounts === 'number' ? p.newAccounts : 0,
+            seconds: typeof p.seconds === 'number' ? p.seconds : 60,
+          }
+        : null
+    case 'constellation:appeal':
+      return str(p.constellationId) && (p.decision === 'accept' || p.decision === 'deny')
+        ? { type: 'constellation:appeal', constellationId: p.constellationId, decision: p.decision }
+        : null
     case 'constellation:activity':
       return str(p.constellationId) && str(p.nebulaId) && str(p.conversationId) && str(p.senderId)
         ? {

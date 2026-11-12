@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { AppealsPage, ModLogPage, NightWatchPage, SafetyPage } from './NightWatch'
+import EmojiSettings from './EmojiSettings'
+import DiscordBridgePage from './DiscordBridgePage'
 import { OnboardingSetup } from './Onboarding'
 import {
   CloseDaysField,
@@ -35,7 +38,6 @@ import type {
   ConstellationDetail,
   ConstellationLink,
   JoinRequest,
-  ModerationEntry,
   PublicUser,
   SignedInUser
 } from '../../../preload/api-types'
@@ -51,6 +53,8 @@ import AutoModPage from './AutoModPage'
 import IntegrationsPage from './IntegrationsPage'
 import WhoCanSee, { LockIcon, gateLabel } from './RoleVisibility'
 import type { NebulaVisibility } from '@glofly/shared/constellations'
+import { STAGE_SPEAKER_CHOICES } from '@glofly/shared/stages'
+import { FollowersList, FollowingList } from './Follow'
 import './Settings2.css'
 
 // Constellation settings (Roles.dc.html, approved): a left menu (Overview, Nebulas & categories,
@@ -82,72 +86,6 @@ function Face({ person, size = 32 }: { person: PublicUser; size?: number }): Rea
   )
 }
 
-const ACTION_WORDS: Record<string, string> = {
-  joined: 'joined',
-  left: 'left',
-  kicked: 'kicked',
-  banned: 'banned',
-  unbanned: 'unbanned',
-  timed_out: 'timed out',
-  timeout_removed: 'ended the time-out of',
-  message_deleted: 'deleted a message by',
-  roles_changed: 'changed the roles of',
-  role_created: 'created a role',
-  role_changed: 'changed a role',
-  onboarding_changed: 'changed onboarding',
-  role_deleted: 'deleted a role',
-  nebula_deleted: 'deleted a nebula',
-  category_deleted: 'deleted a category',
-  voice_muted: 'muted in voice',
-  voice_unmuted: 'unmuted in voice',
-  voice_disconnected: 'disconnected from voice',
-  visibility_changed: 'changed who can join',
-  request_approved: 'let in',
-  request_denied: 'turned down',
-  ownership_transferred: 'gave ownership to',
-  // 0.8.0 AutoMod (the actor is AutoMod itself: "Glofly")
-  automod_hidden: 'held a message by',
-  automod_links: 'held links by',
-  automod_wait: 'asked a new member to wait:',
-  automod_undo: 'undid AutoMod for',
-  automod_changed: 'changed AutoMod',
-  event_cancelled: 'cancelled an event by'
-}
-
-function moderationLine(e: ModerationEntry, meId: string): string {
-  const who = (u: PublicUser | null): string =>
-    u ? (u.id === meId ? 'you' : u.displayName) : 'someone'
-  const actor = e.actor
-    ? e.actor.id === meId
-      ? 'You'
-      : e.actor.displayName
-    : e.action.startsWith('automod_')
-      ? 'AutoMod'
-      : 'Glofly'
-  const verb = ACTION_WORDS[e.action] ?? e.action.replace(/_/g, ' ')
-  const d = e.details ?? {}
-  const extra =
-    e.action === 'timed_out' && typeof d.length === 'string'
-      ? ` for ${d.length}`
-      : (e.action.startsWith('role_') ||
-            e.action === 'nebula_deleted' ||
-            e.action === 'category_deleted') &&
-          typeof d.name === 'string'
-        ? ` “${d.name}”`
-        : e.action.startsWith('voice_') && typeof d.nebula === 'string'
-          ? ` in ${d.nebula}`
-          : e.action === 'message_deleted' && typeof d.excerpt === 'string' && d.excerpt
-            ? `: “${d.excerpt}”`
-            : ''
-  const target =
-    e.action === 'joined' || e.action === 'left' || !e.target ? '' : ` ${who(e.target)}`
-  const why =
-    typeof d.reason === 'string' && d.reason && d.reason !== 'account_removed'
-      ? ` · ${d.reason}`
-      : ''
-  return `${actor} ${verb}${target}${extra}${why}`
-}
-
 export default function ConstellationSettings({
   me,
   detail: c,
@@ -168,7 +106,10 @@ export default function ConstellationSettings({
   onDeleted: () => void
   onProblem: (message: string) => void
 }): React.JSX.Element {
-  const [page, setPage] = useState<SettingsPageName>(initialPage)
+  // Communities round 2: the old Moderation page is the mod log now.
+  const [page, setPage] = useState<SettingsPageName>(
+    initialPage === 'moderation' ? 'modlog' : initialPage
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -206,27 +147,54 @@ export default function ConstellationSettings({
     'manageRoles',
     'manageConstellation'
   ].some((p) => can(c, p as ConstellationPermission))
-  const pages: { id: SettingsPageName; name: string; show: boolean }[] = [
+  // Communities round 2 (board 1a): the "Night watch" group (Dashboard, Mod log, Appeals, Safety,
+  // AutoMod) and "Extras".
+  const pages: {
+    id: SettingsPageName
+    name: string
+    show: boolean
+    group?: string
+    isNew?: boolean
+  }[] = [
     { id: 'overview', name: 'Overview', show: true },
     { id: 'nebulas', name: 'Nebulas & categories', show: true },
     { id: 'roles', name: 'Roles', show: true },
     { id: 'members', name: 'Members', show: true },
     { id: 'invites', name: 'Invites', show: true },
+    // Communities round 4.3: questions new members answer (board 25).
+    {
+      id: 'onboarding',
+      name: 'Onboarding',
+      show: can(c, 'manageConstellation') && can(c, 'manageNebulas')
+    },
+    { id: 'watch', name: 'Dashboard', show: modViewer, group: 'Night watch', isNew: true },
+    { id: 'modlog', name: 'Mod log', show: modViewer, isNew: true },
+    { id: 'appeals', name: 'Appeals', show: can(c, 'ban'), isNew: true },
+    { id: 'safety', name: 'Safety', show: modViewer, isNew: true },
     {
       id: 'automod',
       name: 'AutoMod',
       show: can(c, 'manageConstellation') || can(c, 'deleteMessages')
     },
-    { id: 'moderation', name: 'Moderation', show: modViewer },
-    // Communities round 4.3: questions new members answer (board 25).
-    { id: 'onboarding', name: 'Onboarding', show: can(c, 'manageConstellation') && can(c, 'manageNebulas') },
+    // Communities round 2 (board 2a): emoji + stickers (everyone sees them; managers change them).
+    { id: 'emoji', name: 'Emoji & stickers', show: true, group: 'Extras', isNew: true },
     // Communities round (Nov 2026): API keys, webhooks, bots (Owner / Edit constellation settings).
-    { id: 'integrations', name: 'Integrations', show: can(c, 'manageConstellation') },
+    {
+      id: 'integrations',
+      name: 'Integrations',
+      show: can(c, 'manageConstellation')
+    },
+    // Communities round 2 (board 5a): the Discord ↔ Glofly bridge.
+    { id: 'discord', name: 'Discord bridge', show: can(c, 'manageConstellation'), group: 'Extras', isNew: true },
     // 0.9.3: Twitch, Kick and YouTube alerts (board 4).
     { id: 'liveAlerts', name: 'Live alerts', show: can(c, 'manageConstellation') }
   ]
   const title =
-    page === 'delete' ? 'Delete constellation' : (pages.find((p) => p.id === page)?.name ?? '')
+    page === 'delete'
+      ? 'Delete constellation'
+      : page === 'watch'
+        ? 'Night watch'
+        : (pages.find((p) => p.id === page)?.name ?? '')
 
   return (
     <div
@@ -259,19 +227,24 @@ export default function ConstellationSettings({
           {pages
             .filter((p) => p.show)
             .map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="cx-settings-tab"
-                aria-current={page === p.id ? 'page' : undefined}
-                onClick={() => setPage(p.id)}
-              >
-                {p.name}
-                {p.id === 'liveAlerts' && <span className="cx-settings-new">NEW</span>}
-                {p.id === 'members' && c.pendingRequests > 0 && (
-                  <span className="cx-settings-count">{c.pendingRequests}</span>
-                )}
-              </button>
+              <Fragment key={p.id}>
+                {p.group && <span className="cx-settings-group-name">{p.group}</span>}
+                <button
+                  type="button"
+                  className="cx-settings-tab"
+                  aria-current={page === p.id ? 'page' : undefined}
+                  onClick={() => setPage(p.id)}
+                >
+                  {p.name}
+                  {p.isNew && <span className="cx-settings-new">NEW</span>}
+                  {p.id === 'watch' && (c.watch?.open ?? 0) > 0 && (
+                    <span className="cx-settings-count">{c.watch!.open}</span>
+                  )}
+                  {p.id === 'members' && c.pendingRequests > 0 && (
+                    <span className="cx-settings-count">{c.pendingRequests}</span>
+                  )}
+                </button>
+              </Fragment>
             ))}
           <span style={{ flex: 1 }} />
           {c.me.owner && (
@@ -328,10 +301,19 @@ export default function ConstellationSettings({
           )}
           {page === 'invites' && <InvitesPage c={c} friends={friends} onProblem={onProblem} />}
           {page === 'automod' && <AutoModPage c={c} meId={me.id} onProblem={onProblem} />}
-          {page === 'moderation' && <ModerationPage c={c} me={me} />}
+          {page === 'watch' && (
+            <NightWatchPage c={c} meId={me.id} onOpen={setPage} onProblem={onProblem} />
+          )}
+          {page === 'modlog' && <ModLogPage c={c} meId={me.id} onProblem={onProblem} />}
+          {page === 'appeals' && <AppealsPage c={c} onProblem={onProblem} />}
+          {page === 'safety' && <SafetyPage c={c} onProblem={onProblem} />}
+          {page === 'emoji' && <EmojiSettings c={c} onProblem={onProblem} />}
           {page === 'integrations' && <IntegrationsPage c={c} onProblem={onProblem} />}
           {page === 'liveAlerts' && <LiveAlertsPage c={c} onProblem={onProblem} />}
-          {page === 'onboarding' && <OnboardingSetup c={c} onChanged={onChanged} onProblem={onProblem} />}
+          {page === 'discord' && <DiscordBridgePage c={c} onProblem={onProblem} />}
+          {page === 'onboarding' && (
+            <OnboardingSetup c={c} onChanged={onChanged} onProblem={onProblem} />
+          )}
           {page === 'delete' && <DeletePage c={c} onDeleted={onDeleted} />}
         </div>
       </div>
@@ -560,7 +542,9 @@ function Overview({
 function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
   const editable = can(c, 'manageNebulas')
   const [newName, setNewName] = useState('')
-  const [newKind, setNewKind] = useState<'text' | 'voice' | 'forum'>('text')
+  const [newKind, setNewKind] = useState<'text' | 'voice' | 'forum' | 'stage' | 'announcement'>(
+    'text'
+  )
   const [newCategory, setNewCategory] = useState<string>(c.categories[0]?.id ?? '')
   const [catName, setCatName] = useState('')
   /** 0.7.1: "+ New category" picked in the new nebula's Category list: its name, typed in place */
@@ -576,7 +560,9 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
     threadsStaffOnly: boolean
     threadCloseDays: number
     forum: ForumDraft | null
+    stageSpeakerLimit: number
   }>({
+    stageSpeakerLimit: 25,
     threadsStaffOnly: false,
     threadCloseDays: 7,
     forum: null,
@@ -676,6 +662,24 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                 >
                   Voice
                 </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={newKind === 'stage'}
+                  title="Town halls, Q&As and events: speakers talk, everyone else listens"
+                  onClick={() => setNewKind('stage')}
+                >
+                  Stage
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={newKind === 'announcement'}
+                  title="Only staff post; other constellations can follow it"
+                  onClick={() => setNewKind('announcement')}
+                >
+                  Announcements
+                </button>
               </div>
             </div>
             <label className="cx-field" style={{ minWidth: 180 }}>
@@ -684,7 +688,15 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                 type="text"
                 value={newName}
                 maxLength={NEBULA_NAME_MAX}
-                placeholder={newKind === 'text' ? 'looking-for-group' : 'Campfire'}
+                placeholder={
+                  newKind === 'voice'
+                    ? 'Campfire'
+                    : newKind === 'stage'
+                      ? 'town-hall'
+                      : newKind === 'announcement'
+                        ? 'announcements'
+                        : 'looking-for-group'
+                }
                 onChange={(e) => setNewName(e.target.value)}
               />
             </label>
@@ -861,6 +873,9 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                                 threadCloseDays: draft.threadCloseDays
                               }
                             : {}),
+                          ...(n.kind === 'stage'
+                            ? { stageSpeakerLimit: draft.stageSpeakerLimit }
+                            : {}),
                           ...(n.kind === 'forum' && draft.forum
                             ? {
                                 threadCloseDays: draft.threadCloseDays,
@@ -936,6 +951,27 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                         />
                       </>
                     )}
+                    {n.kind === 'stage' && (
+                      <label className="cx-field">
+                        <span>Speaker limit (each stage starts with it)</span>
+                        <select
+                          value={draft.stageSpeakerLimit}
+                          onChange={(e) =>
+                            setDraft({ ...draft, stageSpeakerLimit: Number(e.target.value) })
+                          }
+                        >
+                          {STAGE_SPEAKER_CHOICES.map((x) => (
+                            <option key={x} value={x}>
+                              {x}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {n.kind === 'announcement' && <FollowersList c={c} nebula={n} />}
+                    {(n.kind === 'text' || n.kind === 'announcement') && (
+                      <FollowingList c={c} nebula={n} />
+                    )}
                     <WhoCanSee
                       c={c}
                       what="nebula"
@@ -961,18 +997,28 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                 ) : (
                   <>
                     <span className="cx-settings-item-kind" aria-hidden="true">
-                      {n.kind === 'text' ? '✦' : n.kind === 'forum' ? '💬' : '🔊'}
+                      {n.kind === 'text'
+                        ? '✦'
+                        : n.kind === 'forum'
+                          ? '💬'
+                          : n.kind === 'stage' || n.kind === 'announcement'
+                            ? '📣'
+                            : '🔊'}
                     </span>
                     <span className="cx-settings-item-text">
                       <strong>{n.name}</strong>
                       <span>
                         {n.kind === 'voice'
                           ? 'Voice nebula'
-                          : n.kind === 'forum'
-                            ? 'Star chart'
-                            : n.readOnly
-                              ? 'Announcements'
-                              : 'Text nebula'}
+                          : n.kind === 'stage'
+                            ? 'Stage'
+                            : n.kind === 'announcement'
+                              ? `Announcements${n.followers ? ` · ${n.followers} following` : ''}`
+                              : n.kind === 'forum'
+                                ? 'Star chart'
+                                : n.readOnly
+                                  ? 'Announcements'
+                                  : 'Text nebula'}
                         {n.topic ? ` · ${n.topic}` : ''}
                       </span>
                     </span>
@@ -997,7 +1043,8 @@ function NebulasPage({ c, busy, run }: PageProps): React.JSX.Element {
                               roleIds: n.roleIds ?? [],
                               threadsStaffOnly: n.threadsStaffOnly ?? false,
                               threadCloseDays: n.threadCloseDays ?? 7,
-                              forum: n.kind === 'forum' ? forumDraftOf(n) : null
+                              forum: n.kind === 'forum' ? forumDraftOf(n) : null,
+                              stageSpeakerLimit: n.stageSpeakerLimit ?? 25
                             })
                           }}
                         >
@@ -1524,7 +1571,7 @@ function MembersPage({
         />
       </label>
       <section className="cx-settings-group">
-        <h2>Members · {c.members.length}</h2>
+        <h2>Members · {(c.memberCount ?? c.members.length).toLocaleString('en-US')}</h2>
         {shown.map((m) => {
           const role = topRole(c, m.user.id)
           const theirRoles = c.roles
@@ -1871,85 +1918,6 @@ function InvitesPage({
         ))}
         {links && links.length === 0 && (
           <p className="cx-settings-text">No working links. Make one to share anywhere.</p>
-        )}
-      </section>
-    </div>
-  )
-}
-
-function ModerationPage({
-  c,
-  me
-}: {
-  c: ConstellationDetail
-  me: SignedInUser
-}): React.JSX.Element {
-  const [entries, setEntries] = useState<ModerationEntry[] | null>(null)
-  const [hasMore, setHasMore] = useState(false)
-  useEffect(() => {
-    void api.moderation(c.id).then((r) => {
-      if (r.ok) {
-        setEntries(r.data.entries)
-        setHasMore(r.data.hasMore)
-      }
-    })
-  }, [c.id])
-  const timedOut = c.members.filter((m) => m.timedOutUntil)
-  return (
-    <div className="cx-settings-body">
-      {timedOut.length > 0 && (
-        <section className="cx-settings-group">
-          <h2>Timed out now · {timedOut.length}</h2>
-          {timedOut.map((m) => (
-            <div key={m.user.id} className="cx-settings-item">
-              <Face person={m.user} />
-              <span className="cx-settings-item-text">
-                <strong>{m.user.displayName}</strong>
-                <span>
-                  Until{' '}
-                  {new Date(m.timedOutUntil!).toLocaleString(undefined, {
-                    weekday: 'short',
-                    hour: 'numeric',
-                    minute: '2-digit'
-                  })}
-                </span>
-              </span>
-            </div>
-          ))}
-        </section>
-      )}
-      <section className="cx-settings-group">
-        <h2>What happened</h2>
-        {entries === null && <p className="cx-settings-text">Loading…</p>}
-        {entries?.length === 0 && <p className="cx-settings-text">Nothing yet.</p>}
-        {entries?.map((e) => (
-          <div key={e.id} className="cx-mod-line">
-            <span className="cx-mod-when">
-              {new Date(e.createdAt).toLocaleString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit'
-              })}
-            </span>
-            <span>{moderationLine(e, me.id)}</span>
-          </div>
-        ))}
-        {hasMore && entries && (
-          <button
-            type="button"
-            className="cx-button"
-            style={{ alignSelf: 'flex-start' }}
-            onClick={async () => {
-              const r = await api.moderation(c.id, entries[entries.length - 1].createdAt)
-              if (r.ok) {
-                setEntries([...entries, ...r.data.entries])
-                setHasMore(r.data.hasMore)
-              }
-            }}
-          >
-            Show older
-          </button>
         )}
       </section>
     </div>

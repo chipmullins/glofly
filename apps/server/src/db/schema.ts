@@ -26,6 +26,9 @@ import type {
   CombatState,
   FogState,
   ForwardedFrom,
+  BridgedFrom,
+  Crosspost,
+  DiscordBridgeSettings,
   GridSettings,
   LiveCard,
   MusicState,
@@ -435,6 +438,12 @@ export const messages = pgTable(
     forwarded: jsonb("forwarded").$type<ForwardedFrom>(),
     // 0.9.3: a constellation's Live alert (the body + link preview are what older apps show)
     liveCard: jsonb("live_card").$type<LiveCard>(),
+    // Communities round 2: the custom emoji its text and reactions use (`:name:` → picture).
+    emojis: jsonb("emojis").$type<{ id: string; name: string; animated: boolean }[]>(),
+    // Communities round 2: a copy of a followed announcement (forwarded is set too, for older apps).
+    crosspost: jsonb("crosspost").$type<Crosspost>(),
+    // Communities round 2: copied from Discord by the bridge (the body starts "name: " for older apps).
+    bridged: jsonb("bridged").$type<BridgedFrom>(),
     // Campfire: a `/roll` in a chat (the body is the plain text older apps show)
     roll: jsonb("roll").$type<ChatRoll>(),
     // Communities round (Nov 2026): a reply in a thread or forum post (nebulas only). Thread
@@ -1085,7 +1094,7 @@ export const friendLinkUses = pgTable(
 
 export const constellationVisibility = pgEnum("constellation_visibility", ["invite", "public", "approval"]);
 // Communities round (Nov 2026): "forum" (posts with titles and tags; each post is a thread).
-export const nebulaKind = pgEnum("nebula_kind", ["text", "voice", "forum"]);
+export const nebulaKind = pgEnum("nebula_kind", ["text", "voice", "forum", "stage", "announcement"]);
 export const constellationRoleKind = pgEnum("constellation_role_kind", ["admin", "moderator", "member", "custom"]);
 
 export const constellations = pgTable(
@@ -1134,6 +1143,12 @@ export const constellations = pgTable(
     celebratedYears: integer("celebrated_years").notNull().default(0),
     // 0.9.3: owners can stop members forwarding its messages to other chats.
     forwardingOff: boolean("forwarding_off").notNull().default(false),
+    // Communities round 2 (Night watch, board 1d): @glofly/shared SafetySettings (null = the
+    // defaults: raid protection and the mention cap on, verification off), and the raid state:
+    // joins paused until then, and when the last raid was noticed.
+    safety: jsonb("safety"),
+    joinsPausedUntil: timestamp("joins_paused_until", { withTimezone: true }),
+    raidAt: timestamp("raid_at", { withTimezone: true }),
   },
   (t) => [
     index("constellations_owner_idx").on(t.ownerId),
@@ -1206,6 +1221,8 @@ export const constellationMembers = pgTable(
     onboardingAnswers: jsonb("onboarding_answers").$type<Record<string, string[]>>().notNull().default({}),
     onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
     shownNebulas: uuid("shown_nebulas").array().notNull().default(sql`'{}'::uuid[]`),
+    // Communities round 2: joined during a raid; their messages wait for a moderator (raidHold).
+    raidHold: boolean("raid_hold").notNull().default(false),
   },
   (t) => [
     primaryKey({ columns: [t.constellationId, t.userId] }),
@@ -1283,6 +1300,8 @@ export const nebulas = pgTable(
     forumGuidelines: text("forum_guidelines"),
     forumRequireTag: boolean("forum_require_tag").notNull().default(false),
     forumSort: text("forum_sort").notNull().default("activity"),
+    // Communities round 2: a stage nebula's speaker limit (each stage starts with it).
+    stageSpeakerLimit: integer("stage_speaker_limit").notNull().default(25),
     conversationId: uuid("conversation_id")
       .notNull()
       .unique()
@@ -1365,8 +1384,91 @@ export const constellationBans = pgTable(
     bannedBy: uuid("banned_by").references(() => users.id, { onDelete: "set null" }),
     reason: text("reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Communities round 2 (board 1c): appeals "now" / "later" (after 7 days) / "never".
+    appeals: text("appeals").notNull().default("now"),
   },
   (t) => [primaryKey({ columns: [t.constellationId, t.userId] })],
+);
+
+// Communities round 2 (boards 2a–2c): a constellation's own emoji and stickers. Pictures are in
+// storage at emoji/<constellation>/<id>.webp, cleaned like every upload (re-saved, no metadata).
+export const constellationEmoji = pgTable(
+  "constellation_emoji",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // "emoji" | "sticker"
+    name: text("name").notNull(),
+    animated: boolean("animated").notNull().default(false),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    // Members can use it outside the constellation (DMs, groups, other constellations).
+    outside: boolean("outside").notNull().default(true),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("constellation_emoji_idx").on(t.constellationId, t.kind, t.createdAt),
+    uniqueIndex("constellation_emoji_name_idx").on(t.constellationId, sql`lower(${t.name})`).where(sql`${t.kind} = 'emoji'`),
+  ],
+);
+
+// Communities round 2 (board 1c): a banned person asking the moderators to reconsider. One per
+// ban at a time; another 30 days after a "no". Moderators see their name and this message only.
+export const constellationAppeals = pgTable(
+  "constellation_appeals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The ban it's about (bans have no id: its time tells a later ban apart).
+    banCreatedAt: timestamp("ban_created_at", { withTimezone: true }).notNull(),
+    body: text("body").notNull(),
+    status: text("status").notNull().default("open"),
+    reply: text("reply"),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("constellation_appeals_queue_idx").on(t.constellationId, t.status, t.createdAt),
+    index("constellation_appeals_user_idx").on(t.userId, t.constellationId),
+  ],
+);
+
+// Communities round 2 (board 1a): nebula messages members reported to the constellation's
+// moderators (Night watch → Reports). One open report per message; more people reporting it add
+// to `reporter_ids`. `excerpt` is the message as first reported (kept 180 days, like the mod log).
+export const constellationReports = pgTable(
+  "constellation_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(() => conversations.id, { onDelete: "set null" }),
+    messageId: uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
+    reportedUserId: uuid("reported_user_id").references(() => users.id, { onDelete: "set null" }),
+    reporterIds: uuid("reporter_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    reason: text("reason").notNull(),
+    excerpt: text("excerpt").notNull(),
+    status: text("status").notNull().default("open"),
+    assignedTo: uuid("assigned_to").references(() => users.id, { onDelete: "set null" }),
+    resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: "set null" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    outcome: text("outcome"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("constellation_reports_queue_idx").on(t.constellationId, t.status, t.createdAt),
+    uniqueIndex("constellation_reports_open_message_idx").on(t.messageId).where(sql`${t.status} = 'open'`),
+  ],
 );
 
 // Settings → Moderation: what moderators and admins did (kicks, bans, time-outs, deleted
@@ -1384,7 +1486,12 @@ export const constellationAuditLog = pgTable(
     details: jsonb("details").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("constellation_audit_constellation_idx").on(t.constellationId, t.createdAt)],
+  (t) => [
+    index("constellation_audit_constellation_idx").on(t.constellationId, t.createdAt),
+    // Communities round 2: the mod log's filters (one member, one kind of action).
+    index("constellation_audit_target_idx").on(t.constellationId, t.targetUserId, t.createdAt),
+    index("constellation_audit_action_idx").on(t.constellationId, t.action, t.createdAt),
+  ],
 );
 
 // ───────────── My games (Glofly 2.0) ─────────────
@@ -1649,6 +1756,9 @@ export const automodHeld = pgTable(
     releasedAt: timestamp("released_at", { withTimezone: true }),
     releasedBy: uuid("released_by").references(() => users.id, { onDelete: "set null" }),
     releasedMessageId: uuid("released_message_id").references(() => messages.id, { onDelete: "set null" }),
+    // Communities round 2: "Keep hidden" in Night watch (out of the queue, never posted).
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    dismissedBy: uuid("dismissed_by").references(() => users.id, { onDelete: "set null" }),
   },
   (t) => [index("automod_held_constellation_idx").on(t.constellationId, t.createdAt)],
 );
@@ -2179,6 +2289,149 @@ export const constellationLiveAlerts = pgTable(
     uniqueIndex("live_alerts_channel_idx").on(t.constellationId, t.site, t.channelId),
     index("live_alerts_watch_idx").on(t.site, t.channelId),
   ],
+);
+
+// Communities round 2 (board 3a): a live stage in a stage nebula (one at a time). Its LiveKit room
+// is `stage-<id>`: speakers get passes that may send, listeners passes that only receive.
+export const stages = pgTable(
+  "stages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    startedBy: uuid("started_by").references(() => users.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    handsOn: boolean("hands_on").notNull().default(true),
+    listenerChat: boolean("listener_chat").notNull().default(false),
+    speakerLimit: integer("speaker_limit").notNull().default(25),
+    // Glofly Control → Insights → Big constellations: the most listeners at once, and everyone's
+    // minutes on it (LiveKit bills each connected minute, speaker or listener).
+    peakListeners: integer("peak_listeners").notNull().default(0),
+    participantMinutes: integer("participant_minutes").notNull().default(0),
+  },
+  (t) => [uniqueIndex("stages_live_idx").on(t.nebulaId).where(sql`${t.endedAt} is null`)],
+);
+
+// Who's up on a stage, asked up, or has a hand raised (listeners themselves are kept in memory).
+export const stagePeople = pgTable(
+  "stage_people",
+  {
+    stageId: uuid("stage_id")
+      .notNull()
+      .references(() => stages.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    speaker: boolean("speaker").notNull().default(false),
+    // A manager asked them up (they become a speaker when they accept).
+    invited: boolean("invited").notNull().default(false),
+    handAt: timestamp("hand_at", { withTimezone: true }),
+    upAt: timestamp("up_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.stageId, t.userId] })],
+);
+
+// Communities round 2 (board 3b): a constellation following an announcement nebula. New posts are
+// copied into target_nebula_id (a text nebula in the follower's constellation).
+export const announcementFollows = pgTable(
+  "announcement_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceNebulaId: uuid("source_nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    targetNebulaId: uuid("target_nebula_id")
+      .notNull()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("announcement_follows_pair_idx").on(t.sourceNebulaId, t.targetNebulaId), index("announcement_follows_target_idx").on(t.targetNebulaId)],
+);
+
+// Which message is a copy of which (edits and deletes follow the original).
+export const crosspostCopies = pgTable(
+  "crosspost_copies",
+  {
+    copyMessageId: uuid("copy_message_id")
+      .primaryKey()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    sourceMessageId: uuid("source_message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    followId: uuid("follow_id").references(() => announcementFollows.id, { onDelete: "set null" }),
+  },
+  (t) => [index("crosspost_copies_source_idx").on(t.sourceMessageId)],
+);
+
+// Communities round 2 (boards 5a–5b): a constellation's Discord bridge. One Discord server per
+// constellation (and per Discord server). The bridge acts in Glofly as a bot with an API key
+// (messages:read + messages:write on the paired nebulas), so members see "shared with Discord".
+export const discordBridges = pgTable(
+  "discord_bridges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    constellationId: uuid("constellation_id")
+      .notNull()
+      .unique()
+      .references(() => constellations.id, { onDelete: "cascade" }),
+    guildId: text("guild_id").notNull().unique(),
+    guildName: text("guild_name").notNull(),
+    guildIcon: text("guild_icon"),
+    apiKeyId: uuid("api_key_id").references(() => constellationApiKeys.id, { onDelete: "set null" }),
+    botUserId: uuid("bot_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    settings: jsonb("settings").$type<DiscordBridgeSettings>().notNull(),
+    connectedBy: uuid("connected_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // The bot was removed from the Discord server (nothing goes across until it's added back).
+    lostAt: timestamp("lost_at", { withTimezone: true }),
+  },
+);
+
+// A Discord channel paired with a nebula. Glofly posts there through the channel's webhook (its
+// token is kept to post with; it only lets Glofly post in that one channel).
+export const discordBridgeChannels = pgTable(
+  "discord_bridge_channels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bridgeId: uuid("bridge_id")
+      .notNull()
+      .references(() => discordBridges.id, { onDelete: "cascade" }),
+    discordChannelId: text("discord_channel_id").notNull().unique(),
+    discordChannelName: text("discord_channel_name").notNull(),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .unique()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    webhookId: text("webhook_id").notNull(),
+    webhookToken: text("webhook_token").notNull(),
+    paused: boolean("paused").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("discord_bridge_channels_bridge_idx").on(t.bridgeId)],
+);
+
+// Which Glofly message is which Discord message (edits and deletes follow along).
+export const discordBridgeMessages = pgTable(
+  "discord_bridge_messages",
+  {
+    messageId: uuid("message_id")
+      .primaryKey()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    discordMessageId: text("discord_message_id").notNull(),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => discordBridgeChannels.id, { onDelete: "cascade" }),
+    // "in" = came from Discord, "out" = went to Discord
+    direction: text("direction").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("discord_bridge_messages_discord_idx").on(t.discordMessageId)],
 );
 
 // ───────────── Campfire (phase 1, Nov 2026): the tabletop ─────────────
