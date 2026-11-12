@@ -164,6 +164,29 @@ test("legendary actions: the creature's budget per round, GM only", { skip }, as
   await combatOp(gm, { op: "end" });
 });
 
+test("initiative: monsters roll at once, players roll their own, then the order starts", { skip }, async () => {
+  await combatOp(gm, { op: "start", tokenIds: [gob, tok1] });
+  let c = (await combatOp(gm, { op: "rollAll" })).json.combat;
+  assert.equal(c.rolling, true, "waiting for the player");
+  assert.ok(c.entries.find((e: any) => e.tokenId === gob).init !== null, "the goblin rolled");
+  assert.equal(c.entries.find((e: any) => e.tokenId === tok1).init, null, "Lyra rolls her own");
+  assert.equal((await combatOp(gm, { op: "next" })).status, 409, "no turns until everyone has rolled");
+  assert.equal((await combatOp(p2, { op: "roll", tokenId: tok1 })).status, 403, "only her player");
+  const p1c = (await call(`/campfire/campaigns/${cid}`, { token: p1.token })).json.combat;
+  assert.equal(p1c.rolling, true);
+  c = (await combatOp(p1, { op: "roll", tokenId: tok1 })).json.combat;
+  assert.equal(c.rolling, undefined, "everyone rolled: the fight starts");
+  assert.equal(c.turn, 0);
+  assert.ok(c.entries.every((e: any) => e.init !== null));
+  // A new round of initiative, and the GM rolls for an absent player.
+  c = (await combatOp(gm, { op: "rollAll" })).json.combat;
+  assert.equal(c.rolling, true);
+  c = (await combatOp(gm, { op: "rollAll", rest: true })).json.combat;
+  assert.equal(c.rolling, undefined);
+  assert.ok(c.entries.every((e: any) => e.init !== null));
+  await combatOp(gm, { op: "end" });
+});
+
 test("pause: players can't move or roll; GMs can; everyone gets the state", { skip }, async () => {
   assert.equal((await call(`/campfire/campaigns/${cid}/pause`, { method: "POST", token: p1.token, body: { on: true } })).status, 403);
   const on = await call(`/campfire/campaigns/${cid}/pause`, { method: "POST", token: gm.token, body: { on: true, message: "Pizza's here" } });

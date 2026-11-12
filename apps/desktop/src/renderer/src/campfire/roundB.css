@@ -346,3 +346,50 @@
 :root[data-contrast='high'] .cfb-paused {
   background: rgba(8, 6, 5, 0.94);
 }
+
+/* 0.11.4: players roll their own initiative */
+.cf-init-prompt {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 22px;
+  border-radius: 18px;
+  background: var(--cf-active);
+  box-shadow:
+    0 0 0 2px var(--cf-amber),
+    0 16px 40px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  animation: cf-init-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.cf-init-prompt b {
+  font: 800 20px/1.1 var(--glo-font-display);
+  color: var(--cf-amber);
+}
+.cf-init-prompt span {
+  font-size: 13px;
+  color: var(--cf-muted);
+}
+.cf-init-wait {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  z-index: 7;
+}
+@keyframes cf-init-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.92);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-init-prompt {
+    animation: none;
+  }
+}

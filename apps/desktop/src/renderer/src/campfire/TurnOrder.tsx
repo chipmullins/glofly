@@ -39,6 +39,76 @@ function useCombat(): {
   return { combat: t.combat, op }
 }
 
+/** Whose tokens are these (owned or controlled by me)? */
+function useMine(): (e: CombatEntry) => boolean {
+  const { t, me } = useCf()
+  return (e) => {
+    const tk = t.tokens.find((x) => x.id === e.tokenId)
+    if (!tk) return false
+    if (tk.controlledBy.includes(me.id)) return true
+    const ch = tk.characterId ? t.characters.find((c) => c.id === tk.characterId) : null
+    return !!ch && ch.ownerId === me.id
+  }
+}
+
+/**
+ * 0.11.4 (Chip: "prompt the players to roll for initiative"): when the game master rolls
+ * initiative, monsters roll at once and each player gets this to roll their own. The turn order
+ * starts once everyone has.
+ */
+export function InitiativePrompt(): React.JSX.Element | null {
+  const { combat, op } = useCombat()
+  const mine = useMine()
+  const [busy, setBusy] = useState(false)
+  if (!combat?.rolling) return null
+  const waiting = combat.entries.filter((e) => e.init === null && mine(e))
+  if (!waiting.length) return null
+  return (
+    <div className="cf-init-prompt" role="alertdialog" aria-label="Roll for initiative">
+      <b>Roll for initiative!</b>
+      <span>The fight starts once everyone has rolled.</span>
+      <div className="cf-row-buttons">
+        {waiting.map((e) => (
+          <button
+            key={e.tokenId}
+            type="button"
+            className="cf-primary"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              await op({ op: 'roll', tokenId: e.tokenId })
+              setBusy(false)
+            }}
+          >
+            Roll d20{waiting.length > 1 ? ` for ${e.name}` : ''}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** The game master's view while players roll: who's left, and "Roll for the rest". */
+export function InitiativeWaiting(): React.JSX.Element | null {
+  const { combat, op } = useCombat()
+  if (!combat?.rolling) return null
+  const left = combat.entries.filter((e) => e.player && e.init === null)
+  if (!left.length) return null
+  return (
+    <div className="cfb-banner cfb-banner--amber cf-init-wait" role="status">
+      <b>Waiting for initiative:</b>
+      <span>{left.map((e) => e.name).join(', ')}</span>
+      <button
+        type="button"
+        className="cf-soft cf-small"
+        onClick={() => void op({ op: 'rollAll', rest: true })}
+      >
+        Roll for the rest
+      </button>
+    </div>
+  )
+}
+
 export function TurnOrder({ withRolls }: { withRolls?: boolean }): React.JSX.Element {
   const { t, isGm, me, selectedId, setSelectedId } = useCf()
   const characters = t.characters
@@ -94,9 +164,11 @@ export function TurnOrder({ withRolls }: { withRolls?: boolean }): React.JSX.Ele
       </div>
       {isGm && (
         <p className="cf-hint">
-          {combat
-            ? `Round ${combat.round}. Everyone rolls d20 + their initiative bonus; the order sorts itself. Drag to fix ties.`
-            : 'Roll initiative starts a fight with everyone on the tokens layer.'}
+          {combat?.rolling
+            ? 'Monsters have rolled. Players roll their own; the fight starts once they all have (or press Roll for the rest).'
+            : combat
+              ? `Round ${combat.round}. Monsters roll at once, players roll their own; the order sorts itself. Drag to fix ties.`
+              : 'Roll initiative starts a fight with everyone on the tokens layer. Players roll their own.'}
         </p>
       )}
       {!combat && !isGm && (

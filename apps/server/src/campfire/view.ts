@@ -293,12 +293,13 @@ export const trackOut = (t: TrackRow): Track => ({
  */
 export function combatOut(combat: CombatState | null, viewer: Viewer, visible: Map<string, string>): CombatView | null {
   if (!combat) return null;
-  const current = combat.entries[combat.turn]?.tokenId ?? null;
+  // While players roll initiative (0.11.4), it's nobody's turn yet.
+  const current = combat.rolling ? null : (combat.entries[combat.turn]?.tokenId ?? null);
   if (viewer.gm) return { ...combat, current };
   const entries = combat.entries
     .filter((e) => !e.hidden && visible.has(e.tokenId))
     // Players get the turn's movement (for the ring), not the GM's bookkeeping.
-    .map((e) => ({ tokenId: e.tokenId, name: visible.get(e.tokenId) ?? "", init: e.init, dex: e.dex, hidden: e.hidden, ...(e.moved ? { moved: e.moved } : {}), ...(e.dashed ? { dashed: true } : {}), ...(e.lastMove ? { lastMove: { x: 0, y: 0, cost: e.lastMove.cost } } : {}) }));
+    .map((e) => ({ tokenId: e.tokenId, name: visible.get(e.tokenId) ?? "", init: e.init, dex: e.dex, hidden: e.hidden, ...(e.player ? { player: true } : {}), ...(e.moved ? { moved: e.moved } : {}), ...(e.dashed ? { dashed: true } : {}), ...(e.lastMove ? { lastMove: { x: 0, y: 0, cost: e.lastMove.cost } } : {}) }));
   const turn = entries.findIndex((e) => e.tokenId === current);
-  return { round: combat.round, turn, entries, current: turn >= 0 ? current : null };
+  return { round: combat.round, turn, entries, current: turn >= 0 ? current : null, ...(combat.rolling ? { rolling: true } : {}) };
 }

@@ -392,7 +392,9 @@ const combatInput = z.discriminatedUnion("op", [
   z.object({ op: z.literal("start"), tokenIds: uuidList(100).optional() }),
   z.object({ op: z.literal("add"), tokenIds: uuidList(100) }),
   z.object({ op: z.literal("remove"), tokenId: z.uuid() }),
-  z.object({ op: z.literal("rollAll") }),
+  // 0.11.4: monsters roll at once, players get a prompt to roll their own; `rest` rolls whoever
+  // still hasn't (the game master's "Roll for the rest").
+  z.object({ op: z.literal("rollAll"), rest: z.boolean().optional() }),
   z.object({ op: z.literal("roll"), tokenId: z.uuid() }),
   z.object({ op: z.literal("set"), tokenId: z.uuid(), init: z.number().int().min(-99).max(999).nullable().optional(), hidden: z.boolean().optional() }),
   z.object({ op: z.literal("reorder"), tokenIds: uuidList(100) }),
@@ -448,6 +450,10 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
       : [],
   );
   const tokensIn = async (ids: string[]) => (await tokensWithScenes(ids)).filter((r) => r.scene.campaignId === t.campaign.id).map((r) => r.token);
+  // A player's token: someone other than this game master owns or controls it.
+  const chars = await charactersInfo(t.campaign.id);
+  const playerToken = (tk: TokenRow) =>
+    tk.controlledBy.some((u) => u !== t.userId) || (!!tk.characterId && !!chars.get(tk.characterId)?.ownerId && chars.get(tk.characterId)?.ownerId !== t.userId);
   const rollInit = async (entry: CombatEntry, sheet: Sheet5e | null) => {
     const named = !hiddenNames.has(entry.tokenId);
     const rolled = serverRoll(withBonus("1d20", sheet ? initiativeBonus(sheet) : 0), named ? `${entry.name}: initiative` : "Initiative");
@@ -491,10 +497,18 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
       for (const e of combat!.entries) {
         const tk = rows.find((r) => r.id === e.tokenId);
         const sheet = tk ? await sheetOf(tk) : null;
-        next.push(await rollInit({ ...e, dex: sheet?.abilities.dex ?? e.dex }, sheet));
+        const player = !!tk && playerToken(tk);
+        const entry: CombatEntry = { ...e, dex: sheet?.abilities.dex ?? e.dex, ...(player ? { player: true } : {}) };
+        if (!player) delete entry.player;
+        if (d.rest) next.push(entry.init === null ? await rollInit(entry, sheet) : entry);
+        // Players roll their own (a fresh fight clears last fight's numbers).
+        else if (player) next.push({ ...entry, init: null });
+        else next.push(await rollInit(entry, sheet));
       }
       combat!.entries = sortEntries(next);
       combat!.turn = 0;
+      combat!.rolling = combat!.entries.some((e) => e.player && e.init === null);
+      if (!combat!.rolling) delete combat!.rolling;
       break;
     }
     case "roll": {
@@ -562,8 +576,17 @@ playRouter.post("/campaigns/:id/combat", actLimiter, async (req, res) => {
       break;
     }
   }
+  // 0.11.4: the last player's initiative is in: the order is set, the first turn starts.
+  let rollingDone = false;
+  if (combat?.rolling && d.op !== "rollAll" && !combat.entries.some((e) => e.player && e.init === null)) {
+    delete combat.rolling;
+    combat.entries = sortEntries(combat.entries);
+    combat.turn = 0;
+    rollingDone = true;
+  }
+  if (combat?.rolling && (d.op === "next" || d.op === "prev")) return bad(res, "Waiting for everyone to roll initiative.", 409, "rolling");
   // Round B: a new turn starts fresh (movement, legendary actions, timed conditions).
-  const turnMoved = combat && (d.op === "start" || d.op === "next" || d.op === "prev" || d.op === "rollAll" || ((d.op === "reorder" || d.op === "remove") && combat.entries[combat.turn]?.tokenId !== currentId));
+  const turnMoved = combat && (rollingDone || (d.op === "rollAll" && !combat.rolling) || d.op === "start" || d.op === "next" || d.op === "prev" || ((d.op === "reorder" || d.op === "remove") && combat.entries[combat.turn]?.tokenId !== currentId));
   if (combat && turnMoved && combat.entries.length) combat = await startTurn(t.campaign, combat);
   const [row] = await db.update(campfireCampaigns).set({ combat, updatedAt: new Date() }).where(eq(campfireCampaigns.id, t.campaign.id)).returning();
   await emitCombat(row);

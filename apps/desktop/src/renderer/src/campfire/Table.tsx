@@ -10,7 +10,7 @@ import { CfContext, type Cf, type RollShare, type StatBlockFor, type Tab } from 
 import { THEMES } from './geometry'
 import MapView, { type FogBrush, type Tool } from './MapView'
 import { useTable } from './useTable'
-import { TurnOrder } from './TurnOrder'
+import { InitiativePrompt, InitiativeWaiting, TurnOrder } from './TurnOrder'
 import { DiceTray, RollsPanel } from './Rolls'
 import { SheetPanel } from './Sheet'
 import { SheetWindow } from './SheetWindow'
@@ -547,9 +547,11 @@ function TableReady({
             <div className="cf-topbar">
               {combat && (
                 <span className="cf-turn-pill">
-                  {myTurn
-                    ? `Your turn · Round ${combat.round}`
-                    : `Round ${combat.round}${currentToken ? ` · ${currentToken.name}'s turn` : ''}`}
+                  {combat.rolling
+                    ? 'Rolling initiative…'
+                    : myTurn
+                      ? `Your turn · Round ${combat.round}`
+                      : `Round ${combat.round}${currentToken ? ` · ${currentToken.name}'s turn` : ''}`}
                 </span>
               )}
               {myTurn && currentToken && (
@@ -843,6 +845,8 @@ function TableReady({
                 )}
                 {isGm && !asPlayer && <ApprovalBox />}
                 {!isGm && <DyingCard />}
+                {!isGm && <InitiativePrompt />}
+                {isGm && !asPlayer && <InitiativeWaiting />}
                 {carded && tool === 'select' && (isGm || controls(carded)) && (
                   <TokenCard
                     key={carded.id}

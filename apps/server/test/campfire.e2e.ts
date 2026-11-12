@@ -581,8 +581,12 @@ test("the turn order", { skip }, async () => {
   assert.equal(start.status, 200, JSON.stringify(start.json));
   assert.equal(start.json.combat.round, 1);
   assert.equal(start.json.combat.entries.find((e: any) => e.tokenId === tok.trap).hidden, true, "GM-layer tokens start hidden");
+  // 0.11.4: monsters roll at once; Thorin's player rolls his own.
   const rolled = await c({ op: "rollAll" });
-  const inits = rolled.json.combat.entries.map((e: any) => e.init);
+  assert.equal(rolled.json.combat.rolling, true);
+  assert.equal(rolled.json.combat.entries.find((e: any) => e.tokenId === tok.thorin).init, null);
+  const rest = await c({ op: "rollAll", rest: true });
+  const inits = rest.json.combat.entries.map((e: any) => e.init);
   assert.ok(inits.every((n: any) => typeof n === "number"));
   assert.deepEqual([...inits].sort((x, y) => y - x), inits, "highest first");
   const asPlayer = (await call(`/campfire/campaigns/${campaignId}`, { token: p1.token })).json.combat;
