@@ -266,7 +266,7 @@
   `docs/campfire/SPEC.md`, approved boards `docs/design/campfire/`. Server `src/campfire/` (all fog/GM-only filtering is
   server-side; players never receive hidden things), shared `packages/shared/src/campfire/`, desktop
   `renderer/src/campfire/`, phones `src/campfire/`. Migrations 0063–0065 (renumbered from the branch's 0058–0060 at the
-  merge); Round C's is 0066. Apps send feature `campfire` (with `threads, round2`). Never "D&D" in the product (say 5e);
+  merge); Round C's is 0067 (0066 = the Nov 14 robustness indexes). Apps send feature `campfire` (with `threads, round2`). Never "D&D" in the product (say 5e);
   SRD content only with the CC BY 4.0 credit. The `campfire` branch is no longer needed (Round C goes on `dev`).
 - **0.11.2 (Nov 11, 2026): Campfire fixes after the first play test** (project doc `glofly-release-0.11.2.md`). Built
   pieces can carry `hidden: true` and `layer` (named `BuiltMap.layers`, hidden layers hide their pieces): shared

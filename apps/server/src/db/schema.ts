@@ -519,7 +519,11 @@ export const glows = pgTable(
     lowWroteOn: date("low_wrote_on"),
     highWroteOn: date("high_wrote_on"),
   },
-  (t) => [primaryKey({ columns: [t.userLow, t.userHigh] })],
+  (t) => [
+    primaryKey({ columns: [t.userLow, t.userHigh] }),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("glows_user_high_idx").on(t.userHigh),
+  ],
 );
 
 // 0.5.0 Custom stickers: pictures made in Glofly (background removed), kept for their maker.
@@ -550,7 +554,11 @@ export const pollVotes = pgTable(
     option: integer("option").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.messageId, t.userId, t.option] })],
+  (t) => [
+    primaryKey({ columns: [t.messageId, t.userId, t.option] }),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("poll_votes_user_idx").on(t.userId),
+  ],
 );
 
 // One row per person per emoji per message.
@@ -566,7 +574,11 @@ export const messageReactions = pgTable(
     emoji: text("emoji").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.messageId, t.userId, t.emoji] })],
+  (t) => [
+    primaryKey({ columns: [t.messageId, t.userId, t.emoji] }),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("message_reactions_user_idx").on(t.userId),
+  ],
 );
 
 /** A voice message's length and its waveform (bar heights 0–100). */
@@ -641,6 +653,9 @@ export const calls = pgTable(
     endedAt: timestamp("ended_at", { withTimezone: true }),
   },
   (t) => [
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("calls_caller_idx").on(t.callerId),
+    index("calls_message_idx").on(t.messageId),
     // At most one ringing or ongoing call per chat.
     uniqueIndex("calls_one_active_idx")
       .on(t.conversationId)
@@ -1011,7 +1026,11 @@ export const nicknames = pgTable(
     nickname: text("nickname").notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.ownerId, t.targetId] })],
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.targetId] }),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("nicknames_target_idx").on(t.targetId),
+  ],
 );
 
 // "Notify me when they come online" (0.3.0): the owner gets a notification when the target goes
@@ -1245,6 +1264,8 @@ export const constellationMemberRoles = pgTable(
       .references(() => constellationRoles.id, { onDelete: "cascade" }),
   },
   (t) => [
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("constellation_member_roles_user_idx").on(t.userId),
     primaryKey({ columns: [t.constellationId, t.userId, t.roleId] }),
     index("constellation_member_roles_role_idx").on(t.roleId),
   ],
@@ -1387,7 +1408,11 @@ export const constellationBans = pgTable(
     // Communities round 2 (board 1c): appeals "now" / "later" (after 7 days) / "never".
     appeals: text("appeals").notNull().default("now"),
   },
-  (t) => [primaryKey({ columns: [t.constellationId, t.userId] })],
+  (t) => [
+    primaryKey({ columns: [t.constellationId, t.userId] }),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("constellation_bans_user_idx").on(t.userId),
+  ],
 );
 
 // Communities round 2 (boards 2a–2c): a constellation's own emoji and stickers. Pictures are in
@@ -1597,7 +1622,11 @@ export const nebulaPins = pgTable(
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.nebulaId] })],
+  (t) => [
+    primaryKey({ columns: [t.userId, t.nebulaId] }),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("nebula_pins_nebula_idx").on(t.nebulaId),
+  ],
 );
 
 // ---------------------------------------------------------------------------------------------
@@ -1656,7 +1685,11 @@ export const pinnedMessages = pgTable(
     pinnedBy: uuid("pinned_by").references(() => users.id, { onDelete: "set null" }),
     pinnedAt: timestamp("pinned_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.conversationId, t.messageId] })],
+  (t) => [
+    primaryKey({ columns: [t.conversationId, t.messageId] }),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("pinned_messages_message_idx").on(t.messageId),
+  ],
 );
 
 // "Send later": a text message waiting for its time. Sent by the server's sweep (scheduled.ts)
@@ -1679,6 +1712,8 @@ export const scheduledMessages = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("scheduled_messages_conversation_idx").on(t.conversationId),
     index("scheduled_messages_due_idx").on(t.sendAt).where(sql`${t.failed} is null`),
     index("scheduled_messages_sender_idx").on(t.senderId, t.conversationId),
   ],
@@ -1760,7 +1795,11 @@ export const automodHeld = pgTable(
     dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
     dismissedBy: uuid("dismissed_by").references(() => users.id, { onDelete: "set null" }),
   },
-  (t) => [index("automod_held_constellation_idx").on(t.constellationId, t.createdAt)],
+  (t) => [
+    index("automod_held_constellation_idx").on(t.constellationId, t.createdAt),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("automod_held_conversation_idx").on(t.conversationId),
+  ],
 );
 
 // Events with RSVP. The card is a message in a text nebula (its plain text works in older apps);
@@ -1791,6 +1830,8 @@ export const constellationEvents = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }),
   },
   (t) => [
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("constellation_events_message_idx").on(t.messageId),
     index("constellation_events_constellation_idx").on(t.constellationId, t.startsAt),
     index("constellation_events_due_idx").on(t.startsAt).where(sql`${t.cancelledAt} is null and ${t.startedAt} is null`),
   ],
@@ -2145,7 +2186,11 @@ export const giveawayEntries = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.giveawayId, t.userId] })],
+  (t) => [
+    primaryKey({ columns: [t.giveawayId, t.userId] }),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("giveaway_entries_user_idx").on(t.userId),
+  ],
 );
 
 // Communities round (Nov 2026): Linked game servers. A game server's script (FiveM/RedM license,
@@ -2331,7 +2376,11 @@ export const stagePeople = pgTable(
     handAt: timestamp("hand_at", { withTimezone: true }),
     upAt: timestamp("up_at", { withTimezone: true }),
   },
-  (t) => [primaryKey({ columns: [t.stageId, t.userId] })],
+  (t) => [
+    primaryKey({ columns: [t.stageId, t.userId] }),
+    // Robustness round (Nov 14): foreign key lookups on deletes use an index.
+    index("stage_people_user_idx").on(t.userId),
+  ],
 );
 
 // Communities round 2 (board 3b): a constellation following an announcement nebula. New posts are

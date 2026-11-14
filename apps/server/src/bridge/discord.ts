@@ -506,6 +506,8 @@ async function saveAvatar(uid: string, hash: string): Promise<boolean> {
     if (data.length > 2 * 1024 * 1024) return false;
     const webp = await sharp(data, { limitInputPixels: 4_000_000 }).resize(128, 128, { fit: "cover" }).webp({ quality: 82 }).toBuffer();
     await storage.put(key, webp, "image/webp");
+    // Only a memory of what's already saved: start over past 5,000 (robustness round, Nov 14).
+    if (savedAvatars.size >= 5000) savedAvatars.clear();
     savedAvatars.add(key);
     return true;
   } catch {

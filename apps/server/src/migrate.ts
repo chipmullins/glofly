@@ -25,6 +25,12 @@ const concurrentIndexes: { name: string; sql: string }[] = [
     name: "messages_search_recent_idx",
     sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS "messages_search_recent_idx" ON "messages" USING btree ("created_at" DESC, "id" DESC) WHERE "messages"."deleted_at" is null and "messages"."event" is null`,
   },
+  // Robustness round (Nov 14, migration 0066): the bigger tables' foreign keys to users and messages,
+  // so deleting an account or a message doesn't scan them.
+  { name: "message_reactions_user_idx", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS "message_reactions_user_idx" ON "message_reactions" USING btree ("user_id")` },
+  { name: "poll_votes_user_idx", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS "poll_votes_user_idx" ON "poll_votes" USING btree ("user_id")` },
+  { name: "calls_caller_idx", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS "calls_caller_idx" ON "calls" USING btree ("caller_id")` },
+  { name: "calls_message_idx", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS "calls_message_idx" ON "calls" USING btree ("message_id")` },
 ];
 
 async function buildConcurrentIndexes(): Promise<void> {

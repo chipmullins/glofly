@@ -420,6 +420,24 @@ export async function access(conversationId: string, myId: string): Promise<Acce
   };
 }
 
+/**
+ * The same yes/no as `access`, without loading everyone in the chat: one indexed lookup for my
+ * membership. For read paths that don't need the member list (history, pictures and files), so a
+ * 25,000-member nebula doesn't load 25,000 rows per picture (robustness round, Nov 14).
+ */
+export async function canRead(conversationId: string, myId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ kind: conversations.kind })
+    .from(conversationMembers)
+    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
+    .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, myId)))
+    .limit(1);
+  if (!row) return false;
+  if (row.kind === "nebula" && !(await nebulaChatOpen(conversationId))) return false;
+  if (row.kind === "nebula" && (await isRestricted(myId))) return false;
+  return true;
+}
+
 /** Can I post here? DMs need us to be friends (and not blocked); groups just need me in it. */
 export async function canPost(chat: Access, myId: string): Promise<boolean> {
   if (chat.kind === "group") return !(await deletionPending(myId));
@@ -1391,7 +1409,7 @@ conversationsRouter.get("/messages/search", searchLimiter, async (req, res) => {
 conversationsRouter.get("/:id/messages", async (req, res) => {
   const id = idParam.safeParse(req.params.id);
   const myId = me(res).id;
-  if (!id.success || (await access(id.data, myId)) === null) {
+  if (!id.success || !(await canRead(id.data, myId))) {
     res.status(404).json({ error: "not_found" });
     return;
   }
@@ -2551,7 +2569,7 @@ async function loadAttachment(conversationIdRaw: unknown, attachmentIdRaw: unkno
   const conversationId = idParam.safeParse(conversationIdRaw);
   const attachmentId = idParam.safeParse(attachmentIdRaw);
   if (!conversationId.success || !attachmentId.success) return null;
-  if ((await access(conversationId.data, myId)) === null) return null;
+  if (!(await canRead(conversationId.data, myId))) return null;
   const [row] = await db
     .select()
     .from(attachments)

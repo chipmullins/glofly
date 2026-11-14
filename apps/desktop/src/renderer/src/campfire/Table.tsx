@@ -307,7 +307,10 @@ function TableReady({
         const shoot = fire
         fire = async (target, dis) => {
           await shoot(target, dis)
-          const now = t.characters.find((c) => c.id === ch.id)
+          // The sheet as it is now (the attack may wait a while for its target, and the sheet can
+          // change meanwhile): saving an older copy would undo those changes.
+          const fresh = await cf.get<Character>(`/campfire/characters/${ch.id}`)
+          const now = fresh.ok ? fresh.data : null
           if (!now || !isFullCharacter(now)) return
           const inventory = now.sheet.inventory.map((i) =>
             i.id === ammo.id ? { ...i, qty: Math.max(0, i.qty - 1) } : i

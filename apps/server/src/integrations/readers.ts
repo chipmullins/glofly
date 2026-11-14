@@ -125,6 +125,7 @@ export async function listMessages(k: BotKey, nebulaId: string, after: string | 
   }
   const logKey = `${k.id}:${nebulaId}`;
   if ((lastLog.get(logKey) ?? 0) < Date.now() - 10 * 60_000) {
+    if (lastLog.size >= 10_000) lastLog.clear(); // bounded (robustness round, Nov 14)
     lastLog.set(logKey, Date.now());
     await logIntegration({ constellationId: k.constellationId, keyId: k.id, keyName: k.name, action: "messages.read", details: { nebulaId }, ip: k.ip });
   }

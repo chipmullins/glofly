@@ -225,12 +225,13 @@ export function startRealtime(httpServer: HttpServer): void {
           if (await canMessage(me.id, other)) emitToUser(other, "typing", { conversationId, userId: me.id });
           return;
         }
-        // Groups and nebulas (2.0, newer apps only): everyone, except across a block.
+        // Groups and nebulas (2.0, newer apps only): everyone, except across a block. Only people
+        // online right now (a hint nobody can see is wasted), in one send: a 25,000-member nebula
+        // used to get one emit per member per keystroke (robustness round, Nov 14).
         const blocked = await blockedWith(me.id);
         const nebula = chat?.kind === "nebula";
-        for (const other of others) {
-          if (!blocked.has(other.userId)) emitToUser(other.userId, "typing", { conversationId, userId: me.id }, nebula);
-        }
+        const to = onlineNow(others.map((o) => o.userId)).filter((id) => !blocked.has(id));
+        if (to.length) emitToUsers(to, "typing", { conversationId, userId: me.id }, nebula);
       } catch {
         // Typing hints aren't important enough to report.
       }
