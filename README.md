@@ -110,7 +110,7 @@ npm run dev -w apps/server           # API on http://localhost:4000
 npm run dev -w apps/desktop          # desktop app
 ```
 
-Calls need a LiveKit project (the free LiveKit Cloud plan works). Without one, everything else runs normally.
+Calls need a LiveKit project (the free LiveKit Cloud plan works). Without one, everything else runs normally - just calls will not work.
 
 ---
 
