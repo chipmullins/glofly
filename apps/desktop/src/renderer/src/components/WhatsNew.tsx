@@ -3,7 +3,7 @@ import type { WhatsNewEntry } from '@glofly/shared/whatsNew'
 import './dialogs.css'
 import './WhatsNew.css'
 
-// 0.11.3 (Chip: a "what's new" pop-up on the first launch after an update). Notes from shared
+// 0.11.3: a "What's new" window on the first launch after an update. Notes from shared
 // whatsNew.ts; lib/whatsNew.ts decides when it shows.
 
 export default function WhatsNew({

@@ -2231,7 +2231,7 @@ export default function ChatView({
               )}
             </div>
             <div className="chat-header-actions">
-              {/* 0.7.4 (Chip, Oct 20): Call, Video and Search stay as buttons; Profile, Pinned
+              {/* 0.7.4 (Oct 20): Call, Video and Search stay as buttons; Profile, Pinned
                 messages, Pin chat and Mute moved into ⋯ More. Pins and Muted still show as their
                 own button while they apply, so they stay one click away. */}
               <button

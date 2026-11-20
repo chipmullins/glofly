@@ -6,7 +6,7 @@ import { checkWhatsNew, markWhatsNewSeen, useWhatsNew } from '@/lib/whatsNew'
 import { Button, Text } from './kit'
 import { useTheme } from './theme'
 
-// 0.11.3 (Chip: a "what's new" pop-up on the first launch after an update). lib/whatsNew.ts
+// 0.11.3: a "What's new" window on the first launch after an update. lib/whatsNew.ts
 // decides when; the notes are in shared whatsNew.ts.
 
 export function WhatsNewHost() {

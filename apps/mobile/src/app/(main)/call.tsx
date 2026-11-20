@@ -476,7 +476,7 @@ function Grid({ tiles, ringing, personOf, pinned, onPin, top, bottom, left = 0, 
   }
   // Pick the number of columns that makes the tiles biggest for this screen shape: upright, 3
   // people are 2 + 1; sideways they're 3 in a row. Past ~9 people the tiles scroll.
-  // 0.11.3 (Chip: 3 people looked "squished"): upright, 3 or more never stack in one column (one
+  // 0.11.3: upright, 3 or more never stack in one column (one
   // column scored a little higher on a tall phone but gave wide, short strips); the 3rd tile sits
   // centered under the first two, the same size as in a 4-person call.
   const n = Math.max(all.length, 1)

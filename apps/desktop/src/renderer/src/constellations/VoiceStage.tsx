@@ -22,7 +22,7 @@ import './Voice.css'
 
 // A voice nebula (VoiceNebula.dc.html, approved): a shared screen big with a LIVE tag and tiles
 // beside it (talking glow), controls Mute / Camera / Share / Leave, "Drop in any time · no
-// ringing". Watch Together works here too (Chip, Oct 17): a Watch button beside Share.
+// ringing". Watch Together works here too (Oct 17): a Watch button beside Share.
 
 type Tile = {
   person: PublicUser

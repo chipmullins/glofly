@@ -117,7 +117,7 @@ export async function notify(
 export const firstNameOf = (p: Pick<PublicUser, 'displayName' | 'username'>): string =>
   p.displayName.trim().split(/\s+/)[0] || p.username
 
-/** The three buttons every message notification gets (Chip, Nov 8: both mute choices). */
+/** The three buttons every message notification gets (Nov 8: both mute choices). */
 export const MESSAGE_BUTTONS = [
   { id: 'read', label: 'Mark as read' },
   { id: 'mute-1h', label: 'Mute 1 h' },

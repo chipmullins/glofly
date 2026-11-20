@@ -1,7 +1,7 @@
 """Glofly login "Glo-fly", round 8 (Nov 5, 2026).
 
-Round 7 (sung) was too intense and too much like a real person. Chip: "you can tell when you
-really listen but not so up front". So here the instrument leads and the word is only a ghost:
+Round 7 (sung) was too intense and too much like a real person. The feedback: the word should come through when you
+really listen, not up front. So here the instrument leads and the word is only a ghost:
 
 - The word's shape comes from a vocoder with few, wide bands (8-12), so only the vowel movement
   "oh" -> "eye" and a soft breath for the F survive. No voice, no person.

@@ -129,7 +129,7 @@ export function withTwoHanded(attacks: readonly SheetAttack[]): (SheetAttack & {
 }
 
 /**
- * 0.11.3 (Chip: "longsword should allow two hands"): a weapon's attacks, a versatile one gets a
+ * 0.11.3: a weapon's attacks, a versatile one gets a
  * second, two-handed attack (its versatile damage) right after the one-handed one.
  */
 export function attacksFromItem(item: RulesItem, scores: Record<Ability, number>, id: string, proficient = true): SheetAttack[] {

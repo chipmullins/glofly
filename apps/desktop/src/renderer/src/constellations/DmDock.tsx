@@ -25,7 +25,7 @@ import { CloseIcon, LinkOutIcon } from './bits'
 import { FireflyMark } from './sky'
 import './Dock.css'
 
-// The DM Dock (Chip, Oct 17; "Glofly Constellations · DM Dock" canvas, approved): while you're in
+// The DM Dock (Oct 17; "Glofly Constellations · DM Dock" canvas, approved): while you're in
 // Constellations, your Glofly chats stay one move away. A soft glowing line at the bottom edge;
 // move the mouse to the very bottom and the dock rises (Home, your DMs, your groups, All chats).
 // Click a face and their chat pops up right above it. When a message arrives while the dock is

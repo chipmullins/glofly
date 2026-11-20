@@ -11,7 +11,7 @@ import { flyIn } from './transition'
 import { placePaths } from './nav'
 import { ConstellationIcon, N } from './ui'
 
-// 0.7.1 (Chip): nebulas with news for you (unread messages it notifies you about, or @you) show
+// 0.7.1: nebulas with news for you (unread messages it notifies you about, or @you) show
 // at the top of the Chats list. A tap flies straight into that nebula: no dashboard, no picking
 // the constellation and finding the nebula. In Glofly's own colours, with the constellation's
 // icon and its little night badge so they read as nebulas, not chats.

@@ -60,7 +60,7 @@ export default function HiddenMenu({
     (n, k) => n + listOf(built, k).filter((p) => pieceHidden(p, layers)).length,
     0
   )
-  // 0.11.3 (Chip: "hiding and unhiding monsters… easier to find"): creatures on the GM layer.
+  // 0.11.3: creatures on the GM layer.
   const hiddenTokens = tokens.filter((x) => x.layer === 'gm')
   const shownTokens = tokens.filter((x) => x.layer === 'tokens' && !isParty?.(x))
   const count = total + hiddenTokens.length

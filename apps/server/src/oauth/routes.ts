@@ -127,7 +127,7 @@ async function checkRequest(raw: unknown): Promise<Checked | { problem: string }
   const [app] = await db.select().from(oauthApps).where(eq(oauthApps.clientId, p.data.client_id));
   if (!app) return { problem: "Glofly doesn't know this app." };
   if (app.disabledAt) return { problem: "The Glofly team switched this app off." };
-  // 0.9.0 (Chip, Nov 7): Sign in with Glofly is only for Glofly's own apps (like Gloslate).
+  // 0.9.0 (Nov 7): Sign in with Glofly is only for Glofly's own apps (like Gloslate).
   if (!app.firstParty) return { problem: "Sign in with Glofly is only for Glofly's own apps." };
   // Exact match only: no prefixes, no added paths.
   if (!app.redirectUris.includes(p.data.redirect_uri)) return { problem: "This app sent you here from an address it didn't register. For your safety, nothing was shared." };
@@ -456,7 +456,7 @@ connectedAppsRouter.delete("/:appId", async (req, res) => {
 });
 
 // ───────────── Making apps (Glofly Control only) ─────────────
-// 0.9.0 (Chip, Nov 7): Sign in with Glofly is only for Glofly's own apps (Gloslate, Tablespin). They are
+// 0.9.0 (Nov 7): Sign in with Glofly is only for Glofly's own apps (Gloslate, Tablespin). They are
 // made in Glofly Control → Sign-in apps (admin/oauthApps.ts); the Glofly apps have no Developer page.
 
 export const appFields = z.object({

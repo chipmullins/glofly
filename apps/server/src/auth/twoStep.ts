@@ -22,7 +22,7 @@ import { requireAuth } from "./sessions";
 import { sendText, smsAvailable } from "./sms";
 import { PASSWORD_MAX } from "./validation";
 
-// Two-step sign-in (0.7.3, Chip: "instead of an Authenticator, can we do texts and emails?").
+// Two-step sign-in (0.7.3).
 //
 // Signing in: the right password for an account with two-step on doesn't sign in yet. A 6-digit
 // code goes by text (if a phone is confirmed and texts are set up) or email, and the app answers

@@ -12,7 +12,7 @@ import './WelcomeFlow.css'
 // 0.7.5 welcome flow (Welcome.dc.html, approved Oct 20): a brand-new account gets three short
 // steps over the app: a photo and what you're up to, your look (theme and accent, applied as
 // you pick), and your first friend. Skip for now works on every step. Every button follows the
-// accent you pick (Chip asked). Shown once per account on the device it was made on.
+// accent you pick. Shown once per account on the device it was made on.
 
 /** Where a phone camera goes to get the app (glofly.app's download section). */
 const PHONE_DOWNLOAD_URL = 'https://glofly.app/#download'

@@ -1,7 +1,6 @@
 import type { GridSettings, SheetAttack, Token } from '@glofly/shared/campfire/types'
 
-// 0.11.3 (Chip: "click the weapon you want to use, then the token you want to attack, and then it
-// does the roll, if it's in range"): an attack picked on a sheet, a stat block or a token card
+// 0.11.3: an attack picked on a sheet, a stat block or a token card
 // waits ("armed") for a click on its target; the table checks the distance before rolling.
 
 export type ArmedAttack = {

@@ -13,7 +13,7 @@ import { emitToUser } from "../realtime";
 import type { PendingLogin } from "./twoStep";
 import { finishSignIn } from "./finish";
 
-// QR code sign-in (0.7.3, Chip: "like Discord: scan a QR code from your desktop on your phone").
+// QR code sign-in (0.7.3).
 //
 // 1. The computer's sign-in screen asks for a code: POST /auth/qr → { id, secret }. The QR code
 //    holds `${server}/qr/<id>`. Only the computer knows `secret`.

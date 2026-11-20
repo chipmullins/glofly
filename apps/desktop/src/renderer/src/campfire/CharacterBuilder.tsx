@@ -290,7 +290,7 @@ function Build({
           ABILITIES.map((a) => [a, d.assign[a] !== undefined ? (pool[d.assign[a]!] ?? 8) : 8])
         ) as Record<Ability, number>)
   const asiCount = pick.cls ? asiLevels(pick.cls, d.level).length : 0
-  // 0.11.3 (Chip: "each class has its own set of starting gear"): the SRD starting equipment.
+  // 0.11.3: the SRD starting equipment.
   // Classes without it (homebrew), or if the item list can't load, keep the free picker.
   const [items, setItems] = useState<RulesItem[] | null>(null)
   useEffect(() => {
@@ -352,7 +352,7 @@ function Build({
     !!d.name.trim()
   ]
   const ready = stepDone.every(Boolean)
-  // 0.11.3 (Chip: "it's confusing"): Next only moves on once everything on this step is chosen,
+  // 0.11.3: Next only moves on once everything on this step is chosen,
   // and says what's still open. Steps further on open once the ones before them are done.
   const plural = (n: number, one: string, many: string): string =>
     `${n} more ${n === 1 ? one : many}`
@@ -1314,7 +1314,7 @@ const costText = (gp: number): string =>
       ? `${Math.round(gp * 10)} sp`
       : `${Math.round(gp * 100)} cp`
 
-/** 0.11.3 (Chip: show what's picked): "+ Add", then a green "Added" (with − / + for more). */
+/** 0.11.3: "+ Add", then a green "Added" (with − / + for more). */
 function AddButton({
   count,
   onAdd,

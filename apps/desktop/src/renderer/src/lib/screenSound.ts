@@ -154,7 +154,7 @@ export async function shareDesktopScreen(
     if (pub !== published && published.track) void local.unpublishTrack(published.track)
   }
   local.on(ParticipantEvent.LocalTrackUnpublished, onUnpublished)
-  // Oct 30, 2026 (Chip: "PC audio doesn't work"): if nothing at all has arrived after 30 s of
+  // Oct 30, 2026: if nothing at all has arrived after 30 s of
   // sharing, tell Control → Errors (silence is skipped by the capture, so this can also mean
   // nothing was playing).
   setTimeout(() => {

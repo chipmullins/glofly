@@ -17,7 +17,7 @@ import { CloseIcon, ConstellationIcon, StarIcon } from './bits'
 import TemplatePicker from './TemplatePicker'
 
 // The + (Create.dc.html, approved): tabs Create | Join with an invite. Create: icon, name, "Start
-// with" templates, and (Chip, Oct 17) who can join: Invite only, Public, or Public with approval,
+// with" templates, and (Oct 17) who can join: Invite only, Public, or Public with approval,
 // with a kind and genre tags for the directory. "You'll be the Owner". Join: a link or code, with
 // a preview of the constellation.
 

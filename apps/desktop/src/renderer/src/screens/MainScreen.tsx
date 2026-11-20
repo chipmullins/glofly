@@ -1138,7 +1138,7 @@ export default function MainScreen({
             if (event.action === 'accept') {
               void window.glofly.friends.accept(person.id).then(() => refresh())
             } else if (event.action === 'decline-request') {
-              // Chip, Nov 8: declining asks first.
+              // Nov 8: declining asks first.
               setOpenChatId(null)
               setPage('friends')
               setFilter('pending')

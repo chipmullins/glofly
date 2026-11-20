@@ -3,7 +3,7 @@ import { prefs } from '@/lib/storage'
 import { useSession } from '@/state/session'
 import { useCx } from '@/state/constellations'
 
-// 0.7.1 (Chip): getting to a nebula from Glofly home took too many taps (Constellations, wait for
+// 0.7.1: getting to a nebula from Glofly home took too many taps (Constellations, wait for
 // the animation, the constellation, then the nebula). Now:
 //   - the Constellations tab flies straight back to the nebula you had open last (a quick hop,
 //     once you're in at least one constellation; the dashboard and the full swipe otherwise);

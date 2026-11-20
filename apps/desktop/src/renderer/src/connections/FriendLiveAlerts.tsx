@@ -101,7 +101,7 @@ export default function FriendLiveAlerts({
               }
             },
             person,
-            // Their profile header as the picture across the top (Chip, Nov 8: when there's no game art).
+            // Their profile header as the picture across the top (Nov 8: when there's no game art).
             e.headerVersion ? headerUrl(person.id, e.headerVersion) : null
           )
         }

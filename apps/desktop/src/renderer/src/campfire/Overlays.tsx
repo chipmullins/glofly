@@ -155,7 +155,7 @@ const BAR_NAMES = ['Hit points', 'Bar 2', 'Bar 3']
 const BAR_COLORS = ['#e0193a', '#4f8cff', '#f0b429']
 
 /**
- * 0.11.3 (Chip: "click the weapon you want to use, then the token you want to attack"): the
+ * 0.11.3: the
  * creature's attacks on its card; pick one, then click who it attacks.
  */
 function TokenAttacks({ token }: { token: Token }): React.JSX.Element | null {
@@ -296,7 +296,7 @@ export function TokenCard({
         </button>
       </div>
       {isGm && token.layer !== 'map' && (
-        // 0.11.3 (Chip: hiding monsters should be easy to find): one press, right on the card.
+        // 0.11.3: one press, right on the card.
         <button
           type="button"
           className={token.layer === 'gm' ? 'cf-vis cf-vis--hidden' : 'cf-vis'}

@@ -154,7 +154,7 @@ constellationsRouter.use(requireAuth);
 type Me = { id: string; username: string; displayName: string };
 const me = (res: Response): Me => res.locals.user as Me;
 
-// Restricted (family-managed) accounts can't be in constellations at all (Chip, Oct 17).
+// Restricted (family-managed) accounts can't be in constellations at all (Oct 17).
 constellationsRouter.use(async (_req: Request, res: Response, next: NextFunction) => {
   if (await isRestricted(me(res).id)) {
     res.status(403).json(MANAGED_BY_FAMILY);

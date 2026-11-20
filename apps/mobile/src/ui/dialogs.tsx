@@ -99,7 +99,7 @@ export async function afterOverlaysClose(): Promise<void> {
 }
 
 /**
- * Oct 31, 2026 (Chip: Block on a profile froze the iPhone app): answers arrive only once the dialog
+ * Oct 31, 2026: answers arrive only once the dialog
  * or sheet has finished sliding away. What comes next is often closing a screen (Block closes the
  * profile) or opening another dialog, and on an iPhone doing that while our Modal is still
  * dismissing leaves an invisible window over everything: the app looks frozen.
@@ -138,7 +138,7 @@ export function dismissTopOverlay(): boolean {
 /** A dialog or sheet of ours is open. */
 export const useOverlayOpen = (): boolean => useOverlays((s) => s.stack.some((o) => !o.closing))
 
-// Oct 31, 2026 (Chip: Block / Remove friend / Report on a profile froze the iPhone app): the profile
+// Oct 31, 2026: the profile
 // card and the Constellations side are see-through screens laid OVER the app (transparentModal). A
 // dialog drawn by the app's root went underneath them on iPhone: invisible, but it still took every
 // touch. So those screens mount their own DialogHost / SheetHost, and only the newest host on

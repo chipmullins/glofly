@@ -13,7 +13,7 @@ export type CxPlace = { constellationId: string; nebulaId: string | null } | nul
 
 const SWEEP_MS = 1050
 const RETURN_MS = 2100
-// 0.7.1 (Chip): once you're in a constellation, going back and forth is a quick hop.
+// 0.7.1: once you're in a constellation, going back and forth is a quick hop.
 const QUICK_SWEEP_MS = 420
 const QUICK_RETURN_MS = 620
 

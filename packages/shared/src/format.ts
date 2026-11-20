@@ -373,7 +373,7 @@ export function applyFormat(
 }
 
 // ---------------------------------------------------------------------------------------
-// Code colors ("like a code editor"; Chip, Nov 8)
+// Code colors ("like a code editor"; Nov 8)
 
 export type CodeTokenKind = 'plain' | 'kw' | 'str' | 'num' | 'com' | 'lit' | 'key' | 'fn' | 'tag' | 'punc'
 export type CodeToken = { k: CodeTokenKind; text: string }

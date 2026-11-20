@@ -199,8 +199,7 @@ function Toast({ text }: { text: string }) {
 }
 
 /** Puts the call strip above the app while a call goes on (and not on the call screen itself). */
-// Nov 5, 2026 (Chip: typing in a chat during a call on iPhone, the keyboard covered the message
-// box's buttons, so sending a lantern meant tapping empty space first): the call strip pushes the
+// Nov 5, 2026: the call strip pushes the
 // screen down, but KeyboardAvoidingView measures itself from its parent, not the screen's top, so it
 // left out the strip's height and the box sat that much behind the keyboard. Screens with a message
 // box pass this as their keyboardVerticalOffset.

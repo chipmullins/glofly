@@ -1,5 +1,4 @@
-// "What's new" (0.11.3, Chip: "when someone updates Glofly, there should be a what's new pop up on
-// the first launch after the update"). Every app (desktop, web, phones) carries these notes in its
+// "What's new" (0.11.3). Every app (desktop, web, phones) carries these notes in its
 // build. On start it compares the newest one it has with the newest one this device has shown:
 // newer notes show once, then the device remembers. Brand-new accounts don't get them (the welcome
 // flow is their introduction). Settings → About → What's new shows them again.

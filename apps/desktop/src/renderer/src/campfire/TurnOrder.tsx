@@ -53,7 +53,7 @@ function useMine(): (e: CombatEntry) => boolean {
 }
 
 /**
- * 0.11.3 (Chip: "prompt the players to roll for initiative"): when the game master rolls
+ * 0.11.3: when the game master rolls
  * initiative, monsters roll at once and each player gets this to roll their own. The turn order
  * starts once everyone has.
  */
