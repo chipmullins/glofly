@@ -12,6 +12,15 @@ I built Glofly solo, starting in October 2026. I designed and wireframed every s
 
 It isn't a demo. It's a live product with real users, deployed on AWS, updated through versioned releases that keep older app versions working, and supported through my own admin tools.
 
+## Screenshots
+
+![Chatting one-on-one in Glofly](docs/screenshots/chat.png)
+
+| | |
+|---|---|
+| ![A group chat with reactions](docs/screenshots/group-chat.png) | ![A channel in a Constellation community](docs/screenshots/constellation.png) |
+| ![The Constellations home screen](docs/screenshots/constellations-home.png) | ![The sign-in screen](docs/screenshots/sign-in.png) |
+
 ## What it does
 
 - **Messaging.** One-on-one and group chats with replies, reactions, edits, photos, files, voice messages, GIFs, link previews, polls, formatting, pinned messages, search and "send later."
