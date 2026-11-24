@@ -287,3 +287,7 @@
   (`messages/gifs.ts`; family accounts keep their own G-only entries). Campfire's attack range rules live in shared
   `campfire/attackFlow.ts` (desktop and phones both use them); phones arm an attack, then tap the target (`startAttack` in
   `apps/mobile/src/campfire/actions.ts`), and game masters hide/show the picked token (`layer` 'gm'/'tokens').
+  **See what you're playing** (approved canvas "Glofly: See what you're playing"): desktop/web `components/MyGame.tsx`
+  (name panel line + card), phones `src/ui/MyGame.tsx` (Settings card + sheet). Windows always looks for games now
+  (shared only while "Show what I'm playing" is on). `GET /users/me/status` adds `activity`/`activityFromSteam`;
+  `PUT /users/me/activity-sharing` reaches open Windows computers only (feature `activityRemote`, event `activity:remote`).
