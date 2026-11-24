@@ -7,6 +7,7 @@ import { requireAuth } from "../auth/sessions";
 import { db } from "../db";
 import { users } from "../db/schema";
 import { noteGiphyCall } from "./gifMeter";
+import { redis } from "../redis";
 
 // GIFs (0.5.0) from GIPHY. Google shut down Tenor's API for other apps in 2026, so GIPHY it is.
 //
@@ -17,12 +18,33 @@ import { noteGiphyCall } from "./gifMeter";
 //
 //   GET /gifs/trending?offset=      → { gifs: GifInfo[], next: number | null }
 //   GET /gifs/search?q=&offset=     → same
+//
+// Results are cached in Redis (the free GIPHY key allows 100 calls an hour for all of Glofly):
+// trending pages for 10 minutes, search pages for an hour, a looked-up GIF for a day. Each cache
+// entry is per rating, so family accounts never get a page made for everyone else.
 
 const KEY = process.env.GIPHY_API_KEY?.trim() || "";
 // Only for testing against a stand-in on this computer; normally GIPHY's own.
 const GIPHY = (process.env.GIPHY_API_URL?.trim() || "https://api.giphy.com/v1").replace(/\/+$/, "");
 export const gifsConfigured = KEY.length > 0;
 const PAGE = 24;
+const TRENDING_TTL = 10 * 60;
+const SEARCH_TTL = 60 * 60;
+const ONE_TTL = 24 * 60 * 60;
+const MISSING_TTL = 60 * 60;
+
+async function cached<T>(key: string): Promise<T | undefined> {
+  try {
+    const raw = await redis.get(key);
+    return raw ? (JSON.parse(raw) as T) : undefined;
+  } catch {
+    return undefined; // Redis trouble never blocks GIFs: ask GIPHY instead
+  }
+}
+
+function keep(key: string, value: unknown, seconds: number): void {
+  redis.set(key, JSON.stringify(value), { EX: seconds }).catch(() => {});
+}
 
 export const gifsRouter = Router();
 gifsRouter.use(requireAuth);
@@ -94,8 +116,17 @@ function notSetUp(res: Response): boolean {
 
 const offsetParam = z.coerce.number().int().min(0).max(4975).catch(0);
 
+type Page = { gifs: GifInfo[]; next: number | null };
+
 async function list(res: Response, path: string, extra: Record<string, string>, offset: number): Promise<void> {
   const allowed = await rating(me(res).id);
+  const cacheKey = `gifcache:v1:${allowed}:${path}:${(extra.q ?? "").toLowerCase()}:${offset}`;
+  const hit = await cached<Page>(cacheKey);
+  if (hit) {
+    res.set("Cache-Control", "private, max-age=60");
+    res.json(hit);
+    return;
+  }
   const answer = await giphy(path, { limit: String(PAGE), offset: String(offset), rating: allowed, bundle: "messaging_non_clips", ...extra });
   const body = (answer === "missing" ? null : answer) as { data?: GiphyItem[]; pagination?: { total_count?: number; count?: number } } | null;
   if (!body || !Array.isArray(body.data)) {
@@ -108,6 +139,7 @@ async function list(res: Response, path: string, extra: Record<string, string>, 
     .filter((g): g is GifInfo => g !== null);
   const total = Number(body.pagination?.total_count ?? 0);
   const next = offset + PAGE < Math.min(total, 5000) && gifs.length > 0 ? offset + PAGE : null;
+  keep(cacheKey, { gifs, next } satisfies Page, extra.q ? SEARCH_TTL : TRENDING_TTL);
   res.set("Cache-Control", "private, max-age=60");
   res.json({ gifs, next });
 }
@@ -134,11 +166,19 @@ gifsRouter.get("/search", gifLimiter, async (req, res) => {
 export async function gifById(id: string, userId: string): Promise<GifInfo | null | "unavailable"> {
   if (!gifsConfigured) return "unavailable";
   if (!isGifId(id)) return null;
-  const answer = await giphy(`/gifs/${id}`, {});
-  if (answer === "missing") return null;
-  const body = answer as { data?: GiphyItem } | null;
-  if (!body) return "unavailable";
-  if (!body.data || !isGifId(body.data.id)) return null;
-  if (!RATINGS[await rating(userId)].has(String(body.data.rating ?? "g").toLowerCase())) return null;
-  return clean(body.data);
+  // The cache keeps the GIF's own rating, so the family check below still runs for every send.
+  type One = { gif: GifInfo; rating: string } | { missing: true };
+  const oneKey = `gifone:v1:${id}`;
+  let one = await cached<One>(oneKey);
+  if (!one) {
+    const answer = await giphy(`/gifs/${id}`, {});
+    if (answer === null) return "unavailable";
+    const body = answer === "missing" ? null : (answer as { data?: GiphyItem });
+    const info = body?.data && isGifId(body.data.id) ? clean(body.data) : null;
+    one = info ? { gif: info, rating: String(body!.data!.rating ?? "g").toLowerCase() } : { missing: true };
+    keep(oneKey, one, "missing" in one ? MISSING_TTL : ONE_TTL);
+  }
+  if ("missing" in one) return null;
+  if (!RATINGS[await rating(userId)].has(one.rating)) return null;
+  return one.gif;
 }
