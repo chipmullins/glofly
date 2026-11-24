@@ -13,6 +13,32 @@ export type WhatsNewEntry = { version: string; date: string; headline: string; i
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.11.4',
+    date: '2026-11-24',
+    headline: 'Better fights on phones, roomier calls',
+    items: [
+      {
+        title: 'Attack from your phone',
+        text: 'In Campfire, tap a weapon, then the creature you want to hit. Rings show how far it reaches, and it only rolls if the target is in range. Bows show how many arrows you have left.',
+        on: ['phone']
+      },
+      {
+        title: 'Hide and show creatures',
+        text: 'Game masters can pick a creature on the map and hide it from players, or show it again, right from the phone.',
+        on: ['phone']
+      },
+      {
+        title: 'Three-person calls side by side',
+        text: 'With three people on a video call, the tiles sit side by side instead of stacked, so nobody gets squished.',
+        on: ['phone']
+      },
+      {
+        title: 'Faster GIFs',
+        text: 'Popular GIFs and searches load quicker.'
+      }
+    ]
+  },
+  {
     version: '0.11.3',
     date: '2026-11-12',
     headline: 'Campfire got a lot better at fights',
