@@ -361,7 +361,8 @@ export function createBridge(): GloflyApi {
     },
     status: {
       get: () => request<MyStatus>('GET', '/users/me/status'),
-      set: (changes) => request<MyStatus>('PATCH', '/users/me/status', changes)
+      set: (changes) => request<MyStatus>('PATCH', '/users/me/status', changes),
+      activitySharing: (change) => request<{ ok: true }>('PUT', '/users/me/activity-sharing', change)
     },
     profile: {
       getMine: (as) =>

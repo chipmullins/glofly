@@ -58,6 +58,12 @@ export function cleanAnnouncement(a: unknown): Announcement | null {
   }
 }
 
+let remoteActivity: ((change: { share?: unknown; hide?: unknown }) => void) | null = null
+/** 0.11.4: who applies a "Show what I'm playing" change sent from your phone (set at start). */
+export function onRemoteActivity(handler: (change: { share?: unknown; hide?: unknown }) => void): void {
+  remoteActivity = handler
+}
+
 export function connectRealtime(url: string, token: string, onUnauthorized: () => void): void {
   disconnectRealtime()
   socket = io(url, {
@@ -65,7 +71,10 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
     auth: {
       token,
       version: app.getVersion(),
-      features: ['constellations', 'callMove', 'watchSites', 'watchKick', 'campfire']
+      // 0.11.4: activityRemote = your phone can change "Show what I'm playing" here (Windows only)
+      features: ['constellations', 'callMove', 'watchSites', 'watchKick', 'campfire'].concat(
+        remoteActivity ? ['activityRemote'] : []
+      )
     },
     transports: ['websocket'],
     reconnectionDelayMax: 10_000 // keeps retrying if the connection drops
@@ -99,6 +108,9 @@ export function connectRealtime(url: string, token: string, onUnauthorized: () =
         }
       })
     }
+  })
+  socket.on('activity:remote', (p) => {
+    if (p && typeof p === 'object') remoteActivity?.(p)
   })
   socket.on('announcement', (p) => {
     forward({ type: 'announcement', announcement: cleanAnnouncement(p?.announcement) })

@@ -15,8 +15,12 @@ export const WHATS_NEW: WhatsNewEntry[] = [
   {
     version: '0.11.4',
     date: '2026-11-24',
-    headline: 'Better fights on phones, roomier calls',
+    headline: 'See what you’re playing, and better fights on phones',
     items: [
+      {
+        title: 'See what you’re playing',
+        text: 'Your game now shows under your name, just like friends see it. Tap it to check what they see, turn sharing off, or tell us if Glofly picked the wrong game.'
+      },
       {
         title: 'Attack from your phone',
         text: 'In Campfire, tap a weapon, then the creature you want to hit. Rings show how far it reaches, and it only rolls if the target is in range. Bows show how many arrows you have left.',

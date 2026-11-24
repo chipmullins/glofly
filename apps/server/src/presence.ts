@@ -153,6 +153,12 @@ export async function setDeviceActivity(
   return true;
 }
 
+/** 0.11.4: whether someone's game comes only from Steam (no Glofly computer is sharing one). */
+export async function activityFromSteamOnly(userId: string): Promise<boolean> {
+  const devices = await redis.sMembers(activityDevicesKey(userId));
+  return devices.length > 0 && devices.every((d) => d === "steam") // connections/steam.ts STEAM_DEVICE;
+}
+
 /** What someone's playing right now on any device (2.0 My games), whatever their status. */
 export async function currentActivity(userId: string): Promise<Activity | null> {
   return activityOf(userId);

@@ -133,6 +133,7 @@ import {
   connectRealtime,
   disconnectRealtime,
   sendCampfireMove,
+  onRemoteActivity,
   sendTyping,
   shareActivity
 } from './realtime'
@@ -155,9 +156,10 @@ import {
   removeGame,
   runningPrograms,
   setGamesEnabled,
-  startGameWatch
+  startGameWatch,
+  applyRemoteActivity
 } from './games'
-import { getMyStatus, getSettings, setMyStatus, setSettings, startIdleWatch } from './status'
+import { getMyStatus, getSettings, setActivitySharing, setMyStatus, setSettings, startIdleWatch } from './status'
 import { isAppsRequest, isConstellationRequest, isToolsRequest, isUserId } from './api'
 import { checkPausedNow, configurePauseChecks, getPaused, getUpdateRequired } from './app-status'
 import { isReportRequest, listNotices, noticeReply, noticeSeen, sendReport } from './safety'
@@ -214,6 +216,9 @@ import type {
   WindowTheme
 } from '../preload/api-types'
 import { request as apiRequest } from './api'
+
+// 0.11.4: your phone can change "Show what I'm playing" on this computer (Windows: game detection).
+if (process.platform === 'win32') onRemoteActivity(applyRemoteActivity)
 
 // Colors for the minimize / maximize / close buttons, matching each screen and theme.
 const TITLE_BAR = {
@@ -653,6 +658,13 @@ function registerIpcHandlers(): void {
 
   // Your status.
   ipcMain.handle('status:get', (event) => (fromApp(event) ? getMyStatus() : invalid))
+  ipcMain.handle('status:activity-sharing', (event, change: unknown) => {
+    const c = change as { share?: unknown; hide?: unknown } | null
+    const share = typeof c?.share === 'boolean' ? c.share : undefined
+    const hide = cleanGameName(c?.hide) ?? undefined
+    if (!fromApp(event) || (share === undefined && hide === undefined)) return invalid
+    return setActivitySharing({ ...(share !== undefined ? { share } : {}), ...(hide ? { hide } : {}) })
+  })
   ipcMain.handle('status:set', (event, changes: unknown) => {
     const c = changes as {
       status?: unknown

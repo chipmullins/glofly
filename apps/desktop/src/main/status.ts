@@ -8,6 +8,10 @@ export const getMyStatus = (): Promise<ApiResult<MyStatus>> => request('GET', '/
 export const setMyStatus = (changes: MyStatusChanges): Promise<ApiResult<MyStatus>> =>
   request('PATCH', '/users/me/status', changes)
 
+/** 0.11.4: ask your open Glofly computer(s) to share your game or not, or to stop showing one game. */
+export const setActivitySharing = (change: { share?: boolean; hide?: string }): Promise<ApiResult<{ ok: true }>> =>
+  request('PUT', '/users/me/activity-sharing', change)
+
 export const getSettings = (): Promise<ApiResult<PrivacySettings>> =>
   request('GET', '/users/me/settings')
 

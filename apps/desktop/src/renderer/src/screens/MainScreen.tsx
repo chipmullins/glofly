@@ -61,6 +61,7 @@ import {
 } from '../lib/presence'
 import StatusDot from '../components/StatusDot'
 import StatusMenu from '../components/StatusMenu'
+import { MyGameCover, MyGameLine, useMyGame } from '../components/MyGame'
 import SettingsDialog, { type SettingsPage } from '../components/SettingsDialog'
 import FriendLiveAlerts from '../connections/FriendLiveAlerts'
 import { liveAlertsMuted, setLiveAlertsMuted, useFriendsLive } from '../lib/connections'
@@ -608,6 +609,8 @@ export default function MainScreen({
   useEffect(() => () => clearOutbox(), [])
   const [presence, setPresence] = useState<Record<string, Presence>>({})
   const [myStatus, setMyStatus] = useState<MyStatus>({ status: 'online', statusText: null })
+  // 0.11.4: your own game, as friends see it (or "Only you" with sharing off)
+  const myGame = useMyGame(myStatus)
   const [statusOpen, setStatusOpen] = useState(false)
   /** Settings, and the page it opens on (false = closed). */
   const [settingsOpen, setSettingsOpen] = useState<false | SettingsPage>(false)
@@ -2038,12 +2041,31 @@ export default function MainScreen({
             </button>
             <div className="profile-text">
               <span className="profile-name">{user.displayName}</span>
-              <span className="profile-sub" title={myStatus.statusText ?? undefined}>
-                <EmojiText
-                  text={`@${user.username} · ${myStatus.statusText || STATUS_LABEL[myStatus.status]}`}
+              {myGame ? (
+                <MyGameLine
+                  game={myGame}
+                  meName={user.displayName}
+                  meUsername={user.username}
+                  avatar={
+                    <Avatar
+                      id={user.id}
+                      name={user.displayName}
+                      avatarVersion={user.avatarVersion}
+                      status={myStatus.status === 'invisible' ? 'offline' : dotFor(myStatus.status)}
+                      ring="var(--glo-subtle)"
+                    />
+                  }
+                  onMyGames={() => setMyGamesOpen(true)}
                 />
-              </span>
+              ) : (
+                <span className="profile-sub" title={myStatus.statusText ?? undefined}>
+                  <EmojiText
+                    text={`@${user.username} · ${myStatus.statusText || STATUS_LABEL[myStatus.status]}`}
+                  />
+                </span>
+              )}
             </div>
+            {myGame && <MyGameCover game={myGame} />}
             <SettingsMenu
               onLogout={onLogout}
               onOpenSettings={() => setSettingsOpen('general')}

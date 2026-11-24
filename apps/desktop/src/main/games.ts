@@ -29,7 +29,11 @@ type Saved = {
 const saved: Saved = { enabled: true, custom: [], hidden: [], noticeShown: false }
 
 let current: string | null = null
+/** 0.11.4: when the current game was first seen, and the program it was found by (none for Steam) */
+let currentSince: string | null = null
+let currentExe: string | null = null
 let timer: ReturnType<typeof setInterval> | null = null
+let watching = false
 let checking = false
 let onActivity: (name: string | null) => void = () => {}
 
@@ -87,6 +91,8 @@ export function gameState(): GameState {
     enabled: saved.enabled,
     current: saved.enabled ? current : null,
     detected: current,
+    since: current ? currentSince : null,
+    exe: current ? currentExe : null,
     custom: saved.custom,
     hidden: saved.hidden,
     noticeShown: saved.noticeShown
@@ -129,11 +135,14 @@ async function steamGame(): Promise<string | null> {
  * What's being played: your own games first, then known games, then Steam. `shared` leaves out
  * games you hid; `running` doesn't (0.7.0: the game overlay works in hidden games too).
  */
-async function detect(): Promise<{ shared: string | null; running: string | null }> {
+async function detect(): Promise<{ shared: string | null; running: string | null; exe?: string }> {
   const exes = await runningExes()
   const all = matchGame(exes, saved.custom, KNOWN_GAMES, [])
   const visible = matchGame(exes, saved.custom, KNOWN_GAMES, saved.hidden)
-  if (visible) return { shared: visible, running: all ?? visible }
+  if (visible) {
+    const exe = [...exes].find((e) => matchGame(new Set([e]), saved.custom, KNOWN_GAMES, saved.hidden) === visible)
+    return { shared: visible, running: all ?? visible, exe }
+  }
   const steam = exes.has('steam.exe') ? await steamGame() : null
   return {
     shared: steam && !isHidden(steam, saved.hidden) ? steam : null,
@@ -143,18 +152,19 @@ async function detect(): Promise<{ shared: string | null; running: string | null
 
 /** The game running now, hidden or not (null when nothing is, or nobody asked to look). */
 let running: string | null = null
-/** 0.7.0: the game overlay wants to know about games even with "Show what I'm playing" off. */
-let overlayWants: () => boolean = () => false
 let onRunning: (name: string | null) => void = () => {}
 
 async function check(): Promise<void> {
   if (checking || !supported) return
   checking = true
   try {
-    const found = saved.enabled || overlayWants() ? await detect() : { shared: null, running: null }
-    const shared = saved.enabled ? found.shared : null
-    if (shared !== current) {
-      current = shared
+    // 0.11.4: always looked for (on this computer only), so your name panel can show "Only you ·
+    // Playing …" with sharing off; only shared with the server while it's on.
+    const found = await detect()
+    if (found.shared !== current) {
+      current = found.shared
+      currentSince = current ? new Date().toISOString() : null
+      currentExe = current ? (found.exe ?? null) : null
       onActivity(saved.enabled ? current : null)
       announce()
     }
@@ -174,7 +184,7 @@ export function watchRunningGame(
   wants: () => boolean,
   listener: (name: string | null) => void
 ): void {
-  overlayWants = wants
+  void wants // 0.11.4: games are always looked for now (shared only while sharing is on)
   onRunning = listener
 }
 
@@ -190,6 +200,7 @@ export const isRunningGameExe = (exe: string): boolean =>
 /** Starts watching for games. `share` sends the game (or null) to the server. */
 export function startGameWatch(share: (name: string | null) => void): void {
   load()
+  watching = true
   onActivity = share
   if (!supported) return
   void check()
@@ -207,13 +218,21 @@ export const sharedGame = (): string | null => (saved.enabled ? current : null)
 export function setGamesEnabled(enabled: boolean): GameState {
   saved.enabled = enabled
   save()
-  if (!enabled) {
-    current = null
-    onActivity(null)
-  }
+  onActivity(enabled ? current : null)
   announce()
   void check()
   return gameState()
+}
+
+/**
+ * 0.11.4: a change sent from your phone (through the server, only to this computer's own
+ * connection): turn sharing on or off, or stop showing one game.
+ */
+export function applyRemoteActivity(change: { share?: unknown; hide?: unknown }): void {
+  if (!watching) return // settings not loaded yet
+  if (typeof change.share === 'boolean') setGamesEnabled(change.share)
+  const name = cleanGameName(change.hide)
+  if (name) hideGame(name, true)
 }
 
 export function hideGame(name: string, hide: boolean): GameState {

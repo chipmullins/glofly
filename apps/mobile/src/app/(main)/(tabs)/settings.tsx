@@ -10,6 +10,7 @@ import { useSession } from '@/state/session'
 import { useStore } from '@/state/store'
 import { prefs } from '@/lib/storage'
 import { Avatar } from '@/ui/Avatar'
+import { MyGameCover, MyGameLine, useMyActivity } from '@/ui/MyGame'
 import { chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { SectionLabel, Text } from '@/ui/kit'
 import { SettingsRow } from '@/ui/SettingsRow'
@@ -36,6 +37,8 @@ export default function Settings() {
   const insets = useSafeAreaInsets()
   const user = useSession((s) => s.user)
   const myStatus = useStore((s) => s.myStatus)
+  // 0.11.4: your game as friends see it (shared by your computer or Steam)
+  const mine = useMyActivity(user?.id ?? '')
   const theme = useThemeChoice((s) => s.choice)
   const accent = useThemeChoice((s) => s.accent)
   const contrast = useThemeChoice((s) => s.contrast)
@@ -112,10 +115,15 @@ export default function Settings() {
           <Text size={14} tone="muted" numberOfLines={1}>
             @{user.username} · {STATUS_LABEL[myStatus?.status ?? 'online']}
           </Text>
+          {mine.activity ? <MyGameLine user={user} activity={mine.activity} fromSteam={mine.fromSteam} /> : null}
         </View>
-        <Text size={14} weight="bold" tone="accent">
-          Edit
-        </Text>
+        {mine.activity ? (
+          <MyGameCover name={mine.activity.name} />
+        ) : (
+          <Text size={14} weight="bold" tone="accent">
+            Edit
+          </Text>
+        )}
       </Pressable>
       {/* 0.9.1: your profile as others see it */}
       <Pressable

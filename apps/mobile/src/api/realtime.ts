@@ -155,6 +155,8 @@ function connect() {
       // 0.8.0: your custom status changed elsewhere or cleared itself on time: fetch it again.
       const mine = useStore.getState().myStatus
       if (mine?.statusText && (p.statusText ?? null) !== mine.statusText) void refreshStatus()
+      // 0.11.4: your game changed (Settings shows it, and whether it's from Steam): fetch it again.
+      else if ((mine?.activity?.name ?? null) !== (a && typeof a.name === 'string' ? a.name : null)) void refreshStatus()
     }
   })
   s.on('conversation:read', (p: { conversationId?: string; userId?: string; readAt?: string }) => {

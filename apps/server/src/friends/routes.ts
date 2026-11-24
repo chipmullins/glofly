@@ -5,9 +5,9 @@ import { z } from "zod";
 import { db } from "../db";
 import { blocks, friendships, users } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
-import { emitToUser } from "../realtime";
+import { emitToFeatureSockets, emitToUser } from "../realtime";
 import { endCallsBetween } from "../calls/service";
-import { announcePresence, liveStatusText, presenceOf } from "../presence";
+import { activityFromSteamOnly, announcePresence, cleanActivityName, liveStatusText, presenceOf } from "../presence";
 import { blockedEitherWay, chatPartnersOf, isRestricted, MANAGED_BY_FAMILY, pair, pairIs } from "./rules";
 import { lockedDown, LOCKDOWN_MESSAGE } from "../admin/lockdown";
 
@@ -95,13 +95,46 @@ async function myStatus(userId: string) {
   if (!row) return row;
   // A status past its end (the sweep hasn't reached it yet) is already gone.
   const expired = !!row.statusText && !liveStatusText(row.statusText, row.statusTextExpiresAt);
+  // 0.11.4 "See what you're playing": your game exactly as friends see it (none while you're
+  // invisible), and whether it comes from Steam rather than a Glofly computer. Older apps ignore both.
+  const seen = (await presenceOf([userId])).get(userId);
+  const activity = seen && seen.status !== "offline" ? (seen.activity ?? null) : null;
   return {
     status: row.status,
     statusText: expired ? null : row.statusText,
     // 0.8.0: only ever sent to you (friends just see the text).
     statusTextEndsAt: !expired && row.statusText ? (row.statusTextExpiresAt?.toISOString() ?? null) : null,
+    activity,
+    activityFromSteam: activity ? await activityFromSteamOnly(userId) : false,
   };
 }
+
+// PUT /users/me/activity-sharing  { share?: boolean, hide?: string }  (0.11.4)
+// From a phone: turn "Show what I'm playing" on or off, or stop showing one game, on your open
+// Glofly computers (the setting lives on each computer). 409 when none can take it.
+const sharingSchema = z
+  .object({ share: z.boolean().optional(), hide: z.string().max(200).optional() })
+  .refine((b) => b.share !== undefined || b.hide !== undefined);
+usersRouter.put("/me/activity-sharing", searchLimiter, async (req, res) => {
+  const parsed = sharingSchema.safeParse(req.body);
+  const hide = parsed.success && parsed.data.hide !== undefined ? cleanActivityName(parsed.data.hide) : undefined;
+  if (!parsed.success || hide === null) {
+    res.status(400).json({ error: "invalid" });
+    return;
+  }
+  const sent = await emitToFeatureSockets(me(res).id, "activity:remote", "activityRemote", {
+    ...(parsed.data.share !== undefined ? { share: parsed.data.share } : {}),
+    ...(hide ? { hide } : {}),
+  });
+  if (!sent) {
+    res.status(409).json({
+      error: "no_computer",
+      message: "Open Glofly on your computer (0.11.4 or newer) to change this, or change it there in Settings → Activity.",
+    });
+    return;
+  }
+  res.json({ ok: true });
+});
 
 // GET /users/me/status — the status you picked and your custom status.
 usersRouter.get("/me/status", async (_req, res) => {

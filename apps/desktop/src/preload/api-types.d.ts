@@ -84,6 +84,9 @@ export type RunningProgram = { exe: string; title: string }
 export type GameState = {
   /** Game detection works on this computer (Windows) */
   supported: boolean
+  /** 0.11.4: when the detected game was first seen (ISO), and the program found (none for Steam) */
+  since?: string | null
+  exe?: string | null
   /** "Show what I'm playing" */
   enabled: boolean
   /** The game friends see right now (null if none, or sharing is off) */
@@ -654,6 +657,8 @@ export type GloflyApi = {
   setErrorReports: (on: boolean) => void
   status: {
     get: () => Promise<ApiResult<MyStatus>>
+    /** 0.11.4: share your game or not (or stop showing one) on your open Glofly computers */
+    activitySharing: (change: { share?: boolean; hide?: string }) => Promise<ApiResult<{ ok: true }>>
     /**
      * Change your status and/or custom status (empty text clears it). 0.8.0: `statusClearAfter`
      * + `timeZone` make the custom status clear itself.

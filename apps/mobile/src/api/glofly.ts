@@ -69,6 +69,8 @@ export const getActivity = (userId: string, as?: 'friend' | 'everyone') =>
 export const removeAvatar = () => request<{ avatarVersion: null }>('DELETE', '/users/me/avatar')
 export const getMyStatus = () => request<MyStatus>('GET', '/users/me/status')
 export const setMyStatus = (changes: MyStatusChanges) => request<MyStatus>('PATCH', '/users/me/status', changes)
+/** 0.11.4: share your game or not (or stop showing one) on your open Glofly computers; 409 = none can */
+export const setActivitySharing = (change: { share?: boolean; hide?: string }) => request<{ ok: true }>('PUT', '/users/me/activity-sharing', change)
 export const getPrivacy = () => request<PrivacySettings>('GET', '/users/me/settings')
 export const setPrivacy = (changes: Partial<PrivacySettings>) => request<PrivacySettings>('PATCH', '/users/me/settings', changes)
 

@@ -405,6 +405,19 @@ export async function emitToUserByFeature(
   }
 }
 
+/** 0.11.4: sends an event only to this person's devices whose app knows `feature`; returns how many. */
+export async function emitToFeatureSockets(userId: string, event: string, feature: string, payload: unknown): Promise<number> {
+  if (!io) return 0;
+  let sent = 0;
+  for (const socket of await io.in(userRoom(userId)).fetchSockets()) {
+    if (Array.isArray(socket.data.features) && socket.data.features.includes(feature)) {
+      socket.emit(event, payload);
+      sent++;
+    }
+  }
+  return sent;
+}
+
 /** Which of these people have Glofly open right now (any device). */
 export async function connectedUserIds(userIds: string[]): Promise<Set<string>> {
   const out = new Set<string>();

@@ -154,6 +154,10 @@ export type MyStatus = {
    * to you, never to friends; missing on older servers.
    */
   statusTextEndsAt?: string | null
+  /** 0.11.4: your game exactly as friends see it (null: none, or you're invisible); missing on older servers */
+  activity?: Activity | null
+  /** 0.11.4: that game comes from Steam (linked), not from a Glofly computer */
+  activityFromSteam?: boolean
 }
 /** PATCH /users/me/status. Text without `statusClearAfter` = Never (what older apps send). */
 export type MyStatusChanges = {

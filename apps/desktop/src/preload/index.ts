@@ -139,7 +139,9 @@ const glofly: GloflyApi = {
   setErrorReports: (on: boolean) => ipcRenderer.send('errors:enabled', on),
   status: {
     get: () => ipcRenderer.invoke('status:get'),
-    set: (changes: MyStatusChanges) => ipcRenderer.invoke('status:set', changes)
+    set: (changes: MyStatusChanges) => ipcRenderer.invoke('status:set', changes),
+    activitySharing: (change: { share?: boolean; hide?: string }) =>
+      ipcRenderer.invoke('status:activity-sharing', change)
   },
   profile: {
     getMine: (as?: 'friend' | 'everyone') => ipcRenderer.invoke('profile:get-mine', as),
