@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { checkRange, type ArmedAttack, type SheetAttack, type Token } from '@glofly/shared'
 import { BackHandler, Platform, Pressable, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -19,6 +20,8 @@ import { useTableMusic } from '@/campfire/music'
 import { myCharacter, myToken, useFire } from '@/campfire/lib'
 import { PhoneTour, useTourOnce } from '@/campfire/PhoneTour'
 import { PausedCover, TableCards } from '@/campfire/BoardB'
+import { startAttack } from '@/campfire/actions'
+import { inform } from '@/ui/dialogs'
 
 // Campfire's table on a phone (the approved Phone board): the map on top, your turn, HP,
 // actions and dice in the sheet below it. Turn order, rolls, handouts and music are behind the
@@ -43,6 +46,8 @@ function Table({ id }: { id: string }) {
   const handouts = table?.handouts.length ?? 0
   const [panel, setPanel] = useState<PanelName | null>(null)
   const [target, setTarget] = useState<string | null>(null)
+  // 0.11.4: an attack picked in the sheet waits here for a tap on its target.
+  const [armed, setArmed] = useState<ArmedAttack | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [sheetH, setSheetH] = useState(0)
   const [seenHandouts, setSeenHandouts] = useState<number | null>(null)
@@ -69,12 +74,13 @@ function Table({ id }: { id: string }) {
   useEffect(() => {
     if (Platform.OS === 'web') return
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (panel) setPanel(null)
+      if (armed) setArmed(null)
+      else if (panel) setPanel(null)
       else leave()
       return true
     })
     return () => sub.remove()
-  }, [panel])
+  }, [panel, armed])
 
   // Paused (players): the sheet folds down so the map's message and cards have room.
   const pausedNow = !!table?.campaign.live?.paused && table?.myRole !== 'gm'
@@ -82,10 +88,11 @@ function Table({ id }: { id: string }) {
     if (pausedNow) setCollapsed(true)
   }, [pausedNow])
 
-  // A target that left the map (or went into fog) is let go.
+  // A target that left the map (or went into fog) is let go; so is an attack whose token left.
   useEffect(() => {
     if (target && table && !table.tokens.some((t) => t.id === target)) setTarget(null)
-  }, [table, target])
+    if (armed && table && !table.tokens.some((t) => t.id === armed.attackerId)) setArmed(null)
+  }, [table, target, armed])
   // New handouts get a dot on their button until the panel is opened.
   useEffect(() => {
     if (table && seenHandouts === null) setSeenHandouts(table.handouts.length)
@@ -120,6 +127,30 @@ function Table({ id }: { id: string }) {
   const people = table.present.map((uid) => table.members.find((m) => m.userId === uid)?.user).filter((u): u is NonNullable<typeof u> => !!u)
   const newHandouts = seenHandouts !== null && handouts > seenHandouts ? handouts - seenHandouts : 0
   const pending = gm ? table.pending[0] : undefined
+  const grid = table.scene?.grid ?? { size: 70, feet: 5 }
+  const say = (title: string, text: string) => void inform(title, text)
+
+  const attack = async (a: SheetAttack) => {
+    if (!character) return
+    const picked = target ? (table.tokens.find((t) => t.id === target) ?? null) : null
+    setArmed(await startAttack(id, character, a, token, picked, grid, say))
+  }
+  // A tap on the map: with an attack waiting, it picks what to attack (in range only).
+  const tapToken = (tokenId: string | null) => {
+    if (armed && tokenId && tokenId !== armed.attackerId) {
+      const attacker = table.tokens.find((t) => t.id === armed.attackerId)
+      const victim: Token | undefined = table.tokens.find((t) => t.id === tokenId)
+      if (!attacker || !victim) return setArmed(null)
+      const c = checkRange(armed.reach, attacker, victim, grid, armed.name)
+      if (!c.ok) return say('Out of range', c.why.replace(/^Out of range: /, ''))
+      setArmed(null)
+      setTarget(tokenId)
+      void armed.fire(victim, c.dis)
+      return
+    }
+    if (armed && !tokenId) return
+    setTarget(tokenId)
+  }
 
   const sheet = (
     <TableSheet
@@ -128,6 +159,9 @@ function Table({ id }: { id: string }) {
       character={character}
       token={token}
       targetId={target}
+      armed={armed}
+      onAttack={attack}
+      onCancelAttack={() => setArmed(null)}
       collapsed={collapsed && !wide}
       onToggle={() => setCollapsed((c) => !c)}
       onOpenPanel={setPanel}
@@ -172,7 +206,7 @@ function Table({ id }: { id: string }) {
 
       <View style={{ flex: 1, flexDirection: wide ? 'row' : 'column', gap: wide ? 12 : 0, paddingHorizontal: 12, paddingBottom: wide ? insets.bottom + 12 : 0 }}>
         <View style={{ flex: 1 }}>
-          <CampfireMap campaignId={id} table={table} meId={meId} targetId={target} onTarget={setTarget} bottomInset={wide ? 0 : Math.max(0, sheetH - 12)} rightInset={64} />
+          <CampfireMap campaignId={id} table={table} meId={meId} targetId={target} onTarget={tapToken} aim={armed} bottomInset={wide ? 0 : Math.max(0, sheetH - 12)} rightInset={64} />
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 10, right: 64, top: 10, gap: 8 }}>
             {pending ? <PendingBox table={table} pending={pending} /> : null}
             <RollToast campaignId={id} table={table} meId={meId} />

@@ -98,6 +98,11 @@ export function upsertCharacter(id: string, ch: CharacterView) {
   patchTable(id, (t) => ({ characters: t.characters.some((c) => c.id === ch.id) ? t.characters.map((c) => (c.id === ch.id ? ch : c)) : [...t.characters, ch] }))
 }
 
+/** A token the server just sent back (0.11.4: hide/show on phones). */
+export function storeToken(id: string, token: Token) {
+  patchTable(id, (t) => upsertToken(t, token))
+}
+
 function upsertToken(t: TableState, token: Token): Partial<TableState> | null {
   if (!t.scene || token.sceneId !== t.scene.id) return null
   return { tokens: t.tokens.some((x) => x.id === token.id) ? t.tokens.map((x) => (x.id === token.id ? token : x)) : [...t.tokens, token] }

@@ -55,6 +55,8 @@ export const campfireApi = {
     request<Character>('PATCH', `/campfire/characters/${enc(cid)}`, body),
   rest: (cid: string, kind: 'short' | 'long') => request<Character>('POST', `/campfire/characters/${enc(cid)}/rest`, { kind }),
   deathSave: (cid: string) => request<{ roll: Roll; outcome: string; deathSaves: Sheet5e['deathSaves'] }>('POST', `/campfire/characters/${enc(cid)}/death-save`, {}),
+  /** 0.11.4: game masters hide a token from players (its layer becomes 'gm') or show it again. */
+  setTokenLayer: (tokenId: string, layer: 'gm' | 'tokens') => request<Token>('PATCH', `/campfire/tokens/${enc(tokenId)}`, { layer }),
   damageToken: (tokenId: string, amount: number) => request<{ applied: unknown }>('POST', `/campfire/tokens/${enc(tokenId)}/damage`, { amount }),
   healToken: (tokenId: string, amount: number) => request<{ ok: true }>('POST', `/campfire/tokens/${enc(tokenId)}/heal`, { amount }),
   srdSpells: (q: string) => request<{ spells: SrdSpellSummary[] }>('GET', `/campfire/srd/spells?q=${enc(q)}`),

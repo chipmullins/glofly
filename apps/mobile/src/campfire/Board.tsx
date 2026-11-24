@@ -1,25 +1,27 @@
 import { useState } from 'react'
-import { withTwoHanded } from '@glofly/shared/campfire/builder'
+import { ammoStack, withTwoHanded } from '@glofly/shared/campfire/builder'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
 import { router } from 'expo-router'
 import Animated, { LinearTransition } from 'react-native-reanimated'
-import { attackExpressions, attackToHit, type Character, type TableState, type Token } from '@glofly/shared'
+import { attackExpressions, attackToHit, reachText, type ArmedAttack, type Character, type SheetAttack, type TableState, type Token } from '@glofly/shared'
 import { Text } from '@/ui/kit'
 import { Icon } from '@/ui/icons'
 import { inform } from '@/ui/dialogs'
 import { haptic } from '@/constellations/motion'
 import { campfireApi, fileSource } from './api'
-import { rollAtTable, takeAction } from './actions'
+import { rollAtTable } from './actions'
+import { storeToken } from './store'
 import { Bar, FireButton } from './ui'
 import { MovementRow } from './BoardB'
 import { useMovement } from './roundB'
 import { useSession } from '@/state/session'
 import { hpColor, initialOf, signed, tokenName, useFire, useStill } from './lib'
 
-// The Phone board's bottom sheet: whose turn it is (yours glows), your HP, your actions (tap to
-// roll; with a target picked on the map they attack it), the dice row, your character sheet and
-// End my turn. Tap the handle to fold it down and see more of the map.
+// The Phone board's bottom sheet: whose turn it is (yours glows), your HP, your actions (0.11.4:
+// tap one, then the creature to attack on the map; a target already picked is attacked at once),
+// the dice row, your character sheet and End my turn. Game masters can hide or show the picked
+// token. Tap the handle to fold it down and see more of the map.
 
 const DICE = ['d4', 'd6', 'd8', 'd12', 'd20'] as const
 
@@ -29,6 +31,9 @@ export function TableSheet({
   character,
   token,
   targetId,
+  armed,
+  onAttack,
+  onCancelAttack,
   collapsed,
   onToggle,
   onOpenPanel,
@@ -39,6 +44,10 @@ export function TableSheet({
   character: Character | null
   token: Token | null
   targetId: string | null
+  /** An attack waiting for its target (tap a creature on the map) */
+  armed: ArmedAttack | null
+  onAttack: (a: SheetAttack) => Promise<void>
+  onCancelAttack: () => void
   collapsed: boolean
   onToggle: () => void
   onOpenPanel: (p: 'order' | 'rolls') => void
@@ -65,7 +74,9 @@ export function TableSheet({
   const title = myTurn ? 'Your turn' : combat ? (currentToken ? `${tokenName(currentToken)}'s turn` : 'Someone’s turn') : gm ? 'Game master' : 'Exploring'
   const subtitle = paused
     ? 'The table is paused · you can still look at your sheet'
-    : myTurn
+    : armed
+      ? `Tap who to attack with ${armed.name} · ${reachText(armed.reach)}`
+      : myTurn
       ? mv
         ? `Drag ${character?.name ?? 'your token'} to plan a move · rest your finger to turn a corner`
         : `Drag ${character?.name ?? 'your token'} on the map to move · ${sheet?.speed ?? 30} ft`
@@ -153,19 +164,30 @@ export function TableSheet({
       {hp && hp.max > 0 ? <Bar fraction={hp.current / hp.max} color={hpColor(fire, hp.current, hp.max)} /> : null}
       {mv && !paused ? <MovementRow campaignId={campaignId} mv={mv} /> : null}
 
+      {armed ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239,90,74,0.55)', backgroundColor: 'rgba(239,90,74,0.12)' }}>
+          <Icon name="target" size={18} color={fire.red} />
+          <Text size={14} weight="bold" numberOfLines={2} style={{ flex: 1, color: fire.ink }} accessibilityLiveRegion="polite">
+            {armed.name}: tap a creature on the map
+          </Text>
+          <FireButton label="Cancel" height={36} size={13} onPress={onCancelAttack} />
+        </View>
+      ) : null}
       {collapsed ? null : (
         <>
           {character && attacks.length ? (
             <ScrollView style={{ maxHeight: 2 * 52 + 8 }} contentContainerStyle={{ gap: 8 }} nestedScrollEnabled>
               {attacks.map((a) => {
                 const toHit = attackToHit(character.sheet, a)
+                const ammo = ammoStack(character.sheet.inventory, a)
                 return (
                   <Pressable
                     key={a.id}
                     accessibilityRole="button"
-                    accessibilityLabel={`${a.name}, ${signed(toHit)} to hit, ${a.damage} ${a.damageType}${target ? `. Attack ${tokenName(target)}` : '. Roll it'}`}
+                    accessibilityLabel={`${a.name}, ${signed(toHit)} to hit, ${a.damage} ${a.damageType}${ammo ? `, ${ammo.qty} ${ammo.name.toLowerCase()} left` : ''}${target ? `. Attack ${tokenName(target)}` : token ? '. Then tap who to attack' : '. Roll it'}`}
+                    accessibilityState={{ selected: armed?.name === a.name.replace(/ \(two hands\)$/, '') }}
                     disabled={busy !== null}
-                    onPress={() => void run(a.id, () => takeAction(campaignId, character, a, token, targetId))}
+                    onPress={() => void run(a.id, () => onAttack(a))}
                     style={({ pressed }) => ({
                       minHeight: 44,
                       flexDirection: 'row',
@@ -175,7 +197,7 @@ export function TableSheet({
                       paddingHorizontal: 12,
                       borderRadius: 10,
                       borderWidth: 1,
-                      borderColor: target ? 'rgba(239,90,74,0.45)' : fire.line,
+                      borderColor: target || armed?.name === a.name.replace(/ \(two hands\)$/, '') ? 'rgba(239,90,74,0.45)' : fire.line,
                       backgroundColor: fire.card,
                       opacity: pressed || busy === a.id ? 0.75 : 1,
                     })}
@@ -187,11 +209,31 @@ export function TableSheet({
                     <Text size={13} style={{ color: fire.muted }}>
                       {attackDamageText(character, a)}
                     </Text>
-                    <Icon name={target ? 'target' : 'dice'} size={16} color={target ? fire.red : fire.muted} />
+                    {ammo ? (
+                      <Text size={12} weight="bold" style={{ color: ammo.qty ? fire.muted : fire.red }}>
+                        {`×${ammo.qty}`}
+                      </Text>
+                    ) : null}
+                    <Icon name={target || token ? 'target' : 'dice'} size={16} color={target ? fire.red : fire.muted} />
                   </Pressable>
                 )
               })}
             </ScrollView>
+          ) : null}
+          {gm && target ? (
+            <FireButton
+              label={target.layer === 'gm' ? `Show ${tokenName(target)} to players` : `Hide ${tokenName(target)} from players`}
+              icon={target.layer === 'gm' ? 'eye' : 'eyeOff'}
+              busy={busy === 'hide'}
+              onPress={() =>
+                void run('hide', async () => {
+                  haptic.light()
+                  const r = await campfireApi.setTokenLayer(target.id, target.layer === 'gm' ? 'tokens' : 'gm')
+                  if (!r.ok) void inform("Couldn't change that", r.message)
+                  else storeToken(campaignId, r.data)
+                })
+              }
+            />
           ) : null}
           {gm && targetSheet ? (
             <FireButton

@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing, runOnJS } from 'react-native-reanimated'
 import Svg, { Circle, Defs, G, Line, Mask, Path, Pattern, Polygon, Polyline, Rect, Text as SvgText } from 'react-native-svg'
 import { Image } from 'expo-image'
-import type { BuiltMap, BuiltTerrain, PieceShown, CharacterView, FogState, GridSettings, MapTheme, Point, Scene, TableState, Token } from '@glofly/shared'
+import type { ArmedAttack, BuiltMap, BuiltTerrain, PieceShown, CharacterView, FogState, GridSettings, MapTheme, Point, Scene, TableState, Token } from '@glofly/shared'
 import { gridFeet, nearestHexCenter, pieceHidden } from '@glofly/shared'
 import { sendLive } from '@/api/realtime'
 import { Text } from '@/ui/kit'
@@ -49,6 +49,7 @@ export function CampfireMap({
   meId,
   targetId,
   onTarget,
+  aim = null,
   bottomInset,
   rightInset = 0,
 }: {
@@ -57,6 +58,8 @@ export function CampfireMap({
   meId: string
   targetId: string | null
   onTarget: (tokenId: string | null) => void
+  /** 0.11.4: an attack waiting for its target: its reach is drawn around the attacker */
+  aim?: ArmedAttack | null
   /** How much of the map the bottom sheet covers (the view centers above it) */
   bottomInset: number
   /** Width covered by the map buttons on the right: centering and "whole map" leave it free */
@@ -366,6 +369,7 @@ export function CampfireMap({
             {scene.built?.terrain?.length ? <TerrainLayer terrain={scene.built.terrain} w={W} h={H} fire={fire} /> : null}
             <FogLayer fog={scene.fog} w={W} h={H} gm={gm} fire={fire} />
             <AuraLayer tokens={table.tokens} cell={cell} feet={scene.grid.feet} w={W} h={H} />
+            {aim ? <AimLayer aim={aim} tokens={table.tokens} cell={cell} feet={scene.grid.feet} w={W} h={H} fire={fire} /> : null}
             {tokens.map((t) => (
               <TokenView
                 key={t.id}
@@ -388,7 +392,7 @@ export function CampfireMap({
                 onStart={startDrag}
                 onMove={moveDrag}
                 onEnd={endDrag}
-                onTap={(id) => onTarget(id === targetId ? null : id)}
+                onTap={(id) => onTarget(aim ? id : id === targetId ? null : id)}
               />
             ))}
             {mv && mvToken ? <MoveLayer mv={mv} token={mvToken} cell={cell} feet={scene.grid.feet} live={live} over={!!liveCost && liveCost.cost > mv.left} zoom={zoom} w={W} h={H} /> : null}
@@ -649,6 +653,24 @@ function AuraLayer({ tokens, cell, feet, w, h }: { tokens: Token[]; cell: number
   )
 }
 
+/** 0.11.4: while an attack waits for its target, rings show how far it reaches: melee reach solid,
+ * normal range dashed, long range (disadvantage) faint. A spell with no range written draws none. */
+function AimLayer({ aim, tokens, cell, feet, w, h, fire }: { aim: ArmedAttack; tokens: Token[]; cell: number; feet: number; w: number; h: number; fire: CampfireColors }) {
+  const t = tokens.find((x) => x.id === aim.attackerId)
+  if (!t) return null
+  const [cx, cy] = centerOf(t, cell)
+  const ring = (ft: number) => (ft / Math.max(1, feet) - 0.5) * cell + (t.w * cell) / 2
+  const r = aim.reach
+  const shown = (v: number | null): v is number => v !== null && Number.isFinite(v) && v > 0
+  return (
+    <Svg width={w} height={h} style={{ position: 'absolute', left: 0, top: 0 }} pointerEvents="none">
+      {shown(r.long) && r.long !== r.normal ? <Circle cx={cx} cy={cy} r={ring(r.long)} fill="none" stroke={fire.amber} strokeOpacity={0.35} strokeWidth={3} strokeDasharray="6 10" /> : null}
+      {shown(r.normal) ? <Circle cx={cx} cy={cy} r={ring(r.normal)} fill={fire.amber} fillOpacity={0.06} stroke={fire.amber} strokeOpacity={0.8} strokeWidth={3} strokeDasharray="14 10" /> : null}
+      {shown(r.melee) ? <Circle cx={cx} cy={cy} r={ring(r.melee)} fill={fire.red} fillOpacity={0.08} stroke={fire.red} strokeOpacity={0.8} strokeWidth={3} /> : null}
+    </Svg>
+  )
+}
+
 /** Difficult ground and water from the map builder: hatched, like desktop's terrain tool. */
 function TerrainLayer({ terrain, w, h, fire }: { terrain: BuiltTerrain[]; w: number; h: number; fire: CampfireColors }) {
   return (
@@ -814,7 +836,7 @@ const TokenView = memo(function TokenView({ token: t, campaignId, cell, characte
   const fx = useTokenFx(campaignId, t.id, cell, still)
   const ringW = Math.max(2, cell * 0.075)
   const showName = me || active || (gm && !!t.name)
-  const label = `${tokenName(t)}${me ? ' (you)' : ''}${t.elevation ? `, ${t.elevation > 0 ? `${t.elevation} ft up` : `${-t.elevation} ft down`}` : ''}${t.locked ? ', locked' : ''}${speaking ? ', talking' : ''}${hp && hp.value !== null && hp.max !== null ? `, ${hp.value} of ${hp.max} hit points` : hp?.state ? `, ${hp.state}` : ''}${t.conditions.length ? `, ${t.conditions.join(', ')}` : ''}${active ? ', their turn' : ''}${targeted ? ', targeted' : ''}`
+  const label = `${tokenName(t)}${me ? ' (you)' : ''}${t.elevation ? `, ${t.elevation > 0 ? `${t.elevation} ft up` : `${-t.elevation} ft down`}` : ''}${t.locked ? ', locked' : ''}${speaking ? ', talking' : ''}${hp && hp.value !== null && hp.max !== null ? `, ${hp.value} of ${hp.max} hit points` : hp?.state ? `, ${hp.state}` : ''}${t.conditions.length ? `, ${t.conditions.join(', ')}` : ''}${active ? ', their turn' : ''}${targeted ? ', targeted' : ''}${gm && t.layer === 'gm' ? ', hidden from players' : ''}`
 
   // The gesture stays the same while dragging (the parent moves the token), so it never restarts.
   const calls = useRef({ onStart, onMove, onEnd, onTap })
@@ -885,6 +907,15 @@ const TokenView = memo(function TokenView({ token: t, campaignId, cell, characte
             pointerEvents="none"
             style={{ position: 'absolute', inset: -ringW * 1.6, borderRadius: w, borderWidth: ringW, borderColor: fire.green, boxShadow: `0 0 ${cell * 0.3}px ${cell * 0.08}px ${fire.green}` }}
           />
+        ) : null}
+        {gm && t.layer === 'gm' ? (
+          <View
+            pointerEvents="none"
+            accessibilityElementsHidden
+            style={{ position: 'absolute', right: -cell * 0.08, top: -cell * 0.08, width: cell * 0.36, height: cell * 0.36, borderRadius: cell, backgroundColor: 'rgba(20,14,40,0.9)', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon name="eyeOff" size={Math.round(cell * 0.22)} color={fire.amber} />
+          </View>
         ) : null}
         {targeted ? <View pointerEvents="none" style={{ position: 'absolute', inset: -ringW * 2.5, borderRadius: w, borderWidth: ringW, borderColor: fire.red, borderStyle: 'dashed' }} /> : null}
         {frac !== null ? (
