@@ -283,3 +283,7 @@
   (plain words, what people can do now; `on: [...]` limits an item to desktop/web/phone). Every app shows newer notes
   once after an update (desktop/web `lib/whatsNew.ts` + `components/WhatsNew.tsx`, phones `lib/whatsNew.ts` +
   `ui/WhatsNew.tsx`), never to brand-new accounts; Settings → About → What's new shows them again.
+- **0.11.4 (on `dev`, Nov 24, 2026)** (project doc `glofly-release-0.11.4.md`): GIPHY results are cached in Redis per rating
+  (`messages/gifs.ts`; family accounts keep their own G-only entries). Campfire's attack range rules live in shared
+  `campfire/attackFlow.ts` (desktop and phones both use them); phones arm an attack, then tap the target (`startAttack` in
+  `apps/mobile/src/campfire/actions.ts`), and game masters hide/show the picked token (`layer` 'gm'/'tokens').
