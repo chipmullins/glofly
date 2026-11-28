@@ -1,3 +1,5 @@
+import { cleanNebulaName } from './constellations'
+
 // Communities round 2 (Nov 2026), item 5: the Discord ↔ Glofly bridge (approved boards 5a–5b).
 // One official "Glofly Bridge" bot (Glofly's own Discord application; its token stays on the
 // server). A constellation connects one Discord server and pairs up to DISCORD_PAIRS_MAX channels
@@ -6,6 +8,8 @@
 // their Glofly name. Members on both sides see that the nebula is shared (Nebula.sharedWith).
 
 export const DISCORD_PAIRS_MAX = 10
+/** Nov 28: voice channel ↔ voice nebula pairs (who's in voice, both sides; no sound crosses) */
+export const DISCORD_VOICE_PAIRS_MAX = 10
 /** Files from Discord copied into Glofly at most this big (bigger ones become a line of text). */
 export const DISCORD_FILE_MAX = 25 * 1024 * 1024
 
@@ -36,6 +40,31 @@ export type DiscordPair = {
   createdAt: string
 }
 
+/** Nov 28: a Discord voice channel paired with a Glofly voice nebula (presence only). */
+export type DiscordVoicePair = {
+  id: string
+  discordChannelId: string
+  discordChannelName: string
+  nebulaId: string
+  createdAt: string
+}
+
+/** Someone in a paired Discord voice channel, as Glofly shows them. */
+export type DiscordVoicePerson = {
+  /** Their name in that server, or "Someone on Discord" when the bridge hides names */
+  name: string
+  /** `<discordUserId>/<hash>` for GET /bridge/avatars/…, or null */
+  avatar: string | null
+}
+
+/** On a voice nebula (VoiceNebulaState.discord): who's in its paired Discord voice channel. */
+export type DiscordVoicePresence = {
+  channelName: string
+  /** Opens the channel in Discord (https://discord.com/channels/<server>/<channel>) */
+  url: string
+  people: DiscordVoicePerson[]
+}
+
 /** Settings → Discord bridge (GET /constellations/:id/discord). */
 export type DiscordBridgeInfo = {
   /** The server has the bot set up (DISCORD_* settings). False: the page explains it isn't available yet. */
@@ -51,9 +80,49 @@ export type DiscordBridgeInfo = {
     pairs: DiscordPair[]
     /** The bot can't reach the server any more (removed in Discord) */
     lost: boolean
+    /** Nov 28 (servers from then on): voice pairs */
+    voicePairs?: DiscordVoicePair[]
   } | null
   /** Text channels of the connected Discord server the bot can see (for "Bridge another channel") */
   channels: { id: string; name: string; parent: string | null }[]
+  /** Nov 28: the server's voice channels (for voice pairs) */
+  voiceChannels?: { id: string; name: string; parent: string | null }[]
+}
+
+/** Nov 28: POST /constellations/:id/discord/pairs also takes { discordChannelId, newNebula: true }:
+ * makes a nebula named after the Discord channel (text for text channels, voice for voice ones) in
+ * the category with the same name as the Discord one, or the first category. */
+
+/** The name a new nebula gets from a Discord channel (the server cleans it the same way). */
+export function newNebulaName(channelName: string, kind: 'text' | 'voice'): string {
+  return cleanNebulaName(channelName, kind) ?? (kind === 'voice' ? 'Voice' : 'discord')
+}
+
+/** A name reduced for matching ("🎮│General Chat" → "generalchat"). */
+export function matchKey(name: string): string {
+  return name
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '')
+}
+
+/**
+ * The nebula a Discord channel most likely goes with: the same name (ignoring case, emoji, dashes
+ * and spaces), else one whose name starts with the channel's or the other way round ("lfg" doesn't
+ * match "looking-for-group", but "events" matches "event"). Null when nothing is close. The setup
+ * screen pre-picks these as "Matched"; people can change every one.
+ */
+export function suggestNebula<T extends { id: string; name: string }>(channelName: string, nebulas: T[], taken: ReadonlySet<string> = new Set()): T | null {
+  const k = matchKey(channelName)
+  if (!k) return null
+  const free = nebulas.filter((n) => !taken.has(n.id))
+  const exact = free.find((n) => matchKey(n.name) === k)
+  if (exact) return exact
+  if (k.length < 4) return null
+  return free.find((n) => {
+    const nk = matchKey(n.name)
+    return nk.length >= 4 && (nk.startsWith(k) || k.startsWith(nk)) && Math.abs(nk.length - k.length) <= 2
+  }) ?? null
 }
 
 /** On a message copied from Discord (messages.bridged). Older apps see "name: text" (the body). */

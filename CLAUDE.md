@@ -291,3 +291,15 @@
   (name panel line + card), phones `src/ui/MyGame.tsx` (Settings card + sheet). Windows always looks for games now
   (shared only while "Show what I'm playing" is on). `GET /users/me/status` adds `activity`/`activityFromSteam`;
   `PUT /users/me/activity-sharing` reaches open Windows computers only (feature `activityRemote`, event `activity:remote`).
+- **Discord bridge round (Nov 28, 2026; suggested 0.11.5)** (project doc `glofly-discord-bridge-nov28.md`, migration 0067,
+  so Campfire Round C's planned 0067 becomes 0068). Approved canvas "Glofly Discord bridge setup"; keep screens matching
+  it. Desktop/web: `DiscordSetup.tsx` (opens when the bot joins with nothing paired, and from "Set up channels"; shared
+  `suggestNebula` pre-picks same-name nebulas), `DiscordBridgePage.tsx` (Discord channels beside nebulas, `+ New #name`).
+  `POST …/discord/pairs` also takes `{ discordChannelId, newNebula: true }` (`newNebulaName`; category named like the
+  Discord one, else the first open one). **Who's in voice** (`bridge/voice.ts`, table `discord_bridge_voice`): a Discord
+  voice channel pairs with a voice nebula (presence only, no sound). Gateway intent GUILD_VOICE_STATES; Discord people go
+  on `VoiceNebulaState.discord` (kept by `setDiscordVoice` in constellations/voice.ts, present while paired, even empty;
+  apps must keep a voice state that has `discord` even with no Glofly people). Glofly people go to Discord as one bot
+  message in the voice channel's chat, edited in place (`onVoiceAnnounced`). Webhook avatars use signed public addresses
+  (`bridge/avatars.ts`, `/bridge/glofly-avatars/...`): Discord can't sign in to load `/avatars/...`. Pictures/files go to
+  Discord as attachments (`discordFiles`, up to 10 MB). Control's new-account alerts and morning summary leave out bots.

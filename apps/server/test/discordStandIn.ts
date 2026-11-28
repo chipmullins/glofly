@@ -23,6 +23,10 @@ export const OTHER_GUILD = "999999999999999999";
 export const CHANNELS = [
   { id: "222222222222222222", name: "general", type: 0, position: 0, guild_id: GUILD },
   { id: "333333333333333333", name: "lfg", type: 0, position: 1, guild_id: GUILD },
+  // Nov 28: a category, a text channel in it, and a voice channel (who's in voice).
+  { id: "660000000000000000", name: "Hangout", type: 4, position: 2, guild_id: GUILD },
+  { id: "661000000000000000", name: "🎮│memes", type: 0, position: 0, guild_id: GUILD, parent_id: "660000000000000000" },
+  { id: "770000000000000000", name: "Lounge", type: 2, position: 1, guild_id: GUILD, parent_id: "660000000000000000" },
   { id: "444444444444444444", name: "elsewhere", type: 0, position: 0, guild_id: OTHER_GUILD },
 ];
 const log: { method: string; path: string; body: unknown }[] = [];
@@ -38,6 +42,11 @@ const server = createServer(async (req, res) => {
   const raw = Buffer.concat(chunks).toString("utf8");
   const body = (() => {
     if (!raw) return null;
+    // Nov 28: webhook posts with files (multipart): keep the JSON part and the file names.
+    if ((req.headers["content-type"] ?? "").includes("multipart/form-data")) {
+      const json = raw.match(/name="payload_json"\r\n\r\n([\s\S]*?)\r\n--/)?.[1];
+      return { ...(json ? JSON.parse(json) : {}), _files: [...raw.matchAll(/filename="([^"]+)"/g)].map((x) => x[1]) };
+    }
     if ((req.headers["content-type"] ?? "").includes("form")) return Object.fromEntries(new URLSearchParams(raw));
     try {
       return JSON.parse(raw);
@@ -84,6 +93,11 @@ const server = createServer(async (req, res) => {
   }
   if ((r = path.match(/^\/channels\/(\d+)\/webhooks$/)) && m === "POST" && bot) return json(200, { id: `7${r[1].slice(1)}`, token: "hook-token-" + r[1] });
   if (path.match(/^\/webhooks\/\d+$/) && m === "DELETE" && bot) return json(204, null);
+  // Nov 28: the bot's own messages (the voice channel status) and server members.
+  if ((r = path.match(/^\/channels\/(\d+)\/messages$/)) && m === "POST" && bot) return json(200, { id: snow(), channel_id: r[1] });
+  if (path.match(/^\/channels\/\d+\/messages\/\d+$/) && bot) return m === "DELETE" ? json(204, null) : json(200, { id: path.split("/").pop() });
+  if ((r = path.match(/^\/guilds\/\d+\/members\/(\d+)$/)) && bot)
+    return json(200, { nick: null, user: { id: r[1], username: `member${r[1].slice(-2)}`, global_name: `Member ${r[1].slice(-2)}`, avatar: null } });
   if (path.match(/^\/users\/@me\/guilds\/\d+$/) && m === "DELETE" && bot) return json(204, null);
   if (path.match(/^\/webhooks\/\d+\/hook-token-\d+$/) && m === "POST") return json(200, { id: snow() });
   if (path.match(/^\/webhooks\/\d+\/hook-token-\d+\/messages\/\d+$/)) return m === "DELETE" ? json(204, null) : json(200, { id: path.split("/").pop() });

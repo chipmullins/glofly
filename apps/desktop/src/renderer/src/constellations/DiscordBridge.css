@@ -1,4 +1,4 @@
-/* Communities round 2, board 5a (approved): Settings → Discord bridge. Light settings look. */
+/* Communities round 2, board 5a + Nov 28 canvas "Glofly Discord bridge setup": Settings → Discord bridge. */
 .dc-bridge {
   display: flex !important;
   flex-direction: row !important;
@@ -100,7 +100,6 @@
   color: #8a2a1f;
   font-size: 13px;
 }
-.dc-pair,
 .dc-add {
   display: flex;
   align-items: center;
@@ -111,10 +110,7 @@
   background: var(--glo-surface, #fff);
   flex-wrap: wrap;
 }
-.dc-add select {
-  flex: 1;
-  min-width: 140px;
-}
+
 .dc-chip {
   height: 28px;
   padding: 0 10px;
@@ -212,4 +208,446 @@
 .dc-toggle input:focus-visible + .dc-switch {
   outline: 2px solid #f47a1f;
   outline-offset: 2px;
+}
+
+/* ---- Nov 28: the page (channels beside nebulas) ---- */
+.dc-step--later {
+  background: var(--glo-subtle);
+  border-color: var(--glo-line);
+}
+.dc-step--later .dc-step-n {
+  background: var(--glo-line-strong);
+}
+.dc-page {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 18px;
+  max-width: 900px;
+}
+.dc-nudge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--glo-warn-bg);
+  color: var(--glo-warn-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.dc-nudge > span {
+  flex: 1;
+  min-width: 220px;
+}
+.dc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dc-section-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dc-h {
+  margin: 0;
+  font: 700 17px var(--glo-font-display);
+  color: var(--glo-ink);
+}
+.dc-count {
+  flex: 1;
+  font-size: 13px;
+  color: var(--glo-muted);
+}
+.dc-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-x: auto;
+}
+.dc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 620px;
+}
+.dc-group-head {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--glo-faint);
+  padding: 8px 12px 0;
+}
+.dc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1.3fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 620px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+  box-sizing: border-box;
+}
+.dc-row > .dc-chip {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dc-row--paired {
+  background: var(--glo-subtle);
+  border-color: var(--glo-accent-muted);
+}
+.dc-row--glofly {
+  background: var(--glo-subtle);
+  border-color: var(--glo-line-soft);
+}
+.dc-row--head {
+  border: 0;
+  background: transparent;
+  padding-block: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--glo-muted);
+}
+.dc-arrow {
+  text-align: center;
+  font-weight: 700;
+  color: var(--glo-line-strong);
+}
+.dc-arrow--on {
+  color: var(--glo-accent);
+}
+.dc-row-glofly {
+  min-width: 0;
+}
+.dc-row-end {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.dc-quiet {
+  font-size: 12.5px;
+  color: var(--glo-faint);
+}
+.dc-pick {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.dc-pick select,
+.dcs-pick select {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--glo-border);
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+  padding: 0 8px;
+  font: 600 13px var(--glo-font-body);
+}
+.dc-new {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 17px;
+  border: 1px dashed var(--glo-accent-muted);
+  background: var(--glo-subtle);
+  color: var(--glo-link);
+  font: 700 13px var(--glo-font-body);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dc-new:hover {
+  background: var(--glo-accent-tint);
+}
+.dc-chip--discord {
+  background: #eef0fb;
+  color: #3b3f9e;
+}
+:root[data-theme='dark'] .dc-chip--discord {
+  background: rgba(88, 101, 242, 0.2);
+  color: #c3c8ff;
+}
+:root[data-theme='dark'] .dc-chip--glofly {
+  background: rgba(244, 122, 31, 0.16);
+  color: #ffc48e;
+}
+
+/* ---- Nov 28: the setup dialog ---- */
+.dcs {
+  width: 960px;
+  max-width: 100%;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+  background: var(--glo-cream);
+  color: var(--glo-ink);
+  box-shadow: 0 24px 60px rgba(var(--glo-shadow-rgb), 0.3);
+  overflow: hidden;
+}
+.dcs-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 26px 16px;
+  border-bottom: 1px solid var(--glo-line);
+}
+.dcs-top-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+  color: var(--glo-muted);
+}
+.dcs-top-text h2 {
+  margin: 0;
+  font: 700 21px var(--glo-font-display);
+  color: var(--glo-ink);
+}
+.dcs-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  border: 0;
+  background: transparent;
+  color: var(--glo-icon);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dcs-close:hover {
+  background: var(--glo-hover);
+}
+.dcs-steps {
+  list-style: none;
+  margin: 0;
+  padding: 12px 26px;
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  background: var(--glo-panel);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--glo-faint);
+}
+.dcs-s {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dcs-s > span {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--glo-line-soft);
+  color: var(--glo-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.dcs-s--now {
+  color: var(--glo-ink);
+}
+.dcs-s--now > span {
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+}
+.dcs-s--done {
+  color: var(--glo-good-text);
+}
+.dcs-s--done > span {
+  background: #1d6b45;
+  color: #fff;
+}
+.dcs-body {
+  display: flex;
+  gap: 22px;
+  padding: 18px 26px 6px;
+  overflow-y: auto;
+  flex-wrap: wrap;
+}
+.dcs-main {
+  flex: 1 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dcs-note {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff7ef;
+  border: 1px solid #f6c79c;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--glo-ink);
+}
+:root[data-theme='dark'] .dcs-note {
+  background: rgba(244, 122, 31, 0.1);
+  border-color: rgba(244, 122, 31, 0.35);
+}
+.dcs-cols,
+.dcs-row {
+  display: grid;
+  grid-template-columns: 200px 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+.dcs-cols {
+  padding: 4px 12px 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--glo-muted);
+}
+.dcs-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dcs-row {
+  padding: 7px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--glo-line);
+  background: var(--glo-surface);
+}
+.dcs-row--on {
+  border-color: var(--glo-accent-muted);
+}
+.dcs-row > .dc-chip {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dcs-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dcs-tag {
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  background: var(--glo-good-bg);
+  color: var(--glo-good-text);
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+.dcs-tag--new {
+  background: var(--glo-accent-tint);
+  color: var(--glo-link);
+}
+.dcs-preview {
+  flex: 0 1 250px;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--glo-panel);
+}
+.dcs-neb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--glo-faint);
+}
+.dcs-neb--on {
+  background: var(--glo-surface);
+  color: var(--glo-ink);
+}
+.dcs-neb-mark {
+  display: inline-flex;
+  color: var(--glo-faint);
+}
+.dcs-neb-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dcs-neb-new {
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  background: var(--glo-accent);
+  color: var(--glo-on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+.dcs-preview-note {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--glo-muted);
+}
+.dcs-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 26px 20px;
+  border-top: 1px solid var(--glo-line-soft);
+}
+.dcs-count {
+  flex: 1;
+  min-width: 200px;
+  font-size: 13.5px;
+  color: var(--glo-muted);
+}
+.dcs-count b {
+  color: var(--glo-ink);
+}
+.dcs-over {
+  color: var(--glo-danger-text);
+  font-weight: 700;
+}
+.dcs-h {
+  margin: 0;
+  font: 700 18px var(--glo-font-display);
+}
+.dcs-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dcs-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--glo-accent);
 }

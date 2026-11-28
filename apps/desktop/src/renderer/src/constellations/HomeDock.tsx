@@ -288,7 +288,7 @@ export default function HomeDock({
           const others = d.voice.filter((v) => v.nebulaId !== event.voice.nebulaId)
           return {
             ...map,
-            [d.id]: { ...d, voice: event.voice.userIds.length ? [...others, event.voice] : others }
+            [d.id]: { ...d, voice: event.voice.userIds.length || event.voice.discord ? [...others, event.voice] : others }
           }
         })
       } else if (event.type === 'constellation:removed') {

@@ -63,6 +63,7 @@ import { NewSincePill } from './NewSinceParts'
 import { layoutFromRows, layoutOf, rowsOf, sameRows, stepNebula, type Row } from './sidebarOrder'
 import { useRowsGlide, useSidebarDrag } from './useSidebarDrag'
 import { preloadConstellation } from './preload'
+import { DiscordVoice } from './DiscordVoice'
 import { InVoiceCount, LivePreview, VoiceFaces } from './VoiceFaces'
 // 0.8.0 community tools: events, constellation search, the Inbox
 import { eventPhase, type ConstellationEvent } from '@glofly/shared'
@@ -1311,7 +1312,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                   .filter((p): p is PublicUser => !!p)
                 // 0.7.5: a folded category keeps only the nebula you're in and voice with people in
                 // it (its header counts the news)
-                if (closed && !current && !inIt.length) return null
+                if (closed && !current && !inIt.length && !v?.discord?.people.length) return null
                 const rowKey = `neb:${n.id}`
                 const lifted = drag.drag?.key === rowKey
                 return (
@@ -1417,6 +1418,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                       onLive={(sharer, anchor, how) => showLive(n, sharer, anchor, how)}
                       onLiveLeave={leaveLive}
                     />
+                    {v?.discord && <DiscordVoice discord={v.discord} />}
                     {n.kind === 'text' &&
                       (n.threads ?? []).map((t) => (
                         <button

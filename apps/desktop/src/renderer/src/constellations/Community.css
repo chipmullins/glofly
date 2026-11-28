@@ -204,7 +204,8 @@
 
 /* ───────────── Upcoming chip (sidebar, night) ───────────── */
 .ev-chip {
-  margin: 0 8px 10px;
+  /* Nov 28: a little room under the constellation's header (it sat right against it). */
+  margin: 8px 8px 10px;
   width: calc(100% - 16px);
   padding: 10px 12px;
   border: 0;

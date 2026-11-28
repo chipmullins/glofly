@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { VoiceNebulaState } from "@glofly/shared";
+import type { DiscordVoicePresence, VoiceNebulaState } from "@glofly/shared";
 import { db } from "../db";
 import { calls, conversationMembers, nebulas } from "../db/schema";
 import { onNebulaCallChange, peopleInCall } from "../calls/service";
@@ -19,6 +19,25 @@ export function setSharing(callId: string, userId: string, on: boolean): void {
   else set.delete(userId);
   if (set.size) sharing.set(callId, set);
   else sharing.delete(callId);
+}
+
+/**
+ * Nov 28: who's in each voice nebula's paired Discord voice channel (bridge/voice.ts keeps it up to
+ * date from Discord's Gateway). Kept here so the sidebar state carries it without this file
+ * importing the bridge.
+ */
+const discordVoice = new Map<string, DiscordVoicePresence>();
+export function setDiscordVoice(nebulaId: string, presence: DiscordVoicePresence | null): void {
+  // Kept while paired, even with nobody there (the apps show "Paired with Discord #lounge").
+  if (presence) discordVoice.set(nebulaId, presence);
+  else discordVoice.delete(nebulaId);
+}
+
+/** Told whenever a voice nebula's people change (the Discord bridge updates its status message). */
+type VoiceListener = (nebulaId: string, constellationId: string, userIds: string[]) => void;
+const voiceListeners: VoiceListener[] = [];
+export function onVoiceAnnounced(listener: VoiceListener): void {
+  voiceListeners.push(listener);
 }
 
 /** Every voice nebula's state in one constellation. */
@@ -52,6 +71,7 @@ export async function voiceStatesFor(constellationIds: string[]): Promise<Map<st
       live: live.length > 0,
       sharing: live,
       muted: call ? voiceMutedIn(call.id).filter((id) => userIds.includes(id)) : [],
+      ...(discordVoice.has(r.nebulaId) ? { discord: discordVoice.get(r.nebulaId)! } : {}),
     });
     out.set(r.constellationId, list);
   }
@@ -70,6 +90,13 @@ export async function announceVoice(conversationId: string): Promise<void> {
   // 0.8.0: only people who can see it (role-only voice nebulas): its conversation's members.
   const viewers = await db.select({ userId: conversationMembers.userId }).from(conversationMembers).where(eq(conversationMembers.conversationId, conversationId));
   for (const v of viewers) emitToUser(v.userId, "constellation:voice", { constellationId: n.constellationId, voice: state }, true);
+  for (const l of voiceListeners) {
+    try {
+      l(n.id, n.constellationId, state.userIds);
+    } catch (err) {
+      console.error("A voice listener failed:", err);
+    }
+  }
 }
 
 // Calls in voice nebulas changed (someone joined or left, the room closed).

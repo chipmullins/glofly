@@ -272,7 +272,7 @@ function onEvent(e: ServerEvent) {
       const d = get().details[e.constellationId]
       if (d) {
         const others = d.voice.filter((v) => v.nebulaId !== e.voice.nebulaId)
-        set({ details: { ...get().details, [d.id]: { ...d, voice: e.voice.userIds.length ? [...others, e.voice] : others } } })
+        set({ details: { ...get().details, [d.id]: { ...d, voice: e.voice.userIds.length || e.voice.discord ? [...others, e.voice] : others } } })
       }
       refreshCardsSoon()
       return

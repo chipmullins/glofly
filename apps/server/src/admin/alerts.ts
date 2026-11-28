@@ -173,7 +173,8 @@ async function sweepAccounts(now: Date): Promise<void> {
   const fresh = await db
     .select({ id: users.id, username: users.username })
     .from(users)
-    .where(and(gt(users.createdAt, last), lt(users.createdAt, now)))
+    // People only: a bot account (a Discord bridge, an API key, a Glofly tool) isn't someone joining.
+    .where(and(gt(users.createdAt, last), lt(users.createdAt, now), eq(users.bot, false)))
     .limit(6);
   if (fresh.length > 3) {
     await raiseAlert("account_new", "New accounts", `${fresh.length >= 6 ? "6 or more" : fresh.length} people made accounts.`, { open: "accounts" });
@@ -202,7 +203,7 @@ async function sweepGrowth(now: Date): Promise<void> {
 export async function morningSummaryText(now = new Date()): Promise<string> {
   const since = new Date(now.getTime() - 24 * 60 * 60_000);
   const [m] = await db.select({ n: count() }).from(messages).where(gte(messages.createdAt, since));
-  const [u] = await db.select({ n: count() }).from(users).where(gte(users.createdAt, since));
+  const [u] = await db.select({ n: count() }).from(users).where(and(gte(users.createdAt, since), eq(users.bot, false)));
   const [r] = await db.select({ n: count() }).from(reports).where(gte(reports.createdAt, since));
   const [open] = await db.select({ n: count() }).from(reports).where(eq(reports.status, "open"));
   return `Last 24 hours: ${plural(m.n, "message")}, ${plural(u.n, "new account")}, ${plural(r.n, "report")}${open.n ? ` (${open.n} still open)` : ""}.`;

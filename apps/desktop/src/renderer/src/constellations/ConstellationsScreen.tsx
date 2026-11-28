@@ -223,7 +223,7 @@ function Space(props: Props): React.JSX.Element {
         setDetail((d) => {
           if (!d || d.id !== event.constellationId) return d
           const others = d.voice.filter((v) => v.nebulaId !== event.voice.nebulaId)
-          return { ...d, voice: event.voice.userIds.length > 0 ? [...others, event.voice] : others }
+          return { ...d, voice: event.voice.userIds.length > 0 || event.voice.discord ? [...others, event.voice] : others }
         })
       } else if (event.type === 'stage:updated' && event.constellationId === here) {
         // Communities round 2: a stage started, changed or ended.

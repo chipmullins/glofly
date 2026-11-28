@@ -468,6 +468,8 @@ export type VoiceNebulaState = {
   sharing: string[]
   /** People a moderator muted (they can't unmute until they rejoin or are unmuted) */
   muted: string[]
+  /** Nov 28: who's in the paired Discord voice channel (only when it's paired and someone's there) */
+  discord?: import('./discord').DiscordVoicePresence | null
 }
 
 /**

@@ -32,8 +32,11 @@ export const BOT_PERMISSIONS = (
   (1n << 29n) // Manage Webhooks
 ).toString();
 
-/** Gateway intents: servers, server messages, message content (a privileged intent: turn it on in the Developer Portal). */
-export const INTENTS = (1 << 0) | (1 << 9) | (1 << 15);
+/**
+ * Gateway intents: servers, voice states (Nov 28: who's in voice channels; not privileged), server
+ * messages, message content (a privileged intent: turn it on in the Developer Portal).
+ */
+export const INTENTS = (1 << 0) | (1 << 7) | (1 << 9) | (1 << 15);
 
 export class DiscordError extends Error {
   constructor(
@@ -63,6 +66,32 @@ export async function discord<T>(method: string, path: string, body?: unknown, a
       continue;
     }
     if (res.status === 204) return null as T;
+    const text = await res.text();
+    if (!res.ok) throw new DiscordError(res.status, `Discord answered ${res.status}: ${text.slice(0, 200)}`);
+    return (text ? JSON.parse(text) : null) as T;
+  }
+}
+
+/**
+ * Nov 28: a webhook post with files (multipart: payload_json + files[n]). Webhook calls carry their
+ * own token in the address, so no bot token is sent.
+ */
+export async function discordFiles<T>(path: string, payload: unknown, files: { name: string; data: Buffer; type: string }[]): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const form = new FormData();
+    form.append("payload_json", JSON.stringify(payload));
+    files.forEach((f, i) => form.append(`files[${i}]`, new Blob([new Uint8Array(f.data)], { type: f.type }), f.name));
+    const res = await fetch(DISCORD_API + path, {
+      method: "POST",
+      headers: { "User-Agent": "DiscordBot (https://glofly.app, 1.0) Glofly-Bridge" },
+      body: form,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (res.status === 429 && attempt === 0) {
+      const wait = Number((await res.json().catch(() => ({})))?.retry_after ?? 1);
+      await new Promise((r) => setTimeout(r, Math.min(10, Math.max(0.2, wait)) * 1000));
+      continue;
+    }
     const text = await res.text();
     if (!res.ok) throw new DiscordError(res.status, `Discord answered ${res.status}: ${text.slice(0, 200)}`);
     return (text ? JSON.parse(text) : null) as T;
@@ -115,7 +144,11 @@ export async function guildFromCode(code: string, redirectUri: string): Promise<
   return { id: g.id, name: g.name.slice(0, 100), icon: typeof g.icon === "string" ? g.icon : null };
 }
 
-export type DiscordChannel = { id: string; name: string; type: number; parent_id?: string | null; position?: number };
+export type DiscordChannel = { id: string; name: string; type: number; parent_id?: string | null; position?: number; guild_id?: string };
+/** Discord channel types the bridge uses: text, announcement, voice. */
+export const TEXT_CHANNEL_TYPES = [0, 5];
+export const VOICE_CHANNEL_TYPE = 2;
+export type DiscordMember = { nick?: string | null; avatar?: string | null; user?: DiscordUser };
 export type DiscordUser = { id: string; username: string; global_name?: string | null; avatar?: string | null; bot?: boolean };
 export type DiscordMessage = {
   id: string;

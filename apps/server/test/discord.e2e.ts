@@ -91,7 +91,9 @@ test("connecting: only managers; the server comes from Discord's answer, never t
   assert.match(ok.text, /Cozy RP/);
   const after = (await call(`/constellations/${cid}/discord`, owner.token)).json;
   assert.equal(after.bridge.guildId, "111111111111111111");
-  assert.deepEqual(after.channels.map((c: any) => c.name), ["general", "lfg"]);
+  assert.deepEqual(after.channels.map((c: any) => c.name), ["general", "lfg", "🎮│memes"]);
+  assert.deepEqual(after.channels.map((c: any) => c.parent), [null, null, "Hangout"]);
+  assert.deepEqual(after.voiceChannels.map((c: any) => c.name), ["Lounge"]);
   // A used state can't be replayed.
   assert.equal((await call(`/bridge/discord/callback?code=good-code&state=${again}`, null)).status, 400);
 });
@@ -187,6 +189,122 @@ test("messages both ways: names, mentions, @everyone held back, no echo, edits a
   await wait(1000);
   posts = (await discordLog()).filter((x) => x.method === "POST" && x.path.startsWith("/webhooks/"));
   assert.equal(posts.length, 0);
+});
+
+test("Nov 28: pictures go to Discord as files, and Glofly photos load without signing in", { skip }, async () => {
+  const info = (await call(`/constellations/${cid}/discord`, owner.token)).json;
+  await call(`/constellations/${cid}/discord/pairs/${info.bridge.pairs[0].id}`, owner.token, "PATCH", { paused: false });
+  // A profile photo for the member.
+  const sharp = (await import("sharp")).default;
+  const png = await sharp({ create: { width: 300, height: 300, channels: 3, background: "#f47a1f" } }).png().toBuffer();
+  const up = await fetch(`${URL_}/users/me/avatar`, { method: "PUT", headers: { ...H, authorization: `Bearer ${member.token}`, "content-type": "image/png" }, body: png });
+  assert.equal(up.status, 200, await up.text());
+  const pic = await fetch(`${URL_}/conversations/${general.conversationId}/attachments?name=sunset.png`, {
+    method: "POST",
+    headers: { ...H, authorization: `Bearer ${member.token}`, "content-type": "application/octet-stream" },
+    body: png,
+  }).then((r) => r.json());
+  await fetch(`${STAND_IN}/_test/clear`, { method: "POST" });
+  const sent = await call(`/conversations/${general.conversationId}/messages`, member.token, "POST", { body: "look", attachmentIds: [pic.attachment.id] });
+  assert.equal(sent.status, 201, sent.text);
+  await wait(1500);
+  const post = (await discordLog()).find((x) => x.method === "POST" && x.path.startsWith("/webhooks/"));
+  assert.ok(post, "posted to Discord");
+  assert.deepEqual(post!.body._files, ["sunset.webp"]);
+  assert.equal(post!.body.content, "look");
+  // The avatar address is public and signed; a changed signature or an old photo gets nothing.
+  const avatarUrl: string = post!.body.avatar_url;
+  assert.match(avatarUrl, /\/bridge\/glofly-avatars\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[A-Za-z0-9_-]{32}\.png$/);
+  const path = new URL(avatarUrl).pathname;
+  const ok = await fetch(URL_ + path);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get("content-type"), "image/png");
+  assert.equal((await fetch(URL_ + path.replace(/[A-Za-z0-9_-]{4}\.png$/, "AAAA.png"))).status, 404);
+  assert.equal((await fetch(`${URL_}/avatars/${member.id}/${path.split("/")[4]}`)).status, 401, "the normal address still needs signing in");
+});
+
+test("Nov 28: pairing with a new nebula (named after the channel, in the matching category)", { skip }, async () => {
+  const cat = await call(`/constellations/${cid}/categories`, owner.token, "POST", { name: "Hangout" });
+  assert.ok(cat.status < 300, cat.text);
+  const r = await call(`/constellations/${cid}/discord/pairs`, owner.token, "POST", { discordChannelId: "661000000000000000", newNebula: true });
+  assert.equal(r.status, 201, r.text);
+  const d = (await call(`/constellations/${cid}`, owner.token)).json.constellation;
+  const made = d.nebulas.find((n: any) => n.name === "memes");
+  assert.ok(made, "a nebula called memes");
+  assert.equal(made.kind, "text");
+  const inCat = d.categories.find((c: any) => c.id === made.categoryId);
+  assert.equal(inCat?.name.toLowerCase(), "hangout");
+  assert.ok(r.json.bridge.pairs.some((p: any) => p.nebulaId === made.id));
+  // Not for someone who can't make nebulas (a plain member can't even see the page).
+  assert.equal((await call(`/constellations/${cid}/discord/pairs`, member.token, "POST", { discordChannelId: "333333333333333333", newNebula: true })).status, 403);
+});
+
+test("Nov 28: who's in voice, both sides (no sound)", { skip }, async () => {
+  const LOUNGE = "770000000000000000";
+  const d = (await call(`/constellations/${cid}`, owner.token)).json.constellation;
+  const voiceNebula = d.nebulas.find((n: any) => n.kind === "voice");
+  assert.ok(voiceNebula, "the gaming template has a voice nebula");
+  // A voice channel only pairs with a voice nebula.
+  assert.equal((await call(`/constellations/${cid}/discord/pairs`, owner.token, "POST", { discordChannelId: LOUNGE, nebulaId: general.id })).status, 400);
+  await fetch(`${STAND_IN}/_test/clear`, { method: "POST" });
+  const r = await call(`/constellations/${cid}/discord/pairs`, owner.token, "POST", { discordChannelId: LOUNGE, nebulaId: voiceNebula.id });
+  assert.equal(r.status, 201, r.text);
+  assert.equal(r.json.bridge.voicePairs.length, 1);
+  // The bot posts one status message in the voice channel's chat.
+  await wait(500);
+  let log = await discordLog();
+  const status = log.find((x) => x.method === "POST" && x.path === `/channels/${LOUNGE}/messages`);
+  assert.ok(status, "status message posted");
+  assert.match(status!.body.content, /Nobody's in \*\*#/);
+  assert.deepEqual(status!.body.allowed_mentions, { parse: [] });
+  assert.equal(status!.body.components[0].components[0].style, 5);
+  // Someone joins the Discord voice channel: Glofly's voice nebula shows them.
+  await dispatch("VOICE_STATE_UPDATE", {
+    guild_id: "111111111111111111",
+    channel_id: LOUNGE,
+    user_id: "800000000000000009",
+    member: { nick: "Sam", user: { id: "800000000000000009", username: "sam", avatar: "0123456789abcdef0123456789abcdef" } },
+  });
+  // A bot in voice is never shown.
+  await dispatch("VOICE_STATE_UPDATE", { guild_id: "111111111111111111", channel_id: LOUNGE, user_id: "800000000000000010", member: { user: { id: "800000000000000010", username: "musicbot", bot: true } } });
+  await wait(2000);
+  let voice = (await call(`/constellations/${cid}`, member.token)).json.constellation.voice.find((v: any) => v.nebulaId === voiceNebula.id);
+  assert.equal(voice.discord.channelName, "Lounge");
+  assert.equal(voice.discord.url, `https://discord.com/channels/111111111111111111/${LOUNGE}`);
+  assert.deepEqual(voice.discord.people.map((p: any) => p.name), ["Sam"]);
+  assert.equal(voice.discord.people[0].avatar, "800000000000000009/0123456789abcdef0123456789abcdef");
+  // Names off: "Someone on Discord", no picture.
+  await call(`/constellations/${cid}/discord/settings`, owner.token, "PUT", { names: false });
+  await wait(1800);
+  voice = (await call(`/constellations/${cid}`, member.token)).json.constellation.voice.find((v: any) => v.nebulaId === voiceNebula.id);
+  assert.deepEqual(voice.discord.people, [{ name: "Someone on Discord", avatar: null }]);
+  await call(`/constellations/${cid}/discord/settings`, owner.token, "PUT", { names: true });
+  // They leave.
+  await dispatch("VOICE_STATE_UPDATE", { guild_id: "111111111111111111", channel_id: null, user_id: "800000000000000009" });
+  await wait(1800);
+  voice = (await call(`/constellations/${cid}`, member.token)).json.constellation.voice.find((v: any) => v.nebulaId === voiceNebula.id);
+  assert.deepEqual(voice.discord.people, []);
+  // Glofly → Discord: joining the voice nebula edits the status message (one edit, the name in it).
+  await fetch(`${STAND_IN}/_test/clear`, { method: "POST" });
+  const join = await call(`/constellations/${cid}/nebulas/${voiceNebula.id}/voice`, member.token, "POST", {});
+  assert.ok(join.status < 300, join.text);
+  {
+    await wait(3500);
+    log = await discordLog();
+    const edit = log.find((x) => x.method === "PATCH" && x.path.startsWith(`/channels/${LOUNGE}/messages/`));
+    assert.ok(edit, "status edited");
+    assert.match(edit!.body.content, /On Glofly in #.*dcmember/);
+  }
+  // Unpairing removes the status message and the Discord group.
+  const info = (await call(`/constellations/${cid}/discord`, owner.token)).json;
+  await fetch(`${STAND_IN}/_test/clear`, { method: "POST" });
+  const un = await call(`/constellations/${cid}/discord/voice/${info.bridge.voicePairs[0].id}`, owner.token, "DELETE");
+  assert.equal(un.status, 200);
+  assert.equal(un.json.bridge.voicePairs.length, 0);
+  log = await discordLog();
+  assert.ok(log.some((x) => x.method === "DELETE" && x.path.startsWith(`/channels/${LOUNGE}/messages/`)));
+  voice = (await call(`/constellations/${cid}`, member.token)).json.constellation.voice.find((v: any) => v.nebulaId === voiceNebula.id);
+  assert.equal(voice.discord, undefined);
 });
 
 test("turning it off: the notice goes, copies stay, the bot leaves the server", { skip }, async () => {

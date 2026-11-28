@@ -1451,3 +1451,15 @@ test('attack reach and range (shared by desktop and phones, 0.11.4)', () => {
   assert.equal(s.reachText(bow), 'range 150/600 ft')
   assert.equal(s.reachText(dagger), 'reach 5 ft, range 20/60 ft')
 })
+
+test('Discord channel ↔ nebula suggestions (Nov 28 bridge setup)', () => {
+  const nebs = [{ id: 'a', name: 'general' }, { id: 'b', name: 'announcements' }, { id: 'c', name: 'looking-for-group' }, { id: 'd', name: 'event' }, { id: 'e', name: 'art' }]
+  assert.equal(s.suggestNebula('General', nebs).id, 'a')
+  assert.equal(s.suggestNebula('📢│announcements', nebs).id, 'b')
+  assert.equal(s.suggestNebula('lfg', nebs), null)
+  assert.equal(s.suggestNebula('events', nebs).id, 'd')
+  assert.equal(s.suggestNebula('arts', nebs), null, 'short names only match exactly')
+  assert.equal(s.suggestNebula('general', nebs, new Set(['a'])), null, 'a taken nebula is skipped')
+  assert.equal(s.suggestNebula('🎮', nebs), null)
+  assert.equal(s.matchKey('Off Topic'), s.matchKey('off-topic'))
+})

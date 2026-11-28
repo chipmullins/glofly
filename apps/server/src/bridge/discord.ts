@@ -1,14 +1,18 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Router, type NextFunction, type Request, type Response } from "express";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import sharp from "sharp";
 import { z } from "zod";
 import {
   DISCORD_FILE_MAX,
   DISCORD_PAIRS_MAX,
+  DISCORD_VOICE_PAIRS_MAX,
+  newNebulaName,
   DEFAULT_DISCORD_SETTINGS,
   MESSAGE_MAX,
+  NEBULAS_MAX,
   cleanDiscordSettings,
+  matchKey,
   type BridgedFrom,
   type DiscordBridgeInfo,
   type DiscordBridgeSettings,
@@ -19,8 +23,10 @@ import { storage, sendStream } from "../storage";
 import {
   attachments,
   constellationApiKeys,
+  constellationCategories,
   constellations,
   discordBridgeChannels,
+  discordBridgeVoice,
   discordBridgeMessages,
   discordBridges,
   messages,
@@ -35,20 +41,28 @@ import { can, frozen, FROZEN_MESSAGE, standingOf, type Standing } from "../const
 import { constellationChanged } from "../constellations/activity";
 import { addMember, ConstellationFull } from "../constellations/members";
 import { syncNebulaAccess } from "../constellations/access";
+import { announceVoice } from "../constellations/voice";
 import { createBotUser, logIntegration } from "../integrations/keys";
 import { postScheduledText, removeMessageForGood, sendUpdated } from "../messages/routes";
 import { processUpload, storeUpload, cleanFileName } from "../messages/attachments";
 import { publicBase } from "../connections/live";
+import { createNebula } from "../constellations/routes";
+import { keyFor } from "../messages/attachments";
 import {
   DiscordError,
+  TEXT_CHANNEL_TYPES,
+  VOICE_CHANNEL_TYPE,
   discord,
   discordConfigured,
+  discordFiles,
   guildChannels,
   guildFromCode,
   inviteUrl,
   webhookName,
   type DiscordMessage,
 } from "./discordApi";
+import { CDN, discordAvatarKey, discordAvatarRef, gloflyAvatarSigOk, gloflyAvatarUrl } from "./avatars";
+import { forgetVoicePair, loadVoicePairs, onVoiceEvent, startVoiceBridge, startVoicePair, voiceSettingsChanged } from "./voice";
 import { DiscordGateway } from "./gateway";
 
 // Communities round 2 (Nov 2026), boards 5a–5b: the Discord ↔ Glofly bridge.
@@ -57,12 +71,15 @@ import { DiscordGateway } from "./gateway";
 //   POST   /constellations/:id/discord/connect          → { url } "Add the Glofly Bridge bot" (opens Discord)
 //   GET    /bridge/discord/callback?code&state&guild_id   where Discord sends people back (a small page)
 //   PUT    /constellations/:id/discord/settings         { edits?, files?, names?, everyone? }
-//   POST   /constellations/:id/discord/pairs            { discordChannelId, nebulaId }
+//   POST   /constellations/:id/discord/pairs            { discordChannelId, nebulaId } or { discordChannelId, newNebula: true }
+//                                                        (Nov 28: a voice channel pairs with a voice nebula: who's in voice)
+//   DELETE /constellations/:id/discord/voice/:vid        unpair a voice channel
 //   PATCH  /constellations/:id/discord/pairs/:pid       { paused }
 //   DELETE /constellations/:id/discord/pairs/:pid
 //   POST   /constellations/:id/discord/note             { where: "discord" | "glofly" }  "Tell members"
 //   DELETE /constellations/:id/discord                  turn the bridge off (copies stay)
 //   GET    /bridge/avatars/:discordUserId/:hash         a Discord person's picture (Glofly's copy)
+//   GET    /bridge/glofly-avatars/:user/:version/:sig.png  Nov 28: a Glofly person's picture for Discord (signed)
 //
 // Who: the owner or "Edit constellation settings" (like Integrations). The bridge acts in Glofly as
 // a bot with an API key (messages:read + messages:write on the paired nebulas only), so every
@@ -95,7 +112,6 @@ const changeLimiter = rateLimit("discord:change", {
 });
 
 const redirectUri = (req: Request) => `${publicBase(`${req.protocol}://${req.get("host")}`)}/bridge/discord/callback`;
-const CDN = (process.env.DISCORD_CDN_URL?.trim() || "https://cdn.discordapp.com").replace(/\/+$/, "");
 
 async function manager(req: Request, res: Response): Promise<Standing | null> {
   const id = idParam.safeParse(req.params.id);
@@ -172,16 +188,24 @@ async function infoFor(constellationId: string): Promise<DiscordBridgeInfo> {
   if (!b) return { available: discordConfigured, bridge: null, channels: [] };
   const list = await db.select().from(discordBridgeChannels).where(eq(discordBridgeChannels.bridgeId, b.id)).orderBy(discordBridgeChannels.createdAt);
   const [by] = b.connectedBy ? await db.select({ id: users.id, displayName: users.displayName }).from(users).where(eq(users.id, b.connectedBy)) : [];
+  const voice = await db.select().from(discordBridgeVoice).where(eq(discordBridgeVoice.bridgeId, b.id)).orderBy(discordBridgeVoice.createdAt);
   let channels: DiscordBridgeInfo["channels"] = [];
+  let voiceChannels: NonNullable<DiscordBridgeInfo["voiceChannels"]> = [];
   let lost = !!b.lostAt;
   if (discordConfigured && !lost) {
     try {
       const all = await guildChannels(b.guildId);
-      const cats = new Map(all.filter((c) => c.type === 4).map((c) => [c.id, c.name]));
-      channels = all
-        .filter((c) => c.type === 0 || c.type === 5)
-        .sort((x, y) => (x.position ?? 0) - (y.position ?? 0))
-        .map((c) => ({ id: c.id, name: c.name, parent: c.parent_id ? (cats.get(c.parent_id) ?? null) : null }));
+      const cats = new Map(all.filter((c) => c.type === 4).map((c) => [c.id, { name: c.name, position: c.position ?? 0 }]));
+      // In Discord's own order: categories first by position, then channels inside them.
+      const order = (c: { parent_id?: string | null; position?: number }) => [c.parent_id ? (cats.get(c.parent_id)?.position ?? 0) + 1 : 0, c.position ?? 0];
+      const sorted = [...all].sort((x, y) => {
+        const [a1, a2] = order(x);
+        const [b1, b2] = order(y);
+        return a1 - b1 || a2 - b2;
+      });
+      const shape = (c: (typeof all)[number]) => ({ id: c.id, name: c.name, parent: c.parent_id ? (cats.get(c.parent_id)?.name ?? null) : null });
+      channels = sorted.filter((c) => TEXT_CHANNEL_TYPES.includes(c.type)).map(shape);
+      voiceChannels = sorted.filter((c) => c.type === VOICE_CHANNEL_TYPE).map(shape);
     } catch (err) {
       if (err instanceof DiscordError && (err.status === 403 || err.status === 404)) lost = true;
     }
@@ -205,8 +229,16 @@ async function infoFor(constellationId: string): Promise<DiscordBridgeInfo> {
         createdAt: p.createdAt.toISOString(),
       })),
       lost,
+      voicePairs: voice.map((v) => ({
+        id: v.id,
+        discordChannelId: v.discordChannelId,
+        discordChannelName: v.discordChannelName,
+        nebulaId: v.nebulaId,
+        createdAt: v.createdAt.toISOString(),
+      })),
     },
     channels,
+    voiceChannels,
   };
 }
 
@@ -290,6 +322,7 @@ discordRouter.get("/bridge/discord/callback", async (req, res) => {
           // Moved to another server: the old server's webhooks go, and the bot leaves it.
           const old = await tx.delete(discordBridgeChannels).where(eq(discordBridgeChannels.bridgeId, existing.id)).returning({ webhookId: discordBridgeChannels.webhookId });
           for (const o of old) void discord("DELETE", `/webhooks/${o.webhookId}`).catch(() => undefined);
+          await tx.delete(discordBridgeVoice).where(eq(discordBridgeVoice.bridgeId, existing.id));
           void discord("DELETE", `/users/@me/guilds/${existing.guildId}`).catch(() => undefined);
         }
         return;
@@ -331,6 +364,7 @@ discordRouter.get("/bridge/discord/callback", async (req, res) => {
   await syncNebulaAccess(constellationId);
   await logIntegration({ constellationId, keyId: null, keyName: "Discord bridge", actorId: userId, action: "discord.connected", details: { server: guild.name } });
   await loadPairs();
+  await loadVoicePairs();
   await constellationChanged(constellationId);
   page(res, 200, "Connected", `${guild.name} is connected to ${c?.name ?? "your constellation"}. Go back to Glofly to pick the channels to bridge.`);
 });
@@ -349,6 +383,7 @@ discordRouter.put("/constellations/:id/discord/settings", changeLimiter, async (
   const settings = cleanDiscordSettings(req.body, cleanDiscordSettings(b.settings));
   await db.update(discordBridges).set({ settings }).where(eq(discordBridges.id, b.id));
   await loadPairs();
+  await voiceSettingsChanged(b.id);
   res.json(await infoFor(s.constellationId));
 });
 
@@ -357,18 +392,86 @@ discordRouter.post("/constellations/:id/discord/pairs", changeLimiter, async (re
   if (!s) return;
   const b = await bridgeOf(s, res);
   if (!b) return;
-  const body = z.object({ discordChannelId: snowflake, nebulaId: idParam }).safeParse(req.body);
+  const body = z
+    .union([z.object({ discordChannelId: snowflake, nebulaId: idParam }), z.object({ discordChannelId: snowflake, newNebula: z.literal(true) })])
+    .safeParse(req.body);
   if (!body.success) {
     bad(res, "Pick a Discord channel and a nebula.");
     return;
   }
-  const count = await db.$count(discordBridgeChannels, eq(discordBridgeChannels.bridgeId, b.id));
-  if (count >= DISCORD_PAIRS_MAX) {
-    bad(res, `Up to ${DISCORD_PAIRS_MAX} channels can be bridged.`, 409);
+  // The channel must be in the connected Discord server (checked with Discord, not trusted).
+  let channel: { id: string; name: string; type: number; guild_id?: string; parent_id?: string | null };
+  try {
+    channel = await discord("GET", `/channels/${body.data.discordChannelId}`);
+  } catch {
+    bad(res, "Glofly Bridge can't see that channel. Check its permissions in Discord.");
     return;
   }
-  const [n] = await db.select().from(nebulas).where(and(eq(nebulas.id, body.data.nebulaId), eq(nebulas.constellationId, s.constellationId)));
-  if (!n || (n.kind !== "text" && n.kind !== "announcement")) {
+  const voice = channel.type === VOICE_CHANNEL_TYPE;
+  if (channel.guild_id !== b.guildId || (!voice && !TEXT_CHANNEL_TYPES.includes(channel.type))) {
+    bad(res, "Pick a text or voice channel from your connected Discord server.");
+    return;
+  }
+  const count = voice
+    ? await db.$count(discordBridgeVoice, eq(discordBridgeVoice.bridgeId, b.id))
+    : await db.$count(discordBridgeChannels, eq(discordBridgeChannels.bridgeId, b.id));
+  const max = voice ? DISCORD_VOICE_PAIRS_MAX : DISCORD_PAIRS_MAX;
+  if (count >= max) {
+    bad(res, `Up to ${max} ${voice ? "voice" : ""} channels can be bridged.`.replace("  ", " "), 409);
+    return;
+  }
+  const [taken] = voice
+    ? await db.select({ id: discordBridgeVoice.id }).from(discordBridgeVoice).where(eq(discordBridgeVoice.discordChannelId, channel.id))
+    : await db.select({ id: discordBridgeChannels.id }).from(discordBridgeChannels).where(eq(discordBridgeChannels.discordChannelId, channel.id));
+  if (taken) {
+    bad(res, "That Discord channel is already bridged.", 409);
+    return;
+  }
+
+  // Nov 28: "+ New nebula" right from the pairing screen. An ordinary nebula (moved, renamed and
+  // unpaired like any other), in the category named like the Discord one, else the first category.
+  let n: typeof nebulas.$inferSelect | undefined;
+  if ("newNebula" in body.data) {
+    if (!can(s, "manageNebulas")) {
+      bad(res, "Making nebulas needs “Manage nebulas”. Pick an existing nebula instead.", 403);
+      return;
+    }
+    n = await newNebulaFor(s.constellationId, b.guildId, channel, voice ? "voice" : "text");
+    if (!n) {
+      bad(res, "That constellation has as many nebulas as it can hold. Pick an existing one.", 409);
+      return;
+    }
+  } else {
+    [n] = await db.select().from(nebulas).where(and(eq(nebulas.id, body.data.nebulaId), eq(nebulas.constellationId, s.constellationId)));
+  }
+  if (!n) {
+    bad(res, "That nebula isn't in this constellation.");
+    return;
+  }
+
+  if (voice) {
+    if (n.kind !== "voice") {
+      bad(res, "A Discord voice channel pairs with a voice nebula.");
+      return;
+    }
+    // Who's in it shows in Discord: only voice nebulas everyone in the constellation can see.
+    if (n.visibility !== "everyone" || n.optional || n.userIds.length) {
+      bad(res, "Pick a voice nebula everyone in the constellation can see (Discord sees who's in it).");
+      return;
+    }
+    const [nebTaken] = await db.select({ id: discordBridgeVoice.id }).from(discordBridgeVoice).where(eq(discordBridgeVoice.nebulaId, n.id));
+    if (nebTaken) {
+      bad(res, "That voice nebula is already paired.", 409);
+      return;
+    }
+    await db.insert(discordBridgeVoice).values({ bridgeId: b.id, discordChannelId: channel.id, discordChannelName: channel.name.slice(0, 100), nebulaId: n.id });
+    await startVoicePair(n.id).catch((err) => console.error("Couldn't start a Discord voice pair:", err));
+    await logIntegration({ constellationId: s.constellationId, keyId: b.apiKeyId, keyName: "Discord bridge", actorId: s.userId, action: "discord.voicePaired", details: { channel: channel.name, nebula: n.name } });
+    res.status(201).json(await infoFor(s.constellationId));
+    return;
+  }
+
+  if (n.kind !== "text" && n.kind !== "announcement") {
     bad(res, "Pick a text nebula from this constellation.");
     return;
   }
@@ -376,24 +479,9 @@ discordRouter.post("/constellations/:id/discord/pairs", changeLimiter, async (re
     bad(res, "Pick a nebula everyone in the constellation can see (Discord can read it).");
     return;
   }
-  // The channel must be in the connected Discord server (checked with Discord, not trusted).
-  let channel: { id: string; name: string; type: number; guild_id?: string };
-  try {
-    channel = await discord("GET", `/channels/${body.data.discordChannelId}`);
-  } catch {
-    bad(res, "Glofly Bridge can't see that channel. Check its permissions in Discord.");
-    return;
-  }
-  if (channel.guild_id !== b.guildId || (channel.type !== 0 && channel.type !== 5)) {
-    bad(res, "Pick a text channel from your connected Discord server.");
-    return;
-  }
-  const [taken] = await db
-    .select({ id: discordBridgeChannels.id })
-    .from(discordBridgeChannels)
-    .where(or(eq(discordBridgeChannels.discordChannelId, channel.id), eq(discordBridgeChannels.nebulaId, n.id)));
-  if (taken) {
-    bad(res, "That channel or nebula is already bridged.", 409);
+  const [nebTaken] = await db.select({ id: discordBridgeChannels.id }).from(discordBridgeChannels).where(eq(discordBridgeChannels.nebulaId, n.id));
+  if (nebTaken) {
+    bad(res, "That nebula is already bridged.", 409);
     return;
   }
   let hook: { id: string; token: string };
@@ -414,6 +502,64 @@ discordRouter.post("/constellations/:id/discord/pairs", changeLimiter, async (re
   await syncKey(b);
   await logIntegration({ constellationId: s.constellationId, keyId: b.apiKeyId, keyName: "Discord bridge", actorId: s.userId, action: "discord.paired", details: { channel: channel.name, nebula: n.name } });
   res.status(201).json(await infoFor(s.constellationId));
+});
+
+/** A nebula for a Discord channel: its name, in the category named like the Discord one (or the first). */
+async function newNebulaFor(
+  constellationId: string,
+  guildId: string,
+  channel: { name: string; parent_id?: string | null },
+  kind: "text" | "voice",
+): Promise<typeof nebulas.$inferSelect | undefined> {
+  const name = newNebulaName(channel.name, kind);
+  if ((await db.$count(nebulas, eq(nebulas.constellationId, constellationId))) >= NEBULAS_MAX) return undefined;
+  const cats = await db
+    .select({ id: constellationCategories.id, name: constellationCategories.name, visibility: constellationCategories.visibility })
+    .from(constellationCategories)
+    .where(eq(constellationCategories.constellationId, constellationId))
+    .orderBy(constellationCategories.position);
+  let parentName: string | null = null;
+  if (channel.parent_id) {
+    try {
+      parentName = (await guildChannels(guildId)).find((c) => c.id === channel.parent_id)?.name ?? null;
+    } catch {
+      parentName = null;
+    }
+  }
+  const key = (x: string) => matchKey(x);
+  // Only categories everyone can see: a bridged text nebula must be readable by everyone.
+  const open = cats.filter((c) => c.visibility !== "roles");
+  const category = (parentName ? open.find((c) => key(c.name) === key(parentName)) : undefined) ?? open[0] ?? null;
+  const [{ max }] = await db
+    .select({ max: sql<number>`coalesce(max(${nebulas.position}), -1)::int` })
+    .from(nebulas)
+    .where(eq(nebulas.constellationId, constellationId));
+  const row = await db.transaction((tx) => createNebula(tx, constellationId, { name, kind, categoryId: category?.id ?? null, topic: null, position: max + 1 }));
+  await constellationChanged(constellationId);
+  return row;
+}
+
+discordRouter.delete("/constellations/:id/discord/voice/*rest", changeLimiter, async (req, res) => {
+  const s = await manager(req, res);
+  if (!s) return;
+  const vid = idParam.safeParse(String(req.params.rest ?? "").split(",")[0]);
+  const [row] = vid.success
+    ? await db
+        .select({ v: discordBridgeVoice })
+        .from(discordBridgeVoice)
+        .innerJoin(discordBridges, eq(discordBridges.id, discordBridgeVoice.bridgeId))
+        .where(and(eq(discordBridgeVoice.id, vid.data), eq(discordBridges.constellationId, s.constellationId)))
+    : [];
+  if (!row) {
+    bad(res, "That voice pair isn't there any more.", 404);
+    return;
+  }
+  await db.delete(discordBridgeVoice).where(eq(discordBridgeVoice.id, row.v.id));
+  await forgetVoicePair(row.v);
+  await loadVoicePairs();
+  const [n] = await db.select({ conversationId: nebulas.conversationId }).from(nebulas).where(eq(nebulas.id, row.v.nebulaId));
+  if (n) await announceVoice(n.conversationId);
+  res.json(await infoFor(s.constellationId));
 });
 
 async function pairFor(req: Request, res: Response, s: Standing) {
@@ -480,6 +626,8 @@ discordRouter.delete("/constellations/:id/discord", changeLimiter, async (req, r
   if (!b) return;
   const list = await db.select().from(discordBridgeChannels).where(eq(discordBridgeChannels.bridgeId, b.id));
   for (const p of list) await discord("DELETE", `/webhooks/${p.webhookId}`).catch(() => undefined);
+  const voice = await db.select().from(discordBridgeVoice).where(eq(discordBridgeVoice.bridgeId, b.id));
+  for (const v of voice) await forgetVoicePair(v);
   await discord("DELETE", `/users/@me/guilds/${b.guildId}`).catch(() => undefined);
   // Copies stay (the bot's member stays too: its messages are its own). The API key goes, so the
   // "shared with Discord" notice goes away.
@@ -487,38 +635,21 @@ discordRouter.delete("/constellations/:id/discord", changeLimiter, async (req, r
   await db.delete(discordBridges).where(eq(discordBridges.id, b.id));
   await logIntegration({ constellationId: s.constellationId, keyId: null, keyName: "Discord bridge", actorId: s.userId, action: "discord.disconnected", details: { server: b.guildName } });
   await loadPairs();
+  await loadVoicePairs();
+  for (const v of voice) {
+    const [n] = await db.select({ conversationId: nebulas.conversationId }).from(nebulas).where(eq(nebulas.id, v.nebulaId));
+    if (n) await announceVoice(n.conversationId);
+  }
   await constellationChanged(s.constellationId);
   res.json(await infoFor(s.constellationId));
 });
 
 // ───────────── Pictures of Discord people ─────────────
 
-const avatarKey = (uid: string, hash: string) => `bridge/avatars/${uid}/${hash}.webp`;
-const savedAvatars = new Set<string>();
-
-async function saveAvatar(uid: string, hash: string): Promise<boolean> {
-  const key = avatarKey(uid, hash);
-  if (savedAvatars.has(key)) return true;
-  try {
-    const res = await fetch(`${CDN}/avatars/${uid}/${hash}.png?size=128`, { signal: AbortSignal.timeout(10_000), redirect: "error" });
-    if (!res.ok) return false;
-    const data = Buffer.from(await res.arrayBuffer());
-    if (data.length > 2 * 1024 * 1024) return false;
-    const webp = await sharp(data, { limitInputPixels: 4_000_000 }).resize(128, 128, { fit: "cover" }).webp({ quality: 82 }).toBuffer();
-    await storage.put(key, webp, "image/webp");
-    // Only a memory of what's already saved: start over past 5,000 (robustness round, Nov 14).
-    if (savedAvatars.size >= 5000) savedAvatars.clear();
-    savedAvatars.add(key);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 discordRouter.get("/bridge/avatars/:uid/:hash", async (req, res) => {
   const uid = snowflake.safeParse(req.params.uid);
   const hash = z.string().regex(/^(a_)?[0-9a-f]{32}$/).safeParse(req.params.hash);
-  const file = uid.success && hash.success ? await storage.get(avatarKey(uid.data, hash.data)) : null;
+  const file = uid.success && hash.success ? await storage.get(discordAvatarKey(uid.data, hash.data)) : null;
   if (!file) {
     res.status(404).end();
     return;
@@ -527,6 +658,43 @@ discordRouter.get("/bridge/avatars/:uid/:hash", async (req, res) => {
   res.setHeader("Content-Length", String(file.size));
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   sendStream(file.stream, res);
+});
+
+// Nov 28: a Glofly person's picture, for Discord (webhook avatar_url). Public but signed: only the
+// server makes these addresses (bridge/avatars.ts), and only for the person's current photo.
+const gloflyPngs = new Map<string, Buffer>();
+discordRouter.get("/bridge/glofly-avatars/:uid/:version/:sig", async (req, res) => {
+  const uid = idParam.safeParse(req.params.uid);
+  const version = idParam.safeParse(req.params.version);
+  const sig = String(req.params.sig ?? "").replace(/\.png$/, "");
+  if (!uid.success || !version.success || !/^[A-Za-z0-9_-]{32}$/.test(sig) || !gloflyAvatarSigOk(uid.data, version.data, sig)) {
+    res.status(404).end();
+    return;
+  }
+  const [row] = await db.select({ v: users.avatarVersion }).from(users).where(eq(users.id, uid.data));
+  if (row?.v !== version.data) {
+    res.status(404).end();
+    return;
+  }
+  const cacheKey = `${uid.data}/${version.data}`;
+  let png = gloflyPngs.get(cacheKey);
+  if (!png) {
+    const file = await storage.get(`avatars/${uid.data}/${version.data}.webp`);
+    if (!file) {
+      res.status(404).end();
+      return;
+    }
+    const chunks: Buffer[] = [];
+    for await (const c of file.stream as AsyncIterable<Buffer>) chunks.push(Buffer.from(c));
+    // PNG: every Discord client shows it (webhook avatars in WebP aren't shown everywhere).
+    png = await sharp(Buffer.concat(chunks), { limitInputPixels: 4_000_000 }).resize(256, 256, { fit: "cover" }).png().toBuffer();
+    if (gloflyPngs.size >= 500) gloflyPngs.clear();
+    gloflyPngs.set(cacheKey, png);
+  }
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Content-Length", String(png.length));
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.end(png);
 });
 
 // ───────────── Discord → Glofly ─────────────
@@ -567,8 +735,7 @@ async function inbound(m: DiscordMessage): Promise<void> {
   const name = settings.names
     ? (m.member?.nick || m.author.global_name || m.author.username || "Someone on Discord").replace(/@/g, "@\u200b").replace(/[\r\n]/g, " ").slice(0, 64)
     : "Someone on Discord";
-  let avatar: string | null = null;
-  if (settings.names && m.author.avatar && /^(a_)?[0-9a-f]{32}$/.test(m.author.avatar) && (await saveAvatar(m.author.id, m.author.avatar))) avatar = `${m.author.id}/${m.author.avatar}`;
+  const avatar = settings.names ? await discordAvatarRef(m.author.id, m.author.avatar) : null;
   const files = settings.files ? (m.attachments ?? []) : [];
   let text = cleanContent(m, settings).trim();
   const tooBig = files.filter((f) => f.size > DISCORD_FILE_MAX);
@@ -653,33 +820,70 @@ async function outbound(conversationId: string, messageId: string, change: "crea
   // Never the bridge's own copies (no echo), events, lanterns, thread replies or the deleted.
   if (!m || m.senderId === p.bridge.botUserId || m.event || m.lantern || m.deletedAt || (m.threadId && !m.alsoInNebula)) return;
   const [sender] = await db.select({ name: users.displayName, avatarVersion: users.avatarVersion, bot: users.bot }).from(users).where(eq(users.id, m.senderId));
-  const files = settings.files ? await db.select({ name: attachments.name, kind: attachments.kind }).from(attachments).where(eq(attachments.messageId, m.id)) : [];
-  const fileLines = files.map((f) => `📎 ${f.kind === "image" ? "a picture" : f.name} (open Glofly to see it)`);
+  const files = settings.files
+    ? await db
+        .select({ id: attachments.id, conversationId: attachments.conversationId, name: attachments.name, kind: attachments.kind, size: attachments.size })
+        .from(attachments)
+        .where(eq(attachments.messageId, m.id))
+        .orderBy(attachments.position)
+    : [];
+  // Nov 28: pictures and files go to Discord as real attachments (up to Discord's upload limit);
+  // anything bigger stays a line of text.
+  const upload: { name: string; data: Buffer; type: string }[] = [];
+  const fileLines: string[] = [];
+  if (change === "created") {
+    let total = 0;
+    for (const f of files) {
+      const key = keyFor(f, f.kind === "image" ? "full" : "file");
+      const fits = upload.length < 10 && f.size <= DISCORD_UPLOAD_MAX && total + f.size <= DISCORD_UPLOAD_MAX;
+      const data = key && fits ? await readStored(key, DISCORD_UPLOAD_MAX) : null;
+      if (data && total + data.length <= DISCORD_UPLOAD_MAX) {
+        total += data.length;
+        const name = f.kind === "image" ? `${f.name.replace(/\.[^.]*$/, "") || "picture"}.webp` : f.name;
+        upload.push({ name: name.slice(0, 100), data, type: f.kind === "image" ? "image/webp" : "application/octet-stream" });
+      } else fileLines.push(`📎 ${f.kind === "image" ? "a picture" : f.name} (too big for Discord: open Glofly to see it)`);
+    }
+  } else for (const f of files) fileLines.push(`📎 ${f.kind === "image" ? "a picture" : f.name} (open Glofly to see it)`);
   const content = [m.gif ? `${m.body}` : m.body, ...fileLines].filter(Boolean).join("\n").slice(0, 2000);
-  if (!content) return;
+  if (!content && !upload.length) return;
   if (change === "edited") {
+    if (!content) return;
     if (!settings.edits) return;
     const [row] = await db.select().from(discordBridgeMessages).where(and(eq(discordBridgeMessages.messageId, m.id), eq(discordBridgeMessages.direction, "out")));
     if (row) await discord("PATCH", `/webhooks/${p.webhookId}/${p.webhookToken}/messages/${row.discordMessageId}`, { content, allowed_mentions: { parse: [] } }, "none").catch(() => undefined);
     return;
   }
   const base = publicBase("https://api.glofly.app");
-  const sent = await discord<{ id: string }>(
-    "POST",
-    `/webhooks/${p.webhookId}/${p.webhookToken}?wait=true`,
-    {
-      content,
-      username: webhookName(sender?.name ?? "Glofly member"),
-      ...(sender?.avatarVersion ? { avatar_url: `${base}/avatars/${m.senderId}/${sender.avatarVersion}` } : {}),
-      // Nobody in Discord is pinged from Glofly.
-      allowed_mentions: { parse: [] },
-    },
-    "none",
-  ).catch((err) => {
+  const payload = {
+    content,
+    username: webhookName(sender?.name ?? "Glofly member"),
+    // Nov 28: a public, signed address (Discord can't sign in to load /avatars/…).
+    ...(sender?.avatarVersion ? { avatar_url: gloflyAvatarUrl(base, m.senderId, sender.avatarVersion) } : {}),
+    // Nobody in Discord is pinged from Glofly.
+    allowed_mentions: { parse: [] },
+  };
+  const path = `/webhooks/${p.webhookId}/${p.webhookToken}?wait=true`;
+  const sent = await (upload.length ? discordFiles<{ id: string }>(path, payload, upload) : discord<{ id: string }>("POST", path, payload, "none")).catch((err) => {
     if (err instanceof DiscordError && err.status === 404) void markWebhookGone(p);
     return null;
   });
   if (sent?.id) await db.insert(discordBridgeMessages).values({ messageId: m.id, discordMessageId: sent.id, channelId: p.id, direction: "out" }).onConflictDoNothing();
+}
+
+/** Discord's upload limit for a server without boosts (bigger files stay a line of text). */
+const DISCORD_UPLOAD_MAX = 10 * 1024 * 1024;
+
+async function readStored(key: string, max: number): Promise<Buffer | null> {
+  const file = await storage.get(key);
+  if (!file || file.size > max) return null;
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of file.stream as AsyncIterable<Buffer>) {
+    size += c.length;
+    if (size > max) return null;
+    chunks.push(Buffer.from(c));
+  }
+  return Buffer.concat(chunks);
 }
 
 /** The channel's webhook was deleted in Discord: pause the pair (Settings shows it paused). */
@@ -703,8 +907,10 @@ export function startDiscordBridge(): void {
     console.log("Discord bridge is off: set DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET and DISCORD_BOT_TOKEN to turn it on.");
     return;
   }
+  startVoiceBridge();
   gateway = new DiscordGateway((type, data) => {
     const run = (p: Promise<void>) => void p.catch((err) => console.error(`Discord bridge (${type}) failed:`, err));
+    if (type === "GUILD_CREATE" || type === "GUILD_DELETE" || type === "VOICE_STATE_UPDATE") onVoiceEvent(type, data);
     if (type === "MESSAGE_CREATE") run(inbound(data as DiscordMessage));
     else if (type === "MESSAGE_UPDATE") run(inboundEdit(data as DiscordMessage));
     else if (type === "MESSAGE_DELETE") run(inboundDelete(data as { id: string; channel_id: string }));

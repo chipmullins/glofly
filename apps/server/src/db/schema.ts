@@ -2483,6 +2483,29 @@ export const discordBridgeMessages = pgTable(
   (t) => [index("discord_bridge_messages_discord_idx").on(t.discordMessageId)],
 );
 
+// Nov 28, 2026: a Discord voice channel paired with a voice nebula. Presence only (who's in each
+// room is shown on the other side); no sound crosses. The bot keeps one message in the voice
+// channel's chat up to date ("On Glofly in #hangout: …").
+export const discordBridgeVoice = pgTable(
+  "discord_bridge_voice",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bridgeId: uuid("bridge_id")
+      .notNull()
+      .references(() => discordBridges.id, { onDelete: "cascade" }),
+    discordChannelId: text("discord_channel_id").notNull().unique(),
+    discordChannelName: text("discord_channel_name").notNull(),
+    nebulaId: uuid("nebula_id")
+      .notNull()
+      .unique()
+      .references(() => nebulas.id, { onDelete: "cascade" }),
+    // The bot's message in the voice channel's chat (edited as people come and go)
+    statusMessageId: text("status_message_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("discord_bridge_voice_bridge_idx").on(t.bridgeId)],
+);
+
 // ───────────── Campfire (phase 1, Nov 2026): the tabletop ─────────────
 // A campaign lives in a constellation (opened from a voice nebula) or a group chat. Everything a
 // player sees is filtered on the server (campfire/view.ts): fog, the GM layer, notes, NPC sheets.

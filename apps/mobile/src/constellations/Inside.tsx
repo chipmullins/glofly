@@ -15,6 +15,7 @@ import { nebulaMenu } from './nebulaActions'
 import { gateLabel, isQuiet, sectionsOf } from './roles'
 import { BannerStars, ConstellationIcon, CountBadge, HomeGlyph, GalaxyIcon, Live, N, SpeakerGlyph, StarGlyph } from './ui'
 import { Megaphone } from './Stage'
+import { DiscordVoice } from './DiscordVoice'
 
 // Inside a constellation (canvas board 4, and the iPad board): the icon strip to switch
 // constellations, the banner, and the categories with their nebulas.
@@ -363,9 +364,12 @@ function VoiceRow({ c, n, voice, people, onOpen, selected, dense }: { c: Constel
   const talking = useTalking(n.id)
   const mine = useCall((st) => st.voice?.nebulaId === n.id)
   const stacked = inIt.length > VOICE_LIST_MAX && !mine
+  // Nov 28: a voice nebula paired with a Discord voice channel shows who's in it there.
+  const discord = voice?.discord ? <DiscordVoice discord={voice.discord} indent={dense ? 24 : 26} /> : null
   if (!busy) {
     return (
-      <Pressable
+      <View>
+        <Pressable
         ref={ref}
         accessibilityRole="button"
         accessibilityLabel={label}
@@ -380,10 +384,13 @@ function VoiceRow({ c, n, voice, people, onOpen, selected, dense }: { c: Constel
           {n.name}
         </Text>
         {n.visibility === 'roles' ? <LockBadge label={gateLabel(c, n.roleIds)} /> : null}
-      </Pressable>
+        </Pressable>
+        {discord}
+      </View>
     )
   }
   return (
+    <View>
     <Pressable
       ref={ref}
       accessibilityRole="button"
@@ -437,5 +444,7 @@ function VoiceRow({ c, n, voice, people, onOpen, selected, dense }: { c: Constel
         </View>
       )}
     </Pressable>
+    {discord}
+    </View>
   )
 }

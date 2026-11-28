@@ -13,6 +13,26 @@ export type WhatsNewEntry = { version: string; date: string; headline: string; i
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.11.5',
+    date: '2026-11-28',
+    headline: 'A friendlier Discord bridge',
+    items: [
+      {
+        title: 'Set up the Discord bridge in one go',
+        text: 'Right after the Glofly Bridge bot joins your Discord server, Glofly asks which channels go with which nebulas. Same-name ones are matched for you, and you can make a new nebula for any Discord channel on the spot.',
+        on: ['desktop', 'web']
+      },
+      {
+        title: 'Who’s in voice, on both sides',
+        text: 'Pair a Discord voice channel with a voice nebula to see who’s hanging out over there, right under the nebula. Discord sees who’s in the nebula too. No sound crosses over.'
+      },
+      {
+        title: 'Your photo and pictures in Discord',
+        text: 'Messages you send into a bridged nebula now show in Discord with your profile photo, and pictures arrive as real pictures instead of a note to open Glofly.'
+      }
+    ]
+  },
+  {
     version: '0.11.4',
     date: '2026-11-24',
     headline: 'See what you’re playing, and better fights on phones',
