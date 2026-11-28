@@ -17,6 +17,7 @@ export function applyAppearance({ accent, dark }: { accent: AccentChoice; dark: 
 export function startAppearance(): void {
   applyAppearance(window.glofly.app.initialAppearance)
   startContrast()
+  startConstellationsLook()
   window.glofly.onEvent((event) => {
     if (event.type === 'appearance') applyAppearance(event)
   })
@@ -63,5 +64,49 @@ export function startContrast(): void {
   // Another Glofly window (or browser tab) changed it.
   window.addEventListener('storage', (e) => {
     if (e.key === CONTRAST_KEY) applyContrast()
+  })
+}
+
+// 0.12.0 (sidebar canvas board 3): Settings → Appearance → "Constellations look", kept on this
+// device. Ember night is today's look and stays the default; the rail and the constellation
+// sidebar take their colors from --cx-* variables set per look (constellations/Looks.css).
+export type ConstellationsLook = 'ember' | 'nightGlow' | 'galaxy' | 'daylight'
+export const CONSTELLATIONS_LOOKS: { value: ConstellationsLook; label: string }[] = [
+  { value: 'ember', label: 'Ember night' },
+  { value: 'nightGlow', label: 'Night Glow' },
+  { value: 'galaxy', label: 'Night Glow Galaxy' },
+  { value: 'daylight', label: 'Daylight' }
+]
+const LOOK_KEY = 'glofly.constellationsLook'
+
+export function constellationsLook(): ConstellationsLook {
+  try {
+    const v = localStorage.getItem(LOOK_KEY)
+    return CONSTELLATIONS_LOOKS.some((l) => l.value === v) ? (v as ConstellationsLook) : 'ember'
+  } catch {
+    return 'ember'
+  }
+}
+
+function applyLook(): void {
+  const look = constellationsLook()
+  if (look === 'ember') delete root.dataset.cxLook
+  else root.dataset.cxLook = look
+}
+
+export function setConstellationsLook(look: ConstellationsLook): void {
+  try {
+    if (look === 'ember') localStorage.removeItem(LOOK_KEY)
+    else localStorage.setItem(LOOK_KEY, look)
+  } catch {
+    // storage off: just for now
+  }
+  applyLook()
+}
+
+function startConstellationsLook(): void {
+  applyLook()
+  window.addEventListener('storage', (e) => {
+    if (e.key === LOOK_KEY) applyLook()
   })
 }

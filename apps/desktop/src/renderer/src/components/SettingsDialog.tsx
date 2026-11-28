@@ -1,6 +1,14 @@
 import ProfileSettings from './ProfileSettings'
 import { hopsOn, setHopsOn } from '../lib/hop'
-import { contrastChoice, setContrastChoice, type ContrastChoice } from '../lib/appearance'
+import {
+  CONSTELLATIONS_LOOKS,
+  constellationsLook,
+  contrastChoice,
+  setConstellationsLook,
+  setContrastChoice,
+  type ConstellationsLook,
+  type ContrastChoice
+} from '../lib/appearance'
 import ConfirmDialog from './ConfirmDialog'
 import { patchSocial, refreshSocial, useSocial } from '../lib/social'
 import { Fragment, useEffect, useRef, useState } from 'react'
@@ -218,6 +226,39 @@ function ContrastRow(): React.JSX.Element {
         <option value="system">Match system</option>
         <option value="standard">Standard</option>
         <option value="high">High</option>
+      </select>
+    </div>
+  )
+}
+
+/** 0.12.0: Settings → Appearance → Constellations look (lib/appearance.ts; kept on this device). */
+function ConstellationsLookRow(): React.JSX.Element {
+  const [look, setLook] = useState<ConstellationsLook>(constellationsLook)
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <label className="settings-row-label" htmlFor="settings-cx-look">
+          Constellations look
+        </label>
+        <span className="settings-row-desc">
+          The colors of the constellations sidebar. Ember night is the original.
+        </span>
+      </div>
+      <select
+        id="settings-cx-look"
+        className="settings-select"
+        value={look}
+        onChange={(e) => {
+          const v = e.target.value as ConstellationsLook
+          setConstellationsLook(v)
+          setLook(v)
+        }}
+      >
+        {CONSTELLATIONS_LOOKS.map((l) => (
+          <option key={l.value} value={l.value}>
+            {l.label}
+          </option>
+        ))}
       </select>
     </div>
   )
@@ -1099,6 +1140,7 @@ export default function SettingsDialog({
                       </select>
                     </div>
                     <ContrastRow />
+                    <ConstellationsLookRow />
                     <HopRow />
                   </div>
                 </section>

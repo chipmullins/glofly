@@ -37,7 +37,8 @@
   box-shadow: 0 0 0 4px rgba(var(--cxa-rgb), 0.18);
 }
 .cx-accented .cx-side {
-  background-image: linear-gradient(180deg, rgba(var(--cxa-rgb), 0.09), transparent 60%);
+  /* 0.12.0: over the look's own sky (Night Glow's gradients; none in Ember night / Daylight) */
+  background-image: linear-gradient(180deg, rgba(var(--cxa-rgb), 0.09), transparent 60%), var(--cx-side-art);
 }
 
 /* The banner photo at the top of the sidebar, with the icon on it. */

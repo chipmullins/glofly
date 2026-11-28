@@ -39,25 +39,25 @@ import { api, can, outranks, topRole } from '../lib/constellations'
 import {
   ChevronDown,
   ConstellationIcon,
-  GearIcon,
   MicIconLine,
   PlusIcon,
+  SlidersIcon,
   SpeakerIcon,
-  StarIcon
+  StarIcon,
+  YouIcon
 } from './bits'
+import fireflyImg from '../assets/firefly.png'
 import { hexA } from './colors'
 import { LockIcon, gateLabel } from './RoleVisibility'
-import { FireflyMark, GalaxyIcon } from './sky'
+import { GalaxyIcon } from './sky'
 import VoiceStage from './VoiceStage'
 import StageView, { MegaphoneIcon } from './StageView'
 import { FollowButton } from './Follow'
 import { stageLine, type StageState } from '@glofly/shared/stages'
-import { BannerArt } from './identity'
 import { accentStyle, hasAccent, needsWelcome } from './communityLib'
 import { MemberCardTop, MembersPanel } from './Members'
 import WelcomeDialog, { YourRolesDialog } from './WelcomeDialog'
-import NebulaSky from './NebulaSky'
-import { sidebarOrder, starsOf } from './skyLayout'
+import { sidebarOrder } from './skyLayout'
 import { scrollToNewLine, useNewSince } from './newSinceState'
 import { NewSincePill } from './NewSinceParts'
 import { layoutFromRows, layoutOf, rowsOf, sameRows, stepNebula, type Row } from './sidebarOrder'
@@ -72,6 +72,7 @@ import { EventCard, EventDialog, EventsChip } from './Events'
 import CxSearch from './CxSearch'
 import { InboxStripButton } from './Inbox'
 import './Inside.css'
+import './Looks.css'
 import BotButtons from './BotButtons'
 import ThreadPanel, { ThreadIcon, ThreadsButton } from './ThreadPanel'
 import { ForumIcon, ForumView, NewPostDialog, PostView } from './Forum'
@@ -333,8 +334,6 @@ export default function ConstellationView(props: ConstellationViewProps): React.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, inVoiceHere, calls.tick, me.id])
   const onlineCount = c.members.filter((m) => m.status !== 'offline').length
-  // 0.7.5 living sky: the banner's stars are this constellation's nebulas
-  const skyStars = useMemo(() => starsOf(c, nebula?.id ?? null), [c, nebula?.id])
   // 0.7.5 "New since you left": the glowing line and its pill
   const newSince = useNewSince(c, nebulaId, me.id)
   // ---- 0.8.0 community tools: events, search across the constellation ----
@@ -856,8 +855,9 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         title="Back to Glofly"
         onClick={props.onHome}
       >
+        {/* 0.12.0 (Chip): the little orange Glofly, like the main sidebar's logo */}
         <span className="cx-home-mark">
-          <FireflyMark size={30} />
+          <img className="cx-home-glofly" src={fireflyImg} alt="" draggable={false} />
         </span>
         <span className="cx-home-label">Home</span>
       </button>
@@ -1024,60 +1024,52 @@ export default function ConstellationView(props: ConstellationViewProps): React.
             muted={!!room && !!inVoiceHere && !room.localParticipant.isMicrophoneEnabled}
           />
         </button>
+        {/* 0.12.0 board 1: a labeled "You" button (your own settings), so there's one gear's worth
+            of meaning on screen and it's clear whose settings these are. */}
         <button
           type="button"
-          className="cx-side-icon"
+          className="cx-you-button"
           aria-label="Your settings"
-          title="Settings"
+          title="Your settings: sounds, theme, account"
           onClick={props.onAppSettings}
         >
-          <GearIcon />
+          <YouIcon />
+          You
         </button>
       </div>
-      {/* 0.7.5 identity: its banner photo, with the icon on it (the approved Identity board) */}
-      {c.bannerVersion && (
-        <div className="cx-side-photo">
-          <BannerArt c={c} width={264} height={112} />
-          <ConstellationIcon
-            id={c.id}
-            name={c.name}
-            color={c.color}
-            iconVersion={c.iconVersion}
-            className="cx-side-photo-icon"
-            style={c.iconVersion ? undefined : { background: '#120c0a', color: 'var(--cxa)' }}
-          />
-        </div>
-      )}
-      <div
-        className={
-          c.bannerVersion ? 'cx-side-banner cx-side-banner--under-photo' : 'cx-side-banner'
-        }
-        style={{ background: theme.sideBanner }}
-        ref={headRef}
-      >
-        <NebulaSky id={c.id} stars={skyStars} scale={0.55} />
+      {/* 0.12.0 board 3: the quiet banner, in every look. A card in the sidebar's own color; the
+          constellation's color only on its small icon, a faint star-chart sketch in the corner. The
+          full colored banner stays on the welcome screen, the invite page and the dashboard card. */}
+      <div className="cx-side-banner cx-side-banner--quiet" ref={headRef}>
+        <svg className="cx-quiet-stars" width="120" height="44" viewBox="0 0 120 44" aria-hidden="true">
+          <path d="M4 30 L30 10 L58 22 L82 6 L112 26" fill="none" stroke="currentColor" strokeWidth="1" />
+          <circle cx="4" cy="30" r="1.8" fill="currentColor" />
+          <circle cx="30" cy="10" r="2.2" fill="currentColor" />
+          <circle cx="58" cy="22" r="1.8" fill="currentColor" />
+          <circle cx="82" cy="6" r="2.2" fill="currentColor" />
+          <circle cx="112" cy="26" r="1.8" fill="currentColor" />
+        </svg>
+        <ConstellationIcon
+          id={c.id}
+          name={c.name}
+          color={c.color}
+          iconVersion={c.iconVersion}
+          className="cx-quiet-icon"
+        />
         <div className="cx-side-banner-row">
           <h1>{c.name}</h1>
-          {settingsAllowed && (
-            <button
-              type="button"
-              className="cx-side-icon cx-side-settings"
-              aria-label={`${c.name} settings`}
-              title="Constellation settings"
-              onClick={() => props.onSettings('overview')}
-            >
-              <GearIcon />
-            </button>
-          )}
+          {/* 0.12.0 board 1: one labeled button opens the constellation's menu: "Manage" for
+              people who can change things (settings first), "Options" for everyone else. */}
           <button
             type="button"
-            className="cx-side-icon cx-side-head-toggle"
-            aria-label="Constellation settings"
+            className="cx-manage-button"
+            aria-label={`${settingsAllowed ? 'Manage' : 'Options for'} ${c.name}`}
             aria-haspopup="menu"
             aria-expanded={headMenu}
             onClick={() => setHeadMenu((v) => !v)}
           >
-            <ChevronDown size={18} strokeWidth={2} />
+            <SlidersIcon />
+            {settingsAllowed ? 'Manage' : 'Options'}
           </button>
         </div>
         <div className="cx-side-count">
@@ -1086,6 +1078,20 @@ export default function ConstellationView(props: ConstellationViewProps): React.
         </div>
         {headMenu && (
           <div role="menu" className="cx-menu cx-head-menu">
+            {settingsAllowed && (
+            <button
+              type="button"
+              role="menuitem"
+              className="cx-menu-item"
+              onClick={() => {
+                setHeadMenu(false)
+                props.onSettings('overview')
+              }}
+            >
+              <SlidersIcon />
+              Constellation settings
+            </button>
+            )}
             {can(c, 'invite') && (
               <button
                 type="button"
@@ -1105,11 +1111,25 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               className="cx-menu-item"
               onClick={() => {
                 setHeadMenu(false)
-                props.onSettings('overview')
+                setNotifyOpen(true)
               }}
             >
-              Constellation settings
+              Notifications for {c.name}
+              <span className="cx-menu-note">{LEVEL_NAMES[c.me.notify]}</span>
             </button>
+            {canPlan && (
+              <button
+                type="button"
+                role="menuitem"
+                className="cx-menu-item"
+                onClick={() => {
+                  setHeadMenu(false)
+                  setEventDialog({ editing: null })
+                }}
+              >
+                Plan an event
+              </button>
+            )}
             {c.watch && (
               <button
                 type="button"
@@ -1149,19 +1169,6 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 Create a nebula
               </button>
             )}
-            {canPlan && (
-              <button
-                type="button"
-                role="menuitem"
-                className="cx-menu-item"
-                onClick={() => {
-                  setHeadMenu(false)
-                  setEventDialog({ editing: null })
-                }}
-              >
-                Plan an event
-              </button>
-            )}
             <button
               type="button"
               role="menuitem"
@@ -1175,18 +1182,6 @@ export default function ConstellationView(props: ConstellationViewProps): React.
               }}
             >
               {c.me.sidebarPinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="cx-menu-item"
-              onClick={() => {
-                setHeadMenu(false)
-                setNotifyOpen(true)
-              }}
-            >
-              Notification settings…
-              <span className="cx-menu-note">{LEVEL_NAMES[c.me.notify]}</span>
             </button>
             <button
               type="button"
@@ -1227,6 +1222,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                 </button>
               )
             )}
+            {!c.me.owner && <span className="cx-menu-divider" role="separator" />}
             {!c.me.owner && (
               <button
                 type="button"
@@ -1237,7 +1233,7 @@ export default function ConstellationView(props: ConstellationViewProps): React.
                   setConfirm({ kind: 'leave' })
                 }}
               >
-                Leave constellation
+                Leave {c.name}
               </button>
             )}
           </div>

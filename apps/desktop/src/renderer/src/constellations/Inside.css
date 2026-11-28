@@ -52,7 +52,7 @@
 .cx-strip {
   width: 76px;
   flex: none;
-  background: #120c0a;
+  background: var(--cx-rail);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -79,7 +79,7 @@
   width: 48px;
   height: 48px;
   border-radius: 24px;
-  background: #2a1c17;
+  background: var(--cx-chip);
   border: 1px solid #4a372b;
   box-shadow: 0 0 18px rgba(255, 165, 74, 0.28);
   display: flex;
@@ -95,13 +95,13 @@
 .cx-home-label {
   font-size: 11px;
   font-weight: 600;
-  color: #e9d5c4;
+  color: var(--cx-dim);
 }
 .cx-strip-line {
   flex: none;
   width: 32px;
   height: 1px;
-  background: #3a2a22;
+  background: var(--cx-line);
 }
 .cx-strip-galaxy {
   flex: none;
@@ -109,13 +109,13 @@
   height: 48px;
   border: 0;
   border-radius: 16px;
-  background: #1c1210;
+  background: var(--cx-side);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .cx-strip-galaxy:hover {
-  background: #2a1c17;
+  background: var(--cx-chip);
 }
 .cx-strip-list {
   flex: 1;
@@ -176,7 +176,7 @@
   height: 12px;
   border-radius: 6px;
   background: #ffb347;
-  border: 2px solid #120c0a;
+  border: 2px solid var(--cx-rail);
   box-sizing: content-box;
   box-shadow: 0 0 8px 2px rgba(255, 165, 74, 0.45);
   font-size: 0;
@@ -188,7 +188,7 @@
   box-sizing: border-box;
   border-radius: 9px;
   border-width: 0;
-  outline: 2px solid #120c0a;
+  outline: 2px solid var(--cx-rail);
   background: #f47a1f;
   color: #2a1406;
   font-size: 11px;
@@ -205,7 +205,7 @@
   border-radius: 24px;
   border: 1.5px dashed #574a41;
   background: transparent;
-  color: #d9c2b1;
+  color: var(--cx-dim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -221,8 +221,9 @@
 .cx-side {
   width: 264px;
   flex: none;
-  background: #1c1210;
-  color: #f5ede6;
+  background-color: var(--cx-side);
+  background-image: var(--cx-side-art);
+  color: var(--cx-ink);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -237,8 +238,8 @@
   align-items: center;
   gap: 10px;
   padding: 12px;
-  background: #150e0b;
-  border-bottom: 1px solid #3a2a22;
+  background: var(--cx-deep);
+  border-bottom: 1px solid var(--cx-line);
 }
 .cx-side-me .status-dot {
   right: -1px;
@@ -258,7 +259,7 @@
 .cx-side-me-name {
   font-weight: 700;
   font-size: 14px;
-  color: #f5ede6;
+  color: var(--cx-ink);
 }
 .cx-side-me-sub {
   font-size: 12px;
@@ -270,15 +271,15 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #d9c2b1;
+  color: var(--cx-dim);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 }
 .cx-side-icon:hover:not(:disabled) {
-  background: #2a1c17;
-  color: #f5ede6;
+  background: var(--cx-chip);
+  color: var(--cx-ink);
 }
 .cx-side-icon:disabled {
   opacity: 0.45;
@@ -293,7 +294,7 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  border-bottom: 1px solid #3a2a22;
+  border-bottom: 1px solid var(--cx-line);
   /* Not clipped: the settings menu drops down from it. */
 }
 .cx-side-banner-row {
@@ -308,18 +309,18 @@
   font-family: var(--glo-font-display);
   font-weight: 600;
   font-size: 22px;
-  color: #f5ede6;
+  color: var(--cx-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .cx-side-head-toggle[aria-expanded='true'] {
-  background: #2a1c17;
+  background: var(--cx-chip);
   color: #ffb347;
 }
 .cx-side-count {
   font-size: 13px;
-  color: #d9c2b1;
+  color: var(--cx-dim);
 }
 .cx-side-list {
   flex: 1;
@@ -330,7 +331,7 @@
   flex-direction: column;
   gap: 14px;
   scrollbar-width: thin;
-  scrollbar-color: #3a2a22 transparent;
+  scrollbar-color: var(--cx-line) transparent;
 }
 .cx-side-section {
   display: flex;
@@ -348,12 +349,12 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #b8a699;
+  color: var(--cx-faint);
   text-align: left;
   cursor: pointer;
 }
 .cx-cat:hover {
-  color: #f5ede6;
+  color: var(--cx-ink);
 }
 .cx-cat svg {
   flex: none;
@@ -372,7 +373,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #b8a699;
+  color: var(--cx-faint);
   font-size: 15px;
   text-align: left;
   cursor: pointer;
@@ -382,17 +383,17 @@
   flex: none;
 }
 .cx-neb:hover {
-  background: #2a1c17;
-  color: #f5ede6;
+  background: var(--cx-chip);
+  color: var(--cx-ink);
 }
 .cx-neb--unread {
-  color: #f5ede6;
+  color: var(--cx-ink);
   font-weight: 600;
 }
 .cx-neb--current,
 .cx-neb--current:hover {
-  background: #3a2a22;
-  color: #ffffff;
+  background: var(--cx-sel);
+  color: var(--cx-sel-ink);
   font-weight: 600;
 }
 .cx-neb-name {
@@ -423,12 +424,12 @@
 }
 .cx-neb-badge--mention {
   background: #ffb347;
-  color: #1c1210;
+  color: var(--cx-side);
   box-shadow: 0 0 8px rgba(255, 165, 74, 0.5);
 }
 .cx-neb-count {
-  background: #2a1c17;
-  color: #d9c2b1;
+  background: var(--cx-chip);
+  color: var(--cx-dim);
 }
 .cx-neb-voice {
   display: flex;
@@ -441,7 +442,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #e9d5c4;
+  color: var(--cx-dim);
   min-width: 0;
 }
 .cx-neb-voice-person .cx-face {
@@ -465,7 +466,7 @@
 .cx-side-empty {
   margin: 4px 10px;
   font-size: 13px;
-  color: #b8a699;
+  color: var(--cx-faint);
 }
 
 /* "Voice connected" at the bottom of the sidebar while you're in one of its voice nebulas. */
@@ -475,8 +476,8 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: #150e0b;
-  border-top: 1px solid #3a2a22;
+  background: var(--cx-deep);
+  border-top: 1px solid var(--cx-line);
 }
 .cx-voice-connected-text {
   flex: 1;
@@ -506,13 +507,13 @@
 .cx-voice-connected-where {
   display: block;
   font-size: 12px;
-  color: #d9c2b1;
+  color: var(--cx-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .cx-voice-connected-text:hover .cx-voice-connected-where {
-  color: #f5ede6;
+  color: var(--cx-ink);
   text-decoration: underline;
 }
 .cx-voice-connected .cx-side-icon:hover {
@@ -529,10 +530,10 @@
   overflow-y: auto;
   padding: 6px;
   border-radius: 12px;
-  background: #241712;
-  border: 1px solid #3a2a22;
+  background: var(--cx-menu);
+  border: 1px solid var(--cx-line);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
-  color: #f5ede6;
+  color: var(--cx-ink);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -554,7 +555,7 @@
   gap: 10px;
   padding: 8px 8px 10px;
   margin-bottom: 4px;
-  border-bottom: 1px solid #3a2a22;
+  border-bottom: 1px solid var(--cx-line);
 }
 .cx-member-menu-head .cx-face {
   font-size: 15px;
@@ -572,7 +573,7 @@
 }
 .cx-member-menu-head strong + span {
   font-size: 12px;
-  color: #b8a699;
+  color: var(--cx-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -586,7 +587,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #f5ede6;
+  color: var(--cx-ink);
   font: inherit;
   font-size: 14px;
   text-align: left;
@@ -594,7 +595,7 @@
 }
 .cx-menu-item:hover:not(:disabled),
 .cx-menu-item:focus-visible {
-  background: #3a2a22;
+  background: var(--cx-line);
   outline: none;
 }
 .cx-menu-item:disabled {
@@ -617,7 +618,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #b8a699;
+  color: var(--cx-faint);
 }
 .cx-menu-check {
   margin-left: auto;
@@ -1162,4 +1163,131 @@
 }
 .cx-shared-note svg {
   flex: none;
+}
+
+/* ---------- 0.12.0 board 1: "You" and "Manage"/"Options" (labeled, so it's clear which is which) */
+.cx-home-glofly {
+  width: 32px;
+  height: auto;
+  filter: drop-shadow(0 0 6px rgba(255, 165, 74, 0.45));
+}
+.cx-you-button,
+.cx-manage-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  font: 600 13px var(--glo-font-body);
+  cursor: pointer;
+}
+.cx-you-button {
+  border: 1px solid var(--cx-line, #4a372b);
+  background: transparent;
+  color: var(--cx-dim, #d9c2b1);
+}
+.cx-you-button:hover,
+.cx-you-button:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--cx-ink, #f5ede6);
+}
+.cx-manage-button {
+  position: relative;
+  margin-left: auto;
+  border: 1px solid rgba(255, 179, 71, 0.45);
+  background: rgba(255, 179, 71, 0.12);
+  color: #ffd38f;
+}
+.cx-manage-button:hover,
+.cx-manage-button:focus-visible,
+.cx-manage-button[aria-expanded='true'] {
+  background: rgba(255, 179, 71, 0.22);
+}
+.cx-head-menu .cx-menu-item svg {
+  margin-right: 8px;
+  vertical-align: -2px;
+  color: #ffb347;
+}
+.cx-menu-divider {
+  display: block;
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---------- 0.12.0 board 3: the quiet banner (every look) */
+.cx-side-banner.cx-side-banner--quiet {
+  height: auto;
+  margin: 10px 8px 4px;
+  padding: 10px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--cx-banner);
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'icon name button'
+    'icon count button';
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 1px;
+}
+.cx-side-banner--quiet .cx-side-banner-row {
+  display: contents;
+}
+.cx-side-banner--quiet .cx-quiet-icon {
+  grid-area: icon;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  font-size: 12px;
+  position: relative;
+}
+.cx-side-banner--quiet h1 {
+  grid-area: name;
+  font-size: 16px;
+  font-weight: 700;
+  position: relative;
+}
+.cx-side-banner--quiet .cx-side-count {
+  grid-area: count;
+  font-size: 11.5px;
+  color: var(--cx-faint);
+  position: relative;
+}
+.cx-side-banner--quiet .cx-manage-button {
+  grid-area: button;
+  margin-left: 0;
+  height: 30px;
+  padding: 0 10px;
+}
+.cx-quiet-stars {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  color: var(--cx-star);
+  opacity: var(--cx-star-opacity);
+  pointer-events: none;
+}
+.cx-side-banner--quiet .cx-quiet-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.cx-side-banner--quiet h1,
+.cx-side-banner--quiet .cx-side-count {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cx-side-banner--quiet h1 {
+  font-size: 15px;
+}
+.cx-side-banner--quiet .cx-manage-button {
+  padding: 0 9px;
+  font-size: 12.5px;
+  gap: 5px;
 }

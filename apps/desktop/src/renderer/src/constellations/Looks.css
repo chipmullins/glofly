@@ -1,0 +1,122 @@
+/* 0.12.0 (sidebar canvas board 3): the constellations rail and sidebar per "Constellations look"
+   (Settings → Appearance, per device; lib/appearance.ts sets :root[data-cx-look]). Ember night is
+   today's look and the default. The chat area keeps following the app's own light/dark theme. */
+
+.cx-inside {
+  --cx-rail: #120c0a;
+  --cx-side: #1c1210;
+  --cx-side-art: none;
+  --cx-deep: #150e0b;
+  --cx-chip: #2a1c17;
+  --cx-menu: #241712;
+  --cx-line: #3a2a22;
+  --cx-ink: #f5ede6;
+  --cx-dim: #d9c2b1;
+  --cx-faint: #b8a699;
+  --cx-sel: #3a2a22;
+  --cx-sel-ink: #ffffff;
+  --cx-banner: rgba(255, 255, 255, 0.05);
+  --cx-star: #ffb347;
+  --cx-star-opacity: 0.35;
+}
+
+/* Night Glow: the saved indigo and amber (glofly-palette-night-glow.md) */
+:root[data-cx-look='nightGlow'] .cx-inside,
+:root[data-cx-look='galaxy'] .cx-inside {
+  --cx-rail: #090c26;
+  --cx-side: #161c4a;
+  --cx-side-art: radial-gradient(ellipse at 30% 0%, #242c6c 0%, #161c4a 50%, #11163c 100%);
+  --cx-deep: #11163c;
+  --cx-chip: #1b2256;
+  --cx-menu: #1b2256;
+  --cx-line: rgba(255, 255, 255, 0.12);
+  --cx-ink: #f2f3ff;
+  --cx-dim: #c9cdf2;
+  --cx-faint: #a9aee0;
+  --cx-sel: rgba(255, 181, 71, 0.22);
+  --cx-sel-ink: #ffd38f;
+  --cx-banner: rgba(255, 255, 255, 0.06);
+  --cx-star: #ffb547;
+  --cx-star-opacity: 0.4;
+}
+
+/* Night Glow Galaxy: the same blue with more sky: a violet nebula near the top, a faint galaxy
+   band, and scattered stars that twinkle slowly. */
+:root[data-cx-look='galaxy'] .cx-inside {
+  --cx-side-art:
+    linear-gradient(140deg, transparent 30%, rgba(190, 200, 255, 0.06) 44%, rgba(220, 225, 255, 0.1) 50%, rgba(190, 200, 255, 0.05) 56%, transparent 70%),
+    radial-gradient(ellipse at 85% 12%, rgba(160, 110, 255, 0.28) 0%, transparent 42%),
+    radial-gradient(ellipse at 10% 78%, rgba(90, 140, 255, 0.2) 0%, transparent 46%),
+    radial-gradient(ellipse at 30% 0%, #242c6c 0%, #161c4a 50%, #11163c 100%);
+  --cx-star-opacity: 0.45;
+}
+:root[data-cx-look='galaxy'] .cx-side {
+  position: relative;
+  z-index: 0; /* the stars below paint behind the content, above the sky */
+}
+:root[data-cx-look='galaxy'] .cx-side::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 30% 7%, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1.2px 1.2px at 83% 12%, rgba(255, 255, 255, 0.85), transparent),
+    radial-gradient(1px 1px at 47% 22%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1px 1px at 92% 33%, rgba(255, 255, 255, 0.65), transparent),
+    radial-gradient(1.2px 1.2px at 32% 45%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 70% 52%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.3px 1.3px at 88% 62%, rgba(255, 255, 255, 0.85), transparent),
+    radial-gradient(1px 1px at 40% 72%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1px 1px at 77% 81%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 23% 92%, rgba(255, 255, 255, 0.6), transparent);
+  animation: cxTwinkle 6s ease-in-out infinite alternate;
+}
+@keyframes cxTwinkle {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-cx-look='galaxy'] .cx-side::before {
+    animation: none;
+  }
+}
+
+/* Daylight: the main app's cream, so constellations feel like the rest of Glofly */
+:root[data-cx-look='daylight'] .cx-inside {
+  --cx-rail: #efe4da;
+  --cx-side: #f7f0e9;
+  --cx-side-art: none;
+  --cx-deep: #efe4da;
+  --cx-chip: #e4d6c9;
+  --cx-menu: #ffffff;
+  --cx-line: #dcc8b8;
+  --cx-ink: #24170f;
+  --cx-dim: #4a372b;
+  --cx-faint: #76604f;
+  --cx-sel: #fbdcc4;
+  --cx-sel-ink: #24170f;
+  --cx-banner: #ffffff;
+  --cx-star: #8a3fe0;
+  --cx-star-opacity: 0.3;
+}
+:root[data-cx-look='daylight'] .cx-home-label {
+  color: #4a372b;
+}
+:root[data-cx-look='daylight'] .cx-home-mark {
+  background: #ffffff;
+  border-color: #dcc8b8;
+}
+:root[data-cx-look='daylight'] .cx-manage-button {
+  border-color: #f6c79c;
+  background: #fff4e5;
+  color: #b8430a;
+}
+:root[data-cx-look='daylight'] .cx-head-menu .cx-menu-item svg {
+  color: #b8430a;
+}
