@@ -108,6 +108,10 @@ export const removeMember = async (id: string, userId: string) => none(await req
 export const setGroupPhoto = (id: string, file: Upload) => upload<{ photoVersion: string }>('PUT', `/conversations/${id}/photo`, file)
 export const deleteGroupPhoto = (id: string) => request<{ photoVersion: null }>('DELETE', `/conversations/${id}/photo`)
 export const pinChat = async (id: string, pinned: boolean) => none(await request(pinned ? 'PUT' : 'DELETE', `/conversations/${id}/pin`))
+/** 0.12.0 Clear chat (just for you): nothing is deleted; Undo works for a few minutes. */
+export const clearChat = (id: string) => request<{ clearedAt: string; previous: string | null }>('POST', `/conversations/${id}/clear`)
+export const undoClearChat = (id: string, clearedAt: string, previous: string | null) =>
+  request<{ clearedAt: string | null }>('POST', `/conversations/${id}/clear/undo`, { clearedAt, previous })
 export const closeChat = async (id: string, closed: boolean) => none(await request(closed ? 'PUT' : 'DELETE', `/conversations/${id}/close`))
 export const muteChat = async (id: string, duration: MuteDuration | null) =>
   map(

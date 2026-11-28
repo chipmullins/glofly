@@ -133,6 +133,12 @@ export function stopRefreshing() {
 }
 
 /** The newest page of a chat (merged with what's already there). False if it couldn't load. */
+/** 0.12.0: shows a chat as the server has it now (after Clear chat or its Undo). */
+export async function startChatOver(id: string): Promise<void> {
+  setChatMessages(id, { list: chatMessages(id).list.filter((m) => m.id.startsWith('local-')), hasMore: true, loaded: false })
+  await loadLatest(id)
+}
+
 export async function loadLatest(id: string): Promise<boolean> {
   const current = chatMessages(id)
   if (current.loading) return true

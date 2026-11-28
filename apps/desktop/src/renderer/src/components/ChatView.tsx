@@ -37,6 +37,7 @@ import {
   BellIcon,
   BellOffIcon,
   GroupIcon,
+  EraserIcon,
   MoreIcon,
   PhoneIcon,
   ProfileIcon,
@@ -55,6 +56,7 @@ import {
   SendLaterMenu
 } from './ChatTools'
 import {
+  clearChat as clearChatApi,
   markUnread as markUnreadApi,
   pins as pinsApi,
   scheduled as scheduledApi
@@ -413,6 +415,10 @@ export default function ChatView({
   const threadExtras = threadId ? { sendTo: conversation.id, threadId, alsoInNebula } : {}
   const partner = conversation.partner
   const isGroup = conversation.kind === 'group'
+  /** 0.12.0 Clear chat wording: who still sees everything */
+  const othersStillSee = isGroup
+    ? 'Everyone in the group still sees'
+    : `${partner?.displayName.split(/\s+/)[0] ?? 'Your friend'} still sees`
   const social = useSocial()
   const calls = useCalls()
   const inThisCall = calls.current?.conversationId === conversation.id
@@ -470,6 +476,17 @@ export default function ChatView({
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Message | null>(null)
+  // 0.12.0 Clear chat (just for you): the prompt, the Undo note, and when it was cleared.
+  const [clearing, setClearing] = useState(false)
+  const [clearUndo, setClearUndo] = useState<{ clearedAt: string; previous: string | null } | null>(null)
+  const [clearedAt, setClearedAt] = useState<string | null>(conversation.clearedAt ?? null)
+  const [reloadKey, setReloadKey] = useState(0)
+  useEffect(() => setClearedAt(conversation.clearedAt ?? null), [conversation.clearedAt])
+  useEffect(() => {
+    if (!clearUndo) return
+    const t = setTimeout(() => setClearUndo(null), 8000)
+    return () => clearTimeout(t)
+  }, [clearUndo])
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [uploads, setUploads] = useState<Upload[]>([])
   const [viewing, setViewing] = useState<{ photos: Attachment[]; index: number } | null>(null)
@@ -637,7 +654,7 @@ export default function ChatView({
     return () => {
       cancelled = true
     }
-  }, [conversation.id, threadId, handleFailure, markRead, rememberPeople])
+  }, [conversation.id, threadId, handleFailure, markRead, rememberPeople, reloadKey])
 
   // Live updates: new messages, edits/deletes/reactions, and typing.
   useEffect(() => {
@@ -1387,6 +1404,9 @@ export default function ChatView({
     loadLater()
     return window.glofly.onEvent((event) => {
       if (event.type === 'pins:changed' && event.conversationId === conversation.id) loadPins()
+      // 0.12.0: cleared (or undone) here or on another of my devices: load it again.
+      if (event.type === 'conversation:cleared' && event.conversationId === conversation.id)
+        startOver(event.clearedAt)
       if (event.type === 'scheduled:changed' && event.conversationId === conversation.id)
         loadLater()
       if (event.type === 'connection' && event.connected) {
@@ -1396,6 +1416,33 @@ export default function ChatView({
     })
   }, [conversation.id, loadPins, loadLater])
   const pinnedIds = new Set(pinList.map((p) => p.message.id))
+
+  /** Shows the chat as the server has it now (after Clear chat or its Undo). */
+  function startOver(at: string | null): void {
+    setClearedAt(at)
+    setMessages([])
+    setHasMore(false)
+    setLoading(true)
+    setReloadKey((k) => k + 1)
+    loadPins()
+  }
+
+  async function confirmClear(): Promise<void> {
+    setClearing(false)
+    const r = await clearChatApi.clear(conversation.id)
+    if (!r.ok) return setNotice(r.message ?? "Couldn't clear this chat. Try again.")
+    startOver(r.data.clearedAt)
+    setClearUndo(r.data)
+  }
+
+  async function undoClear(): Promise<void> {
+    const u = clearUndo
+    setClearUndo(null)
+    if (!u) return
+    const r = await clearChatApi.undo(conversation.id, u.clearedAt, u.previous)
+    if (!r.ok) return setNotice(r.message ?? "Couldn't bring this chat back.")
+    startOver(r.data.clearedAt)
+  }
 
   async function setPinned(m: Message, pin: boolean): Promise<void> {
     const r = await pinsApi.set(conversation.id, m.id, pin)
@@ -2420,6 +2467,23 @@ export default function ChatView({
                       {muted ? <BellIcon size={18} /> : <BellOffIcon size={18} />}
                       {muted ? 'Unmute' : `Mute ${isGroup ? 'group' : 'chat'}…`}
                     </button>
+                    {/* 0.12.0: set apart at the end, "Just for you" under it (sidebar canvas board 8) */}
+                    <div className="menu-divider" role="separator" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item menu-item--danger"
+                      onClick={() => {
+                        setMoreOpen(false)
+                        setClearing(true)
+                      }}
+                    >
+                      <EraserIcon size={18} />
+                      <span className="menu-item-text">
+                        <span>Clear chat</span>
+                        <span className="menu-item-sub">Just for you</span>
+                      </span>
+                    </button>
                   </div>
                 )}
                 {muteOpen && (
@@ -2558,7 +2622,15 @@ export default function ChatView({
             </div>
           )}
           {/* 0.7.5: a brand-new chat says hi with a wave instead of an empty page */}
-          {!loading && !hasMore && !nebula && messages.length === 0 && pending.length === 0 && (
+          {/* 0.12.0: a chat I cleared starts over with a quiet "fresh start" */}
+          {!loading && !hasMore && !nebula && clearedAt && messages.length === 0 && pending.length === 0 && (
+            <EmptyScene
+              kind="hello"
+              title="A fresh start"
+              text={`You cleared this ${isGroup ? 'group' : 'chat'} on ${new Date(clearedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}. ${othersStillSee} every message.`}
+            />
+          )}
+          {!loading && !hasMore && !nebula && !clearedAt && messages.length === 0 && pending.length === 0 && (
             <EmptyScene
               kind={partner ? 'hello' : 'group'}
               title={
@@ -2618,7 +2690,14 @@ export default function ChatView({
               <h2>
                 <EmojiText text={title} />
               </h2>
-              {partner ? (
+              {clearedAt ? (
+                // 0.12.0: not the real beginning; it's where I cleared it.
+                <p>
+                  You cleared this {isGroup ? 'group' : 'chat'} on{' '}
+                  {new Date(clearedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.
+                  Messages from before are hidden for you.
+                </p>
+              ) : partner ? (
                 <p>
                   This is the beginning of your messages with <strong>@{partner.username}</strong>.
                   Say hello!
@@ -2698,6 +2777,14 @@ export default function ChatView({
               {forwardNote}
               <button type="button" aria-label="Dismiss" onClick={() => setForwardNote(null)}>
                 ×
+              </button>
+            </p>
+          )}
+          {clearUndo && (
+            <p className="chat-notice chat-notice--plain" role="status">
+              Chat cleared for you
+              <button type="button" className="chat-notice-action" onClick={() => void undoClear()}>
+                Undo
               </button>
             </p>
           )}
@@ -3233,6 +3320,17 @@ export default function ChatView({
               setForwarding(null)
               setForwardNote(summary)
             }}
+          />
+        )}
+        {clearing && (
+          <ConfirmDialog
+            title={`Clear this ${isGroup ? 'group' : 'chat'} for you?`}
+            message={`It’ll start empty for you, on all your devices. ${othersStillSee} every message.`}
+            note="Pinned messages, photos and files from before go too, for you. New messages show up as usual."
+            confirmLabel="Clear chat"
+            danger
+            onConfirm={() => void confirmClear()}
+            onCancel={() => setClearing(false)}
           />
         )}
         {deleting && (

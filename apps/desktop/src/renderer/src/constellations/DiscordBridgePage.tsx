@@ -375,6 +375,8 @@ function PairTable({
       <div key={ch.id} className={p ? 'dc-row dc-row--paired' : 'dc-row'}>
         <span className="dc-chip dc-chip--discord">
           {voice ? <SpeakerGlyph /> : '#'} {ch.name}
+          {/* 0.12.0: made in Discord later, waiting for someone to pick (auto-bridge found no match) */}
+          {!p && b.newChannels?.some((x) => x.id === ch.id) && <span className="dc-new-tag">New on Discord</span>}
         </span>
         <span className={p ? 'dc-arrow dc-arrow--on' : 'dc-arrow'} aria-hidden="true">
           {p ? '⇄' : '→'}

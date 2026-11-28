@@ -565,3 +565,11 @@
 .invite-friends-note--ok {
   color: var(--glo-good);
 }
+
+/* 0.12.0: a smaller second line in an "Are you sure?" box (Clear chat) */
+.confirm-note {
+  margin: -4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--glo-faint);
+}

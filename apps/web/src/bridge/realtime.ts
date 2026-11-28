@@ -139,6 +139,19 @@ export function connectRealtime(onUnauthorized: () => void): void {
     if (typeof p?.conversationId === 'string')
       forward({ type: 'scheduled:changed', conversationId: p.conversationId })
   })
+  // 0.12.0: I cleared a chat for me (here or on another device), or undid it.
+  socket.on('conversation:cleared', (p) => {
+    if (typeof p?.conversationId === 'string')
+      forward({
+        type: 'conversation:cleared',
+        conversationId: p.conversationId,
+        clearedAt: typeof p.clearedAt === 'string' ? p.clearedAt : null
+      })
+  })
+  // 0.12.0: a new Discord channel auto-bridge couldn't match (only to people who manage the bridge).
+  socket.on('discord:newChannel', (p) => {
+    if (typeof p?.constellationId === 'string') forward({ type: 'discord:newChannel', constellationId: p.constellationId })
+  })
   socket.on('conversation:unread', (p) => {
     if (typeof p?.conversationId === 'string' && typeof p?.lastReadAt === 'string')
       forward({

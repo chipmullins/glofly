@@ -6,6 +6,7 @@ import { patchConversation, removeConversation, useStore } from '@/state/store'
 import { refreshConversations } from '@/state/sync'
 import { useSession } from '@/state/session'
 import { isWideNow } from '@/lib/layout'
+import { clearChat } from '@/lib/clearChat'
 
 // The long-press menu for a chat (Chats list, Groups page, chat header ⋮), and what each does.
 
@@ -100,6 +101,8 @@ export async function chatMenu(c: ConversationSummary, opts: { inChat?: boolean;
       ? [{ key: 'profile', label: 'View profile', icon: 'user' as const }]
       : [{ key: 'settings', label: 'Group settings', icon: 'gear' as const }]),
     ...(!opts.inChat && !c.pinnedAt ? [{ key: 'close', label: 'Close chat', icon: 'close' as const, detail: 'Hidden until a new message. Nothing is deleted.' }] : []),
+    // 0.12.0: Clear chat (just for you), set apart at the end, above Leave group.
+    { key: 'clear', label: 'Clear chat', icon: 'eraser' as const, danger: true, detail: 'Just for you. Everyone else keeps every message.' },
     ...(c.kind === 'group' ? [{ key: 'leave', label: 'Leave group', icon: 'door' as const, danger: true }] : []),
   ]
   const pick = await chooseFrom(items, chatTitle(c))
@@ -120,6 +123,8 @@ export async function chatMenu(c: ConversationSummary, opts: { inChat?: boolean;
       return
     case 'close':
       return closeChat(c)
+    case 'clear':
+      return clearChat(c)
     case 'leave':
       if ((await leaveGroup(c)) && opts.inChat) router.back()
       return

@@ -233,6 +233,16 @@ export function PencilIcon(p: IconProps): React.JSX.Element {
   )
 }
 
+/** 0.12.0 Clear chat (an eraser), as drawn on the sidebar canvas's board 8. */
+export function EraserIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg strokeWidth={1.9} {...p}>
+      <path d="M4 20h16" />
+      <path d="M7 16l9.5-9.5a2.1 2.1 0 0 0-3-3L4 13l-1 4z" />
+    </Svg>
+  )
+}
+
 // ---------- Calls (from Calling.dc.html, Incoming.dc.html and GroupCall.dc.html) ----------
 
 const PHONE =

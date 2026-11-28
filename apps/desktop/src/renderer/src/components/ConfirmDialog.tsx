@@ -4,6 +4,8 @@ import './dialogs.css'
 type ConfirmDialogProps = {
   title: string
   message: string
+  /** 0.12.0: a smaller second line under the message */
+  note?: string
   confirmLabel: string
   danger?: boolean
   busy?: boolean
@@ -15,6 +17,7 @@ type ConfirmDialogProps = {
 export default function ConfirmDialog({
   title,
   message,
+  note,
   confirmLabel,
   danger = false,
   busy = false,
@@ -52,6 +55,7 @@ export default function ConfirmDialog({
       >
         <h1 id="confirm-title">{title}</h1>
         <p id="confirm-message">{message}</p>
+        {note && <p className="confirm-note">{note}</p>}
         <div className="confirm-actions">
           <button
             ref={cancelRef}

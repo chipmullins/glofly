@@ -447,6 +447,8 @@ type ConversationBase = {
   mentionCount?: number
   /** When you closed it in the sidebar (ISO date), or null. Hidden until a newer message. */
   closedAt?: string | null
+  /** 0.12.0: when you cleared it for you (ISO date), or null. The server leaves out everything before. */
+  clearedAt?: string | null
 }
 
 /** How long to mute a chat for. */

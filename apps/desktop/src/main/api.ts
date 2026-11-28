@@ -143,7 +143,7 @@ const TOOL_PATHS = [
   /^\/account\/two-step(\/(start|confirm|off|remove-phone|backup-codes))?$/,
   /^\/account\/quiet-hours$/,
   /^\/conversations\/scheduled$/,
-  new RegExp(`^/conversations/${UUID}/(pins|unread|scheduled)$`, 'i'),
+  new RegExp(`^/conversations/${UUID}/(pins|unread|scheduled|clear|clear/undo)$`, 'i'),
   new RegExp(`^/conversations/${UUID}/scheduled/${UUID}(/send)?$`, 'i'),
   new RegExp(`^/conversations/${UUID}/messages/${UUID}/pin$`, 'i'),
   // 0.9.3 Settings → Connections (Steam, Twitch, Kick) and friends' streams.

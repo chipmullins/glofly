@@ -13,10 +13,20 @@ export type WhatsNewEntry = { version: string; date: string; headline: string; i
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    version: '0.11.5',
+    // 0.12.0 (the visual overhaul) also carries the Discord bridge round that was going to be 0.11.5.
+    version: '0.12.0',
     date: '2026-11-28',
-    headline: 'A friendlier Discord bridge',
+    headline: 'A fresh look, and a friendlier Discord bridge',
     items: [
+      {
+        title: 'Clear a chat, just for you',
+        text: 'Open a chat’s ⋯ menu and pick Clear chat to start it fresh on all your devices. Nothing is deleted: everyone else still sees every message, and new messages show up as usual. Changed your mind? Tap Undo right after.'
+      },
+      {
+        title: 'New Discord channels bridge themselves',
+        text: 'Make a channel in your Discord server and Glofly bridges it with the nebula that has the same name. If there isn’t one, people who manage the bridge are asked whether to make a nebula for it or pair it by hand. Private Discord channels are never bridged this way. Turn it off in Constellation settings → Discord bridge.',
+        on: ['desktop', 'web']
+      },
       {
         title: 'Set up the Discord bridge in one go',
         text: 'Right after the Glofly Bridge bot joins your Discord server, Glofly asks which channels go with which nebulas. Same-name ones are matched for you, and you can make a new nebula for any Discord channel on the spot.',

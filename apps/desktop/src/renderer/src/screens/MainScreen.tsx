@@ -969,6 +969,7 @@ export default function MainScreen({
           break
         // 0.7.3: marked unread (here or on another device): its count comes back.
         case 'conversation:unread':
+        case 'conversation:cleared':
           void refreshConversations()
           break
         case 'profile:changed':

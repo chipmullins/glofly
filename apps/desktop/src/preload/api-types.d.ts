@@ -401,6 +401,10 @@ export type GloflyEvent =
   /** 0.7.3: pins changed in a chat; my own devices: marked unread / send-later list changed */
   | { type: 'pins:changed'; conversationId: string }
   | { type: 'conversation:unread'; conversationId: string; lastReadAt: string }
+  /** 0.12.0: Clear chat (just for you), from any of my devices; null = undone */
+  | { type: 'conversation:cleared'; conversationId: string; clearedAt: string | null }
+  /** 0.12.0: a new Discord channel waits for a manager to choose (constellation's bridge) */
+  | { type: 'discord:newChannel'; constellationId: string }
   /** Jump List / Dock menu: call `shortcuts.take()` and do what it returns */
   | { type: 'shortcut'; action: ShortcutAction }
   /** 0.8.0: Glofly was opened with a glofly:// link: call `links.take()` */

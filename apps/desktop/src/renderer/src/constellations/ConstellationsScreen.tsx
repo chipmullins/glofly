@@ -21,6 +21,7 @@ import Dashboard from './Dashboard'
 import CreateJoin, { AskToJoin } from './CreateJoin'
 import ConstellationView, { type SettingsPageName } from './ConstellationView'
 import ConstellationSettings from './Settings'
+import DiscordNewChannels from './DiscordNewChannels'
 import DmDock from './DmDock'
 import { CxToast } from './bits'
 import './Constellations.css'
@@ -404,6 +405,14 @@ function Space(props: Props): React.JSX.Element {
             setDialog(null)
             say(`Request sent. A moderator of ${dialog.entry.name} will let you in.`)
           }}
+        />
+      )}
+      {/* 0.12.0: a new Discord channel auto-bridge couldn't match (managers only) */}
+      {detail && place && dialog?.kind !== 'settings' && (
+        <DiscordNewChannels
+          c={detail}
+          onManual={() => setDialog({ kind: 'settings', page: 'discord' })}
+          onProblem={say}
         />
       )}
       {dialog?.kind === 'settings' && detail && (

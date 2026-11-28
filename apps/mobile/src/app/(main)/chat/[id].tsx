@@ -56,6 +56,7 @@ import { ChatAvatar } from '@/ui/Avatar'
 import { BottomSheet, chooseFrom, confirm, inform } from '@/ui/dialogs'
 import { Icon } from '@/ui/icons'
 import { Button, IconButton, Spinner, Text } from '@/ui/kit'
+import { othersStillSee, undoClear, useClearUndo } from '@/lib/clearChat'
 import { EmptyScene } from '@/ui/EmptyScene'
 import { Skeleton } from '@/ui/Skeleton'
 import { JumpToLatestButton, useJumpToLatest } from '@/chat/JumpToLatest'
@@ -132,6 +133,8 @@ export default function ChatScreen() {
   const [scheduledOpen, setScheduledOpen] = useState(false)
   const [laterText, setLaterText] = useState<string | null>(null)
   const voice = useVoice(id)
+  // 0.12.0 Clear chat: a few seconds of Undo right after clearing it.
+  const clearUndo = useClearUndo((st) => (st.pending?.id === id ? st.pending : null))
 
   // Load and keep it read while it's on screen.
   useEffect(() => {
@@ -574,6 +577,15 @@ export default function ChatScreen() {
             <View style={{ padding: 16 }}>
               <Spinner />
             </View>
+          ) : messages?.loaded && !messages.hasMore && !messages.list.length && chat.clearedAt ? (
+            // 0.12.0: a chat I cleared starts over quietly.
+            <View>
+              <EmptyScene
+                kind="hello"
+                title="A fresh start"
+                text={`You cleared this ${isGroup ? 'group' : 'chat'} on ${new Date(chat.clearedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}. ${othersStillSee(chat)} every message.`}
+              />
+            </View>
           ) : messages?.loaded && !messages.hasMore && !messages.list.length ? (
             // 0.7.5: a brand-new chat says hi with a wave instead of an empty page.
             <View>
@@ -608,6 +620,14 @@ export default function ChatScreen() {
       {partnerBirthday && chat.kind === 'dm' ? <BirthdayConfetti userId={chat.partner.id} name={chat.partner.displayName} /> : null}
       </View>
 
+      {clearUndo ? (
+        <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginHorizontal: 12, marginBottom: 8, paddingLeft: 16, paddingRight: 6, height: 44, borderRadius: 22, backgroundColor: c.ink }}>
+          <Text size={14} style={{ color: c.bg }}>
+            Chat cleared for you
+          </Text>
+          <Button compact kind="ghost" label="Undo" onPress={() => void undoClear()} />
+        </View>
+      ) : null}
       {canMessage ? (
         <Composer
           ref={composer}

@@ -202,6 +202,8 @@ const strokes: Record<string, (fill: string) => React.ReactNode> = {
   ),
   pencil: () => <Path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z" />,
   trash: () => <Path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />,
+  // 0.12.0 Clear chat (just for you): an eraser, like the desktop's
+  eraser: () => <Path d="M4 20h16M7 16l9.5-9.5a2.1 2.1 0 0 0-3-3L4 13l-1 4z" />,
   copy: () => (
     <>
       <Rect x="9" y="9" width="13" height="13" rx="2" />

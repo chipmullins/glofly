@@ -58,6 +58,17 @@ export const markUnread = (
 ): Promise<ApiResult<{ lastReadAt: string }>> =>
   req<{ lastReadAt: string }>('POST', `/conversations/${conversationId}/unread`, { messageId })
 
+/** 0.12.0: Clear chat (just for you). Nothing is deleted; Undo works for a few minutes. */
+export const clearChat = {
+  clear: (conversationId: string) =>
+    req<{ clearedAt: string; previous: string | null }>('POST', `/conversations/${conversationId}/clear`),
+  undo: (conversationId: string, clearedAt: string, previous: string | null) =>
+    req<{ clearedAt: string | null }>('POST', `/conversations/${conversationId}/clear/undo`, {
+      clearedAt,
+      previous
+    })
+}
+
 export const scheduled = {
   list: (conversationId: string) =>
     req<{ scheduled: ScheduledMessage[] }>('GET', `/conversations/${conversationId}/scheduled`),

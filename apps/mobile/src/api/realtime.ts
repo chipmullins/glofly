@@ -9,6 +9,7 @@ import {
   receiveMessage,
   refreshAll,
   refreshConversations,
+  startChatOver,
   refreshFriends,
   refreshNotices,
   refreshStatus,
@@ -201,6 +202,14 @@ function connect() {
   // 0.7.3: pins changed in a chat; a chat marked unread on another device; send-later list changed.
   s.on('pins:changed', (p: { conversationId?: string }) => {
     if (typeof p?.conversationId === 'string') emit('pins:changed', p.conversationId)
+  })
+  // 0.12.0: I cleared a chat for me (here or on another device), or undid it.
+  s.on('conversation:cleared', (p: { conversationId?: string }) => {
+    void refreshConversations()
+    if (typeof p?.conversationId === 'string') {
+      void startChatOver(p.conversationId)
+      emit('pins:changed', p.conversationId)
+    }
   })
   s.on('conversation:unread', (p: { conversationId?: string }) => {
     void refreshConversations()
