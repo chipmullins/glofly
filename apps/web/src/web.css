@@ -107,3 +107,51 @@ body,
 .message--touched .msg-toolbar {
   display: flex;
 }
+
+/* 0.12.0: the profile card at phone width (it used to keep its two columns and squash the name
+   column to nothing). One column: photo and status, then the name, buttons and tabs, then the
+   rest; the whole card scrolls. ("body" in front: this file loads before the dialogs' own CSS.) */
+@media (max-width: 640px) {
+  body .dialog-backdrop:has(> .profile-wrap) {
+    --profile-edge: 10px;
+    padding: 10px;
+  }
+  body .profile-dialog {
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  body .profile-dialog .profile-body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 0 18px 20px;
+  }
+  body .profile-dialog .profile-side {
+    display: contents;
+  }
+  body .profile-dialog .profile-side > * {
+    order: 2;
+    align-self: center;
+  }
+  body .profile-dialog .profile-side > .profile-photo {
+    order: 0;
+    margin-top: -56px;
+    position: relative;
+    width: 112px !important;
+    height: 112px !important;
+    font-size: 40px;
+  }
+  body .profile-dialog .profile-side > .status-pill {
+    order: 0;
+  }
+  body .profile-dialog .profile-body > .profile-main {
+    order: 1;
+    align-self: stretch;
+    padding-top: 0;
+    overflow: visible;
+  }
+  body .profile-dialog .profile-tab-scroll {
+    overflow: visible;
+  }
+}

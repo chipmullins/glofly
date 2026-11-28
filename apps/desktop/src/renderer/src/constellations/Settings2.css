@@ -29,6 +29,17 @@
   outline: none;
 }
 
+/* 0.12.0: short windows keep a small gap above and below instead of 40px */
+@media (max-height: 720px) {
+  .cx-settings-backdrop {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  .cx-settings {
+    height: min(680px, calc(100vh - 32px));
+  }
+}
+
 /* The left menu */
 .cx-settings-nav {
   width: 240px;

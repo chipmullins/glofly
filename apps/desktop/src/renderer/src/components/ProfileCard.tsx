@@ -542,6 +542,8 @@ export default function ProfileCard({
                       </button>
                     ))}
                   </div>
+                  {/* 0.12.0: the tab's content scrolls here, so a short window never cuts the card off */}
+                  <div className="profile-tab-scroll">
                   <SteadyPanel resetKey={`${person.id}:${preview ? viewAs : ''}`}>
                     <div
                       role="tabpanel"
@@ -570,6 +572,7 @@ export default function ProfileCard({
                       ) : null}
                     </div>
                   </SteadyPanel>
+                  </div>
                 </div>
               )}
             </div>

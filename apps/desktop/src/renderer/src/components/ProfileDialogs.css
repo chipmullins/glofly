@@ -4,8 +4,30 @@
   position: relative;
   max-width: 800px;
   transition: max-width 220ms var(--glo-ease-open, ease);
-  max-height: 100%;
-  overflow: hidden auto;
+  /* 0.12.0: never taller than the window (the backdrop's padding above and below). The header art,
+     photo, name and buttons stay put; the tab content scrolls inside (.profile-tab-scroll), and if
+     even that isn't enough the right column scrolls. */
+  max-height: calc(100dvh - 2 * var(--profile-edge, 40px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.profile-dialog > * {
+  flex: none;
+}
+.profile-dialog > .profile-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.dialog-backdrop:has(> .profile-wrap) {
+  --profile-edge: 40px;
+}
+@media (max-height: 720px) {
+  .dialog-backdrop:has(> .profile-wrap) {
+    --profile-edge: 16px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
 }
 
 /* The dark night-sky strip across the top, with drifting fireflies */
@@ -247,10 +269,17 @@
 .profile-main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
   padding-top: 22px;
+  /* 0.12.0: only when even a short tab area doesn't fit */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.profile-main > * {
+  flex-shrink: 0;
 }
 .profile-names {
   display: flex;
@@ -754,4 +783,21 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+/* 0.12.0: the tab area gives way first (down to a usable size), its content scrolling inside. */
+.profile-main > .profile-tabs-area {
+  flex: 1 1 auto;
+  min-height: 200px;
+}
+.profile-tabs-area > .pb-tabs {
+  flex: none;
+}
+.profile-tab-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* room for focus rings and tile shadows at the edges */
+  margin: 0 -6px;
+  padding: 0 6px 4px;
 }

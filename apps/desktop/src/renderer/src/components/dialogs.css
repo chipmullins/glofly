@@ -24,6 +24,14 @@
     dialogPop var(--glo-open) var(--glo-ease-open),
     dialogFade 180ms ease;
 }
+/* 0.12.0: short windows (800×600 and the like) keep a small gap above and below every dialog. */
+@media (max-height: 720px) {
+  .dialog-backdrop {
+    --dialog-edge: 16px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
 @keyframes dialogFade {
   from {
     opacity: 0;
