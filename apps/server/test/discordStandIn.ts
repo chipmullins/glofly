@@ -8,7 +8,8 @@
 //   DISCORD_CLIENT_ID=123456789012345678 DISCORD_CLIENT_SECRET=stand-in-secret DISCORD_BOT_TOKEN=stand-in-bot-token-0123456789 \
 //   npx tsx --env-file=../../.env src/index.ts
 //
-// Test hooks: POST /_test/dispatch { t, d } sends a Gateway event; GET /_test/log lists what the
+// Test hooks: POST /_test/dispatch { t, d } sends a Gateway event; POST /_test/channel { channel }
+// adds a channel to the server and sends CHANNEL_CREATE (0.12.0 auto-bridge); GET /_test/log lists what the
 // bridge did in "Discord" (webhook posts, edits, deletes); GET /_test/state.
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
@@ -20,7 +21,7 @@ import { WebSocketServer } from "ws";
 const PORT = Number(process.env.STAND_IN_PORT ?? 4790);
 export const GUILD = "111111111111111111";
 export const OTHER_GUILD = "999999999999999999";
-export const CHANNELS = [
+export const CHANNELS: { id: string; name: string; type: number; position: number; guild_id: string; parent_id?: string; permission_overwrites?: unknown[] }[] = [
   { id: "222222222222222222", name: "general", type: 0, position: 0, guild_id: GUILD },
   { id: "333333333333333333", name: "lfg", type: 0, position: 1, guild_id: GUILD },
   // Nov 28: a category, a text channel in it, and a voice channel (who's in voice).
@@ -63,6 +64,12 @@ const server = createServer(async (req, res) => {
   if (p === "/_test/dispatch" && m === "POST") {
     const { t, d } = body as { t: string; d: unknown };
     for (const s of sockets) s.send(JSON.stringify({ op: 0, t, d, s: Date.now() % 100000 }));
+    return json(200, { sent: sockets.size });
+  }
+  if (p === "/_test/channel" && m === "POST") {
+    const { channel } = body as { channel: (typeof CHANNELS)[number] };
+    CHANNELS.push(channel);
+    for (const s of sockets) s.send(JSON.stringify({ op: 0, t: "CHANNEL_CREATE", d: channel, s: Date.now() % 100000 }));
     return json(200, { sent: sockets.size });
   }
   if (p === "/_test/log") return json(200, log);

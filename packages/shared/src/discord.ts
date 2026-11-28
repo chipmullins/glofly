@@ -22,13 +22,18 @@ export type DiscordBridgeSettings = {
   names: boolean
   /** @everyone / @here from Discord ping in Glofly (off by default) */
   everyone: boolean
+  /**
+   * 0.12.0: a Discord channel made later gets a nebula of its own and is bridged by itself (on by
+   * default). Channels hidden from @everyone in Discord are never bridged this way.
+   */
+  autoBridge: boolean
 }
-export const DEFAULT_DISCORD_SETTINGS: DiscordBridgeSettings = { edits: true, files: true, names: true, everyone: false }
+export const DEFAULT_DISCORD_SETTINGS: DiscordBridgeSettings = { edits: true, files: true, names: true, everyone: false, autoBridge: true }
 
 export function cleanDiscordSettings(raw: unknown, base: DiscordBridgeSettings = DEFAULT_DISCORD_SETTINGS): DiscordBridgeSettings {
   const r = (raw ?? {}) as Record<string, unknown>
   const b = (k: keyof DiscordBridgeSettings) => (typeof r[k] === 'boolean' ? (r[k] as boolean) : base[k])
-  return { edits: b('edits'), files: b('files'), names: b('names'), everyone: b('everyone') }
+  return { edits: b('edits'), files: b('files'), names: b('names'), everyone: b('everyone'), autoBridge: b('autoBridge') }
 }
 
 export type DiscordPair = {
@@ -82,11 +87,28 @@ export type DiscordBridgeInfo = {
     lost: boolean
     /** Nov 28 (servers from then on): voice pairs */
     voicePairs?: DiscordVoicePair[]
+    /** 0.12.0: channels made in Discord later that auto-bridge couldn't match to a nebula */
+    newChannels?: DiscordNewChannel[]
   } | null
   /** Text channels of the connected Discord server the bot can see (for "Bridge another channel") */
   channels: { id: string; name: string; parent: string | null }[]
   /** Nov 28: the server's voice channels (for voice pairs) */
   voiceChannels?: { id: string; name: string; parent: string | null }[]
+}
+
+/**
+ * 0.12.0: a channel made in the Discord server after the bridge was set up, that auto-bridge couldn't
+ * match to a nebula. People who can manage the bridge are asked what to do (desktop/web pop-up):
+ * GET /constellations/:id/discord/new-channels, POST …/new-channels/:channelId/dismiss. Live event
+ * "discord:newChannel" { constellationId, channel } to them (newer apps).
+ */
+export type DiscordNewChannel = {
+  id: string
+  name: string
+  voice: boolean
+  /** Its Discord category's name, if any */
+  parent: string | null
+  at: string
 }
 
 /** Nov 28: POST /constellations/:id/discord/pairs also takes { discordChannelId, newNebula: true }:
@@ -139,3 +161,25 @@ export type BridgedFrom = {
 /** The text new apps show for a bridged message (without the "name: " older apps see). */
 export const bridgedText = (body: string, b: BridgedFrom | null | undefined): string =>
   b && b.skip > 0 && b.skip <= body.length ? body.slice(b.skip) : body
+
+/** Discord's "View Channel" permission bit. */
+const VIEW_CHANNEL = 1n << 10n
+
+/**
+ * 0.12.0: is this Discord channel hidden from @everyone (a private channel)? The @everyone role's
+ * id is the server's id. Auto-bridge skips these: a bridged nebula is readable by the whole
+ * constellation.
+ */
+export function hiddenFromEveryone(
+  channel: { permission_overwrites?: { id: string; type: number | string; deny: string }[] },
+  guildId: string
+): boolean {
+  return (channel.permission_overwrites ?? []).some((o) => {
+    if (o.id !== guildId || Number(o.type) !== 0) return false
+    try {
+      return (BigInt(o.deny) & VIEW_CHANNEL) !== 0n
+    } catch {
+      return false
+    }
+  })
+}

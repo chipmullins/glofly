@@ -307,6 +307,53 @@ test("Nov 28: who's in voice, both sides (no sound)", { skip }, async () => {
   assert.equal(voice.discord, undefined);
 });
 
+test("0.12.0: new Discord channels auto-bridge to a nebula with their name, else managers are asked", { skip }, async () => {
+  const newChannel = (id: string, name: string, extra: Record<string, unknown> = {}) =>
+    fetch(`${STAND_IN}/_test/channel`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ channel: { id, name, type: 0, position: 9, guild_id: "111111111111111111", parent_id: "660000000000000000", ...extra } }) });
+  const info = async () => (await call(`/constellations/${cid}/discord`, owner.token)).json;
+  assert.equal((await info()).bridge.settings.autoBridge, true, "on by default");
+  // A nebula already named like the new channel: bridged with it, no questions.
+  const plans = await call(`/constellations/${cid}/nebulas`, owner.token, "POST", { name: "plans", kind: "text" });
+  assert.ok(plans.status < 300, plans.text);
+  await newChannel("881000000000000001", "📅│plans");
+  let i = await info();
+  for (let t = 0; t < 40 && !i.bridge.pairs.some((p: any) => p.discordChannelId === "881000000000000001"); t++) {
+    await wait(100);
+    i = await info();
+  }
+  assert.ok(i.bridge.pairs.some((p: any) => p.discordChannelId === "881000000000000001" && p.nebulaId === plans.json.nebulaId));
+  // No match: nothing is made; it waits for a manager (who also hears it live).
+  await newChannel("881000000000000002", "bug-reports");
+  let waiting: any[] = [];
+  for (let t = 0; t < 40 && !waiting.length; t++) {
+    await wait(100);
+    waiting = (await call(`/constellations/${cid}/discord/new-channels`, owner.token)).json.newChannels;
+  }
+  assert.deepEqual(waiting.map((c) => [c.id, c.name, c.voice, c.parent]), [["881000000000000002", "bug-reports", false, "Hangout"]]);
+  assert.ok(!(await call(`/constellations/${cid}`, owner.token)).json.constellation.nebulas.some((n: any) => n.name === "bug-reports"));
+  assert.equal((await call(`/constellations/${cid}/discord/new-channels`, member.token)).status, 403);
+  // "Make a nebula and bridge" = the usual pairing; it leaves the list.
+  assert.equal((await call(`/constellations/${cid}/discord/pairs`, owner.token, "POST", { discordChannelId: "881000000000000002", newNebula: true })).status, 201);
+  assert.deepEqual((await call(`/constellations/${cid}/discord/new-channels`, owner.token)).json.newChannels, []);
+  // "Not now".
+  await newChannel("881000000000000003", "art");
+  for (let t = 0; t < 40 && !(await call(`/constellations/${cid}/discord/new-channels`, owner.token)).json.newChannels.length; t++) await wait(100);
+  assert.equal((await call(`/constellations/${cid}/discord/new-channels/881000000000000003/dismiss`, owner.token, "POST")).status, 204);
+  assert.deepEqual((await call(`/constellations/${cid}/discord/new-channels`, owner.token)).json.newChannels, []);
+  // A private Discord channel (hidden from @everyone) is never bridged or offered.
+  await call(`/constellations/${cid}/nebulas`, owner.token, "POST", { name: "staff", kind: "text" });
+  await newChannel("881000000000000004", "staff", { permission_overwrites: [{ id: "111111111111111111", type: 0, allow: "0", deny: String(1 << 10) }] });
+  // Switched off: nothing happens.
+  assert.equal((await call(`/constellations/${cid}/discord/settings`, owner.token, "PUT", { autoBridge: false })).json.bridge.settings.autoBridge, false);
+  await call(`/constellations/${cid}/nebulas`, owner.token, "POST", { name: "clips", kind: "text" });
+  await newChannel("881000000000000005", "clips");
+  await wait(1500);
+  i = await info();
+  assert.ok(!i.bridge.pairs.some((p: any) => ["881000000000000004", "881000000000000005"].includes(p.discordChannelId)));
+  assert.deepEqual(i.bridge.newChannels, []);
+  await call(`/constellations/${cid}/discord/settings`, owner.token, "PUT", { autoBridge: true });
+});
+
 test("turning it off: the notice goes, copies stay, the bot leaves the server", { skip }, async () => {
   const r = await call(`/constellations/${cid}/discord`, owner.token, "DELETE");
   assert.equal(r.status, 200);

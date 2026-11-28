@@ -29,6 +29,7 @@ import type {
   BridgedFrom,
   Crosspost,
   DiscordBridgeSettings,
+  DiscordNewChannel,
   GridSettings,
   LiveCard,
   MusicState,
@@ -384,6 +385,9 @@ export const conversationMembers = pgTable(
     // When this person closed the chat in their sidebar (history kept). It stays hidden until
     // a message newer than this arrives, or they open it again. Null = not closed.
     closedAt: timestamp("closed_at", { withTimezone: true }),
+    // 0.12.0 "Clear chat (just for you)": this person sees nothing at or before this. Nothing is
+    // deleted; history, search, previews, unread counts and pins skip those messages for them.
+    clearedAt: timestamp("cleared_at", { withTimezone: true }),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
     // Nebulas only (2.0): this person's notifications for it ("all" / "mentions" / "none").
     // Null = their default for the constellation (constellation_members.notify).
@@ -2439,6 +2443,8 @@ export const discordBridges = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     // The bot was removed from the Discord server (nothing goes across until it's added back).
     lostAt: timestamp("lost_at", { withTimezone: true }),
+    // 0.12.0: new Discord channels auto-bridge couldn't match (waiting for a manager to choose).
+    newChannels: jsonb("new_channels").$type<DiscordNewChannel[]>().notNull().default(sql`'[]'::jsonb`),
   },
 );
 

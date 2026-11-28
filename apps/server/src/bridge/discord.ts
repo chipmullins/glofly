@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Router, type NextFunction, type Request, type Response } from "express";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import sharp from "sharp";
 import { z } from "zod";
 import {
@@ -13,9 +13,11 @@ import {
   NEBULAS_MAX,
   cleanDiscordSettings,
   matchKey,
+  hiddenFromEveryone,
   type BridgedFrom,
   type DiscordBridgeInfo,
   type DiscordBridgeSettings,
+  type DiscordNewChannel,
 } from "@glofly/shared";
 import { db } from "../db";
 import { redis } from "../redis";
@@ -24,6 +26,9 @@ import {
   attachments,
   constellationApiKeys,
   constellationCategories,
+  constellationMemberRoles,
+  constellationMembers,
+  constellationRoles,
   constellations,
   discordBridgeChannels,
   discordBridgeVoice,
@@ -34,6 +39,7 @@ import {
   users,
 } from "../db/schema";
 import { requireAuth } from "../auth/sessions";
+import { emitToUsers, onlineNow } from "../realtime";
 import { isRestricted, MANAGED_BY_FAMILY } from "../friends/rules";
 import { rateLimit } from "../rateLimit";
 import { registerToolHooks } from "../toolHooks";
@@ -236,6 +242,7 @@ async function infoFor(constellationId: string): Promise<DiscordBridgeInfo> {
         nebulaId: v.nebulaId,
         createdAt: v.createdAt.toISOString(),
       })),
+      newChannels: b.newChannels ?? [],
     },
     channels,
     voiceChannels,
@@ -399,97 +406,115 @@ discordRouter.post("/constellations/:id/discord/pairs", changeLimiter, async (re
     bad(res, "Pick a Discord channel and a nebula.");
     return;
   }
-  // The channel must be in the connected Discord server (checked with Discord, not trusted).
-  let channel: { id: string; name: string; type: number; guild_id?: string; parent_id?: string | null };
-  try {
-    channel = await discord("GET", `/channels/${body.data.discordChannelId}`);
-  } catch {
-    bad(res, "Glofly Bridge can't see that channel. Check its permissions in Discord.");
+  const done = await pairChannel(b, s.constellationId, body.data.discordChannelId, "newNebula" in body.data ? "new" : body.data.nebulaId, {
+    actorId: s.userId,
+    canMakeNebulas: can(s, "manageNebulas"),
+  });
+  if ("error" in done) {
+    bad(res, done.error, done.status);
     return;
+  }
+  res.status(201).json(await infoFor(s.constellationId));
+});
+
+type DiscordChannel = {
+  id: string;
+  name: string;
+  type: number;
+  guild_id?: string;
+  parent_id?: string | null;
+  permission_overwrites?: { id: string; type: number | string; deny: string }[];
+};
+
+/**
+ * Pairs a Discord channel with a nebula ("new" = make one named like it). The one way a pair is
+ * made: the pairing screen and 0.12.0's auto-bridge of new Discord channels both come here.
+ */
+async function pairChannel(
+  b: typeof discordBridges.$inferSelect,
+  constellationId: string,
+  discordChannelId: string,
+  target: string | "new",
+  who: { actorId: string; canMakeNebulas: boolean; auto?: boolean; known?: DiscordChannel },
+): Promise<{ ok: true } | { error: string; status: number }> {
+  const fail = (error: string, status = 400) => ({ error, status });
+  // The channel must be in the connected Discord server (checked with Discord, not trusted).
+  let channel: DiscordChannel;
+  try {
+    channel = who.known ?? (await discord("GET", `/channels/${discordChannelId}`));
+  } catch {
+    return fail("Glofly Bridge can't see that channel. Check its permissions in Discord.");
   }
   const voice = channel.type === VOICE_CHANNEL_TYPE;
   if (channel.guild_id !== b.guildId || (!voice && !TEXT_CHANNEL_TYPES.includes(channel.type))) {
-    bad(res, "Pick a text or voice channel from your connected Discord server.");
-    return;
+    return fail("Pick a text or voice channel from your connected Discord server.");
   }
   const count = voice
     ? await db.$count(discordBridgeVoice, eq(discordBridgeVoice.bridgeId, b.id))
     : await db.$count(discordBridgeChannels, eq(discordBridgeChannels.bridgeId, b.id));
   const max = voice ? DISCORD_VOICE_PAIRS_MAX : DISCORD_PAIRS_MAX;
   if (count >= max) {
-    bad(res, `Up to ${max} ${voice ? "voice" : ""} channels can be bridged.`.replace("  ", " "), 409);
-    return;
+    return fail(`Up to ${max} ${voice ? "voice" : ""} channels can be bridged.`.replace("  ", " "), 409);
   }
   const [taken] = voice
     ? await db.select({ id: discordBridgeVoice.id }).from(discordBridgeVoice).where(eq(discordBridgeVoice.discordChannelId, channel.id))
     : await db.select({ id: discordBridgeChannels.id }).from(discordBridgeChannels).where(eq(discordBridgeChannels.discordChannelId, channel.id));
   if (taken) {
-    bad(res, "That Discord channel is already bridged.", 409);
-    return;
+    return fail("That Discord channel is already bridged.", 409);
   }
 
   // Nov 28: "+ New nebula" right from the pairing screen. An ordinary nebula (moved, renamed and
   // unpaired like any other), in the category named like the Discord one, else the first category.
   let n: typeof nebulas.$inferSelect | undefined;
-  if ("newNebula" in body.data) {
-    if (!can(s, "manageNebulas")) {
-      bad(res, "Making nebulas needs “Manage nebulas”. Pick an existing nebula instead.", 403);
-      return;
+  if (target === "new") {
+    if (!who.canMakeNebulas) {
+      return fail("Making nebulas needs “Manage nebulas”. Pick an existing nebula instead.", 403);
     }
-    n = await newNebulaFor(s.constellationId, b.guildId, channel, voice ? "voice" : "text");
+    n = await newNebulaFor(constellationId, b.guildId, channel, voice ? "voice" : "text");
     if (!n) {
-      bad(res, "That constellation has as many nebulas as it can hold. Pick an existing one.", 409);
-      return;
+      return fail("That constellation has as many nebulas as it can hold. Pick an existing one.", 409);
     }
   } else {
-    [n] = await db.select().from(nebulas).where(and(eq(nebulas.id, body.data.nebulaId), eq(nebulas.constellationId, s.constellationId)));
+    [n] = await db.select().from(nebulas).where(and(eq(nebulas.id, target), eq(nebulas.constellationId, constellationId)));
   }
   if (!n) {
-    bad(res, "That nebula isn't in this constellation.");
-    return;
+    return fail("That nebula isn't in this constellation.");
   }
 
   if (voice) {
     if (n.kind !== "voice") {
-      bad(res, "A Discord voice channel pairs with a voice nebula.");
-      return;
+      return fail("A Discord voice channel pairs with a voice nebula.");
     }
     // Who's in it shows in Discord: only voice nebulas everyone in the constellation can see.
     if (n.visibility !== "everyone" || n.optional || n.userIds.length) {
-      bad(res, "Pick a voice nebula everyone in the constellation can see (Discord sees who's in it).");
-      return;
+      return fail("Pick a voice nebula everyone in the constellation can see (Discord sees who's in it).");
     }
     const [nebTaken] = await db.select({ id: discordBridgeVoice.id }).from(discordBridgeVoice).where(eq(discordBridgeVoice.nebulaId, n.id));
     if (nebTaken) {
-      bad(res, "That voice nebula is already paired.", 409);
-      return;
+      return fail("That voice nebula is already paired.", 409);
     }
     await db.insert(discordBridgeVoice).values({ bridgeId: b.id, discordChannelId: channel.id, discordChannelName: channel.name.slice(0, 100), nebulaId: n.id });
     await startVoicePair(n.id).catch((err) => console.error("Couldn't start a Discord voice pair:", err));
-    await logIntegration({ constellationId: s.constellationId, keyId: b.apiKeyId, keyName: "Discord bridge", actorId: s.userId, action: "discord.voicePaired", details: { channel: channel.name, nebula: n.name } });
-    res.status(201).json(await infoFor(s.constellationId));
-    return;
+    await logIntegration({ constellationId, keyId: b.apiKeyId, keyName: "Discord bridge", actorId: who.actorId, action: who.auto ? "discord.voiceAutoPaired" : "discord.voicePaired", details: { channel: channel.name, nebula: n.name } });
+    await forgetNewChannel(b.id, channel.id);
+    return { ok: true };
   }
 
   if (n.kind !== "text" && n.kind !== "announcement") {
-    bad(res, "Pick a text nebula from this constellation.");
-    return;
+    return fail("Pick a text nebula from this constellation.");
   }
   if (n.visibility !== "everyone" || n.optional || n.userIds.length) {
-    bad(res, "Pick a nebula everyone in the constellation can see (Discord can read it).");
-    return;
+    return fail("Pick a nebula everyone in the constellation can see (Discord can read it).");
   }
   const [nebTaken] = await db.select({ id: discordBridgeChannels.id }).from(discordBridgeChannels).where(eq(discordBridgeChannels.nebulaId, n.id));
   if (nebTaken) {
-    bad(res, "That nebula is already bridged.", 409);
-    return;
+    return fail("That nebula is already bridged.", 409);
   }
   let hook: { id: string; token: string };
   try {
     hook = await discord("POST", `/channels/${channel.id}/webhooks`, { name: "Glofly Bridge" });
   } catch {
-    bad(res, "Glofly Bridge couldn't make a webhook there. Give it “Manage Webhooks” in that channel.");
-    return;
+    return fail("Glofly Bridge couldn't make a webhook there. Give it “Manage Webhooks” in that channel.");
   }
   await db.insert(discordBridgeChannels).values({
     bridgeId: b.id,
@@ -500,8 +525,106 @@ discordRouter.post("/constellations/:id/discord/pairs", changeLimiter, async (re
     webhookToken: hook.token,
   });
   await syncKey(b);
-  await logIntegration({ constellationId: s.constellationId, keyId: b.apiKeyId, keyName: "Discord bridge", actorId: s.userId, action: "discord.paired", details: { channel: channel.name, nebula: n.name } });
-  res.status(201).json(await infoFor(s.constellationId));
+  await logIntegration({ constellationId, keyId: b.apiKeyId, keyName: "Discord bridge", actorId: who.actorId, action: who.auto ? "discord.autoPaired" : "discord.paired", details: { channel: channel.name, nebula: n.name } });
+  await forgetNewChannel(b.id, channel.id);
+  return { ok: true };
+}
+
+/**
+ * 0.12.0: a channel made in a bridged Discord server is bridged by itself while "Bridge new
+ * channels" is on (the default). A nebula of the same name that isn't bridged yet is used, else a
+ * new one (same category rule as "+ New nebula"). Never for channels hidden from @everyone, a
+ * frozen constellation or a lost bot; nothing happens if the bridge is full.
+ */
+async function autoBridge(c: DiscordChannel): Promise<void> {
+  if (!c.guild_id) return;
+  const voice = c.type === VOICE_CHANNEL_TYPE;
+  if (!voice && !TEXT_CHANNEL_TYPES.includes(c.type)) return;
+  const [b] = await db.select().from(discordBridges).where(and(eq(discordBridges.guildId, c.guild_id), isNull(discordBridges.lostAt)));
+  if (!b || !cleanDiscordSettings(b.settings).autoBridge) return;
+  if (hiddenFromEveryone(c, b.guildId) || (await frozen(b.constellationId))) return;
+  const taken = new Set(
+    (voice
+      ? await db.select({ id: discordBridgeVoice.nebulaId }).from(discordBridgeVoice)
+      : await db.select({ id: discordBridgeChannels.nebulaId }).from(discordBridgeChannels)
+    ).map((r) => r.id),
+  );
+  const same = (await db.select().from(nebulas).where(eq(nebulas.constellationId, b.constellationId))).find(
+    (n) =>
+      !taken.has(n.id) &&
+      (voice ? n.kind === "voice" : n.kind === "text" || n.kind === "announcement") &&
+      n.visibility === "everyone" &&
+      !n.optional &&
+      !n.userIds.length &&
+      matchKey(n.name) === matchKey(c.name),
+  );
+  if (same) {
+    const done = await pairChannel(b, b.constellationId, c.id, same.id, { actorId: b.botUserId, canMakeNebulas: true, auto: true, known: c });
+    if (!("error" in done)) {
+      await loadPairs();
+      return;
+    }
+    console.warn(`Discord bridge: didn't bridge the new channel #${c.name}: ${done.error}`);
+  }
+  // No match (or it couldn't pair): ask the people who manage the bridge (Chip, Nov 28).
+  let parent: string | null = null;
+  if (c.parent_id) {
+    try {
+      parent = (await guildChannels(b.guildId)).find((x) => x.id === c.parent_id)?.name ?? null;
+    } catch {
+      parent = null;
+    }
+  }
+  const entry: DiscordNewChannel = { id: c.id, name: c.name.slice(0, 100), voice, parent, at: new Date().toISOString() };
+  const list = [...(b.newChannels ?? []).filter((x) => x.id !== c.id), entry].slice(-NEW_CHANNELS_MAX);
+  await db.update(discordBridges).set({ newChannels: list }).where(eq(discordBridges.id, b.id));
+  emitToUsers(await managersOnline(b.constellationId), "discord:newChannel", { constellationId: b.constellationId, channel: entry }, true);
+}
+
+/** At most this many unmatched new channels wait (the oldest drop off). */
+const NEW_CHANNELS_MAX = 20;
+
+async function forgetNewChannel(bridgeId: string, channelId: string): Promise<void> {
+  await db
+    .update(discordBridges)
+    .set({ newChannels: sql`coalesce((select jsonb_agg(x) from jsonb_array_elements(${discordBridges.newChannels}) x where x->>'id' <> ${channelId}), '[]'::jsonb)` })
+    .where(eq(discordBridges.id, bridgeId));
+}
+
+/** Online people who can manage the bridge ("Edit constellation settings" or the owner). */
+async function managersOnline(constellationId: string): Promise<string[]> {
+  const [c] = await db.select({ ownerId: constellations.ownerId }).from(constellations).where(eq(constellations.id, constellationId));
+  if (!c) return [];
+  const roles = (await db.select().from(constellationRoles).where(eq(constellationRoles.constellationId, constellationId))).filter(
+    (r) => !r.selfAssign && r.permissions.includes("manageConstellation"),
+  );
+  const ids = new Set<string>([c.ownerId]);
+  if (roles.some((r) => r.kind === "member")) {
+    for (const m of await db.select({ id: constellationMembers.userId }).from(constellationMembers).where(eq(constellationMembers.constellationId, constellationId))) ids.add(m.id);
+  } else if (roles.length) {
+    const held = await db
+      .select({ id: constellationMemberRoles.userId })
+      .from(constellationMemberRoles)
+      .where(and(eq(constellationMemberRoles.constellationId, constellationId), inArray(constellationMemberRoles.roleId, roles.map((r) => r.id))));
+    for (const h of held) ids.add(h.id);
+  }
+  return onlineNow(ids);
+}
+
+discordRouter.get("/constellations/:id/discord/new-channels", async (req, res) => {
+  const s = await manager(req, res);
+  if (!s) return;
+  const [b] = await db.select({ newChannels: discordBridges.newChannels, settings: discordBridges.settings }).from(discordBridges).where(eq(discordBridges.constellationId, s.constellationId));
+  res.json({ newChannels: b && cleanDiscordSettings(b.settings).autoBridge ? b.newChannels : [] });
+});
+
+discordRouter.post("/constellations/:id/discord/new-channels/:channelId/dismiss", changeLimiter, async (req, res) => {
+  const s = await manager(req, res);
+  if (!s) return;
+  const ch = snowflake.safeParse(req.params.channelId);
+  const [b] = await db.select({ id: discordBridges.id }).from(discordBridges).where(eq(discordBridges.constellationId, s.constellationId));
+  if (ch.success && b) await forgetNewChannel(b.id, ch.data);
+  res.status(204).end();
 });
 
 /** A nebula for a Discord channel: its name, in the category named like the Discord one (or the first). */
@@ -912,6 +1035,11 @@ export function startDiscordBridge(): void {
     const run = (p: Promise<void>) => void p.catch((err) => console.error(`Discord bridge (${type}) failed:`, err));
     if (type === "GUILD_CREATE" || type === "GUILD_DELETE" || type === "VOICE_STATE_UPDATE") onVoiceEvent(type, data);
     if (type === "MESSAGE_CREATE") run(inbound(data as DiscordMessage));
+    else if (type === "CHANNEL_CREATE") run(autoBridge(data as DiscordChannel));
+    else if (type === "CHANNEL_DELETE") {
+      const d = data as { id: string; guild_id?: string };
+      if (d.guild_id) run(db.select({ id: discordBridges.id }).from(discordBridges).where(eq(discordBridges.guildId, d.guild_id)).then(async ([b]) => { if (b) await forgetNewChannel(b.id, d.id); }));
+    }
     else if (type === "MESSAGE_UPDATE") run(inboundEdit(data as DiscordMessage));
     else if (type === "MESSAGE_DELETE") run(inboundDelete(data as { id: string; channel_id: string }));
     else if (type === "GUILD_DELETE") {

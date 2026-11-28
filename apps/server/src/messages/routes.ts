@@ -46,6 +46,7 @@ import {
   webpName,
   type Variant,
 } from "./attachments";
+import { notClearedBy } from "./cleared";
 import { requireAuth } from "../auth/sessions";
 import { blockedEitherWay, canMessage, deletionPending, groupBreaksRestriction, isRestricted, messageableAmong, pair } from "../friends/rules";
 import { emitToUser, emitToUsers } from "../realtime";
@@ -470,6 +471,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
       groupPosition: conversationMembers.groupPosition,
       mutedUntil: conversationMembers.mutedUntil,
       closedAt: conversationMembers.closedAt,
+      clearedAt: conversationMembers.clearedAt,
     })
     .from(conversationMembers)
     .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
@@ -512,7 +514,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
     await db
       .selectDistinctOn([messages.conversationId], messageFields)
       .from(messages)
-      .where(inArray(messages.conversationId, ids))
+      // 0.12.0: a chat I cleared shows no last message until a new one arrives.
+      .where(and(inArray(messages.conversationId, ids), notClearedBy(myId)))
       .orderBy(messages.conversationId, desc(messages.createdAt), desc(messages.id)),
   );
 
@@ -542,6 +545,7 @@ async function summaries(myId: string, conversationIds?: string[]) {
           sql`(${messages.event}->>'type' = 'call' and ${messages.event}->>'status' = 'missed')`,
         ),
         gt(messages.createdAt, conversationMembers.lastReadAt),
+        or(isNull(conversationMembers.clearedAt), gt(messages.createdAt, conversationMembers.clearedAt)),
       ),
     )
     .groupBy(messages.conversationId);
@@ -575,6 +579,8 @@ async function summaries(myId: string, conversationIds?: string[]) {
       joinedAt: c.joinedAt.toISOString(),
       // When I closed it in my sidebar. The app hides it until a newer message arrives.
       closedAt: c.closedAt?.toISOString() ?? null,
+      // 0.12.0: when I cleared it for me (nothing at or before this shows). Older apps ignore it.
+      clearedAt: c.clearedAt?.toISOString() ?? null,
     };
     if (c.kind === "group") {
       result.push({
@@ -1396,6 +1402,7 @@ conversationsRouter.get("/messages/search", searchLimiter, async (req, res) => {
       isNull(messages.deletedAt),
       isNull(messages.event),
       inNebulaTimeline(),
+      notClearedBy(myId),
       ilike(messages.body, pattern),
       olderThan,
     ),
@@ -1444,7 +1451,7 @@ conversationsRouter.get("/:id/messages", async (req, res) => {
   const rows = await db
     .select(messageFields)
     .from(messages)
-    .where(and(eq(messages.conversationId, id.data), olderThan, inThread ?? inNebulaTimeline()))
+    .where(and(eq(messages.conversationId, id.data), olderThan, inThread ?? inNebulaTimeline(), notClearedBy(myId)))
     .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(limit + 1);
 

@@ -477,6 +477,13 @@
       "when": 1795858518958,
       "tag": "0067_discord_voice",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1795862647468,
+      "tag": "0068_clear_chat_new_channels",
+      "breakpoints": true
     }
   ]
 }

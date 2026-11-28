@@ -23,11 +23,17 @@ const call = <T,>(
   body?: unknown
 ): Promise<ApiResult<T>> => window.glofly.constellations.request<T>(method, path, body)
 
-const TOGGLES: { key: keyof DiscordBridgeSettings; label: string }[] = [
+const TOGGLES: { key: keyof DiscordBridgeSettings; label: string; note?: string }[] = [
   { key: 'edits', label: 'Edits and deletes' },
   { key: 'files', label: 'Pictures and files (up to 25 MB)' },
   { key: 'names', label: 'Discord nicknames + avatars in Glofly' },
-  { key: 'everyone', label: '@everyone / @here pings from Discord' }
+  { key: 'everyone', label: '@everyone / @here pings from Discord' },
+  // 0.12.0: on by default (older bridges too).
+  {
+    key: 'autoBridge',
+    label: 'Bridge new Discord channels automatically',
+    note: 'A channel made in Discord later is bridged with the nebula that has its name. If none does, you’re asked what to do. Private Discord channels are never bridged this way.'
+  }
 ]
 
 type Channel = { id: string; name: string; parent: string | null }
@@ -250,7 +256,10 @@ export default function DiscordBridgePage({
               }
             />
             <span className="dc-switch" aria-hidden="true" />
-            <span>{t.label}</span>
+            <span>
+              {t.label}
+              {t.note && <span className="dc-toggle-note">{t.note}</span>}
+            </span>
           </label>
         ))}
       </section>
